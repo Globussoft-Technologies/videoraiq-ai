@@ -1,0 +1,199 @@
+import { redis } from "./database.js";
+import axios from "axios";
+import config from "config";
+import logger from "./logger.js";
+import { decrypt } from "./cryptoUtils.js";
+const api_host = config.get("RTSPStream.host");
+const token = config.get("RTSPStream.token");
+const terminateHost = config.get("RTSPStream.terminateHost");
+const APP_ENV = config.get("APP_ENV");
+
+export const getStreamingUrl = async (id, rtspUrl) => {
+  const redisKey = `stream_url:${id}`;
+  let streamUrl = await redis.get(redisKey);
+
+  if (!streamUrl) {
+    try {
+      const response = await axios.post(
+        `${api_host}/api/add-camera`,
+        {
+          id: id,
+          rtsp_url: rtspUrl,
+          generate: "true",
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (response.data?.status === "success") {
+        streamUrl = response.data.url;
+        await redis.set(redisKey, streamUrl); // optionally set expiration
+      }
+    } catch (err) {
+      logger.error(`Failed to add camera`, err.message);
+    }
+  }
+
+  return streamUrl || null;
+};
+
+export const killCurrentPlayBack = async (camera_id) => {
+  try {
+    const response = await axios.post(
+      `${api_host}/api/playback/start`,
+      {
+        camera_id,
+        generate: false,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+  } catch (error) {
+    logger.error(`Failed to kill current playback`, error.message);
+  }
+};
+
+export const generatePlayBackUrl = async (
+  session_id,
+  camera_id,
+  startTime,
+  endTime,
+) => {
+  try {
+    const response = await axios.post(
+      `${api_host}/api/playback/start`,
+      {
+        session_id,
+        camera_id,
+        start_time: startTime,
+        end_time: endTime,
+        generate: true,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    // console.log(response, "generated");
+    return response.data?.playback_url || "";
+  } catch (error) {
+    logger.error(`Failed to generate playback url`, error.message);
+  }
+};
+
+export const buildRTSPUrl = (nvr, channel, streamType = "main") => {
+  const decryptedIp = decrypt(nvr.ip);
+  const decryptedPassword = decrypt(nvr.password);
+  const username = nvr.username; // Already decrypted based on your data
+
+  if (nvr.brand === "hikvision") {
+    // Hikvision: rtsp://user:pass@ip:port/Streaming/Channels/101
+    const streamEndpoint = channel.streamEndpoint;
+    const streamIndex = streamType === "main" ? 0 : 1;
+    const streamId = channel.rtspChannels?.[streamIndex]?.id || "";
+
+    return `rtsp://${username}:${decryptedPassword}@${decryptedIp}:${nvr.rtspPort}${streamEndpoint}${streamId}`;
+  } else if (nvr.brand === "cpplus") {
+    // CP Plus: rtsp://user:pass@ip:port/cam/realmonitor?channel=1&subtype=0
+    const streamEndpoint = channel.streamEndpoint; // /cam/realmonitor
+    const channelId = channel.channelId;
+    const subtype = streamType === "main" ? 0 : 1;
+
+    return `rtsp://${username}:${decryptedPassword}@${decryptedIp}:${nvr.rtspPort}${streamEndpoint}?channel=${channelId}&subtype=${subtype}`;
+  } else if (nvr.brand === "camera") {
+    // Generic Camera: rtsp://user:pass@ip:port/stream
+    const streamEndpoint = channel.streamEndpoint; // e.g., /stream
+
+    return `rtsp://${username}:${decryptedPassword}@${decryptedIp}:${nvr.rtspPort}${streamEndpoint}`;
+  } else {
+    throw new Error(`Unsupported NVR brand: ${nvr.brand}`);
+  }
+};
+
+export const registerCameraStream = async (id, rtspUrl) => {
+  const redisKey = `stream_url:${id}`;
+  try {
+    const response = await axios.post(
+      `${api_host}/api/add-camera`,
+      {
+        id: id,
+        rtsp_url: rtspUrl,
+        generate: "true",
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    if (response.data?.status === "success") {
+      let streamUrl = response?.data?.url;
+      await redis.set(redisKey, streamUrl); // optionally set expiration
+    }
+  } catch (err) {
+    logger.error(`Failed to add camera`, err.message);
+  }
+};
+
+export const updateCameraStream = async (id, rtspUrl, bitrate) => {
+  try {
+    const payload = { rtsp_url: rtspUrl };
+    if (bitrate) payload.bitrate = bitrate;
+
+    const response = await axios.put(
+      `${api_host}/api/camera/${id}`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    return response.data;
+  } catch (err) {
+    logger.error(`Failed to update camera stream ${id}`, err.message);
+    return null;
+  }
+};
+
+export const terminateEverything = async () => {
+  try {
+    await axios.post(
+      `${terminateHost}/api/system/revoke`,
+      {},
+      {
+        headers: {
+          "x-videora-admin-key": config.get("RTSPStream.terminateKey"),
+        },
+      },
+    );
+  } catch (error) {
+    logger.error(`Failed to terminate all streams`, error.message);
+  }
+};
+
+export const buildStreamingUrl = async (nvr, channel) => {
+  try {
+    let streamingUrl = null;
+    const uid = `${nvr?._id}-${channel?._id}`;
+    if (APP_ENV === "cloud") {
+      const rtspUrl = buildRTSPUrl(nvr, channel, "main");
+      streamingUrl = await getStreamingUrl(uid, rtspUrl);
+    } else {
+      streamingUrl = `${nvr?.domain}/${channel?.streamingPath}`;
+    }
+    return streamingUrl;
+  } catch (error) {
+    logger.error(`Failed to build streaming url`, error.message);
+    return null;
+  }
+};
+
+export default getStreamingUrl;

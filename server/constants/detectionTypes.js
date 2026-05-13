@@ -1,0 +1,711 @@
+/* Update constants when new settings is added - DETECTION_TYPES, TYPE_MAP, Example payloads
+ detection settings model
+ detection settings service - createDetectionSettings, getDetectionExamples
+ detection settings controller - swagger of getAllDetectionSettings
+ channels model
+ channels service - getAllChannels
+*/
+
+export const DETECTION_TYPES = {
+  personalProtectiveEquipmentSettings:
+    "Personal Protective Equipment Detection",
+  vehicleDetectionSettings: "ANPR Detection",
+  unauthorizedAccessSettings: "Intrusion Detection",
+  crowdDetectionSettings: "Crowd Detection",
+  lineCrossingSettings: "Line Crossing Detection",
+  countVehiclesSettings: "Count Vehicles Detection",
+  conveyorDetectionSettings: "Conveyor Detection",
+  crusherDetectionSettings: "Crusher Detection",
+  waterSpillageDetectionSettings: "Water Spillage Detection",
+  // countPersonsSettings: "Count Persons Detection",
+  doorDetectionSettings: "Door Detection",
+  lightDetectionSettings: "Light Detection",
+  deskAbsenceSettings: "Desk Absence Detection",
+  guardAbsenceSettings: "Guard Absence Detection",
+  // motionDetectionSettings: "Motion Detection",
+  // genericObjectDetectionSettings: "Generic Object Detection",
+  // loiteringWithoutAuthSettings: "Loitering Without Authorization Detection",
+  // loiteringWithAuthSettings: "Loitering With Authorization Detection",
+  // fireSmokeDetectionSettings: "Fire and Smoke Detection",
+  // weaponDetectionSettings: "Weapon Detection",
+  // unattendedBaggageDetectionSettings: "Unattended Baggage Detection",
+};
+
+export const TYPE_MAP = {
+  countPersonsSettings: "countPersons",
+  motionDetectionSettings: "motionDetection",
+  genericObjectDetectionSettings: "genericObjectDetection",
+  countVehiclesSettings: "countVehicles",
+  loiteringWithoutAuthSettings: "loiteringWithoutAuth",
+  loiteringWithAuthSettings: "loiteringWithAuth",
+  unauthorizedAccessSettings: "unauthorizedAccess",
+  lineCrossingSettings: "lineCrossing",
+  fireSmokeDetectionSettings: "fireSmokeDetection",
+  weaponDetectionSettings: "weaponDetection",
+  unattendedBaggageDetectionSettings: "unattendedBaggageDetection",
+  personalProtectiveEquipmentSettings: "personalProtectiveEquipment",
+  crowdDetectionSettings: "crowdDetection",
+  doorDetectionSettings: "doorDetection",
+  lightDetectionSettings: "lightDetection",
+  vehicleDetectionSettings: "vehicleDetection",
+  deskAbsenceSettings: "deskAbsence",
+  guardAbsenceSettings: "guardAbsence",
+  conveyorDetectionSettings: "conveyorDetection",
+  crusherDetectionSettings: "crusherDetection",
+  waterSpillageDetectionSettings: "waterSpillageDetection",
+};
+
+export const DETECTION_MODES_MAP = {
+  personalProtectiveEquipmentSettings: ["helmet", "vest"],
+  crowdDetectionSettings: ["crowd"],
+  doorDetectionSettings: ["door"],
+  lightDetectionSettings: ["light"],
+  lineCrossingSettings: ["line_crossing"],
+  deskAbsenceSettings: ["desk_absence"],
+  guardAbsenceSettings: ["guard_absence"],
+  countVehiclesSettings: ["vehicles"],
+  countPersonsSettings: ["persons"],
+  unauthorizedAccessSettings: ["intrusion"],
+  conveyorDetectionSettings: ["conveyor"],
+  crusherDetectionSettings: ["crusher"],
+  waterSpillageDetectionSettings: ["water_spillage"],
+  vehicleDetectionSettings: ["ANPR"],
+};
+
+export const DETECTION_OBJECTS_TYPES_MAP = {
+  personalProtectiveEquipment: "Personal Protective Equipment Detection",
+  crowdDetection: "Crowd Detection",
+  deskAbsence: "Desk Absence Detection",
+  guardAbsence: "Guard Absence Detection",
+};
+
+export const toPopulateDetections = [
+  { path: "detections.countPersonsSettings.id" },
+  { path: "detections.motionDetectionSettings.id" },
+  { path: "detections.genericObjectDetectionSettings.id" },
+  { path: "detections.countVehiclesSettings.id" },
+  { path: "detections.loiteringWithoutAuthSettings.id" },
+  { path: "detections.fireSmokeDetectionSettings.id" },
+  { path: "detections.weaponDetectionSettings.id" },
+  { path: "detections.unattendedBaggageDetectionSettings.id" },
+  { path: "detections.unauthorizedAccessSettings.id" },
+  { path: "detections.lineCrossingSettings.id" },
+  { path: "detections.loiteringWithAuthSettings.id" },
+  { path: "detections.personalProtectiveEquipmentSettings.id" },
+  { path: "detections.crowdDetectionSettings.id" },
+  { path: "detections.lightDetectionSettings.id" },
+  { path: "detections.doorDetectionSettings.id" },
+  { path: "detections.vehicleDetectionSettings.id" },
+  { path: "detections.deskAbsenceSettings.id" },
+  { path: "detections.guardAbsenceSettings.id" },
+  { path: "detections.conveyorDetectionSettings.id" },
+  { path: "detections.crusherDetectionSettings.id" },
+  { path: "detections.waterSpillageDetectionSettings.id" },
+];
+
+// sample payloads
+export const countPersonsSettings = {
+  channelId: ["664f89e8a9d345001ee326b1"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "countPersonsSettings",
+  name: "Person Counter - Zone A",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: true,
+    videoLinkRequirement: false,
+    videoMinLength: 10,
+    videoMaxLength: 120,
+    videoDuration: 10,
+    levelOfImportance: "high",
+    videoResolution: [1920, 1080],
+    detectionTimeGap: 30,
+    referencePoints: {
+      1: [
+        [100, 100],
+        [200, 100],
+        [200, 200],
+        [100, 200],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const motionDetectionSettings = {
+  channelId: ["684a9cec2f7a93276ca673fa"],
+  NVRId: "684a9cec2f7a93276ca673f8",
+  settingType: "motionDetectionSettings",
+  name: "Motion Detector - Hallway",
+  enabled: false,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: true,
+    videoLinkRequirement: true,
+    videoMinLength: 8,
+    videoMaxLength: 100,
+    videoDuration: 10,
+    levelOfImportance: "low",
+    alertThreshold: 2,
+    videoResolution: [640, 480],
+    detectionTimeGap: 20,
+    referencePoints: {
+      1: [
+        [10, 10],
+        [110, 10],
+        [110, 110],
+        [10, 110],
+      ],
+    },
+    metricType: "binary",
+  },
+};
+
+export const genericObjectDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "genericObjectDetectionSettings",
+  name: "Object Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    alertThreshold: 3,
+    videoResolution: [1280, 720],
+    detectionTimeGap: 15,
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+    objectList: ["generic"],
+  },
+};
+
+export const countVehiclesSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "countVehiclesSettings",
+  name: "Object Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    objectList: ["vehicles"],
+    videoResolution: [1280, 720],
+    detectionTimeGap: 15,
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const loiteringWithoutAuthSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "loiteringWithoutAuthSettings",
+  name: "Object Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    crowdCountThreshold: 1,
+    peopleCountThreshold: 2,
+    loiteringThreshold: 3,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const loiteringWithAuthSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "loiteringWithAuthSettings",
+  name: "Object Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    crowdCountThreshold: 1,
+    peopleCountThreshold: 2,
+    loiteringThreshold: 3,
+    videoResolution: [1280, 720],
+    authorisedUsers: ["68493b14b176a495112b6522"],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const unauthorizedAccessSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "unauthorizedAccessSettings",
+  name: "Object Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    alertThreshold: 3,
+    videoResolution: [1280, 720],
+    authorisedUsers: ["68493b14b176a495112b6522"],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const lineCrossingSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "lineCrossingSettings",
+  name: "Object Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    alertThreshold: 3,
+    videoResolution: [1280, 720],
+    faceAuth: true,
+    authorisedUsers: ["68493b14b176a495112b6522"],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const fireSmokeDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "fireSmokeDetectionSettings",
+  name: "Object Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    alertThreshold: 3,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const weaponDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "weaponDetectionSettings",
+  name: "Object Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    alertThreshold: 3,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+    objectList: ["weapons"],
+  },
+};
+
+export const unattendedBaggageDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "unattendedBaggageDetectionSettings",
+  name: "Object Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    alertThreshold: 3,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+    objectList: ["bag"],
+  },
+};
+
+export const personalProtectiveEquipmentSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "personalProtectiveEquipmentSettings",
+  name: "Object Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    alertThreshold: 3,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+    ppeList: ["helmet", "vest"],
+  },
+};
+
+export const crowdDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "crowdDetectionSettings",
+  name: "Object Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    crowdCountThreshold: 10,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const doorDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "doorDetectionSettings",
+  name: "Object Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    crowdCountThreshold: 10,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const lightDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "lightDetectionSettings",
+  name: "Object Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    crowdCountThreshold: 10,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const vehicleDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "vehicleDetectionSettings",
+  name: "Vehicle Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    crowdCountThreshold: 10,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const deskAbsenceSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "deskAbsenceSettings",
+  name: "Desk Absence Detection - Desk 1",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    absenceThreshold: 300,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const guardAbsenceSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "guardAbsenceSettings",
+  name: "Guard Absence Detection - Guard 1",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    absenceThreshold: 300,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const conveyorDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "conveyorDetectionSettings",
+  name: "Conveyor Detection - Belt 1",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    alertThreshold: 1,
+    videoResolution: [1280, 720],
+    obstruction_threshold_sec: 0,
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const crusherDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "crusherDetectionSettings",
+  name: "Crusher Detection - Unit 1",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    alertThreshold: 1,
+    videoResolution: [1280, 720],
+    obstruction_threshold_sec: 0,
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const waterSpillageDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "waterSpillageDetectionSettings",
+  name: "Water Spillage Detection - Floor 1",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    alertThreshold: 1,
+    videoResolution: [1280, 720],
+    obstruction_threshold_sec: 0,
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};

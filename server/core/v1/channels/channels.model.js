@@ -1,0 +1,232 @@
+import mongoose from "mongoose";
+import authorizedChannelsModel from "../cameraRestrictions/authorizedChannels.model.js";
+import config from "config";
+const APP_ENV = config.get("APP_ENV");
+
+let ChannelSchema;
+
+const detectionSettingSchema = new mongoose.Schema(
+  {
+    id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "DetectionSetting",
+      default: null,
+    },
+    enabled: Boolean,
+  },
+  { _id: false }, // prevent nested _id creation
+);
+
+const detectionFields = {
+  countPersonsSettings: detectionSettingSchema,
+  motionDetectionSettings: detectionSettingSchema,
+  genericObjectDetectionSettings: detectionSettingSchema,
+  countVehiclesSettings: detectionSettingSchema,
+  loiteringWithoutAuthSettings: detectionSettingSchema,
+  loiteringWithAuthSettings: detectionSettingSchema,
+  unauthorizedAccessSettings: detectionSettingSchema,
+  lineCrossingSettings: detectionSettingSchema,
+  fireSmokeDetectionSettings: detectionSettingSchema,
+  weaponDetectionSettings: detectionSettingSchema,
+  unattendedBaggageDetectionSettings: detectionSettingSchema,
+  personalProtectiveEquipmentSettings: detectionSettingSchema,
+  crowdDetectionSettings: detectionSettingSchema,
+  doorDetectionSettings: detectionSettingSchema,
+  lightDetectionSettings: detectionSettingSchema,
+  vehicleDetectionSettings: detectionSettingSchema,
+  deskAbsenceSettings: detectionSettingSchema,
+  guardAbsenceSettings: detectionSettingSchema,
+  conveyorDetectionSettings: detectionSettingSchema,
+  crusherDetectionSettings: detectionSettingSchema,
+  waterSpillageDetectionSettings: detectionSettingSchema,
+};
+
+// ! old
+const cloudSchema = new mongoose.Schema(
+  {
+    nvrId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "NVR",
+      required: true,
+    },
+    userId: {
+      type: String,
+      required: true,
+    },
+    channelId: String,
+    rtspChannels: [Object],
+    name: String,
+    ipAddress: String,
+    model: String,
+    serialNumber: String,
+    firmwareVersion: String,
+    streamEndpoint: {
+      type: String,
+      required: true,
+    },
+    profile: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Profile",
+    },
+
+    // 🔍 Detection features
+    detections: detectionFields,
+
+    // 🟡 Detection status: 0 = pending, 1 = approved, 2 = rejected
+    detectionStatus: {
+      type: Number,
+      enum: [0, 1, 2],
+      default: 0,
+    },
+    // 🎮 Control status: 0 = stop, 1 = start
+    control: {
+      type: Number,
+      enum: [0, 1],
+      default: 0,
+    },
+    customName: String,
+    department: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Department",
+      },
+    ],
+    checkType: {
+      type: String,
+      enum: ["checkin", "checkout", "none"],
+      default: "none",
+    },
+    alerts: {
+      type: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "recipients",
+        }
+      ],
+      default: []
+    }
+  },
+  { timestamps: true },
+);
+
+// ! new
+const localSchema = new mongoose.Schema(
+  {
+    nvrId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "NVR",
+      required: true,
+    },
+    userId: {
+      type: String,
+      required: true,
+    },
+    streamingPath: {
+      type: String,
+      required: true,
+    },
+    localChannelId: {
+      type: String,
+      required: true,
+    },
+    name: String,
+    profile: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Profile",
+    },
+
+    // 🔍 Detection features
+    detections: detectionFields,
+
+    // 🟡 Detection status: 0 = pending, 1 = approved, 2 = rejected
+    detectionStatus: {
+      type: Number,
+      enum: [0, 1, 2],
+      default: 0,
+    },
+    // 🎮 Control status: 0 = stop, 1 = start
+    control: {
+      type: Number,
+      enum: [0, 1],
+      default: 0,
+    },
+    customName: String,
+    department: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Department",
+      },
+    ],
+    checkType: {
+      type: String,
+      enum: ["checkin", "checkout", "none"],
+      default: "none",
+    },
+    // 📨 Alerts
+    alerts: {
+      type: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "recipients",
+        }
+      ],
+      default: []
+    }
+  },
+  { timestamps: true },
+);
+
+if (APP_ENV === "cloud") {
+  ChannelSchema = cloudSchema;
+} else {
+  ChannelSchema = localSchema;
+}
+
+ChannelSchema.pre("save", function (next) {
+  try {
+    const detectionFields = Object.keys(this.detections || {});
+
+    // Check if any detection is enabled
+    const anyEnabled = detectionFields.some(
+      (field) => this.detections?.[field]?.enabled === true,
+    );
+
+    // Set control based on detections
+    this.control = anyEnabled ? 1 : 0;
+
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
+ChannelSchema.pre(/^find/, async function () {
+  const memberId = this.options?.memberId;
+
+  // No member → allow full access
+
+  if (!memberId) return;
+
+  // Fetch allowed channels
+  const authorized = await authorizedChannelsModel.findOne({
+    userId: memberId,
+  });
+  if (!authorized) return;
+
+  const allowed = authorized.channels; // ensure correct field
+
+  // If allowed list empty → block all results
+  if (!Array.isArray(allowed) || allowed.length === 0) {
+    this.where({ _id: { $in: [] } });
+    return;
+  }
+
+  // --- MERGE EXISTING QUERY WITH AUTHORIZATION FILTER ---
+  const existingQuery = this.getQuery();
+
+  this.where({
+    $and: [existingQuery, { _id: { $in: allowed } }],
+  });
+});
+
+export default mongoose.model("Channel", ChannelSchema);
