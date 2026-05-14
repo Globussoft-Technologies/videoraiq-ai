@@ -5,7 +5,7 @@ describe("UsersValidator.createAuthUser", () => {
   const base = {
     firstName: "Jane",
     lastName: "Doe",
-    email: "jane@test.local",
+    email: "jane@test.com",
     profilePics: ["http://cdn.test/jane.jpg"],
     password: "p4ss",
   };

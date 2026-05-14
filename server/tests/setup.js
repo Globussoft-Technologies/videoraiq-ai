@@ -8,7 +8,7 @@
  */
 process.env.NODE_ENV = "test";
 process.env.T = "test";
-process.env.APP_ENV = "test";
+process.env.APP_ENV = "local";
 
 // 32-byte hex (64 chars) = 256-bit key; 16-byte hex (32 chars) = 128-bit IV.
 const TEST_ENCRYPTION_KEY = "0".repeat(64);
@@ -16,7 +16,7 @@ const TEST_IV = "0".repeat(32);
 
 const testConfig = {
   port: 5000,
-  APP_ENV: "test",
+  APP_ENV: "local",
 
   // Crypto
   ENCRYPTION_KEY: TEST_ENCRYPTION_KEY,

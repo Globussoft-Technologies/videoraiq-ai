@@ -14,7 +14,7 @@ export function makeUser(overrides = {}) {
     _id: `00000000000000000000000${id}`.slice(-24),
     user_id: 100 + id,
     admin_id: 1,
-    email: `user${id}@test.local`,
+    email: `user${id}@test.com`,
     firstName: "Test",
     lastName: `User${id}`,
     name_f: `Test User${id}`,
@@ -31,7 +31,7 @@ export function makeAdmin(overrides = {}) {
     _id: "000000000000000000000001",
     user_id: 1,
     admin_id: 1,
-    email: "admin@test.local",
+    email: "admin@test.com",
     firstName: "Admin",
     lastName: "Root",
     name_f: "Admin Root",
@@ -56,30 +56,44 @@ export function makePermissionConfig(overrides = {}) {
     incidents: { view: true, create: true, edit: true, delete: true },
     NVR: { view: true, create: true, edit: true, delete: true },
     channels: { view: true, create: true, edit: true, delete: true },
-    users: { view: true, create: true, edit: true, delete: true },
+    Users: { view: true, create: true, edit: true, delete: true },
     ...overrides,
   };
 }
 
+/**
+ * Mirrors the keys + casing of `core/v1/permission/permissions.config.js`
+ * `completeConfig` (flipped to `true` for every leaf). Keep this in sync
+ * with the source — the `permissionConfigChecker` maps URL prefixes to
+ * these exact keys, and a key mismatch surfaces as a silent permission
+ * denial.
+ */
 export function completePermissionConfig() {
+  const yes = { view: true, create: true, edit: true, delete: true };
   return {
-    dashboard: { view: true },
-    incidents: { view: true, create: true, edit: true, delete: true },
-    NVR: { view: true, create: true, edit: true, delete: true },
-    channels: { view: true, create: true, edit: true, delete: true },
-    users: { view: true, create: true, edit: true, delete: true },
-    roles: { view: true, create: true, edit: true, delete: true },
-    permissions: { view: true, create: true, edit: true, delete: true },
-    storage: { view: true, create: true, edit: true, delete: true },
-    detection: { view: true, create: true, edit: true, delete: true },
-    attendance: { view: true, create: true, edit: true, delete: true },
-    departments: { view: true, create: true, edit: true, delete: true },
-    locations: { view: true, create: true, edit: true, delete: true },
-    profiles: { view: true, create: true, edit: true, delete: true },
-    settings: { view: true, create: true, edit: true, delete: true },
-    logs: { view: true, create: true, edit: true, delete: true },
-    LIVE: { view: true },
-    playbacks: { view: true },
+    NVR: { ...yes },
+    channels: { ...yes },
+    LIVE: { ...yes },
+    dashboard: { ...yes },
+    incidents: { ...yes },
+    Users: { ...yes },
+    permission: { ...yes },
+    roles: { ...yes },
+    departments: { ...yes },
+    detectionSettings: { ...yes },
+    profiles: { ...yes },
+    recipients: { ...yes },
+    logs: {
+      global: { ...yes },
+      accessLogs: { ...yes },
+      attendanceLogs: { ...yes },
+      trackLogs: { ...yes },
+      deskLogs: { ...yes },
+      guardLogs: { ...yes },
+      ANPRLogs: { ...yes },
+    },
+    locations: { ...yes },
+    playbacks: { ...yes },
   };
 }
 
