@@ -29,9 +29,11 @@ export default defineConfig({
     },
     // The `config` package reads ENV before any `import config from "config"`.
     // tests/setup.js sets process.env.NODE_CONFIG before any test code runs.
+    //
+    // Forks + per-file isolation required for Mongoose: re-importing a model
+    // file in the same process throws OverwriteModelError. Isolation gives
+    // each test file a fresh fork and a fresh model registry.
     pool: "forks",
-    poolOptions: {
-      forks: { singleFork: true },
-    },
+    isolate: true,
   },
 });
