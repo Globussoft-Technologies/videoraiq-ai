@@ -1,0 +1,27 @@
+{
+  "name": "videora-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Playwright E2E tests for VideoraIQ (https://dev.videoraiq.com)",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:login": "playwright test tests/01-login.spec.js",
+    "test:smoke": "playwright test tests/02-dashboard-smoke.spec.js tests/04-navigation.spec.js",
+    "test:auth": "playwright test tests/03-auth-edge-cases.spec.js",
+    "test:flows": "playwright test tests/05-nvr-flow.spec.js tests/06-incidents-flow.spec.js tests/07-users-flow.spec.js",
+    "test:chromium": "playwright test --project=chromium",
+    "test:firefox": "playwright test --project=firefox",
+    "test:webkit": "playwright test --project=webkit",
+    "report": "playwright show-report",
+    "codegen": "playwright codegen https://dev.videoraiq.com",
+    "install:browsers": "playwright install --with-deps"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "dotenv": "^16.4.5"
+  }
+}

@@ -1,0 +1,54 @@
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+
+  - package-ecosystem: "npm"
+    directory: "/server"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(server)"
+    ignore:
+      - dependency-name: "node"
+
+  - package-ecosystem: "npm"
+    directory: "/client"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(client)"
+    groups:
+      radix:
+        patterns: ["@radix-ui/*"]
+      tailwind:
+        patterns: ["tailwindcss", "@tailwindcss/*", "tw-animate-css"]
+
+  - package-ecosystem: "npm"
+    directory: "/docker-client"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(docker-client)"
+    groups:
+      radix:
+        patterns: ["@radix-ui/*"]
+      tailwind:
+        patterns: ["tailwindcss", "@tailwindcss/*", "tw-animate-css"]
+
+  - package-ecosystem: "npm"
+    directory: "/e2e"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(e2e)"

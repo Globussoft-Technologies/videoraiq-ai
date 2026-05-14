@@ -1,0 +1,131 @@
+name: Server tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - ".github/workflows/server-tests.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "server/**"
+      - ".github/workflows/server-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: server-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Unit + validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install
+        run: npm ci || npm install
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+  contract:
+    name: Contract (Supertest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install
+        run: npm ci || npm install
+
+      - name: Run contract tests
+        run: npm run test:contract
+
+  integration:
+    name: Integration (mongodb-memory-server)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Cache mongodb-memory-server binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongo-binaries-${{ runner.os }}
+
+      - name: Install
+        run: npm ci || npm install
+
+      - name: Run integration tests
+        run: npm run test:integration
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [unit, contract, integration]
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Cache mongodb-memory-server binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongo-binaries-${{ runner.os }}
+
+      - name: Install
+        run: npm ci || npm install
+
+      - name: Run coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-coverage-${{ github.run_id }}
+          path: server/coverage/
+          retention-days: 14

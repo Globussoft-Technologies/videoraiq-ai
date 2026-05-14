@@ -1,0 +1,80 @@
+name: Client (lint + build)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "client/**"
+      - "docker-client/**"
+      - ".github/workflows/client.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "client/**"
+      - "docker-client/**"
+      - ".github/workflows/client.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: client-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.workdir }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        workdir: [client, docker-client]
+    defaults:
+      run:
+        working-directory: ${{ matrix.workdir }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.workdir }}/package-lock.json
+
+      - name: Install
+        run: npm ci || npm install
+
+      - name: Lint
+        # ESLint config is present in both client and docker-client.
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Build
+        env:
+          # Vite reads these at build time. Use harmless placeholders so the
+          # build succeeds in CI; real values come from the deploy pipeline.
+          VITE_ENV: ci
+          VITE_LOCAL_SETUP: "false"
+          VITE_FRONTEND: https://dev.videoraiq.com
+          VITE_BACKEND: https://dev-api.videoraiq.com
+          VITE_DS_API: https://dev-stream.videoraiq.com
+          VITE_STREAM_URL: https://dev-stream.videoraiq.com
+          VITE_INCIDENT_URL: https://dev-api.videoraiq.com/api/v1/uploads/
+          VITE_ENCRYPTION_KEY: ci-encryption-key-placeholder-32b
+          VITE_IV: ci-iv-placeholder!
+          VITE_SOCKET_URL: wss://dev-api.videoraiq.com
+          VITE_APP_CURRENT_EXE_VERSION: 0.0.0-ci
+          VITE_INITIALS_URL: https://api.dicebear.com/9.x/initials/svg?seed=
+          VITE_HIDE_PLAYBACK_FEATURE: "false"
+        run: npm run build
+
+      - name: Upload build artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.workdir }}-dist-${{ github.run_id }}
+          path: ${{ matrix.workdir }}/dist/
+          retention-days: 7
+          if-no-files-found: warn
