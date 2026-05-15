@@ -9,6 +9,7 @@ const validBase = {
   location: "Head Office",
   brand: "hikvision",
   password: "secret",
+  nvrName: "Lobby Cam 01",
 };
 
 /** Validate against the schema; resolve to null on success or the error message. */

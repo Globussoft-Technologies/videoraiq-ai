@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 import useDebounce from "../../../src/hooks/useDebounce.js";
 
 beforeEach(() => {
@@ -8,6 +8,14 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
 });
+
+// Advancing fake timers must happen inside act() so React flushes the
+// setState the debounce hook schedules.
+function advance(ms) {
+  act(() => {
+    vi.advanceTimersByTime(ms);
+  });
+}
 
 describe("useDebounce", () => {
   it("returns the initial value immediately", () => {
@@ -22,7 +30,7 @@ describe("useDebounce", () => {
     );
 
     rerender({ value: "b" });
-    vi.advanceTimersByTime(499);
+    advance(499);
     expect(result.current).toBe("a");
   });
 
@@ -33,7 +41,7 @@ describe("useDebounce", () => {
     );
 
     rerender({ value: "b" });
-    vi.advanceTimersByTime(500);
+    advance(500);
     expect(result.current).toBe("b");
   });
 
@@ -44,13 +52,13 @@ describe("useDebounce", () => {
     );
 
     rerender({ value: "b" });
-    vi.advanceTimersByTime(300);
+    advance(300);
     rerender({ value: "c" });
-    vi.advanceTimersByTime(300);
+    advance(300);
     // 600ms total elapsed, but the timer reset at 300ms — still pending.
     expect(result.current).toBe("a");
 
-    vi.advanceTimersByTime(200);
+    advance(200);
     expect(result.current).toBe("c");
   });
 
@@ -61,9 +69,9 @@ describe("useDebounce", () => {
     );
 
     rerender({ value: "y" });
-    vi.advanceTimersByTime(500);
+    advance(500);
     expect(result.current).toBe("x");
-    vi.advanceTimersByTime(500);
+    advance(500);
     expect(result.current).toBe("y");
   });
 
@@ -72,7 +80,7 @@ describe("useDebounce", () => {
       initialProps: { value: 1 },
     });
     rerender({ value: 2 });
-    vi.advanceTimersByTime(500);
+    advance(500);
     expect(result.current).toBe(2);
   });
 });
