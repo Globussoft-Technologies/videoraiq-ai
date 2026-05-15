@@ -7,7 +7,7 @@ GitHub Actions workflows that run for every push and PR against `main`.
 | Workflow | Triggers | What it does |
 |---|---|---|
 | [`server-tests.yml`](workflows/server-tests.yml) | `server/**` change, manual | Vitest: unit → contract → integration → coverage (parallel jobs; coverage waits) |
-| [`client.yml`](workflows/client.yml) | `client/**` or `docker-client/**` change, manual | ESLint + `vite build` for both React variants with placeholder env vars |
+| [`client.yml`](workflows/client.yml) | `client/**` or `docker-client/**` change, manual | ESLint + `vite build` for both React variants; Vitest unit tests + coverage for `client/` |
 | [`e2e-tests.yml`](workflows/e2e-tests.yml) | push/PR to main, nightly cron (02:00 UTC), manual | Playwright matrix across Chromium / Firefox / WebKit against the dev environment |
 | [`codeql.yml`](workflows/codeql.yml) | push/PR to main, weekly cron | GitHub CodeQL static analysis (JavaScript) |
 
