@@ -35,10 +35,22 @@ export default defineConfig({
     },
   },
   projects: [
+    // Logs in once with chromium and persists storage state. The authenticated
+    // browser projects depend on it. chromium is always installed in CI so
+    // this project can run regardless of which browsers the matrix targets.
     {
       name: "setup",
       testMatch: /global\.setup\.js/,
+      use: { ...devices["Desktop Chrome"] },
     },
+    // Unauthenticated specs (login form + auth edge cases) — no storage state.
+    {
+      name: "unauthenticated",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: /01-login\.spec\.js|03-auth-edge-cases\.spec\.js/,
+    },
+    // Authenticated browser projects. They exclude the unauthenticated specs
+    // (those would break when run with a logged-in storage state).
     {
       name: "chromium",
       use: {
@@ -46,6 +58,7 @@ export default defineConfig({
         storageState: "playwright/.auth/user.json",
       },
       dependencies: ["setup"],
+      testIgnore: /01-login\.spec\.js|03-auth-edge-cases\.spec\.js/,
     },
     {
       name: "firefox",
@@ -54,6 +67,7 @@ export default defineConfig({
         storageState: "playwright/.auth/user.json",
       },
       dependencies: ["setup"],
+      testIgnore: /01-login\.spec\.js|03-auth-edge-cases\.spec\.js/,
     },
     {
       name: "webkit",
@@ -62,11 +76,7 @@ export default defineConfig({
         storageState: "playwright/.auth/user.json",
       },
       dependencies: ["setup"],
-    },
-    {
-      name: "unauthenticated",
-      use: { ...devices["Desktop Chrome"] },
-      testMatch: /01-login\.spec\.js|03-auth-edge-cases\.spec\.js/,
+      testIgnore: /01-login\.spec\.js|03-auth-edge-cases\.spec\.js/,
     },
   ],
   outputDir: "test-results",

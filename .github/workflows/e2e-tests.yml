@@ -52,15 +52,11 @@ jobs:
           fi
 
   e2e:
-    name: ${{ matrix.project }}
+    name: Playwright suite
     needs: preflight
     if: needs.preflight.outputs.has-creds == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        project: [chromium, firefox, webkit]
     defaults:
       run:
         working-directory: e2e
@@ -81,13 +77,16 @@ jobs:
       - name: Install npm dependencies
         run: npm ci || npm install
 
+      # Install all three browsers. The `setup` project always runs on
+      # chromium regardless of which browser projects execute, so a partial
+      # install (just one browser) breaks the auth setup.
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps ${{ matrix.project }}
+        run: npx playwright install --with-deps
 
       - name: Install browser system deps (cache hit path)
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps ${{ matrix.project }}
+        run: npx playwright install-deps
 
       - name: Run Playwright
         env:
@@ -100,13 +99,15 @@ jobs:
           TEST_PASSWORD: ${{ secrets.E2E_PASSWORD }}
           ALLOW_DESTRUCTIVE_TESTS: "false"
           CI: "true"
-        run: npx playwright test --project=${{ matrix.project }}
+        # No --project filter: runs setup → unauthenticated → chromium →
+        # firefox → webkit, all defined in playwright.config.js.
+        run: npx playwright test
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-${{ matrix.project }}-${{ github.run_id }}
+          name: playwright-report-${{ github.run_id }}
           path: e2e/playwright-report/
           retention-days: 14
 
@@ -114,6 +115,6 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-traces-${{ matrix.project }}-${{ github.run_id }}
+          name: playwright-traces-${{ github.run_id }}
           path: e2e/test-results/
           retention-days: 14
