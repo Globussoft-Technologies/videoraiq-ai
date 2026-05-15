@@ -64,7 +64,11 @@ e2e/
     ├── 04-navigation.spec.js
     ├── 05-nvr-flow.spec.js
     ├── 06-incidents-flow.spec.js
-    └── 07-users-flow.spec.js
+    ├── 07-users-flow.spec.js
+    ├── 08-playback.spec.js
+    ├── 09-settings.spec.js          # detection / storage / recipients / profile
+    ├── 10-workforce-logs.spec.js    # departments / locations / logs routes
+    └── 11-rbac.spec.js              # roles-permissions + read-only RBAC check
 ```
 
 ---
