@@ -1,6 +1,8 @@
 import { expect } from "@playwright/test";
 
-const LOGIN_PATH = process.env.LOGIN_PATH || "/login";
+// The React AdminLoginForm (#login / #pass fields) is served at /admin-login.
+// /login is a separate aMember/PHP login page — not this app's React form.
+const LOGIN_PATH = process.env.LOGIN_PATH || "/admin-login";
 
 export class LoginPage {
   constructor(page) {

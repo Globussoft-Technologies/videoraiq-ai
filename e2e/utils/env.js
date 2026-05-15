@@ -18,5 +18,7 @@ export function baseUrl() {
 }
 
 export function loginPath() {
-  return process.env.LOGIN_PATH || "/login";
+  // The React AdminLoginForm is served at /admin-login. (/login is a separate
+  // aMember/PHP login page — not the app's React login form.)
+  return process.env.LOGIN_PATH || "/admin-login";
 }
