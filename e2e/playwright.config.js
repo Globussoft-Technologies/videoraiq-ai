@@ -36,10 +36,14 @@ export default defineConfig({
   },
   projects: [
     // Logs in once with chromium and persists storage state. The authenticated
-    // browser projects depend on it. chromium is always installed in CI so
-    // this project can run regardless of which browsers the matrix targets.
+    // browser projects depend on it.
+    //
+    // testDir is "." (the e2e/ root) because global.setup.js lives there,
+    // OUTSIDE the top-level testDir of ./tests — without this override the
+    // setup project matches zero files and never runs.
     {
       name: "setup",
+      testDir: ".",
       testMatch: /global\.setup\.js/,
       use: { ...devices["Desktop Chrome"] },
     },
