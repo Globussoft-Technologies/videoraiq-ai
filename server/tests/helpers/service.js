@@ -19,7 +19,10 @@ export function serviceCtx({
   adminId,
   orgId,
   memberId,
+  user_id,
+  user_email,
   authorizedChannel,
+  permissionConfig,
   body,
   query,
   params,
@@ -30,8 +33,11 @@ export function serviceCtx({
       adminId: adminId != null ? String(adminId) : undefined,
       orgId,
       memberId,
+      user_id,
+      user_email,
     },
     authorizedChannel,
+    permissionConfig,
   };
   if (body) req.body = body;
   if (query) req.query = query;
