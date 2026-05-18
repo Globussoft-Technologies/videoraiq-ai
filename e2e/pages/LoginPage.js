@@ -1,27 +1,29 @@
 import { expect } from "@playwright/test";
 
-// The React AdminLoginForm (#login / #pass fields) is served at /admin-login.
-// /login is a separate aMember/PHP login page — not this app's React form.
-const LOGIN_PATH = process.env.LOGIN_PATH || "/admin-login";
+// dev.videoraiq.com fronts login with aMember (a PHP app), not the React
+// AdminLoginForm. The real user login form lives at /login:
+//   #amember-login  (name=amember_login)  — username/email
+//   #amember-pass   (name=amember_pass)   — password
+//   <input type=submit value="Login">
+const LOGIN_PATH = process.env.LOGIN_PATH || "/login";
 
 export class LoginPage {
   constructor(page) {
     this.page = page;
-    // Prefer label/placeholder lookups — they survive class-name churn.
-    this.usernameInput = page.locator("#login");
-    this.passwordInput = page.locator("#pass");
-    this.rememberMe = page.locator("#remember");
-    this.submitButton = page.getByRole("button", { name: /sign in/i });
-    this.signingInButton = page.getByRole("button", { name: /signing in/i });
+    this.usernameInput = page.locator("#amember-login");
+    this.passwordInput = page.locator("#amember-pass");
+    this.submitButton = page.getByRole("button", { name: "Login", exact: true });
     this.forgotPasswordLink = page.getByRole("link", {
       name: /forgot.*password/i,
     });
-    this.toast = page.locator("[data-sonner-toast], [role='status']");
+    // aMember re-renders /login with an inline error block on a failed login.
+    this.errorMessage = page.locator(
+      ".am-error, .error, [class*='error'], .am-form-error"
+    );
   }
 
   async goto() {
     await this.page.goto(LOGIN_PATH);
-    // The login form can render under any of these routes; wait for the field.
     await expect(this.usernameInput).toBeVisible({ timeout: 15_000 });
   }
 
@@ -45,13 +47,9 @@ export class LoginPage {
     await expect(this.submitButton).toBeVisible();
   }
 
-  async expectErrorToast(messageRegex = /invalid|wrong|incorrect|failed/i) {
-    await expect(this.toast.first()).toBeVisible({ timeout: 15_000 });
-    await expect(this.toast.first()).toContainText(messageRegex);
-  }
-
-  async expectSuccessToast() {
-    await expect(this.toast.first()).toBeVisible({ timeout: 15_000 });
-    await expect(this.toast.first()).toContainText(/success|welcome/i);
+  /** A failed aMember login stays on the /login page (no redirect to the app). */
+  async expectLoginRejected() {
+    await expect(this.page).toHaveURL(/\/login/i, { timeout: 15_000 });
+    await expect(this.page).not.toHaveURL(/\/dashboard/i);
   }
 }

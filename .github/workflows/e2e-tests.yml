@@ -94,7 +94,7 @@ jobs:
           BACKEND_URL: ${{ secrets.E2E_BACKEND_URL || 'https://dev-api.videoraiq.com' }}
           STREAMING_URL: ${{ secrets.E2E_STREAMING_URL || 'https://dev-stream.videoraiq.com' }}
           AUTH_COOKIE_NAME: ${{ secrets.E2E_AUTH_COOKIE_NAME || 'dev-access-token' }}
-          LOGIN_PATH: ${{ secrets.E2E_LOGIN_PATH || '/admin-login' }}
+          LOGIN_PATH: ${{ secrets.E2E_LOGIN_PATH || '/login' }}
           TEST_USERNAME: ${{ secrets.E2E_USERNAME }}
           TEST_PASSWORD: ${{ secrets.E2E_PASSWORD }}
           ALLOW_DESTRUCTIVE_TESTS: "false"

@@ -1,19 +1,19 @@
 import { expect } from "@playwright/test";
 
+// aMember's forgot-password form lives on the same /login page, reached via
+// the "Forgot password?" link or directly at /login?sendpass:
+//   #sendpass  (name=login)  — username/email
+//   <input type=submit value="Reset Password">
 export class ForgotPasswordPage {
-  static PATH = "/forgot-password";
+  static PATH = "/login?sendpass";
 
   constructor(page) {
     this.page = page;
-    this.emailInput = page.locator("#email");
-    this.submitButton = page.getByRole("button", {
-      name: /send reset instructions/i,
-    });
-    this.sendingButton = page.getByRole("button", { name: /sending/i });
-    this.backToLoginLink = page.getByRole("link", { name: /back to login/i });
-    this.successHeading = page.getByText(/check your email/i);
-    this.resendButton = page.getByRole("button", { name: /resend email/i });
-    this.toast = page.locator("[data-sonner-toast], [role='status']");
+    this.emailInput = page.locator("#sendpass");
+    this.submitButton = page.getByRole("button", { name: /reset password/i });
+    this.toast = page.locator(
+      "[data-sonner-toast], [role='status'], .am-info, [class*='error']"
+    );
   }
 
   async goto() {
@@ -24,10 +24,5 @@ export class ForgotPasswordPage {
   async submitEmail(email) {
     await this.emailInput.fill(email);
     await this.submitButton.click();
-  }
-
-  async expectSuccessState() {
-    await expect(this.successHeading).toBeVisible({ timeout: 15_000 });
-    await expect(this.resendButton).toBeVisible();
   }
 }

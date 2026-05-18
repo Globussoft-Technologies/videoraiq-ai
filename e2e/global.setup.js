@@ -19,14 +19,20 @@ setup("authenticate", async ({ page }) => {
 
   fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true });
 
+  // Log in through the aMember /login form.
   const loginPage = new LoginPage(page);
   await loginPage.goto();
   await loginPage.login(username, password);
 
-  // Wait for the post-login redirect to land on the dashboard.
-  await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
-  await expect(page).toHaveURL(/\/dashboard/);
+  // aMember authenticates server-side and hands the browser off to the app.
+  // Wait until we leave the /login page, then settle on the dashboard.
+  await page.waitForURL((url) => !/\/login/i.test(url.pathname), {
+    timeout: 30_000,
+  });
+  await page.goto("/dashboard");
+  await expect(page).toHaveURL(/\/dashboard/, { timeout: 20_000 });
 
-  // Persist storage state so spec workers can skip the login flow.
+  // Persist storage state (cookies + localStorage) so the authenticated
+  // browser projects skip the login flow.
   await page.context().storageState({ path: AUTH_FILE });
 });

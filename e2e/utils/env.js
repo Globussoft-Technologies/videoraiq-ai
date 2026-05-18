@@ -18,7 +18,7 @@ export function baseUrl() {
 }
 
 export function loginPath() {
-  // The React AdminLoginForm is served at /admin-login. (/login is a separate
-  // aMember/PHP login page — not the app's React login form.)
-  return process.env.LOGIN_PATH || "/admin-login";
+  // dev.videoraiq.com fronts login with aMember (PHP); the real user login
+  // form is at /login. The React app's own /admin-login route is shadowed.
+  return process.env.LOGIN_PATH || "/login";
 }
