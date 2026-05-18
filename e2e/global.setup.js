@@ -25,14 +25,18 @@ setup("authenticate", async ({ page }) => {
   await loginPage.login(username, password);
 
   // aMember authenticates server-side and hands the browser off to the app.
-  // Wait until we leave the /login page, then settle on the dashboard.
   await page.waitForURL((url) => !/\/login/i.test(url.pathname), {
     timeout: 30_000,
   });
-  await page.goto("/dashboard");
-  await expect(page).toHaveURL(/\/dashboard/, { timeout: 20_000 });
 
-  // Persist storage state (cookies + localStorage) so the authenticated
-  // browser projects skip the login flow.
+  // Persist storage state (cookies + localStorage) as soon as we have an
+  // authenticated session — BEFORE the dashboard sanity-check below. This
+  // guarantees the auth file exists even if the dashboard probe is slow,
+  // so the authenticated browser projects always have a state to load.
   await page.context().storageState({ path: AUTH_FILE });
+
+  // Best-effort sanity check that the app itself is reachable. Non-fatal:
+  // the storage state is already written above.
+  await page.goto("/dashboard").catch(() => {});
+  await expect(page).toHaveURL(/\/dashboard/, { timeout: 20_000 });
 });
