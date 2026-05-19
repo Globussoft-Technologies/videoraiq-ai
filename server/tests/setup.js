@@ -74,6 +74,8 @@ const testConfig = {
   telegram: { botToken: "test:bot" },
 
   // Misc
+  ImageView: "http://imageview.test",
+  accessLogsTimeDifference: 5,
   swagger: { user: "test", pass: "test" },
   empDomain: { url: "http://emp.test", apiKey: "test-key" },
   storage: {
