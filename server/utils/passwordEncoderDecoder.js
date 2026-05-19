@@ -1,6 +1,5 @@
 import crypto from 'crypto'
-import atob from 'atob';
-import btoa from 'btoa';
+
 class PasswordEncoderDecoder {
 
     async encryptText(text, key) {

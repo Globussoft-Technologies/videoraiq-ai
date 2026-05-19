@@ -777,11 +777,16 @@ class StorageService {
         fileId,
       });
 
-      fs.unlink(req.file.path, () => {});
+      fs.unlink(req.file.path, (err) => {
+        if (err) logger.debug("Failed to delete temp file:", err);
+      });
 
       return res.status(200).json({ fileId: file._id });
     } catch (error) {
       logger.error("Error uploading to Google Drive:", error);
+      fs.unlink(req.file.path, (err) => {
+        if (err) logger.debug("Failed to delete temp file on error:", err);
+      });
       return res
         .status(500)
         .json({ error: "Failed to upload file to Google Drive" });
@@ -847,11 +852,16 @@ class StorageService {
         fileId: uploadParams.Key,
       });
 
-      fs.unlink(req.file.path, () => {});
+      fs.unlink(req.file.path, (err) => {
+        if (err) logger.debug("Failed to delete temp file:", err);
+      });
 
       return res.status(200).json({ fileId: file._id });
     } catch (error) {
       logger.error("Error uploading to S3:", error);
+      fs.unlink(req.file.path, (err) => {
+        if (err) logger.debug("Failed to delete temp file on error:", err);
+      });
       return res.status(500).json({ error: "Failed to upload file to S3" });
     }
   }
@@ -934,7 +944,9 @@ class StorageService {
       });
 
       // Clean up temp file
-      fs.unlink(req.file.path, () => {});
+      fs.unlink(req.file.path, (err) => {
+        if (err) logger.debug("Failed to delete temp file:", err);
+      });
 
       return res.status(200).json({
         success: true,
@@ -942,9 +954,9 @@ class StorageService {
       });
     } catch (error) {
       logger.error("SFTP Upload Error:", error.message);
-      // If error occurs, we might want to invalidate the pool if it's a connection issue,
-      // but 'error' event handler on client handles clean up.
-      // We just ensure activeRequests is decremented.
+      fs.unlink(req.file.path, (err) => {
+        if (err) logger.debug("Failed to delete temp file on error:", err);
+      });
       return res.status(500).json({ error: "Failed to upload file to SFTP" });
     } finally {
       if (poolSession) {

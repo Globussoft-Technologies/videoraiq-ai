@@ -54,7 +54,7 @@ class RolesServices{
             //Updating new Roles and their permissions
             if (newRole.length > 0) {
                 try {
-                    newRole.map(async role_new => {
+                    await Promise.all(newRole.map(async role_new => {
                         let roles = {
                             adminId: adminId,
                             roleName: role_new.toLowerCase(),
@@ -68,11 +68,11 @@ class RolesServices{
                         let createdPermission = await permissionModel.create(permissionData);
 
                         let updatedRole = await rolesModel.findOneAndUpdate(
-                          { _id:roleInsert._id}, 
-                          { $set: { permissionId: createdPermission._id } }, 
+                          { _id:roleInsert._id},
+                          { $set: { permissionId: createdPermission._id } },
                           { new: true }
                         );
-                    });
+                    }));
                     if (existRole.length) {
                         return newRole.length
                             ? resp.send(Response.SuccessResp(`${newRole} ${RolesMessageNew['ROLES_ADD_SUCCESS']['en']} ${existRole} ${RolesMessageNew['ROLES_EXIST']['en']}`))
@@ -82,6 +82,7 @@ class RolesServices{
                     }
                 } catch (error) {
                     logger.error(`Error while inserting new Roles ${error.message}`);
+                    return resp.send(Response.FailResp(`Error while inserting new Roles: ${error.message}`));
                 }
             }
             return resp.send(Response.FailResp(`${existRole} ${RolesMessageNew['ROLES_EXIST']['en']} `));

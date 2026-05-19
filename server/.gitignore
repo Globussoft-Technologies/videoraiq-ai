@@ -67,3 +67,6 @@ storageconfig.json
 obf_src
 docker-compose.yml
 deploy.js
+
+# Temporary file uploads
+incidentUploads/

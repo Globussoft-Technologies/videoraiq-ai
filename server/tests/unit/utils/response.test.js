@@ -51,10 +51,10 @@ describe("Response", () => {
       expect(r.body.status).toBe("failed");
     });
 
-    it("notFoundResp currently returns 500 (matches source)", () => {
-      // Note: source returns 500, not 404 — this test pins the current behavior.
-      // Update if the source is fixed to return 404.
-      expect(Response.notFoundResp("nope", null).statusCode).toBe(500);
+    it("notFoundResp returns 404", () => {
+      const r = Response.notFoundResp("nope", null);
+      expect(r.statusCode).toBe(404);
+      expect(r.body.status).toBe("failed");
     });
   });
 
