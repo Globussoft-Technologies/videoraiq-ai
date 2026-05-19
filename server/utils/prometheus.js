@@ -80,6 +80,6 @@ export const metricsHandler = async (req, res) => {
     res.set('Content-Type', promClient.register.contentType);
     res.end(await promClient.register.metrics());
   } catch (error) {
-    res.status(500).end(error);
+    res.status(500).end('Internal Server Error');
   }
 };
