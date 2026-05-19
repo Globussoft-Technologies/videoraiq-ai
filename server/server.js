@@ -22,6 +22,8 @@ import logger from "./utils/logger.js";
 import { auth, swaggerAuthLogger } from "./views/swaggerAuth.js";
 import { initSocket } from "./socket.js"; // <-- Socket.io setup
 import { mustRunInsideContainer } from "./scripts/check.js";
+import { prometheusMiddleware } from "./middlewares/prometheusMiddleware.js";
+import { metricsHandler } from "./utils/prometheus.js";
 
 if (process.env.T === "D") mustRunInsideContainer();
 
@@ -44,6 +46,7 @@ if (process.env.NODE_ENV === "localDev") {
 }
 
 app.use(helmet());
+app.use(prometheusMiddleware);
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
@@ -82,6 +85,9 @@ app.use(express.static(path.join(__dirname, "public")));
 app.get("/", (_req, res) => {
   res.send("Welcome to the API");
 });
+
+app.get("/metrics", metricsHandler);
+
 app.use("/api", routes);
 
 app.use(

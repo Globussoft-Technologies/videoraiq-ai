@@ -52,7 +52,7 @@ class Response {
   }
   notFoundResp(message, error) {
     return {
-      statusCode: 500,
+      statusCode: 404,
       body: {
         status: "failed",
         message: message,

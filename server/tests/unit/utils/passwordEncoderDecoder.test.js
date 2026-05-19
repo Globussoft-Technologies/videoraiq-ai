@@ -1,14 +1,10 @@
 import { describe, it, expect } from "vitest";
 import crypto from "crypto";
+import PED from "../../../utils/passwordEncoderDecoder.js";
 
-// SKIPPED — the source file `utils/passwordEncoderDecoder.js` imports `atob`
-// and `btoa` from npm, but neither package is declared in server/package.json.
-// Importing the module here throws ERR_MODULE_NOT_FOUND. Tracked in:
-//   https://github.com/Globussoft-Technologies/videoraiq-ai/issues/21
-// Unskip once the dependency gap is fixed in product code.
-const PED = null;
+const KEY = crypto.randomBytes(32).toString('hex').slice(0, 32);
 
-describe.skip("PasswordEncoderDecoder", () => {
+describe("PasswordEncoderDecoder", () => {
   describe("encryptText / decryptText (AES-256-CBC, random IV)", () => {
     it("round-trips arbitrary text", async () => {
       const samples = ["", "p", "long-password-123!@#", "non-ascii: ñá🚀"];
