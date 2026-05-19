@@ -37,7 +37,12 @@ const testConfig = {
     detectionUrl: "http://detection.test",
     attendanceUrl: "http://attendance.test",
   },
-  RTSPStream: { host: "http://rtsp.test" },
+  RTSPStream: {
+    host: "http://rtsp.test",
+    token: "test-rtsp-token",
+    terminateHost: "http://rtsp-terminate.test",
+    terminateKey: "test-terminate-key",
+  },
   aMember: {
     baseUrl: "http://amember.test",
     apiKey: "test-key",
@@ -52,7 +57,16 @@ const testConfig = {
 
   // Infra
   redis: { host: "127.0.0.1", port: 6379 },
+  Redis: {
+    host: "127.0.0.1",
+    port: 6379,
+    username: "",
+    password: "",
+    db: 0,
+    url: "redis://127.0.0.1:6379",
+  },
   mongoURI: "mongodb://127.0.0.1:27017/videora-test",
+  mongodb_uri: "mongodb://127.0.0.1:27017/videora-test",
 
   // Mail / SMS
   sendgrid: { apiKey: "SG.test", from: "noreply@test" },
