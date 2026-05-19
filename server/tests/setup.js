@@ -52,6 +52,9 @@ const testConfig = {
   detectionServiceRevokeSecretKey: "test-revoke-detection-secret",
   attendanceServiceRevokeSecretKey: "test-revoke-attendance-secret",
   DSAuthUsersAPI: "http://ds-auth-users.test",
+  DSAuthUsersApiDB: "test-faces-db",
+  backendDomain: "http://backend.test",
+  SFTP: { Path: "/sftp/test" },
   enablePhoneRecipients: false,
   allowed_users: [],
 

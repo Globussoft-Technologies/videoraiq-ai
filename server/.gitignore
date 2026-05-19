@@ -9,6 +9,9 @@ dist/
 package-lock.json
 audit.json
 
+# Test coverage reports
+coverage/
+
 
 # Compiled Java class files
 *.class
