@@ -54,7 +54,13 @@ const testConfig = {
   DSAuthUsersAPI: "http://ds-auth-users.test",
   DSAuthUsersApiDB: "test-faces-db",
   backendDomain: "http://backend.test",
-  SFTP: { Path: "/sftp/test" },
+  SFTP: {
+    Path: "/sftp/test",
+    IP: "127.0.0.1",
+    Port: 22,
+    "user-name": "test-sftp-user",
+    Password: "test-sftp-pass",
+  },
   enablePhoneRecipients: false,
   allowed_users: [],
 
@@ -77,6 +83,7 @@ const testConfig = {
   telegram: { botToken: "test:bot" },
 
   // Misc
+  Frontend: { storagePage: "http://frontend.test/storage" },
   ImageView: "http://imageview.test",
   accessLogsTimeDifference: 5,
   swagger: { user: "test", pass: "test" },
