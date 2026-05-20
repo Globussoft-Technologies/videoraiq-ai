@@ -140,6 +140,14 @@ describe("AUTHService.getAmemberUserDetails", () => {
     await AUTHService.getAmemberUserDetails(req, res);
     expect(res.statusCode).toBe(400);
   });
+
+  it("returns 404 when admin with username does not exist", async () => {
+    const { req, res } = authCtx({ params: { username: "nonexistent_user" } });
+    await AUTHService.getAmemberUserDetails(req, res);
+    expect(res.statusCode).toBe(404);
+    expect(res._body.success).toBe(false);
+    expect(res._body.message).toContain("No Admin found");
+  });
 });
 
 describe("AUTHService.registerAdminIfNotExists", () => {
