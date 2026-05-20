@@ -31,6 +31,20 @@ const { Incident, CountPersonIncident } = incidents;
 const { default: IncidentsService } = await import(
   "../../../core/v1/incidents/incidents.service.js"
 );
+const { sendPayloadToUser } = await import("../../../socket.js");
+const { triggerAlertOnIncident } = await import(
+  "../../../core/v1/alerts/alert.events.js"
+);
+const { default: Admin } = await import(
+  "../../../core/v1/admin/admin.model.js"
+);
+const { default: Channel } = await import(
+  "../../../core/v1/channels/channels.model.js"
+);
+const { CountPersonsDetectionSetting } = await import(
+  "../../../core/v1/detectionSettings/detectionSettings.model.js"
+);
+await import("../../../core/v1/NVR/nvr.model.js");
 
 beforeAll(async () => {
   await connectMongo();
@@ -40,6 +54,8 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   await clearCollections();
+  sendPayloadToUser.mockClear();
+  triggerAlertOnIncident.mockClear();
 });
 
 function makeIncident(over = {}) {
@@ -153,5 +169,141 @@ describe("IncidentsService.updateReportStatus", () => {
     });
     await IncidentsService.updateReportStatus(req, res, next);
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("IncidentsService.createIncidents — happy path", () => {
+  /**
+   * Seed Admin + NVR-id + Channel (with a wired-up countPersons detection
+   * setting) so a genuine countPersons body can flow end-to-end.
+   */
+  async function seedCountPersonsScene() {
+    const admin = await Admin.create({
+      user_id: "777",
+      login: "owner",
+      email: "owner@test.com",
+    });
+    const detectionSetting = await CountPersonsDetectionSetting.create({
+      userId: admin.user_id,
+      settingType: "countPersonsSettings",
+      name: "default",
+      enabled: true,
+      settings: { metricType: "gauge", detectionTimeGap: 30 },
+    });
+    const nvrId = new mongoose.Types.ObjectId();
+    const channel = await Channel.create({
+      nvrId,
+      userId: admin.user_id,
+      streamingPath: "/Streaming/Channels/101",
+      localChannelId: "1",
+      name: "Front Door",
+      detections: {
+        countPersonsSettings: { id: detectionSetting._id, enabled: true },
+      },
+    });
+    return { admin, nvrId, channel, detectionSetting };
+  }
+
+  it("creates a new countPersons incident, persists it, and fans out the socket payload", async () => {
+    const { admin, nvrId, channel, detectionSetting } =
+      await seedCountPersonsScene();
+
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "countPersons",
+        incidentName: "People counted",
+        nvrId: nvrId.toString(),
+        channelId: channel._id.toString(),
+        adminId: admin._id.toString(),
+        triggerNotification: true,
+        count: 5,
+        timeOfIncident: new Date(),
+        severity: "low",
+      },
+    });
+
+    await IncidentsService.createIncidents(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).status).toBe("success");
+    expect(payload(res).message).toBe("Incident created successfully");
+    expect(payload(res).data.Incident.count).toBe(5);
+    expect(payload(res).data.Incident.channelName).toBe("Front Door");
+
+    // Persisted as a countPersons discriminator with the admin's user_id.
+    const stored = await Incident.findOne({ channelId: channel._id });
+    expect(stored).not.toBeNull();
+    expect(stored.incidentType).toBe("countPersons");
+    expect(stored.userId).toBe(admin.user_id);
+    const cp = await CountPersonIncident.findById(stored._id);
+    expect(cp.count).toBe(5);
+    expect(cp.timeSeries).toHaveLength(1);
+    expect(cp.timeSeries[0].count).toBe(5);
+
+    // Socket fan-out is scoped to the admin and carries the detection setting.
+    expect(sendPayloadToUser).toHaveBeenCalledTimes(1);
+    const [socketUserId, socketTopic, socketBody] =
+      sendPayloadToUser.mock.calls[0];
+    expect(socketUserId).toBe(admin.user_id);
+    expect(socketTopic).toBe(`cameradetection_${admin._id}`);
+    expect(socketBody.channelName).toBe("Front Door");
+    expect(socketBody.detectionSetting._id.toString()).toBe(
+      detectionSetting._id.toString()
+    );
+
+    // countPersons is explicitly excluded from triggerAlertOnIncident.
+    expect(triggerAlertOnIncident).not.toHaveBeenCalled();
+  });
+
+  it("updates the same day's countPersons incident in place on a second post", async () => {
+    const { admin, nvrId, channel } = await seedCountPersonsScene();
+
+    const buildBody = (count) => ({
+      incidentType: "countPersons",
+      incidentName: "People counted",
+      nvrId: nvrId.toString(),
+      channelId: channel._id.toString(),
+      adminId: admin._id.toString(),
+      triggerNotification: true,
+      count,
+      timeOfIncident: new Date(),
+    });
+
+    const first = serviceCtx({ body: buildBody(2) });
+    await IncidentsService.createIncidents(first.req, first.res, first.next);
+    expect(first.res.statusCode).toBe(200);
+
+    const second = serviceCtx({ body: buildBody(9) });
+    await IncidentsService.createIncidents(second.req, second.res, second.next);
+    expect(second.res.statusCode).toBe(200);
+    expect(payload(second.res).message).toBe("Incident updated successfully");
+
+    // Still a single document on disk — same-day countPersons updates in place.
+    expect(await Incident.countDocuments()).toBe(1);
+    const stored = await CountPersonIncident.findOne({ channelId: channel._id });
+    expect(stored.count).toBe(9);
+    expect(stored.timeSeries).toHaveLength(2);
+    expect(stored.timeSeries.map((t) => t.count)).toEqual([2, 9]);
+  });
+
+  it("returns 400 when adminId does not resolve to a real admin", async () => {
+    const { nvrId, channel } = await seedCountPersonsScene();
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "countPersons",
+        nvrId: nvrId.toString(),
+        channelId: channel._id.toString(),
+        adminId: new mongoose.Types.ObjectId().toString(),
+        count: 1,
+        timeOfIncident: new Date(),
+      },
+    });
+
+    await IncidentsService.createIncidents(req, res, next);
+    // Service uses res.send(Response.validationFailResp(...)) — no statusCode shift.
+    expect(payload(res).status).toBe("failed");
+    expect(payload(res).message).toMatch(/Admin not found/i);
+    expect(await Incident.countDocuments()).toBe(0);
+    expect(sendPayloadToUser).not.toHaveBeenCalled();
   });
 });

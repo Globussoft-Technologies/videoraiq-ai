@@ -12,6 +12,8 @@ vi.mock("../../../socket.js", () => ({
   sendPayloadToUser: vi.fn().mockResolvedValue(undefined),
 }));
 
+const { sendPayloadToUser } = await import("../../../socket.js");
+
 const { default: AttendanceService } = await import(
   "../../../core/v1/attendance/attendance.service.js"
 );
@@ -37,6 +39,7 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   await clearCollections();
+  sendPayloadToUser.mockClear();
 });
 
 /** Seed an admin + employee + channel; returns the ids for a valid body. */
@@ -126,10 +129,37 @@ describe("AttendanceService.logAttendance", () => {
     const seeded = await seed();
     const { req, res } = serviceCtx({ body: body(seeded) });
     await AttendanceService.logAttendance(req, res);
-    expect([200, 201]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(201);
+    expect(payload(res).status).toBe("success");
+    expect(payload(res).message).toBe("Attendance logged");
     const att = await Attendance.findOne({ employee: seeded.employee._id });
     expect(att).not.toBeNull();
     expect(att.events.some((e) => e.cameraType === "checkin")).toBe(true);
+  });
+
+  it("emits a sendPayloadToUser socket event with the right shape on check-in", async () => {
+    const seeded = await seed();
+    const { req, res } = serviceCtx({ body: body(seeded) });
+    await AttendanceService.logAttendance(req, res);
+    expect(res.statusCode).toBe(201);
+
+    expect(sendPayloadToUser).toHaveBeenCalledTimes(1);
+    const [userIdArg, channelArg, payloadArg] = sendPayloadToUser.mock.calls[0];
+    // Admin.user_id is a string when seeded; the topic must scope to admin._id.
+    expect(userIdArg).toBe(seeded.admin.user_id);
+    expect(channelArg).toBe(`attendanceLog_${seeded.admin._id}`);
+
+    expect(payloadArg.message).toBe("New attendance event logged");
+    expect(payloadArg.attendance.channelId.toString()).toBe(
+      seeded.channel._id.toString()
+    );
+    expect(payloadArg.attendance.channelName).toBe(seeded.channel.name);
+    expect(payloadArg.attendance.event.cameraType).toBe("checkin");
+    // Employee was populated before being sent over the socket.
+    expect(payloadArg.attendance.employee._id.toString()).toBe(
+      seeded.employee._id.toString()
+    );
+    expect(payloadArg.attendance.event.timestamp).toBeInstanceOf(Date);
   });
 
   it("allows a checkout after a check-in exists", async () => {
