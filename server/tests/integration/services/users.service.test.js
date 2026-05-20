@@ -292,3 +292,85 @@ describe("UsersService.getImportProgress", () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+describe("UsersService.fetchAuthUser", () => {
+  it("fails validation when the admin does not exist", async () => {
+    const { req, res, next } = serviceCtx({
+      adminId: new mongoose.Types.ObjectId(),
+      query: {},
+      body: {},
+    });
+    await UsersService.fetchAuthUser(req, res, next);
+    expect(payload(res).status).toBe("failed");
+  });
+
+  it("returns 200 with empty users when userId not found", async () => {
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      query: { userId: new mongoose.Types.ObjectId().toString() },
+      body: {},
+    });
+    await UsersService.fetchAuthUser(req, res, next);
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.totalCount).toBe(0);
+    expect(payload(res).data.users).toEqual([]);
+  });
+
+  it("returns the single user when userId is provided", async () => {
+    const user = await seedUser({ email: "single@test.com" });
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      query: { userId: user._id.toString() },
+      body: {},
+    });
+    await UsersService.fetchAuthUser(req, res, next);
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.totalCount).toBe(1);
+    expect(payload(res).data.users[0].email).toBe("single@test.com");
+  });
+
+  it("fails when an invalid roleId is provided", async () => {
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      query: {},
+      body: { roleIds: [new mongoose.Types.ObjectId().toString()] },
+    });
+    await UsersService.fetchAuthUser(req, res, next);
+    expect(payload(res).status).toBe("failed");
+  });
+
+  it("lists the admin's users (paginated)", async () => {
+    await seedUser({ email: "a@test.com", userName: "alpha" });
+    await seedUser({ email: "b@test.com", userName: "bravo" });
+    // Different admin → must NOT appear.
+    await seedUser({
+      adminId: new mongoose.Types.ObjectId(),
+      email: "other@test.com",
+    });
+
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      query: {},
+      body: {},
+    });
+    await UsersService.fetchAuthUser(req, res, next);
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.totalCount).toBe(2);
+    expect(payload(res).data.users).toHaveLength(2);
+  });
+
+  it("applies the searchQuery filter on userName", async () => {
+    await seedUser({ userName: "alpha", email: "a@test.com" });
+    await seedUser({ userName: "bravo", email: "b@test.com" });
+
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      query: { searchQuery: "alpha" },
+      body: {},
+    });
+    await UsersService.fetchAuthUser(req, res, next);
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.totalCount).toBe(1);
+    expect(payload(res).data.users[0].userName).toBe("alpha");
+  });
+});

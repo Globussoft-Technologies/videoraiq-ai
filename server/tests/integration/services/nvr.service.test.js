@@ -26,6 +26,9 @@ const { default: NVR } = await import("../../../core/v1/NVR/nvr.model.js");
 const { default: Admin } = await import(
   "../../../core/v1/admin/admin.model.js"
 );
+const { default: Channel } = await import(
+  "../../../core/v1/channels/channels.model.js"
+);
 
 const USER_ID = "8001";
 
@@ -189,6 +192,135 @@ describe("NVRService.addNvr", () => {
   it("returns 400 when the admin does not exist", async () => {
     const { req, res, next } = serviceCtx({ user_id: "9999", body: {} });
     await NVRService.addNvr(req, res, next);
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("NVRService.getNVRsWithChannels", () => {
+  it("returns 400 when settingType query is missing (admin path)", async () => {
+    const admin = await Admin.create({
+      user_id: USER_ID,
+      login: "admin",
+      email: "a@test.com",
+    });
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      query: {},
+    });
+    await NVRService.getNVRsWithChannels(req, res, next);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 400 when settingType query is missing (member path)", async () => {
+    const admin = await Admin.create({
+      user_id: USER_ID,
+      login: "admin",
+      email: "a@test.com",
+    });
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      memberId: "member-1",
+      authorizedChannel: { channels: [], nvrIds: [] },
+      query: {},
+    });
+    await NVRService.getNVRsWithChannels(req, res, next);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns NVRs grouped with channels (admin path)", async () => {
+    const admin = await Admin.create({
+      user_id: USER_ID,
+      login: "admin",
+      email: "a@test.com",
+    });
+    const nvr = await makeNvr({ nvrName: "Main" });
+    await Channel.create({
+      nvrId: nvr._id,
+      userId: USER_ID,
+      streamingPath: "/x",
+      localChannelId: "1",
+      name: "Lobby",
+    });
+
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      query: { settingType: "loiteringWithAuth" },
+    });
+    await NVRService.getNVRsWithChannels(req, res, next);
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.nvrs).toHaveLength(1);
+    expect(payload(res).data.nvrs[0].channels).toHaveLength(1);
+    expect(payload(res).data.nvrs[0].channels[0].hasSetting).toBe(false);
+  });
+
+  it("scopes to authorized NVRs/channels when memberId is set", async () => {
+    const admin = await Admin.create({
+      user_id: USER_ID,
+      login: "admin",
+      email: "a@test.com",
+    });
+    const nvr1 = await makeNvr({ localNvrId: "n1", nvrName: "Allowed" });
+    const nvr2 = await makeNvr({ localNvrId: "n2", nvrName: "Restricted" });
+    const ch1 = await Channel.create({
+      nvrId: nvr1._id,
+      userId: USER_ID,
+      streamingPath: "/x",
+      localChannelId: "1",
+      name: "Allowed-Ch",
+    });
+    await Channel.create({
+      nvrId: nvr2._id,
+      userId: USER_ID,
+      streamingPath: "/x",
+      localChannelId: "2",
+      name: "Restricted-Ch",
+    });
+
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      memberId: "member-1",
+      authorizedChannel: { channels: [ch1._id], nvrIds: [nvr1._id] },
+      query: { settingType: "loiteringWithAuth" },
+    });
+    await NVRService.getNVRsWithChannels(req, res, next);
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.nvrs).toHaveLength(1);
+    expect(payload(res).data.nvrs[0].name).toBe("Allowed");
+  });
+});
+
+describe("NVRService.updateNvrChannels", () => {
+  it("returns 400 when nvrId is missing", async () => {
+    const { req, res, next } = serviceCtx({ params: {} });
+    await NVRService.updateNvrChannels(req, res, next);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 404 when the NVR does not exist", async () => {
+    const { req, res, next } = serviceCtx({
+      params: { id: new mongoose.Types.ObjectId().toString() },
+    });
+    await NVRService.updateNvrChannels(req, res, next);
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 400 for an unsupported brand", async () => {
+    // updateHandlers is mocked empty → any brand resolves to unsupported.
+    const nvr = await makeNvr();
+    const { req, res, next } = serviceCtx({
+      params: { id: nvr._id.toString() },
+    });
+    await NVRService.updateNvrChannels(req, res, next);
+    expect(res.statusCode).toBe(400);
+    expect(payload(res).message).toMatch(/unsupported brand/i);
+  });
+});
+
+describe("NVRService.getNvrById", () => {
+  it("returns 400 when id is missing", async () => {
+    const { req, res, next } = serviceCtx({ params: {} });
+    await NVRService.getNvrById(req, res, next);
+    // Service treats invalid/missing as cast error → 400.
     expect(res.statusCode).toBe(400);
   });
 });
