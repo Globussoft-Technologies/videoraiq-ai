@@ -1,11 +1,8 @@
 /**
- * Integration test for PermissionService (permissions.utility.js) — the
- * tractable fetch/update/delete paths against in-memory MongoDB.
- *
- * `create` and `bulkPermissionDelete` read `req.verified.userData.userData`
- * (a double-nested shape) outside their try blocks, so they are not exercised
- * here. Every method responds via `res.send(Response.xxx())`, which leaves
- * `res.statusCode` at 200 — assertions check `payload(res).status` instead.
+ * Integration test for PermissionService (permissions.utility.js) against
+ * in-memory MongoDB. Every method responds via `res.send(Response.xxx())`,
+ * which leaves `res.statusCode` at 200 — assertions check `payload(res).status`
+ * instead.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import mongoose from "mongoose";
@@ -188,6 +185,82 @@ describe("PermissionService.updateAdminPermissions", () => {
   it("fails when permissionConfig is missing", async () => {
     const { req, res, next } = serviceCtx({ adminId: admin._id, body: {} });
     await PermissionService.updateAdminPermissions(req, res, next);
+    expect(payload(res).status).toBe("failed");
+  });
+});
+
+describe("PermissionService.create", () => {
+  it("creates a new permission with valid input", async () => {
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      body: {
+        permissionName: "new_permission",
+        permissionConfig: { dashboard: { view: true, edit: true } },
+      },
+    });
+    await PermissionService.create(req, res, next);
+    expect(payload(res).status).toBe("success");
+    const created = await permissionModel.findOne({
+      permissionName: "new_permission",
+    });
+    expect(created).not.toBeNull();
+  });
+
+  it("fails when permissionName already exists", async () => {
+    await seedPermission({ permissionName: "existing" });
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      body: {
+        permissionName: "existing",
+        permissionConfig: { dashboard: { view: true } },
+      },
+    });
+    await PermissionService.create(req, res, next);
+    expect(payload(res).status).toBe("failed");
+  });
+});
+
+describe("PermissionService.bulkPermissionDelete", () => {
+  it("deletes multiple permission modules", async () => {
+    const perm = await seedPermission({
+      permissionConfig: { dashboard: { view: true }, users: { view: true } },
+    });
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      body: {
+        permissionConfig: [
+          { moduleName: "dashboard" },
+          { moduleName: "users" },
+        ],
+      },
+    });
+    await PermissionService.bulkPermissionDelete(req, res, next);
+    expect(payload(res).status).toBe("success");
+    const updated = await permissionModel.findById(perm._id);
+    expect(updated.permissionConfig.dashboard).toBeUndefined();
+    expect(updated.permissionConfig.users).toBeUndefined();
+  });
+
+  it("fails when no permissions are provided", async () => {
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      body: { permissionConfig: [] },
+    });
+    await PermissionService.bulkPermissionDelete(req, res, next);
+    expect(payload(res).status).toBe("failed");
+  });
+
+  it("fails when a module to delete does not exist", async () => {
+    const perm = await seedPermission({
+      permissionConfig: { dashboard: { view: true } },
+    });
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      body: {
+        permissionConfig: [{ moduleName: "nonexistent" }],
+      },
+    });
+    await PermissionService.bulkPermissionDelete(req, res, next);
     expect(payload(res).status).toBe("failed");
   });
 });
