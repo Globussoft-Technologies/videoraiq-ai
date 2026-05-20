@@ -29,6 +29,13 @@ const eventSchema = new Schema({
   confidenceScore: { type: Number },
 });
 
+eventSchema.pre("validate", function (next) {
+  if (!this.images || (!this.images.face && !this.images.person && !this.images.frame)) {
+    this.invalidate("images", "At least one image (face, person, or frame) is required.");
+  }
+  next();
+});
+
 const attendanceSchema = new Schema(
   {
     user: {
