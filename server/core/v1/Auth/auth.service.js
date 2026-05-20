@@ -754,14 +754,15 @@ class AUTHService {
       }
       let isUserExist = await adminModel.findOne({ login: username });
 
-      !isUserExist &&
-        res.status(404).json({
+      if (!isUserExist) {
+        return res.status(404).json({
           success: false,
           message: `No Admin found with username ${username} `,
         });
+      }
 
       const allsubscriptions = await this.getAmemberAccessByUserId(
-        parseInt(isUserExist?.user_id)
+        parseInt(isUserExist.user_id)
       );
       const formattedSubscriptions =
         this.extractSubscriptions(allsubscriptions);
