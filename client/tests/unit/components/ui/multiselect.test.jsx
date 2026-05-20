@@ -169,4 +169,15 @@ describe("ui/MultiSelect", () => {
     fireEvent.click(screen.getByRole("combobox"));
     expect(screen.queryByText("Select All")).toBeNull();
   });
+
+  it("closes the dropdown when a mousedown fires outside its ref", () => {
+    // Round 6 — covers the document mousedown handler in the useEffect.
+    render(<MultiSelect options={optionsBasic} value={[]} onChange={() => {}} />);
+    openDropdown();
+    expect(screen.getByText("Select All")).toBeInTheDocument();
+
+    // dispatch a real mousedown on document.body (outside the trigger)
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByText("Select All")).toBeNull();
+  });
 });
