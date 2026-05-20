@@ -27,8 +27,29 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "html", "lcov", "json-summary"],
       reportsDirectory: "./coverage",
-      include: ["src/utils/**", "src/helpers/**", "src/hooks/**", "src/lib/**", "src/schema/**"],
-      exclude: ["tests/**", "**/*.jsx"],
+      // Widened in Round 3 to count the component / context / data tests
+      // added since the original narrow scope. `.jsx` files now count.
+      include: [
+        "src/utils/**",
+        "src/helpers/**",
+        "src/hooks/**",
+        "src/lib/**",
+        "src/schema/**",
+        "src/components/**",
+        "src/context/**",
+        "src/data/**",
+      ],
+      exclude: [
+        "tests/**",
+        // Asset-only paths and the giant page tree (Round-4 territory) are
+        // still excluded so the % reflects what we actively test against.
+        "src/assets/**",
+        "src/page/**",
+        "src/layout/**",
+        "src/routes/**",
+        "src/main.jsx",
+        "src/App.jsx",
+      ],
     },
   },
 });

@@ -84,6 +84,8 @@ const testConfig = {
 
   // Misc
   Frontend: { storagePage: "http://frontend.test/storage" },
+  // Lowercase alias used by users.service forgotPassword for the reset link.
+  frontend: { baseUrl: "http://frontend.test" },
   ImageView: "http://imageview.test",
   accessLogsTimeDifference: 5,
   swagger: { user: "test", pass: "test" },
