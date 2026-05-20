@@ -61,17 +61,24 @@ describe("Attendance model", () => {
     ).rejects.toThrow();
   });
 
-  it("accepts an event with an empty images object — validator is NOT enforced", async () => {
-    // The `images` path is not `required`, so an empty `images: {}` is
-    // treated as unset and the "at least one image" validator never runs.
-    // This contradicts the validator's stated intent — tracked as a bug;
-    // see videoraiq-ai#29. This test pins the CURRENT behavior.
-    const a = await Attendance.create({
-      user,
-      employee,
-      events: [{ cameraType: "checkin", images: {} }],
-    });
-    expect(a.events).toHaveLength(1);
+  it("rejects an event with an empty images object", async () => {
+    await expect(
+      Attendance.create({
+        user,
+        employee,
+        events: [{ cameraType: "checkin", images: {} }],
+      })
+    ).rejects.toThrow();
+  });
+
+  it("rejects an event with no images field", async () => {
+    await expect(
+      Attendance.create({
+        user,
+        employee,
+        events: [{ cameraType: "checkin" }],
+      })
+    ).rejects.toThrow();
   });
 
   it("accepts checkout events and a confidence score", async () => {
