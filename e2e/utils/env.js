@@ -14,11 +14,12 @@ export function isDestructiveAllowed() {
 }
 
 export function baseUrl() {
-  return process.env.BASE_URL || "https://dev.videoraiq.com";
+  return process.env.BASE_URL || "https://dev-dashboard.videoraiq.com";
 }
 
 export function loginPath() {
-  // dev.videoraiq.com fronts login with aMember (PHP); the real user login
-  // form is at /login. The React app's own /admin-login route is shadowed.
-  return process.env.LOGIN_PATH || "/login";
+  // The dev deployment serves the React AdminLoginForm at /admin-login on
+  // dev-dashboard.videoraiq.com. The aMember-fronted dev.videoraiq.com/login
+  // flow is no longer the canonical entry point.
+  return process.env.LOGIN_PATH || "/admin-login";
 }

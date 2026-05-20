@@ -19,15 +19,13 @@ setup("authenticate", async ({ page }) => {
 
   fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true });
 
-  // Log in through the aMember /login form.
+  // Log in through the React AdminLoginForm at /admin-login (the form sets
+  // the token cookie client-side and navigates to /dashboard on success).
   const loginPage = new LoginPage(page);
   await loginPage.goto();
   await loginPage.login(username, password);
 
-  // aMember authenticates server-side and hands the browser off to the app.
-  await page.waitForURL((url) => !/\/login/i.test(url.pathname), {
-    timeout: 30_000,
-  });
+  await page.waitForURL(/\/dashboard/i, { timeout: 30_000 });
 
   // Persist storage state (cookies + localStorage) as soon as we have an
   // authenticated session — BEFORE the dashboard sanity-check below. This

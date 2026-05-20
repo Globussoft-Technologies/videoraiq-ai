@@ -58,9 +58,12 @@ test.describe("Users / RBAC flow", () => {
       await page.goto("/logout");
     });
 
-    // After logout we should not be able to reach /dashboard.
+    // After logout we should not be able to reach /dashboard. On the dev
+    // deployment, logout hands off to the aMember member page
+    // (dev.videoraiq.com/member/index), so the post-logout URL may match
+    // /login (React form) OR /member|amember (aMember) — tolerate both.
     await page.goto("/dashboard");
-    await expect(page).toHaveURL(/login/i, { timeout: 15_000 });
+    await expect(page).toHaveURL(/login|member|amember/i, { timeout: 15_000 });
 
     const cookies = await context.cookies();
     const tokens = cookies.filter((c) =>

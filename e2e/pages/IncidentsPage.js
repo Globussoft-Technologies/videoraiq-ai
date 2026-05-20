@@ -6,13 +6,19 @@ export class IncidentsPage {
   constructor(page) {
     this.page = page;
     this.heading = page.getByRole("heading", { name: /incidents/i }).first();
+    // Deployed page uses a react-aria DateRangePicker, not a plain text
+    // button. Selectors below come from the live DOM dump.
     this.dateRangeButton = page.locator(
-      "[data-testid='date-range'], button:has-text('Date Range'), button:has-text('Today')"
+      "[aria-label='Date range picker'], .react-aria-DateRangePicker, [data-testid='date-range']"
     );
+    // Each incident card carries an `aria-label='Incident actions'` button;
+    // we anchor row detection on it since there's no semantic <tr> here.
     this.firstIncidentRow = page
-      .locator("[data-testid='incident-row'], tr, [class*='IncidentCard']")
+      .locator(
+        "[aria-label='Incident actions'], [data-testid='incident-row'], [class*='incidentContainer'] [class*='card' i], tr"
+      )
       .first();
-    this.emptyState = page.getByText(/no incidents|nothing here/i);
+    this.emptyState = page.getByText(/no incidents|nothing here|no data/i);
     this.pagination = page.locator(
       "[data-testid='pagination'], nav[aria-label*='pagination' i]"
     );

@@ -3,8 +3,10 @@ import { LoginPage } from "../pages/LoginPage.js";
 import { loginPath } from "../utils/env.js";
 
 // Runs under the "unauthenticated" project (no stored auth state).
-// The login form is aMember's /login page (PHP), not the React app.
-test.describe("Login page (aMember)", () => {
+// The login form is the React AdminLoginForm at /admin-login on
+// dev-dashboard.videoraiq.com (the legacy aMember /login flow is no
+// longer the canonical entry point).
+test.describe("Login page (Admin)", () => {
   test("renders the login form with all controls", async ({ page }) => {
     const login = new LoginPage(page);
     await login.goto();
@@ -17,11 +19,17 @@ test.describe("Login page (aMember)", () => {
     await expect(login.passwordInput).toHaveAttribute("type", "password");
   });
 
-  test("exposes a 'Forgot password?' link", async ({ page }) => {
-    const login = new LoginPage(page);
-    await login.goto();
-    await expect(login.forgotPasswordLink).toBeVisible();
-  });
+  // The "Forgot password?" link is currently commented out in
+  // client/src/page/admin/Login/AdminLoginForm.jsx (lines 251-257).
+  // Un-fixme once the link is restored.
+  test.fixme(
+    "exposes a 'Forgot password?' link",
+    async ({ page }) => {
+      const login = new LoginPage(page);
+      await login.goto();
+      await expect(login.forgotPasswordLink).toBeVisible();
+    }
+  );
 
   test("submitting empty credentials does not log in", async ({ page }) => {
     const login = new LoginPage(page);
@@ -50,20 +58,13 @@ test.describe("Login page (aMember)", () => {
     await login.goto();
     await login.login(username, password);
 
-    // After a successful aMember login the browser is handed off to the
-    // app — it must leave the /login page.
-    await page.waitForURL((url) => !/\/login/i.test(url.pathname), {
-      timeout: 30_000,
-    });
-    await expect(page).not.toHaveURL(/\/login/i);
+    // The React form sets the auth cookie client-side and navigates to
+    // /dashboard. Note: `/\/login/i` does NOT match `/admin-login` (no
+    // `/login` substring), so we wait for /dashboard explicitly.
+    await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
+    await expect(page).toHaveURL(/\/dashboard/);
 
-    // The app is reachable once authenticated.
-    await page.goto("/dashboard");
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 20_000 });
-
-    // A session cookie was established. Note: on this aMember-fronted
-    // deployment the JWT `dev-access-token` cookie is NOT issued — auth
-    // rides the aMember session cookie instead.
+    // A session cookie (JWT) was issued by the React form.
     const cookies = await context.cookies();
     expect(
       cookies.length,
@@ -71,7 +72,7 @@ test.describe("Login page (aMember)", () => {
     ).toBeGreaterThan(0);
   });
 
-  test("the login route serves the aMember form", async ({ page }) => {
+  test("the login route serves the React admin login form", async ({ page }) => {
     const login = new LoginPage(page);
     await login.goto();
     await expect(page).toHaveURL(

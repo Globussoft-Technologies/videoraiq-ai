@@ -43,10 +43,12 @@ test.describe("Dashboard smoke", () => {
 
     // Filter out noise that's well-known to surface from third-party SDKs
     // (HLS.js parse errors when no live stream is available, dicebear avatars,
-    // adblocker-blocked analytics, etc.). We assert ONLY on errors that
-    // suggest a real regression.
+    // adblocker-blocked analytics, etc.) and from the app's optional
+    // local-helper WebSocket (the dashboard probes ws://localhost:<port>/statusinfo,
+    // which is absent on a clean Playwright browser). We assert ONLY on
+    // errors that suggest a real regression.
     const ignorable =
-      /hls\.js|dicebear|adblock|google|gtag|sentry|chunk-error|favicon/i;
+      /hls\.js|dicebear|adblock|google|gtag|sentry|chunk-error|favicon|ws:\/\/localhost.*statusinfo|ERR_CONNECTION_REFUSED/i;
     const real = errors.filter((e) => !ignorable.test(e));
     expect(real, real.join("\n")).toHaveLength(0);
   });

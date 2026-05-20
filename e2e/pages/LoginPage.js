@@ -1,24 +1,27 @@
 import { expect } from "@playwright/test";
 
-// dev.videoraiq.com fronts login with aMember (a PHP app), not the React
-// AdminLoginForm. The real user login form lives at /login:
-//   #amember-login  (name=amember_login)  — username/email
-//   #amember-pass   (name=amember_pass)   — password
-//   <input type=submit value="Login">
-const LOGIN_PATH = process.env.LOGIN_PATH || "/login";
+// The dev deployment serves the React AdminLoginForm at /admin-login on
+// dev-dashboard.videoraiq.com. Form fields are Formik-bound:
+//   #login  (name=login)  — username/email
+//   #pass   (name=pass)   — password
+//   <button type=submit>Sign In</button>
+// On success the form sets a token cookie client-side and navigates to
+// /dashboard.
+const LOGIN_PATH = process.env.LOGIN_PATH || "/admin-login";
 
 export class LoginPage {
   constructor(page) {
     this.page = page;
-    this.usernameInput = page.locator("#amember-login");
-    this.passwordInput = page.locator("#amember-pass");
-    this.submitButton = page.getByRole("button", { name: "Login", exact: true });
+    this.usernameInput = page.locator("#login");
+    this.passwordInput = page.locator("#pass");
+    this.submitButton = page.getByRole("button", { name: /sign in/i });
     this.forgotPasswordLink = page.getByRole("link", {
       name: /forgot.*password/i,
     });
-    // aMember re-renders /login with an inline error block on a failed login.
+    // The form surfaces a sonner toast on failure ("Failed to Login!"); we
+    // also broadly look for an error-styled element if a toast is missed.
     this.errorMessage = page.locator(
-      ".am-error, .error, [class*='error'], .am-form-error"
+      "[role='status'], [class*='toast'], .text-red-600, [class*='error']"
     );
   }
 
@@ -47,9 +50,9 @@ export class LoginPage {
     await expect(this.submitButton).toBeVisible();
   }
 
-  /** A failed aMember login stays on the /login page (no redirect to the app). */
+  /** A failed login keeps the user on /admin-login (no redirect to /dashboard). */
   async expectLoginRejected() {
-    await expect(this.page).toHaveURL(/\/login/i, { timeout: 15_000 });
+    await expect(this.page).toHaveURL(/\/admin-login/i, { timeout: 15_000 });
     await expect(this.page).not.toHaveURL(/\/dashboard/i);
   }
 }
