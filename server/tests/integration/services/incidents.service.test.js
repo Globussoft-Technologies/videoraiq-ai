@@ -41,7 +41,12 @@ const { default: Admin } = await import(
 const { default: Channel } = await import(
   "../../../core/v1/channels/channels.model.js"
 );
-const { CountPersonsDetectionSetting } = await import(
+const {
+  CountPersonsDetectionSetting,
+  CountVehiclesSetting,
+  MotionDetectionSetting,
+  LineCrossingSetting,
+} = await import(
   "../../../core/v1/detectionSettings/detectionSettings.model.js"
 );
 await import("../../../core/v1/NVR/nvr.model.js");
@@ -305,5 +310,426 @@ describe("IncidentsService.createIncidents — happy path", () => {
     expect(payload(res).message).toMatch(/Admin not found/i);
     expect(await Incident.countDocuments()).toBe(0);
     expect(sendPayloadToUser).not.toHaveBeenCalled();
+  });
+});
+
+describe("IncidentsService.createIncidents — additional discriminators", () => {
+  /**
+   * Seed an admin, an nvrId, and a Channel pointed at the requested
+   * discriminator setting. `settingType` follows the channel.detections key
+   * convention (e.g. "countVehiclesSettings").
+   */
+  async function seedScene({ SettingModel, settingType, channelDetections }) {
+    const admin = await Admin.create({
+      user_id: "888",
+      login: "scene",
+      email: "scene@test.com",
+    });
+    const setting = await SettingModel.create({
+      userId: admin.user_id,
+      settingType,
+      name: "default",
+      enabled: true,
+      settings: { metricType: "gauge" },
+    });
+    const nvrId = new mongoose.Types.ObjectId();
+    const channel = await Channel.create({
+      nvrId,
+      userId: admin.user_id,
+      streamingPath: "/Streaming/Channels/101",
+      localChannelId: "1",
+      name: "Front Door",
+      detections: channelDetections(setting),
+    });
+    return { admin, nvrId, channel, setting };
+  }
+
+  it("creates a countVehicles incident with a single timeSeries entry and triggers an alert", async () => {
+    const { admin, nvrId, channel } = await seedScene({
+      SettingModel: CountVehiclesSetting,
+      settingType: "countVehiclesSettings",
+      channelDetections: (s) => ({
+        countVehiclesSettings: { id: s._id, enabled: true },
+      }),
+    });
+
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "countVehicles",
+        incidentName: "Vehicles counted",
+        nvrId: nvrId.toString(),
+        channelId: channel._id.toString(),
+        adminId: admin._id.toString(),
+        count: 4,
+        timeOfIncident: new Date(),
+      },
+    });
+
+    await IncidentsService.createIncidents(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).message).toBe("Incident created successfully");
+
+    const stored = await Incident.findOne({ channelId: channel._id });
+    expect(stored).not.toBeNull();
+    expect(stored.incidentType).toBe("countVehicles");
+    expect(stored.count).toBe(4);
+    expect(stored.timeSeries).toHaveLength(1);
+
+    // countVehicles is also excluded from triggerAlertOnIncident.
+    expect(triggerAlertOnIncident).not.toHaveBeenCalled();
+    expect(sendPayloadToUser).toHaveBeenCalledTimes(1);
+  });
+
+  it("creates a motionDetection incident and triggers the alert", async () => {
+    const { admin, nvrId, channel } = await seedScene({
+      SettingModel: MotionDetectionSetting,
+      settingType: "motionDetectionSettings",
+      channelDetections: (s) => ({
+        motionDetectionSettings: { id: s._id, enabled: true },
+      }),
+    });
+
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "motionDetection",
+        incidentName: "Motion detected",
+        nvrId: nvrId.toString(),
+        channelId: channel._id.toString(),
+        adminId: admin._id.toString(),
+        timeOfIncident: new Date(),
+        severity: "moderate",
+      },
+    });
+
+    await IncidentsService.createIncidents(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+
+    const stored = await Incident.findOne({ channelId: channel._id });
+    expect(stored).not.toBeNull();
+    expect(stored.incidentType).toBe("motionDetection");
+
+    // motionDetection is NOT in the create-or-update list, so a fresh row
+    // is always inserted and the alert pipeline runs.
+    expect(triggerAlertOnIncident).toHaveBeenCalledTimes(1);
+    expect(sendPayloadToUser).toHaveBeenCalledTimes(1);
+  });
+
+  it("creates a lineCrossing incident with atoB/btoA and a timeSeries entry", async () => {
+    const { admin, nvrId, channel } = await seedScene({
+      SettingModel: LineCrossingSetting,
+      settingType: "lineCrossingSettings",
+      channelDetections: (s) => ({
+        lineCrossingSettings: { id: s._id, enabled: true },
+      }),
+    });
+
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "lineCrossing",
+        incidentName: "Line crossed",
+        nvrId: nvrId.toString(),
+        channelId: channel._id.toString(),
+        adminId: admin._id.toString(),
+        atoB: 3,
+        btoA: 1,
+        timeOfIncident: new Date(),
+      },
+    });
+
+    await IncidentsService.createIncidents(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    const stored = await Incident.findOne({ channelId: channel._id });
+    expect(stored.incidentType).toBe("lineCrossing");
+    expect(stored.atoB).toBe(3);
+    expect(stored.btoA).toBe(1);
+    expect(stored.timeSeries).toHaveLength(1);
+    expect(stored.timeSeries[0].atoB).toBe(3);
+    expect(triggerAlertOnIncident).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 400 when the channelId/nvrId pair is invalid", async () => {
+    const admin = await Admin.create({
+      user_id: "999",
+      login: "bad",
+      email: "bad@test.com",
+    });
+
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "motionDetection",
+        nvrId: new mongoose.Types.ObjectId().toString(),
+        channelId: new mongoose.Types.ObjectId().toString(),
+        adminId: admin._id.toString(),
+        timeOfIncident: new Date(),
+      },
+    });
+    await IncidentsService.createIncidents(req, res, next);
+
+    expect(res.statusCode).toBe(400);
+    expect(await Incident.countDocuments()).toBe(0);
+  });
+
+  it("returns 400 for an unknown incidentType", async () => {
+    const admin = await Admin.create({
+      user_id: "1000",
+      login: "u",
+      email: "u@test.com",
+    });
+    const channel = await Channel.create({
+      nvrId: new mongoose.Types.ObjectId(),
+      userId: admin.user_id,
+      streamingPath: "/Streaming/Channels/101",
+      localChannelId: "1",
+      name: "Cam",
+      detections: {},
+    });
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "thisIsNotARealIncidentType",
+        nvrId: channel.nvrId.toString(),
+        channelId: channel._id.toString(),
+        adminId: admin._id.toString(),
+        timeOfIncident: new Date(),
+      },
+    });
+    await IncidentsService.createIncidents(req, res, next);
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("IncidentsService log-fetching endpoints (_fetchIncidentLogs)", () => {
+  /**
+   * The log-fetch helpers all require `userData.user_id`; without it they
+   * short-circuit to a 'failed' Response via `res.send(...)` with no
+   * statusCode flip. With it they should hit the aggregation pipeline and
+   * return 200 + a totalCount.
+   */
+  it("getVehicleDetectionLogs returns 401-shape when user is unauthenticated", async () => {
+    const { req, res, next } = serviceCtx({ query: {} });
+    await IncidentsService.getVehicleDetectionLogs(req, res, next);
+    expect(payload(res).status).toBe("failed");
+  });
+
+  it("getVehicleDetectionLogs returns the matching logs", async () => {
+    const userId = "uvlogs";
+    const nvrId = new mongoose.Types.ObjectId();
+    const channelId = new mongoose.Types.ObjectId();
+    // Seed two vehicleDetection incidents.
+    await Incident.create([
+      {
+        incidentType: "vehicleDetection",
+        timeOfIncident: new Date(),
+        nvrId,
+        channelId,
+        userId,
+        count: 1,
+        vehicleNumber: "KA01AB1234",
+      },
+      {
+        incidentType: "vehicleDetection",
+        timeOfIncident: new Date(),
+        nvrId,
+        channelId,
+        userId,
+        count: 2,
+        vehicleNumber: "MH02CD5678",
+      },
+    ]);
+
+    const { req, res, next } = serviceCtx({
+      user_id: userId,
+      query: { vehicleNumber: "KA01" },
+    });
+    await IncidentsService.getVehicleDetectionLogs(req, res, next);
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.totalCount).toBe(1);
+    expect(payload(res).data.data[0].vehicleNumber).toBe("KA01AB1234");
+  });
+
+  it("getConveyorDetectionLogs filters by current status", async () => {
+    const userId = "uconv";
+    const nvrId = new mongoose.Types.ObjectId();
+    const channelId = new mongoose.Types.ObjectId();
+    await Incident.create([
+      {
+        incidentType: "conveyorDetection",
+        timeOfIncident: new Date(),
+        nvrId,
+        channelId,
+        userId,
+        currentStatus: "ON",
+      },
+      {
+        incidentType: "conveyorDetection",
+        timeOfIncident: new Date(),
+        nvrId,
+        channelId,
+        userId,
+        currentStatus: "OFF",
+      },
+    ]);
+    const { req, res, next } = serviceCtx({
+      user_id: userId,
+      query: { status: "ON" },
+    });
+    await IncidentsService.getConveyorDetectionLogs(req, res, next);
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.totalCount).toBe(1);
+  });
+
+  it("getCrusherDetectionLogs returns all rows when no filter", async () => {
+    const userId = "ucrush";
+    await Incident.create([
+      {
+        incidentType: "crusherDetection",
+        timeOfIncident: new Date(),
+        nvrId: new mongoose.Types.ObjectId(),
+        channelId: new mongoose.Types.ObjectId(),
+        userId,
+        currentStatus: "ON",
+      },
+    ]);
+    const { req, res, next } = serviceCtx({
+      user_id: userId,
+      query: {},
+    });
+    await IncidentsService.getCrusherDetectionLogs(req, res, next);
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.totalCount).toBe(1);
+  });
+
+  it("getWaterSpillageDetectionLogs filters by DETECTED/CLEAR status", async () => {
+    const userId = "uwater";
+    await Incident.create([
+      {
+        incidentType: "waterSpillageDetection",
+        timeOfIncident: new Date(),
+        nvrId: new mongoose.Types.ObjectId(),
+        channelId: new mongoose.Types.ObjectId(),
+        userId,
+        currentStatus: "DETECTED",
+      },
+      {
+        incidentType: "waterSpillageDetection",
+        timeOfIncident: new Date(),
+        nvrId: new mongoose.Types.ObjectId(),
+        channelId: new mongoose.Types.ObjectId(),
+        userId,
+        currentStatus: "CLEAR",
+      },
+    ]);
+    const { req, res, next } = serviceCtx({
+      user_id: userId,
+      query: { status: "DETECTED" },
+    });
+    await IncidentsService.getWaterSpillageDetectionLogs(req, res, next);
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.totalCount).toBe(1);
+  });
+
+  it("getVehicleCountLogs filters by min/max count", async () => {
+    const userId = "uvc";
+    await Incident.create([
+      {
+        incidentType: "countVehicles",
+        timeOfIncident: new Date(),
+        nvrId: new mongoose.Types.ObjectId(),
+        channelId: new mongoose.Types.ObjectId(),
+        userId,
+        count: 3,
+      },
+      {
+        incidentType: "countVehicles",
+        timeOfIncident: new Date(),
+        nvrId: new mongoose.Types.ObjectId(),
+        channelId: new mongoose.Types.ObjectId(),
+        userId,
+        count: 9,
+      },
+    ]);
+    const { req, res, next } = serviceCtx({
+      user_id: userId,
+      query: { minCount: "5" },
+    });
+    await IncidentsService.getVehicleCountLogs(req, res, next);
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.totalCount).toBe(1);
+  });
+
+  it("getLineCrossingLogs filters by atoB/btoA ranges", async () => {
+    const userId = "ulc";
+    await Incident.create([
+      {
+        incidentType: "lineCrossing",
+        timeOfIncident: new Date(),
+        nvrId: new mongoose.Types.ObjectId(),
+        channelId: new mongoose.Types.ObjectId(),
+        userId,
+        atoB: 2,
+        btoA: 0,
+      },
+      {
+        incidentType: "lineCrossing",
+        timeOfIncident: new Date(),
+        nvrId: new mongoose.Types.ObjectId(),
+        channelId: new mongoose.Types.ObjectId(),
+        userId,
+        atoB: 8,
+        btoA: 0,
+      },
+    ]);
+    const { req, res, next } = serviceCtx({
+      user_id: userId,
+      query: { minAtoB: "5" },
+    });
+    await IncidentsService.getLineCrossingLogs(req, res, next);
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.totalCount).toBe(1);
+  });
+
+  it("getVehicleNumbers returns the distinct vehicle numbers for the user", async () => {
+    const userId = "uvn";
+    await Incident.create([
+      {
+        incidentType: "vehicleDetection",
+        timeOfIncident: new Date(),
+        nvrId: new mongoose.Types.ObjectId(),
+        channelId: new mongoose.Types.ObjectId(),
+        userId,
+        vehicleNumber: "KA01AB1234",
+      },
+      {
+        incidentType: "vehicleDetection",
+        timeOfIncident: new Date(),
+        nvrId: new mongoose.Types.ObjectId(),
+        channelId: new mongoose.Types.ObjectId(),
+        userId,
+        vehicleNumber: "KA01AB1234", // dup
+      },
+      {
+        incidentType: "vehicleDetection",
+        timeOfIncident: new Date(),
+        nvrId: new mongoose.Types.ObjectId(),
+        channelId: new mongoose.Types.ObjectId(),
+        userId,
+        vehicleNumber: "MH02CD5678",
+      },
+    ]);
+    const { req, res, next } = serviceCtx({ user_id: userId, query: {} });
+    await IncidentsService.getVehicleNumbers(req, res, next);
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.totalCount).toBe(2);
+    expect(payload(res).data.vehicleNumbers).toEqual(
+      expect.arrayContaining(["KA01AB1234", "MH02CD5678"])
+    );
+  });
+
+  it("getVehicleNumbers returns auth-failed without a user_id", async () => {
+    const { req, res, next } = serviceCtx({ query: {} });
+    await IncidentsService.getVehicleNumbers(req, res, next);
+    expect(payload(res).status).toBe("failed");
   });
 });
