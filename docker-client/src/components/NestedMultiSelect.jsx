@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { X, Bell } from 'lucide-react';
 import MultiSelect from '@/components/ui/multiselect';
-import { detectionOptions } from '@/data/detectionOptions';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 
@@ -60,8 +59,6 @@ const NestedMultiSelect = ({ value, onChange, options }) => {
 
     return normalized;
   }, [value]);
-
-  console.log(selectedDetections, 'selectedDetections');
 
   const detectionOptions = useMemo(() => {
     const map = {};

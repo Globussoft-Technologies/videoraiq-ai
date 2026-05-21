@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { v4 as uuidv4 } from 'uuid';
 import AutoHideWrapper from './AutoHideWrapper';
+import getAccessToken from '@/utils/getAccessToken';
 let onChangeActive = false
 let intialLoad = true
 import { toast } from 'sonner';
@@ -166,6 +167,7 @@ const detectionConfig = {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "x-access-token": getAccessToken(),
           },
         }
       );

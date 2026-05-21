@@ -223,8 +223,10 @@ const PlaybackVideo = ({
 
       const segments = processRecordedData(response?.data?.body?.data?.timeline?.CMSearchResult?.matchList?.searchMatchItem);
       setAvailableSegments(segments);
-      setCurrentSegmentIndex(0);
-      handleTimeSelect(segments[0], undefined, undefined, selectedCamera);
+      if (segments.length > 0) {
+        setCurrentSegmentIndex(0);
+        handleTimeSelect(segments[0], undefined, undefined, selectedCamera);
+      }
 
       // else{
       //   toast.error("No segment available on this date");

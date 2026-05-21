@@ -64,6 +64,7 @@ export const DetectionProvider = ({ children }) => {
           break;
         case 'unauthorizedAccess':
           setUnauthorizedAccess(data);
+          break;
         default:
           console.warn('Unknown incident type:', data.incidentType);
       }
