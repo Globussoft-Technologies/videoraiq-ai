@@ -135,6 +135,15 @@ describe("UsersService.forgotPassword", () => {
     await UsersService.forgotPassword(req, res);
     expect(res.statusCode).toBe(404);
   });
+
+  it("generates a reset token + 200 for a known email", async () => {
+    const user = await seedUser({ email: "pwd@test.com" });
+    const { req, res } = serviceCtx({ body: { email: "pwd@test.com" } });
+    await UsersService.forgotPassword(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.resetToken).toBeDefined();
+    expect(payload(res).data.resetLink).toContain("reset-password?token=");
+  });
 });
 
 describe("UsersService.resetPassword", () => {
