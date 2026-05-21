@@ -965,7 +965,7 @@ class UsersService {
           await user.save();
 
           // Build reset link (frontend will handle the reset page)
-          const resetLink = `${config.get("frontend.baseUrl")}/reset-password?token=${resetToken}`;
+          const resetLink = `${config.get("Frontend.baseUrl")}/reset-password?token=${resetToken}`;
 
           // TODO: You can send email here using your mail service
           let response = await MailHelper?.sendForgotPasswordEmail(user?.email,user?.firstName + " " + user?.lastName, resetLink);
