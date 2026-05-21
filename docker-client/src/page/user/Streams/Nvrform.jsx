@@ -16,6 +16,8 @@ import CreatableSelect from 'react-select/creatable';
 
 const AddNVRForm = ({ onClose, isEdit, initialData, fetchNvrData, title }) => {
     const [showPassword, setShowPassword] = useState(false);
+    const [showOldPassword, setShowOldPassword] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
     const [locations, setLocations] = useState([]);
 
     const loadLocations = async () => {
@@ -93,7 +95,7 @@ const AddNVRForm = ({ onClose, isEdit, initialData, fetchNvrData, title }) => {
                 }
             } else {
                 payload = {
-                    ip: encrypt(values.ip),
+                    ip: values.ip,
                     port: Number(values.port),
                     rtspPort: Number(values.rtspPort),
                     username: values.username,
@@ -243,15 +245,29 @@ const AddNVRForm = ({ onClose, isEdit, initialData, fetchNvrData, title }) => {
 
                             {isEdit && (
                                 <>
-                                    <div className={FORM_CONTAINER_STYLE}>
+                                    <div className={`${FORM_CONTAINER_STYLE} relative`}>
                                         <label className={LABEL_STYLE}>Old Password</label>
-                                        <Field name='oldPassword' as={Input} type='password' placeholder='••••••••' className={BORDER} />
+                                        <Field name='oldPassword' as={Input} type={showOldPassword ? 'text' : 'password'} placeholder='••••••••' className={`${BORDER} pr-10`} />
+                                        <button
+                                            type='button'
+                                            onClick={() => setShowOldPassword(!showOldPassword)}
+                                            className='absolute right-3 top-[33px] text-gray-500'
+                                        >
+                                            {showOldPassword ? <Eye size={20} /> : <EyeOff size={20} />}
+                                        </button>
                                         <ErrorMessage name='oldPassword' component='div' className='text-sm text-red-600 ml-2' />
                                     </div>
 
-                                    <div className={FORM_CONTAINER_STYLE}>
+                                    <div className={`${FORM_CONTAINER_STYLE} relative`}>
                                         <label className={LABEL_STYLE}>New Password</label>
-                                        <Field name='newPassword' as={Input} type='password' placeholder='••••••••' className={BORDER} />
+                                        <Field name='newPassword' as={Input} type={showNewPassword ? 'text' : 'password'} placeholder='••••••••' className={`${BORDER} pr-10`} />
+                                        <button
+                                            type='button'
+                                            onClick={() => setShowNewPassword(!showNewPassword)}
+                                            className='absolute right-3 top-[33px] text-gray-500'
+                                        >
+                                            {showNewPassword ? <Eye size={20} /> : <EyeOff size={20} />}
+                                        </button>
                                         <ErrorMessage name='newPassword' component='div' className='text-sm text-red-600 ml-2' />
                                     </div>
                                 </>
