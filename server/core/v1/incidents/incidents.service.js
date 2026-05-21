@@ -197,7 +197,7 @@ class IncidentsService {
             recentIncident.timeOfIncident = req?.body?.timeOfIncident;
             recentIncident.croudCount = req.body.count;
             recentIncident.timeSeries.push({
-              croudCount: req.body.count ?? 0, // or appropriate value
+              count: req.body.count ?? 0, // or appropriate value
             });
           } else if (incidentType === "personalProtectiveEquipment") {
             recentIncident.timeOfIncident = req?.body?.timeOfIncident;
@@ -312,7 +312,7 @@ class IncidentsService {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.croudCount = req.body.count;
         newIncident.timeSeries.push({
-          croudCount: req.body.count ?? 0, // or appropriate value
+          count: req.body.count ?? 0, // or appropriate value
         });
       } else if (incidentType === "personalProtectiveEquipment") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
