@@ -70,4 +70,35 @@ describe("Pagination", () => {
     expect(labels).toContain("20");
     expect(labels).toContain("10");
   });
+
+  // Round 13: cover the "currentPage >= totalPages - 2" branch (lines 37-41
+  // of Pagination.jsx) — when the current page is in the last 3 of a long
+  // list, render: first, ellipsis, last4.
+  it("shows first + ellipsis + last 4 pages when current is near the end", () => {
+    render(<Pagination currentPage={19} totalPages={20} onPageChange={vi.fn()} />);
+    const labels = pageButtons().map((b) => b.textContent.trim());
+    // first page always present
+    expect(labels).toContain("1");
+    // last 4 pages present (totalPages-3 .. totalPages)
+    expect(labels).toContain("17");
+    expect(labels).toContain("18");
+    expect(labels).toContain("19");
+    expect(labels).toContain("20");
+    // the ellipsis between 1 and 17 renders
+    expect(screen.getAllByText("...").length).toBeGreaterThan(0);
+    // the middle pages should NOT be rendered in this branch
+    expect(labels).not.toContain("10");
+  });
+
+  // The exact threshold case currentPage === totalPages - 2 (still in the
+  // "last 3" branch).
+  it("includes the last-3 branch boundary currentPage = totalPages - 2", () => {
+    render(<Pagination currentPage={8} totalPages={10} onPageChange={vi.fn()} />);
+    const labels = pageButtons().map((b) => b.textContent.trim());
+    expect(labels).toContain("1");
+    expect(labels).toContain("7");
+    expect(labels).toContain("8");
+    expect(labels).toContain("9");
+    expect(labels).toContain("10");
+  });
 });
