@@ -47,8 +47,9 @@ const MultiSelect = ({
   const inputRef = useRef(null);
 
   // Filter options based on search
+  const needle = searchTerm.toLowerCase();
   const filteredOptions = options.filter((option) =>
-    option?.label?.toLowerCase?.().includes(searchTerm.toLowerCase())
+    (option?.label ?? '').toLowerCase().includes(needle)
   );
 
   // Close dropdown on outside click

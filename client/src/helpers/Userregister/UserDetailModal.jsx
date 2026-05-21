@@ -86,12 +86,14 @@ const UserDetailModalContent = ({ user, nasUrl, onClose }) => {
               {profilePics.length > 1 && (
                 <>
                   <button
+                    type="button"
                     onClick={(e) => { e.stopPropagation(); handlePrevImage(); }}
                     className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 text-[#07486A] shadow-lg hover:bg-white hover:scale-110 transition-all cursor-pointer opacity-0 group-hover/images:opacity-100 z-10"
                   >
                     <ChevronLeft className="w-6 h-6" />
                   </button>
                   <button
+                    type="button"
                     onClick={(e) => { e.stopPropagation(); handleNextImage(); }}
                     className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 text-[#07486A] shadow-lg hover:bg-white hover:scale-110 transition-all cursor-pointer opacity-0 group-hover/images:opacity-100 z-10"
                   >
@@ -129,7 +131,8 @@ const UserDetailModalContent = ({ user, nasUrl, onClose }) => {
                 <UserCircle className="w-5 h-5 text-[#07486A]" />
                 User Profiles & Details
               </h3>
-              <button 
+              <button
+                type="button"
                 onClick={onClose}
                 className="p-2 hover:bg-gray-100 rounded-full transition-colors md:hidden"
               >
