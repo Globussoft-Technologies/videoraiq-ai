@@ -77,6 +77,17 @@ export default defineConfig({
         "src/page/user/Incidents/Api/get/index.js",
         "src/page/user/Incidents/Api/post/index.jsx",
         "src/page/user/Streams/Cameraview/CameraviewSkeleton.jsx",
+        // Round 10: Profile/Api/{get,post,put,delete}, Dashboard/Api/{get,post,put},
+        // Users/api/post. Each entry has a dedicated test file under
+        // tests/unit/page/user/{Profile,Dashboard,Users}/...
+        "src/page/user/Profile/Api/get/index.jsx",
+        "src/page/user/Profile/Api/post/index.jsx",
+        "src/page/user/Profile/Api/put/index.jsx",
+        "src/page/user/Profile/Api/delete/index.jsx",
+        "src/page/user/Dashboard/Api/get/index.jsx",
+        "src/page/user/Dashboard/Api/post/index.jsx",
+        "src/page/user/Dashboard/Api/put/index.jsx",
+        "src/page/user/Users/api/post/Index.jsx",
       ],
       exclude: [
         "tests/**",
