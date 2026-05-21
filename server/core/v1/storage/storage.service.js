@@ -427,7 +427,7 @@ class StorageService {
             .send(
               Response.userFailResp(
                 `Test folder ${testFolder} does not exist`,
-                err.message
+                "Verify the path exists on the SFTP server"
               )
             );
         }
