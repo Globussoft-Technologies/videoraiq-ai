@@ -763,7 +763,6 @@ class ChannelService {
         return res.send(
           Response.userFailResp("Validation Failed", "Channel not found")
         );
-        l;
       }
 
       return res.status(200).json(
