@@ -77,4 +77,70 @@ test.describe("Departments page", () => {
     await search.fill("");
     await expect(search).toHaveValue("");
   });
+
+  test("department table column headers render", async ({ page }) => {
+    await page.goto("/departments");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    test.skip(
+      !/\/departments/.test(page.url()),
+      "User does not have access to /departments"
+    );
+
+    // The PermissionTable renders these column headers (confirmed via DOM dump).
+    // "Department Name" is a sortable button; "Description" / "Action" are plain th.
+    await expect(
+      page.getByRole("button", { name: /^department name$/i }).first()
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/^Description$/i).first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(/^Action$/i).first()).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test("'Add New Department' opens a dialog with the create form", async ({
+    page,
+  }) => {
+    await page.goto("/departments");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    const addBtn = page
+      .getByRole("button", { name: /add new department/i })
+      .first();
+    test.skip(
+      !(await addBtn.isVisible().catch(() => false)),
+      "User cannot create departments"
+    );
+
+    await addBtn.click();
+
+    // The DepartmentForm renders a Radix Dialog with role=dialog.
+    const dialog = page.getByRole("dialog").first();
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+
+    // The create form has Department Name + Description inputs and an
+    // "Add Department" submit button (see DepartmentForm.jsx).
+    await expect(
+      dialog.getByPlaceholder(/e\.g\. Human Resources/i).first()
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      dialog.getByPlaceholder(/e\.g\. Handles employee relations/i).first()
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      dialog.getByRole("button", { name: /add department/i }).first()
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      dialog.getByRole("button", { name: /^cancel$/i }).first()
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Cancel should dismiss the dialog cleanly (no data submitted).
+    await dialog.getByRole("button", { name: /^cancel$/i }).first().click();
+    await expect(dialog).toBeHidden({ timeout: 10_000 });
+  });
 });

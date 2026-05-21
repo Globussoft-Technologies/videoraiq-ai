@@ -107,6 +107,14 @@ export default defineConfig({
         // axios + waitForToken modules; tested under tests/unit/layout/Api/**.
         "src/layout/Api/get/index.jsx",
         "src/layout/Api/put/index.jsx",
+        // Round 14: small leaf page-tree components + the AppliedProfile
+        // detection card. Each has a dedicated test under tests/unit/page/**.
+        "src/page/user/NotificationRecipients/VerificationModal.jsx",
+        "src/page/user/Streams/DesktopTableView.jsx",
+        "src/page/user/Streams/MobileTableView.jsx",
+        "src/page/user/Streams/Operationselect.jsx",
+        "src/page/user/Profile/ProfilesTable.jsx",
+        "src/page/user/Detection/components/AppliedProfile.jsx",
       ],
       exclude: [
         "tests/**",
