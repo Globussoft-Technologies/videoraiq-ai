@@ -42,6 +42,9 @@ export default defineConfig({
         "src/context/**",
         "src/data/**",
         "src/page/admin/Api/post/index.jsx",
+        // Round 7: AdminLoginForm — Formik admin login orchestrator,
+        // tested in tests/unit/page/admin/AdminLoginForm.test.jsx.
+        "src/page/admin/Login/AdminLoginForm.jsx",
         "src/page/user/Dashboard/validation.jsx",
         "src/page/user/Users/Schema/UserLoginSchema.jsx",
         "src/page/user/Playback/components/PlayBackTime.jsx",
