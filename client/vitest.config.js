@@ -67,6 +67,16 @@ export default defineConfig({
         "src/page/user/Settings/StorageSetting/Api/put/index.jsx",
         "src/page/user/Settings/StorageSetting/Api/delete/index.jsx",
         "src/page/user/Settings/StorageSetting/schema/Storage.jsx",
+        // Round 9: parent Settings/Api/* (fetch-based recipients) and
+        // Incidents/Api/* (axios). Each entry has a dedicated test under
+        // tests/unit/page/user/Settings/Api/** or Incidents/Api/**.
+        "src/page/user/Settings/Api/delete/index.jsx",
+        "src/page/user/Settings/Api/get/index.jsx",
+        "src/page/user/Settings/Api/post/index.jsx",
+        "src/page/user/Settings/Api/put/index.jsx",
+        "src/page/user/Incidents/Api/get/index.js",
+        "src/page/user/Incidents/Api/post/index.jsx",
+        "src/page/user/Streams/Cameraview/CameraviewSkeleton.jsx",
       ],
       exclude: [
         "tests/**",

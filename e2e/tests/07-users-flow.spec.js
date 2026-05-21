@@ -62,7 +62,16 @@ test.describe("Users / RBAC flow", () => {
     // deployment, logout hands off to the aMember member page
     // (dev.videoraiq.com/member/index), so the post-logout URL may match
     // /login (React form) OR /member|amember (aMember) — tolerate both.
-    await page.goto("/dashboard");
+    //
+    // The goto itself can race the logout redirect (webkit sometimes throws
+    // "Navigation interrupted by another navigation" because the logout flow
+    // is still navigating). Treat that interruption as the success case — the
+    // URL check below is the real assertion.
+    await page.goto("/dashboard").catch((e) => {
+      if (!/interrupted by another navigation|net::ERR_ABORTED/i.test(e.message)) {
+        throw e;
+      }
+    });
     await expect(page).toHaveURL(/login|member|amember/i, { timeout: 15_000 });
 
     const cookies = await context.cookies();

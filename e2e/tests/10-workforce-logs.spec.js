@@ -11,6 +11,12 @@ const routes = [
   { path: "/logs/access", name: "Access logs" },
   { path: "/logs/productivity", name: "Productivity logs" },
   { path: "/logs/ANPR", name: "ANPR logs" },
+  // Three additional log routes wired up in client/src/routes/routes.jsx
+  // (TrackLog, VisibilityLog, GuardLog). They render under the same Layout
+  // shell; we just want to confirm they paint without a runtime crash.
+  { path: "/logs/track", name: "Track logs" },
+  { path: "/logs/desk", name: "Desk / visibility logs" },
+  { path: "/logs/guard", name: "Guard logs" },
 ];
 
 test.describe("Workforce & logs routes", () => {
