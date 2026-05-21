@@ -777,7 +777,7 @@ class DetectionSettingService {
 
       if (
         !existingLinkedId ||
-        existingLinkedId.toString() !== detectionSettingId
+        existingLinkedId?.id?.toString() !== detectionSettingId
       ) {
         return res
           .status(404)
