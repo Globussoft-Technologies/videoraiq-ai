@@ -338,13 +338,7 @@ describe("DetectionSettingsService.detachDetectionSetting", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  // BUG: detachDetectionSetting compares `channel.detections[settingType].toString()`
-  // (whole sub-doc) against `detectionSettingId`. Since the channel schema
-  // declares the field as { id, enabled }, the comparison can never match
-  // and the service always 404s "Detection setting is not linked to this
-  // channel" even when it clearly is. Track and fix in product; for now we
-  // assert the observed-but-incorrect behaviour.
-  it.skip("detaches the setting (200) — blocked by product bug (sub-doc toString comparison)", async () => {
+  it("detaches the setting (200)", async () => {
     const setting = await makeMotionSetting();
     const ch = await makeChannel({
       detections: {
@@ -362,24 +356,5 @@ describe("DetectionSettingsService.detachDetectionSetting", () => {
     expect(res.statusCode).toBe(200);
     const reloaded = await Channel.findById(ch._id);
     expect(reloaded.detections?.motionDetectionSettings).toBeFalsy();
-  });
-
-  it("404s even with a matching linked setting (current product behaviour)", async () => {
-    const setting = await makeMotionSetting();
-    const ch = await makeChannel({
-      detections: {
-        motionDetectionSettings: { id: setting._id, enabled: true },
-      },
-    });
-    const { req, res, next } = serviceCtx({
-      user_id: "u1",
-      body: {
-        channelId: ch._id.toString(),
-        detectionSettingId: setting._id.toString(),
-      },
-    });
-    await DetectionSettingsService.detachDetectionSetting(req, res, next);
-    // BUG ref above: sub-doc toString never matches the id string.
-    expect(res.statusCode).toBe(404);
   });
 });
