@@ -88,6 +88,21 @@ export default defineConfig({
         "src/page/user/Dashboard/Api/post/index.jsx",
         "src/page/user/Dashboard/Api/put/index.jsx",
         "src/page/user/Users/api/post/Index.jsx",
+        // Round 11: more page/Api wrappers — Departments, Locations,
+        // RolePermissions {get,post,put,delete}, UserDetails {Post,delete},
+        // EmployeeLogs {get,post}. Each entry has a dedicated test file
+        // under tests/unit/page/user/{Departments,Locations,RolePermissions,
+        // UserDetails,EmployeeLogs}/Api/**.
+        "src/page/user/Departments/Api/index.jsx",
+        "src/page/user/Locations/Api/index.jsx",
+        "src/page/user/RolePermissions/Api/get/index.jsx",
+        "src/page/user/RolePermissions/Api/post/index.jsx",
+        "src/page/user/RolePermissions/Api/put/index.jsx",
+        "src/page/user/RolePermissions/Api/delete/index.jsx",
+        "src/page/user/UserDetails/Api/Post/index.jsx",
+        "src/page/user/UserDetails/Api/delete/index.jsx",
+        "src/page/user/EmployeeLogs/Api/get/index.jsx",
+        "src/page/user/EmployeeLogs/Api/post/index.jsx",
       ],
       exclude: [
         "tests/**",
