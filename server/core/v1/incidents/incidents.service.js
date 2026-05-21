@@ -333,7 +333,7 @@ class IncidentsService {
       } else if (incidentType === "lightDetection") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.currentStatus = req.body?.lightDetection?.status;
-        newIncident.currentImage = req.body?.lightDetection?.image;
+        newIncident.currentImage = req.body?.lightDetection?.Image;
         newIncident.timeSeries.push({
           status: req.body?.lightDetection?.status,
           Image: req.body?.lightDetection?.Image,

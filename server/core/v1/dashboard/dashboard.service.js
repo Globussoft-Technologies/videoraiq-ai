@@ -1181,7 +1181,9 @@ class DashboardService {
           }
 
           const filter = {};
-      
+          let channelFilter = { userId: data.user_id.toString() };
+          const userMatch = { userId: data?.user_id.toString() };
+
           // Filter: specific NVR
           if (nvrId) {
             const nvrIds = Array.isArray(nvrId)
