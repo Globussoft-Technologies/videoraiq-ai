@@ -8,9 +8,9 @@ const Monitorcog = ({ className, ...props }) => {
       viewBox="0 0 24 24"
       fill="none"
       stroke="url(#blue_gradient)"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
       className={`lucide lucide-monitor-cog-icon lucide-monitor-cog ${className || ''}`}
       {...props}
     >
@@ -23,8 +23,8 @@ const Monitorcog = ({ className, ...props }) => {
           y2="24"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0%" stop-color="#57CDFF" />
-          <stop offset="100%" stop-color="#003E58" />
+          <stop offset="0%" stopColor="#57CDFF" />
+          <stop offset="100%" stopColor="#003E58" />
         </linearGradient>
       </defs>
       <path d="M12 17v4" />

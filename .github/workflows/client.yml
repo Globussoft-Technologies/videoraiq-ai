@@ -70,7 +70,7 @@ jobs:
 
       - name: Upload build artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.workdir }}-dist-${{ github.run_id }}
           path: ${{ matrix.workdir }}/dist/
@@ -99,7 +99,7 @@ jobs:
 
       - name: Upload coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: client-coverage-${{ github.run_id }}
           path: client/coverage/

@@ -42,6 +42,9 @@ export default defineConfig({
         "src/context/**",
         "src/data/**",
         "src/page/admin/Api/post/index.jsx",
+        // Round 7: AdminLoginForm — Formik admin login orchestrator,
+        // tested in tests/unit/page/admin/AdminLoginForm.test.jsx.
+        "src/page/admin/Login/AdminLoginForm.jsx",
         "src/page/user/Dashboard/validation.jsx",
         "src/page/user/Users/Schema/UserLoginSchema.jsx",
         "src/page/user/Playback/components/PlayBackTime.jsx",
@@ -51,6 +54,19 @@ export default defineConfig({
         "src/page/user/Detection/components/DeviceDetail.jsx",
         "src/page/user/Detection/Api/post/index.jsx",
         "src/page/user/Streams/Api/delete/index.jsx",
+        // Round 8: more leaf API files + the StorageSetting yup schema.
+        // Each entry has a dedicated test file under tests/unit/page/**.
+        "src/page/user/Detection/Api/delete/index.jsx",
+        "src/page/user/Detection/Api/get/index.jsx",
+        "src/page/user/Detection/Api/patch/index.jsx",
+        "src/page/user/Streams/Api/get/index.jsx",
+        "src/page/user/Streams/Api/post/index.jsx",
+        "src/page/user/Streams/Api/pacth/index.jsx",
+        "src/page/user/Settings/StorageSetting/Api/get/index.jsx",
+        "src/page/user/Settings/StorageSetting/Api/post/index.jsx",
+        "src/page/user/Settings/StorageSetting/Api/put/index.jsx",
+        "src/page/user/Settings/StorageSetting/Api/delete/index.jsx",
+        "src/page/user/Settings/StorageSetting/schema/Storage.jsx",
       ],
       exclude: [
         "tests/**",

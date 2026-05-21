@@ -11,28 +11,33 @@ import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { decrypt, encrypt } from '@/helpers/decriptNvr';
 import { fetchUniqueLocations } from '@/helpers/Userregister/Api/post';
+import { createLocation } from '@/page/user/Locations/Api';
+import CreatableSelect from 'react-select/creatable';
 
 const AddNVRForm = ({ onClose, isEdit, initialData, fetchNvrData, title }) => {
     const [showPassword, setShowPassword] = useState(false);
+    const [showOldPassword, setShowOldPassword] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
     const [locations, setLocations] = useState([]);
 
-    useEffect(() => {
-        const loadLocations = async () => {
-            try {
-                const resp = await fetchUniqueLocations();
-                if (resp?.body?.status === 'success') {
-                    const rawData = resp?.body?.data;
-                    const locs = Array.isArray(rawData)
-                      ? rawData
-                      : Array.isArray(rawData?.locations)
+    const loadLocations = async () => {
+        try {
+            const resp = await fetchUniqueLocations();
+            if (resp?.body?.status === 'success') {
+                const rawData = resp?.body?.data;
+                const locs = Array.isArray(rawData)
+                    ? rawData
+                    : Array.isArray(rawData?.locations)
                         ? rawData.locations.map(l => l.locationName || l)
                         : [];
-                    setLocations(locs);
-                }
-            } catch (error) {
-                console.error('Error fetching locations:', error);
+                setLocations(locs);
             }
-        };
+        } catch (error) {
+            console.error('Error fetching locations:', error);
+        }
+    };
+
+    useEffect(() => {
         loadLocations();
     }, []);
 
@@ -90,7 +95,7 @@ const AddNVRForm = ({ onClose, isEdit, initialData, fetchNvrData, title }) => {
                 }
             } else {
                 payload = {
-                    ip: encrypt(values.ip),
+                    ip: values.ip,
                     port: Number(values.port),
                     rtspPort: Number(values.rtspPort),
                     username: values.username,
@@ -132,7 +137,7 @@ const AddNVRForm = ({ onClose, isEdit, initialData, fetchNvrData, title }) => {
                     {({ isSubmitting, dirty, setFieldValue, values }) => (
                         <Form className='flex flex-col gap-5'>
                             <div className={FORM_CONTAINER_STYLE}>
-                                <label className={LABEL_STYLE}>Brand</label>
+                                <label className={LABEL_STYLE}>Brand*</label>
                                 {isEdit ? (
                                     // For edit mode - show disabled input
                                     <Field
@@ -161,40 +166,63 @@ const AddNVRForm = ({ onClose, isEdit, initialData, fetchNvrData, title }) => {
                             </div>
 
                             <div className={FORM_CONTAINER_STYLE}>
-                                <label className={LABEL_STYLE}>Name</label>
+                                <label className={LABEL_STYLE}>Name*</label>
                                 <Field name='nvrName' as={Input} placeholder='Enter name' className={BORDER} />
                                 <ErrorMessage name='nvrName' component='div' className='text-sm text-red-600 ml-2' />
                             </div>
 
                             <div className={FORM_CONTAINER_STYLE}>
-                                <label className={LABEL_STYLE}>Location</label>
-                                <Select
-                                    onValueChange={(value) => setFieldValue('location', value)}
-                                    value={values.location || undefined}
-                                    name="location"
-                                >
-                                    <SelectTrigger className="bg-[#FAFAFA] border-[#80808059] shadow-none">
-                                        <SelectValue placeholder="Select location" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-white shadow-md">
-                                        {locations.map((loc) => (
-                                            <SelectItem key={loc} value={loc} className="hover:bg-[#F5F5F5]">
-                                                {loc}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <label className={LABEL_STYLE}>Location*</label>
+                                <CreatableSelect
+                                    isClearable
+                                    options={locations.map(loc => ({ value: loc, label: loc }))}
+                                    value={values.location ? { value: values.location, label: values.location } : null}
+                                    onChange={(option) => setFieldValue('location', option ? option.value : '')}
+                                    onCreateOption={async (inputValue) => {
+                                        try {
+                                            const resp = await createLocation({ locationName: inputValue });
+                                            if (resp?.data?.body?.status === 'success') {
+                                                toast.success(resp?.data?.body?.message || 'Location created');
+                                                await loadLocations();
+                                                setFieldValue('location', inputValue);
+                                            } else {
+                                                toast.error(resp?.data?.body?.message || 'Failed to create location');
+                                            }
+                                        } catch (error) {
+                                            toast.error(error?.response?.data?.body?.message || 'Failed to create location');
+                                        }
+                                    }}
+                                    placeholder="Select or type to create location"
+                                    classNamePrefix="rs"
+                                    styles={{
+                                        control: (base) => ({
+                                            ...base,
+                                            borderColor: '#80808059',
+                                            boxShadow: 'none',
+                                            backgroundColor: '#FAFAFA',
+                                            borderRadius: '6px',
+                                            minHeight: '36px',
+                                            '&:hover': { borderColor: '#80808059' },
+                                        }),
+                                        menu: (base) => ({ ...base, zIndex: 9999 }),
+                                        option: (base, state) => ({
+                                            ...base,
+                                            backgroundColor: state.isFocused ? '#F5F5F5' : 'white',
+                                            color: '#333',
+                                        }),
+                                    }}
+                                />
                                 <ErrorMessage name='location' component='div' className='text-sm text-red-600 ml-2' />
                             </div>
 
                             <div className={FORM_CONTAINER_STYLE}>
-                                <label className={LABEL_STYLE}>Public IP Address</label>
+                                <label className={LABEL_STYLE}>Public IP Address*</label>
                                 <Field name='ip' as={Input} placeholder='e.g. 169.253.255.255 ' className={BORDER} />
                                 <ErrorMessage name='ip' component='div' className='text-sm text-red-600 ml-2' />
                             </div>
 
                             <div className={FORM_CONTAINER_STYLE}>
-                                <label className={LABEL_STYLE}>Username</label>
+                                <label className={LABEL_STYLE}>Username*</label>
                                 <Field name='username' as={Input} placeholder='e.g. admin' className={BORDER} />
                                 <ErrorMessage name='username' component='div' className='text-sm text-red-600 ml-2' />
                             </div>
@@ -217,28 +245,42 @@ const AddNVRForm = ({ onClose, isEdit, initialData, fetchNvrData, title }) => {
 
                             {isEdit && (
                                 <>
-                                    <div className={FORM_CONTAINER_STYLE}>
+                                    <div className={`${FORM_CONTAINER_STYLE} relative`}>
                                         <label className={LABEL_STYLE}>Old Password</label>
-                                        <Field name='oldPassword' as={Input} type='password' placeholder='••••••••' className={BORDER} />
+                                        <Field name='oldPassword' as={Input} type={showOldPassword ? 'text' : 'password'} placeholder='••••••••' className={`${BORDER} pr-10`} />
+                                        <button
+                                            type='button'
+                                            onClick={() => setShowOldPassword(!showOldPassword)}
+                                            className='absolute right-3 top-[33px] text-gray-500'
+                                        >
+                                            {showOldPassword ? <Eye size={20} /> : <EyeOff size={20} />}
+                                        </button>
                                         <ErrorMessage name='oldPassword' component='div' className='text-sm text-red-600 ml-2' />
                                     </div>
 
-                                    <div className={FORM_CONTAINER_STYLE}>
+                                    <div className={`${FORM_CONTAINER_STYLE} relative`}>
                                         <label className={LABEL_STYLE}>New Password</label>
-                                        <Field name='newPassword' as={Input} type='password' placeholder='••••••••' className={BORDER} />
+                                        <Field name='newPassword' as={Input} type={showNewPassword ? 'text' : 'password'} placeholder='••••••••' className={`${BORDER} pr-10`} />
+                                        <button
+                                            type='button'
+                                            onClick={() => setShowNewPassword(!showNewPassword)}
+                                            className='absolute right-3 top-[33px] text-gray-500'
+                                        >
+                                            {showNewPassword ? <Eye size={20} /> : <EyeOff size={20} />}
+                                        </button>
                                         <ErrorMessage name='newPassword' component='div' className='text-sm text-red-600 ml-2' />
                                     </div>
                                 </>
                             )}
 
                             <div className={FORM_CONTAINER_STYLE}>
-                                <label className={LABEL_STYLE}>RTSP Port</label>
+                                <label className={LABEL_STYLE}>RTSP Port*</label>
                                 <Field name='rtspPort' as={Input} placeholder='e.g. 554' className={BORDER} />
                                 <ErrorMessage name='rtspPort' component='div' className='text-sm text-red-600 ml-2' />
                             </div>
 
                             <div className={FORM_CONTAINER_STYLE}>
-                                <label className={LABEL_STYLE}>Port</label>
+                                <label className={LABEL_STYLE}>Port*</label>
                                 <Field name='port' as={Input} placeholder='e.g. 80' className={BORDER} />
                                 <ErrorMessage name='port' component='div' className='text-sm text-red-600 ml-2' />
                             </div>
