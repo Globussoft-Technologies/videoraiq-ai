@@ -90,6 +90,9 @@ const testConfig = {
   accessLogsTimeDifference: 5,
   swagger: { user: "test", pass: "test" },
   empDomain: { url: "http://emp.test", apiKey: "test-key" },
+  // EmpMonitor secret used by AdminService.getEmpEmployees /
+  // UsersService.allOrgEmployee in their POST body to the EMP backend.
+  emp_secret_key: "test-emp-secret",
   storage: {
     s3: { accessKey: "", secretKey: "", region: "us-east-1", bucket: "" },
     googleDrive: { clientId: "", clientSecret: "", redirectUri: "" },

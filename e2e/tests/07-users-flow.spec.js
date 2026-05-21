@@ -64,11 +64,17 @@ test.describe("Users / RBAC flow", () => {
     // /login (React form) OR /member|amember (aMember) — tolerate both.
     //
     // The goto itself can race the logout redirect (webkit sometimes throws
-    // "Navigation interrupted by another navigation" because the logout flow
-    // is still navigating). Treat that interruption as the success case — the
-    // URL check below is the real assertion.
+    // "Navigation interrupted by another navigation" or "Frame load
+    // interrupted" because the logout flow is still navigating, and
+    // chromium sometimes surfaces ERR_ABORTED for the same reason). Treat
+    // any of these as the success case — the URL check below is the real
+    // assertion.
     await page.goto("/dashboard").catch((e) => {
-      if (!/interrupted by another navigation|net::ERR_ABORTED/i.test(e.message)) {
+      if (
+        !/interrupted by another navigation|net::ERR_ABORTED|frame load interrupted/i.test(
+          e.message
+        )
+      ) {
         throw e;
       }
     });

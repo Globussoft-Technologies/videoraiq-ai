@@ -115,6 +115,17 @@ export default defineConfig({
         "src/page/user/Streams/Operationselect.jsx",
         "src/page/user/Profile/ProfilesTable.jsx",
         "src/page/user/Detection/components/AppliedProfile.jsx",
+        // Round 15: Settings/components leaves (NvrSettingscard, Reports,
+        // AlertPreferences are pure presentation; Verify is the route-level
+        // OTP confirmation wrapper) and the helpers/Userregister
+        // VerifyUserDialog (multi-step face-verify dialog). Each has a
+        // dedicated test under tests/unit/page/user/Settings/components/**
+        // or tests/unit/helpers/Userregister/**.
+        "src/page/user/Settings/components/NvrSettingscard.jsx",
+        "src/page/user/Settings/components/Reports.jsx",
+        "src/page/user/Settings/components/Verify.jsx",
+        "src/page/user/Settings/components/AlertPreferences.jsx",
+        "src/helpers/Userregister/VerifyUserDialog.jsx",
       ],
       exclude: [
         "tests/**",
