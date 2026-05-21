@@ -103,6 +103,10 @@ export default defineConfig({
         "src/page/user/UserDetails/Api/delete/index.jsx",
         "src/page/user/EmployeeLogs/Api/get/index.jsx",
         "src/page/user/EmployeeLogs/Api/post/index.jsx",
+        // Round 12: layout-level sidebar config API wrappers. Both are leaf
+        // axios + waitForToken modules; tested under tests/unit/layout/Api/**.
+        "src/layout/Api/get/index.jsx",
+        "src/layout/Api/put/index.jsx",
       ],
       exclude: [
         "tests/**",
@@ -111,7 +115,6 @@ export default defineConfig({
         // test against. Specific page files we now test are listed in the
         // include array above.
         "src/assets/**",
-        "src/layout/**",
         "src/routes/**",
         "src/main.jsx",
         "src/App.jsx",
