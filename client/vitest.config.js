@@ -126,6 +126,17 @@ export default defineConfig({
         "src/page/user/Settings/components/Verify.jsx",
         "src/page/user/Settings/components/AlertPreferences.jsx",
         "src/helpers/Userregister/VerifyUserDialog.jsx",
+        // Round 16: ScheduleRow (the big day-timeline picker — previously
+        // 0% / 545 lines), and three Settings/components: OtpVerification
+        // (route-level 6-digit OTP modal), Nvralertsettingsform (read-only
+        // current-NVR summary card with Edit -> AddNVRForm), NvrAlertsettings
+        // (parent collapsible card). Each entry has a dedicated test under
+        // tests/unit/components/Schedule/** or tests/unit/page/user/
+        // Settings/components/**.
+        "src/components/Schedule/ScheduleRow.jsx",
+        "src/page/user/Settings/components/OtpVerification.jsx",
+        "src/page/user/Settings/components/Nvralertsettingsform.jsx",
+        "src/page/user/Settings/components/NvrAlertsettings.jsx",
       ],
       exclude: [
         "tests/**",

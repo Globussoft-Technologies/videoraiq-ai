@@ -72,4 +72,62 @@ test.describe("Locations page", () => {
     // Best-effort: close via Escape so we don't leave UI open.
     await page.keyboard.press("Escape").catch(() => {});
   });
+
+  test("'Add New Location' dialog exposes form fields and Cancel button", async ({
+    page,
+  }) => {
+    await page.goto("/locations");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    const addBtn = page
+      .getByRole("button", { name: /add new location/i })
+      .first();
+    test.skip(
+      !(await addBtn.isVisible().catch(() => false)),
+      "User cannot add locations"
+    );
+
+    await addBtn.click();
+
+    // The LocationForm renders a Radix Dialog with role=dialog.
+    const dialog = page.getByRole("dialog").first();
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+
+    // Webkit may animate the Radix dialog in — be tolerant.
+    await expect(async () => {
+      // Header text
+      await expect(
+        dialog.getByText(/add new location/i).first()
+      ).toBeVisible({ timeout: 5_000 });
+      // Location Name input with placeholder "e.g. Banglore"
+      await expect(
+        dialog.getByPlaceholder(/e\.g\. Banglore/i).first()
+      ).toBeVisible({ timeout: 5_000 });
+      // Employee Location ID input with placeholder "e.g. BLR001"
+      await expect(
+        dialog.getByPlaceholder(/e\.g\. BLR001/i).first()
+      ).toBeVisible({ timeout: 5_000 });
+      // Submit + Cancel buttons (in create mode the submit reads "Add Location")
+      await expect(
+        dialog.getByRole("button", { name: /^add location$/i }).first()
+      ).toBeVisible({ timeout: 5_000 });
+      await expect(
+        dialog.getByRole("button", { name: /^cancel$/i }).first()
+      ).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 10_000 });
+
+    // Typing into the name field should be reflected in the input value.
+    const nameInput = dialog.getByPlaceholder(/e\.g\. Banglore/i).first();
+    await nameInput.fill("e2e-temp-location-zzz");
+    await expect(nameInput).toHaveValue("e2e-temp-location-zzz");
+
+    // Cancel should close the dialog cleanly without submitting.
+    await dialog
+      .getByRole("button", { name: /^cancel$/i })
+      .first()
+      .click();
+    await expect(dialog).toBeHidden({ timeout: 10_000 });
+  });
 });

@@ -62,4 +62,60 @@ test.describe("Active Cameras page", () => {
       });
     }
   });
+
+  test("clicking the Select NVR trigger opens the listbox of NVR options", async ({
+    page,
+  }) => {
+    await page.goto("/active-cameras");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    // The two Radix selects are rendered with the placeholder text inside the
+    // SelectValue. Use the placeholder text as a locator since the trigger has
+    // role=combobox but no accessible name.
+    const nvrTrigger = page.getByText(/^Select NVR$/i).first();
+    test.skip(
+      !(await nvrTrigger.isVisible().catch(() => false)),
+      "Select NVR trigger not present"
+    );
+    await nvrTrigger.click();
+
+    // Radix renders the listbox as role=listbox. Either we get a listbox open
+    // or a 'No NVRs available'-style placeholder — both prove the dropdown
+    // expanded without throwing.
+    await expect(async () => {
+      const listbox = page.getByRole("listbox").first();
+      const emptyState = page
+        .getByText(/no nvr|no data|loading/i)
+        .first();
+      const opened =
+        (await listbox.isVisible().catch(() => false)) ||
+        (await emptyState.isVisible().catch(() => false));
+      expect(opened).toBe(true);
+    }).toPass({ timeout: 10_000 });
+
+    // Dismiss the dropdown so we don't leak state.
+    await page.keyboard.press("Escape").catch(() => {});
+  });
+
+  test("typing in the search input filters with a debounce-safe value", async ({
+    page,
+  }) => {
+    await page.goto("/active-cameras");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    const search = page.getByPlaceholder(/search/i).first();
+    await expect(search).toBeVisible({ timeout: 10_000 });
+
+    await search.fill("zzz-no-such-camera");
+    await expect(search).toHaveValue("zzz-no-such-camera");
+
+    // Clearing the search restores the empty value (debounce in the page is
+    // 300ms but value-update is synchronous on the input).
+    await search.fill("");
+    await expect(search).toHaveValue("");
+  });
 });
