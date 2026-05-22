@@ -195,6 +195,25 @@ export default defineConfig({
         // EmployeeLogs/ProductivityLog — static-data table page (hard-coded
         // 5 rows + 7 columns) with two NVR/Camera filter selects.
         "src/page/user/EmployeeLogs/ProductivityLog.jsx",
+        // Round 21: six more small leaves —
+        //  - Detection/components/BasicSettings (read-only basic block of
+        //    the applied profile - timezone + day chips + per-day slots).
+        //  - Playback/components/AutoHideWrapper (auto-fade pointer-idle
+        //    wrapper with both local and targetRef listener modes).
+        //  - Streams/components/EditCameraInfo (controlled popover for
+        //    editing camera alias + department assignment).
+        //  - EmployeeLogs/components/AutoRefreshComponent (manual + auto
+        //    refresh button with +/- stepper, switch, preset buttons).
+        //  - Profile/EvidenceSeverityStep (step 3 of multi-step profile
+        //    form: Formik-driven Evidence/Time/Storage selects).
+        //  - Departments/DepartmentForm (Yup-validated Formik dialog for
+        //    create/edit department).
+        "src/page/user/Detection/components/BasicSettings.jsx",
+        "src/page/user/Playback/components/AutoHideWrapper.jsx",
+        "src/page/user/Streams/components/EditCameraInfo.jsx",
+        "src/page/user/EmployeeLogs/components/AutoRefreshComponent.jsx",
+        "src/page/user/Profile/EvidenceSeverityStep.jsx",
+        "src/page/user/Departments/DepartmentForm.jsx",
       ],
       exclude: [
         "tests/**",
