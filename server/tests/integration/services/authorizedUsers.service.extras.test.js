@@ -235,15 +235,14 @@ describe("AuthUsersService.authUserLogin", () => {
     expect(payload(res).status).toBe("failed");
   });
 
-  it("returns 500 for an unknown user (decrypt of undefined throws)", async () => {
-    // Product quirk: service tries to decrypt user.password before the null
-    // check, so an unknown user falls into the catch handler and returns 500.
+  it("returns 401 for an unknown user (null-check before decrypt)", async () => {
     const { req, res, next } = serviceCtx({
       body: { usernameOrEmail: "ghost@test.com", password: "p" },
     });
     await AuthUsersService.authUserLogin(req, res, next);
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(401);
     expect(payload(res).status).toBe("failed");
+    expect(payload(res).message).toMatch(/Invalid email\/username or password/);
   });
 });
 
