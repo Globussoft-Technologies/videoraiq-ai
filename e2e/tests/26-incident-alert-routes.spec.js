@@ -50,8 +50,14 @@ test.describe("Alert-card / incident-summary routes", () => {
       await expect(page).toHaveURL(route.urlPattern);
       expect(errors, errors.join("\n")).toHaveLength(0);
 
-      const bodyText = await page.locator("body").innerText();
-      expect(bodyText.trim().length).toBeGreaterThan(0);
+      // CriticalAlert renders skeleton rows of zero-width chars before data
+      // arrives, which can make `innerText` empty during early sampling.
+      // Retry briefly so we capture the page once real text has painted.
+      let bodyText = "";
+      await expect(async () => {
+        bodyText = await page.locator("body").innerText();
+        expect(bodyText.trim().length).toBeGreaterThan(0);
+      }).toPass({ timeout: 10_000 });
 
       // Heading sanity check — only if the SPA actually stayed on this route.
       if (new RegExp(route.path.replace(/\//g, "\\/"), "i").test(page.url())) {

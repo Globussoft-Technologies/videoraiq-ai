@@ -67,4 +67,52 @@ test.describe("Navigation", () => {
     await page.goto("/");
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
   });
+
+  test("sidebar exposes the canonical authenticated nav links", async ({
+    page,
+    sidebar,
+  }) => {
+    // Visual smokes already cover the layout shell on individual route specs;
+    // this test asserts the full set of nav links the Header is contracted
+    // to render for an authenticated admin (per Header.jsx + the Sidebar POM).
+    await page.goto("/dashboard");
+    await sidebar.expectVisible();
+
+    for (const link of [
+      sidebar.dashboardLink,
+      sidebar.incidentsLink,
+      sidebar.nvrLink,
+      sidebar.liveLink,
+      sidebar.playbackLink,
+      sidebar.settingsLink,
+      sidebar.logsLink,
+      sidebar.userDetailsLink,
+    ]) {
+      await expect(link.first()).toBeVisible({ timeout: 10_000 });
+    }
+  });
+
+  test("clicking the NVR sidebar link routes to /nvr-settings", async ({
+    page,
+    sidebar,
+  }) => {
+    // Tighter than the existing "dashboard → NVR settings" test: that one only
+    // calls StreamsPage.expectLoaded(). Here we additionally pin the URL — it
+    // catches regressions where the link points somewhere else but the
+    // destination component still renders.
+    await page.goto("/dashboard");
+    await sidebar.expectVisible();
+    await sidebar.goTo("nvr");
+    await expect(page).toHaveURL(/\/nvr-settings/, { timeout: 15_000 });
+  });
+
+  test("clicking the Live sidebar link routes to /cameraview", async ({
+    page,
+    sidebar,
+  }) => {
+    await page.goto("/dashboard");
+    await sidebar.expectVisible();
+    await sidebar.goTo("live");
+    await expect(page).toHaveURL(/\/cameraview/, { timeout: 15_000 });
+  });
 });

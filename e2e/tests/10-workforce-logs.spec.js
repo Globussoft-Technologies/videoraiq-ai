@@ -31,8 +31,14 @@ test.describe("Workforce & logs routes", () => {
       await page.waitForLoadState("networkidle", { timeout: 20_000 });
 
       expect(errors, errors.join("\n")).toHaveLength(0);
-      const bodyText = await page.locator("body").innerText();
-      expect(bodyText.trim().length).toBeGreaterThan(0);
+
+      // `innerText` excludes still-hydrating subtrees so it can be empty right
+      // after networkidle on slow-paint log routes (Guard logs observed flaky).
+      // Retry briefly to absorb that race.
+      await expect(async () => {
+        const txt = await page.locator("body").innerText();
+        expect(txt.trim().length).toBeGreaterThan(0);
+      }).toPass({ timeout: 10_000 });
     });
   }
 

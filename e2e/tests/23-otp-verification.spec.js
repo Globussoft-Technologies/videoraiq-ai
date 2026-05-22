@@ -28,8 +28,12 @@ test.describe("OTP verification page (/otp-verification)", () => {
     );
     expect(errors, errors.join("\n")).toHaveLength(0);
 
-    const bodyText = await page.locator("body").innerText();
-    expect(bodyText.trim().length).toBeGreaterThan(0);
+    // /otp-verification can paint inside a portal that hydrates after
+    // networkidle. Retry briefly so we don't snapshot an empty body.
+    await expect(async () => {
+      const txt = await page.locator("body").innerText();
+      expect(txt.trim().length).toBeGreaterThan(0);
+    }).toPass({ timeout: 10_000 });
   });
 
   test("renders the OTP entry UI (heading + 6 inputs + Verify / Resend)", async ({

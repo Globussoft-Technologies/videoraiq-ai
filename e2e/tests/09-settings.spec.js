@@ -65,9 +65,14 @@ test.describe("Settings-family routes", () => {
       );
       expect(errors, errors.join("\n")).toHaveLength(0);
 
-      // Something must be painted.
-      const bodyText = await page.locator("body").innerText();
-      expect(bodyText.trim().length).toBeGreaterThan(0);
+      // Something must be painted. `innerText` excludes nodes that are still
+      // hydrating, so it can return "" if we sample right after networkidle on
+      // a slow-paint route (storage-settings has been observed empty here).
+      // Retry briefly to absorb that race rather than fail the whole spec.
+      await expect(async () => {
+        const txt = await page.locator("body").innerText();
+        expect(txt.trim().length).toBeGreaterThan(0);
+      }).toPass({ timeout: 10_000 });
 
       // Soft paint check: if the SPA stayed on the route we expected, the
       // route-specific paint hint should be present. Skip the hint check on

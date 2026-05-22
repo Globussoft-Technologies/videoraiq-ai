@@ -148,6 +148,19 @@ export default defineConfig({
         "src/page/user/Streams/Cameraview/CameraThree.jsx",
         "src/page/user/Streams/Cameraview/CameraFour.jsx",
         "src/page/user/Streams/Cameraview/CameraFive.jsx",
+        // Round 18: the rest of the Cameraview/Camera{One,Two,Six,Seven,
+        // Eight,Nine}.jsx fixed-size grid wrappers + the shared
+        // CameraStreamDisplay tile + the pure timeUtils helpers used by
+        // EmployeeLogs filter popover. Each entry has a dedicated test
+        // under tests/unit/page/user/{Streams/Cameraview,EmployeeLogs}/**.
+        "src/page/user/EmployeeLogs/components/timeUtils.js",
+        "src/page/user/Streams/Cameraview/CameraOne.jsx",
+        "src/page/user/Streams/Cameraview/CameraTwo.jsx",
+        "src/page/user/Streams/Cameraview/CameraSix.jsx",
+        "src/page/user/Streams/Cameraview/CameraSeven.jsx",
+        "src/page/user/Streams/Cameraview/CameraEight.jsx",
+        "src/page/user/Streams/Cameraview/CameraNine.jsx",
+        "src/page/user/Streams/Cameraview/CameraStreamDisplay.jsx",
       ],
       exclude: [
         "tests/**",

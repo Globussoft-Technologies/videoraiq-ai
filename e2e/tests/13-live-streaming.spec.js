@@ -73,4 +73,30 @@ test.describe("Live streaming page", () => {
     await search.fill("test-camera");
     await expect(search).toHaveValue("test-camera");
   });
+
+  test("Location MultiSelect opens a searchable popup", async ({ page }) => {
+    // Cameraview wires three MultiSelect filter widgets (Location / NVR /
+    // Cameras). Clicking the Location trigger should open a popup containing
+    // a "Search Locations..." input. We don't assert on actual location rows
+    // because the list is data-dependent.
+    await page.goto("/cameraview");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+    test.skip(
+      !page.url().includes("/cameraview"),
+      "User does not have access to /cameraview"
+    );
+
+    const locationTrigger = page.getByText(/^select location$/i).first();
+    await expect(locationTrigger).toBeVisible({ timeout: 15_000 });
+    await locationTrigger.click();
+
+    // Wrap in toPass for webkit tolerance — popover animation can lag.
+    await expect(async () => {
+      await expect(
+        page.getByPlaceholder(/search locations/i).first()
+      ).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 10_000 });
+  });
 });

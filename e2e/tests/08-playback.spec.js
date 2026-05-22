@@ -114,21 +114,28 @@ test.describe("Playback", () => {
     const playback = new PlaybackPage(page);
     await playback.goto();
 
+    // Dismiss any stray popover the previous test in this file may have left
+    // open (search results, focused combobox, etc.) — the playback page often
+    // restores the previous filter state and this can occlude the Location
+    // trigger on re-entry.
+    await page.keyboard.press("Escape").catch(() => {});
+    await page.mouse.click(5, 5).catch(() => {});
+
     // The Radix Select trigger for Location renders the placeholder text
     // "Select Location" until a value is chosen. Click the trigger and
     // assert the listbox or 'No options available' label appears.
     const locationTrigger = page.getByText(/select location/i).first();
     await expect(locationTrigger).toBeVisible({ timeout: 15_000 });
 
-    await locationTrigger.click();
-
+    // Re-click via toPass so flaky popover state can recover.
     await expect(async () => {
+      await locationTrigger.click();
       const listbox = page.getByRole("listbox").first();
       const empty = page.getByText(/no options available/i).first();
       const listboxVisible = await listbox.isVisible().catch(() => false);
       const emptyVisible = await empty.isVisible().catch(() => false);
       expect(listboxVisible || emptyVisible).toBeTruthy();
-    }).toPass({ timeout: 10_000 });
+    }).toPass({ timeout: 15_000 });
 
     // Close the popover so subsequent tests start clean.
     await page.keyboard.press("Escape").catch(() => {});
