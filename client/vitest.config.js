@@ -161,6 +161,20 @@ export default defineConfig({
         "src/page/user/Streams/Cameraview/CameraEight.jsx",
         "src/page/user/Streams/Cameraview/CameraNine.jsx",
         "src/page/user/Streams/Cameraview/CameraStreamDisplay.jsx",
+        // Round 19: more small leaves —
+        //  - Detection: DeleteConfirmation (reusable portal modal),
+        //    DetectionSettingsFormSkeleton (pure presentational skeleton),
+        //    DeleteAddedRecipients (TanStack-table confirmation portal).
+        //  - Playback: RecordedScreens (thumbnail strip list).
+        //  - EmployeeLogs: LogEmployeeProfileDialog (Radix dialog showing
+        //    profile + region-converted times), ProfilesTable (TanStack-
+        //    table wrapper with skeleton mode).
+        "src/page/user/Detection/components/DeleteConfirmation.jsx",
+        "src/page/user/Detection/components/DetectionSettingsFormSkeleton.jsx",
+        "src/page/user/Detection/components/DeleteAddedRecipients.jsx",
+        "src/page/user/Playback/components/RecordedScreens.jsx",
+        "src/page/user/EmployeeLogs/LogEmployeeProfileDialog.jsx",
+        "src/page/user/EmployeeLogs/ProfilesTable.jsx",
       ],
       exclude: [
         "tests/**",

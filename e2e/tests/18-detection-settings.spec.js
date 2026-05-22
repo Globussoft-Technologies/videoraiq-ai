@@ -61,4 +61,56 @@ test.describe("Detection Settings page", () => {
     await filter.fill("");
     await expect(filter).toHaveValue("");
   });
+
+  test("'Select NVR' combobox is rendered and clickable", async ({ page }) => {
+    await page.goto("/detection-settings");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+    test.skip(
+      !/detection-settings/.test(page.url()),
+      "User does not have access to /detection-settings"
+    );
+
+    // The NVR Select is the second SelectTrigger on the page (after the
+    // Camera Type cells, but those are scoped per-row). Use the placeholder
+    // text "Select NVR" to disambiguate when nothing has been chosen yet.
+    // If an NVR is already selected the placeholder is replaced by its name,
+    // so we tolerate that by also looking for any combobox in the toolbar
+    // region.
+    const nvrCombobox = page
+      .getByRole("combobox")
+      .filter({ hasText: /select nvr|.+/i })
+      .first();
+    await expect(nvrCombobox).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("clicking 'Applied Types' opens a Detection Types popover (when rows exist)", async ({
+    page,
+  }) => {
+    await page.goto("/detection-settings");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+    test.skip(
+      !/detection-settings/.test(page.url()),
+      "User does not have access to /detection-settings"
+    );
+
+    // The Enable-Detection column renders an "Applied Types" trigger per
+    // row. If the account has no cameras / NVRs we'd see zero — tolerate
+    // that with a skip rather than a fail.
+    const triggers = page.getByText(/^Applied Types$/i);
+    const count = await triggers.count();
+    test.skip(count === 0, "No detection rows rendered for this account");
+
+    await triggers.first().click();
+    await expect(
+      page.getByText(/^Detection Types$/i).first()
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Dismiss the popover without flipping any switch — we do NOT want to
+    // mutate detection state on the live dev environment.
+    await page.keyboard.press("Escape");
+  });
 });

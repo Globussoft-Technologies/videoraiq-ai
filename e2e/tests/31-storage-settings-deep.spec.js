@@ -91,4 +91,46 @@ test.describe("Storage Settings page (/storage-settings)", () => {
       page.getByText(/Alert Recipients/i).first()
     ).toBeVisible({ timeout: 15_000 });
   });
+
+  test("clicking 'Add Storage' opens the modal with a storage-type picker", async ({
+    page,
+  }) => {
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+
+    await page.goto("/storage-settings");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    test.skip(
+      !/\/storage-settings/.test(page.url()),
+      "User does not have access to /storage-settings"
+    );
+
+    const addBtn = page.getByLabel(/add storage/i).first();
+    await expect(addBtn).toBeVisible({ timeout: 15_000 });
+    await addBtn.click();
+
+    // The modal title is "Add Storage" (DialogTitle). Both the trigger and the
+    // dialog title share that text — scope the assertion to role=dialog so we
+    // are unambiguously asserting the modal opened.
+    const dialog = page.getByRole("dialog").first();
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await expect(
+      dialog.getByText(/^Add Storage$/i).first()
+    ).toBeVisible({ timeout: 10_000 });
+
+    // First panel shows a "Select storage type" placeholder on the storage-
+    // type select (combobox).
+    await expect(
+      dialog.getByText(/select storage type/i).first()
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Close the dialog without submitting — Radix Dialog supports Escape.
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden({ timeout: 10_000 });
+
+    expect(errors, errors.join("\n")).toHaveLength(0);
+  });
 });

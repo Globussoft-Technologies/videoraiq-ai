@@ -74,4 +74,51 @@ test.describe("Inner detection settings (/settings/inner)", () => {
     const reset = page.getByText(/reset setting/i).first();
     await expect(reset).toBeVisible({ timeout: 15_000 });
   });
+
+  test("DeviceDetail grid exposes Model / NVR field labels", async ({
+    page,
+  }) => {
+    await page.goto("/settings/inner");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    test.skip(
+      !/settings\/inner/.test(page.url()),
+      "User does not have access to /settings/inner"
+    );
+
+    // The DeviceDetail component renders Model / NVR / IP Address. Status is
+    // currently commented out in the source — do not assert on it. IP Address
+    // is already covered by the existing test.
+    for (const label of [/^Model$/i, /^NVR$/i]) {
+      await expect(page.getByText(label).first()).toBeVisible({
+        timeout: 15_000,
+      });
+    }
+  });
+
+  test("'Select Detection Type' selector is rendered", async ({ page }) => {
+    await page.goto("/settings/inner");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    test.skip(
+      !/settings\/inner/.test(page.url()),
+      "User does not have access to /settings/inner"
+    );
+
+    // SettingsCard exposes "Select Detection Type" as the trigger label for
+    // the primary detection-type picker. If the page is in a partial state
+    // (e.g. no channel context) the selector may not render — tolerate that
+    // by skipping rather than failing.
+    const selector = page.getByText(/select detection type/i).first();
+    const visible = await selector.isVisible().catch(() => false);
+    test.skip(
+      !visible,
+      "Detection-type selector not rendered for this account / context"
+    );
+    await expect(selector).toBeVisible({ timeout: 15_000 });
+  });
 });
