@@ -70,6 +70,35 @@ test.describe("Forgot password page", () => {
     await expect(back).toBeVisible({ timeout: 10_000 });
   });
 
+  test("forgot-password form rejects an empty submit without navigating away", async ({
+    page,
+  }) => {
+    await page.goto("/forgot-password");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    test.skip(
+      !/forgot-password/i.test(page.url()),
+      "redirected away from /forgot-password"
+    );
+
+    const submit = page
+      .getByRole("button", { name: /send reset|reset instructions/i })
+      .first();
+    await submit.click().catch(() => {});
+
+    // Give Formik a tick. The form must NOT navigate away on an empty submit.
+    await page.waitForTimeout(500);
+    expect(page.url()).toMatch(/forgot-password/i);
+
+    // The email input should still be present and empty.
+    const email = page
+      .locator('input[name="email"], input[type="email"]')
+      .first();
+    await expect(email).toHaveValue("");
+  });
+
   test("submitting an invalid email surfaces a Formik validation error", async ({
     page,
   }) => {
@@ -160,6 +189,63 @@ test.describe("Reset password page", () => {
     expect(bodyText).toMatch(/Password must contain/i);
     expect(bodyText).toMatch(/At least 8 characters/i);
     expect(bodyText).toMatch(/uppercase/i);
+  });
+
+  test("reset-password form rejects an empty submit", async ({ page }) => {
+    await page.goto("/reset-password?token=e2e_smoke_token");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    test.skip(
+      !/reset-password/i.test(page.url()),
+      "redirected away from /reset-password"
+    );
+
+    // Click submit with both fields empty — Formik should refuse to send
+    // a request. We assert via the post-click URL: still on /reset-password.
+    const submit = page
+      .getByRole("button", { name: /reset password/i })
+      .first();
+    await submit.click().catch(() => {});
+
+    // Give Formik a tick to run validators, then ensure we did NOT navigate
+    // away to /login or /dashboard.
+    await page.waitForTimeout(500);
+    expect(page.url()).toMatch(/reset-password/i);
+
+    // Both inputs should still be on screen, untouched.
+    await expect(
+      page.locator('input[name="password"]').first()
+    ).toHaveValue("");
+    await expect(
+      page.locator('input[name="confirmPassword"]').first()
+    ).toHaveValue("");
+  });
+
+  test("reset-password page renders even with a missing token query param", async ({
+    page,
+  }) => {
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+
+    // Drop the ?token=... query string entirely — the form should still
+    // render (the token validation happens on submit, not on mount).
+    await page.goto("/reset-password");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    await expect(page).toHaveURL(/reset-password|login|dashboard/i);
+    expect(errors, errors.join("\n")).toHaveLength(0);
+
+    // If we landed on /reset-password the body should still mention "Reset
+    // Password" — if we got redirected (some builds bounce to /login when
+    // there's no token), that's also acceptable.
+    if (/reset-password/.test(page.url())) {
+      const bodyText = await page.locator("body").innerText();
+      expect(bodyText).toMatch(/Reset Password/i);
+    }
   });
 
   test("mismatched password + confirm surfaces a Formik validation error", async ({

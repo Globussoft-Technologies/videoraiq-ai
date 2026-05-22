@@ -67,6 +67,84 @@ test.describe("User Details page", () => {
     }
   });
 
+  test("user-details search input accepts typing and clears", async ({
+    page,
+  }) => {
+    await page.goto("/user-details");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    test.skip(
+      !/\/user-details/.test(page.url()),
+      "User does not have access to /user-details"
+    );
+
+    // The user-list panel exposes a search input with placeholder "Search ".
+    const search = page.getByPlaceholder(/^Search\s*$/i).first();
+    test.skip(
+      !(await search.isVisible().catch(() => false)),
+      "Search input not exposed for this user"
+    );
+
+    await search.fill("zzz-no-such-user-xyz");
+    await expect(search).toHaveValue("zzz-no-such-user-xyz");
+    await search.fill("");
+    await expect(search).toHaveValue("");
+  });
+
+  test("user-details table column headers render", async ({ page }) => {
+    await page.goto("/user-details");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    test.skip(
+      !/\/user-details/.test(page.url()),
+      "User does not have access to /user-details"
+    );
+
+    // The registered-users table renders Email / Role / Action columns.
+    // Wrap in toPass for late-arriving table rows in webkit.
+    await expect(async () => {
+      await expect(page.getByText(/^Email$/i).first()).toBeVisible({
+        timeout: 5_000,
+      });
+      await expect(page.getByText(/^Role$/i).first()).toBeVisible({
+        timeout: 5_000,
+      });
+      await expect(page.getByText(/^Action$/i).first()).toBeVisible({
+        timeout: 5_000,
+      });
+    }).toPass({ timeout: 15_000 });
+  });
+
+  test("'Add New User' button is reachable when admin has access", async ({
+    page,
+  }) => {
+    await page.goto("/user-details");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    test.skip(
+      !/\/user-details/.test(page.url()),
+      "User does not have access to /user-details"
+    );
+
+    const addBtn = page
+      .getByRole("button", { name: /add new user/i })
+      .first();
+
+    // If the button isn't exposed for this account, skip rather than fail —
+    // the page itself rendered, which is what matters for the smoke check.
+    test.skip(
+      !(await addBtn.isVisible().catch(() => false)),
+      "User cannot add new users"
+    );
+    await expect(addBtn).toBeEnabled();
+  });
+
   test("Register-your-User tab exposes the employee-registration controls", async ({
     page,
   }) => {

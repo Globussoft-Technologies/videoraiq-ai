@@ -82,4 +82,77 @@ test.describe("Streams & camera-view routes", () => {
     const back = page.getByText(/back to NVR settings|Go back to NVR/i).first();
     await expect(back).toBeVisible({ timeout: 10_000 });
   });
+
+  test("cameraview camera search input is interactive", async ({ page }) => {
+    await page.goto("/cameraview");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    test.skip(
+      !/cameraview/i.test(page.url()),
+      "redirected away from /cameraview — NvrAuthCheck bounce"
+    );
+
+    // Cameraview.jsx exposes an input with placeholder "Search cameras".
+    const search = page.getByPlaceholder(/search cameras/i).first();
+    test.skip(
+      !(await search.isVisible().catch(() => false)),
+      "Search input not exposed for this user"
+    );
+
+    await search.fill("zzz-no-such-camera");
+    await expect(search).toHaveValue("zzz-no-such-camera");
+    await search.fill("");
+    await expect(search).toHaveValue("");
+  });
+
+  test("cameraview exposes Location / NVR / Camera selectors when it renders", async ({
+    page,
+  }) => {
+    await page.goto("/cameraview");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    test.skip(
+      !/cameraview/i.test(page.url()),
+      "redirected away from /cameraview"
+    );
+
+    // The page renders four selectors: Location / NVR / Camera / Department,
+    // plus a "Select View Grid" picker. Their placeholder text is part of
+    // the visible body text. We tolerate webkit timing with toPass.
+    await expect(async () => {
+      const txt = await page.locator("body").innerText();
+      expect(txt).toMatch(/Select View Grid/i);
+      expect(txt).toMatch(/Select Location/i);
+      expect(txt).toMatch(/Select NVR/i);
+      expect(txt).toMatch(/Select Cameras/i);
+    }).toPass({ timeout: 15_000 });
+  });
+
+  test("nvrsettings page exposes CCTV Configurations affordance when it renders", async ({
+    page,
+  }) => {
+    await page.goto("/streams/nvrsettings");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    test.skip(
+      !/streams\/nvrsettings/i.test(page.url()),
+      "redirected away from /streams/nvrsettings"
+    );
+
+    // The CCTV Configurations button is rendered by <StreamHeader />.
+    const cfg = page
+      .getByRole("button", { name: /cctv configurations|add nvr/i })
+      .first();
+    test.skip(
+      !(await cfg.isVisible().catch(() => false)),
+      "CCTV Configurations button not exposed for this user"
+    );
+    await expect(cfg).toBeEnabled();
+  });
 });

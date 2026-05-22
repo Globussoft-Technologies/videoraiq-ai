@@ -137,6 +137,17 @@ export default defineConfig({
         "src/page/user/Settings/components/OtpVerification.jsx",
         "src/page/user/Settings/components/Nvralertsettingsform.jsx",
         "src/page/user/Settings/components/NvrAlertsettings.jsx",
+        // Round 17: small page-tree leaves with self-contained renders or
+        // straightforward child-component stubbing. Each entry has a
+        // dedicated test under tests/unit/page/user/**.
+        "src/page/user/NVR/NVRAuthLogin.jsx",
+        "src/page/user/Detection/components/DetectionPreviewModal.jsx",
+        "src/page/user/Detection/components/MiniCameraPreview.jsx",
+        "src/page/user/Detection/components/NotificationSettings.jsx",
+        "src/page/user/Settings/Settings.jsx",
+        "src/page/user/Streams/Cameraview/CameraThree.jsx",
+        "src/page/user/Streams/Cameraview/CameraFour.jsx",
+        "src/page/user/Streams/Cameraview/CameraFive.jsx",
       ],
       exclude: [
         "tests/**",
