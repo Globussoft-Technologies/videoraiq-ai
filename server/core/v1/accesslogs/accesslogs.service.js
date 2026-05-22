@@ -1143,6 +1143,11 @@ async getLogs(req, res, next) {
 }
   
 const  parseDuration = (duration) => {
+  // Handle numeric input (treat as milliseconds)
+  if (typeof duration === 'number') {
+    return duration;
+  }
+
   const value = parseInt(duration);
   if (duration.endsWith("s")) return value * 1000;         // seconds
   if (duration.endsWith("m")) return value * 60 * 1000;    // minutes
