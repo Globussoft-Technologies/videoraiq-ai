@@ -175,6 +175,26 @@ export default defineConfig({
         "src/page/user/Playback/components/RecordedScreens.jsx",
         "src/page/user/EmployeeLogs/LogEmployeeProfileDialog.jsx",
         "src/page/user/EmployeeLogs/ProfilesTable.jsx",
+        // Round 20: tiny leaves —
+        //  - Detection/components/TimeSlotsPopover (popover that shows
+        //    overflow time slots beyond the first two, supports strings /
+        //    label objects / startTime+endTime objects).
+        //  - Detection/components/EditDetectionSettingModal (dialog
+        //    wrapper around ManageSettings).
+        //  - Detection/components/olddetections (legacy DetectionSetting
+        //    page wrapper composing AddNewConfiguration + SavedConfiguration).
+        //  - Playback/components/VideoSection (thin PlaybackVideo wrapper
+        //    with zoom-in/out wiring).
+        "src/page/user/Detection/components/TimeSlotsPopover.jsx",
+        "src/page/user/Detection/components/EditDetectionSettingModal.jsx",
+        "src/page/user/Detection/components/olddetections.jsx",
+        "src/page/user/Playback/components/VideoSection.jsx",
+        // Detection/DetectionSettingsModal — Dialog wrapper that embeds
+        // SavedConfiguration (Action='action') + AddNewConfiguration.
+        "src/page/user/Detection/DetectionSettingsModal.jsx",
+        // EmployeeLogs/ProductivityLog — static-data table page (hard-coded
+        // 5 rows + 7 columns) with two NVR/Camera filter selects.
+        "src/page/user/EmployeeLogs/ProductivityLog.jsx",
       ],
       exclude: [
         "tests/**",

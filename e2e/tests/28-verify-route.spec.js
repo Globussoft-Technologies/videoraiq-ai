@@ -80,4 +80,58 @@ test.describe("Public /verify route", () => {
     const logo = page.getByAltText(/VideoraIQ Logo/i).first();
     await expect(logo).toBeVisible({ timeout: 10_000 });
   });
+
+  test("/verify modal renders a centered card with the failure copy", async ({
+    page,
+  }) => {
+    await page.goto("/verify");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    // Failure variant ("Couldn't verify. Try again.") is rendered by the
+    // FailureContent component when no token/value is present.
+    await expect(async () => {
+      const bodyText = await page.locator("body").innerText();
+      expect(bodyText).toMatch(/Couldn.?t verify\.? Try again/i);
+    }).toPass({ timeout: 10_000 });
+  });
+
+  test("/verify modal heading uses an h2 (semantic correctness)", async ({
+    page,
+  }) => {
+    await page.goto("/verify");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    // VerificationModal puts "Verification Failed" inside an <h2>. Asserting on
+    // the heading role guards against accidental refactors that demote the
+    // copy to plain <div>.
+    await expect(
+      page.getByRole("heading", { name: /Verification Failed/i }).first()
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("/verify modal is rendered above the page (portal at body root)", async ({
+    page,
+  }) => {
+    await page.goto("/verify");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    // VerificationModal mounts via ReactDOM.createPortal into document.body
+    // with z-[9999]. We assert that the heading is positioned within the
+    // viewport — if the portal failed to mount, the heading would be missing
+    // or have zero size.
+    const heading = page
+      .getByRole("heading", { name: /Verification Failed/i })
+      .first();
+    await expect(heading).toBeVisible({ timeout: 10_000 });
+    const box = await heading.boundingBox();
+    expect(box, "modal heading should have a bounding box").not.toBeNull();
+    expect(box.width).toBeGreaterThan(0);
+    expect(box.height).toBeGreaterThan(0);
+  });
 });

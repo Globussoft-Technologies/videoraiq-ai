@@ -82,4 +82,49 @@ test.describe("Register-new-employee route", () => {
 
     expect(errors, errors.join("\n")).toHaveLength(0);
   });
+
+  test("/register-new-employee exposes the standard Layout sidebar nav links", async ({
+    page,
+  }) => {
+    await page.goto("/register-new-employee");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    test.skip(
+      !/register-new-employee/.test(page.url()),
+      "User does not have access to /register-new-employee"
+    );
+
+    // The RegisterForm component lives inside the authenticated Layout, so
+    // the sidebar's primary nav items should be reachable. We assert on a
+    // small set rather than the whole nav — the visible link set varies by
+    // RBAC, but every admin sees at least Dashboard and Settings.
+    await expect(
+      page.getByRole("link", { name: /^Dashboard$/i }).first()
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByRole("link", { name: /^Settings$/i }).first()
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("/register-new-employee tolerates trailing query strings without crashing", async ({
+    page,
+  }) => {
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+
+    // The route does not consume query params, but a stray ?source=… or
+    // similar should never wedge the SPA. This guards against accidental
+    // query-string side-effects in future routing refactors.
+    await page.goto("/register-new-employee?source=e2e-smoke&utm=ignore");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    await expect(page).toHaveURL(
+      /register-new-employee|access-denied|dashboard|login/i
+    );
+    expect(errors, errors.join("\n")).toHaveLength(0);
+  });
 });

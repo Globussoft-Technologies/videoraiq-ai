@@ -48,6 +48,96 @@ test.describe("Users / RBAC flow", () => {
     });
   });
 
+  test("'Verify User' CTA on /register-users opens the Verify Identity dialog", async ({
+    page,
+  }) => {
+    await page.goto("/register-users");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    test.skip(
+      !/\/register-users/.test(page.url()),
+      "User does not have access to /register-users"
+    );
+
+    // The "Verify User" button is rendered via the VerifyUserDialog `trigger`
+    // prop. The component intercepts the click on its parent <div> wrapper
+    // and only then mounts the underlying Radix Dialog.
+    const verifyBtn = page.getByRole("button", { name: /Verify User/i }).first();
+    await expect(verifyBtn).toBeVisible({ timeout: 15_000 });
+    await verifyBtn.click();
+
+    // Dialog header is "Verify Identity" on step 1 of the flow.
+    const dialog = page.getByRole("dialog").first();
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await expect(
+      dialog.getByRole("heading", { name: /Verify Identity/i }).first()
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("Verify Identity dialog exposes Upload + Take Photo affordances", async ({
+    page,
+  }) => {
+    await page.goto("/register-users");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    test.skip(
+      !/\/register-users/.test(page.url()),
+      "User does not have access to /register-users"
+    );
+
+    const verifyBtn = page.getByRole("button", { name: /Verify User/i }).first();
+    if (!(await verifyBtn.isVisible().catch(() => false))) {
+      test.skip(true, "Verify User CTA not exposed");
+    }
+    await verifyBtn.click();
+
+    const dialog = page.getByRole("dialog").first();
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+
+    // Step 1 of the VerifyUserDialog exposes two CTAs:
+    //   - "Upload from Files" (with subtitle "Support JPG, PNG or PDF files")
+    //   - "Take Instant Photo"
+    await expect(
+      dialog.getByText(/Upload from Files/i).first()
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      dialog.getByText(/Take Instant Photo/i).first()
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("Verify Identity dialog can be dismissed via ESC", async ({ page }) => {
+    await page.goto("/register-users");
+    await page
+      .waitForLoadState("networkidle", { timeout: 20_000 })
+      .catch(() => {});
+
+    test.skip(
+      !/\/register-users/.test(page.url()),
+      "User does not have access to /register-users"
+    );
+
+    const verifyBtn = page.getByRole("button", { name: /Verify User/i }).first();
+    if (!(await verifyBtn.isVisible().catch(() => false))) {
+      test.skip(true, "Verify User CTA not exposed");
+    }
+    await verifyBtn.click();
+
+    const dialog = page.getByRole("dialog").first();
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+
+    await page.keyboard.press("Escape");
+
+    // Radix Dialog closes via ESC. Wrap in toPass since dismiss animations
+    // can race the assertion on slower hardware.
+    await expect(async () => {
+      await expect(dialog).toBeHidden({ timeout: 2_000 });
+    }).toPass({ timeout: 10_000 });
+  });
+
   test("logout via header clears the session", async ({ page, context }) => {
     await page.goto("/dashboard");
     const sidebar = new Sidebar(page);
