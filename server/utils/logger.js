@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 const logDir = path.join(__dirname, "../logs");
 
 if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir);
+  fs.mkdirSync(logDir, { recursive: true });
 }
 
 const { combine, timestamp, printf, errors } = format;

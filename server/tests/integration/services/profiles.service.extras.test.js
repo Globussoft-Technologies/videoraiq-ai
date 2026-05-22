@@ -146,15 +146,10 @@ describe("ProfilesService.importProfile", () => {
     await ProfilesService.importProfile(req, res, next);
     expect(res.statusCode).toBe(500);
     expect(payload(res).status).toBe("failed");
-    // service cleans up the uploaded file.
     expect(fs.existsSync(tmpFile)).toBe(false);
   });
 
-  // Product bug: ProfilesService.importProfile builds its payload without
-  // `userType` and `createdBy`, both of which are `required` on
-  // createProfileValidator. The happy-path therefore always 400s — the import
-  // endpoint cannot succeed in its current form.
-  it.skip("creates a new profile from a valid encrypted payload (bug: importProfile omits userType/createdBy, validator always fails)", async () => {
+  it("creates a new profile from a valid encrypted payload", async () => {
     const validProfile = {
       basics: { profileName: "Imported", days: {} },
       notification: {},
@@ -168,27 +163,6 @@ describe("ProfilesService.importProfile", () => {
     await ProfilesService.importProfile(req, res, next);
     expect(res.statusCode).toBe(200);
     expect(payload(res).status).toBe("success");
-  });
-
-  it("400s a fully-valid basics payload because importProfile omits required createProfileValidator fields", async () => {
-    // Documents the bug above: even with a fully-valid `basics`/`notification`
-    // /`evidenceSeverity`/`defaultDetectionSettings`, the missing `userType`
-    // and `createdBy` cause the validator to reject.
-    const validProfile = {
-      basics: { profileName: "Imported", days: {} },
-      notification: {},
-      evidenceSeverity: {},
-      defaultDetectionSettings: { objects: {} },
-    };
-    const tmpFile = path.join(os.tmpdir(), `profile_doc_bug_${Date.now()}.enc`);
-    fs.writeFileSync(tmpFile, encryptData(validProfile));
-    const { req, res, next } = serviceCtx({ adminId });
-    req.file = { path: tmpFile };
-    await ProfilesService.importProfile(req, res, next);
-    expect(res.statusCode).toBe(400);
-    expect(res._body.success).toBe(false);
-    const errs = res._body.errors.join("|");
-    expect(errs).toMatch(/userType|createdBy/);
     expect(fs.existsSync(tmpFile)).toBe(false);
   });
 
@@ -204,8 +178,6 @@ describe("ProfilesService.importProfile", () => {
     const { req, res, next } = serviceCtx({ adminId });
     req.file = { path: tmpFile };
     await ProfilesService.importProfile(req, res, next);
-    // basics is sent as `{}` (the `||` fallback), so it fails on missing
-    // profileName + days.
     expect(res.statusCode).toBe(400);
     expect(res._body.success).toBe(false);
     expect(fs.existsSync(tmpFile)).toBe(false);

@@ -1871,8 +1871,10 @@ export const runWithConcurrency = async (tasks, concurrencyLimit = 10) => {
     executing.push(promise);
 
     if (executing.length >= concurrencyLimit) {
-      await Promise.race(executing);
-      executing.splice(executing.findIndex(p => p === promise), 1);
+      const settled = await Promise.race(
+        executing.map((p, idx) => p.then(() => idx, () => idx))
+      );
+      executing.splice(settled, 1);
     }
   }
 
