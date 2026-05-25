@@ -245,6 +245,14 @@ export default defineConfig({
         // Tested under tests/unit/page/user/RolePermissions/
         // AddRoleDialog.test.jsx.
         "src/page/user/RolePermissions/AddRoleDialog.jsx",
+        // Round 35: Incidents/components/IncidentPagination — the
+        // pagination footer used by the incidents grid (first/prev/next/
+        // last chevrons, "Page X of Y" label, "Showing M To N Of T
+        // Entries" summary, and the digit-filtered Go-to input that
+        // clamps Number(value) into [1, totalPages] on Go / Enter).
+        // Tested under tests/unit/page/user/Incidents/components/
+        // IncidentPagination.test.jsx.
+        "src/page/user/Incidents/components/IncidentPagination.jsx",
       ],
       exclude: [
         "tests/**",
