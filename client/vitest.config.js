@@ -512,6 +512,33 @@ export default defineConfig({
         // {Locations/Locations,NotificationRecipients/NotificationRecipients}.test.jsx.
         "src/page/user/Locations/Locations.jsx",
         "src/page/user/NotificationRecipients/NotificationRecipients.jsx",
+        // Round 67: two more layout/Sidebar files —
+        //  - Sidebar/SettingsSidebar: the Settings / Detection Settings
+        //    side rail (4-item nav: Profile / Detection Settings / Alert
+        //    Recipients / Storage Settings). Pure pathname-driven active
+        //    state; AddNVRForm import is gated by an internal showNVRForm
+        //    flag that no in-component trigger flips, so the form stays
+        //    dormant on mount. The new spec stubs Nvrform + Button +
+        //    react-router-dom.useNavigate, pins the four labels, the
+        //    active background gate, the Detection Settings activePaths
+        //    /settings/inner branch, leaf-click navigate routing, and the
+        //    AddNVRForm-stays-dormant invariant.
+        //  - Sidebar/Sidebar: the main dashboard side rail. Heavily
+        //    branched on permissions.dashboard.view, isSettingsPage,
+        //    isLoading, and the displayWidgets (pathname === '/dashboard')
+        //    flag. The new spec stubs usePermissions + DetectionToggle +
+        //    SidebarSkeleton + AccessDenied and uses a UserContext.Provider
+        //    to feed the 6 consumed context fields. Pins: view gate
+        //    returns null, isSettingsPage gate returns null on both
+        //    /settings and /detection-settings, isLoading renders the
+        //    skeleton, non-dashboard non-settings paths mount no inner
+        //    tile, sidebarShow=true renders the DetectionToggle list, and
+        //    sidebarShow=false renders the collapsed icon list (one icon
+        //    per detectionItem).
+        // Each entry has a dedicated test under tests/unit/layout/
+        // Sidebar/{SettingsSidebar,Sidebar}.test.jsx.
+        "src/layout/Sidebar/SettingsSidebar.jsx",
+        "src/layout/Sidebar/Sidebar.jsx",
       ],
       exclude: [
         "tests/**",
