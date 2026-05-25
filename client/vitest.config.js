@@ -292,6 +292,15 @@ export default defineConfig({
         // success-pane Back to Login navigate to /user-login. Tested
         // under tests/unit/page/user/Users/ForgotPassword.test.jsx.
         "src/page/user/Users/ForgotPassword.jsx",
+        // Round 42: Playback/components/MediaControls — pure presentational
+        // playback control bar (skip / rewind / play-pause / fast-forward /
+        // skip-next + speed indicator + fullscreen toggle). The +/- 30 and
+        // +/- 60 second buttons call setPosition with a function that
+        // clamps to [0, 86400] and offsets by currentTime; play button is
+        // disabled while isBuffering; transport buttons get a
+        // cursor-not-allowed class when availableSegments is empty. Tested
+        // under tests/unit/page/user/Playback/components/MediaControls.test.jsx.
+        "src/page/user/Playback/components/MediaControls.jsx",
       ],
       exclude: [
         "tests/**",
