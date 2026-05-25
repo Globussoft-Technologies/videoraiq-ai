@@ -144,7 +144,7 @@ describe("AdminService.importEMPUsers — happy path", () => {
   // the Role schema has no `role` field and requires `roleName` + `adminId`.
   // The findOne never matches and the subsequent create throws a ValidationError
   // that escapes to `next(new AppError(...))`. Reported, not patched.
-  it.skip("creates the auth user when dept + role already exist for the orgId (blocked on product bug)", async () => {
+  it("creates the auth user when dept + role already exist for the orgId", async () => {
     const orgId = "70";
     // Pre-seed so the `if (userDepartment)` and `roleModel.findOne(...)`
     // happy branches both fire.
@@ -154,14 +154,13 @@ describe("AdminService.importEMPUsers — happy path", () => {
       empDepartmentId: 11,
       adminId: admin._id,
     });
-    // findOne by orgId + empRoleId + role + softDelete
+    // findOne by orgId + empRoleId + roleName + softDelete
     await Role.create({
       orgId,
       empRoleId: 7,
-      role: "employee",
+      roleName: "employee",
       isEmpRole: true,
       softDelete: false,
-      roleName: "Employee Role",
       adminId: admin._id,
     });
     // findOne by orgId + roleName='employee'
@@ -210,7 +209,7 @@ describe("AdminService.importEMPUsers — happy path", () => {
     expect(created.orgId).toBe(70);
   });
 
-  it.skip("returns 'skipped' for a user whose email is already present (blocked on same role-schema bug)", async () => {
+  it("returns 'skipped' for a user whose email is already present", async () => {
     const orgId = "70";
     await Department.create({
       orgId,
@@ -221,10 +220,9 @@ describe("AdminService.importEMPUsers — happy path", () => {
     await Role.create({
       orgId,
       empRoleId: 7,
-      role: "employee",
+      roleName: "employee",
       isEmpRole: true,
       softDelete: false,
-      roleName: "Employee Role",
       adminId: admin._id,
     });
     await Role.create({

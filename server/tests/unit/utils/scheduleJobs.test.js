@@ -56,6 +56,7 @@ const baseSchedule = (over = {}) => ({
     },
   },
   notification: {},
+  save: vi.fn().mockResolvedValue(undefined),
   ...over,
 });
 
