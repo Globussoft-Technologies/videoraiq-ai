@@ -226,15 +226,16 @@ class AdminService {
           let foundRole = await roleModel.findOne({
             orgId,
             empRoleId: r.role_id,
-            role: r.role,
+            roleName: r.role,
             softDelete: false,
           });
-  
+
           if (!foundRole) {
             foundRole = await roleModel.create({
               orgId,
+              adminId,
               empRoleId: r.role_id,
-              role: r.role,
+              roleName: r.role,
               isEmpRole: true,
               softDelete: false,
             });
