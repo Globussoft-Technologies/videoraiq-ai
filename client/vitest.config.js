@@ -340,6 +340,15 @@ export default defineConfig({
         // the .stream-modal container. Tested under
         // tests/unit/page/user/Streams/CameraStreamsModal/ZoneSelector.test.jsx.
         "src/page/user/Streams/CameraStreamsModal/ZoneSelector.jsx",
+        // Round 54: Streams/CameraPlay/CameraStream — the JSMpeg-based stream
+        // tile used by the various Streams pages. Polls window.JSMpeg every
+        // 100ms until available then constructs a Player against
+        // `${VITE_SOCKET_URL}/${RtspChannel}`. Maximize button hands the
+        // config to setSelectedVideo and opens the modal via
+        // UserContext.setStreamModalShow. Unmount destroys the player and
+        // opens a control WebSocket to send 'stop'. Tested under
+        // tests/unit/page/user/Streams/CameraPlay/CameraStream.test.jsx.
+        "src/page/user/Streams/CameraPlay/CameraStream.jsx",
         // Round 49: layout/Sidebar/AdminSidebar — the admin-side rail
         // (User Details parent + child routes, Role & Permission,
         // Locations, Departments). Tests pin all four labels + the
