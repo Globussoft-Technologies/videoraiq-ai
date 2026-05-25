@@ -263,6 +263,13 @@ export default defineConfig({
         // interactive children stopPropagation. Tested under
         // tests/unit/page/user/Incidents/components/IncidentCard.test.jsx.
         "src/page/user/Incidents/components/IncidentCard.jsx",
+        // Round 37: Incidents/components/ReportIncidentModal — the small
+        // Dialog used to file, view, or edit an incident report. Two
+        // visual modes driven by incidentData.report (view vs create/edit);
+        // submit calls updateIncidentReportStatus, toasts success/error,
+        // and invokes onClose + onSuccess. Tested under tests/unit/page/
+        // user/Incidents/components/ReportIncidentModal.test.jsx.
+        "src/page/user/Incidents/components/ReportIncidentModal.jsx",
       ],
       exclude: [
         "tests/**",
