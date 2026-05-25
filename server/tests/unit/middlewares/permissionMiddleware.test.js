@@ -136,4 +136,26 @@ describe("permissionMiddleware", () => {
       expect(next.calls).toHaveLength(1);
     });
   });
+
+  describe("catch arms", () => {
+    // The edit/delete try blocks read `req.verified.userData.memberId` and
+    // then `req.verified.permissionConfig[0]?.permissionConfig`. When
+    // req.verified is missing entirely the destructuring throws, which is the
+    // exact path the catch arm guards against. Cover those branches so the
+    // FailResp fallback is pinned.
+    it("editAccessCheck returns FailResp when req.verified is missing", async () => {
+      const { req, res, next } = makeReqRes();
+      // No req.verified at all — `result.userData.memberId` throws.
+      await editAccessCheck(req, res, next);
+      expect(next.calls).toHaveLength(0);
+      expect(res._body?.body?.status).toBe("failed");
+    });
+
+    it("deleteAccessCheck returns FailResp when req.verified is missing", async () => {
+      const { req, res, next } = makeReqRes();
+      await deleteAccessCheck(req, res, next);
+      expect(next.calls).toHaveLength(0);
+      expect(res._body?.body?.status).toBe("failed");
+    });
+  });
 });

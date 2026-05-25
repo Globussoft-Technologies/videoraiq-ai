@@ -28,6 +28,7 @@ const { default: verifyToken } = await import(
 const { default: Admin } = await import(
   "../../../core/v1/admin/admin.model.js"
 );
+const helperFns = await import("../../../utils/helperFunctions.js");
 
 beforeAll(async () => {
   await connectMongo();
@@ -114,6 +115,52 @@ describe("verifyToken", () => {
       name.toLowerCase() === "x-access-token" ? token : undefined;
     await runMiddleware(req, res);
     expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 401 when req.header() throws (outer catch)", async () => {
+    // The outer try/catch traps synchronous failures before jwt.verify fires.
+    // Make req.header throw so the catch arm responds with the generic
+    // "Invalid access token" payload.
+    const { req, res } = makeReqRes();
+    req.header = () => {
+      throw new Error("boom");
+    };
+    await runMiddleware(req, res);
+    expect(res.statusCode).toBe(401);
+    expect(res._body?.body?.message).toMatch(/Invalid access token/i);
+  });
+
+  it("still proceeds when getEmpAuthInfo rejects (orgId catch arm)", async () => {
+    // The middleware silently swallows EMP API failures and continues
+    // without setting decoded.orgId. Force a rejection and assert
+    // req.verified is still attached.
+    helperFns.getEmpAuthInfo.mockRejectedValueOnce(new Error("EMP down"));
+    const admin = await Admin.create({
+      user_id: "12",
+      login: "u2",
+      email: "u2@test.com",
+    });
+    const token = signJwt({
+      adminId: admin._id.toString(),
+      user_email: "u2@test.com",
+    });
+    const { req, res } = makeReqRes();
+    req.originalUrl = "/api/v1/foo";
+    req.path = "/foo";
+    req.baseUrl = "/api/v1";
+    req.header = (name) =>
+      name.toLowerCase() === "x-access-token" ? token : undefined;
+    await new Promise((resolve) => {
+      const next = (err) => {
+        next.calls.push(err);
+        resolve();
+      };
+      next.calls = [];
+      verifyToken(req, res, next).catch(() => resolve());
+      setTimeout(resolve, 200);
+    });
+    expect(req.verified).toBeDefined();
+    expect(req.verified.userData.orgId).toBeUndefined();
   });
 
   it("attaches req.verified and proceeds for a valid admin token", async () => {
