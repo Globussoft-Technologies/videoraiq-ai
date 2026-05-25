@@ -277,6 +277,13 @@ export default defineConfig({
         // under tests/unit/page/user/Dashboard/Alertwidgets/
         // NoDataCard.test.jsx.
         "src/page/user/Dashboard/Alertwidgets/NoDataCard.jsx",
+        // Round 39: Locations/LocationForm — the Yup-validated Formik
+        // Radix dialog used for both create and edit location flows.
+        // Mirrors DepartmentForm structure: locationName required + max
+        // 100, empLocationId optional. Submits via createLocation /
+        // updateLocation and toasts success/error. Tested under
+        // tests/unit/page/user/Locations/LocationForm.test.jsx.
+        "src/page/user/Locations/LocationForm.jsx",
       ],
       exclude: [
         "tests/**",
