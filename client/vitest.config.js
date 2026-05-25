@@ -284,6 +284,14 @@ export default defineConfig({
         // updateLocation and toasts success/error. Tested under
         // tests/unit/page/user/Locations/LocationForm.test.jsx.
         "src/page/user/Locations/LocationForm.jsx",
+        // Round 40: Users/ForgotPassword — Formik + Yup forgot-password
+        // page. Two visual states (form / "Check Your Email" success pane)
+        // gated by local `emailSent`. Submits via forgotPassword
+        // ({email}), toasts server message or fallback on success,
+        // toasts server / fallback on failure, and the back-button +
+        // success-pane Back to Login navigate to /user-login. Tested
+        // under tests/unit/page/user/Users/ForgotPassword.test.jsx.
+        "src/page/user/Users/ForgotPassword.jsx",
       ],
       exclude: [
         "tests/**",
