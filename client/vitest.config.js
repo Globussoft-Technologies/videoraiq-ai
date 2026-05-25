@@ -223,6 +223,12 @@ export default defineConfig({
         // The new spec mocks both children and pins the fixed header copy /
         // image / four-chip grid.
         "src/page/user/Dashboard/RecentAlerts.jsx",
+        // Round 31: EmployeeLogs/LogsFilterPopover — presentational
+        // filters popover (NVR / Camera / Department multi-selects +
+        // optional Location, Time Range pair, Authorized switch).
+        // Stubs popover / switch / multiselect / TimePickerComponents
+        // and pins option-mapping + handler wiring.
+        "src/page/user/EmployeeLogs/components/LogsFilterPopover.jsx",
       ],
       exclude: [
         "tests/**",
