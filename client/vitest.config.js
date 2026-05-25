@@ -414,6 +414,21 @@ export default defineConfig({
         // around through cameraList, and the isOpen=false null guard.
         // Tested under tests/unit/page/user/Streams/LiveViewModal.test.jsx.
         "src/page/user/Streams/LiveViewModal.jsx",
+        // Round 61: Settings/StorageSetting/AddStorageModal — the
+        // Formik + yup + Radix Dialog "Add Storage" / "Edit Storage"
+        // modal. Lazily mounts SFTPForm / GoogledriveForm / S3Form per
+        // picked type; submits via addStorage (create) or updateStorage
+        // (edit) with Base64-encoded password / secretAccessKey;
+        // google_drive_oauth opens response.data.body.data.url in a new
+        // tab. Tests pin: initial picker render (Add mode), title +
+        // pre-fill swap (Edit mode), sub-form lazy mount per type, the
+        // disabled type-Select in edit mode, the closed-when-isOpen-
+        // false null guard, the validation guard that blocks submit
+        // when password is blank in edit mode (yup `when storageType`
+        // clauses), and controlled Name-input keystroke forwarding.
+        // Tested under tests/unit/page/user/Settings/StorageSetting/
+        // AddStorageModal.test.jsx.
+        "src/page/user/Settings/StorageSetting/AddStorageModal.jsx",
         // Round 49: layout/Sidebar/AdminSidebar — the admin-side rail
         // (User Details parent + child routes, Role & Permission,
         // Locations, Departments). Tests pin all four labels + the
