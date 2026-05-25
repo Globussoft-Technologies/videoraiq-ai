@@ -229,6 +229,11 @@ export default defineConfig({
         // Stubs popover / switch / multiselect / TimePickerComponents
         // and pins option-mapping + handler wiring.
         "src/page/user/EmployeeLogs/components/LogsFilterPopover.jsx",
+        // Round 32: RolePermissions/PermissionTable — TanStack-table wrapper
+        // with three branches (loading skeleton / empty "No data available" /
+        // normal headers+rows). Tested under tests/unit/page/user/
+        // RolePermissions/PermissionTable.test.jsx.
+        "src/page/user/RolePermissions/PermissionTable.jsx",
       ],
       exclude: [
         "tests/**",
