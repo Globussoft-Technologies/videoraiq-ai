@@ -94,5 +94,42 @@ describe("globalErrorHandler", () => {
       expect(res.statusCode).toBe(400);
       expect(res._body.message).toMatch(/Duplicate field/);
     });
+
+    it("maps a Mongoose ValidationError to a 400 with joined field messages", () => {
+      // Covers handleValidationErrorDB (lines 14-18) which iterates err.errors
+      // values and joins each .message — the only ValidationError path in the
+      // suite was previously untested.
+      const { req, res, next } = makeReqRes();
+      const err = new Error("validation failed");
+      err.name = "ValidationError";
+      err.errors = {
+        email: { message: "Email is required" },
+        name: { message: "Name is required" },
+      };
+      globalErrorHandler(err, req, res, next);
+      expect(res.statusCode).toBe(400);
+      expect(res._body.message).toMatch(/Invalid input data/);
+      expect(res._body.message).toContain("Email is required");
+      expect(res._body.message).toContain("Name is required");
+    });
+  });
+
+  describe("localDev output", () => {
+    beforeEach(() => {
+      process.env.NODE_ENV = "localDev";
+    });
+
+    it("uses the dev formatter (stack + error object) under NODE_ENV=localDev", () => {
+      // The dev branch is OR'd against 'localDev' — that arm of the condition
+      // was previously unexercised, so the production-mapping fallback could
+      // silently swallow localDev runs.
+      const { req, res, next } = makeReqRes();
+      const err = new AppError("boom", 422);
+      globalErrorHandler(err, req, res, next);
+      expect(res.statusCode).toBe(422);
+      expect(res._body.message).toBe("boom");
+      expect(res._body.stack).toBeDefined();
+      expect(res._body.error).toBeDefined();
+    });
   });
 });
