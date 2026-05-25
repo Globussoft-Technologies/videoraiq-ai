@@ -270,6 +270,13 @@ export default defineConfig({
         // and invokes onClose + onSuccess. Tested under tests/unit/page/
         // user/Incidents/components/ReportIncidentModal.test.jsx.
         "src/page/user/Incidents/components/ReportIncidentModal.jsx",
+        // Round 38: Dashboard/Alertwidgets/NoDataCard — purely
+        // presentational empty-state card with a tiny incidentName->title
+        // switch (seven explicit cases + default fall-back) and the
+        // static "Inactive" badge + "No Data Available" copy. Tested
+        // under tests/unit/page/user/Dashboard/Alertwidgets/
+        // NoDataCard.test.jsx.
+        "src/page/user/Dashboard/Alertwidgets/NoDataCard.jsx",
       ],
       exclude: [
         "tests/**",
