@@ -239,6 +239,12 @@ export default defineConfig({
         // populated) and offers PDF / Excel export. Tested under tests/unit/
         // page/user/EmployeeLogs/components/BreakLogsDialog.test.jsx.
         "src/page/user/EmployeeLogs/components/BreakLogsDialog.jsx",
+        // Round 34: RolePermissions/AddRoleDialog — Formik + yup Radix
+        // dialog for create vs edit role. Auto-opens in edit mode via
+        // setOpen(true). Submits via createRole / updateRole and toasts.
+        // Tested under tests/unit/page/user/RolePermissions/
+        // AddRoleDialog.test.jsx.
+        "src/page/user/RolePermissions/AddRoleDialog.jsx",
       ],
       exclude: [
         "tests/**",
