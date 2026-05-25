@@ -429,6 +429,15 @@ export default defineConfig({
         // Tested under tests/unit/page/user/Settings/StorageSetting/
         // AddStorageModal.test.jsx.
         "src/page/user/Settings/StorageSetting/AddStorageModal.jsx",
+        // Round 62: Incidents/Incidents — the top-level Incidents page.
+        // The full grid is heavy (StatCards + VideoModal + IncidentCard +
+        // MultiSelect + DateRangePicker + AutoRefresh + four Api modules +
+        // three contexts), but the permission gates at the top of the
+        // component short-circuit before any of those run. The new spec
+        // pins the two early-return branches: permissionsLoading ->
+        // <PageLoader />, and !canView -> <AccessDenied message="…" />.
+        // Tested under tests/unit/page/user/Incidents/Incidents.test.jsx.
+        "src/page/user/Incidents/Incidents.jsx",
         // Round 49: layout/Sidebar/AdminSidebar — the admin-side rail
         // (User Details parent + child routes, Role & Permission,
         // Locations, Departments). Tests pin all four labels + the
