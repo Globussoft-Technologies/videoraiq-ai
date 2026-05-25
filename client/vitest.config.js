@@ -340,6 +340,15 @@ export default defineConfig({
         // the .stream-modal container. Tested under
         // tests/unit/page/user/Streams/CameraStreamsModal/ZoneSelector.test.jsx.
         "src/page/user/Streams/CameraStreamsModal/ZoneSelector.jsx",
+        // Round 55: Streams/CameraStreamsModal/AttendanceCheckLog — the
+        // floating top-left log panel rendered over the stream modal.
+        // Two collapsible sections (Attendance Log / Access Log), each
+        // sliced to the first five entries; both empty -> component
+        // returns null. Click on an entry routes to onProfileClick with
+        // an `isAccess` boolean differentiating attendance vs access
+        // sources. Tested under tests/unit/page/user/Streams/
+        // CameraStreamsModal/AttendanceCheckLog.test.jsx.
+        "src/page/user/Streams/CameraStreamsModal/AttendanceCheckLog.jsx",
         // Round 54: Streams/CameraPlay/CameraStream — the JSMpeg-based stream
         // tile used by the various Streams pages. Polls window.JSMpeg every
         // 100ms until available then constructs a Player against
