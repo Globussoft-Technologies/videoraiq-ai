@@ -461,6 +461,22 @@ export default defineConfig({
         // graph. Tested under tests/unit/layout/Sidebar/
         // AdminSidebar.test.jsx.
         "src/layout/Sidebar/AdminSidebar.jsx",
+        // Round 64: two more top-level permission-gated pages —
+        //  - RolePermissions/RolesandPermission: the full roles &
+        //    permissions management screen (AddRoleDialog, PermissionStep,
+        //    DeleteConfirmation, PermissionTable, Pagination, four Api
+        //    modules). The gate at the top short-circuits before any of
+        //    those hooks/queries fire.
+        //  - Streams/Cameraview: the multi-camera grid live-view page
+        //    (CameraTwo / CameraStreamDisplay tiles, GridViewModal,
+        //    multi-select filters, axios + getAccessToken, two contexts,
+        //    react-router useNavigate/useLocation). The gate also sits
+        //    at the very top of the component, before any other hook
+        //    runs.
+        // Each entry has a dedicated test under tests/unit/page/user/
+        // {RolePermissions/RolesandPermission,Streams/Cameraview}.test.jsx.
+        "src/page/user/RolePermissions/RolesandPermission.jsx",
+        "src/page/user/Streams/Cameraview.jsx",
       ],
       exclude: [
         "tests/**",
