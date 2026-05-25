@@ -307,6 +307,15 @@ export default defineConfig({
         // /streams/camera-settings and /cameraview. Tested under
         // tests/unit/page/user/Streams/NvrLocalsettings.test.jsx.
         "src/page/user/Streams/NvrLocalsettings.jsx",
+        // Round 44: Departments/Departments — paginated departments page.
+        // fetchDepartments(skip,limit,search) on mount + on search-debounce
+        // dependency change; TanStack PermissionTable with edit/delete per
+        // row gated by permissions.departments.{edit,delete}; "Add New
+        // Department" CTA gated by canCreate; DeleteConfirmation flow that
+        // only calls deleteDepartment on confirm + toasts and refetches;
+        // permissionsLoading -> PageLoader; !canView -> AccessDenied.
+        // Tested under tests/unit/page/user/Departments/Departments.test.jsx.
+        "src/page/user/Departments/Departments.jsx",
       ],
       exclude: [
         "tests/**",
