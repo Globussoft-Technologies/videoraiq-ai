@@ -214,6 +214,10 @@ export default defineConfig({
         "src/page/user/EmployeeLogs/components/AutoRefreshComponent.jsx",
         "src/page/user/Profile/EvidenceSeverityStep.jsx",
         "src/page/user/Departments/DepartmentForm.jsx",
+        // Round 27: GoogledriveForm — the Google Drive OAuth sub-form
+        // used by AddStorageModal. Pure controlled component (clientId /
+        // clientSecret / redirectUri) with isEditMode placeholder swap.
+        "src/page/user/Settings/StorageSetting/components/GoogledriveForm.jsx",
       ],
       exclude: [
         "tests/**",
