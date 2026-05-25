@@ -301,6 +301,12 @@ export default defineConfig({
         // cursor-not-allowed class when availableSegments is empty. Tested
         // under tests/unit/page/user/Playback/components/MediaControls.test.jsx.
         "src/page/user/Playback/components/MediaControls.jsx",
+        // Round 43: Streams/NvrLocalsettings — presentational NVR list
+        // card with empty/populated branches, the StreamHeader Add NVR CTA
+        // wiring to AddNVRForm, and gear/eye action navigates to
+        // /streams/camera-settings and /cameraview. Tested under
+        // tests/unit/page/user/Streams/NvrLocalsettings.test.jsx.
+        "src/page/user/Streams/NvrLocalsettings.jsx",
       ],
       exclude: [
         "tests/**",
