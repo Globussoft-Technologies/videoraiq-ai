@@ -253,6 +253,16 @@ export default defineConfig({
         // Tested under tests/unit/page/user/Incidents/components/
         // IncidentPagination.test.jsx.
         "src/page/user/Incidents/components/IncidentPagination.jsx",
+        // Round 36: Incidents/components/IncidentCard — the single
+        // incident tile rendered by the grid. Composes CameraCanvas with
+        // optional zone chip / Mark-as-resolved checkbox (canEdit), an
+        // uppercased title, a Report button whose label flips to
+        // "Reported" when item.report.status is truthy, an optional Alert
+        // chip, and a footer that runs alertText through
+        // formatFromToTimestamps. The card itself is click-to-open;
+        // interactive children stopPropagation. Tested under
+        // tests/unit/page/user/Incidents/components/IncidentCard.test.jsx.
+        "src/page/user/Incidents/components/IncidentCard.jsx",
       ],
       exclude: [
         "tests/**",
