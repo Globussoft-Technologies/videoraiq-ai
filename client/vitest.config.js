@@ -315,6 +315,15 @@ export default defineConfig({
         // with the chosen type + the addedDetection setter. Tested under
         // tests/unit/page/user/Detection/components/AddNewConfiguration.test.jsx.
         "src/page/user/Detection/components/AddNewConfiguration.jsx",
+        // Round 47: Streams/CameraCanvas — the small video-thumbnail tile
+        // shared by Incidents / Streams / Playback. Renders <video> when src
+        // is present (auto-swaps to thumbnail <img> on video onError or when
+        // src is missing) and the <img> swaps to a bundled fallback SVG on
+        // its first onError. Maximize button has two modes: in-modal uses
+        // the Fullscreen API on the wrapping div; non-modal pushes src into
+        // UserContext (setStreamModalContentSrc + setStreamModalShow). Tested
+        // under tests/unit/page/user/Streams/CameraCanvas.test.jsx.
+        "src/page/user/Streams/CameraCanvas.jsx",
         // Round 44: Departments/Departments — paginated departments page.
         // fetchDepartments(skip,limit,search) on mount + on search-debounce
         // dependency change; TanStack PermissionTable with edit/delete per
