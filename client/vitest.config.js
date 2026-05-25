@@ -403,6 +403,17 @@ export default defineConfig({
         // fullscreenchange-exit path. Tested under tests/unit/page/user/
         // Streams/CameraStreamsModal/StreamModal.test.jsx.
         "src/page/user/Streams/CameraStreamsModal/StreamModal.jsx",
+        // Round 60: Streams/LiveViewModal — the side-overlay live-feed
+        // modal (distinct from the fullscreen StreamModal in
+        // CameraStreamsModal/). Owns memoised HLS URL (raw vs
+        // VITE_STREAM_URL-prefixed via VITE_LOCAL_SETUP), the
+        // useHlsPlayer lifecycle, an Edit overlay (gated on
+        // permissions.channels.edit) that fetches departments once on
+        // open and saves via createCameraAliasName with toasts and a
+        // local activeCamera update, prev/next navigation with wrap-
+        // around through cameraList, and the isOpen=false null guard.
+        // Tested under tests/unit/page/user/Streams/LiveViewModal.test.jsx.
+        "src/page/user/Streams/LiveViewModal.jsx",
         // Round 49: layout/Sidebar/AdminSidebar — the admin-side rail
         // (User Details parent + child routes, Role & Permission,
         // Locations, Departments). Tests pin all four labels + the
