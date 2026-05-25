@@ -378,6 +378,16 @@ export default defineConfig({
         // opens a control WebSocket to send 'stop'. Tested under
         // tests/unit/page/user/Streams/CameraPlay/CameraStream.test.jsx.
         "src/page/user/Streams/CameraPlay/CameraStream.jsx",
+        // Round 58: Streams/CameraStreamsModal/CameraStreamWithDetection —
+        // the absolute-positioned <canvas> overlay layered on the
+        // CameraCanvasModal video. Reads polygon referencePoints keyed by
+        // cameraId from each detection's detectionSetting.settings and
+        // re-draws scaled polygons via a 2D context; observes the
+        // underlying <video> via ResizeObserver and re-draws on video
+        // 'playing' (which dispatches a window resize). Tested under
+        // tests/unit/page/user/Streams/CameraStreamsModal/
+        // CameraStreamWithDetection.test.jsx.
+        "src/page/user/Streams/CameraStreamsModal/CameraStreamWithDetection.jsx",
         // Round 49: layout/Sidebar/AdminSidebar — the admin-side rail
         // (User Details parent + child routes, Role & Permission,
         // Locations, Departments). Tests pin all four labels + the
