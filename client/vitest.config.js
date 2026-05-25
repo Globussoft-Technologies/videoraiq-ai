@@ -307,6 +307,14 @@ export default defineConfig({
         // /streams/camera-settings and /cameraview. Tested under
         // tests/unit/page/user/Streams/NvrLocalsettings.test.jsx.
         "src/page/user/Streams/NvrLocalsettings.jsx",
+        // Round 45: Detection/components/AddNewConfiguration — collapsible
+        // "Add New / Edit Configurations Settings" panel used by the legacy
+        // DetectionSetting page. Fetches detectionTypes from
+        // getAllDetectionTypes() on mount, renders a react-select for type
+        // pick, and lazily mounts DetectionSettingsForm (ManageSettings)
+        // with the chosen type + the addedDetection setter. Tested under
+        // tests/unit/page/user/Detection/components/AddNewConfiguration.test.jsx.
+        "src/page/user/Detection/components/AddNewConfiguration.jsx",
         // Round 44: Departments/Departments — paginated departments page.
         // fetchDepartments(skip,limit,search) on mount + on search-debounce
         // dependency change; TanStack PermissionTable with edit/delete per
