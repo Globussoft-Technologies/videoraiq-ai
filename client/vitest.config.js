@@ -340,6 +340,15 @@ export default defineConfig({
         // the .stream-modal container. Tested under
         // tests/unit/page/user/Streams/CameraStreamsModal/ZoneSelector.test.jsx.
         "src/page/user/Streams/CameraStreamsModal/ZoneSelector.jsx",
+        // Round 56: Streams/CameraStreamsModal/UserProfileDialog — the
+        // modal popped up from the AttendanceCheckLog list when a row
+        // is clicked. Gated on isOpen + userData; switches between
+        // known/unknown variant + access-log/attendance-log modes;
+        // also includes an avatar carousel (next/prev wrap-around,
+        // initials-fallback src when avatars list is empty). Tested
+        // under tests/unit/page/user/Streams/CameraStreamsModal/
+        // UserProfileDialog.test.jsx.
+        "src/page/user/Streams/CameraStreamsModal/UserProfileDialog.jsx",
         // Round 55: Streams/CameraStreamsModal/AttendanceCheckLog — the
         // floating top-left log panel rendered over the stream modal.
         // Two collapsible sections (Attendance Log / Access Log), each
