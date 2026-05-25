@@ -333,6 +333,19 @@ export default defineConfig({
         // permissionsLoading -> PageLoader; !canView -> AccessDenied.
         // Tested under tests/unit/page/user/Departments/Departments.test.jsx.
         "src/page/user/Departments/Departments.jsx",
+        // Round 49: layout/Sidebar/AdminSidebar — the admin-side rail
+        // (User Details parent + child routes, Role & Permission,
+        // Locations, Departments). Tests pin all four labels + the
+        // auto-expanded User Details children on mount, leaf-click
+        // navigates to its route, parent-click toggles expansion
+        // without navigating, active-class on the matching pathname,
+        // isChildActive lifts the active class to the parent when a
+        // child route matches, and child-click navigates to the child
+        // route. Mocks the giant Streams/Nvrform import so its
+        // Formik + Yup + Streams Api chain doesn't enter the test
+        // graph. Tested under tests/unit/layout/Sidebar/
+        // AdminSidebar.test.jsx.
+        "src/layout/Sidebar/AdminSidebar.jsx",
       ],
       exclude: [
         "tests/**",
