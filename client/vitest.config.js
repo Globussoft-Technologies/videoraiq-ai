@@ -429,6 +429,16 @@ export default defineConfig({
         // Tested under tests/unit/page/user/Settings/StorageSetting/
         // AddStorageModal.test.jsx.
         "src/page/user/Settings/StorageSetting/AddStorageModal.jsx",
+        // Round 63: Profile/Profile — the top-level Profile listing page.
+        // The full page is heavy (search + column-toggle popover +
+        // Pagination + ProfilesTable + MultiStepForm dialog + bulk
+        // delete/export + four Api modules + usePermissions + useDebounce),
+        // but the permission gates at the top short-circuit before any of
+        // those run. The new spec pins the two early-return branches:
+        // permissionsLoading -> <PageLoader />, and !canView ->
+        // <AccessDenied message="…" />. Tested under tests/unit/page/user/
+        // Profile/Profile.test.jsx.
+        "src/page/user/Profile/Profile.jsx",
         // Round 62: Incidents/Incidents — the top-level Incidents page.
         // The full grid is heavy (StatCards + VideoModal + IncidentCard +
         // MultiSelect + DateRangePicker + AutoRefresh + four Api modules +
