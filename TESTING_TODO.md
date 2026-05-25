@@ -3,6 +3,99 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R65 — full 4-phase round, +58 tests; **first parallel-agent index race + process-violation issue #103**)
+
+- **server** — `core/v1/authorizedUsers/authorizedUsers.service.js`
+  THREE more previously-uncovered methods: `deleteAuthUser`,
+  `authUserLogin` (happy + wrong-password paths), `verifyUser`
+  (downstream branches). New
+  `server/tests/integration/services/authorizedUsers.service.deleteAuthUserAndLogin.test.js`
+  (**18 tests**, 3 mocks — `axios`, `sftpConnectionCheck`,
+  `newSFTPConnectionCheck`; `fs.{existsSync,lstatSync,unlinkSync,rmSync}`
+  via `vi.spyOn` per-test, R64 constraint). Exercises real production
+  crypto round-trip (model's pre-save encrypt + service's `decrypt`).
+  Coverage of authorizedUsers.service.js: **43.31% → 53.82%** statements
+  (+10.51pp on 1399 stmts); functions 61.53% → 76.92% (+15.39pp);
+  branches 76.51% → 85.45% (+8.94pp). Suite 217 → 218 / +18 tests.
+  Public `1ab8cbc`, private mirror `89584c5`.
+- **client** — `page/user/Streams/Streams.jsx` AND
+  `page/user/Streams/Cameraview/GridViewModal.jsx` (both 0% → covered).
+  Streams (top-level NVR Settings listing): 2 tests, 3 mocks
+  (PermissionContext + AccessDenied + PageLoader) pinning the two
+  permission-gate early-return branches before the heavy downstream
+  tree (AddNVRForm + Nvrsettings/NvrLocalsettings + 2 Api modules +
+  sonner + skeleton + StreamHeader). GridViewModal (fullscreen
+  multi-camera Live Monitoring grid): 4 tests, 2 mocks (Dialog primitive
+  + CameraStreamDisplay) — isOpen=false null guard, channel-to-tile
+  formatting (`rtspChannels[1].id` + `customName|name` display) +
+  `perPage` slicing + page-indicator string, ArrowLeft/ArrowRight
+  window-key pagination + close-button `onOpenChange(false)` wiring,
+  default-grid fallback. Coverage delta: Streams.jsx 0% → 41.09 /
+  66.66 / 25 / 41.09; GridViewModal.jsx 0% → 98.08 / 77.77 / 75 /
+  98.08. Suite 1445 → 1451 / +6 tests. **Public `e98150c`, private
+  `adb3576` — RECOVERY COMMITS after the index race; see issue
+  [#103](https://github.com/Globussoft-Technologies/videoraiq-ai/issues/103)
+  below.**
+- **streaming** — `internal/stream` **77.2% → 79.0%** (+1.8pp).
+  `MonitorFFmpegProcessStats` ticker.C arm pinned: **46.9% → 78.1%**
+  (+31.2pp). New `streaming/internal/stream/monitor_ffmpeg_stats_tick_test.go`
+  (1 test, no mocks). Uses `os.Getpid()` for a live PID so the first
+  5s tick exercises the full body: pins CPU + Memory gauge writes
+  via a poison-and-watch sentinel, and pins the `lastTime.IsZero()`
+  TRUE arm of the network block which only snapshots `lastNet`/
+  `lastTime` without touching bandwidth gauges (guards against an
+  `index out of range` regression on `lastNet[0]`). ~6s runtime,
+  no live ffmpeg, no sockets, no goroutine leaks (ctx-cancel +
+  drain). Full streaming green. Private only `0a48a3e`.
+- **cv-faceauth** — `api/face_auth_api.py` (main FastAPI service for
+  the heavier face-auth camera pipeline — sibling of R47's onfly POC,
+  was priority 8 on the roadmap). Bypassed `api/__init__.py` (which
+  imports `face_auth_api.app` and would cycle when `load_standalone`
+  re-loads the module). New `cv-faceauth/tests/test_face_auth_api.py`
+  (**33 tests**). Pinned: `FaceAuthStartCameraRequest` schema +
+  full `@validator("zones")` matrix (None / valid int points /
+  not-a-list / non-list-point / wrong-arity / non-numeric coord /
+  negative coord), `FaceAuthStopCameraRequest`, module constants
+  (`PREFIX == "/face-auth/api/v1"`, `PIPELINE_MODE == "face_auth"`,
+  `_manager is None` at import, `_start_time` is `datetime`,
+  `dbs.json` admin→collection map), FastAPI app metadata
+  (title/version/description mentions RTDETR, docs/redoc URLs,
+  CORS middleware), full 9-route map with method + tag assertions,
+  `get_face_auth_manager()` lazy singleton via injected fake
+  `CameraManager` in `sys.modules["orchestrator.manager"]` (rolled
+  back via `finally:`). Product-behaviour pin discovered: the
+  `zones` field is `List[List[int]]` so pydantic rejects floats
+  *before* the validator runs — test documents the actual contract.
+  Suite 826 → **859 passing / 2 skipped** (unchanged #102 skips).
+  Private only `5ed449d`.
+
+## NEW PROCESS-VIOLATION ISSUE — #103 (parallel-agent index race)
+
+[#103 — parallel sub-agents on the same working tree caused an index race](https://github.com/Globussoft-Technologies/videoraiq-ai/issues/103)
+
+R65 was the first round where two sub-agents (server + client)
+collided on `git add` / `git commit` against a shared private clone.
+Commit `d1fdbf0` landed on `videoraiq:main` with the **client's
+commit subject** but a **server file's content** (the diff showed
+only `authorizedUsers.service.deleteAuthUserAndLogin.test.js`,
+not the client's Streams/GridViewModal tests). The client agent
+correctly detected the mis-attribution in its self-check, reverted
+via `fea45cb` (force-pushed), and filed #103 with a recommendation
+to **serialize phase agents or isolate working trees per phase**
+(e.g. `git worktree add` per phase, or per-phase clones). The
+server agent later recovered its file from its own write history
+and landed `89584c5` cleanly under a server-only path scope. The
+client deliverables were re-committed in this round's
+recovery commits (`adb3576` private, `e98150c` public).
+
+Both pieces of work landed correctly in the end — the violation
+was the commit-subject/contents mismatch, not a content loss.
+Total pending bugs filed: **7 product (#96-#102)** + **1 process
+(#103)** = 8 issues open.
+
+Cumulative R22→R65: **~1764 new tests across 110 test files; 0
+product files touched across 44 rounds.**
+
 ## TL;DR — what changed on 2026-05-26 (R64 — full 4-phase round, +48 tests; **streaming Start* happy-paths 100%, legacy LocalMatcher unblocked**)
 
 - **server** — `core/v1/authorizedUsers/authorizedUsers.service.js`
@@ -854,12 +947,12 @@ re-target):
 - EmployeeLogs: TimePickerComponents (R25), LogsFilterPopover (R31), BreakLogsDialog (R33)
 - StorageSetting: Googledrive (R27), S3 (R28), Sftp (R29), AddStorageModal (R61)
 - Dashboard: RecentAlerts (R30), NoDataCard (R38)
-- RolePermissions: PermissionTable (R32), AddRoleDialog (R34), **RolesandPermission PAGE (R64)**
+- RolePermissions: PermissionTable (R32), AddRoleDialog (R34), RolesandPermission PAGE (R64)
 - Incidents: IncidentPagination (R35), IncidentCard (R36), ReportIncidentModal (R37), Incidents PAGE (R62)
 - Locations: LocationForm (R39)
 - Users: ForgotPassword (R40), ResetPassword (R41)
 - Playback: MediaControls (R42)
-- Streams: NvrLocalsettings (R43), CameraCanvas (R47), ZoneSelector (R52), CameraStream (R54), **Cameraview PAGE (R64)**
+- Streams: NvrLocalsettings (R43), CameraCanvas (R47), ZoneSelector (R52), CameraStream (R54), Cameraview PAGE (R64), **Streams PAGE + GridViewModal (R65)**
 - Cameraview grid: CameraOne/Two (R17), Three (R46), Four (R48), Five (R50), Six (R51), Seven/Eight/Nine (R53)
 - Departments: Departments page (R44)
 - Detection: AddNewConfiguration (R45)
@@ -872,19 +965,18 @@ re-target):
 **Next priorities (pick top-down):**
 
 1. ~~`client/src/page/user/Streams/Cameraview/`~~ **DONE in R53** —
-   all 9 CameraView grid variants covered.
-2. ~~Cameraview PAGE~~ **DONE in R64** — top-level page gate pinned.
-3. ~~RolesandPermission PAGE~~ **DONE in R64** — top-level gate pinned.
+   all 9 CameraView grid variants.
+2. ~~Cameraview PAGE / RolesandPermission PAGE~~ **DONE in R64**.
+3. ~~Streams PAGE / GridViewModal~~ **DONE in R65**.
 4. **`client/src/page/user/NVR/`** — entire page surface UNTOUCHED.
    Highest-leverage remaining 0% page area.
 5. **`client/src/page/user/Streams/CameraStreamsModal/*`** other
-   than ZoneSelector R52 (check the directory for siblings).
+   than ZoneSelector R52 — check for sibling components.
 6. **`client/src/page/user/Incidents/`** — IncidentDetail,
-   IncidentFilters (the PAGE itself is R62).
+   IncidentFilters (PAGE itself is R62).
 7. **`client/src/page/user/Settings/`** — AutoEmailReport, Network,
    Other (StorageSetting trio + AddStorageModal done).
-8. **`client/src/hooks/`** — diff `ls client/src/hooks/` vs
-   `ls client/tests/unit/hooks/`. Most custom hooks uncovered.
+8. **`client/src/hooks/`** — most custom hooks uncovered.
 9. **`client/src/contexts/`** — SocketContext, PermissionContext,
    UserContext untested.
 10. **`client/src/components/`** — Modals, Forms, Tables, Cards in
@@ -893,33 +985,29 @@ re-target):
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R64):**
+**Coverage state (after R65):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 95.2%,
   `internal/config` 82.4%, `internal/logger` 87.5%, `internal/server`
-  **86.8%**, `internal/stream` **77.2%** (R64: +6.0pp via Start*
-  happy-path tests; StartStreamForCamera + StartSubStreamForCamera
-  both at 100%)
+  **86.8%**, `internal/stream` **79.0%** (R65: +1.8pp via
+  MonitorFFmpegProcessStats ticker.C arm 46.9% → 78.1%)
 - `internal/metrics` registry contract **pinned via smoke tests** in R53
-  (`metrics_test.go`; package shows `[no statements]` because file is
-  var-declarations only, but drift in metric names/types/help would fail)
 - `cmd/server` **0%** (main + wiring, hard to unit-test without
   spawning the full server)
 
 **Next priorities (pick top-down):**
 
-1. **`internal/stream`** (still the biggest active gap at 77.2%) —
-   `runFFmpegPipeline`/`runFFmpegPipelineSub` partial (25.7%/29.7%
-   after R64); remaining stale-cleanup branches, queue handling.
-   Avoid anything needing real ffmpeg or sockets.
+1. **`internal/stream`** (still the biggest active gap at 79.0%) —
+   `runFFmpegPipeline`/`runFFmpegPipelineSub` partial (25.7%/29.7%);
+   `MonitorFFmpegProcessStats` at 78.1% after R65 (remaining 22% is
+   the post-snapshot branches that require a second tick);
+   remaining stale-cleanup branches, queue handling.
 2. **`internal/server` HLS body delivery** — large fraction of the
    remaining ~13% is live-ffmpeg-dependent serve paths; can pin error
    paths and header contracts without ffmpeg.
-3. **`internal/logger`** — diminishing returns; the remaining 12.5% is
-   mostly `NewIPLogger`, rotator goroutines. Some of these are
-   exercised cross-package from `streaming/tests/` but don't get
-   in-package coverage credit. Could mirror those tests in-package.
+3. **`internal/logger`** — diminishing returns; remaining 12.5% is
+   mostly `NewIPLogger`, rotator goroutines.
 
-### cv-faceauth — 41+ product modules covered, suite at 826 passing / 2 skipped
+### cv-faceauth — 42+ product modules covered, suite at 859 passing / 2 skipped
 
 **Done:**
 - core (10): fps_tracker, context, gpu_lock, health_monitor, metrics,
@@ -959,16 +1047,15 @@ two of the above.
 2. ~~`cv-faceauth/processor/embedder.py`~~ **DONE in R54**.
 3. ~~`cv-faceauth/orchestrator/manager.py`~~ **DONE in R56**.
 4. ~~`cv-faceauth/orchestrator/face_auth_pipeline.py`~~ **DONE in R61**.
-5. ~~`cv-faceauth/recognition/local_matcher_old.py`~~ **DONE in R64** —
-   the legacy LocalMatcher; bypassed `recognition/__init__.py` via
-   `load_standalone` so we don't import qdrant_client. 31 tests.
-6. **`cv-faceauth/processor/detector.py`** — needs onnxruntime +
+5. ~~`cv-faceauth/recognition/local_matcher_old.py`~~ **DONE in R64**.
+6. ~~`cv-faceauth/api/face_auth_api.py`~~ **DONE in R65** — heavy
+   main FastAPI service; bypassed `api/__init__.py` via `load_standalone`
+   to avoid the import cycle. 33 tests covering schemas + full
+   `@validator("zones")` matrix + route map + lazy singleton.
+7. **`cv-faceauth/processor/detector.py`** — needs onnxruntime +
    insightface stubs at import top. Use R47/R54/R55/R56 pattern.
-7. **`cv-faceauth/orchestrator/face_auth_onfly_pipeline.py`** —
-   sibling of face_auth_pipeline (R61); same stub-stack
-   complexity but R61 unblocked the pattern.
-8. **`cv-faceauth/api/face_auth_api.py`** — heavy main FastAPI;
-   may need extensive route stubbing. Diff against R47 onfly api.
+8. **`cv-faceauth/orchestrator/face_auth_onfly_pipeline.py`** —
+   sibling of face_auth_pipeline (R61); same stub-stack complexity.
 9. **`cv-faceauth/scripts/run_bg_worker.py`** — entrypoint script;
    check if any pure-logic surface.
 
