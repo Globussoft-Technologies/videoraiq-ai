@@ -477,6 +477,25 @@ export default defineConfig({
         // {RolePermissions/RolesandPermission,Streams/Cameraview}.test.jsx.
         "src/page/user/RolePermissions/RolesandPermission.jsx",
         "src/page/user/Streams/Cameraview.jsx",
+        // Round 65: two more 0% surfaces —
+        //  - Streams/Streams: the top-level NVR Settings listing page
+        //    (AddNVRForm + Nvrsettings / NvrLocalsettings + getAllNvrDetails
+        //    / deleteNVR Api modules + skeleton loader + sonner toasts).
+        //    The permission gate at the top short-circuits before any of
+        //    those run; the new spec pins the two early-return branches
+        //    (permissionsLoading -> PageLoader, !canView -> AccessDenied).
+        //  - Streams/Cameraview/GridViewModal: the fullscreen "Live
+        //    Monitoring" multi-camera grid modal. Pure presentational
+        //    with the dialog open/null guard, the channel-to-tile
+        //    formatting (rtspChannels[1].id pulled into config,
+        //    customName|name display), perPage slicing, ArrowLeft /
+        //    ArrowRight window-key pagination, the Close button
+        //    onOpenChange(false) wiring, and the default-grid fallback
+        //    when selectedGrid does not match any gridOption.
+        // Each entry has a dedicated test under tests/unit/page/user/
+        // Streams/{Streams,Cameraview/GridViewModal}.test.jsx.
+        "src/page/user/Streams/Streams.jsx",
+        "src/page/user/Streams/Cameraview/GridViewModal.jsx",
       ],
       exclude: [
         "tests/**",
