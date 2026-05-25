@@ -349,6 +349,17 @@ export default defineConfig({
         // under tests/unit/page/user/Streams/CameraStreamsModal/
         // UserProfileDialog.test.jsx.
         "src/page/user/Streams/CameraStreamsModal/UserProfileDialog.jsx",
+        // Round 57: Streams/CameraStreamsModal/CameraCanvasModal — the
+        // zoom/pan-capable canvas the StreamModal embeds when a tile is
+        // maximised. The new spec mocks useHlsPlayer + the
+        // CameraStreamWithDetection child, and pins the loading->onCanPlay
+        // transition, the hook-driven onError pane, the wheel-zoom +
+        // Reset round-trip (scale 1 -> 1.15 -> 1), the close button +
+        // onClose wiring (gated on !isInModal), and the 3-second
+        // disappearance of the zoom hint via fake timers. Tested under
+        // tests/unit/page/user/Streams/CameraStreamsModal/
+        // CameraCanvasModal.test.jsx.
+        "src/page/user/Streams/CameraStreamsModal/CameraCanvasModal.jsx",
         // Round 55: Streams/CameraStreamsModal/AttendanceCheckLog — the
         // floating top-left log panel rendered over the stream modal.
         // Two collapsible sections (Attendance Log / Access Log), each
