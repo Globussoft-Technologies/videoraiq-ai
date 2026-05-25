@@ -18,6 +18,10 @@ export async function createJobsForNextDays(scheduleDoc) {
   const { _id: scheduleId, user, basics, notification } = scheduleDoc;
   const { days, timeZone } = basics;
 
+  // Set scheduleId on the profile document to enable job lookups
+  scheduleDoc.scheduleId = scheduleId.toString();
+  await scheduleDoc.save();
+
   // 1️⃣ Clear existing recurring jobs for this schedule to avoid duplicates/stale jobs
   await removeExistingJobs(scheduleId);
 
