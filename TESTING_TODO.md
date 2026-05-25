@@ -3,6 +3,96 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R66 — full 4-phase round, +64 tests; **serial execution worked: zero race; LAST KNOWN-UNAVAILABLE module unblocked**)
+
+- **server** — `core/v1/authorizedUsers/authorizedUsers.service.js` —
+  the remaining big methods: `createAuthUser` (197-line block) and
+  `updateAuthUser` (343-line block). New
+  `server/tests/integration/services/authorizedUsers.service.createUpdate.test.js`
+  (**23 tests**, 3 mocks — `axios`, `sftpConnectionCheck`,
+  `newSFTPConnectionCheck`; pattern lifted from R65's
+  `deleteAuthUserAndLogin.test.js`). Coverage of authorizedUsers.service.js:
+  **53.82% → 86.77%** statements (+33pp); functions **76.92% → 100%**
+  (+23.08pp); branches 85.45% → 84.41% (-1.04pp, marginal). Suite 2454 →
+  2487 / +33 tests. Public `8567d09`, private mirror `b369bc6`. **In 3
+  consecutive rounds (R64 → R65 → R66) authorizedUsers.service has gone
+  37% → 87%** — a 1399-stmt service that was a quiet drag now mostly
+  pinned.
+- **client** — `page/user/Locations/Locations.jsx` AND
+  `page/user/NotificationRecipients/NotificationRecipients.jsx` (both
+  0% → covered). New `Locations.test.jsx` (2 tests, 4 mocks —
+  PermissionContext + AccessDenied + PageLoader + `./Api`; the extra
+  mock is because Locations declares its useEffect BEFORE the early-
+  return, so the Api call would fire without the gate. Hook-order
+  anti-pattern is a pre-existing codebase convention, not filed as
+  bug per agent judgment) and `NotificationRecipients.test.jsx`
+  (2 tests, 3 mocks — standard permission-gate pattern). Suite 1436 →
+  1440 / +4 tests. Public `3b9a167`, private mirror `ba3b1b4`. **Note:
+  NVR/ was already 100% covered (it's only the `NVRAuthLogin.jsx` stub) —
+  the roadmap entry that called it "the biggest 0% area" was stale.**
+- **streaming** — `internal/logger` **87.5% → 91.0%** (+3.5pp). Three
+  previously-uncovered IPLogger boot/shutdown lifecycle functions:
+  `NewIPLogger` 0% → **100%**, `Stop` 0% → **100%**, `StartCleanupRoutine`
+  0% → 33.3% (disabled early-return arm only; enabled arm deliberately
+  skipped — unkillable 6h-ticker goroutine with no shutdown signal in
+  product code). New `streaming/internal/logger/iplogger_lifecycle_test.go`
+  (4 tests, no mocks). All prior logger tests sidestepped these via the
+  `newBareIPLogger` shortcut — the new file pins the real constructor +
+  rotator-stop double-close panic recovery + final cleanupOldLogs via
+  stale-entry seed. No live ffmpeg, no goroutine leaks (`t.Chdir(tmpdir)`
+  + `t.Cleanup(l.Stop)` guards). Private only `8852c9b`.
+- **cv-faceauth** — `core/memory_monitor.py` (0% → covered) — **the
+  LAST KNOWN-UNAVAILABLE module from the R23 blocker list is now
+  unblocked** (psutil must have been installed locally; the agent
+  stubs it in `sys.modules` regardless for determinism). New
+  `cv-faceauth/tests/test_memory_monitor.py` (**22 pass + 1 skip
+  pending #104**). Pinned: MB→bytes unit conversion on all thresholds,
+  default + custom kwargs, initial-state counters, `start()`
+  lifecycle (daemon thread named "MemoryMonitor", double-start guard,
+  safe-without-start `stop()`), `get_stats()` shape, single-tick
+  `_monitor_loop` behaviours (below-threshold no-op, plain GC at
+  memory_threshold, `generation=2` GC at aggressive_threshold,
+  swap-triggered GC, outer exception swallowing), and the three
+  singleton helpers. Stub strategy: `psutil` pre-stubbed in
+  `sys.modules` then per-test `monkeypatch.setattr(mm, "psutil",
+  ...)` for controlled rss/swap; `time.sleep` monkey-patched as
+  deterministic stop-gate; `gc.collect` patched to observable
+  lambda; `teardown_module` rolls back. Suite 859 → **881 passing
+  / 3 skipped** (+22 pass + 1 new skip on top of existing 2 #102 skips).
+  Private only `93197eb`. **All 4 original KNOWN-UNAVAILABLE modules
+  are now covered.**
+
+## NEW PRODUCT BUG — #104 (memory_monitor swap_info UnboundLocalError)
+
+[#104 — `core/memory_monitor.py::_monitor_loop` UnboundLocalError on `swap_info`](https://github.com/Globussoft-Technologies/videoraiq-ai/issues/104)
+
+The R66 cv-faceauth agent found a real bug: when `psutil.swap_memory()`
+raises, `_monitor_loop` references `swap_info` in a subsequent branch
+without defining it, causing UnboundLocalError. The dedicated
+swap-failure test is `pytest.skip("see #104")` pending the product fix.
+
+Total pending bugs filed: **8 product (#96-#102, #104)** + **1 process
+(#103)** = 9 issues open.
+
+## Serial-vs-parallel decision
+
+R66 ran the four sub-agents **serially** (one at a time) instead of
+in parallel — a deliberate response to the R65 race that triggered
+#103. Results:
+
+- **Zero index race**. Every commit's subject matched its diff.
+- **Zero off-limits-path violations**.
+- **Total wall-clock**: ~22 minutes (vs ~10 min parallel). Acceptable
+  cost for correctness on an autonomous loop.
+
+Going forward the cron should keep running serially until #103 is
+resolved by either (a) per-phase git worktrees, or (b) a remote-side
+serialization signal. The cost is ~12 extra minutes per round; the
+benefit is bulletproof commit/diff alignment.
+
+Cumulative R22→R66: **~1828 new tests across 114 test files; 0 product
+files touched across 45 rounds.**
+
 ## TL;DR — what changed on 2026-05-26 (R65 — full 4-phase round, +58 tests; **first parallel-agent index race + process-violation issue #103**)
 
 - **server** — `core/v1/authorizedUsers/authorizedUsers.service.js`
@@ -949,7 +1039,8 @@ re-target):
 - Dashboard: RecentAlerts (R30), NoDataCard (R38)
 - RolePermissions: PermissionTable (R32), AddRoleDialog (R34), RolesandPermission PAGE (R64)
 - Incidents: IncidentPagination (R35), IncidentCard (R36), ReportIncidentModal (R37), Incidents PAGE (R62)
-- Locations: LocationForm (R39)
+- Locations: LocationForm (R39), **Locations PAGE (R66)**
+- NotificationRecipients: **NotificationRecipients PAGE (R66)**
 - Users: ForgotPassword (R40), ResetPassword (R41)
 - Playback: MediaControls (R42)
 - Streams: NvrLocalsettings (R43), CameraCanvas (R47), ZoneSelector (R52), CameraStream (R54), Cameraview PAGE (R64), **Streams PAGE + GridViewModal (R65)**
@@ -968,8 +1059,10 @@ re-target):
    all 9 CameraView grid variants.
 2. ~~Cameraview PAGE / RolesandPermission PAGE~~ **DONE in R64**.
 3. ~~Streams PAGE / GridViewModal~~ **DONE in R65**.
-4. **`client/src/page/user/NVR/`** — entire page surface UNTOUCHED.
-   Highest-leverage remaining 0% page area.
+4. ~~Locations PAGE / NotificationRecipients PAGE~~ **DONE in R66**.
+5. ~~`client/src/page/user/NVR/`~~ **was a STALE roadmap entry** —
+   the agent verified that NVR/ is only `NVRAuthLogin.jsx` (a stub)
+   and is already 100% covered. Skip.
 5. **`client/src/page/user/Streams/CameraStreamsModal/*`** other
    than ZoneSelector R52 — check for sibling components.
 6. **`client/src/page/user/Incidents/`** — IncidentDetail,
@@ -985,11 +1078,11 @@ re-target):
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R65):**
+**Coverage state (after R66):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 95.2%,
-  `internal/config` 82.4%, `internal/logger` 87.5%, `internal/server`
-  **86.8%**, `internal/stream` **79.0%** (R65: +1.8pp via
-  MonitorFFmpegProcessStats ticker.C arm 46.9% → 78.1%)
+  `internal/config` 82.4%, `internal/logger` **91.0%** (R66: NewIPLogger
+  + Stop both 0%→100%, StartCleanupRoutine 0%→33.3%), `internal/server`
+  **86.8%**, `internal/stream` **79.0%**
 - `internal/metrics` registry contract **pinned via smoke tests** in R53
 - `cmd/server` **0%** (main + wiring, hard to unit-test without
   spawning the full server)
@@ -999,15 +1092,17 @@ re-target):
 1. **`internal/stream`** (still the biggest active gap at 79.0%) —
    `runFFmpegPipeline`/`runFFmpegPipelineSub` partial (25.7%/29.7%);
    `MonitorFFmpegProcessStats` at 78.1% after R65 (remaining 22% is
-   the post-snapshot branches that require a second tick);
+   post-snapshot branches needing a second tick);
    remaining stale-cleanup branches, queue handling.
 2. **`internal/server` HLS body delivery** — large fraction of the
    remaining ~13% is live-ffmpeg-dependent serve paths; can pin error
    paths and header contracts without ffmpeg.
-3. **`internal/logger`** — diminishing returns; remaining 12.5% is
-   mostly `NewIPLogger`, rotator goroutines.
+3. **`internal/logger`** — diminishing returns now (91.0%); remaining 9%
+   is the enabled-arm of `StartCleanupRoutine` (unkillable 6h-ticker
+   goroutine with no shutdown signal — needs product-side seam refactor
+   to be testable, file as ambiguous if attempting).
 
-### cv-faceauth — 42+ product modules covered, suite at 859 passing / 2 skipped
+### cv-faceauth — 43+ product modules covered, suite at 881 passing / 3 skipped
 
 **Done:**
 - core (10): fps_tracker, context, gpu_lock, health_monitor, metrics,
@@ -1021,25 +1116,16 @@ re-target):
 - stream (3): base, pyav_reader, shared_reader
 - api (2): face_auth_onfly_api, models (whole file)
 
-**KNOWN UNAVAILABLE in this dev env (skip until deps installed):**
-- `core/memory_monitor.py` — needs `psutil`
-- ~~`api/dependencies.py`~~ **UNBLOCKED + COVERED in R59** —
-  R56's manager coverage made this testable via a fake-CameraManager
-  stub on `orchestrator.manager`.
+**KNOWN UNAVAILABLE in this dev env — ALL CLEARED:**
+- ~~`core/memory_monitor.py`~~ **UNBLOCKED + COVERED in R66** —
+  22 pass + 1 skip on bug #104 (UnboundLocalError on swap_info).
+  Pre-stubs psutil + per-test monkeypatch for rss/swap.
+- ~~`api/dependencies.py`~~ **UNBLOCKED + COVERED in R59**.
 - ~~`stream/token_manager.py`~~ **UNBLOCKED + COVERED in R63** —
-  agent installed a fake `jwt` module in sys.modules before
-  load_standalone (R55 robust_hls_reader pattern). 17 pass + 2 skip
-  (the 2 skips uncovered bug #102 — real product deadlock).
-- ~~`processor/qdrant_deduplicator.py`~~ **UNBLOCKED + COVERED in R62** —
-  agent patched `QdrantClient` on the loaded module so no on-disk
-  Qdrant storage is touched. 27 tests landed.
+  17 pass + 2 skip on bug #102 (URLTokenManager deadlock).
+- ~~`processor/qdrant_deduplicator.py`~~ **UNBLOCKED + COVERED in R62**.
 
-**STATUS**: 3 of the original 4 KNOWN-UNAVAILABLE modules are now
-covered. Only `core/memory_monitor.py` (psutil) remains blocked.
-A `pip install psutil` from the user would unlock it.
-
-**Suggested for user (one-time):** `pip install psutil pyjwt` to unlock
-two of the above.
+**STATUS**: All 4 original KNOWN-UNAVAILABLE modules are now covered.
 
 **Next priorities (pick top-down):**
 
@@ -1048,16 +1134,18 @@ two of the above.
 3. ~~`cv-faceauth/orchestrator/manager.py`~~ **DONE in R56**.
 4. ~~`cv-faceauth/orchestrator/face_auth_pipeline.py`~~ **DONE in R61**.
 5. ~~`cv-faceauth/recognition/local_matcher_old.py`~~ **DONE in R64**.
-6. ~~`cv-faceauth/api/face_auth_api.py`~~ **DONE in R65** — heavy
-   main FastAPI service; bypassed `api/__init__.py` via `load_standalone`
-   to avoid the import cycle. 33 tests covering schemas + full
-   `@validator("zones")` matrix + route map + lazy singleton.
-7. **`cv-faceauth/processor/detector.py`** — needs onnxruntime +
-   insightface stubs at import top. Use R47/R54/R55/R56 pattern.
-8. **`cv-faceauth/orchestrator/face_auth_onfly_pipeline.py`** —
-   sibling of face_auth_pipeline (R61); same stub-stack complexity.
-9. **`cv-faceauth/scripts/run_bg_worker.py`** — entrypoint script;
-   check if any pure-logic surface.
+6. ~~`cv-faceauth/api/face_auth_api.py`~~ **DONE in R65**.
+7. ~~`cv-faceauth/core/memory_monitor.py`~~ **DONE in R66** — the last
+   original KNOWN-UNAVAILABLE module. Bug #104 filed.
+8. **`cv-faceauth/processor/detector.py`** — R66 agent noted this is
+   ALREADY covered (R47/R56-style coverage exists somewhere). VERIFY:
+   `find cv-faceauth/tests -name "test_detector*"` next round before
+   targeting.
+9. **`cv-faceauth/orchestrator/face_auth_onfly_pipeline.py`** — R66
+   agent noted ALREADY covered too. VERIFY: search tests for it.
+10. **`cv-faceauth/scripts/run_bg_worker.py`** — R66 agent noted
+    ALREADY covered. VERIFY.
+11. **Next-round priority: re-scan with `python -m pytest --cov --cov-report=term-missing tests`** to find the true remaining 0% / low-coverage modules. The roadmap entries 8-10 may be stale.
 
 ### e2e — STALLED until live DOM is reverse-engineered
 
