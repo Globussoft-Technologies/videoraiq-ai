@@ -162,14 +162,9 @@ class AdminService {
             emp_id: 1
         });
         if(isUserExist.length > 0){
-            const userArray = isUserExist.map(obj => obj['emp_id']);
+            const importedEmployeeIds = new Set(isUserExist.map(obj => String(obj['emp_id'])));
             for(let i=0;i<empOrgDataArray?.length; i++){
-                if (userArray.includes(empOrgDataArray[i].id.toString())) {
-                    empOrgDataArray[i].importedStatus = true;
-                }
-                else{
-                    empOrgDataArray[i].importedStatus = false;
-                }
+                empOrgDataArray[i].importedStatus = importedEmployeeIds.has(String(empOrgDataArray[i].id));
             }
         }
         return res.send(Response.userSuccessResp('Employee List Fetched Successfully', empOrgDataArray))
