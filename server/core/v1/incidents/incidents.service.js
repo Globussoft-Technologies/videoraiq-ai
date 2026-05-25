@@ -1605,7 +1605,7 @@ class IncidentsService {
 
       return res.status(200).json(
         Response.userSuccessResp("Incident fetched successfully", {
-          totalCount: totalCount[0]?.totalCount ?? 0,
+          totalCount: totalCount.length,
           result: formattedResult,
         }),
       );
