@@ -234,6 +234,11 @@ export default defineConfig({
         // normal headers+rows). Tested under tests/unit/page/user/
         // RolePermissions/PermissionTable.test.jsx.
         "src/page/user/RolePermissions/PermissionTable.jsx",
+        // Round 33: EmployeeLogs/components/BreakLogsDialog — Radix Dialog
+        // that fetches per-employee attendance break logs (loading / empty /
+        // populated) and offers PDF / Excel export. Tested under tests/unit/
+        // page/user/EmployeeLogs/components/BreakLogsDialog.test.jsx.
+        "src/page/user/EmployeeLogs/components/BreakLogsDialog.jsx",
       ],
       exclude: [
         "tests/**",
