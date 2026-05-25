@@ -1142,7 +1142,7 @@ async getLogs(req, res, next) {
   
 }
   
-const  parseDuration = (duration) => {
+const parseDuration = (duration) => {
   // Handle numeric input (treat as milliseconds)
   if (typeof duration === 'number') {
     return duration;
@@ -1154,6 +1154,21 @@ const  parseDuration = (duration) => {
   if (duration.endsWith("h")) return value * 60 * 60 * 1000; // hours
   return value; // fallback (already ms)
 };
+
+const formatDuration = (ms) => {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const parts = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (seconds > 0) parts.push(`${seconds}s`);
+
+  return parts.length > 0 ? parts.join(' ') : '0s';
+};
+
 const getValue = (obj, path) => {
   return path.split('.').reduce((acc, part) => acc?.[part], obj);
 };
