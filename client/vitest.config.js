@@ -333,6 +333,13 @@ export default defineConfig({
         // permissionsLoading -> PageLoader; !canView -> AccessDenied.
         // Tested under tests/unit/page/user/Departments/Departments.test.jsx.
         "src/page/user/Departments/Departments.jsx",
+        // Round 52: Streams/CameraStreamsModal/ZoneSelector — the small
+        // floating, draggable zone-picker overlay rendered on top of the
+        // stream modal. Toggles a panel listing detection zone_names,
+        // calls setSelectedZone on pick, and supports mouse-drag inside
+        // the .stream-modal container. Tested under
+        // tests/unit/page/user/Streams/CameraStreamsModal/ZoneSelector.test.jsx.
+        "src/page/user/Streams/CameraStreamsModal/ZoneSelector.jsx",
         // Round 49: layout/Sidebar/AdminSidebar — the admin-side rail
         // (User Details parent + child routes, Role & Permission,
         // Locations, Departments). Tests pin all four labels + the
