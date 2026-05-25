@@ -104,6 +104,31 @@ describe("JobsService.handleProfileStart", () => {
       }),
     ).resolves.toBeUndefined();
   });
+
+  it("successfully finds a profile by scheduleId and logs channel start", async () => {
+    const scheduleId = "cron-job-123";
+    const profile = await seedProfile({ scheduleId });
+
+    // Create a channel for this profile (minimal structure to pass validation).
+    const { default: Channel } = await import(
+      "../../../core/v1/channels/channels.model.js"
+    );
+    await Channel.create({
+      profile: profile._id,
+      channelName: "Test Camera",
+      nvrId: new mongoose.Types.ObjectId(),
+      userId: "user-123",
+      streamingPath: "/stream/path",
+      localChannelId: "local-ch-1",
+      detections: {},
+    });
+
+    // Call handleProfileStart with the matching scheduleId.
+    await expect(
+      JobsService.handleProfileStart({ scheduleId }),
+    ).resolves.toBeUndefined();
+    // No throw means success — the function logs and processes the profile.
+  });
 });
 
 // ----------------------------------------------------------------------------

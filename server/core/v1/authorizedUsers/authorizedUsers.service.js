@@ -1049,13 +1049,14 @@ async updateAuthUser(req, res, _next) {
           const user = await authorizedUsersModel.findOne({
             $or: [{ email:usernameOrEmail }, { firstName: usernameOrEmail }]
           });
-          console.log(user);
-          const decryptedOldPassword = decrypt(user?.password);
+
           if (!user) {
             return res.status(401).json(
               Response.userFailResp("Invalid email/username or password", "Authentication Failed!")
             );
           }
+
+          const decryptedOldPassword = decrypt(user.password);
           
           if (password !== decryptedOldPassword) {
             return res

@@ -142,6 +142,10 @@ const profileSchema = new Schema(
       ref: "Admin",
       required: true,
     },
+    scheduleId: {
+      type: String,
+      index: true,
+    },
     status: { type: String, enum: ["Active", "Inactive"], default: "Inactive" },
     basics: basicsSchema,
     notification: notificationSchema,
