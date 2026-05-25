@@ -388,6 +388,21 @@ export default defineConfig({
         // tests/unit/page/user/Streams/CameraStreamsModal/
         // CameraStreamWithDetection.test.jsx.
         "src/page/user/Streams/CameraStreamsModal/CameraStreamWithDetection.jsx",
+        // Round 59: Streams/CameraStreamsModal/StreamModal — the last
+        // untested sibling in the CameraStreamsModal subdir. Orchestrates
+        // the maximised camera view: requests element fullscreen on mount,
+        // wires the document fullscreenchange handler that calls onClose
+        // when the user exits fullscreen, filters detections /
+        // accessAllDetections / attendanceLogs to the active camera, and
+        // composes the close button, ZoneSelector, CameraCanvasModal,
+        // AttendanceCheckLog, and UserProfileDialog children. The new spec
+        // pins the isOpen=false null-render path, the maximised mount path
+        // (requestFullscreen call, multi-channel chevron rendering, fresh
+        // countPersons + countVehicles counter cards, "People Detected"
+        // strip stat, per-camera detection filtering), and the close-via-
+        // fullscreenchange-exit path. Tested under tests/unit/page/user/
+        // Streams/CameraStreamsModal/StreamModal.test.jsx.
+        "src/page/user/Streams/CameraStreamsModal/StreamModal.jsx",
         // Round 49: layout/Sidebar/AdminSidebar — the admin-side rail
         // (User Details parent + child routes, Role & Permission,
         // Locations, Departments). Tests pin all four labels + the
