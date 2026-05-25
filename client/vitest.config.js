@@ -539,6 +539,16 @@ export default defineConfig({
         // Sidebar/{SettingsSidebar,Sidebar}.test.jsx.
         "src/layout/Sidebar/SettingsSidebar.jsx",
         "src/layout/Sidebar/Sidebar.jsx",
+        // Round 68: layout/Header/ProfileDropdown — the avatar button +
+        // dropdown panel in the top-right of the header. Pure
+        // presentational: avatar img with dicebear seed built from
+        // name_f + (name_l ?? user_email), parent-driven open state
+        // (profileDrop / setProfileDrop), Profile NavLink suppressed
+        // by user.memberId truthy, Logout button calls handleLogout
+        // prop, click-outside (mousedown) closes via setProfileDrop(false),
+        // mousedown inside the dropdown panel is guarded by contains().
+        // Tested under tests/unit/layout/Header/ProfileDropdown.test.jsx.
+        "src/layout/Header/ProfileDropdown.jsx",
       ],
       exclude: [
         "tests/**",
