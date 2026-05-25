@@ -3,6 +3,87 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R67 — full 4-phase round, +70 tests; **pivot off authorizedUsers; bug #105 filed**)
+
+- **server** — pivoted off `authorizedUsers.service.js` (now 86.77% /
+  100% functions, diminishing). New target: `core/v1/permission/permissions.utility.js`
+  — `PermissionService.create` + `PermissionService.bulkPermissionDelete`.
+  An old `permissions.service.test.js` header claimed both were unreachable
+  due to a "double-nested `req.verified.userData.userData`" shape — the
+  R67 agent verified that comment was WRONG: both methods destructure
+  `req.verified.userData` directly and work with the standard
+  `serviceCtx({adminId, body})` shape. New
+  `server/tests/integration/services/permissions.service.createAndBulkDelete.test.js`
+  (**9 tests, 0 mocks** — pure in-memory Mongo). `create`: Joi failure,
+  happy-path persist, exact-match dup, case-insensitive regex dup,
+  outer-catch via undefined permissionName. `bulkPermissionDelete`:
+  admin-not-found, missing permissionConfig, missing-module list,
+  happy-path `$unset` of a named module. Suite 2510 → 2519 / +9.
+  Public `a777127`, private mirror `55c79d3`. **Two additional bugs
+  noticed but not filed this round** (agent judgment, since they're
+  unreachable from existing tests): `auth.service.js::revokeDetectionService`/
+  `revokeAttendanceService` use `axios.post` but `axios` is never imported
+  → `ReferenceError` if invoked; `dashboard.service.js::WeeklyComparisonChart`
+  references undeclared `channelFilter`/`userMatch` (already tracked as
+  legacy issue #49). Note for future rounds: the auth.service axios bug
+  IS worth filing if the next server round wants an easy issue to land.
+- **client** — pivoted from PAGE-level sweep to `layout/Sidebar/*`.
+  TWO 0% files in one round: `SettingsSidebar.jsx` (152-line 4-item
+  settings side rail — 5 tests, 3 mocks pinning pathname-active,
+  `activePaths` fallback for `/settings/inner`, dormant `AddNVRForm`
+  import) and `Sidebar.jsx` (113-line permission-gated main dashboard
+  rail — 7 tests, 4 mocks pinning view gate, `isSettingsPage` gate on
+  `/settings` and `/detection-settings`, `isLoading` skeleton branch,
+  non-dashboard short-circuit, `sidebarShow` toggle + collapsed-icon
+  list branches). Both files added to vitest include (previously the
+  `src/layout/**` glob was opt-in per-file — only `AdminSidebar`,
+  `LogsSidebar`, `Api/{get,put}` were listed). Suite 1440 → 1452 /
+  +12 tests. Public `320ea06`, private mirror `f9ebdd2`.
+- **streaming** — `internal/stream` **79.0% → 80.9%** (+1.9pp).
+  `StreamManager.StartPlayback` 54.2% → **100%**. New
+  `streaming/internal/stream/playback_start_happy_test.go` (2 tests).
+  Covers `endTime != ""` arm (sessionID format `pb-<camID>-<n>`,
+  runPlaybackPipeline goroutine launched but parked on saturated
+  `ffmpegPool`, PlaybackStream registration, PlaybackSessions metric
+  Inc, clean teardown via ctx-cancel + pool drain) AND `endTime == ""`
+  arm with `sessionCounter` monotonic increment via 2 back-to-back
+  calls. Agent noted the remaining named targets in the roadmap
+  (`cleanupInactiveStreams/SubStreams/Playbacks` at 0%, `processStartQueue`
+  body, `MonitorFFmpegProcessStats` second-tick) are all blocked on
+  product-side seams (5-min `time.NewTicker` blocking loops with no
+  shutdown channel; `time.Sleep(5*time.Second)` in `processStartQueue`;
+  flaky netIO deltas in MonitorFFmpeg second tick). StartPlayback was
+  the highest-leverage testable gap remaining. Private only `8186554`.
+- **cv-faceauth** — `scripts/run_bg_worker.py` (0% → **70%** on 403
+  stmts) — was untouched. The R66 agent's note that it "already had
+  coverage" was wrong; R67 agent re-scanned with `pytest --cov` and
+  confirmed it was 0%. New `cv-faceauth/tests/test_run_bg_worker.py`
+  (**43 pass + 4 skip**). Pinned: init/singleton wiring, `_decode_base64`,
+  `get_status`, `stop`, `_process_task` (face-rec + entry_log routing +
+  all gates + error paths + camera_type mapping + outer-except),
+  `_safe_process_task`, `_process_entry_log_task` (happy + remote_face_url
+  skip + None-client + return-False/raise + frame removal), `_cleanup`,
+  `run()` (pre-stopped + pop-then-stop). Suite 881 → **924 passing /
+  7 skipped** (+43 pass, +4 skip on bug #105). Private only `7e05d48`.
+
+## NEW PRODUCT BUG — #105 (run_bg_worker incident handler missing)
+
+[#105 — `scripts/run_bg_worker.py`: incident tasks crash + never dispatched](https://github.com/Globussoft-Technologies/videoraiq-ai/issues/105)
+
+The R67 cv-faceauth agent found TWO related bugs:
+1. `_process_task` never routes to an incident handler — PPE / Crowd /
+   Light / LineCrossing tasks fall through to face-recognition.
+2. The would-be incident handler calls `self.incident_log` which is
+   never defined on the BackgroundWorker class.
+
+Four dispatch tests are `pytest.skip("see #105")` pending product fix.
+
+Total pending bugs filed: **9 product (#96-#102, #104-#105)** + **1
+process (#103)** = 10 issues open.
+
+Cumulative R22→R67: **~1898 new tests across 118 test files; 0 product
+files touched across 46 rounds. Serial execution continues clean.**
+
 ## TL;DR — what changed on 2026-05-26 (R66 — full 4-phase round, +64 tests; **serial execution worked: zero race; LAST KNOWN-UNAVAILABLE module unblocked**)
 
 - **server** — `core/v1/authorizedUsers/authorizedUsers.service.js` —
@@ -1033,7 +1114,7 @@ re-target):
 
 **Done by area:**
 - Layout/Header: DesktopNav (R22), MobileNav (R24), UpgradeModal (R26)
-- Layout/Sidebar: LogsSidebar (R23), AdminSidebar (R49)
+- Layout/Sidebar: LogsSidebar (R23), AdminSidebar (R49), **SettingsSidebar + Sidebar (R67)**
 - EmployeeLogs: TimePickerComponents (R25), LogsFilterPopover (R31), BreakLogsDialog (R33)
 - StorageSetting: Googledrive (R27), S3 (R28), Sftp (R29), AddStorageModal (R61)
 - Dashboard: RecentAlerts (R30), NoDataCard (R38)
@@ -1078,11 +1159,16 @@ re-target):
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R66):**
+**Coverage state (after R67):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 95.2%,
-  `internal/config` 82.4%, `internal/logger` **91.0%** (R66: NewIPLogger
-  + Stop both 0%→100%, StartCleanupRoutine 0%→33.3%), `internal/server`
-  **86.8%**, `internal/stream` **79.0%**
+  `internal/config` 82.4%, `internal/logger` 91.0%, `internal/server`
+  **86.8%**, `internal/stream` **80.9%** (R67: StartPlayback 54.2%→100%)
+
+**Known blocked on product-side seams** (per R67 agent investigation):
+- `cleanupInactiveStreams` / `cleanupInactiveSubStreams` / `cleanupInactivePlaybacks` — 5-min `time.NewTicker` blocking loops with no shutdown channel; would need product `init()` seam
+- `processStartQueue` — contains hard-coded `time.Sleep(5*time.Second)`; deterministic testing would need a clock seam
+- `MonitorFFmpegProcessStats` second-tick branches — depend on flaky system-wide netIO deltas
+- `StartCleanupRoutine` enabled arm — unkillable 6h ticker (same seam issue)
 - `internal/metrics` registry contract **pinned via smoke tests** in R53
 - `cmd/server` **0%** (main + wiring, hard to unit-test without
   spawning the full server)
@@ -1143,9 +1229,10 @@ re-target):
    targeting.
 9. **`cv-faceauth/orchestrator/face_auth_onfly_pipeline.py`** — R66
    agent noted ALREADY covered too. VERIFY: search tests for it.
-10. **`cv-faceauth/scripts/run_bg_worker.py`** — R66 agent noted
-    ALREADY covered. VERIFY.
-11. **Next-round priority: re-scan with `python -m pytest --cov --cov-report=term-missing tests`** to find the true remaining 0% / low-coverage modules. The roadmap entries 8-10 may be stale.
+10. ~~`cv-faceauth/scripts/run_bg_worker.py`~~ **DONE in R67** —
+    R66's note was wrong; R67 agent verified 0% and landed 43 pass +
+    4 skip (bug #105). Module now at 70%.
+11. **Each round: re-scan with `python -m pytest --cov --cov-report=term-missing tests`** to find the true remaining 0% / low-coverage modules.
 
 ### e2e — STALLED until live DOM is reverse-engineered
 
