@@ -218,6 +218,11 @@ export default defineConfig({
         // used by AddStorageModal. Pure controlled component (clientId /
         // clientSecret / redirectUri) with isEditMode placeholder swap.
         "src/page/user/Settings/StorageSetting/components/GoogledriveForm.jsx",
+        // Round 30: Dashboard/RecentAlerts — static "Walmart Store" alert
+        // card that wraps two heavy children (AlertGauge + ActivityChart).
+        // The new spec mocks both children and pins the fixed header copy /
+        // image / four-chip grid.
+        "src/page/user/Dashboard/RecentAlerts.jsx",
       ],
       exclude: [
         "tests/**",
