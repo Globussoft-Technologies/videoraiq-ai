@@ -496,6 +496,22 @@ export default defineConfig({
         // Streams/{Streams,Cameraview/GridViewModal}.test.jsx.
         "src/page/user/Streams/Streams.jsx",
         "src/page/user/Streams/Cameraview/GridViewModal.jsx",
+        // Round 66: two more 0% top-level permission-gated pages —
+        //  - Locations/Locations: the locations listing page (Pagination +
+        //    PermissionTable + LocationForm + DeleteConfirmation +
+        //    fetchLocations / deleteLocation Api). The gate at the top
+        //    short-circuits before any of those hooks fire. Passes
+        //    <AccessDenied /> with no message prop on the deny branch.
+        //  - NotificationRecipients/NotificationRecipients: the
+        //    notification recipients listing page (RecipientList +
+        //    AddRecipientModal + getRecipients/getDetectionTypes/
+        //    resendMailOrSMS Api + useDebounce + AuthContext +
+        //    react-router useNavigate). The gate short-circuits with a
+        //    Recipients-specific AccessDenied message.
+        // Each entry has a dedicated test under tests/unit/page/user/
+        // {Locations/Locations,NotificationRecipients/NotificationRecipients}.test.jsx.
+        "src/page/user/Locations/Locations.jsx",
+        "src/page/user/NotificationRecipients/NotificationRecipients.jsx",
       ],
       exclude: [
         "tests/**",
