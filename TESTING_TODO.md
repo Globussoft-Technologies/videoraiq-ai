@@ -3,6 +3,126 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R93 — full 4-phase round +57 tests; **MAJOR product refactor `59adc4c` broke 155 cron tests; bug #114 filed; +1 streaming arm; triton_model_specs 0→100%**)
+
+- **server** — `core/v1/locations/location.service.js` outer-catch
+  arms (deleteLocation 229-232, fetchEmployeeLocation 281-284). New
+  `server/tests/integration/services/location.service.catches.test.js`
+  (**4 tests, 0 mocks** — only `vi.spyOn(...).mockImplementationOnce(throw)`
+  spies). Coverage of location.service.js: **90.62% → 92.7%** lines
+  (+2.08pp); branches **84.21% → 88.23%** (+4.02pp); fns hold at 100%.
+  Suite +4. Public `ef430ea`, private mirror `c5b8ae1`.
+- **client** — `helpers/Userregister/RegisterForm.jsx` (multi-step
+  Dialog used by UserDetails). New
+  `client/tests/unit/helpers/Userregister/RegisterForm.test.jsx`
+  (**4 tests, 7 mocks** — Radix Dialog, sonner, react-webcam,
+  getAccessToken, RegisterFormStep1, RegisterFormStep2,
+  getEmployeeLocations + global fetch spy). Pinned: closed-by-
+  default Dialog (trigger renders + Root has `data-open="false"`);
+  on-mount data fetch fan-out; trigger-click flips open → step-1
+  chrome mounts with "User Registration" title; `editUser`-supplied
+  auto-open via `Promise.all().then(setOpen(true))` → "Update User
+  Details" title. 0% → covered. Suite +4. Public `142f00c`, private
+  mirror `4e2ddc3`.
+- **streaming** — `internal/stream/playlist.go::buildPlaylist`
+  atomic-rename `os.Create(tmp)` silent-return arm (playlist.go:86-88,
+  hit count was 0) — **issue #113's surface**. New
+  `streaming/internal/stream/playlist_create_tmp_error_test.go`
+  (1 test). Technique: pre-create `playlist.m3u8.tmp` as a directory
+  so `os.Create(tmp)` fails with EISDIR — asserts no panic, no
+  destructive overwrite of pre-existing dir, no live playlist
+  written. `buildPlaylist`: **86.4% → 88.6%** (+2.2pp);
+  `internal/stream` pkg: **80.1% → 80.3%** (+0.2pp). Private only
+  `800f43a`.
+- **cv-faceauth** — `core/triton_model_specs.py` (newly-introduced
+  in product commit `59adc4c` mentioned below, **never covered**).
+  New `cv-faceauth/tests/test_triton_model_specs.py` (**48 tests,
+  0 skips**). Pinned MODEL_SPECS dict keys (`rtdetr_l`, `scrfd`,
+  `arcface`, `ppekit`), tensor shape contracts (rtdetr 8x3x640x640,
+  arcface 16x512 embedding, ppekit 7x8400 with 3 PPE classes + 4
+  box dims, scrfd 9-output / 3-stride layout), region-name format
+  `{model}_{tensor}_{in|out}`, byte-size math via numpy dtype
+  itemsize, SCRFD anchor grid formulas (80x80x2, 40x40x2, 20x20x2).
+  Coverage: **0% → 100%**. Private only `1d7ddca`.
+
+## 🚨 MAJOR PRODUCT REFACTOR + BUG #114 FILED
+
+Between R92 and R93, the product team landed commit `59adc4c
+"Fixed stream/token_manager.py invalid token issue"` on private,
+plus 2 merge commits (`2ad88c3`, `f4a4c2d`). The commit's
+description belies its scope: it's actually a **236-file / +46k LOC
+cv-faceauth refactor** that touches dozens of product files
+including `api/face_auth_api.py`, `api/face_auth_onfly_api.py`,
+`core/triton_client.py`, `core/triton_model_specs.py` (NEW),
+`core/shared_memory_manager.py` (NEW), `core/stream_hub_client.py`
+(NEW), and an entire new `api_obj/` directory (FastAPI + routers
++ shard runner). Tons of new docs under `docs/`.
+
+**Impact on the cron test suite (private)**: **155 cron-authored
+tests broke** from a baseline of 1365 passing (R92 end) to 1242
+passing + 155 failing this round. Reason: the refactor changed
+public signatures (e.g. `BasePipeline.__init__` no longer accepts
+`use_shared_reader=...`) and made `av` (PyAV) a hard top-level
+import in `stream/pyav_reader.py`. Many of the modules our R69-R92
+agents covered have moved or been renamed.
+
+**Filed [#114 — umbrella regression report on commit 59adc4c](https://github.com/Globussoft-Technologies/videoraiq-ai/issues/114)**.
+The cron does not patch product code; this is for the product team.
+The product team controls when test files get updated after their
+refactors (R83's `7229407` and R84's `fb36495` showed they have
+done this before).
+
+**Open bug count update**:
+- 12 product (#97-#102, #104-#108, #112) — #96 fixed in R91/R92
+- **+1 product (#114)** — NEW umbrella regression filed this round
+- = **13 product** open
+- 1 process (#103)
+- **Total open: 14** (was 13, was 14 before #96 fix)
+
+## Streaming progress this round (post-R91 product fixes)
+
+Two of the three streaming bugs the product team fixed (#96, #100,
+#113) now have cron tests covering the fixed surface:
+- **#96** (R92): `deleteOldFiles` IsDir continue arm — 90.5% → 95.2%
+- **#113** (R93): `buildPlaylist` os.Create(tmp) silent-return — 86.4% → 88.6%
+- **#100**: still pending trace; product touched `playback.go` but
+  the specific arm hasn't been pinned
+
+**Still seam-blocked**:
+- `cleanupInactivePlaybacks/Streams/SubStreams` (infinite goroutines
+  on `time.NewTicker` with no shutdown channel)
+- `processStartQueue` hard-coded `time.Sleep(5s)`
+- `MonitorFFmpegProcessStats` second-tick branches (flaky netIO)
+- `StartCleanupRoutine` enabled arm
+- `runFFmpegPipeline*` / `runPlaybackPipeline` / `getVideoCodec`
+  (need real ffmpeg/ffprobe binaries)
+
+## Clone divergences (no change this round)
+
+Private-only client files: R86 `EmployeeRegister.jsx`, R90
+`VehicleCountLogs.jsx`, R91 `AttendanceLogsLive.jsx`.
+
+**No new bugs filed by cron beyond #114 this round.** R68's
+roles.service.js mongoose issue and R72's permissions.utility
+deletePermissions issue remain unfiled.
+
+**Push-verification protocol worked (16th round in a row)**: all 4
+acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (21st round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R93: **~3014 new tests across 223 test files (priv)
+[note: 155 currently broken on private only due to #114; tests
+themselves are correct, product code shifted]; 0 product files
+touched across 72 rounds.** Serial execution still clean.
+cv-faceauth suite: **1242 passing** (was 1365 before #114, lost 123
+to product refactor; +48 new from R93 brings it to 1290 if #114 is
+resolved by product team).
+
+Total pending bugs filed: **13 product (#97-#102, #104-#108, #112,
+#114)** + **1 process (#103)** = **14 issues open**.
+
 ## TL;DR — what changed on 2026-05-26 (R92 — full 4-phase round +25 tests; **bug #96 CONFIRMED FIXED; cv-faceauth 93%; alert.events 100%; streaming back in scope**)
 
 - **server** — `core/v1/alerts/alert.events.js::triggerAlertOnIncident`
