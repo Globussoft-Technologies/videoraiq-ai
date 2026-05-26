@@ -1116,6 +1116,25 @@ export default defineConfig({
         // and the Settings-tab filter when every settings sub-permission
         // is false. Tested under tests/unit/layout/Header/Header.test.jsx.
         "src/layout/Header/Header.jsx",
+        // Round 99: Dashboard/Alertcards/CriticalAlerts — the "Critical /
+        // Total / Resolved Incidents" listing page popped up from the
+        // dashboard StatCards card-click handlers (sibling of ActiveCamera
+        // covered in R82, but with a different filter contract). Heavy
+        // downstream tree (TanStack-table with 9 columns, VideoModal,
+        // ReportIncidentModal, NVR + Camera Selects, four Api modules,
+        // useDebounce, useAuth + usePermissions contexts, memo'd
+        // IncidentTable, react-loading-skeleton), but the page is
+        // permission-gateless — every branch flows through the
+        // location.pathname -> INCIDENT_TYPE_MAP -> API_TYPE_MAP chain.
+        // Spec mounts the three documented pathnames (/critical-incidents,
+        // /total-incidents, /incidents-resolved) and pins the page title,
+        // sub-label, API flag fan-out, the location.state.incident-
+        // branched back-button (Back to Incidents -> /incidents vs
+        // Back to Dashboard -> /dashboard), and the non-200
+        // getIncidentData failure path with toast.error + No-data-found
+        // copy. Tested under tests/unit/page/user/Dashboard/Alertcards/
+        // CriticalAlerts.test.jsx.
+        "src/page/user/Dashboard/Alertcards/CriticalAlerts.jsx",
         // Round 97: Playback/Playback.jsx — the top-level "CCTV Playbacks"
         // page mounted under /playback. The full page is heavy
         // (useReducer-driven filters/state machine, PlaybackHeader +
