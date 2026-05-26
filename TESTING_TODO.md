@@ -3,6 +3,81 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R90 — 3-phase round +52 tests (priv), streaming SKIPPED; **detectionSettings 95.97%; GuardLog covered; 2nd clone divergence**)
+
+- **server** — `core/v1/detectionSettings/detectionSettings.service.js`.
+  New `server/tests/integration/services/detectionSettings.service.catches.test.js`
+  (**11 tests, 1 mock** — pythonService; spies on Model methods
+  don't count). Pinned 3 update-flow business branches
+  (pythonService.handleDetectionUpdate fires once per linked+enabled
+  channel; per-channel rejection swallow inside notify loop;
+  already-linked+enabled+same-id skip arm) + 8 outer-catch / 500
+  arms across `getDetectionTypes`, `createDetectionSettings`,
+  `deleteDetectionSettings`, `updateDetectionSettings`,
+  `getDetectionSettings`, `getAllDetectionSettings`,
+  `attachDetectionSetting`, `detachDetectionSetting`. Coverage of
+  detectionSettings.service.js: **81.55% → 95.97%** lines (+14.42pp);
+  **branches 73.11% → 87.73%** (+14.62pp); fns hold at 100%. Suite
+  +11. Public `d9d5c2d`, private mirror `89a2c48`.
+- **client** — TWO 0% EmployeeLogs pages covered, with **second
+  clone divergence detected**:
+  - `EmployeeLogs/GuardLog.jsx` (535 LOC) — covered on **both
+    clones**. 14 tests, 4 mocks (ReusableTablePage, Api/post,
+    Tooltip, xlsx-js-style).
+  - `EmployeeLogs/VehicleCountLogs.jsx` (426 LOC) — **PRIVATE
+    ONLY** (file does not exist on public mirror — first such
+    divergence was R86's `EmployeeRegister.jsx`). 15 tests, 5
+    mocks (axios, getAccessToken, AutoRefreshComponent,
+    DateRangePicker, react-apexcharts).
+  
+  Suite delta: private 1737 → 1766 (+29 tests); public mirror
+  +14 (GuardLog only). Public `15283f5`, private mirror `4b348c2`.
+- **streaming** — **SKIPPED** per R83-R89 practical-ceiling.
+- **cv-faceauth** — `scripts/run_bg_worker.py` **70% → 78%**
+  (+8pp; 121 → 89 missing). New
+  `cv-faceauth/tests/test_run_bg_worker_incident_paths.py` (**12
+  tests, 0 skips**). Pinned incident-task dispatch arms (still
+  hitting the broken paths from bug #105 via AttributeError
+  sentinels): NAS upload arm (success / success=False / raise /
+  missing-path / nonexistent-path) — lines 436-450; crowd dispatch
+  + inner except (lines 478-486, 493-496); lightDetection dispatch
+  + inner except with/without `meta["lightDetection"]` (499-512,
+  520-523); lineCrossing dispatch + inner except (526-537, 544-547);
+  outer except arm via `_ExplodingDict` subclass (564-565).
+  Per-test autouse `_patch_module_globals` fixture for settings/
+  logger/get_health_monitor with monkeypatch (auto-rollback);
+  `_make_worker` patches 6 singleton accessors under
+  `patch.object(...)` context scoped to `BackgroundWorker.__init__`.
+  Suite 1332 → **1344 passing** / 8 skipped. Total cv-faceauth
+  holds at **92%** (missing dropped 1602 → 1571). Private only
+  `6d5bc30`.
+
+**Clone divergences observed so far** (both clones may have private-
+only files):
+- R86: `client/src/page/user/Users/EmployeeRegister.jsx` — private only
+- R90: `client/src/page/user/EmployeeLogs/VehicleCountLogs.jsx` —
+  private only
+
+The `git ls-files` check before mirroring is now an established
+pattern; future client agents continue to use it.
+
+**No new bugs filed this round.** R68's roles.service.js mongoose
+issue and R72's permissions.utility deletePermissions issue remain
+unfiled.
+
+**Push-verification protocol worked (13th round in a row)**: all
+3 acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (18th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R90: **~2890 new tests across 212 test files (priv);
+0 product files touched across 69 rounds.** Serial execution still
+clean. cv-faceauth suite: 1344 passing, 92% total coverage.
+
+Total pending bugs filed: **13 product (#96-#102, #104-#108, #112)** +
+**1 process (#103)** = 14 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R89 — 3-phase round +51 tests, streaming SKIPPED; **authorizedChannels fns 100%, persistent_matcher 100%, VisibilityLog + TrackLog covered**)
 
 - **server** — `core/v1/cameraRestrictions/authorizedChannels.service.js`
