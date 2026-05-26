@@ -567,6 +567,21 @@ export default defineConfig({
         // {Header/HeaderSkeleton,Sidebar/SidebarSkeleton}.test.jsx.
         "src/layout/Header/HeaderSkeleton.jsx",
         "src/layout/Sidebar/SidebarSkeleton.jsx",
+        // Round 70: layout/Header/HeaderActions — the top-right action
+        // cluster shown next to the avatar. Pure presentational: branches
+        // on UpgradeReqiore (Install button vs Upgrade pill + bell) and on
+        // installerStatus (Install vs Installed, with the button disabled
+        // in the Installed state). Both interactive controls build a
+        // throwaway <a href="<bucket-url>"> and call .click() on it to
+        // start the download. The new spec stubs @/components/ui/button to
+        // a plain <button> and spies on document.createElement to observe
+        // the anchor-click side-effect. Pins: default Install render
+        // (no upgrade pill / bell), Install click triggers exactly one
+        // anchor .click(), Installed-state disabled-button + label swap,
+        // UpgradeReqiore=true hides Install + renders Upgrade pill + bell,
+        // and the Upgrade pill triggers the same anchor-click install flow.
+        // Tested under tests/unit/layout/Header/HeaderActions.test.jsx.
+        "src/layout/Header/HeaderActions.jsx",
       ],
       exclude: [
         "tests/**",
