@@ -64,7 +64,7 @@ class DigestFetchStub {
 }
 vi.mock("digest-fetch", () => ({ default: DigestFetchStub }));
 
-const { default: NVRService } = await import(
+const { NVRService } = await import(
   "../../../core/v1/NVR/nvr.service.js"
 );
 
@@ -312,15 +312,13 @@ describe("NVRService._fetchCamerasFromNvr — unsupported + error arms", () => {
     const out = await NVRService._fetchCamerasFromNvr(
       "axis",
       "10.0.0.99",
-      80,
       "u",
       "p",
     );
     expect(out).toEqual({
-      error: "This brand is not yet supported for camera discovery",
+      error: "NVR brand not yet supported",
     });
-    // Never reaches a fetch — DigestFetch is instantiated but the branch
-    // falls through to the else arm.
+    // Never reaches a fetch — the brand check happens before any fetch call.
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
