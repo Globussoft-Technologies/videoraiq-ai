@@ -1098,6 +1098,24 @@ export default defineConfig({
         // missing-container no-op guard. Tested under tests/unit/layout/
         // Layout.test.jsx.
         "src/layout/Layout.jsx",
+        // Round 97: Playback/Playback.jsx — the top-level "CCTV Playbacks"
+        // page mounted under /playback. The full page is heavy
+        // (useReducer-driven filters/state machine, PlaybackHeader +
+        // VideoSection children, multiple useCallback fetchers each
+        // calling axios.post against /api/v1/authorizedChannels/*, a
+        // debounce'd camera search, websocket teardown on unmount, 5+
+        // useEffects firing on mount), but the permission gates near the
+        // bottom of the component short-circuit the render before any of
+        // the downstream JSX mounts. Spec pins the three early-return arms
+        // (permissionsLoading -> PageLoader; !canView -> AccessDenied
+        // "permission to view Playbacks."; "permissions object missing
+        // playbacks entirely" -> AccessDenied fall-through). Mocks
+        // PermissionContext + AccessDenied + PageLoader + SocketContext +
+        // react-router-dom + axios + getAccessToken + PlaybackVideo (8 at
+        // cap — needed because the useEffects above the gate still
+        // register + fire on the first commit). Tested under tests/unit/
+        // page/user/Playback/Playback.test.jsx.
+        "src/page/user/Playback/Playback.jsx",
       ],
       exclude: [
         "tests/**",
