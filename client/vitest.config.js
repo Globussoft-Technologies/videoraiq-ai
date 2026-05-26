@@ -718,6 +718,16 @@ export default defineConfig({
         // Detection/components/{Innersettings,StaticAreaMarking}.test.jsx.
         "src/page/user/Detection/components/Innersettings.jsx",
         "src/page/user/Detection/components/StaticAreaMarking.jsx",
+        // Round 79: Detection/components/SavedConfiguration — the "Saved
+        // Configurations" expandable panel on the legacy DetectionSetting
+        // page. Fetches on mount (and on addedDetection/filters dep change)
+        // via getAllDetectionDetails(searchTerm,nvrName,cameraId), branches
+        // through loading/error/empty/populated, mounts EditDetectionSettingModal
+        // on per-card Edit, and on per-card Delete drives a DeleteConfirmation
+        // flow → deleteDetectionSettings(_id) → toast + refetch (200) or
+        // toast.error (non-200). Tested under tests/unit/page/user/Detection/
+        // components/SavedConfiguration.test.jsx.
+        "src/page/user/Detection/components/SavedConfiguration.jsx",
       ],
       exclude: [
         "tests/**",
