@@ -654,6 +654,26 @@ export default defineConfig({
         // Tested under tests/unit/page/user/Streams/CameraPlay/
         // PlaybackStreams.test.jsx.
         "src/page/user/Streams/CameraPlay/PlaybackStreams.jsx",
+        // Round 77: Detection/components/SettingsCard + ConfigSearchControl.
+        //  - SettingsCard: the parent detection-settings card with two
+        //    branches gated by import.meta.env.VITE_DESK_CLIENT. The
+        //    desk-client branch is a self-contained verified-recipients
+        //    Select with a click-outside-closes dropdown, +N overflow
+        //    label, fetch-on-mount via getVerifiedRecipients, and a
+        //    toggleRecipient flow that PATCHes the linked camera via
+        //    updateCameraSettingById and toasts success / error. The
+        //    browser branch composes AppliedProfile + four sub-section
+        //    children only once appliedProfileData.profile is defined.
+        //  - ConfigSearchControl: the search + NVR + multi-camera filter
+        //    strip on SavedConfiguration. Fetches NVR names on mount,
+        //    refetches cameras on nvrId change, mirrors searchTerm /
+        //    nvrId / cameraId back through four setter props on every
+        //    change, lowercases the search input, and disables the
+        //    camera multi-select until an NVR is picked. Tested under
+        //    tests/unit/page/user/Detection/components/
+        //    {SettingsCard,ConfigSearchControl}.test.jsx.
+        "src/page/user/Detection/components/SettingsCard.jsx",
+        "src/page/user/Detection/components/ConfigSearchControl.jsx",
         // Round 75: Detection/components/AlertReceiversSection — the
         // "Alert Receivers Email Id/Phone No" dropdown panel rendered
         // inside the Detection settings card. Purely props-driven (no
