@@ -728,6 +728,28 @@ export default defineConfig({
         // toast.error (non-200). Tested under tests/unit/page/user/Detection/
         // components/SavedConfiguration.test.jsx.
         "src/page/user/Detection/components/SavedConfiguration.jsx",
+        // Round 80: two more Dashboard surfaces —
+        //  - Dashboard/Alertwidgets/CameraViewSection: the presentational
+        //    camera-view panel rendered on the right side of the dashboard.
+        //    All values flow in through props (nvrList, selectedNvrId,
+        //    cameraChannels, selectedCamera, selectedConfig, personCounts,
+        //    objectDetections, emotionDetected, lineCrossing, etc.). Pins
+        //    every render branch (nvrNameLoading skeleton, single-NVR
+        //    disabled input, multi-NVR Select, populated/empty channel
+        //    strip, selectedConfig CameraStream-or-Skeleton swap, chevron
+        //    scroll handlers, line-crossing tile gate, and the four
+        //    DetectionInfo sub-cards).
+        //  - Dashboard/StatCards: the four-card incident summary strip
+        //    (Critical / Total / Active Cameras / Resolved). On mount
+        //    calls getAlertsData(nvrId, location, department) and stores
+        //    the response body.data; the four cards then read from
+        //    alertsData (dashboardTitles=true) or stats (false). Pins
+        //    the API wiring, dashboardTitles vs stats fallback, the
+        //    navigate routes with state-payload differences, the
+        //    clickableFor() permission + requirePositive gates, and
+        //    the non-200/rejection fall-back to 0.
+        "src/page/user/Dashboard/Alertwidgets/CameraViewSection.jsx",
+        "src/page/user/Dashboard/StatCards.jsx",
       ],
       exclude: [
         "tests/**",
