@@ -890,6 +890,123 @@ class NVRService {
         );
     }
   }
+
+  async removeCamera(req, res, _next) {
+    try {
+      const user_id = req?.verified?.userData?.user_id;
+      const { cameraId } = req.params;
+
+      if (!cameraId) {
+        return res.status(400).json(Response.userFailResp("Validation Failed", "cameraId is required"));
+      }
+
+      const camera = await Camera.findOne({ _id: cameraId, userId: user_id });
+      if (!camera) {
+        return res.status(404).json(Response.notFoundResp("Camera not found"));
+      }
+
+      const nvrId = camera.nvrId;
+
+      await DeleteService.deleteChannel(cameraId);
+
+      const totalCameras = await Camera.countDocuments({ nvrId });
+      await NVR.findByIdAndUpdate(nvrId, { cameraCount: totalCameras });
+
+      return res.status(200).json(
+        Response.userSuccessResp("Camera removed successfully", { cameraId, nvrId, cameraCount: totalCameras }),
+      );
+    } catch (error) {
+      logger.error("Remove Camera Error:", error);
+      return res.status(500).json(Response.errorResp("Failed to remove camera", error.message));
+    }
+  }
+
+  static async _fetchCamerasFromNvr(brand, host, username, password) {
+    try {
+      const brandLower = brand?.toLowerCase();
+
+      if (!['hikvision', 'cpplus'].includes(brandLower)) {
+        return {
+          error: 'NVR brand not yet supported'
+        };
+      }
+
+      let deviceInfo, cameraResponse;
+
+      if (brandLower === 'hikvision') {
+        const deviceResponse = await fetch(
+          `http://${host}/ISAPI/System/deviceInfo`,
+          {
+            headers: {
+              'Authorization': 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64')
+            }
+          }
+        );
+
+        if (!deviceResponse.ok) {
+          return { error: 'Failed to fetch device info from Hikvision NVR' };
+        }
+
+        deviceInfo = await deviceResponse.json();
+
+        const camerasResponse = await fetch(
+          `http://${host}/ISAPI/ContentMgmt/InputProxy/channels`,
+          {
+            headers: {
+              'Authorization': 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64')
+            }
+          }
+        );
+
+        cameraResponse = await camerasResponse.json();
+
+      } else if (brandLower === 'cpplus') {
+        const deviceResponse = await fetch(
+          `http://${host}/API/System/SystemInfo`,
+          {
+            headers: {
+              'Authorization': 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64')
+            }
+          }
+        );
+
+        if (!deviceResponse.ok) {
+          return { error: 'Failed to fetch device info from CP Plus NVR' };
+        }
+
+        deviceInfo = await deviceResponse.json();
+
+        const camerasResponse = await fetch(
+          `http://${host}/API/ContentMgmt/InputProxy/Channels`,
+          {
+            headers: {
+              'Authorization': 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64')
+            }
+          }
+        );
+
+        cameraResponse = await camerasResponse.json();
+      }
+
+      const cameras = Array.isArray(cameraResponse) ? cameraResponse :
+                      cameraResponse?.InputProxyChannelList || [];
+
+      return {
+        deviceInfo,
+        cameras: cameras.map(cam => ({
+          id: cam.id || cam.channelId,
+          name: cam.name || cam.channelName,
+          enabled: cam.enabled !== false
+        }))
+      };
+
+    } catch (error) {
+      return {
+        error: error.message || 'Unknown error fetching cameras from NVR'
+      };
+    }
+  }
 }
 
+export { NVRService };
 export default new NVRService();
