@@ -2,6 +2,7 @@ import { generateToken } from "../../../middlewares/decodeToken.js";
 import logger from "../../../utils/logger.js";
 import config from "config";
 import jwt from "jsonwebtoken";
+import axios from "axios";
 import Admin from "../admin/admin.model.js";
 import dashboardSidebarModel from "../dashboard/dashboardSidebar.model.js";
 import { Incident } from "../incidents/incidents.model.js";
