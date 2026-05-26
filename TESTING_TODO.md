@@ -3,6 +3,90 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R68 — full 4-phase round, +38 tests; **2 product bugs filed (#106, #107); client roadmap purged of stale entries**)
+
+- **server** — `core/v1/roles/roles.service.js` body. R57 covered the
+  basic CRUD; R68 adds `RolesServices.get` (3 new branches) and `.update`
+  (4 new branches). New
+  `server/tests/integration/services/roles.service.extras.test.js`
+  (**7 tests, 0 mocks** — pure in-memory Mongo + shared `serviceCtx`/
+  `payload` helpers). Suite 2519 → 2526 / +7. Public `64f75bb`, private
+  mirror `06bc4d4`. **TWO new product bugs filed this round**:
+  - [#106](https://github.com/Globussoft-Technologies/videoraiq-ai/issues/106)
+    `auth.service.js::revokeDetectionService` /
+    `revokeAttendanceService` call `axios.post(...)` but `axios` is
+    NEVER imported → `ReferenceError` on invocation. R67 noticed this
+    but didn't file; R68 filed it.
+  - [#107](https://github.com/Globussoft-Technologies/videoraiq-ai/issues/107)
+    `permissions.utility.js::deletePermissions` bulk-delete branch
+    references undefined `collectionName.deleteMany(...)` at line 312
+    — silent failure (the throw is swallowed by the async forEach
+    callback) so the response reports success while no docs are
+    actually deleted.
+  - **Also noted but NOT filed**: `roles.service.js::update` (lines
+    230-231) imports `ObjectId` from `mongoose` (which is
+    `Schema.Types.ObjectId`, a schema-type constructor) and calls
+    `new ObjectId(adminId)`, producing a `SchemaObjectId` that never
+    matches any document in the subsequent `$match`. Makes the
+    `isRoleDuplicate` and likely `roleEditAccess === false` branches
+    effectively unreachable. Latent for many rounds; doesn't crash.
+    Would be worth filing in a future round if any server agent needs
+    a low-priority issue to surface.
+  - **Coverage data note**: the `--coverage` run terminated with
+    unhandled tinypool worker-exit errors before writing
+    `coverage-summary.json` (recurring Windows-host serial-runner
+    glitch, unrelated to R68 tests). Per-file numbers unavailable for
+    this round; agent verified branch-level qualitative delta.
+- **client** — `layout/Header/ProfileDropdown.jsx` (0% → ~100%, +9
+  tests, 0 mocks — uses real `react-router` MemoryRouter). The
+  avatar + dropdown panel is a real product surface but small/self-
+  contained. Suite 1452 → 1461 / +9. Public `4bf1a32`, private
+  mirror `0f02579`. **MAJOR roadmap correction** — the client agent
+  verified the roadmap had several stale entries:
+  - `client/src/contexts/` directory **does NOT exist**
+  - All 5 files in `client/src/hooks/` already have tests
+  - All `CameraStreamsModal/*` siblings already covered (R55-R59)
+  - `IncidentDetail` / `IncidentFilters` / `AutoEmailReport` / `Network`
+    page entries — **the files don't exist** (stale roadmap)
+  - `src/utils/`, `src/lib/`, `src/components/ui/` are fully tested
+  - Roadmap below reflects this purge.
+- **streaming** — `internal/server` 86.8% → **87.2%** (+0.4pp).
+  `handleRestart` 73.7% → **84.2%** (+10.5pp) via the refresh-true /
+  known-camera / 200-JSON success arm. New
+  `streaming/internal/server/handle_restart_success_test.go`
+  (1 test, no mocks). Pre-seed playlist file → corrupt-ciphertext
+  RTSPURL → `util.D("")` no-op makes spawned `StartStreamForCamera`
+  early-return → 3s `RestartStream` sleep → `os.Stat` finds the
+  playlist → 200 JSON. No ffmpeg, no sockets, no goroutine leaks.
+  Remaining 15.8% in `handleRestart` is dead code — the RTSP-error
+  503-JSON arm's only producer is fully commented out at
+  `stream.go:325-332`. Private only `a3e40d3`.
+- **cv-faceauth** — `processor/detector.py` 51% → **91%** (+40pp)
+  — **the roadmap was wrong about this module being 0%-uncovered**;
+  R68 agent re-scanned with `pytest --cov` and found it was actually
+  at 51%. New `cv-faceauth/tests/test_detector_inference.py`
+  (**21 tests, 0 skips**, 543 LOC). Surfaces pinned:
+  `_resolve_and_export_onnx` ultralytics export (YOLO + RTDETR class
+  dispatch, `check_requirements` monkeypatch incl. failure-path
+  restore, ImportError re-raise), `_load_onnx_model` CPU + CUDA +
+  missing-provider RuntimeError + dynamic vs static batch-shape +
+  generic-exception re-raise, `_postprocess` RTDETR normalized-coords
+  + YOLOv5 short-detection skip, `detect` unloaded/happy/exception,
+  `detect_batch` unloaded/empty/single/fixed/dynamic/exception
+  fallback, `_load_model` .onnx pass-through. R47/R54 stub-at-import
+  pattern + GPU-lock null-context patch. Suite 924 → **945 passing
+  / 7 skipped** (+21 pass). Repo total 77% → 78%. Remaining 9% in
+  detector.py is Linux/CUDA-runtime-specific (`ctypes.CDLL(
+  "libcublas.so.12")`, `torch.cuda.zeros`, ORT-CPU-fallback retry)
+  — not portably testable on Windows without product seams. Private
+  only `af8a302`.
+
+Cumulative R22→R68: **~1936 new tests across 122 test files; 0 product
+files touched across 47 rounds.** Serial execution still clean.
+
+Total pending bugs filed: **11 product (#96-#102, #104-#107)** + **1
+process (#103)** = 12 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R67 — full 4-phase round, +70 tests; **pivot off authorizedUsers; bug #105 filed**)
 
 - **server** — pivoted off `authorizedUsers.service.js` (now 86.77% /
@@ -1134,16 +1218,40 @@ re-target):
 - `Dashboard/Alertwidgets/alert.jsx` — blocked by [#97](https://github.com/Globussoft-Technologies/videoraiq-ai/issues/97)
 - `Profile/DefaultDetectionStep.jsx` — blocked by [#98](https://github.com/Globussoft-Technologies/videoraiq-ai/issues/98)
 
-**Next priorities (pick top-down):**
+**True remaining 0% candidates (verified — pick from these, NOT the
+stale list below):**
 
-1. ~~`client/src/page/user/Streams/Cameraview/`~~ **DONE in R53** —
-   all 9 CameraView grid variants.
+- Each round: `npx vitest run --coverage 2>&1 | tail -100` from
+  `d:/gbs projects/videora/videoraiq/client` then look for 0% files
+  that ARE in the vitest include scope. The include scope is opt-in
+  per-file (not glob-based), so unincluded src files won't show up
+  in coverage — diff `ls client/src/<area>/` against what's in
+  `client/vitest.config.js` include list.
+- Likely remaining: smaller widget components inside
+  `client/src/page/user/<area>/components/` that haven't had a
+  parent test file include them yet.
+
+**Stale-list reference (DO NOT re-target — verified non-existent or
+already done):**
+
+1. ~~`client/src/page/user/Streams/Cameraview/`~~ **DONE in R53**.
 2. ~~Cameraview PAGE / RolesandPermission PAGE~~ **DONE in R64**.
 3. ~~Streams PAGE / GridViewModal~~ **DONE in R65**.
 4. ~~Locations PAGE / NotificationRecipients PAGE~~ **DONE in R66**.
-5. ~~`client/src/page/user/NVR/`~~ **was a STALE roadmap entry** —
-   the agent verified that NVR/ is only `NVRAuthLogin.jsx` (a stub)
-   and is already 100% covered. Skip.
+5. ~~`client/src/page/user/NVR/`~~ **STALE** — NVR/ is only
+   `NVRAuthLogin.jsx` stub, already covered.
+6. ~~`layout/Header/ProfileDropdown.jsx`~~ **DONE in R68**.
+7. ~~`client/src/page/user/Streams/CameraStreamsModal/*`~~
+   **STALE** — R55-R59 already covered all siblings of ZoneSelector.
+8. ~~`client/src/page/user/Incidents/IncidentDetail` /
+   `IncidentFilters`~~ **STALE** — files don't exist.
+9. ~~`client/src/page/user/Settings/{AutoEmailReport,Network}/`~~
+   **STALE** — files don't exist.
+10. ~~`client/src/hooks/`~~ **STALE** — all 5 files in
+    `client/src/hooks/` already have tests.
+11. ~~`client/src/contexts/`~~ **STALE** — directory does NOT exist.
+12. ~~`client/src/utils/`, `client/src/lib/`, `client/src/components/ui/`~~
+    **STALE** — fully tested.
 5. **`client/src/page/user/Streams/CameraStreamsModal/*`** other
    than ZoneSelector R52 — check for sibling components.
 6. **`client/src/page/user/Incidents/`** — IncidentDetail,
@@ -1159,10 +1267,11 @@ re-target):
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R67):**
+**Coverage state (after R68):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 95.2%,
   `internal/config` 82.4%, `internal/logger` 91.0%, `internal/server`
-  **86.8%**, `internal/stream` **80.9%** (R67: StartPlayback 54.2%→100%)
+  **87.2%** (R68: handleRestart 73.7%→84.2%), `internal/stream`
+  **80.9%**
 
 **Known blocked on product-side seams** (per R67 agent investigation):
 - `cleanupInactiveStreams` / `cleanupInactiveSubStreams` / `cleanupInactivePlaybacks` — 5-min `time.NewTicker` blocking loops with no shutdown channel; would need product `init()` seam
@@ -1223,10 +1332,10 @@ re-target):
 6. ~~`cv-faceauth/api/face_auth_api.py`~~ **DONE in R65**.
 7. ~~`cv-faceauth/core/memory_monitor.py`~~ **DONE in R66** — the last
    original KNOWN-UNAVAILABLE module. Bug #104 filed.
-8. **`cv-faceauth/processor/detector.py`** — R66 agent noted this is
-   ALREADY covered (R47/R56-style coverage exists somewhere). VERIFY:
-   `find cv-faceauth/tests -name "test_detector*"` next round before
-   targeting.
+8. ~~`cv-faceauth/processor/detector.py`~~ **DONE in R68** —
+   was 51% (not 0% as R66 thought), now 91%. 21 tests. Remaining
+   9% is Linux/CUDA-runtime-specific (libcublas, torch.cuda) not
+   portably testable on Windows.
 9. **`cv-faceauth/orchestrator/face_auth_onfly_pipeline.py`** — R66
    agent noted ALREADY covered too. VERIFY: search tests for it.
 10. ~~`cv-faceauth/scripts/run_bg_worker.py`~~ **DONE in R67** —
