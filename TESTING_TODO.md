@@ -3,7 +3,95 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
-## TL;DR — what changed on 2026-05-26 (R103 — 3-phase round +126 tests; **helperFunctions 100%; PermissionStep covered; api_obj/manager 81% (11th + final new module)**)
+## TL;DR — what changed on 2026-05-26 (R104 — 3-phase round +47 tests; **database.js 100%; PrivateRoute covered; orchestrator/_shm_mixin 100% (12th new module — first POST-recovery pivot to `orchestrator/`)**)
+
+- **server** — `utils/database.js` (26-LOC connectDB + module-scope
+  Redis client wiring). New `server/tests/unit/utils/database.test.js`
+  (**13 tests, 4 mocks** — mongoose/ioredis/config/logger). Pinned:
+  Mongo connect success log, URI pass-through, error log +
+  `process.exit(1)` on failure, non-Error rejection swallowed,
+  return-undefined both paths, no-exit on success, idempotent
+  re-call; Redis constructor args, config keys read, exported
+  instance shape, `maxRetriesPerRequest: null` invariant,
+  different-config propagation. Coverage: **0% → 100%**. Suite
+  2832 → 2850 passing (+18 net, +13 new file; pre-existing 121
+  failures unchanged). Private `5eae214`, public mirror `279c804`.
+- **client** — `routes/PrivateRoute.jsx` (14-LOC auth-gate:
+  `Cookies.get('token')` → `<Outlet/>` or `<Navigate to="/admin/login"/>`).
+  New `client/tests/unit/routes/PrivateRoute.test.jsx` (**19 tests,
+  2 mocks** — js-cookie + react-router-dom). Pinned: authed
+  truthy-token branch, unauthed falsy/missing branch, edge-case
+  truthy strings (' ', 'false', '0' all gate-true), per-render
+  cookie re-evaluation, exact redirect path, throw-on-cookie-error
+  invariant. Also added the src to `client/vitest.config.js` include
+  list (`src/routes/**` was otherwise excluded). 0% → covered. Suite
+  1893 → 1912 passing (+19). Private `b2f7364`, public mirror `f267033`.
+- **streaming** — **SKIPPED** per R94/R95/R98 practical-ceiling.
+- **cv-faceauth** — **First post-recovery pivot**. With api_obj/
+  exhausted (11 modules covered R93-R103), pivoted to `orchestrator/`:
+  `orchestrator/_shm_mixin.py` (96-LOC TritonShmNamespaceMixin used
+  by 7 Triton pipelines: face_auth, ppe, count_person, count_vehicle,
+  line_crossing, zone_intrusion, vehicle_obstruction). New
+  `cv-faceauth/tests/test_orchestrator_shm_mixin.py` (**15 tests, 2
+  mocks** — FakeTritonClient + ContextVar stub). 6 test classes
+  pinning: `_init_shm_namespace` happy + arbitrary camera_id shapes
+  + RuntimeError on missing `_SHM_PREFIX_CODE`;
+  `_register_shm_namespace` success → True + contextvar bind,
+  failure-still-binds per-docstring contract, empty-model-list →
+  empty regions; `_bind_shm_context` idempotent + distinct-pipelines
+  → distinct prefixes; `cleanup_shm` unregister/no-op/swallow-non-fatal;
+  full lifecycle integration. Per-test sys.modules rollback with
+  fake `core.triton_client` + `core.triton_model_specs`. Coverage:
+  **0% → 100%** (33/33 stmts). All R93-R103 tests still green.
+  Private only `16232d8`.
+
+## Post-#114-recovery cv-faceauth coverage map
+
+**11 new api_obj/* modules pinned R93-R103** (full recovery complete).
+**12th new module (R104): `orchestrator/_shm_mixin.py` 100%** — first
+file from the orchestrator/ tree, used by every Triton pipeline.
+
+R104 agent surveyed remaining candidates:
+- `core/`: **EXHAUSTED** — every real module already has tests
+  (context, models, shared_memory_manager, stream_hub_client,
+  domains, fps_tracker, gpu_lock, health_monitor, logger,
+  memory_monitor, metrics, redis_client, triton_client,
+  triton_model_specs — 14/14).
+- `processor/`: `detection_cache.py` (48 LOC) viable next-target.
+- `stream/`: `cuda_context.py` (27 LOC) viable next-target.
+- `orchestrator/`: more pipeline helpers possible after `_shm_mixin`.
+- `workers/`, `recognition/`, `scripts/`: mostly GPU/Triton/realtime;
+  case-by-case for small standalone helpers.
+
+## Open bug count after R104
+
+- **16 product**: #97-#102, #104, #105, **#107 (WIP)**, #108, #112,
+  #114, #116, #117, #120, #121
+- **1 process** (#103)
+- **Total open: 17** (no change this round — no new bugs filed)
+- Fixed: #96 (R91/R92), #106 (R95)
+
+**No new bugs filed this round.**
+
+**Push-verification protocol worked (27th round in a row)**: all
+3 acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (32nd round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R104: **~3721 new tests across 256 test files (priv)
+[155 broken by #114, product-owned]; 0 product files touched
+across 83 rounds.** Serial execution still clean (39 rounds since
+R66). cv-faceauth suite: 1639 passing.
+
+## Clone divergences (4 known, unchanged this round)
+
+1. R86: `EmployeeRegister.jsx` (private only)
+2. R90: `VehicleCountLogs.jsx` (private only)
+3. R91: `AttendanceLogsLive.jsx` (private only)
+4. R102: `Detection/Api/put/index.jsx` (private only)
+
+## Prior TL;DR — R103 (kept for context, +126 tests; helperFunctions 100%; PermissionStep covered; api_obj/manager 81% (11th + final new module))
 
 - **server** — `utils/helperFunctions.js` (auth/NVR registration
   helpers: `getEmpAuthInfo` POST to empDomain `/auth/info`,
