@@ -890,6 +890,36 @@ class NVRService {
         );
     }
   }
+
+  async removeCamera(req, res, _next) {
+    try {
+      const user_id = req?.verified?.userData?.user_id;
+      const { cameraId } = req.params;
+
+      if (!cameraId) {
+        return res.status(400).json(Response.userFailResp("Validation Failed", "cameraId is required"));
+      }
+
+      const camera = await Camera.findOne({ _id: cameraId, userId: user_id });
+      if (!camera) {
+        return res.status(404).json(Response.notFoundResp("Camera not found"));
+      }
+
+      const nvrId = camera.nvrId;
+
+      await DeleteService.deleteChannel(cameraId);
+
+      const totalCameras = await Camera.countDocuments({ nvrId });
+      await NVR.findByIdAndUpdate(nvrId, { cameraCount: totalCameras });
+
+      return res.status(200).json(
+        Response.userSuccessResp("Camera removed successfully", { cameraId, nvrId, cameraCount: totalCameras }),
+      );
+    } catch (error) {
+      logger.error("Remove Camera Error:", error);
+      return res.status(500).json(Response.errorResp("Failed to remove camera", error.message));
+    }
+  }
 }
 
 export default new NVRService();
