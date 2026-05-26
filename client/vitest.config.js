@@ -1044,6 +1044,29 @@ export default defineConfig({
         // invariant. Tested under tests/unit/page/user/EmployeeLogs/
         // AccessLog.test.jsx.
         "src/page/user/EmployeeLogs/AccessLog.jsx",
+        // Round 95: two more 0% top-level permission-gated log pages —
+        //  - EmployeeLogs/AttendanceLog: the top-level "Attendance Logs"
+        //    page mounted under /logs/attendance. Heavy downstream tree
+        //    (ReusableTablePage + LogEmployeeProfileDialog +
+        //    ActionCameraPreview + BreakLogsDialog, LogsFilterPopover +
+        //    AutoRefreshComponent, four Api/post + Api/get +
+        //    Dashboard/Api/get, jsPDF/autotable/xlsx export), but the
+        //    permission gates short-circuit before any of those run. Spec
+        //    pins the null-render permissionsLoading branch, the
+        //    AccessDenied branch when attendanceLogs.view is false, the
+        //    "permissions object missing logs entirely" arm, and the
+        //    "loading wins over canView=false" precedence invariant.
+        //  - EmployeeLogs/ANPRLogs: the top-level "ANPR Logs" (Automatic
+        //    Number Plate Recognition) page mounted under /logs/ANPR.
+        //    Heavy downstream tree (ReusableTablePage, AutoRefreshComponent,
+        //    direct axios GET to /api/v1/incidents/logs/vehicle-detection,
+        //    Api/post getNVRs / getchannels, jsPDF/autotable/xlsx export),
+        //    but the same permission-gate pattern at the bottom short-
+        //    circuits the render. Spec pins the same four arms.
+        // Each entry has a dedicated test under tests/unit/page/user/
+        // EmployeeLogs/{AttendanceLog,ANPRLogs}.test.jsx.
+        "src/page/user/EmployeeLogs/AttendanceLog.jsx",
+        "src/page/user/EmployeeLogs/ANPRLogs.jsx",
       ],
       exclude: [
         "tests/**",
