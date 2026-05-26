@@ -3,6 +3,104 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R80 — full 4-phase round, +69 tests; **accesslogs 90.77%; bug #108 filed; Dashboard widgets covered; pyav_reader 85%**)
+
+- **server** — pivoted from users.service to `core/v1/accesslogs/accesslogs.service.js`.
+  The entire `getLogs` body (lines 494-726, 232 contiguous lines)
+  plus the populated tail of `getUserSessionReport` (lines 742-787)
+  were uncovered. New
+  `server/tests/integration/services/accesslogs.service.getLogs.test.js`
+  (**17 tests + 1 skip = 18 cases**, 1 mock — `socket.js`). Pinned
+  large portions of `getLogs` (filter pipeline, date range, NVR/
+  channel/department joins, populated rendering) and the
+  `getUserSessionReport` happy-path checkIn/checkOut tuple +
+  odd-count trailing break + startDate/endDate `match.createdAt`
+  window. Coverage of accesslogs.service.js: **68.40% → 90.77%**
+  lines (+22.37pp); branches **75.93% → 82.24%** (+6.31pp); fns
+  **50% → 75%** (+25pp). Suite +18 tests. Public `4d7c8d4`, private
+  mirror `f8281f0`. **NEW PRODUCT BUG #108 filed**: `getLogs` crashes
+  with `ReferenceError: authorizedUsersModel is not defined` at line
+  556 when `employeeLocations` is non-empty (file imports the model
+  as `userModel` on line 5 but uses `authorizedUsersModel` at 556).
+  Branch skipped with `it.skip("see #108")`. **Side observation**:
+  the existing `accesslogs.service.sessions.test.js` had skipped
+  pairing tests on a misdiagnosed `formatDuration` "not defined"
+  claim — the const IS defined at module scope (line 1153) and in
+  scope at request time. R80 agent re-attempted those pairings and
+  all 3 pass.
+- **client** — TWO Dashboard widgets covered:
+  - `Dashboard/Alertwidgets/CameraViewSection.jsx` 0% → **100%
+    lines / 87.17% branches** (10 tests, 4 mocks — ui/select,
+    DynamicDateTime, CameraStream, react-loading-skeleton)
+  - `Dashboard/StatCards.jsx` 0% → **94.48% lines / 91.01%
+    branches** (8 tests, 5 mocks — Api/get, AuthContext,
+    PermissionContext, react-router-dom, DynamicDateTime)
+  
+  New `CameraViewSection.test.jsx` + `StatCards.test.jsx`. Suite
+  1576 → 1594 / +18. Public `a09b84f`, private mirror `a5b800d`.
+- **streaming** — `internal/logger` 94.0% → **94.5%** (+0.5pp).
+  `LogRotator.Start` 80% → **100%** via the previously-uncovered
+  `MkdirAll` error arm. New
+  `streaming/internal/logger/logrotator_start_mkdir_error_test.go`
+  (1 test). Technique: set `logDir = <regularFile>/sub/logs` where
+  parent is a regular file, not a directory — MkdirAll fails with
+  "not a directory" on every supported GOOS. Pre-flight sanity check
+  `t.Skip()`s if a future Go release behaves differently.
+  Postconditions: `cleanupTick` remains nil (proving the error arm
+  was taken before the success path allocates it) and `logDir` was
+  not created. No goroutine spawn, no live ffmpeg, no sockets.
+  Total streaming: 87.5% → **87.6%** (+0.1pp). Private only `ee6ffa0`.
+- **cv-faceauth** — `stream/pyav_reader.py` **34% → 85%** (+51pp).
+  The R51 coverage was just the closed-state surface; R80 attacked
+  the active decode body via per-test `pyav_module` fixture installing
+  `av`/`av.container`/`cv2` sys.modules stubs (R71/R75-R79 lesson).
+  New `cv-faceauth/tests/test_pyav_reader_decoder.py` (**32 tests,
+  0 skips**, 769 LOC). Pinned: `DecoderThread._open_container`
+  (documented FFmpeg options + hardware `hwaccel=cuda` branch +
+  no-video-stream RuntimeError); `_decode_loop` (None-PTS skip,
+  PTS-rewind skip, running-flag mid-loop break, queue.Full +
+  drop_on_full=True oldest evict, drop_on_full=False silent skip,
+  periodic %300 stats log); `run` (happy single-loop, KeyboardInterrupt,
+  exception → reconnect w/ exponential backoff, stop-signal short-
+  circuit, max-attempts give-up, max-delay cap, finally
+  container.close error swallowed); `PyAVReader.open` (success,
+  queue.Empty timeout, generic exception); `read` (BGR ndarray
+  success, timeout, `_is_open` mid-poll flip, to_ndarray exception);
+  `read_async` (closed short-circuit, happy, executor exception);
+  `release` / `release_async` (queue drain, decoder stop signal,
+  no-decoder no-op); aliases `start`/`stop`/`get_frame`. Remaining
+  15% is race-condition `except: break` arms inside concurrent queue
+  drains, dead GStreamer-fallback branch (factory hard-codes
+  `backend="pyav"`), and CLI block. No real PyAV / FFmpeg / OpenCV /
+  network exercised. Suite 1154 → **1186 passing** / 7 skipped.
+  Total cv-faceauth coverage 86% → **87%**. Private only `bf0464f`.
+
+## NEW PRODUCT BUG — #108 (accesslogs getLogs ReferenceError)
+
+[#108 — `accesslogs.service.js::getLogs` crashes with `ReferenceError: authorizedUsersModel is not defined`](https://github.com/Globussoft-Technologies/videoraiq-ai/issues/108)
+
+When `employeeLocations` is non-empty, line 556 references
+`authorizedUsersModel` but the file imports the model as `userModel`
+at line 5 — instant crash on production. Branch is skipped in tests
+pending product fix.
+
+Total pending bugs filed: **12 product (#96-#102, #104-#108)** + **1
+process (#103)** = 13 issues open.
+
+**No new bugs filed besides #108.** R68's roles.service.js mongoose
+issue and R72's permissions.utility deletePermissions issue remain
+unfiled.
+
+**Push-verification protocol worked (3rd round in a row)**: all 4
+sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (8th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R80: **~2417 new tests across 175 test files; 0
+product files touched across 59 rounds.** Serial execution still
+clean. cv-faceauth suite: 1186 passing.
+
 ## TL;DR — what changed on 2026-05-26 (R79 — full 4-phase round, +37 tests; **embedder.py 100%; users.service 76.42%; SavedConfiguration 90.57%**)
 
 - **server** — `core/v1/users/users.service.js` tail 500-catch arms
@@ -2151,12 +2249,12 @@ already done):**
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R79):**
+**Coverage state (after R80):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 96.8%,
-  `internal/config` 82.4%, `internal/logger` 94.0%, `internal/server`
-  **97.7%** (R79: handlePlaybackStart 94.6→96.4% via Config.Save error arm),
+  `internal/config` 82.4%, `internal/logger` **94.5%** (R80:
+  LogRotator.Start 80→100% via MkdirAll error arm), `internal/server` 97.7%,
   `internal/stream` 80.9%
-- Total streaming: 87.5% (unchanged at 3-sig-fig precision)
+- Total streaming: **87.6%** (was 87.5%)
 
 **Practical ceiling note** (per R73 agent investigation): all
 remaining `internal/stream` and most `internal/server` gaps are
