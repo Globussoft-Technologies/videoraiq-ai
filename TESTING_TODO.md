@@ -3,6 +3,80 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R78 — full 4-phase round, +30 tests; **redis_client 100%; ServeHLS 97%; users.service authUserLogin pinned**)
+
+- **server** — `core/v1/users/users.service.js` `authUserLogin` happy
+  path body (lines 866-908, the largest reachable uncovered region
+  after R77's runImport work). New
+  `server/tests/integration/services/users.service.authUserLoginHappy.test.js`
+  (**4 tests, 3 mocks** — `AuthService.getAmemberAccessByUserId` spy,
+  `AuthService.extractSubscriptions` spy,
+  `helperFunctions.syncPermissionLocations` partial mock). Pinned:
+  email-match happy path (200 + JWT shape + userData payload + sync
+  invocation), userName-match `$or` branch, `logsSound` legacy-doc
+  migration (`updateOne` fires + persists `false`), AuthService
+  throws → 500. Coverage of users.service.js: **73.60% → 74.86%**
+  lines (+1.26pp); branches **86.08% → 89.10%** (+3.02pp); fns 60%
+  unchanged. Suite 2552 → 2556 / +4. Public `5794154`, private
+  mirror `cd6c603`.
+- **client** — TWO 0% Detection sub-components covered:
+  - `Detection/components/Innersettings.jsx` (144 lines) — 0% →
+    covered (4 tests, 8 mocks at the cap)
+  - `Detection/components/StaticAreaMarking.jsx` (196 lines) — 0%
+    → covered (4 tests, 7 mocks)
+  
+  New `Innersettings.test.jsx` + `StaticAreaMarking.test.jsx`.
+  Suite 1561 → 1569 / +8. Public `0cc9325`, private mirror
+  `1edac93`.
+- **streaming** — `internal/server` 96.9% → **97.5%** (+0.6pp).
+  `ServeHLS` 93.9% → **97.0%** (+3.1pp) via the StartQueue-drain
+  arm (`server.go:535-540`) — the only StartQueue `select` arm
+  still uncovered (existing tests only hit the `default` arm).
+  New `streaming/internal/server/serve_hls_queue_drain_test.go`
+  (1 test, deterministic — buffered StartQueue with no consumer +
+  pre-seeded playlist so the 500ms ticker hits on the first tick;
+  no ffmpeg, no real sockets, no goroutine leaks). Total streaming:
+  87.3% → **87.5%** (+0.2pp). Private only `a5fc93f`. **Streaming
+  ceiling has lifted from 87.1% → 87.5% over R76-R78** despite the
+  practical-ceiling diagnosis — clean error-arm exceptions still
+  available.
+- **cv-faceauth** — `core/redis_client.py` **70% → 100%** (+30pp).
+  New `cv-faceauth/tests/test_redis_client_initialize.py` (**17 pass
+  / 0 skip**, no new skips). Pinned: `initialize()` full body
+  (success with empty/whitespace password downgraded to `None`,
+  non-empty stripped, `decode_responses`/timeouts forwarded, `ping`
+  awaited, handle stashed); idempotent when client already set;
+  `redis.ConnectionError` arm leaves client None; `pop_task`
+  init-fail guard + `redis.TimeoutError` + `redis.RedisError`;
+  `setex`/`exists`/`keys`/`delete` init-fail short-circuits;
+  `exists` generic-Exception arm; `scan_iter` happy + init-fail +
+  underlying-Exception swallow; `push_task` unicode round-trip.
+  Per-test autouse singleton-reset fixture + scoped `patch.object`
+  — no module-level `sys.modules` mutation (R71/R75/R76/R77 lesson).
+  Suite 1117 → **1134 passing** / 7 skipped. Total cv-faceauth
+  coverage 85% → **86%**. Private only `18005c2`.
+
+**No new bugs filed this round.** R68's roles.service.js mongoose
+issue and R72's permissions.utility deletePermissions issue remain
+unfiled.
+
+**Process improvement (push verification protocol worked)**: After
+R77's silent-push-failure incident, sub-agents this round each ran
+`git status -sb` after their `git push` and reported the exact
+output. All 4 sub-agents confirmed `## main...origin/main` (clean,
+not "ahead by N"). **Cron-driver final audit confirmed both clones
+in sync with origin BEFORE writing TESTING_TODO.**
+
+**Process compliance perfect (6th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R78: **~2311 new tests across 167 test files; 0
+product files touched across 57 rounds.** Serial execution still
+clean. cv-faceauth suite: 1134 passing.
+
+Total pending bugs filed: **11 product (#96-#102, #104-#107)** +
+**1 process (#103)** = 12 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R77 — full 4-phase round, +30 tests; **users.service runImport cracked; registration_service 99%**)
 
 - **server** — `core/v1/users/users.service.js` `runImport` happy path
@@ -1985,11 +2059,11 @@ already done):**
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R77):**
-- `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` **96.8%**
-  (R77: GetNVRKey 75→100%), `internal/config` 82.4%, `internal/logger`
-  94.0%, `internal/server` 96.9%, `internal/stream` 80.9%
-- Total streaming: **87.3%** (was 87.2%)
+**Coverage state (after R78):**
+- `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 96.8%,
+  `internal/config` 82.4%, `internal/logger` 94.0%, `internal/server`
+  **97.5%** (R78: ServeHLS 93.9→97.0% via StartQueue drain), `internal/stream` 80.9%
+- Total streaming: **87.5%** (was 87.3%)
 
 **Practical ceiling note** (per R73 agent investigation): all
 remaining `internal/stream` and most `internal/server` gaps are
