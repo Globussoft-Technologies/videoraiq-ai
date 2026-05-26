@@ -3,6 +3,117 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R95 — 3-phase round +56 tests, streaming SKIPPED; **bug #106 CONFIRMED FIXED + new bug #120; detectionObjects 100%; stream_hub_client 100%**)
+
+- **server** — `core/v1/detectionObjects/objects.service.js` error
+  catch branches. New
+  `server/tests/unit/services/detectionObjects.service.errorBranches.test.js`
+  (**5 tests, 1 mock**). Covered `getAllObjects` outer catch (57-66)
+  and `deleteDetectionObjectsByType` outer catch (103-104). Coverage:
+  **88.88% → 100%** lines (+11.12pp); branches **78.57% → 94.11%**
+  (+15.54pp). Suite +5. Public `f3e6680` (rebased over in-flight
+  product PR #118 to land cleanly), private mirror `10704db`.
+- **client** — TWO 0% EmployeeLogs pages covered with the same
+  permission-gate pattern (4 tests each, 8 and 7 mocks):
+  - `EmployeeLogs/AttendanceLog.jsx` — 0% → 42.25% lines
+  - `EmployeeLogs/ANPRLogs.jsx` — 0% → 40.04% lines
+  
+  Both verified present on both clones via `git ls-files` per R86
+  lesson. Suite 1793 → 1801. Public `4466f7a`, private mirror
+  `1cb2119`.
+- **streaming** — **SKIPPED** per R94 practical-ceiling re-confirmation.
+- **cv-faceauth** — `core/stream_hub_client.py` (NEW module from
+  refactor `9bac117`, untouched until now). New
+  `cv-faceauth/tests/test_core_stream_hub_client.py` (**43 tests,
+  0 skips, 0 mocks** — pure FakeRedis class with async publish/get).
+  Pinned: `_cpp_allowlist` (CSV parsing, whitespace trim, empty
+  drops); `_backend_for` (full precedence ladder: allowlist >
+  `STREAM_HUB_BACKEND` env > python default, case-insensitivity,
+  negative arms); `_routing_for` (channel + status_key tuple for
+  both Python and C++ paths); `StreamHubClient.start_stream`
+  (publishes JSON, uses `settings.stream_jwt_secret` — pinned the
+  **known wart that `jwt_secret` param is IGNORED**);
+  `stop_stream` (`{"action":"stop", camera_id, consumer_id}`);
+  `get_status` (bytes/str/missing/JSONDecodeError/falsy all → unknown
+  sentinel); module constants; construction. Per-test fixture loads
+  via `importlib.util` + scoped `sys.modules` rollback;
+  `monkeypatch.delenv()` snapshots STREAM_HUB env vars. Coverage:
+  stream_hub_client.py **39% → 100%** (44/44 statements). Suite
+  1290 → **1333 passing** / 9 skipped (155 #114 unchanged).
+  Private only `649d242`.
+
+## NEW PRODUCT BUG — #120
+
+[#120 — `cv-faceauth: api_obj/routers/revoke.py reads non-existent settings.REVOKE_SECRET_KEY`](https://github.com/Globussoft-Technologies/videoraiq-ai/issues/120)
+
+Filed by R95 cv-faceauth agent. The route reads
+`settings.REVOKE_SECRET_KEY` (uppercase) but `config/settings.py`
+only declares `revoke_secret_key` (lowercase). Route is structurally
+dead — always 500s on any request. NOT part of the #114 cluster
+(it's a separate latent issue in the same `api_obj/` slice that
+came in with refactor `59adc4c`).
+
+## 🎉 BUG #106 CONFIRMED FIXED
+
+Product team merged PR #118 (`fix/issue-106-auth-axios`) to public
+mirror between R94 and R95:
+- `b0d5005 fix(auth): add missing axios import for revoke endpoints`
+- `2c86e1c test(auth): update verifyUser test for axios import fix`
+  — product team modified our cron-authored
+  `auth.service.verifyUser.test.js` to match the fix
+- `3a798e2 fix(auth): wrap revoke calls in try-catch for graceful
+  error handling`
+- `5dacdbf` merge
+
+**Bug #106** (R68 finding from R67 — auth.service.js
+`revokeDetectionService`/`revokeAttendanceService` calling
+`axios.post(...)` without importing axios → ReferenceError) is now
+fixed on the public mirror. Private clone doesn't have it yet —
+product team's standard pattern is to land on public mirror first.
+
+**Also new on public mirror**: `fix/issue-107-delete-permissions`
+branch — product team starting work on **#107** (R67 finding
+about `permissions.utility.deletePermissions` undefined
+`collectionName`). #107 will likely be fixed in the next few rounds.
+
+Note: #117 (R94's filing — same code path as #107 but with
+ObjectId mismatch detail) may also be resolved once #107 lands.
+
+## Open bug count after R95
+
+- **15 product**:
+  - Carried: #97-#102 (-#100 still pending trace), #104, #105,
+    **#107** (work in progress), #108, #112, #114, #116, #117 = 14
+  - **+ #120 (NEW R95)** = 15 total
+  - **Fixed/removed**: #96 (R91/R92), **#106 (R95, just now)**
+- **1 process (#103)**
+- **Total open: 16** (was 16 — net zero this round: -#106 +#120)
+
+## Streaming status
+
+Same as R94 — practical ceiling re-confirmed. SKIP each round
+unless product team lands a clock/shutdown seam refactor.
+
+## Clone divergences (no change)
+
+Private-only client files: R86 `EmployeeRegister.jsx`, R90
+`VehicleCountLogs.jsx`, R91 `AttendanceLogsLive.jsx`.
+
+**Push-verification protocol worked (18th round in a row)**: all
+3 acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (23rd round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R95: **~3128 new tests across 230 test files (priv)
+[155 broken by #114, product-owned]; 0 product files touched
+across 74 rounds.** Serial execution still clean. cv-faceauth suite:
+1333 passing.
+
+Total pending bugs filed: **15 product (#97-#102, #104, #105,
+#107, #108, #112, #114, #116, #117, #120)** + **1 process (#103)**
+= **16 issues open**.
+
 ## TL;DR — what changed on 2026-05-26 (R94 — full 4-phase round +58 tests; **R68+R72 latent finally filed as #116 + #117; cameraRestrictions FIXED by product team; cv-faceauth recovering**)
 
 - **server** — `core/v1/roles/roles.service.js` reachable gap branches.
