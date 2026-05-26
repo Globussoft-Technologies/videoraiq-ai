@@ -3,6 +3,69 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R89 — 3-phase round +51 tests, streaming SKIPPED; **authorizedChannels fns 100%, persistent_matcher 100%, VisibilityLog + TrackLog covered**)
+
+- **server** — `core/v1/cameraRestrictions/authorizedChannels.service.js`
+  combined-filter arms. New
+  `server/tests/integration/services/cameraRestrictions.service.combinedFilters.test.js`
+  (**13 tests, 0 mocks** — pure in-memory Mongo via `dbSetup.js`).
+  Covered: `fetchChannelByNVRsOrDepartment` (nvrIds+selectedLocations,
+  departmentIds+selectedLocations, departmentIds+nvrIds,
+  nvrIds+departmentIds+selectedLocations triple intersection,
+  no-filter fallback) plus `fetchChannelsByNVRIdsAndLocation` +
+  `fetchChannelsByDepartmentIdsAndLocation` and their `searchQuery`
+  + `camType` inner branches (lines 1188, 1200-1254). Coverage of
+  authorizedChannels.service.js: **70.67% → 88.36%** lines (+17.69pp);
+  branches **81.22% → 87.45%** (+6.23pp); **fns 88.88% → 100%**
+  (+11.12pp). Suite +13. Public `787fb86`, private mirror `4d85529`.
+- **client** — TWO 0% EmployeeLogs pages covered:
+  - `EmployeeLogs/VisibilityLog.jsx` (338 LOC) — 12 tests, 3 mocks
+    (ReusableTablePage, Api/post, Tooltip)
+  - `EmployeeLogs/TrackLog.jsx` (372 LOC) — 15 tests, 1 mock (Api/get)
+  
+  Both verified present on both clones via `git ls-files` (R86
+  lesson). Suite 1710 → 1737 / +27 tests. Public `fd59ea0`, private
+  mirror `d2b8c31`.
+- **streaming** — **SKIPPED** per R83-R88 practical-ceiling diagnosis.
+- **cv-faceauth** — `recognition/persistent_matcher.py` **77% →
+  100%** (+23pp, 21 missing → 0). New
+  `cv-faceauth/tests/test_persistent_matcher_init.py` (**11 tests,
+  0 skips**, 359 LOC). Pinned: `_init_local` existing-collection
+  branch (count called, no create) + multi-collection name walk;
+  new-collection branch (create_collection with VectorParams
+  size=512 + cosine, count not called) + with unrelated collections
+  present; exception arm (lines 67-69) — re-raise after logging,
+  driven via 3 different failure points (QdrantClient ctor,
+  get_collections, create_collection); `get_instance` singleton
+  classmethod (first call constructs, subsequent return cached,
+  double-checked-locking outer-test path 3 calls → ctor count==1);
+  `match()` count-exception swallow (lines 92-94) — when `count(...)`
+  raises mid-match, falls through to `search(...)` (matched +
+  empty-search arms). Per-test `qdrant_client_stub` fixture patches
+  module-level `QdrantClient` binding with try/finally rollback;
+  `reset_singleton` snapshots+restores `PersistentMatcher._instance`
+  so get_instance tests don't leak. Suite 1321 → **1332 passing**
+  / 8 skipped. Total cv-faceauth coverage holds at **92%**
+  (denominator grew; missing dropped 1624→1602). Private only
+  `55ad100`.
+
+**No new bugs filed this round.** R68's roles.service.js mongoose
+issue and R72's permissions.utility deletePermissions issue remain
+unfiled.
+
+**Push-verification protocol worked (12th round in a row)**: all
+3 acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (17th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R89: **~2838 new tests across 208 test files; 0
+product files touched across 68 rounds.** Serial execution still
+clean. cv-faceauth suite: 1332 passing, 92% total coverage.
+
+Total pending bugs filed: **13 product (#96-#102, #104-#108, #112)** +
+**1 process (#103)** = 14 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R88 — 3-phase round +42 tests, streaming SKIPPED; **profiles.service 93%, quality.py 100%, Nvrsettings + EmployeesOnDuty covered**)
 
 - **server** — `core/v1/profiles/profiles.service.js` export paths.
