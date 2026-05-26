@@ -8,7 +8,7 @@ import Response from "../../../utils/response.js";
 import { decryptData, encryptData } from "../../../utils/cryptoUtils.js";
 import fs from "node:fs";
 import path from "node:path";
-import archiver from "archiver";
+import { ZipArchive } from "archiver";
 import { createJobsForNextDays } from "../jobs/utils/scheduleJobs.js";
 
 class ProfilesServices {
@@ -275,7 +275,7 @@ class ProfilesServices {
       const zipFileName = `profiles_export_${Date.now()}.zip`;
       const zipFilePath = path.join("/tmp", zipFileName);
       const output = fs.createWriteStream(zipFilePath);
-      const archive = archiver("zip", { zlib: { level: 9 } });
+      const archive = new ZipArchive({ zlib: { level: 9 } });
   
       output.on("close", () => {
         // Send the zip file for download
