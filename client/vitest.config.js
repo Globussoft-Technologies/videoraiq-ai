@@ -1009,9 +1009,27 @@ export default defineConfig({
         //    fallback), and the smart paginator clamps clicks to
         //    [1, totalPages] with first/prev/next/last + ellipsis pages.
         "src/page/user/EmployeeLogs/GuardLog.jsx",
-        // VehicleCountLogs (R90) and AttendanceLogsLive (R91) are
-        // private-only and intentionally NOT included here; the public
-        // mirror does not carry their src files.
+        "src/page/user/EmployeeLogs/VehicleCountLogs.jsx",
+        // Round 91: Dashboard/AttendanceLogsLive — the "Live Attendance"
+        // (or "Live Notifications" under VITE_ORGANISATION_ID="dubai")
+        // card mounted on the dashboard. Reads attendanceLogs + isMuted
+        // from useAllDetections(), maps each log through mapLog (employee
+        // name composition + premise / avatar / capturedImage fall-back
+        // chains + composite id), slices to first 12 and renders one
+        // card per entry with the makeDeptColorResolver palette
+        // assignment. The items-change effect silently snapshots the
+        // current id set on first mount and on subsequent updates calls
+        // speak() for new ids only (when !isMutedRef.current); isMuted
+        // flipping true cancels any in-flight utterance via
+        // window.speechSynthesis.cancel(). The avatar button opens a
+        // DetailModal (Escape / overlay click / X button close it; the
+        // inner dialog click stops propagation; the captured + profile
+        // <img>s drive loading/loaded/error states off onLoad/onError;
+        // the modal labels swap between Entered/Exited Premise based on
+        // cameraType; designation/email/employeeId rows render only
+        // when present). Tested under tests/unit/page/user/Dashboard/
+        // AttendanceLogsLive.test.jsx.
+        "src/page/user/Dashboard/AttendanceLogsLive.jsx",
         // Round 92: Detection/DetectionSetting — the top-level Detection
         // Settings listing page mounted under /detection-settings (distinct
         // from DetectionSettingsModal R45, Innersettings R78, and
@@ -1067,6 +1085,19 @@ export default defineConfig({
         // EmployeeLogs/{AttendanceLog,ANPRLogs}.test.jsx.
         "src/page/user/EmployeeLogs/AttendanceLog.jsx",
         "src/page/user/EmployeeLogs/ANPRLogs.jsx",
+        // Round 96: layout/Layout.jsx — the top-level page chrome shown on
+        // every authenticated route. Owns the pathname-driven sidebar
+        // selector (SETTINGS / ADMIN / LogsSidebar / null), the `hasSidebar`
+        // gap-class + spacer toggle, and the route-change useEffect that
+        // scrolls `.app-scroll-container` back to top. The new spec stubs
+        // Header + the four Sidebar variants + TitleUpdater (6 mocks), pins
+        // each pathname branch (dashboard -> null sidebar; /settings ->
+        // SettingsSidebar; /admin/roles/* -> AdminSidebar; /logs/* ->
+        // LogsSidebar; arbitrary path -> no sidebar), the scroll-to-top
+        // effect (instrumented via document.querySelector), and the
+        // missing-container no-op guard. Tested under tests/unit/layout/
+        // Layout.test.jsx.
+        "src/layout/Layout.jsx",
       ],
       exclude: [
         "tests/**",
