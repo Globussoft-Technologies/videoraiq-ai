@@ -631,6 +631,22 @@ export default defineConfig({
         // under tests/unit/page/user/EmployeeLogs/
         // ActionCameraPreview.test.jsx.
         "src/page/user/EmployeeLogs/ActionCameraPreview.jsx",
+        // Round 75: Detection/components/AlertReceiversSection — the
+        // "Alert Receivers Email Id/Phone No" dropdown panel rendered
+        // inside the Detection settings card. Purely props-driven (no
+        // API calls of its own): chip strip of already-selected
+        // receivers with stop-propagation X close-buttons, click-to-
+        // toggle dropdown via setIsReceiversDropdownOpen updater,
+        // Escape-key-while-open closes the dropdown, Select-All /
+        // Clear-All header row, a verified-only filter on
+        // recipientsList, per-row Checkbox -> handleReceiverSelection
+        // (_id, value, fullName), VerifiedBadge + Remove button on
+        // verified rows, Verify/navigate('/notification-recipients')
+        // + Remove buttons on unverified rows, and the scroll-to-
+        // bottom pagination hook (skipRecipients += limitRecipients
+        // when !loading && hasMore). Tested under tests/unit/page/
+        // user/Detection/components/AlertReceiversSection.test.jsx.
+        "src/page/user/Detection/components/AlertReceiversSection.jsx",
       ],
       exclude: [
         "tests/**",
