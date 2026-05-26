@@ -597,6 +597,21 @@ export default defineConfig({
         // Tested under tests/unit/page/user/Detection/components/
         // DefaultDetectionSettings.test.jsx.
         "src/page/user/Detection/components/DefaultDetectionSettings.jsx",
+        // Round 72: Detection/components/ProfileSelectionDialog — the
+        // Radix Dialog the AppliedProfile tile mounts when the user
+        // attaches an existing camera-detection profile to the active
+        // channel. Fetches via getProfileDetails on open + on
+        // searchInput change; renders loading / error / empty /
+        // populated branches; the populated branch is a RadioGroup of
+        // profile rows with a 15-char truncate + ellipsis; Apply with
+        // no selection toasts "Please select a profile", Apply with
+        // selection routes through updateCameraSettingById(channelId,
+        // { profile: _id }) and toasts success/error + refetches the
+        // applied profile + onClose on 200; the "+ Add New Profile"
+        // CTA next to the search input is gated on permissions.
+        // detectionSettings.create. Tested under tests/unit/page/user/
+        // Detection/components/ProfileSelectionDialog.test.jsx.
+        "src/page/user/Detection/components/ProfileSelectionDialog.jsx",
       ],
       exclude: [
         "tests/**",
