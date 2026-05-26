@@ -885,6 +885,34 @@ export default defineConfig({
         // {Detection/components/LiveFeedSection,Streams/Camerasettings}.test.jsx.
         "src/page/user/Detection/components/LiveFeedSection.jsx",
         "src/page/user/Streams/Camerasettings.jsx",
+        // Round 85: two more 0% surfaces —
+        //  - UserDetails/UserDetails.jsx: the top-level Users listing page
+        //    mounted under /user-details. The full page is heavy
+        //    (PermissionTable + Pagination + NewPermissionForm dialog +
+        //    DeleteConfirmation + getUserDetails / deleteUser /
+        //    deleteBulkUser Api modules + Formik-driven role assignment +
+        //    column-toggle popover + jwt-decode of the access token), but
+        //    the permission gates at the very top short-circuit before any
+        //    of those hooks fire. Spec pins the two early-return arms
+        //    (permissionsLoading -> PageLoader, !canView -> AccessDenied)
+        //    plus the "permissions object missing Users entirely" arm so
+        //    the canView=undefined fall-through is covered too.
+        //  - Users/UserForm.jsx (default export LoginForm): the user-side
+        //    login screen at /user-login. Formik + Yup form with two
+        //    fields, password eye-toggle, Remember-me checkbox, Forgot-
+        //    password navigate, userLogin Api call, success branch that
+        //    sets the dev/prod/local access-token cookie + toasts the
+        //    server message + navigates to /dashboard, non-success and
+        //    rejection branches that surface toast.error and skip the
+        //    navigate. Spec pins each: initial render, forgot-password
+        //    navigate, password type-toggle round-trip, empty-form Yup
+        //    errors, success path (cookies.set + toast.success +
+        //    navigate("/dashboard") + rememberMe=false -> cookies.remove),
+        //    non-success path, rejection path.
+        // Each entry has a dedicated test under tests/unit/page/user/
+        // {UserDetails/UserDetails,Users/UserForm}.test.jsx.
+        "src/page/user/UserDetails/UserDetails.jsx",
+        "src/page/user/Users/UserForm.jsx",
       ],
       exclude: [
         "tests/**",
