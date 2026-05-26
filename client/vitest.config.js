@@ -985,21 +985,49 @@ export default defineConfig({
         //    selectedImageType with face/person/frame fall-through.
         "src/page/user/EmployeeLogs/VisibilityLog.jsx",
         "src/page/user/EmployeeLogs/TrackLog.jsx",
-        // Round 90: EmployeeLogs/GuardLog — per-channel 24-hour
-        // presence/absence sibling of VisibilityLog (R89). Fires
-        // getGuardChannelGraph(searchQuery, skip, limit, { date }) on
-        // mount + on [currentPage, selectedDate, searchQuery] dep change,
-        // maps each channel's incidents into presence/absence segments,
-        // and forwards data / columns (4: channelId / totalPresenceTime
-        // / totalAbsenceTime / segments) / searchKeys / loading /
-        // attendanceLogsCount / setCurrentPage / onSearchChange to
-        // ReusableTablePage. The children slot renders a date <input>,
-        // the Export-Logs Excel button (xlsx-js-style book_new ->
-        // json_to_sheet -> book_append_sheet -> writeFile with
-        // `camera_logs_<date>.xlsx`), and a presence/absence legend.
-        // VehicleCountLogs (also targeted in R90) is private-only and
-        // omitted here per the R86 git-ls-files divergence rule.
+        // Round 90: two more 0% EmployeeLogs pages —
+        //  - EmployeeLogs/GuardLog: per-channel 24-hour presence/absence
+        //    page (sibling of VisibilityLog covered in R89). Fires
+        //    getGuardChannelGraph(searchQuery, skip, limit, { date }) on
+        //    mount + on [currentPage, selectedDate, searchQuery] dep
+        //    change, maps each channel's incidents into presence/absence
+        //    segments via UTC->local minute math, and forwards data /
+        //    columns (4: channelId / totalPresenceTime / totalAbsenceTime /
+        //    segments) / searchKeys / loading / attendanceLogsCount /
+        //    setCurrentPage / onSearchChange to ReusableTablePage. The
+        //    children slot renders a date <input>, the Export-Logs Excel
+        //    button (drives xlsx-js-style book_new -> json_to_sheet ->
+        //    book_append_sheet -> writeFile with `camera_logs_<date>.xlsx`
+        //    filename), and a presence/absence legend strip.
+        //  - EmployeeLogs/VehicleCountLogs (PRIVATE-ONLY): per-NVR vehicle
+        //    count time-series page. Fires axios GET to
+        //    /api/v1/incidents/logs/vehicle-count on mount + on
+        //    [skip, startDate, endDate] dep change, persists autoRefresh
+        //    + refreshInterval to localStorage, drives a per-interval
+        //    setInterval refetch, renders a ReactApexChart per record
+        //    when seriesData is non-empty (empty -> "No time-series data"
+        //    fallback), and the smart paginator clamps clicks to
+        //    [1, totalPages] with first/prev/next/last + ellipsis pages.
         "src/page/user/EmployeeLogs/GuardLog.jsx",
+        // VehicleCountLogs (R90) and AttendanceLogsLive (R91) are
+        // private-only and intentionally NOT included here; the public
+        // mirror does not carry their src files.
+        // Round 92: Detection/DetectionSetting — the top-level Detection
+        // Settings listing page mounted under /detection-settings (distinct
+        // from DetectionSettingsModal R45, Innersettings R78, and
+        // SavedConfiguration R79). The full page is heavy (TanStack-table
+        // of channels, NVR + Camera Selects, three Detection/Api modules +
+        // Streams/Api/patch, Pagination, DeleteConfirmation, Monitorcog
+        // popover, Tooltip on every action, six setIsXxxLoading flags),
+        // but the permission gates at the very top of the component
+        // short-circuit before any of those hooks fire. The new spec pins
+        // the two early-return arms (permissionsLoading -> PageLoader,
+        // !canView -> AccessDenied "permission to view Detections.") plus
+        // the "permissions object missing detectionSettings entirely" arm
+        // so the canView=undefined fall-through is covered too, and the
+        // "loading wins over canView=false" precedence invariant. Tested
+        // under tests/unit/page/user/Detection/DetectionSetting.test.jsx.
+        "src/page/user/Detection/DetectionSetting.jsx",
       ],
       exclude: [
         "tests/**",
