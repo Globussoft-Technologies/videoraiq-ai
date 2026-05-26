@@ -3,6 +3,129 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R83 — full 4-phase round, +54 tests; **cv-faceauth 91%; nvr.service 71.91%; face_auth_pipeline 91%; major product activity**)
+
+- **server** — `core/v1/NVR/nvr.service.js` camera-CRUD methods.
+  New `server/tests/integration/services/nvr.service.cameraOps.test.js`
+  (**13 tests, 4 mocks** — delete.service, nvr.brands, rtspStream,
+  digest-fetch). Pinned: `addSelectedCameras` (validation 3 arms +
+  404 + outer-catch via CastError), `editNvrCameras` (validation +
+  404 + decrypt-undefined outer-catch + `camerasData.error` arm via
+  prototype spy), `removeCamera` (validation + 404 + happy path
+  with DeleteService.deleteChannel delegation + camera-count recount
+  + outer-catch via CastError). Coverage of nvr.service.js: **67.96%
+  → 71.91%** lines (+3.95pp); fns **84.21% → 94.73%** (+10.52pp;
+  16/19 → 18/19); branches 69.07% → 70.09% (+1.02pp). Suite 2599 →
+  2612 / +13. Public `86739c5`, private mirror `672d12b`.
+- **client** — TWO 0% files covered:
+  - `EmployeeLogs/ReusableTablePage.jsx` (386 lines) — 14 tests,
+    4 mocks (ProfilesTable, DateRangePickerComponent, Input,
+    formatDateRange)
+  - `Dashboard/ActivityChart.jsx` (249 lines) — 9 tests, 5 mocks
+    (Dashboard/Api/post, Linechart, react-apexcharts,
+    react-loading-skeleton, skeleton CSS shim)
+  
+  Suite 1608 → 1631 / +23. Public `8e4d6c6`, private mirror `163a563`.
+- **streaming** — `internal/logger` 95.0% → **95.5%** (+0.5pp).
+  `InitCriticalLogger` 87.5% → **100%** via the previously uncovered
+  `os.OpenFile` error silent-fail arm (logrotator.go:41). New
+  `streaming/internal/logger/logrotator_init_openfile_error_test.go`
+  (1 test). Technique: chdir to tmp, pre-create
+  `logs/critical_YYYY-MM-DD.log` as a **directory** so
+  `os.OpenFile(...O_WRONLY|O_APPEND)` fails. Asserts `Rotator` set
+  up, `criticalLogger == nil`, `Critical()` is a no-op. Total
+  streaming: 87.8% → **87.9%** (+0.1pp). Private only `5ad7136`.
+  **Agent verified the practical-ceiling state**: remaining
+  sub-100% partials are all in seam-blocked / binary-blocked /
+  unreachable-error-arm buckets per the roadmap. **Future streaming
+  rounds should likely return SKIPPED unless a product seam refactor
+  lands.**
+- **cv-faceauth** — `orchestrator/face_auth_pipeline.py` **45% →
+  91%** (+46pp). New `cv-faceauth/tests/test_face_auth_pipeline_batch.py`
+  (**17 tests, 0 skips**, 786 LOC). Pinned: `__init__` field wiring;
+  `_warmup_gpu` happy + thread-pool inference + exception swallow;
+  `_process_frame` pass-through; `process_batch` (thread-pool gather
+  with face-association upper-60%-of-person-bbox, face-outside-upper-60%
+  rejection, empty-detections increment_frame, detector exception
+  aborts, SCRFD exception degrades gracefully, synchronous no-thread-pool
+  fallback, `should_process` → recognition task scheduling, lock-busy
+  → pending flag); `_process_cutout_batch` (empty short-circuit,
+  pose_wise=False single-dispatch with config.db, pose_wise=True
+  group-by-db dispatch). Per-test `stub_heavy_modules` fixture with
+  `try/finally` rollback (R71 lesson). Suite 1240 → **1257 passing**
+  / 7 skipped. Total cv-faceauth coverage 90% → **91%**.
+  Private only `59a0982`.
+
+## Major product team activity between R82 and R83 (public mirror)
+
+The public mirror gained **11 product commits** between R82 docs
+(`cb6b1b4`) and R83 audit time, all landed via merge of
+`feature/monitoring-setup` (PR #109):
+
+- `bd56f9d fix(permissions): case-insensitive module name matching
+  in bulkPermissionDelete` — same fix as private's `bd274e5` but
+  different hash (re-applied via the feature branch path)
+- `f28e0aa test(permissions): update bulkPermissionDelete tests
+  for case-insensitive behavior` — product team added their own
+  tests
+- `4ed5ca5 feat(NVR): add missing removeCamera method to NVRService`
+- `427ae56 feat(NVR): add _fetchCamerasFromNvr static method for
+  camera discovery`
+- `e384b2e refactor(NVR): export NVRService class for static
+  method access` — needed to make `_fetchCamerasFromNvr` and
+  `removeCamera` reachable as static methods (which our R82 server
+  test was already exercising via prototype access)
+- `c6eb902 Merge branch 'main' ...`
+- `f3f3942 fix(profiles): correct archiver import for v8.0.0
+  compatibility`
+- `7229407 fix(nvr): correct NVRService import in tests to access
+  static methods` — **product team modified OUR R82 test file**
+  (`server/tests/integration/services/nvr.service.fetchCameras.test.js`)
+  to use the corrected static-method import. This is the first
+  time someone outside the cron has touched a cron-authored test
+  file. Change is benign (matches the new static-method export).
+- `e9cfdd3 Revert "test(permissions): update bulkPermissionDelete
+  tests for case-insensitive behavior"` — reverted their own added
+  tests
+- `8a5e665 Revert "fix(permissions): case-insensitive module name
+  matching in bulkPermissionDelete"` — **REVERTED the bd274e5/
+  bd56f9d permissions fix that landed between R81 and R82.** The
+  product team rolled back this fix on the public mirror.
+- `ab5bba2 Merge pull request #109 from .../feature/monitoring-setup`
+
+**Implications**:
+1. The bd274e5 permissions fix is now reverted on public mirror.
+   Whether it's still present on private is unclear (the
+   private clone's `git pull --ff-only` did not fast-forward
+   anything this round). Worth checking next round.
+2. The product team has acknowledged the gaps the cron has been
+   testing (R81 added NVR tests; R82 added `_fetchCamerasFromNvr`
+   tests via prototype access; the product team has since added
+   the static-method exports to formalize that access pattern).
+3. **Cron-authored test files are no longer untouchable by the
+   product team.** If they make further edits, those would land
+   via fast-forward on subsequent rounds. Not a concern as long
+   as edits remain inside test files only.
+4. **None of our 12 filed product bugs (#96-#102, #104-#108) have
+   been addressed yet.**
+
+**No new bugs filed this round.** R68's roles.service.js mongoose
+issue and R72's permissions.utility deletePermissions issue remain
+unfiled.
+
+**Push-verification protocol worked (6th round in a row)**: all 4
+sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (11th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R83: **~2557 new tests across 187 test files; 0
+product files touched across 62 rounds.** Serial execution still
+clean. cv-faceauth suite: 1257 passing, **91% total coverage**.
+
+Total pending bugs filed: **12 product (#96-#102, #104-#108)** +
+**1 process (#103)** = 13 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R82 — full 4-phase round, +34 tests; **cv-faceauth hits 90% total; nvr.service 67.96%; handlePlaybackStart 100%**)
 
 - **server** — `core/v1/NVR/nvr.service.js` private helper
