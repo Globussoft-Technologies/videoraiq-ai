@@ -2,6 +2,7 @@ import { generateToken } from "../../../middlewares/decodeToken.js";
 import logger from "../../../utils/logger.js";
 import config from "config";
 import jwt from "jsonwebtoken";
+import axios from "axios";
 import Admin from "../admin/admin.model.js";
 import dashboardSidebarModel from "../dashboard/dashboardSidebar.model.js";
 import { Incident } from "../incidents/incidents.model.js";
@@ -409,8 +410,16 @@ class AUTHService {
           let attendanceServiceRevokeSecretKey = config.get(
             "attendanceServiceRevokeSecretKey"
           );
-          await this.revokeDetectionService(detectionServiceRevokeSecretKey);
-          await this.revokeAttendanceService(attendanceServiceRevokeSecretKey);
+          try {
+            await this.revokeDetectionService(detectionServiceRevokeSecretKey);
+          } catch (error) {
+            logger.error("Failed to revoke detection service:", error.message);
+          }
+          try {
+            await this.revokeAttendanceService(attendanceServiceRevokeSecretKey);
+          } catch (error) {
+            logger.error("Failed to revoke attendance service:", error.message);
+          }
         }
         return res.status(403).json({
           ok: true,
