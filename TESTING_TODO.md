@@ -3,6 +3,101 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R101 — 3-phase round +79 tests; **bug #121 filed; permissions.config 100%; alert.jsx covered; api_obj/routers/streams 98% (9th new module)**)
+
+- **server** — `core/v1/permission/permissions.config.js` (110-LOC
+  pure named-export bundle of 4 permission templates —
+  `completeConfig`, `adminConfig`, `readConfig`, `writeConfig`).
+  New `server/tests/unit/utils/permissions.config.test.js` (**18
+  tests, 0 mocks**). Per-template shape + CRUD-flag tables (admin
+  all-true, complete all-false, read view-only, write no-delete)
+  plus cross-template invariants (shared key set, independent object
+  identity, view-flag precedence, delete-flag exclusive to admin).
+  Coverage: **0% → 100%** lines/branches/funcs. Suite +18. Public
+  `8a75aa7`, private mirror `2aabfca`.
+- **client** — `Dashboard/Alertwidgets/alert.jsx` (404-LOC FireAlert
+  + BaseAlertCard). New
+  `client/tests/unit/page/user/Dashboard/Alertwidgets/alert.test.jsx`
+  (**20 tests, 8 mocks at cap** — 6 SVG asset stubs + DynamicDateTime
+  + NoDataCard). Pinned: FireAlert grid-wrapper branches, all 6
+  incidentType → wrapper-card dispatches, default-arm NoDataCard
+  fallback, missing-incidentType 'Unknown Incident' fallback;
+  BaseAlertCard preview pane (video vs .webp vs no-image), metadata
+  grid (empty + populated + Severity-missing), Maximize →
+  `requestFullscreen` / `exitFullscreen` wiring. 1 test skipped
+  with `it.skip` citing existing bug **#97** (lineCrossing case).
+  0% → covered. Suite 1844 → 1864 (+19 passing, +1 skip). Public
+  `3837d46`, private mirror `1e6aff9`.
+- **streaming** — **SKIPPED** per R94/R95 practical-ceiling.
+- **cv-faceauth** — `api_obj/routers/streams.py` (114-stmt new
+  module from `59adc4c` refactor — **9th new module brought to
+  coverage**). New `cv-faceauth/tests/test_api_obj_routers_streams.py`
+  (**42 pass + 1 skip** on new bug #121; 956 LOC). Pinned:
+  `DETECTION_TO_LOGIC` / `LOGIC_TO_DETECTION` bidirectional mapping;
+  `_map_logics_external` (known + unknown + empty); `_build_logic_config`
+  (all 19 optional fields, `include_person=False` default);
+  `configure_detector` (start, restart-on-diff, same-config short-
+  circuit, `merge_existing=True` layering, None-from-get_logic_config,
+  inherit stream_url, empty-string fallback, `_save_pipeline_entry`
+  payload); `POST /` `stream_config` (uninit-503, 400-no-url, happy
+  direct + via TestClient, running-camera-ignores-url, message
+  lists external names, 500 wrap, HTTPException propagation);
+  `POST /stop` `stop_stream` (uninit-503, full-stop, empty-list,
+  per-detector partial, unmapped-name passthrough, 500 wrap);
+  `GET /{camera_id}/status` `camera_status` (uninit-503, 404-empty,
+  happy, endpoint variants). Coverage: **0% → 98%** (2 missing
+  lines are the #121-blocked 503-capacity arm). Suite 1488 →
+  **1530 passing** / 10 skipped. Private only `4080bc2`.
+
+## NEW PRODUCT BUG — #121
+
+[#121 — `cv-faceauth/api_obj/routers/streams.py::configure_detector`
+calls `logger.warning(msg, camera_id=..., reason=...)` against a
+stdlib `logging.getLogger` instance, which raises `TypeError:
+Logger._log() got an unexpected keyword argument 'camera_id'`](https://github.com/Globussoft-Technologies/videoraiq-ai/issues/121)
+
+This converts the intended 503-capacity error into a generic 500
+via the outer exception handler. 1 test skipped citing #121.
+Filed by R101 cv-faceauth agent.
+
+## #114-refactor new-module coverage (9 modules covered)
+
+- R93: `core/triton_model_specs.py` (48 tests, 100%)
+- R94: `api_obj/models/schemas.py` (48 tests, 100%)
+- R95: `core/stream_hub_client.py` (43 tests, 100%)
+- R96: `api_obj/deps.py` (28 tests, 100%)
+- R97: `core/shared_memory_manager.py` (29 tests, 100%)
+- R98: `api_obj/routers/system.py` (29 tests, 100%)
+- R99: `api_obj/routers/detectors.py` (28 tests, 100%)
+- R100: `api_obj/main.py` (41 tests, 96%)
+- **R101: `api_obj/routers/streams.py` (42 tests, 98%)**
+
+**9 modules, ~336 tests recovered**. Remaining new-module
+candidates: `api_obj/shard_runner.py` (118 stmts), `api_obj/manager.py`
+(237 stmts — large). Skip `api_obj/routers/revoke.py` (#120-blocked).
+
+## Open bug count after R101
+
+- **16 product**: #97-#102, #104, #105, **#107 (WIP)**, #108, #112,
+  #114, #116, #117, #120, **#121 (NEW R101)**
+- **1 process** (#103)
+- **Total open: 17** (was 16; +#121 added this round)
+- Fixed: #96 (R91/R92), #106 (R95)
+
+**Push-verification protocol worked (24th round in a row)**: all
+3 acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (29th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R101: **~3457 new tests across 247 test files (priv)
+[155 broken by #114, product-owned]; 0 product files touched
+across 80 rounds.** Serial execution still clean. cv-faceauth
+suite: 1530 passing.
+
+Total pending bugs filed: **16 product** + **1 process** = **17
+issues open**.
+
 ## 🎉 TL;DR — R100 MILESTONE — 3-phase round +64 tests, streaming SKIPPED; **3 more server models to 100% + Dashboard gates + 8th new #114 module (api_obj/main.py)**
 
 - **server** — TWO new test files covering 3 previously-uncovered
