@@ -813,6 +813,44 @@ export default defineConfig({
         // Dashboard/{VideoCanvasStream,Alertcards/ActiveCamera}.test.jsx.
         "src/page/user/Dashboard/VideoCanvasStream.jsx",
         "src/page/user/Dashboard/Alertcards/ActiveCamera.jsx",
+        // Round 83: two more 0% surfaces —
+        //  - EmployeeLogs/ReusableTablePage: the generic "search +
+        //    date-range + view-mode toggle + ProfilesTable / gridCard +
+        //    smart paginator + rows-per-page select" shell reused across
+        //    almost every EmployeeLogs / AccessLog / Visibility / ANPR
+        //    page. Pure presentational with controlled-or-internal state
+        //    on viewMode, searchInput, limit, and dateRange. Server
+        //    pagination is gated on a numeric attendanceLogsCount prop.
+        //    The new spec stubs ProfilesTable + DateRangePickerComponent
+        //    + Input + formatDateRange, and pins all the documented
+        //    branches (table vs grid view, visibility-mode date-picker
+        //    suppression, multi-key includes() search + currentPage
+        //    reset side-effect, controlled vs internal search/viewMode/
+        //    limit, server-pagination Total-logs strip, Prev/Next
+        //    boundary disabling, onLimitChange-resets-page, the null
+        //    payload no-op on the DateRangePicker, the loading + empty
+        //    branches, and the children filter-row slot).
+        //  - Dashboard/ActivityChart: the 2-slide dashboard carousel
+        //    (slide 0 'activity' is a ReactApexChart bar/stacked chart
+        //    driven by getDetectionData; slide 1 'comparison' mounts
+        //    the ComparisonChart child). Default index is 1.
+        //    handlePrevChart / handleNextChart / goToChart cycle slides;
+        //    the Neutral series math is `max(0, 100 - totalPerDay[i])`
+        //    per day. The new spec mocks Api/post + Linechart +
+        //    react-apexcharts + react-loading-skeleton (5 mocks, well
+        //    under cap) and pins: the default Comparison slide mount
+        //    with forwarded props, Prev/Next arrow cycling, dot-click
+        //    goToChart navigation, the bar chart populated branch
+        //    (including verifying the Neutral series total math),
+        //    the empty-state "No detection found" pane on slide 0 when
+        //    series is empty, the non-200 status reset path, the catch
+        //    branch on rejection, the re-fetch on [nvrId, department,
+        //    location] dep change, and the loading-state Skeleton
+        //    placeholders.
+        // Each entry has a dedicated test under tests/unit/page/user/
+        // {EmployeeLogs/ReusableTablePage,Dashboard/ActivityChart}.test.jsx.
+        "src/page/user/EmployeeLogs/ReusableTablePage.jsx",
+        "src/page/user/Dashboard/ActivityChart.jsx",
       ],
       exclude: [
         "tests/**",
