@@ -549,6 +549,24 @@ export default defineConfig({
         // mousedown inside the dropdown panel is guarded by contains().
         // Tested under tests/unit/layout/Header/ProfileDropdown.test.jsx.
         "src/layout/Header/ProfileDropdown.jsx",
+        // Round 69: two more layout-level loading placeholders —
+        //  - layout/Header/HeaderSkeleton: the static placeholder rendered
+        //    by the Header while permissions / context are still loading.
+        //    Pure presentational, mirrors the real header layout (logo,
+        //    7-pill desktop nav, action button + welcome strip + avatar).
+        //    The new spec pins the single <header> shell + documented
+        //    layout classes, the seven nav-pill count, the desktop-only
+        //    welcome-text strip, and the no-interactive-controls invariant.
+        //  - layout/Sidebar/SidebarSkeleton: the placeholder rail rendered
+        //    by Sidebar's isLoading arm. Pure presentational with a fixed
+        //    card wrapper and a column of five circular tile skeletons via
+        //    [...Array(5)]. The new spec pins the fixed/rounded outer
+        //    card, the five-tile count, the per-row justify-center wrapper
+        //    structure, and the no-interactive-controls invariant.
+        // Each entry has a dedicated test under tests/unit/layout/
+        // {Header/HeaderSkeleton,Sidebar/SidebarSkeleton}.test.jsx.
+        "src/layout/Header/HeaderSkeleton.jsx",
+        "src/layout/Sidebar/SidebarSkeleton.jsx",
       ],
       exclude: [
         "tests/**",
