@@ -612,6 +612,14 @@ export default defineConfig({
         // detectionSettings.create. Tested under tests/unit/page/user/
         // Detection/components/ProfileSelectionDialog.test.jsx.
         "src/page/user/Detection/components/ProfileSelectionDialog.jsx",
+        // Round 73: Playback/components/PlaybackHeader — the top filter
+        // bar of the CCTV Playbacks page. Pure presentational: takes
+        // {state, actions} and renders search input, four Selects
+        // (Location/NVR/Camera/Department), a MultiSelect for camera
+        // type, and a DatePicker. No internal API calls — all wiring
+        // flows through the actions handler bag. Tested under tests/
+        // unit/page/user/Playback/components/PlaybackHeader.test.jsx.
+        "src/page/user/Playback/components/PlaybackHeader.jsx",
       ],
       exclude: [
         "tests/**",
