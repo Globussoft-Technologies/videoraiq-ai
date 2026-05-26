@@ -3,6 +3,94 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R85 — 3-phase round +46 tests, streaming SKIPPED; **python.service 99.2%, metricsHelper 100%, local_matcher_old 99%, bug #112 filed**)
+
+- **server** — TWO new test files this round:
+  - `services/python.service.js` — pinned per-mode detector
+    branches in `updateNewDetection` (lines 263-333) and
+    `stopNewDetection` (lines 422-451). New
+    `server/tests/integration/services/python.service.update.test.js`
+    (**21 tests, 3 mocks**). Coverage of python.service.js: **88.4%
+    → 99.2%** lines (+10.8pp); branches 65.4% → 72.8%.
+  - `utils/metricsHelper.js::recordAsyncMetric` — discovered the
+    method is silently broken: `this.startTime` should be
+    `startTime` (line 79). Under Node ESM, `this` resolves to
+    global so `(undefined - new Date())` produces NaN, which
+    `prom-client.observe(NaN)` silently drops. **Every async
+    metric data point is currently dropped**. **NEW BUG #112
+    filed**. New
+    `server/tests/unit/utils/metricsHelper.recordAsyncMetric.test.js`
+    (3 specs: 1 active documenting the buggy NaN behavior, 2 `.skip`
+    on #112 for the would-be happy/error paths). Coverage of
+    metricsHelper.js: **89.2% → 100%** lines (+10.8pp); branches
+    90.9% → 100%.
+  
+  Suite +24 (22 pass + 2 skip). Public `262b8c3`, private mirror
+  `d7c22d5`. **Side observation**: `nvr.service.cameraOps.test.js`
+  (our R83 test) now has 2 failing assertions (expects 500, gets
+  400) because the public-mirror product team added
+  `mongoose.Types.ObjectId.isValid` checks in `f847913` security
+  fix. Already documented in R84's TESTING_TODO notes about product
+  activity diverging the test files; not touched per ABSOLUTE RULE.
+- **client** — TWO 0% PAGES covered:
+  - `UserDetails/UserDetails.jsx` permission-gate (3 tests, 5 mocks)
+  - `Users/UserForm.jsx` (`LoginForm` default export) Formik login
+    (7 tests, 4 mocks)
+  
+  Suite 1643 → 1653 / +10. Public `db7aae0`, private mirror `c0249c0`.
+  **Pre-existing 14 failures from product commit `fb36495` carry
+  over**, unrelated to R85.
+- **streaming** — **SKIPPED** per R83/R84 practical-ceiling diagnosis.
+  No change.
+- **cv-faceauth** — `recognition/local_matcher_old.py` (legacy
+  LocalMatcher sync orchestration). R64 had covered 31 tests of the
+  metadata surface but left the sync surface untouched (62%). R85
+  attacked the sync surface. New
+  `cv-faceauth/tests/test_local_matcher_old_sync.py` (**12 tests,
+  0 skips**). Pinned: `_init_local` happy + suffix-fallback ("_1"
+  appended on first QdrantClient failure); `sync()` (collection-
+  not-on-source skip, default-collections-list fallback, per-
+  collection failure recorded but loop continues, source-client
+  failure → return False + record_error, zero-match → False +
+  stats still written); `_sync_collection()` (scroll-and-upsert
+  with None-vector skip, empty first page, single-page next_offset
+  break, delete_collection exception swallowed, batched upserts at
+  batch_size=2). Mirrors the R74 `test_local_matcher_sync.py`
+  pattern. All Qdrant calls mocked; no real network/disk/GPU.
+  Suite 1272 → **1284 passing** / 8 skipped. Coverage of
+  local_matcher_old.py: **62% → 99%** (2/180 missing). Total
+  cv-faceauth holds at 91%. Private only `53fc4c9`.
+
+## NEW PRODUCT BUG — #112 (metricsHelper.recordAsyncMetric silently NaN)
+
+[#112 — `metricsHelper.recordAsyncMetric` silently emits NaN duration via `this.startTime`](https://github.com/Globussoft-Technologies/videoraiq-ai/issues/112)
+
+`server/utils/metricsHelper.js::recordAsyncMetric` line 79 reads
+`this.startTime` instead of the local `startTime` const. Under Node
+ESM, `this` resolves to global (or undefined under strict), so
+`(undefined - new Date())` produces NaN and `prom-client.observe(NaN)`
+silently no-ops. Result: **every async metric the codebase records
+is silently dropped** — observability data point loss. Production
+impact significant. Two tests skipped citing #112 (happy + error
+arms); active test documents the current NaN behavior.
+
+Total pending bugs filed: **13 product (#96-#102, #104-#108, #112)** +
+**1 process (#103)** = 14 issues open.
+
+**No other bugs filed this round.** R68's roles.service.js mongoose
+issue and R72's permissions.utility deletePermissions issue remain
+unfiled.
+
+**Push-verification protocol worked (8th round in a row)**: all 3
+acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (13th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R85: **~2645 new tests across 196 test files; 0
+product files touched across 64 rounds.** Serial execution still
+clean. cv-faceauth suite: 1284 passing.
+
 ## TL;DR — what changed on 2026-05-26 (R84 — 3-phase round +42 tests, streaming SKIPPED at practical ceiling; **nvr.service fns 100%; major product activity continues**)
 
 - **server** — TWO targets:
