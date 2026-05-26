@@ -3,6 +3,97 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R99 — 3-phase round +67 tests, streaming SKIPPED; **9 server models covered; CriticalAlerts 79.8%; 7th new #114 module (detectors.py) at 100%**)
+
+- **server** — TWO new test files covering **9 previously-untested
+  models** (pure schema-level, 0 mocks per file):
+  - `server/tests/integration/models/entry-vehicle-files.model.test.js`
+    (**17 tests**) covers `core/v1/entry/{entry,user}.model.js`,
+    `core/v1/vehicle/{vehicle,vehicle.log}.model.js`,
+    `core/v1/files/files.model.js`
+  - `server/tests/integration/models/storage-report-accesslogs.model.test.js`
+    (**17 tests**) covers `core/v1/storage/storage.model.js` (incl.
+    `pre('save')` cross-doc deactivation hook),
+    `core/v1/autoEmailReport/autoEmailReport.model.js`,
+    `core/v1/accesslogs/{accesslogs,newAccessLogs}.model.js`
+  
+  Suite 2680 → **2714 passing** (+34 net), 258 → 260 files. Public
+  `35d379b`, private mirror `b960876`. **Note**: Entry/VehicleLog
+  image-validator omitted-sub-doc bypass is documented behavior,
+  not a bug — tests pin the actually-reachable failure branch
+  (all-falsy explicitly set).
+- **client** — `Dashboard/Alertcards/CriticalAlerts.jsx` (755-LOC
+  page with 3 routes: `/critical-incidents`, `/total-incidents`,
+  `/incidents-resolved`). New
+  `client/tests/unit/page/user/Dashboard/Alertcards/CriticalAlerts.test.jsx`
+  (**5 tests, 8 mocks at cap**). Pinned: `/critical-incidents`
+  mounts with `criticalIncidents` API flag + "Immediate attention
+  needed" sub-label + populated row + status badge;
+  `location.state.incident` truthy → "Back to Incidents" +
+  navigate('/incidents'); `/total-incidents` → `totalIncidents`
+  flag + "Alerts Notified" sub-label; falsy state.incident →
+  "Back to Dashboard" + navigate('/dashboard'); non-200
+  `getIncidentData` surfaces `toast.error` + "No data found";
+  `/incidents-resolved` → `resolvedIncidents` flag + "Acknowledged
+  or closed alerts" sub-label. Coverage: 0% → **79.8% lines /
+  80.7% branches** (509/638). Suite 1819 → 1824. Public `0f0dac6`,
+  private mirror `f81df5a`.
+- **streaming** — **SKIPPED** per R94/R95 practical-ceiling.
+- **cv-faceauth** — `api_obj/routers/detectors.py` (26-stmt new
+  module from `59adc4c` refactor — **7th new module at 100%**).
+  New `cv-faceauth/tests/test_api_obj_routers_detectors.py`
+  (**28 tests, 0 skips**). Pinned: module surface (router type,
+  single `/update` POST, `response_model=StreamResponse`, logger
+  namespace); `update_logic` direct (503-on-uninitialised, happy-
+  path returns real StreamResponse, per-detector `configure_detector`
+  call args, `DETECTION_TO_LOGIC` mapping + raw-name fallback,
+  400 with cam-id + external name when pipeline_key not in
+  `_pipeline_shards`, 400 short-circuits remaining detectors,
+  admin_id preserved/defaults, `engine_id_for` + `_map_logics_external`
+  propagation, outer `except Exception` arm wraps non-HTTP as 500,
+  `HTTPException` from configure_detector propagates untouched,
+  `_get_pipeline_key` error funnels to 500); `/update` via
+  TestClient (503/200/400/500/422 empty/422 unknown DetectionLogic).
+  Lesson noted: `from api_obj.routers.streams import configure_detector`
+  — swapping the implementation after module load requires rebinding
+  on the loaded module (`sysmod.mod.configure_detector = ...`),
+  not on the streams stub. Coverage: **0% → 100%** (26/26).
+  Suite 1419 → **1447 passing** / 9 skipped. Private only `4efedf6`.
+
+## #114-refactor new-module coverage (7 modules at 100% now)
+
+- R93: `core/triton_model_specs.py` (48 tests)
+- R94: `api_obj/models/schemas.py` (48 tests)
+- R95: `core/stream_hub_client.py` (43 tests)
+- R96: `api_obj/deps.py` (28 tests)
+- R97: `core/shared_memory_manager.py` (29 tests)
+- R98: `api_obj/routers/system.py` (29 tests)
+- **R99: `api_obj/routers/detectors.py` (28 tests)**
+
+Remaining new-module candidates: `api_obj/main.py` (48 stmts),
+`api_obj/routers/streams.py` (114 stmts), `api_obj/shard_runner.py`
+(118 stmts), `api_obj/manager.py` (237 stmts — large). Skip
+`api_obj/routers/revoke.py` (#120-blocked).
+
+**No new bugs filed this round.** R94's #116/#117 + R95's #120
+still pending product team. #106 fixed (R95). #107 fix branch
+still in flight on public mirror.
+
+**Push-verification protocol worked (22nd round in a row)**: all
+3 acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (27th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R99: **~3314 new tests across 242 test files (priv)
+[155 broken by #114, product-owned]; 0 product files touched
+across 78 rounds.** Serial execution still clean. cv-faceauth
+suite: 1447 passing.
+
+Total pending bugs filed: **15 product (#97-#102, #104, #105,
+#107, #108, #112, #114, #116, #117, #120)** + **1 process (#103)**
+= **16 issues open**.
+
 ## TL;DR — what changed on 2026-05-26 (R98 — 3-phase round +41 tests, streaming SKIPPED; **api_obj/routers/system 100% (6th new module); Header.jsx covered; admin.service logsSound branches**)
 
 - **server** — `core/v1/admin/admin.service.js` `updateLogsSound`/
