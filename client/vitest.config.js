@@ -750,6 +750,38 @@ export default defineConfig({
         //    the non-200/rejection fall-back to 0.
         "src/page/user/Dashboard/Alertwidgets/CameraViewSection.jsx",
         "src/page/user/Dashboard/StatCards.jsx",
+        // Round 81: two more Dashboard surfaces —
+        //  - Dashboard/Linechart (ComparisonChart): the amCharts5-driven
+        //    "Current week vs Previous week" line chart. Fires
+        //    comparisonChart() on mount + on [nvrId, department, location]
+        //    change, shape-transforms the API body into two parallel series
+        //    keyed by the SAME current-week timestamps (the previousWeek
+        //    series carries the real previousWeek date in
+        //    `actualPreviousDate` for tooltip display), mounts an amCharts
+        //    root + DateAxis + ValueAxis + two LineSeries, and disposes
+        //    the root on unmount. The new spec deeply mocks @amcharts/
+        //    amcharts5 + /xy + /themes/Animated (chainable shims with
+        //    set/setAll/setThemes/push/get/appear/dispose), pins
+        //    comparisonChart fan-out, both series .data.setAll payloads
+        //    (including the actualPreviousDate alignment), the unmount
+        //    disposal, and the rejection-swallow path.
+        //  - Dashboard/AlertGauge: the alert gauge / carousel card. The
+        //    component debounces 500ms then fires getCriticalityStats(
+        //    skip, limit=5) + drives the gauge image / severity copy /
+        //    Safe-Zone vs Notified-Manager badge off recentAlerts[idx],
+        //    and the Mark-as-resolved checkbox calls markAlertResolved
+        //    (id, { resolved: !resolved, incidentType }) + toasts +
+        //    triggers useAuth().triggerUpdate() + refetches stats. The
+        //    new spec pins the empty-state branch (No Current Alerts +
+        //    Safe Zone footer), the high-severity populated branch
+        //    (High-Alert header + Notified-Manager badge + last-alert
+        //    timestamp + zone/camera/reason strip + Mark-as-resolved
+        //    checkbox + the highalert.png image), and the resolve-click
+        //    -> markAlertResolved + toast.success + triggerUpdate path.
+        // Each entry has a dedicated test under tests/unit/page/user/
+        // Dashboard/{Linechart,AlertGauge}.test.jsx.
+        "src/page/user/Dashboard/Linechart.jsx",
+        "src/page/user/Dashboard/AlertGauge.jsx",
       ],
       exclude: [
         "tests/**",
