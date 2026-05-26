@@ -3,6 +3,89 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R73 — full 4-phase round, +26 tests; **face_auth_onfly_pipeline.py hits 100%; storage Google Drive + PlaybackHeader from 0%**)
+
+- **server** — pivoted off permissions.utility (95.13%, diminishing).
+  `core/v1/storage/storage.service.js::streamFromGoogleDrive` — was
+  **0% on a ~70-line method body** (lines 1090-1160). New
+  `server/tests/integration/services/storage.service.streamGoogleDrive.test.js`
+  (**5 tests, 5 mocks** — googleapis, @aws-sdk/client-s3,
+  ssh2-sftp-client, utils/newSFTPConnectionCheck.js,
+  utils/database.js). Branches pinned: 200 no-Range happy path, 206
+  Range with explicit `bytes=0-99`, 206 omitted-upper-bound
+  (`bytes=200-`) → clamps to `fileSize-1`, catch arm with
+  `!headersSent` → 500, catch arm with `headersSent` → no-op guard.
+  Suite 2548 → 2553 / +5. Pre-existing `incidents.service.crud` 2
+  flakes unchanged. Note: per-file coverage summary unavailable due
+  to recurring Windows tinypool worker-exit on full-suite coverage
+  runs, but the 5 tests exercise every line/branch in the function.
+  **streamFromS3 was already covered (R62-ish); Google Drive streaming
+  was the remaining storage gap.** Public `c6c3b0d`, private mirror
+  `98da7ea`.
+- **client** — `page/user/Playback/components/PlaybackHeader.jsx`
+  (0% → **97.75%** lines / 86.11% branches / 77.77% fns) — top
+  filter bar for the CCTV Playbacks page (search input + Location/
+  NVR/Camera/Department selects + camera-type MultiSelect +
+  DatePicker, pure presentational, props-driven via `state` +
+  `actions`). New
+  `client/tests/unit/page/user/Playback/components/PlaybackHeader.test.jsx`
+  (**7 tests, 8 mocks** — at budget cap:
+  `@/components/ui/{input,select,multiselect,calendar}`,
+  `@/utils/formatDateRange`, `react-icons/md`, `lucide-react`,
+  `@/assets/Calendar.svg`). Only the unreachable Escape-state effect
+  and a hidden useEffect leg remain uncovered. Suite 1492 → 1499.
+  Public `f28b6eb`, private mirror `1eeb8e9`.
+- **streaming** — `internal/server` **95.3% → 95.7%** (+0.4pp).
+  `validateAndUpdateToken` 90.0% → **100%**. New
+  `streaming/internal/server/validate_token_transport_test.go`
+  (2 tests). Pins `client.Do` error arm (line 928-930) via closed-
+  `httptest.NewServer` URL, and `json.Decoder.Decode` error arm
+  (line 955-957) via 200/non-JSON body. Total streaming: 86.4% →
+  **86.6%** (+0.2pp). Private only `4dec261`. **Agent confirmed
+  the remaining `internal/stream` gaps are all real-binary/seam-
+  blocked** (`runFFmpegPipeline`/Sub/Playback + `getVideoCodec`
+  need real ffmpeg/ffprobe binaries; `processStartQueue` +
+  `cleanupInactive*` are explicit seam blockers; `UpdateConfig` /
+  `config.Save` only have unreachable `json.Marshal/Indent` errors
+  left; `handleRestart` 503-arm + ServeHLS 503-timeout branches are
+  dead code / 30s-wait blocked). **Streaming is approaching its
+  practical ceiling without product-side seam refactors.**
+- **cv-faceauth** — `orchestrator/face_auth_onfly_pipeline.py`
+  **54% → 100%** (+46pp, 37 missing → 0 missing) — the on-the-fly
+  registration POC pipeline override. **The roadmap entry that
+  called this "import-time-blocked" was wrong**; R73 agent
+  unblocked it. New
+  `cv-faceauth/tests/test_face_auth_onfly_pipeline_init.py`
+  (**12 tests**). Pinned: `_initialize_components` (super delegation,
+  matcher swap to `PersistentMatcher.get_instance(local_path=
+  "./data/qdrant_poc", collection="poc_faces")`, `get_token_provider`
+  wiring, `NASUploader(NASConfig(api_url=settings.nas_upload_api))`
+  construction, `RegistrationService` composition, hard-coded
+  thresholds `recognition_threshold=0.4` / `new_person_threshold=0.15`,
+  parent-raises re-raise path — matcher NOT swapped); dispatch
+  exception handler (lines 177-178) `dispatcher.dispatch_entry_log`
+  raising → swallowed, `mark_dispatched` not called, frame buffer
+  cleanup still runs; `_active_tracks.pop` on success + exception
+  + hasattr guard safe when attr missing; registered-users follow-up
+  loop (lines 201-230) non-empty `process_unknowns` → per-user
+  `dispatch_entry_log`, candidates_by_track lookup hit + miss
+  (orphan track fallback), multi-user fan-out, outer exception
+  swallow, empty-list short-circuit. Scoped sys.modules rollback
+  limited to first-party prefixes per R71 lesson. Suite 1037 →
+  **1049 passing**, 7 skipped (unchanged). Private only `e1bd2a3`.
+
+**No new bugs filed this round.** R68's roles.service.js mongoose
+`Schema.Types.ObjectId` issue and R72's permissions.utility
+`deletePermissions` ObjectId-vs-string-adminId issue both remain
+unfiled (no R73 agent touched those files).
+
+Cumulative R22→R73: **~2118 new tests across 143 test files; 0
+product files touched across 52 rounds.** Serial execution still
+clean. cv-faceauth suite: 1049 passing.
+
+Total pending bugs filed: **11 product (#96-#102, #104-#107)** +
+**1 process (#103)** = 12 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R72 — full 4-phase round, +34 tests; **ProfileSelectionDialog + ServeSubStreamHLS pinned; permissions tail-branches near 100%**)
 
 - **server** — `core/v1/permission/permissions.utility.js` tail
@@ -1575,11 +1658,21 @@ already done):**
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R72):**
+**Coverage state (after R73):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 95.2%,
   `internal/config` 82.4%, `internal/logger` 92.5%, `internal/server`
-  **95.3%** (R72: ServeSubStreamHLS 75.8→96.7%), `internal/stream` 80.9%
-- Total streaming: **86.4%** (was 85.1%)
+  **95.7%** (R73: validateAndUpdateToken 90→100%), `internal/stream` 80.9%
+- Total streaming: **86.6%** (was 86.4%)
+
+**Practical ceiling note** (per R73 agent investigation): all
+remaining `internal/stream` and most `internal/server` gaps are
+either (a) blocked on the explicit seam list (cleanupInactive*,
+processStartQueue Sleep, MonitorFFmpeg second tick, StartCleanupRoutine
+enabled arm, RestartStream dead-code) or (b) need real ffmpeg/ffprobe
+binaries (runFFmpegPipeline/Sub/Playback, getVideoCodec) or (c) are
+unreachable error arms (json.Marshal/Indent errors in config.Save(),
+strconv.Unquote when JSON contains `"`). Streaming is at its
+practical ceiling without product-side seam refactors.
 
 **Known blocked on product-side seams** (per R67 agent investigation):
 - `cleanupInactiveStreams` / `cleanupInactiveSubStreams` / `cleanupInactivePlaybacks` — 5-min `time.NewTicker` blocking loops with no shutdown channel; would need product `init()` seam
@@ -1644,10 +1737,13 @@ already done):**
    was 51% (not 0% as R66 thought), now 91%. 21 tests. Remaining
    9% is Linux/CUDA-runtime-specific (libcublas, torch.cuda) not
    portably testable on Windows.
-9. **`cv-faceauth/orchestrator/face_auth_onfly_pipeline.py`** —
-   R69 re-scan verified already at 54%. Remaining 37 lines are
-   the `_initialize_components` body which is import-time-blocked;
-   would need additional stub work to test those lines.
+9. ~~`cv-faceauth/orchestrator/face_auth_onfly_pipeline.py`~~
+   **DONE in R73** — 54% → **100%** (+46pp). The "import-time-blocked"
+   note in the earlier roadmap was wrong; R73 agent unblocked it via
+   the standard stub-at-import + scoped sys.modules rollback pattern.
+   12 tests pinning `_initialize_components`, dispatch exception
+   handler, `_active_tracks.pop`, and the registered-users follow-up
+   loop including multi-user fan-out and outer exception swallow.
 12. ~~`cv-faceauth/workers/redis_dispatcher.py`~~ **DONE in R69** —
     54% → 98% via 17 tests covering the entire async push surface.
 10. ~~`cv-faceauth/scripts/run_bg_worker.py`~~ **DONE in R67** —
