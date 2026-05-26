@@ -222,7 +222,7 @@ class NVRController {
   async deleteAllNvrs(req, res, next) {
     /* #swagger.tags = ['NVR']
        #swagger.description = 'Delete all NVRs and their associated cameras of an user'
-       
+
        #swagger.responses[200] = {
            description: 'All NVRs and associated cameras deleted successfully'
        }
@@ -234,6 +234,92 @@ class NVRController {
       }]
     */
     return NVRService.deleteAllNvrs(req, res, next);
+  }
+
+  async registerAndFetchCameras(req, res, next) {
+    /* #swagger.tags = ['NVR']
+       #swagger.description = 'Register NVR (if new) or fetch existing, and return available cameras for user selection'
+       #swagger.parameters['data'] = {
+           in: 'body',
+           description: 'NVR credentials',
+           required: true,
+           schema: { $ref: "#/definitions/registerNVR" }
+       }
+       #swagger.responses[200] = {
+           description: 'Cameras fetched from existing NVR'
+       }
+       #swagger.responses[201] = {
+           description: 'NVR registered and cameras fetched successfully'
+       }
+       #swagger.responses[400] = {
+           description: 'Validation error or authentication failed'
+       }
+       #swagger.responses[500] = {
+           description: 'Internal server error'
+       }
+        #swagger.security = [{
+         "EncryptedAuthToken": []
+      }]
+    */
+    return NVRService.registerAndFetchCameras(req, res, next);
+  }
+
+  async addSelectedCameras(req, res, next) {
+    /* #swagger.tags = ['NVR']
+       #swagger.description = 'Add selected cameras to an NVR and register their streams'
+       #swagger.parameters['data'] = {
+           in: 'body',
+           description: 'NVR ID and selected camera IDs',
+           required: true,
+           schema: {
+               type: 'object',
+               properties: {
+                   nvrId: { type: 'string', description: 'MongoDB ID of the NVR' },
+                   cameraIds: { type: 'array', items: { type: 'string' }, description: 'Array of channel IDs to add' },
+                   cameras: { type: 'array', description: 'Camera details from previous response' }
+               },
+               required: ['nvrId', 'cameraIds', 'cameras']
+           }
+       }
+       #swagger.responses[201] = {
+           description: 'Cameras added and registered successfully'
+       }
+       #swagger.responses[400] = {
+           description: 'Validation error or missing required fields'
+       }
+       #swagger.responses[404] = {
+           description: 'NVR not found'
+       }
+       #swagger.responses[500] = {
+           description: 'Internal server error'
+       }
+        #swagger.security = [{
+         "EncryptedAuthToken": []
+      }]
+    */
+    return NVRService.addSelectedCameras(req, res, next);
+  }
+
+  async editNvrCameras(req, res, next) {
+    /* #swagger.tags = ['NVR']
+       #swagger.description = 'Get NVR cameras for editing — returns all device cameras with isAdded flag'
+       #swagger.responses[200] = { description: 'Edit data retrieved successfully' }
+       #swagger.responses[404] = { description: 'NVR not found' }
+       #swagger.responses[500] = { description: 'Internal server error' }
+       #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return NVRService.editNvrCameras(req, res, next);
+  }
+
+  async removeCamera(req, res, next) {
+    /* #swagger.tags = ['NVR']
+       #swagger.description = 'Remove a camera from an NVR'
+       #swagger.responses[200] = { description: 'Camera removed successfully' }
+       #swagger.responses[404] = { description: 'Camera not found' }
+       #swagger.responses[500] = { description: 'Internal server error' }
+       #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return NVRService.removeCamera(req, res, next);
   }
 }
 

@@ -13,7 +13,11 @@ router.get("/locations", viewAccessCheck, NVRController.getNVRLocations);
 router.get("/", viewAccessCheck, NVRController.getAllNvrs);
 router.get("/all-nvrs", viewAccessCheck, NVRController.allNvrs);
 router.post("/register", createAccessCheck, NVRController.registerNvr);
+router.post("/register-and-fetch", createAccessCheck, NVRController.registerAndFetchCameras);
+router.post("/add-cameras", createAccessCheck, NVRController.addSelectedCameras);
 router.post("/add-nvr", createAccessCheck, NVRController.addNvr);
+router.get("/edit/:nvrId", editAccessCheck, NVRController.editNvrCameras);
+router.delete("/camera/:cameraId", deleteAccessCheck, NVRController.removeCamera);
 router.get(
   "/with-channels",
   viewAccessCheck,
