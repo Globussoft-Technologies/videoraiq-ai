@@ -1192,6 +1192,35 @@ export default defineConfig({
         // register + fire on the first commit). Tested under tests/unit/
         // page/user/Playback/Playback.test.jsx.
         "src/page/user/Playback/Playback.jsx",
+        // Round 102: Detection/Api/put/index.jsx — PRIVATE-CLONE-ONLY API
+        // leaf with the same two functions as the public mirror's
+        // Detection/Api/patch/index.jsx. Both use axios.put despite the
+        // path name; the file is the 4th known clone divergence (joins
+        // EmployeeRegister R86, VehicleCountLogs R90, AttendanceLogsLive
+        // R91). New tests/unit/page/user/Detection/Api/put.test.js
+        // (private only) pins every URL contract, the token-fresh-per-
+        // call invariant, body pass-through, raw-response return, and
+        // rejection propagation for both updateDetectionSettings (per-id
+        // PUT) and enableDetectionSettings (toggle PUT).
+        "src/page/user/Detection/Api/put/index.jsx",
+        // Round 103: RolePermissions/PermissionStep — the 5-column
+        // permission matrix sub-step rendered inside AddRoleDialog
+        // (Access | View | Create | Edit | Delete). Pure props-driven
+        // (no API of its own): updatePermission auto-flips view=true
+        // when enabling create/edit/delete, cascades create/edit/delete=
+        // false when disabling view, no-ops on channels.create + channels.
+        // delete (those cells are wrapped in a "Not in use" Tooltip and
+        // rendered disabled); updateLogsSubPermission cascades view to
+        // every LOG_SUB_KEY when toggling the global row, and recomputes
+        // global as an OR of children when toggling a child; handleSelectAll
+        // / handleClearAll build per-module action bags from the union of
+        // roleData.permissionDetails.permissionConfig keys + edited keys,
+        // with the channels module forced to create=false / delete=false
+        // on select-all and the logs module rebuilt as global + every
+        // LOG_SUB_KEY. readOnly suppresses the Select All / Clear All
+        // bar and disables every row checkbox. Tested under tests/unit/
+        // page/user/RolePermissions/PermissionStep.test.jsx.
+        "src/page/user/RolePermissions/PermissionStep.jsx",
       ],
       exclude: [
         "tests/**",
