@@ -3,6 +3,142 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R84 — 3-phase round +42 tests, streaming SKIPPED at practical ceiling; **nvr.service fns 100%; major product activity continues**)
+
+- **server** — TWO targets:
+  - `core/v1/NVR/nvr.service.js::registerAndFetchCameras` (lines
+    895-986, ~92 LOC) — 10 tests, 3 mocks (nvr.brands, rtspStream,
+    digest-fetch). Coverage of nvr.service.js: **71.91% → 78.33%**
+    lines (+6.42pp); **fns 94.73% → 100%** (19/19 — all functions
+    now have at least one test).
+  - `core/v1/channels/channel.defaultDetectionSettings.js` (full
+    45-LOC file) — 5 tests, 0 mocks. **0% → 100%**.
+  
+  New
+  `server/tests/integration/services/nvr.service.registerAndFetchCameras.test.js`
+  + `server/tests/unit/utils/channel.defaultDetectionSettings.test.js`.
+  Suite 2622 → 2637 / +15. Public `f2626fd`, private mirror
+  `b03a3ea`.
+- **client** — TWO 0% targets covered:
+  - `Detection/components/LiveFeedSection.jsx` ("Zone Marking"
+    parent) — 9 tests, 5 mocks. 0% → **73.27%** lines / 75.4%
+    branches / 42.85% fns.
+  - `Streams/Camerasettings.jsx` (Camera Settings page entry) —
+    3 tests, 5 mocks. 0% → **19.9%** lines / 68.42% branches
+    (permission-gate path only; full page body is heavy and
+    gates short-circuit it).
+  
+  Suite 1643 → 1655 / +12. Public `91b461f`, private mirror
+  `f27175a`. **Note**: agent had to `git pull --rebase` because
+  PR #110 merged into public mirror during the round — handled
+  cleanly, no conflicts.
+- **streaming** — **SKIPPED. Practical ceiling formally reached.**
+  Agent enumerated every remaining sub-100% partial against the
+  blocked categories table:
+  - **SEAM-blocked**: `logger.StartCleanupRoutine` (6h ticker,
+    no shutdown), `stream.MonitorFFmpegProcessStats` (flaky netIO
+    deltas), `stream.processStartQueue` (hard-coded `time.Sleep(5s)`),
+    `server.ServeHLS/ServeSubStreamHLS` playlistTimeout 30s arms
+  - **BINARY-blocked**: `stream.killFFmpeg`, `runFFmpegPipeline*`,
+    `runPlaybackPipeline`, `getVideoCodec` (need real ffmpeg/ffprobe)
+  - **DEAD CODE**: `server.handleRestart` RTSP-error 503 arm (source
+    at `stream.go:325-332` fully commented out), `util.D` line 63
+    `len(d) < 12` (impossible per earlier guard), `util.RandomString`
+    `crypto/rand.Read` error arm (does not fail)
+  - **PRODUCT BUG** already documented (#96): `logger.deleteOldFiles`
+    dot-check `!Contains(name, ".")` excludes every `.log`
+  - **Test-placement-blocked**: `server.handleCamera` Active=true
+    spawn arm requires unexported `stream.StreamManager.ffmpegPool`
+    access from `server` package
+  
+  **Recommendation**: streaming should SKIP each round until product
+  team lands a seam refactor (clock/shutdown injection for tickers,
+  ffmpeg-binary indirection). Pivot autonomous coverage cycles to
+  server/client/cv-faceauth.
+
+- **cv-faceauth** — `stream/token_manager.py` **65% → 79%** (+14pp).
+  New `cv-faceauth/tests/test_token_manager_tokenized_reader.py`
+  (**15 pass + 1 new skip** on existing #102). Pinned: `TokenizedPyAVReader`
+  forwarding (`open`/`read`/`read_async`/`get`/`isOpened`/`release`
+  + `get_stats` combined dict + `refresh_stream` rotation),
+  `URLTokenManager._auto_refresh_loop` branches (skip-when-plenty-of-life,
+  exit-when-not-running, tolerate-None-expiry, exit-when-flipped-
+  mid-sleep). Per-test `fake_pyav_module` fixture (R71-R83 lesson).
+  Suite 1257 → **1272 passing** / 8 skipped. **Discovered same #102
+  deadlock root cause** in `_auto_refresh_loop` happy path (holds
+  `self._lock` then calls `_refresh_token` which re-acquires) —
+  bug #102 now covers BOTH `get_stats` AND `_auto_refresh_loop`
+  arms. Test skipped citing #102. Total cv-faceauth holds at 91%.
+  Private only `43dc4b8`.
+
+## Major product team activity between R83 and R84
+
+**Private clone** gained 1 large product commit:
+- `fb36495 feat(NVR): add camera discovery and update service exports`
+  (massive — touches 12+ product files including `nvr.service.js`,
+  `accesslogs.service.js`, `admin.service.js`,
+  `authorizedUsers.service.js`, `detectionSettings.service.js`,
+  `incidents.service.js`, `jobs/utils/scheduleJobs.js`,
+  `permissions.utility.js`, `profiles.service.js`, `users.service.js`,
+  `utils/logger.js`, plus `package.json` deps update, plus several
+  cron-authored test files modified to match new product behavior)
+- `7cd1d94 fix(profiles): import archiver correctly as CommonJS module`
+- `3707143 Merge pull request #44 from .../back_end`
+
+**Public mirror** gained different but related product activity:
+- `72498d6 feat(NVR): enhance camera discovery and NVR management
+  capabilities`
+- `f847913 security(NVR): add ObjectId validation for nvrId and
+  cameraId parameters` — **security fix landed**
+- `7f16eef test(NVR): fix digest-fetch mock setup for fork isolation`
+  — product modified our R82 nvr.service.fetchCameras.test.js for
+  test-runner isolation
+- `9197b6d test(NVR,Uploads): update tests to reflect ObjectId
+  validation behavior` — product modified BOTH our R83
+  nvr.service.cameraOps.test.js AND uploads.service.extras.test.js
+  to reflect the new ObjectId validation
+- `a346206 fix(profiles): import archiver correctly as CommonJS module`
+- 2 merge commits (#110, #111)
+
+**Implications**:
+1. Private and public clones are now significantly diverged in
+   product state. The mirror appears more polished (has the security
+   fix + ObjectId validation), private is more raw.
+2. **Cron-authored test files continue to be edited by the product
+   team** — at least 5+ different test files modified across these
+   two clones (nvr.service.fetchCameras, nvr.service.cameraOps,
+   uploads.service.extras, admin.service.empAdmin,
+   authorizedUsers.service.extras, detectionSettings.service.extras,
+   jobs.service.extras, permissions.service.test, profiles.service.extras,
+   users.service.test, runWithConcurrency, scheduleJobs).
+3. **None of our 12 filed product bugs (#96-#102, #104-#108) have
+   been addressed yet** — product activity is on NVR features and
+   security, not on our filed defects.
+
+## Housekeeping (this commit)
+
+`.coverage` (root-level) added to `.gitignore`. R77 added
+`cv-faceauth/.coverage` but pytest is now writing to repo root in
+some configurations; the wildcard catches both.
+
+**No new bugs filed this round.** R68's roles.service.js mongoose
+issue and R72's permissions.utility deletePermissions issue remain
+unfiled. R84 cv-faceauth re-confirmed #102 covers MULTIPLE deadlock
+arms (not just `get_stats`).
+
+**Push-verification protocol worked (7th round in a row)**: all 3
+acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (12th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R84: **~2599 new tests across 191 test files; 0
+product files touched across 63 rounds.** Serial execution still
+clean. cv-faceauth suite: 1272 passing.
+
+Total pending bugs filed: **12 product (#96-#102, #104-#108)** +
+**1 process (#103)** = 13 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R83 — full 4-phase round, +54 tests; **cv-faceauth 91%; nvr.service 71.91%; face_auth_pipeline 91%; major product activity**)
 
 - **server** — `core/v1/NVR/nvr.service.js` camera-CRUD methods.
@@ -2544,14 +2680,19 @@ already done):**
     `src/components/` (vs `src/page/.../components/`).
 11. **`client/src/utils/` and `client/src/lib/`** — formatters and helpers.
 
-### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
+### Streaming Go — PRACTICAL CEILING REACHED (R83/R84). Skip until product seam refactor lands.
 
-**Coverage state (after R82):**
+**Coverage state (frozen at R83):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 96.8%,
-  `internal/config` 82.4%, `internal/logger` 95.0%, `internal/server`
-  **98.1%** (R82: handlePlaybackStart 96.4→100% via success JSON envelope),
+  `internal/config` 82.4%, `internal/logger` 95.5%, `internal/server` 98.1%,
   `internal/stream` 80.9%
-- Total streaming: **87.8%** (was 87.7%)
+- Total streaming: **87.9%**
+
+**R84 streaming SKIPPED** — agent enumerated every remaining partial
+against blocked categories (seam, binary, dead-code, product-bug,
+test-placement). Recommendation: skip streaming each round until
+product team lands clock/shutdown injection or ffmpeg-binary
+indirection. Pivot autonomous coverage cycles to server/client/cv-faceauth.
 
 **Practical ceiling note** (per R73 agent investigation): all
 remaining `internal/stream` and most `internal/server` gaps are

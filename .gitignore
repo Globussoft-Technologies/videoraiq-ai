@@ -16,6 +16,7 @@ streaming/cover.html
 streaming/internal/**/config.json
 cv-faceauth/logs/
 cv-faceauth/.coverage
+.coverage
 
 # Local env overrides
 *.env.local
