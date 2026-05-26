@@ -1098,6 +1098,24 @@ export default defineConfig({
         // missing-container no-op guard. Tested under tests/unit/layout/
         // Layout.test.jsx.
         "src/layout/Layout.jsx",
+        // Round 98: layout/Header/Header.jsx — the top-level page chrome
+        // shown on every authenticated route. Combines three contexts
+        // (AuthContext / Permission / AllDetections) + UserContext with
+        // four child slot components (HeaderSkeleton / DesktopNav /
+        // MobileNav / ProfileDropdown), opens a status WebSocket on mount,
+        // and computes the filtered navLinks list before render. The new
+        // spec stubs the three context hooks + the four child components
+        // (7 mocks, one under cap) and pins: the AuthContext.isLoading
+        // skeleton branch, the loaded-state full-chrome render after the
+        // 1.5s mount timer (logo + DesktopNav + MobileNav +
+        // ProfileDropdown + mute button + Welcome strip with capitalised
+        // first letter), the mute-button -> AllDetections.toggleMute
+        // wiring, the isMuted=true aria-label swap, the Welcome-strip
+        // suppression when user.name_f is missing, the empty-permissions
+        // pass-through that forwards all 8 baseNavLinks to DesktopNav,
+        // and the Settings-tab filter when every settings sub-permission
+        // is false. Tested under tests/unit/layout/Header/Header.test.jsx.
+        "src/layout/Header/Header.jsx",
         // Round 97: Playback/Playback.jsx — the top-level "CCTV Playbacks"
         // page mounted under /playback. The full page is heavy
         // (useReducer-driven filters/state machine, PlaybackHeader +
