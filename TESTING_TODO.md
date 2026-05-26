@@ -3,6 +3,114 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R91 — 3-phase round +42 tests (priv), streaming SKIPPED; **PRODUCT TEAM FIXED STREAMING BUGS #96, #100, #113**; dashboard 94.72%; 3rd clone divergence**)
+
+- **server** — `core/v1/dashboard/dashboard.service.js::detectionChart`
+  body-filter branches (lines ~707-883). New
+  `server/tests/integration/services/dashboard.service.detectionChart.bodyFilters.test.js`
+  (**17 tests, 0 mocks** — pure in-memory Mongo). Coverage of
+  dashboard.service.js: **85.15% → 94.72%** stmts (+9.57pp);
+  branches **89.63% → 93.75%** (+4.12pp); fns hold at 100%. 167 lines
+  newly covered (259 → 92 missing). Suite +17. Public `707b542`,
+  private mirror `b49da91`. **Dashboard journey R86 → R91**: 71.78%
+  → 85.14% → 94.72%.
+- **client** — `Dashboard/AttendanceLogsLive.jsx` (423-LOC live
+  attendance log feed with speech synthesis + DetailModal). **3rd
+  clone divergence detected** — file exists on PRIVATE ONLY. New
+  `client/tests/unit/page/user/Dashboard/AttendanceLogsLive.test.jsx`
+  (**16 tests, 1 mock** — `useAllDetections`). Pinned: empty-state,
+  `mapLog` chain (12-cap, Unauthorized-person + '--' fallback,
+  "Unknown" name when blank, Entered/Exited message); speech effect
+  first-mount silent snapshot + `speechSynthesis.cancel()` on
+  `isMuted=true`; `DetailModal` open via avatar click, close via
+  Escape / X / overlay; inner-dialog stopPropagation guard; "No
+  captured image" fallback; captured-image onLoad/onError; avatar
+  onError; Exited Premise label on cameraType=checkout; optional
+  designation/email/employeeId rows. Suite 1766 → 1782 / +16. Private
+  only `c890cfa` (no public mirror — file private-only).
+- **streaming** — **SKIPPED** by cron per R83-R90 practical-ceiling,
+  but see "Product team activity" below: **product team landed
+  streaming fixes themselves**.
+- **cv-faceauth** — `scripts/run_bg_worker.py` **78% → 85%** (+7pp).
+  New `cv-faceauth/tests/test_run_bg_worker_loop_paths.py` (**9 tests,
+  0 skips**). Pinned: `run()` status-update exception arm flips
+  `_redis_connected=False`; `run()` `CancelledError` exit breaks loop;
+  `run()` outer Exception handler (log + flip + sleep + continue);
+  `run()` final `asyncio.gather(*active_tasks, ...)` drains in-flight;
+  `_process_task` face/frame upload exception arms; `_process_entry_log_task`
+  person/face/frame upload exception arms (all errors bump + health
+  record + file preserved + empty URL in payload). Remaining gaps are
+  the bug #105-blocked incident dispatch success arms (466-471, 487-492,
+  513-519, 538-543) and the CLI/main() entry point. Suite 1344 →
+  **1353 passing** / 8 skipped. Total cv-faceauth holds at 92%.
+  Private only `0964f75`.
+
+## **PRODUCT TEAM ACTIVITY between R90 and R91: streaming bugs FIXED**
+
+Private clone gained **2 product commits** before R91 started:
+
+- `f3add51 Streaming Issue 96 100 113` — touches:
+  - `streaming/internal/logger/logrotator.go` (product) — fixes #96
+    (`deleteOldFiles` dot-check)
+  - `streaming/internal/stream/playback.go` (product)
+  - `streaming/internal/stream/playlist.go` (product)
+  - `streaming/internal/logger/iplogger_internal_test.go` (cron-
+    authored, modified by product)
+  - `streaming/internal/stream/playlist_test.go` (new or modified)
+  - `streaming/internal/stream/stream_branches_test.go` (cron-
+    authored, modified by product)
+- `6345e06 Merge pull request #45 from .../streaming/issues` — merge
+
+**The product team has explicitly addressed bugs #96, #100, AND #113.**
+These are streaming-related issues:
+- **#96** — `deleteOldFiles` dot-check + missing sort (R-prior cron
+  finding, originally filed mid-2026-05-26)
+- **#100** — needs cross-check against the issue list (not in our
+  recent cron memory; was an early streaming issue from the R47-ish
+  era)
+- **#113** — NEW; not in our 13-bug list. Either filed by the product
+  team themselves, or upstream from an external reporter.
+
+**Implications**:
+1. **#96 is now likely FIXED** in the streaming product code (the
+   product team named it in the commit). Next streaming round should
+   re-check whether the `t.Skip("see #96")` annotation in our
+   `logrotator_test.go` can now be removed.
+2. **#100 may also be fixed** — re-check pending product team
+   confirmation.
+3. **Cron-authored test files are being kept-in-sync by humans** —
+   `iplogger_internal_test.go` and `stream_branches_test.go` were
+   edited. This is the expected partnership pattern.
+4. **Pending bug count update**: if #96 + #100 confirmed fixed,
+   open count drops from 13 → 11 product bugs.
+
+Tracking #100 confirmation: agent should next streaming round verify
+the test still passes (it should — the agent in R83 found 2 of our
+streaming partials are now blocked on #100's dependent fix).
+
+**Clone divergences observed so far** (private-only files):
+- R86: `client/src/page/user/Users/EmployeeRegister.jsx`
+- R90: `client/src/page/user/EmployeeLogs/VehicleCountLogs.jsx`
+- R91: `client/src/page/user/Dashboard/AttendanceLogsLive.jsx` (NEW)
+
+**No new bugs filed by cron this round.** R68's roles.service.js
+mongoose issue and R72's permissions.utility deletePermissions issue
+remain unfiled.
+
+**Push-verification protocol worked (14th round in a row)**: all
+3 acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (19th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R91: **~2932 new tests across 215 test files (priv);
+0 product files touched across 70 rounds.** Serial execution still
+clean. cv-faceauth suite: 1353 passing, 92% total coverage.
+
+Total pending bugs filed: **13 product (#96-#102, #104-#108, #112)**
++ **1 process (#103)** = 14 issues open (some may be fixed by product
+team's f3add51 — pending verification).
+
 ## TL;DR — what changed on 2026-05-26 (R90 — 3-phase round +52 tests (priv), streaming SKIPPED; **detectionSettings 95.97%; GuardLog covered; 2nd clone divergence**)
 
 - **server** — `core/v1/detectionSettings/detectionSettings.service.js`.
