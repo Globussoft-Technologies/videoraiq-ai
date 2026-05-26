@@ -620,6 +620,17 @@ export default defineConfig({
         // flows through the actions handler bag. Tested under tests/
         // unit/page/user/Playback/components/PlaybackHeader.test.jsx.
         "src/page/user/Playback/components/PlaybackHeader.jsx",
+        // Round 74: EmployeeLogs/ActionCameraPreview — Radix Dialog
+        // carousel-style preview popped up from the various log tables
+        // when a row is clicked. Renders an image carousel with prev/
+        // next chevrons + ArrowLeft / ArrowRight / Escape key handlers,
+        // switches header copy + several detail rows on module=
+        // 'attendancelogs' vs 'accesslogs', and accepts imageUrls
+        // entries as either bare strings or {url,timestamp,cameraType}
+        // objects (joined onto VITE_BACKEND + /api/v1/uploads). Tested
+        // under tests/unit/page/user/EmployeeLogs/
+        // ActionCameraPreview.test.jsx.
+        "src/page/user/EmployeeLogs/ActionCameraPreview.jsx",
       ],
       exclude: [
         "tests/**",
