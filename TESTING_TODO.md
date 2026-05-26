@@ -3,6 +3,89 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R71 — full 4-phase round, +35 tests; **dispatcher.py hits 100%, ServeHLS stale-cleanup pinned**)
+
+- **server** — `core/v1/permission/permissions.utility.js` outer-catch
+  arms (the 4 tail branches none of R67's create/bulkDelete tests
+  reached). New
+  `server/tests/integration/services/permissions.service.outerCatches.test.js`
+  (**5 tests, 4 mocks** — `vi.spyOn` on `usersModel.findOne`,
+  `Admin.findOne`, `permissionModel.find`, `permissionModel.findOne`/
+  `updateMany`; per-test `mockImplementationOnce` + `restoreAllMocks`
+  in `beforeEach`). Pins: `userPermissions` catch (559-561),
+  `updateAdminPermissions` catch (653-655), `bulkPermissionDelete`
+  modifiedCount=0 else (502-503), `bulkPermissionDelete` outer catch
+  (506-508). Coverage of permissions.utility.js: **89.51% → 91.18%**
+  statements (+1.67pp); branches **80% → 83.8%** (+3.8pp); fns
+  remain 100%. Suite 2538 → 2543 / +5. Public `511f931`, private
+  mirror `2e0535b`.
+- **client** — `page/user/Detection/components/DefaultDetectionSettings.jsx`
+  (0% → **97.38%** stmts / 83.87% branches / 97.38% lines). 4 of 153
+  lines uncovered (remaining = conditional click-outside `mousedown`
+  handler arms that fire only when `showUsersDropdown`). New
+  `client/tests/unit/page/user/Detection/components/DefaultDetectionSettings.test.jsx`
+  (**8 tests, 7 mocks** — `@/components/ui/switch`,
+  `./InnerSettingsContext`, `../../Streams/Api/patch` +
+  `../../Streams/Api/pacth` (both paths — the typo'd one still
+  ships on mirror), `sonner`, `../../Profile/MultiStepForm`,
+  `../components/DeleteConfirmation`, `@/context/Permission/PermissionContext`).
+  Branches: Switch from `authorisedUsers.length > 0` (empty +
+  non-empty), "No users selected" fallback, first-3-inline + "+N
+  more" toggle, edit gate mounts `MultiStepForm` with
+  `module='appliedProfile'` + `selectedChannelIds` from
+  `channelData.linkedCameras`, delete gate opens
+  `DeleteConfirmation` → confirm calls
+  `updateCameraSettingById(linkedCameras[0]._id, { profile: null })`
+  + toast.success + `fetchAppliedProfile`, non-200 → toast.error +
+  no fetch, thrown → toast.error(error.response.data.body.message),
+  neither permission → zero right-action buttons. Suite 1474 → 1482
+  / +8. Public `1e8ca68`, private mirror `28000ae`.
+- **streaming** — `internal/server` **89.1% → 91.7%** (+2.6pp).
+  `ServeHLS` 80.8% → **93.9%** (+13.1pp). New
+  `streaming/internal/server/serve_hls_stale_segments_test.go`
+  (2 tests). First test walks the `latestSeg` modtime accumulator
+  + `noActiveViewer` classifier without firing RemoveAll (fresh
+  segments arm). Second forces stale modtimes via `os.Chtimes` to
+  trigger the `RemoveAll + MkdirAll` cleanup branch (lines 561-563);
+  uses a sentinel-disappearance signal in the side goroutine to
+  deterministically gate the post-cleanup playlist re-seed (avoids
+  racing with RemoveAll). Total streaming: 84.2% → 85.1% (+0.9pp).
+  Private only `e146f3d`. **Newly catalogued seam blockers** (per
+  R71 agent): `json.Marshal/Indent` error arms in `config.Save()`
+  (unreachable for any realistic Config), and the `strconv.Unquote`
+  success arm (unreachable when marshaled JSON contains any `"`).
+- **cv-faceauth** — `workers/dispatcher.py` **57% → 100%** (+43pp,
+  all 81 statements covered). New
+  `cv-faceauth/tests/test_dispatcher_async.py` (**20 tests**).
+  Pinned: `_async_dispatch` body (lines 197-274, formerly 0%) —
+  happy-path triple-upload + person-only upload (URL placement) +
+  failed-upload URL stays None + face/frame skip when cutout None /
+  settings flag off, **all 8 camera_type string variants → enum
+  mapping**, `return_exceptions=True` isolating per-client failures
+  (access OR attendance raising does not abort dispatch);
+  `dispatch()` exception arm (`create_task` raising is swallowed);
+  `_get_loop()` RuntimeError fallback (`get_event_loop` raising →
+  `new_event_loop` + `set_event_loop` adopted); `shutdown()`
+  cleanup-exception swallow. Sub-client stubs swapped on
+  `WorkerDispatcher` instance after construction (AsyncMock for
+  access_log / attendance_log / nas_upload — no real I/O). Suite
+  1000 → **1020 passing** / 7 skipped (unchanged). Private only
+  `b93644e`. **Lesson learned**: `sys.modules` rollback in
+  `teardown_module` had to be scoped to first-party prefixes
+  (`workers.`, `core.`, `config.`) — initial broad rollback broke
+  `test_face_auth_api` + `test_local_matcher` by invalidating
+  cached class references in sibling test files.
+
+**No new bugs this round.** R68's latent `roles.service.js::update`
+mongoose `Schema.Types.ObjectId` confusion remains unfiled.
+
+Cumulative R22→R71: **~2058 new tests across 135 test files; 0
+product files touched across 50 rounds.** Serial execution still
+clean. cv-faceauth suite: 1020 passing.
+
+Total pending bugs filed: **11 product (#96-#102, #104-#107)** +
+**1 process (#103)** = 12 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R70 — full 4-phase round, +52 tests; **cv-faceauth suite hits 1000 passing; 3 files lifted to 98%+**)
 
 - **server** — pivoted from permissions.utility (already at 89.51%
@@ -1404,10 +1487,11 @@ already done):**
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R70):**
+**Coverage state (after R71):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 95.2%,
-  `internal/config` 82.4%, `internal/logger` **92.5%** (R70: cleanupRoutine
-  60→100%), `internal/server` **89.1%**, `internal/stream` **80.9%**
+  `internal/config` 82.4%, `internal/logger` 92.5%, `internal/server`
+  **91.7%** (R71: ServeHLS 80.8→93.9%), `internal/stream` 80.9%
+- Total streaming: **85.1%** (was 84.2%)
 
 **Known blocked on product-side seams** (per R67 agent investigation):
 - `cleanupInactiveStreams` / `cleanupInactiveSubStreams` / `cleanupInactivePlaybacks` — 5-min `time.NewTicker` blocking loops with no shutdown channel; would need product `init()` seam
