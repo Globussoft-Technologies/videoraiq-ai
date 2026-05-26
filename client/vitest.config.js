@@ -961,6 +961,30 @@ export default defineConfig({
         //    toast.error.
         "src/page/user/Streams/Nvrsettings.jsx",
         "src/page/user/Dashboard/EmployeesOnDuty.jsx",
+        // Round 89: two more 0% surfaces —
+        //  - EmployeeLogs/VisibilityLog: presence/absence-over-24h channel
+        //    timeline page. Fires getDeskChannelGraph(searchQuery, skip,
+        //    limit, { date }) on mount + on [currentPage, selectedDate,
+        //    searchQuery] dep change, maps each channel's incidents into
+        //    presence/absence segments via UTC->local minute math + a
+        //    running personPresent state machine, and forwards data /
+        //    columns / searchKeys / loading / attendanceLogsCount /
+        //    setCurrentPage / onSearchChange to ReusableTablePage. The
+        //    children slot renders a date <input> clamped to the current
+        //    month boundary plus a presence/absence legend strip.
+        //  - EmployeeLogs/TrackLog: two-tab Users/Vehicles tracking page
+        //    rendered at /track. The active tab drives the list fetch
+        //    (getTrackUsers vs getVehicleList), the per-row selection
+        //    triggers the per-user/vehicle logs fetch (getTrackLogs vs
+        //    getVehicleLogs), and the rendered events get formatted into
+        //    {step, title, timestamp, images, cameraId, location} rows.
+        //    Thumbnails differ per tab (user: 3-up face/person/frame
+        //    thumbnails; vehicle: single vehicle thumb). handleTabChange
+        //    resets selectedItem, trackData, activeFeed, search, and
+        //    dropdown state. activeFeed picks the right image source per
+        //    selectedImageType with face/person/frame fall-through.
+        "src/page/user/EmployeeLogs/VisibilityLog.jsx",
+        "src/page/user/EmployeeLogs/TrackLog.jsx",
       ],
       exclude: [
         "tests/**",
