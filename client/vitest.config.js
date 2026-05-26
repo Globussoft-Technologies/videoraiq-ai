@@ -582,6 +582,21 @@ export default defineConfig({
         // and the Upgrade pill triggers the same anchor-click install flow.
         // Tested under tests/unit/layout/Header/HeaderActions.test.jsx.
         "src/layout/Header/HeaderActions.jsx",
+        // Round 71: Detection/components/DefaultDetectionSettings — the
+        // read-only "Default Detection Setting" tile that sits inside
+        // SettingsCard once a profile is applied. Renders a non-interactive
+        // Switch (checked iff authorisedUsers.length > 0), a name strip
+        // (first 3 inline, "+N more" overflow dropdown for the rest with
+        // click-outside dismiss), and two permission-gated right-actions:
+        // Edit mounts MultiStepForm with module='appliedProfile' +
+        // selectedChannelIds derived from channelData.linkedCameras (gated
+        // on permissions.detectionSettings.edit === true); Trash opens
+        // DeleteConfirmation and on confirm calls
+        // updateCameraSettingById(linkedCameras[0]._id, { profile: null })
+        // + toasts success/error + re-fetches via fetchAppliedProfile.
+        // Tested under tests/unit/page/user/Detection/components/
+        // DefaultDetectionSettings.test.jsx.
+        "src/page/user/Detection/components/DefaultDetectionSettings.jsx",
       ],
       exclude: [
         "tests/**",
