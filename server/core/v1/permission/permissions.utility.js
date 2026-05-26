@@ -307,13 +307,14 @@ class PermissionService {
 
                         const data = await permissionModel
                             .aggregate([{ $match: { $and: [{ adminId: adminId }, { is_default: { $ne: true } }] } }]);
-                        data.forEach(async function (ele) {
-                            const key = { is_default: { $ne: true } ,'createdBy.userId':userId};
-                             await collectionName.deleteMany(key);
-                        });
-                        data.length
-                            ? res.send(Response.SuccessResp(PermissionMessageNew['DELETE_PERMISSIONS'][language ?? 'en'], { DeletedCount: data.length }))
-                            : res.send(Response.FailResp(PermissionMessageNew['DELETE_DEFAULT_PERMISSIONS'][language ?? 'en'],null));
+
+                        if (data.length > 0) {
+                            const key = { is_default: { $ne: true }, 'createdBy.userId': userId };
+                            await permissionModel.deleteMany(key);
+                            res.send(Response.SuccessResp(PermissionMessageNew['DELETE_PERMISSIONS'][language ?? 'en'], { DeletedCount: data.length }));
+                        } else {
+                            res.send(Response.FailResp(PermissionMessageNew['DELETE_DEFAULT_PERMISSIONS'][language ?? 'en'], null));
+                        }
 
                 }
             } catch (err) {
