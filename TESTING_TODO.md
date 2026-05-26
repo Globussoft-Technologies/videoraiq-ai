@@ -3,6 +3,76 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R69 — full 4-phase round, +35 tests; **no new bugs; vehicle.service + redis_dispatcher near 100%**)
+
+- **server** — `core/v1/vehicle/vehicle.service.js` body. New
+  `server/tests/integration/services/vehicle.service.notification.test.js`
+  (**5 tests, 3 mocks** — socket + jobs.service + mail.helper, mirrors
+  the existing `vehicle.service.log.test.js` pattern). Covers the
+  previously-unreached notification dispatch branch
+  (`handleProfileNotification === true`): happy path (profile + email
+  recipient + `channels.email: true` → `MailHelper.vehicleLog` invoked),
+  `channels.email: false` boundary (NOT invoked), phone-only recipients
+  boundary (NOT invoked), plus 2 outer-catch branches via
+  `vi.spyOn(Vehicle/VehicleLog, "find").mockImplementationOnce(throw)`.
+  Coverage of vehicle.service.js: **81.66% → 97.91%** statements
+  (+16.25pp); branches 82.14% → 97.05% (+14.91pp). Only the `log()`
+  outer-catch (lines 150-154) remains uncovered. Suite (integration/
+  services slice) 1162 → 1167. Public `145b011`, private mirror `3b0c531`.
+- **client** — Two pure-presentational layout skeletons (both 0% →
+  covered, both added to vitest include scope):
+  `layout/Header/HeaderSkeleton.jsx` (4 tests) and
+  `layout/Sidebar/SidebarSkeleton.jsx` (4 tests). Both depend only
+  on `react-loading-skeleton`; 0 mocks per file. New specs pin
+  layout classes, documented widget counts (7 nav pills / 5 sidebar
+  tiles), desktop-only welcome strip, no-interactive-controls
+  invariant. Suite 1461 → 1469 / +8 tests. Public `ddfc4b7`, private
+  mirror `8123580`.
+- **streaming** — `internal/server` **87.2% → 89.1%** (+1.9pp). Two
+  functions pinned in one round: `checkPlaybackToken` 82.6% → **100%**
+  (+17.4pp) and `handleCamera` 79.0% → **88.7%** (+9.7pp). New
+  `streaming/internal/server/check_playback_token_branches_test.go`
+  (3 tests — sync.Map.Range continue arm, backend-success-with-past-exp
+  evicts cache, malformed Backend_url err-arm) and
+  `handle_camera_stream_exists_test.go` (2 tests — DELETE with
+  pre-seeded live stream entry → Cancel fires exactly once + entry
+  removed + slice rebuild preserves siblings; PUT on Active=false cam
+  with live stream → Cancel + delete + RTSPURL rewritten encrypted +
+  no goroutine spawn). StreamManager built directly (no
+  NewStreamManager → no log-rotator / StartQueue / cleanup goroutines).
+  Active=false everywhere to avoid `if Active { go StartStreamForCamera }`
+  arms. No live ffmpeg, no real sockets, deterministic (atomic counter
+  + httptest backend; no `time.Sleep`). Private only `ca5700d`.
+- **cv-faceauth** — `workers/redis_dispatcher.py` **54% → 98%**
+  (+44pp, only 2 lines remain). The roadmap re-scan showed
+  `orchestrator/face_auth_onfly_pipeline.py` was already at 54%
+  (not 0% as the roadmap implied) — its remaining 37 lines are
+  import-time-blocked `_initialize_components` body. **`workers/
+  redis_dispatcher.py` was the bigger leverage at 54% with the
+  entire async push surface uncovered.** New
+  `cv-faceauth/tests/test_redis_dispatcher_async.py` (**17 tests**,
+  609 LOC). Pinned: `_async_push_payload` (full payload shape +
+  queue routing + 3 toggle-off branches + push-failure-no-depth-call
+  + queue-depth exception swallowing + outer-exception fire-and-forget
+  contract), `dispatch_entry_log` (running short-circuit +
+  `asyncio.create_task` scheduling + scheduling-exception swallow),
+  `_async_push_entry_log` (happy path with `log_job` queue +
+  `task_type="entry_log"` shape + `Unknown User` fallback +
+  push-failure log path + outer-exception swallow), `_save_frame_to_disk`
+  cv2.imwrite exception → returns `""`, `_encode_base64` imencode
+  `False` and exception → `""`. Suite **945 → 962 passing / 7 skipped**
+  (unchanged). Repo total 78% → 79%. Private only `eb88078`.
+
+**No new bugs this round.** R68's latent `roles.service.js::update`
+mongoose `Schema.Types.ObjectId` confusion remains unfiled because
+no R69 agent touched roles.service.
+
+Cumulative R22→R69: **~1971 new tests across 127 test files; 0 product
+files touched across 48 rounds.** Serial execution still clean.
+
+Total pending bugs filed: **11 product (#96-#102, #104-#107)** + **1
+process (#103)** = 12 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R68 — full 4-phase round, +38 tests; **2 product bugs filed (#106, #107); client roadmap purged of stale entries**)
 
 - **server** — `core/v1/roles/roles.service.js` body. R57 covered the
@@ -1197,8 +1267,8 @@ re-target):
 ### Client — page+component sweep
 
 **Done by area:**
-- Layout/Header: DesktopNav (R22), MobileNav (R24), UpgradeModal (R26)
-- Layout/Sidebar: LogsSidebar (R23), AdminSidebar (R49), **SettingsSidebar + Sidebar (R67)**
+- Layout/Header: DesktopNav (R22), MobileNav (R24), UpgradeModal (R26), ProfileDropdown (R68), **HeaderSkeleton (R69)**
+- Layout/Sidebar: LogsSidebar (R23), AdminSidebar (R49), SettingsSidebar + Sidebar (R67), **SidebarSkeleton (R69)**
 - EmployeeLogs: TimePickerComponents (R25), LogsFilterPopover (R31), BreakLogsDialog (R33)
 - StorageSetting: Googledrive (R27), S3 (R28), Sftp (R29), AddStorageModal (R61)
 - Dashboard: RecentAlerts (R30), NoDataCard (R38)
@@ -1267,11 +1337,11 @@ already done):**
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R68):**
+**Coverage state (after R69):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 95.2%,
   `internal/config` 82.4%, `internal/logger` 91.0%, `internal/server`
-  **87.2%** (R68: handleRestart 73.7%→84.2%), `internal/stream`
-  **80.9%**
+  **89.1%** (R69: checkPlaybackToken 82.6%→100%, handleCamera 79.0%→88.7%),
+  `internal/stream` **80.9%**
 
 **Known blocked on product-side seams** (per R67 agent investigation):
 - `cleanupInactiveStreams` / `cleanupInactiveSubStreams` / `cleanupInactivePlaybacks` — 5-min `time.NewTicker` blocking loops with no shutdown channel; would need product `init()` seam
@@ -1336,8 +1406,12 @@ already done):**
    was 51% (not 0% as R66 thought), now 91%. 21 tests. Remaining
    9% is Linux/CUDA-runtime-specific (libcublas, torch.cuda) not
    portably testable on Windows.
-9. **`cv-faceauth/orchestrator/face_auth_onfly_pipeline.py`** — R66
-   agent noted ALREADY covered too. VERIFY: search tests for it.
+9. **`cv-faceauth/orchestrator/face_auth_onfly_pipeline.py`** —
+   R69 re-scan verified already at 54%. Remaining 37 lines are
+   the `_initialize_components` body which is import-time-blocked;
+   would need additional stub work to test those lines.
+12. ~~`cv-faceauth/workers/redis_dispatcher.py`~~ **DONE in R69** —
+    54% → 98% via 17 tests covering the entire async push surface.
 10. ~~`cv-faceauth/scripts/run_bg_worker.py`~~ **DONE in R67** —
     R66's note was wrong; R67 agent verified 0% and landed 43 pass +
     4 skip (bug #105). Module now at 70%.
