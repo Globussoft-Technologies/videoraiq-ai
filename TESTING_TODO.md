@@ -3,21 +3,21 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
-## TL;DR — what changed on 2026-05-26 (R72 — server phase, +5 tests; **permissions.utility.js tail-branches pinned, 91.18 → 95.13%**)
+## TL;DR — what changed on 2026-05-26 (R72 — full 4-phase round, +34 tests; **ProfileSelectionDialog + ServeSubStreamHLS pinned; permissions tail-branches near 100%**)
 
 - **server** — `core/v1/permission/permissions.utility.js` tail
   branches not reached by R67/R71. New
   `server/tests/integration/services/permissions.service.tailBranches.test.js`
   (**5 tests, 3 mocks** — `vi.spyOn` on `roleModel.aggregate`,
   `Admin.findOne`, and `res.send` capture; per-test
-  `restoreAllMocks` in `beforeEach`). Pins:
-  `deletePermissions` no-permissionId empty branch (lines 301-307,
-  314, 316 — the success-resp arm at 315 remains unreachable from
-  unit-test surface because the inner aggregate `$match:{adminId}`
-  compares string-typed adminId against ObjectId field; JWT-decoded
-  adminId is also a string in production, so this is a latent
-  product issue independent of bug #107's `collectionName`
-  ReferenceError on line 312); `fetchRolesPermission` admin-missing
+  `restoreAllMocks` in `beforeEach`). Pins: `deletePermissions`
+  no-permissionId empty branch (lines 301-307, 314, 316 — the
+  success-resp arm at 315 remains unreachable from unit-test surface
+  because the inner aggregate `$match:{adminId}` compares
+  string-typed adminId against ObjectId field; JWT-decoded adminId
+  is also a string in production, so this is a **new latent product
+  issue independent of bug #107's `collectionName` ReferenceError**
+  on line 312); `fetchRolesPermission` admin-missing
   permissionConfig path (343-346); `fetchRolesPermission` outer
   catch (407-409); `bulkPermissionUpdate` no-authorized-users tail
   (422-423 — the missing `return` means both line 422 and the
@@ -25,15 +25,71 @@
   `bulkPermissionUpdate` outer catch (450-452). Coverage of
   permissions.utility.js: **91.18% → 95.13%** statements (+3.95pp);
   branches **83.8% → 87.33%** (+3.53pp); fns remain 100%. Remaining
-  uncovered: 311-312 (bug #107 unreachable) and 320-322
-  (deletePermissions outer catch — would need a `req.query` access
-  spy or a model-level throw on the permissionId branch).
-  Suite 2543 → 2548 / +5. Pre-existing
-  `incidents.service.crud` 2 flakes unchanged.
+  uncovered: 311-312 (bug #107 unreachable) and 320-322. Suite 2543
+  → 2548. Public `6a1668f`, private mirror `30a5b65`.
+- **client** — `page/user/Detection/components/ProfileSelectionDialog.jsx`
+  (0% → **94.11%** lines / 82.5% branches / 85.71% fns) — 245-line
+  Radix dialog the AppliedProfile UI mounts when attaching an
+  existing detection profile to a channel. New
+  `client/tests/unit/page/user/Detection/components/ProfileSelectionDialog.test.jsx`
+  (**10 tests, 6 mocks** — Profile/Api/get + Streams/Api/patch +
+  Streams/Api/pacth typo variant + sonner + MultiStepForm +
+  PermissionContext + radio-group passthrough). Branches: open=false
+  null guard, loading/error/empty/populated arms of `getProfileDetails`,
+  15-char profile-name truncate + ellipsis, permission-gated `+ Add
+  New Profile` CTA, Apply-button `disabled={!selectedProfile}` gate,
+  200-OK happy path (channelId + profile._id + toast.success +
+  fetchAppliedProfile + onClose), non-200 error toast, debounced
+  search-input re-fetch, Cancel button onClose. Both `patch` and
+  `pacth` imports mocked so the spec is parity-clean across private
+  and public mirror. Suite 1482 → 1492 / +10. Public `205b514`,
+  private mirror `32ae9e7`.
+- **streaming** — `internal/server` **91.7% → 95.3%** (+3.6pp).
+  `ServeSubStreamHLS` 75.8% → **96.7%** (+20.9pp). New
+  `streaming/internal/server/serve_substream_stale_segments_test.go`
+  (2 tests). Pinned: stale sub-stream segments + no active viewer →
+  `RemoveAll + MkdirAll` cleanup arm (lines 697-716, with
+  `time.Since(latestSeg) > 8s` forced via `os.Chtimes`); live
+  sub-stream + .ts fetch → `video/MP2T` Content-Type +
+  `LastSegmentAt`/`LastActive` bump on the `SubStreams[camID]` entry
+  (755-765). Total streaming: 85.1% → **86.4%** (+1.3pp). Private
+  only `920fa25`.
+- **cv-faceauth** — `workers/nas_uploader.py` **59% → 91%** (+32pp,
+  86 → 19 lines missing — remaining all in `if __name__ ==
+  "__main__"` CLI block + two dead-branch guards). New
+  `cv-faceauth/tests/test_nas_uploader_http.py` (**17 tests**).
+  Pinned: `_get_client` lazy create + reuse + recreate-on-closed,
+  `_encode_to_jpeg` `cv2.imencode→(False,_)` raises ValueError,
+  every upload method (`upload_person_cutout` / `upload_face_cutout`
+  / `upload_frame_from_memory` / `upload_frame_from_disk`) happy +
+  exception paths, `_upload_bytes` 200 / 401-short-circuit /
+  5xx-retry-exhaustion / generic-exception-then-success /
+  `folder_path` override, `close()` aclose + `_running` flip,
+  `_cleanup_old_frames` per-file `os.remove` exception swallowing.
+  Suite **1020 → 1037 passing**, 7 skipped (unchanged). Overall
+  coverage 81% → 82%. Private only `61520d8`.
 
 **No new bugs filed this round.** R68's latent `roles.service.js
-::update` mongoose `Schema.Types.ObjectId` issue remains unfiled
-(this round did not touch roles.service).
+::update` mongoose `Schema.Types.ObjectId` issue remains unfiled.
+R72 server agent catalogued a NEW latent issue worth filing in
+a future round: `permissions.utility.deletePermissions` inner
+aggregate `$match:{adminId}` compares string-typed adminId against
+ObjectId field, making the success-resp arm at line 315 unreachable
+even when the bug #107 fix lands.
+
+Cumulative R22→R72: **~2092 new tests across 139 test files; 0
+product files touched across 51 rounds.** Serial execution still
+clean. cv-faceauth suite: 1037 passing.
+
+Total pending bugs filed: **11 product (#96-#102, #104-#107)** +
+**1 process (#103)** = 12 issues open.
+
+**Process note**: R72 server agent prematurely added its own
+TL;DR to TESTING_TODO.md in commit `30a5b65`. Cron driver
+rewrote the section to encompass all 4 phases. Future rounds:
+sub-agents should leave TESTING_TODO updates to the cron driver
+(end-of-round aggregation) — touching TESTING_TODO mid-round
+risks mis-aggregated state if other phases also try to edit it.
 
 ## TL;DR — what changed on 2026-05-26 (R71 — full 4-phase round, +35 tests; **dispatcher.py hits 100%, ServeHLS stale-cleanup pinned**)
 
@@ -1519,11 +1575,11 @@ already done):**
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R71):**
+**Coverage state (after R72):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 95.2%,
   `internal/config` 82.4%, `internal/logger` 92.5%, `internal/server`
-  **91.7%** (R71: ServeHLS 80.8→93.9%), `internal/stream` 80.9%
-- Total streaming: **85.1%** (was 84.2%)
+  **95.3%** (R72: ServeSubStreamHLS 75.8→96.7%), `internal/stream` 80.9%
+- Total streaming: **86.4%** (was 85.1%)
 
 **Known blocked on product-side seams** (per R67 agent investigation):
 - `cleanupInactiveStreams` / `cleanupInactiveSubStreams` / `cleanupInactivePlaybacks` — 5-min `time.NewTicker` blocking loops with no shutdown channel; would need product `init()` seam
