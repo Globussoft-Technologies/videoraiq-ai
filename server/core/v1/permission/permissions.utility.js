@@ -466,11 +466,23 @@ class PermissionService {
                 return res.send(Response.FailResp(PermissionMessageNew["NO_PERMISSION_CONFIG_PROVIDED"]['en'], "error"));
             }
     
-            let moduleNamesToDelete = data.permissionConfig.map(item => item.moduleName.toLowerCase());
-    
+            let moduleNamesToDelete = data.permissionConfig.map(item => item.moduleName);
+
             let adminPermission = await permissionModel.findOne({ adminId: adminId});
 
-            let missingModules = moduleNamesToDelete.filter(moduleName => !adminPermission.permissionConfig.hasOwnProperty(moduleName));
+            // Case-insensitive module lookup: map requested module names to actual keys in permissionConfig
+            const configKeys = Object.keys(adminPermission.permissionConfig || {});
+            const moduleMap = {};
+            const missingModules = [];
+
+            moduleNamesToDelete.forEach(requestedModule => {
+                const actualKey = configKeys.find(key => key.toLowerCase() === requestedModule.toLowerCase());
+                if (actualKey) {
+                    moduleMap[requestedModule] = actualKey;
+                } else {
+                    missingModules.push(requestedModule);
+                }
+            });
 
             if (missingModules.length > 0) {
                 // Return error if any moduleName is not found in the database
@@ -478,8 +490,9 @@ class PermissionService {
             }
 
             // Construct an object where each key represents a module to be removed from permissionConfig
-            let unsetFields = moduleNamesToDelete.reduce((acc, moduleName) => {
-                acc[`permissionConfig.${moduleName}`] = "";
+            let unsetFields = moduleNamesToDelete.reduce((acc, requestedModule) => {
+                const actualKey = moduleMap[requestedModule];
+                acc[`permissionConfig.${actualKey}`] = "";
                 return acc;
             }, {});
 
