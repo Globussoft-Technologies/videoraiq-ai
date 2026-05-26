@@ -1,0 +1,22 @@
+# Secrets — never commit
+server-creds/
+*.pem
+
+# Build / runtime artifacts
+**/__pycache__/
+*.pyc
+*.pyo
+node_modules/
+coverage/
+playwright-report/
+test-results/
+streaming/cover.out
+streaming/cover*.out
+streaming/cover.html
+streaming/internal/**/config.json
+cv-faceauth/logs/
+cv-faceauth/.coverage
+
+# Local env overrides
+*.env.local
+.env.local

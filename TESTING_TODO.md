@@ -3,6 +3,92 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R77 — full 4-phase round, +30 tests; **users.service runImport cracked; registration_service 99%**)
+
+- **server** — `core/v1/users/users.service.js` `runImport` happy path
+  body (lines 1243-1377, the largest contiguous uncovered region of
+  this 1992-LOC mega-service). **The "users.service is too big to
+  test" reputation cracked**: like attendance.service (R63) and
+  storage.service (R73-R76), it's testable with focused branch
+  coverage when you find the right entry point. New
+  `server/tests/integration/services/users.service.runImport.test.js`
+  (**4 tests, 2 mocks** — axios + helperFunctions.autoSyncLocations
+  partial mock). Pinned: brand-new user upsert (200 immediate
+  response, async runImport populates DB with normalized fields —
+  lowercased location, hyphen-stripped phone, dept created with
+  lowercased name + `isImportedFromEMP:true`); pre-existing
+  case-mismatched dept reused via `findOneAndUpdate` regex match;
+  duplicate `{adminId,email}` user → `upsertedCount=0` branch bumps
+  `skipped`, appends `failedUsers` entry; mixed batch (2 new + 1 dup)
+  → `imported=2`, `skipped=1`, `percentage=100`, status `"Completed
+  with Errors"`. Coverage of users.service.js: **66.44% → 73.60%**
+  lines (+7.16pp); fns **54.28% → 60%** (+5.72pp); branches 85.86%
+  → 86.08%. Suite 2548 → 2552. Public `7fb2fd4`, private mirror
+  `9cfb248`. **Agent noted** that the module-private helpers
+  (`resolveAuthorizedChannels`, `fetchDepartmentsByLocation`,
+  `fetchLocationsByNVRs`, `fetchChannelsByNVRIds`, lines 1428-1860,
+  ~430 LOC) are unreachable from public API because their call sites
+  in `createAuthUser` / `updateAuthUser` are **commented out** in
+  product code — code-quality observation, not a runtime defect.
+- **client** — TWO 0% Detection sub-components covered:
+  - `Detection/components/SettingsCard.jsx` (0% → **93.61%** lines,
+    9 tests, 7 mocks)
+  - `Detection/components/ConfigSearchControl.jsx` (0% → **86.25%**
+    lines, 7 tests, 7 mocks)
+  
+  New
+  `client/tests/unit/page/user/Detection/components/SettingsCard.test.jsx`
+  and `ConfigSearchControl.test.jsx`. Suite 1545 → 1561 / +16.
+  Public `2bac8a3`, private mirror `8340a88`.
+- **streaming** — `internal/util` **95.2% → 96.8%** (+1.6pp).
+  `GetNVRKey` **75% → 100%** (+25pp) — `url.Parse` error arm pinned
+  via 4 sub-cases (`":"/bad`, `rtsp://[invalid`, `%zz`, `rtsp://h:port-x`).
+  New `streaming/internal/util/util_parse_error_test.go` (1 test,
+  deterministic, no goroutines / sockets / ffmpeg). Total streaming:
+  87.2% → **87.3%** (+0.1pp). Private only `7339fcb`.
+- **cv-faceauth** — `recognition/registration_service.py` **70% → 99%**
+  (+29pp). New `cv-faceauth/tests/test_registration_service_flow.py`
+  (**9 tests, 0 skips**). Pinned: DBSCAN exception fallback to
+  per-point labels; DBSCAN noise label (-1) silently skipped;
+  cluster purity rejection when > 2 unique track ids; end-to-end
+  happy path (cluster → secondary verify miss → NAS upload success
+  → registration API returns `user._id` → Qdrant `register_user` →
+  returned user dict); NAS upload failure → skip registration;
+  `reg_client.register()` returns None → skip Qdrant;
+  `get_registration_client()` returns None → skip Qdrant; API
+  response missing `_id` → uuid4 fallback; `matcher.register_user`
+  raising → exception swallowed, returns []. Uses per-test
+  `monkeypatch` (R71/R75/R76 lesson) — no module-level sys.modules
+  pollution. Suite 1108 → **1117 passing** / 7 skipped (unchanged).
+  Private only `18c72fc`.
+
+**Process incident (recovered)**: All 4 sub-agents reported successful
+commits, but `git status -sb` showed private 4 ahead / public 2
+ahead of origin. The agents committed locally but their `git push`
+calls didn't actually land (likely silent failures or shell-state
+issues). Cron driver caught it in the audit step and pushed both
+clones. **No work lost; takeaway** — always run `git status -sb`
+after sub-agent runs to verify pushes actually landed before
+declaring done.
+
+**Housekeeping (this commit)**: Added `cv-faceauth/.coverage` to
+`.gitignore` — pytest-cov writes this artifact when running
+`--cov`, and it was leaking as untracked across rounds.
+
+**No new bugs filed this round.** R68's roles.service.js mongoose
+issue and R72's permissions.utility deletePermissions issue remain
+unfiled.
+
+**Process compliance perfect (5th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R77: **~2281 new tests across 162 test files; 0
+product files touched across 56 rounds.** Serial execution still
+clean. cv-faceauth suite: 1117 passing.
+
+Total pending bugs filed: **11 product (#96-#102, #104-#107)** +
+**1 process (#103)** = 12 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R76 — full 4-phase round, +40 tests; **face_auth_onfly_api hits 100%; storage 93.36%; getLocationFromAPI 100%**)
 
 - **server** — `core/v1/storage/storage.service.js` `uploadToSFTP`
@@ -1899,12 +1985,11 @@ already done):**
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R76):**
-- `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 95.2%,
-  `internal/config` 82.4%, `internal/logger` **94.0%** (R76:
-  getLocationFromAPI 87.5→100%), `internal/server` 96.9%, `internal/stream`
-  80.9%
-- Total streaming: **87.2%** (was 87.1%)
+**Coverage state (after R77):**
+- `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` **96.8%**
+  (R77: GetNVRKey 75→100%), `internal/config` 82.4%, `internal/logger`
+  94.0%, `internal/server` 96.9%, `internal/stream` 80.9%
+- Total streaming: **87.3%** (was 87.2%)
 
 **Practical ceiling note** (per R73 agent investigation): all
 remaining `internal/stream` and most `internal/server` gaps are
