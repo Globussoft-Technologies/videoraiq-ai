@@ -3,6 +3,126 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R92 — full 4-phase round +25 tests; **bug #96 CONFIRMED FIXED; cv-faceauth 93%; alert.events 100%; streaming back in scope**)
+
+- **server** — `core/v1/alerts/alert.events.js::triggerAlertOnIncident`
+  (always mocked out by every caller (IncidentsService + incidents-
+  routes contract test), so it sat at **0%** despite being a real
+  product path that fans out 19 different `MailResponse.*` template
+  dispatches plus SMS). New `server/tests/unit/services/alert.events.test.js`
+  (**8 tests, 7 mocks** — alerts.model, nvr.model, channels.model,
+  recipients.model, incidents.model, mail.helper, sms.incidentsFunction).
+  Pinned happy path with email + SMS fan-out (loiteringWithoutAuth);
+  404 on second channel.findOne null; 404 on no matching detection
+  config; email dedup via Set; zero-recipient skip; outer-catch
+  swallow on findOne throw; LoiteringWithAuth dispatch; per-
+  detectionType fan-out walking 16 branches (lineCrossing,
+  motionDetection, genericObjectDetection, countPersons,
+  countVehicles, crowdDetection, personalProtectiveEquipment,
+  lightDetection, doorDetection, bagDetection, vehicleDetection,
+  deskAbsence, guardAbsence, conveyorDetection, crusherDetection,
+  waterSpillageDetection). Coverage of alert.events.js: **0% → 100%**
+  lines/funcs/stmts, 98.27% branches. Suite +8. Public `61d12e4`,
+  private mirror `0668408`.
+- **client** — `Detection/DetectionSetting.jsx` (845-LOC top-level
+  Detection Settings listing page). R64/R65/R66/R85-style permission-
+  gate pattern. New
+  `client/tests/unit/page/user/Detection/DetectionSetting.test.jsx`
+  (**4 tests, 4 mocks** — PermissionContext, AccessDenied, PageLoader,
+  react-router-dom). Pinned: both early-return gate arms +
+  "permissions object missing detectionSettings entirely" fall-through
+  + "loading wins over canView=false" precedence invariant. Coverage:
+  0% → **17.31% lines / 53.33% branches / 6.66% fns / 17.31% stmts**
+  (the gate arms execute; the rest of the 845-LOC body never runs in
+  a gated-off render). Suite +4. Public `c076f53`, private mirror
+  `57790cf`. **Process note**: client agent handled clone-divergence
+  vitest.config.js asymmetry cleanly — the public mirror's config did
+  NOT have the R90 `VehicleCountLogs` and R91 `AttendanceLogsLive`
+  include lines (those are private-only), and the initial copy would
+  have clobbered that. Agent used `git reset --soft HEAD~1` and re-
+  edited to preserve the mirror's pre-R92 omissions with an explanatory
+  comment.
+- **streaming** — **BACK IN SCOPE** after R91's product fixes for
+  #96/#100/#113. Agent investigated and confirmed: **bug #96
+  (`deleteOldFiles` dot-check + missing sort) IS FIXED** in the
+  product code (now uses ModTime-based newest-first `sort.Slice`
+  and clean prefix/suffix filter). Added a regression-guard test
+  for the IsDir-continue arm. New
+  `streaming/internal/logger/logrotator_deleteoldfiles_isdir_test.go`
+  (1 test). Coverage of `deleteOldFiles`: **90.5% → 95.2%** (+4.7pp,
+  IsDir continue arm now hit). `internal/logger` pkg: 97.1% → **97.6%**.
+  **#100 and #113 status**: agent observed product touched
+  `playback.go` / `playlist.go`, and existing R90/R91 product-modified
+  tests (`playlist_test.go`, `stream_branches_test.go`) already lock
+  those in. Both packages remain green at current coverage —
+  conclusively confirming #100/#113 fixes is pending a detailed
+  trace, but they're at minimum not regressing. Cleanup-goroutine 0%
+  targets (cleanupInactivePlaybacks/Streams/SubStreams) remain seam-
+  blocked. Private only `3325c44`.
+- **cv-faceauth** — `core/logger.py::log_gpu_status` (GPU/CUDA self-
+  check called at server bootstrap). New
+  `cv-faceauth/tests/test_logger_gpu_status.py` (**12 tests, 0 skips**).
+  Pinned: single-CUDA / mixed (TensorRT+CUDA+CPU) / CPU-only / empty
+  / substring-only guard (`CUDAExecutionProvider_Old`) → False;
+  `get_available_providers` raises → False; missing attribute → False;
+  simulated ImportError → False; broad-except contract (`KeyboardInterrupt`
+  propagates, NOT swallowed); smoke with no root handlers; consecutive
+  calls independent (no caching). Per-test `stub_onnxruntime` fixture +
+  autouse `structlog.reset_defaults()` to prevent filter-wrapper leakage.
+  Coverage of core/logger.py: **83% → 100%** (+17pp, 10 missing → 0).
+  Suite 1353 → **1365 passing** / 8 skipped. **Total cv-faceauth
+  coverage 92% → 93%.** Private only `10b7b94`.
+
+## **BUG #96 CONFIRMED FIXED**
+
+The R92 streaming agent verified that product commit `f3add51`
+correctly addresses bug #96 (`deleteOldFiles` dot-check + missing
+sort). The function now uses ModTime-based newest-first `sort.Slice`
+and a clean prefix/suffix filter. **Open bug count updated**:
+- 12 product (was 13): **#96 removed** — confirmed fixed
+- Remaining: #97-#102, #104-#108, #112
+- #100 and #113 fix status: **pending trace** (product touched
+  related files but specific arm not yet confirmed; both packages
+  remain green)
+- 1 process (#103)
+- Total open: **13** (was 14)
+
+## Streaming "practical ceiling" status (R92 update)
+
+R83-R91's "ceiling" was only partially lifted by the product team's
+f3add51 fix. **Fixed/unblocked**:
+- `deleteOldFiles` dot-check + sort (#96)
+
+**Still seam-blocked** (waiting on product seams):
+- `cleanupInactivePlaybacks` / `cleanupInactiveStreams` /
+  `cleanupInactiveSubStreams` — infinite goroutines on `time.NewTicker`
+  with no shutdown channel
+- `processStartQueue` hard-coded `time.Sleep(5s)`
+- `MonitorFFmpegProcessStats` second-tick branches (flaky netIO)
+- `StartCleanupRoutine` enabled arm
+- `runFFmpegPipeline*` / `runPlaybackPipeline` / `getVideoCodec`
+  (need real ffmpeg/ffprobe binaries)
+
+Cron should target small remaining wins each round (like R92's
+`deleteOldFiles` regression-guard) but expect SKIPs most rounds.
+
+**No new bugs filed by cron this round.** R68's roles.service.js
+mongoose issue and R72's permissions.utility deletePermissions issue
+remain unfiled.
+
+**Push-verification protocol worked (15th round in a row)**: all 4
+acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (20th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R92: **~2957 new tests across 219 test files (priv);
+0 product files touched across 71 rounds.** Serial execution still
+clean. cv-faceauth suite: 1365 passing, **93% total coverage**.
+
+Total pending bugs filed: **12 product (#97-#102, #104-#108, #112)**
++ **1 process (#103)** = **13 issues open** (#96 fixed by product).
+
 ## TL;DR — what changed on 2026-05-26 (R91 — 3-phase round +42 tests (priv), streaming SKIPPED; **PRODUCT TEAM FIXED STREAMING BUGS #96, #100, #113**; dashboard 94.72%; 3rd clone divergence**)
 
 - **server** — `core/v1/dashboard/dashboard.service.js::detectionChart`
