@@ -3,6 +3,84 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R97 — 3-phase round +35 tests, streaming SKIPPED; **delete.service 100%; shared_memory_manager 100% (5th new module); Playback page gates**)
+
+- **server** — `services/delete.service.js` previously-uncovered
+  cloud-mode branch and outer-catch arm. R55 baseline test only
+  exercised APP_ENV=local. New
+  `server/tests/integration/services/delete.service.gaps.test.js`
+  (**3 tests, 8 mocks at cap** — axios, NVR, Channel,
+  DetectionSetting, Incident, authorizedChannels, users, database).
+  Forced module-load APP_ENV=cloud via NODE_CONFIG patch before
+  dynamic import; drove the chainable `Channel.find().select()`
+  rejection through `deleteNVR` so the inner wrapper got swallowed
+  by the outer "Failed to delete NVR..." message. Coverage of
+  delete.service.js: **93.37% → 100%** lines (+6.63pp);
+  **90% → 100%** branches (+10pp). services/ aggregate: 98.04% →
+  99.44% lines. Suite +3. Public `0357e4e`, private mirror `37b3052`.
+- **client** — `page/user/Playback/Playback.jsx` (top-level CCTV
+  Playbacks page) permission gates. New
+  `client/tests/unit/page/user/Playback/Playback.test.jsx`
+  (**3 tests, 8 mocks at cap** — PermissionContext, AccessDenied,
+  PageLoader, SocketContext, react-router-dom, axios,
+  getAccessToken, PlaybackVideo — needed because Playback declares
+  5+ useEffects above the gate). Pinned 3 early-return arms:
+  permissionsLoading → PageLoader; `permissions.playbacks.view ===
+  false` → AccessDenied; permissions object missing `playbacks`
+  entry entirely → same fall-through. Coverage 0% → **38.05%
+  lines / 39.39% branches / 16.66% fns** (gates + module-level
+  reducer/callback declarations). Suite 1809 → 1812. Public
+  `d836cb3`, private mirror `31f7fc5`.
+- **streaming** — **SKIPPED** per R94/R95 practical-ceiling.
+- **cv-faceauth** — `core/shared_memory_manager.py` (64-stmt new
+  module from `59adc4c` refactor / #114 umbrella). New
+  `cv-faceauth/tests/test_core_shared_memory_manager.py`
+  (**29 tests, 0 skips**). Pinned: `ShmRegion` dataclass (slots,
+  fields); `SharedMemoryManager.__init__`, `has_region`, `get_region`,
+  `region_count`, `total_bytes`; `register()` (happy + crash-recovery
+  unregister swallow + multi-region + return value); `write()`
+  (contiguous + non-contiguous transpose + overflow ValueError +
+  unknown-region KeyError); `read()` (get_contents_as_numpy +
+  KeyError); `cleanup()` (happy + empty no-op + unregister error
+  collection + destroy error collection + combined errors).
+  Per-test fixture with scoped `try/finally` for sys.modules stubs
+  (`tritonclient.utils.shared_memory`). Coverage: **0% → 100%**
+  (64/64). Suite 1361 → **1390 passing** / 9 skipped (155 #114
+  unchanged). Private only `ee9744b`.
+
+## #114-refactor new-module coverage (5 modules done, all 100%)
+
+The cron's strategy of targeting new modules introduced by the
+`59adc4c` refactor (R93+) is paying off:
+- **R93**: `core/triton_model_specs.py` (48 tests, 0→100%)
+- **R94**: `api_obj/models/schemas.py` (48 tests, 0→100%)
+- **R95**: `core/stream_hub_client.py` (43 tests, 39→100%)
+- **R96**: `api_obj/deps.py` (28 tests, 0→100%)
+- **R97**: `core/shared_memory_manager.py` (29 tests, 0→100%)
+
+Remaining new modules to target: `api_obj/main.py`, `api_obj/manager.py`,
+`api_obj/shard_runner.py`, `api_obj/routers/{detectors,streams,system}.py`
+(skip revoke.py — #120-blocked).
+
+**No new bugs filed this round.** R94's #116/#117 + R95's #120
+still pending. #106 fixed (R95). #107 fix branch in flight on
+public mirror.
+
+**Push-verification protocol worked (20th round in a row)**: all
+3 acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (25th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R97: **~3206 new tests across 236 test files (priv)
+[155 broken by #114, product-owned]; 0 product files touched
+across 76 rounds.** Serial execution still clean. cv-faceauth
+suite: 1390 passing.
+
+Total pending bugs filed: **15 product (#97-#102, #104, #105,
+#107, #108, #112, #114, #116, #117, #120)** + **1 process (#103)**
+= **16 issues open**.
+
 ## TL;DR — what changed on 2026-05-26 (R96 — 3-phase round +43 tests, streaming SKIPPED; **permissionMiddleware 100%; Layout 98.36%; api_obj/deps 100%**)
 
 - **server** — `server/middlewares/permissionMiddleware.js` +
