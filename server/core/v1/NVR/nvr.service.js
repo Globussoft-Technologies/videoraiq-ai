@@ -1008,4 +1008,5 @@ class NVRService {
   }
 }
 
+export { NVRService };
 export default new NVRService();
