@@ -3,6 +3,96 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R86 — 3-phase round +66 tests, streaming SKIPPED; **dashboard.service 85.14%, dispatch_cache 100%, clone divergence discovered**)
+
+- **server** — `core/v1/dashboard/dashboard.service.js` body-filter
+  branches. TWO new test files this round (pure in-memory Mongo,
+  0 mocks each):
+  - `dashboard.service.headerStats.bodyFilters.test.js` (18 tests)
+    — nvrId/channelId/location/department body filters; memberId
+    + authorizedNVRs/authorizedChannel scoping; outer-catch
+  - `dashboard.service.criticalityStats.filters.test.js` (17 tests)
+    — same filter arms + all timeAgo buckets
+  
+  Coverage of dashboard.service.js: **71.78% → 85.14%** statements
+  (+13.36pp); branches **81.77% → 89.63%** (+7.86pp); fns hold at
+  100%. Suite +35. Public `c667e49`, private mirror `4062e78`.
+- **client** — TWO files this round, both 0% → covered:
+  - `Detection/components/zonemarking/AreaMarkingControls.jsx`
+    (props/ref-driven action-bar, 13 tests, 4 mocks — sonner,
+    Switch, Select, DeleteConfirmation). Covered on **both clones**.
+  - `Users/EmployeeRegister.jsx` (Formik + fetch two-step
+    onboarding, 7 tests, 6 mocks — sonner, react-webcam,
+    RegisterFormStep1, RegisterFormStep2, Button, global.fetch).
+    **PRIVATE ONLY — file does NOT exist on public mirror.** The
+    agent documented this divergence inline in the public mirror's
+    vitest.config.js include block.
+  
+  Suite delta: private 1653 → 1673 (+20); public 1660 → 1673 (+13).
+  Public `5f2aac0`, private mirror `9299704`.
+- **streaming** — **SKIPPED** per R83/R84/R85 practical-ceiling
+  diagnosis.
+- **cv-faceauth** — `workers/dispatch_cache.py` **79% → 100%** (+21pp).
+  New `cv-faceauth/tests/test_dispatch_cache_errors.py` (**11 tests,
+  0 skips**). Pinned: `mark_dispatched` redis-failure branch (lines
+  184-186); entire `clear_camera` method (disabled-noop, no-keys,
+  keys-present-deleted, redis-exception-fails-closed);
+  `should_dispatch_incident` edge cases (prefix-mismatch continue,
+  empty-ids-str continue, non-integer ID ValueError continue, outer
+  redis exception fails-open); `mark_incident_dispatched` (disabled-
+  noop, redis-exception swallowed). All branches behaved correctly
+  (fail-open on redis errors). Suite 1284 → **1295 passing** / 8
+  skipped. Total cv-faceauth coverage holds at **91%**. Private only
+  `2511b6d`.
+
+## Clone divergence discovered (private vs public mirror)
+
+For the **first time** the agent observed product code that exists
+on **private only** and not on the public mirror:
+
+- `client/src/page/user/Users/EmployeeRegister.jsx` — exists on
+  `videoraiq` private clone, does NOT exist on `videoraiq-ai`
+  public mirror.
+
+This may be a deliberate keep-private feature, an unmerged branch,
+or just a sync lag. Going forward the cron may encounter more
+asymmetries between the two clones. The R86 client agent handled
+this cleanly by committing both test files to private but only the
+common test (AreaMarkingControls) to the public mirror, with an
+inline comment in `vitest.config.js` explaining the asymmetry.
+
+Roadmap update: **future client rounds should check whether a
+target src file exists on BOTH clones before committing tests
+that reference it on the public mirror.** A `git ls-files` check
+would catch this before commit.
+
+## Active disruption from earlier product activity
+
+R83's `nvr.service.cameraOps.test.js` (cron-authored, mirrored to
+both clones) has 2 failing assertions because R84 product team's
+`f847913 security(NVR): ObjectId validation` changed expected
+status codes from 500 → 400. R86 agents confirmed these are still
+failing this round. **Not touched per ABSOLUTE RULE** (the product
+team owns those test files now). The 14 client-side failures from
+product commit `fb36495 feat(NVR)` also carry over unchanged.
+
+**No new bugs filed this round.** R68's roles.service.js mongoose
+issue and R72's permissions.utility deletePermissions issue remain
+unfiled.
+
+**Push-verification protocol worked (9th round in a row)**: all 3
+acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (14th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R86: **~2711 new tests across 200 test files
+(milestone!)** ; 0 product files touched across 65 rounds. Serial
+execution still clean. cv-faceauth suite: 1295 passing.
+
+Total pending bugs filed: **13 product (#96-#102, #104-#108, #112)** +
+**1 process (#103)** = 14 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R85 — 3-phase round +46 tests, streaming SKIPPED; **python.service 99.2%, metricsHelper 100%, local_matcher_old 99%, bug #112 filed**)
 
 - **server** — TWO new test files this round:
