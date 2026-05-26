@@ -5,14 +5,15 @@ import logger from "../../../utils/logger.js";
 import NVRValidation from "./nvr.validate.js";
 import { decrypt, encrypt } from "../../../utils/cryptoUtils.js";
 import Response from "../../../utils/response.js";
-import brandHandlers, { updateHandlers } from "./nvr.brands.js"; // Import brand-specific handlers
+import brandHandlers, { updateHandlers } from "./nvr.brands.js";
 import DeleteService from "../../../services/delete.service.js";
 import Channel from "../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
 import net from "net";
 import config from "config";
 import { autoSyncLocations } from "../../../utils/helperFunctions.js";
-import { buildRTSPUrl, updateCameraStream } from "../../../utils/rtspStream.js";
+import { buildRTSPUrl, updateCameraStream, registerCameraStream } from "../../../utils/rtspStream.js";
+import { parseXml } from "../../../utils/xmlParse.js";
 const APP_ENV = config.get("APP_ENV");
 
 class NVRService {
@@ -888,6 +889,497 @@ class NVRService {
         .json(
           Response.errorResp("Failed to retrieve NVR locations", error.message),
         );
+    }
+  }
+
+  async registerAndFetchCameras(req, res, _next) {
+    try {
+      const { error, value } = NVRValidation.registerNVR(req.body);
+      if (error) {
+        return res
+          .status(400)
+          .json(Response.userFailResp("Validation Failed", error.message));
+      }
+
+      const { brand, ip, port, username, password, rtspPort, nvrName, location } = value;
+      const user_id = req?.verified?.userData?.user_id;
+
+      // Check if NVR already exists by querying all NVRs and comparing
+      const allNvrs = await NVR.find({ userId: user_id, port });
+      let existingNvr = null;
+
+      for (const nvr of allNvrs) {
+        const decryptedIp = decrypt(nvr.ip);
+        if (decryptedIp === ip) {
+          existingNvr = nvr;
+          break;
+        }
+      }
+
+      // Authenticate and fetch available cameras from device
+      const camerasData = await this._fetchCamerasFromNvr(brand, ip, port, username, password);
+      if (camerasData.error) {
+        return res.status(400).json(
+          Response.userFailResp("NVR Authentication failed", camerasData.error),
+        );
+      }
+
+      if (existingNvr) {
+        // NVR exists - show all available cameras + mark which ones are already added
+        const addedCameras = await Camera.find({ nvrId: existingNvr._id });
+        const addedChannelIds = addedCameras.map((c) => c.channelId);
+
+        // Mark cameras that are already added
+        const camerasWithStatus = camerasData.cameras.map((cam) => ({
+          ...cam,
+          isAdded: addedChannelIds.includes(cam.channelId),
+        }));
+
+        return res.status(200).json(
+          Response.userSuccessResp("Cameras retrieved successfully", {
+            nvr: existingNvr,
+            cameras: camerasWithStatus,
+            isNew: false,
+          }),
+        );
+      }
+
+      // Save NVR without cameras
+      const savedNvr = await NVR.create({
+        userId: user_id,
+        ip,
+        username,
+        password,
+        port,
+        rtspPort,
+        nvrName,
+        brand: brand.toLowerCase(),
+        deviceName: camerasData.deviceInfo?.deviceName || "",
+        model: camerasData.deviceInfo?.model || "",
+        serialNumber: camerasData.deviceInfo?.serialNumber || "",
+        macAddress: camerasData.deviceInfo?.macAddress || "",
+        firmwareVersion: camerasData.deviceInfo?.firmwareVersion || "",
+        deviceType: camerasData.deviceInfo?.deviceType || "",
+        location: location || "",
+        cameraCount: 0,
+      });
+
+      return res.status(201).json(
+        Response.userSuccessResp("NVR registered and cameras fetched successfully", {
+          nvr: savedNvr,
+          cameras: camerasData.cameras,
+          isNew: true,
+        }),
+      );
+    } catch (error) {
+      logger.error("Register and Fetch Cameras Error:", error);
+      // Handle duplicate key error
+      if (error.message.includes("E11000")) {
+        return res.status(400).json(
+          Response.userFailResp("NVR already exists", "This NVR is already registered"),
+        );
+      }
+      return res
+        .status(500)
+        .json(Response.errorResp("Failed to register and fetch cameras", error.message));
+    }
+  }
+
+  async _fetchCamerasFromNvr(brand, ip, port, username, password) {
+    try {
+      const client = new DigestFetch(username, password);
+
+      if (brand.toLowerCase() === "hikvision") {
+        const deviceInfoRes = await client.fetch(
+          `http://${ip}:${port}/ISAPI/System/deviceInfo`
+        );
+        if (!deviceInfoRes.ok) {
+          return { error: "Failed to authenticate with Hikvision NVR" };
+        }
+
+        const deviceInfoXml = await deviceInfoRes.text();
+        const deviceInfoData = await parseXml(deviceInfoXml);
+        const deviceInfo = deviceInfoData?.DeviceInfo;
+
+        const channelsRes = await client.fetch(
+          `http://${ip}:${port}/ISAPI/ContentMgmt/InputProxy/channels`
+        );
+        const channelsXml = await channelsRes.text();
+        const channelsData = await parseXml(channelsXml);
+        const channelList = channelsData?.InputProxyChannelList?.InputProxyChannel;
+        const channels = Array.isArray(channelList) ? channelList : (channelList ? [channelList] : []);
+
+        const statusRes = await client.fetch(
+          `http://${ip}:${port}/ISAPI/ContentMgmt/InputProxy/channels/status`
+        );
+        const statusXml = await statusRes.text();
+        const statusData = await parseXml(statusXml);
+        const statusList =
+          statusData?.InputProxyChannelStatusList?.InputProxyChannelStatus;
+        const statuses = Array.isArray(statusList) ? statusList : [statusList];
+
+        const streamInfoRes = await client.fetch(
+          `http://${ip}:${port}/ISAPI/Streaming/channels/`
+        );
+        const streamInfoXml = await streamInfoRes.text();
+        const streamInfoData = await parseXml(streamInfoXml);
+        const streamingChannelList =
+          streamInfoData?.StreamingChannelList?.StreamingChannel;
+        const streamingChannels = Array.isArray(streamingChannelList)
+          ? streamingChannelList
+          : [streamingChannelList];
+
+        const streamResolutionMap = {};
+        for (const stream of streamingChannels) {
+          const id = stream?.id;
+          const width = stream?.Video?.videoResolutionWidth;
+          const height = stream?.Video?.videoResolutionHeight;
+          if (id && width && height) {
+            streamResolutionMap[id] = {
+              width: parseInt(width, 10),
+              height: parseInt(height, 10),
+            };
+          }
+        }
+
+        const cameraList = [];
+        for (const ch of channels) {
+          const chId = ch.id;
+          const status = statuses.find((s) => s.id === chId);
+          const streamIds =
+            status?.streamingProxyChannelIdList?.streamingProxyChannelId || [];
+
+          const rtspChannels = streamIds.map((id) => ({
+            id,
+            resolution: streamResolutionMap[id] || { width: 0, height: 0 },
+          }));
+
+          cameraList.push({
+            channelId: chId,
+            rtspChannels,
+            name: ch?.name || `Camera ${chId}`,
+            ipAddress: ch?.sourceInputPortDescriptor?.ipAddress || "",
+            model: ch?.sourceInputPortDescriptor?.model || "",
+            serialNumber: ch?.sourceInputPortDescriptor?.serialNumber || "",
+            firmwareVersion: ch?.sourceInputPortDescriptor?.firmwareVersion || "",
+            streamEndpoint: "/Streaming/Channels/",
+          });
+        }
+
+        return {
+          deviceInfo,
+          cameras: cameraList,
+        };
+      } else if (brand.toLowerCase() === "cpplus") {
+        // Helper function to parse CP Plus plain text response
+        const parseCPPlusResponse = (text) => {
+          const lines = text.split("\n");
+          const result = {};
+          lines.forEach((line) => {
+            const trimmed = line.trim();
+            if (trimmed && trimmed.includes("=")) {
+              const [key, ...valueParts] = trimmed.split("=");
+              const value = valueParts.join("=");
+              result[key.trim()] = value.trim();
+            }
+          });
+          return result;
+        };
+
+        // Helper to group array properties from CP Plus response
+        const groupArrayProperties = (data, prefix) => {
+          const groups = {};
+          Object.keys(data).forEach((key) => {
+            if (key.startsWith(prefix)) {
+              const match = key.match(/\[(\d+)\](?:\[(\d+)\])?\.?(.+)?/);
+              if (match) {
+                const index1 = match[1];
+                const index2 = match[2];
+                const property = match[3];
+                const groupKey = index2 ? `${index1}_${index2}` : index1;
+                if (!groups[groupKey]) {
+                  groups[groupKey] = {
+                    channel: index1,
+                    stream: index2,
+                  };
+                }
+                if (property) {
+                  groups[groupKey][property] = data[key];
+                }
+              }
+            }
+          });
+          return Object.values(groups);
+        };
+
+        const deviceInfoRes = await client.fetch(
+          `http://${ip}:${port}/cgi-bin/magicBox.cgi?action=getSystemInfo`
+        );
+
+        if (!deviceInfoRes.ok) {
+          return { error: "Failed to authenticate with CP Plus NVR" };
+        }
+
+        const deviceInfoText = await deviceInfoRes.text();
+        const deviceInfoData = parseCPPlusResponse(deviceInfoText);
+
+        const deviceInfo = {
+          deviceName:
+            deviceInfoData["deviceName"] ||
+            deviceInfoData["DeviceName"] ||
+            "",
+          model:
+            deviceInfoData["deviceModel"] ||
+            deviceInfoData["DeviceType"] ||
+            "",
+          serialNumber:
+            deviceInfoData["serialNumber"] || deviceInfoData["SerialNo"] || "",
+          macAddress:
+            deviceInfoData["macAddress"] || deviceInfoData["MacAddress"] || "",
+          firmwareVersion:
+            deviceInfoData["softwareVersion"] ||
+            deviceInfoData["SoftwareVersion"] ||
+            "",
+          deviceType:
+            deviceInfoData["deviceClass"] ||
+            deviceInfoData["DeviceClass"] ||
+            "",
+        };
+
+        // Get channel titles
+        const channelTitlesRes = await client.fetch(
+          `http://${ip}:${port}/cgi-bin/configManager.cgi?action=getConfig&name=ChannelTitle`
+        );
+        const channelTitlesText = await channelTitlesRes.text();
+        const channelTitlesData = parseCPPlusResponse(channelTitlesText);
+
+        const channelNames = {};
+        Object.keys(channelTitlesData).forEach((key) => {
+          const match = key.match(/table\.ChannelTitle\[(\d+)\]\.Name/);
+          if (match) {
+            const channelIdx = match[1];
+            channelNames[channelIdx] = channelTitlesData[key];
+          }
+        });
+
+        // Get channels
+        const channelsRes = await client.fetch(
+          `http://${ip}:${port}/cgi-bin/configManager.cgi?action=getConfig&name=VideoInOptions`
+        );
+        const channelsText = await channelsRes.text();
+        const channelsData = parseCPPlusResponse(channelsText);
+        const channelGroups = groupArrayProperties(
+          channelsData,
+          "table.VideoInOptions["
+        );
+
+        // Get encode config
+        const encodeRes = await client.fetch(
+          `http://${ip}:${port}/cgi-bin/configManager.cgi?action=getConfig&name=Encode`
+        );
+        const encodeText = await encodeRes.text();
+        const encodeData = parseCPPlusResponse(encodeText);
+
+        const encodeGroups = {};
+        Object.keys(encodeData).forEach((key) => {
+          const match = key.match(
+            /table\.Encode\[(\d+)\]\.(MainFormat|ExtraFormat)\[(\d+)\]\.Video\.(Width|Height|Compression|BitRate|FPS)/
+          );
+
+          if (match) {
+            const channelIdx = match[1];
+            const streamType = match[2];
+            const streamIdx = match[3];
+            const property = match[4];
+
+            const streamKey = `${channelIdx}_${streamType}_${streamIdx}`;
+
+            if (!encodeGroups[streamKey]) {
+              encodeGroups[streamKey] = {
+                channel: channelIdx,
+                streamType,
+                streamIdx,
+                id: `${parseInt(channelIdx) + 1}${
+                  streamType === "MainFormat" ? "01" : "02"
+                }`,
+              };
+            }
+
+            if (property === "Width") {
+              encodeGroups[streamKey].width = parseInt(encodeData[key], 10);
+            } else if (property === "Height") {
+              encodeGroups[streamKey].height = parseInt(encodeData[key], 10);
+            }
+          }
+        });
+
+        const cameraList = [];
+        for (const chGroup of channelGroups) {
+          const chId = chGroup.channel;
+
+          const channelStreams = Object.values(encodeGroups).filter(
+            (stream) => stream.channel === chId && stream.width && stream.height
+          );
+
+          const rtspChannels = channelStreams.map((stream) => ({
+            id: stream.id,
+            resolution: {
+              width: stream.width || 0,
+              height: stream.height || 0,
+            },
+          }));
+
+          const cameraName =
+            channelNames[chId] ||
+            chGroup.Alias ||
+            chGroup.Name ||
+            `Camera ${parseInt(chId) + 1}`;
+
+          cameraList.push({
+            channelId: (parseInt(chId) + 1).toString(),
+            rtspChannels,
+            name: cameraName,
+            ipAddress: chGroup?.IPAddress || "",
+            model: chGroup?.Model || "",
+            serialNumber: chGroup?.SerialNumber || "",
+            firmwareVersion: chGroup?.FirmwareVersion || "",
+            streamEndpoint: "/cam/realmonitor",
+          });
+        }
+
+        return {
+          deviceInfo,
+          cameras: cameraList,
+        };
+      } else {
+        return { error: "This brand is not yet supported for camera discovery" };
+      }
+    } catch (error) {
+      logger.error("Fetch Cameras From NVR Error:", error);
+      return { error: error.message };
+    }
+  }
+
+  async addSelectedCameras(req, res, _next) {
+    try {
+      const user_id = req?.verified?.userData?.user_id;
+      const { nvrId, cameras } = req.body;
+
+      if (!nvrId || !Array.isArray(cameras) || cameras.length === 0) {
+        return res
+          .status(400)
+          .json(
+            Response.userFailResp(
+              "Validation Failed",
+              "nvrId and cameras array are required",
+            ),
+          );
+      }
+
+      const nvr = await NVR.findOne({ _id: nvrId, userId: user_id });
+      if (!nvr) {
+        return res.status(404).json(Response.notFoundResp("NVR not found"));
+      }
+
+      // Get plain password for stream registration
+      const plainPassword = nvr.getDecryptedPassword?.() || nvr.password;
+      const plainIp = decrypt(nvr.ip);
+
+      const client = new DigestFetch(nvr.username, plainPassword);
+      const cameraResults = [];
+
+      // Add selected cameras
+      for (const camera of cameras) {
+        const { channelId } = camera;
+
+        // Check if camera already exists
+        const existingCam = await Camera.findOne({
+          nvrId,
+          channelId,
+        });
+
+        if (existingCam) {
+          cameraResults.push(existingCam);
+          continue;
+        }
+
+        // Create new camera
+        const savedCam = await Camera.create({
+          nvrId,
+          userId: user_id,
+          channelId,
+          rtspChannels: camera.rtspChannels || [],
+          name: camera.name || "",
+          ipAddress: camera.ipAddress || "",
+          model: camera.model || "",
+          serialNumber: camera.serialNumber || "",
+          firmwareVersion: camera.firmwareVersion || "",
+          streamEndpoint: camera.streamEndpoint || "",
+        });
+
+        // Register camera stream
+        const uid = `${nvrId}-${savedCam._id}`;
+        const rtspUrl = buildRTSPUrl(nvr, savedCam, "main");
+        await registerCameraStream(uid, rtspUrl);
+
+        cameraResults.push(savedCam);
+      }
+
+      // Update camera count
+      const totalCameras = await Camera.countDocuments({ nvrId });
+      await NVR.findByIdAndUpdate(nvrId, { cameraCount: totalCameras });
+      console.log(totalCameras);
+      
+      return res.status(201).json(
+        Response.userSuccessResp("Cameras added successfully", {
+          cameras: cameraResults,
+        }),
+      );
+    } catch (error) {
+      logger.error("Add Selected Cameras Error:", error);
+      return res
+        .status(500)
+        .json(Response.errorResp("Failed to add cameras", error.message));
+    }
+  }
+
+  async editNvrCameras(req, res, _next) {
+    try {
+      const user_id = req?.verified?.userData?.user_id;
+      const { nvrId } = req.params;
+
+      if (!nvrId) {
+        return res.status(400).json(Response.userFailResp("Validation Failed", "nvrId is required"));
+      }
+
+      const nvr = await NVR.findOne({ _id: nvrId, userId: user_id });
+      if (!nvr) {
+        return res.status(404).json(Response.notFoundResp("NVR not found"));
+      }
+
+      const plainPassword = decrypt(nvr.password);
+      const plainIp = decrypt(nvr.ip);
+
+      const camerasData = await this._fetchCamerasFromNvr(nvr.brand, plainIp, nvr.port, nvr.username, plainPassword);
+      if (camerasData.error) {
+        return res.status(400).json(Response.userFailResp("Failed to fetch cameras", camerasData.error));
+      }
+
+      const addedCameras = await Camera.find({ nvrId });
+      const addedMap = new Map(addedCameras.map((c) => [c.channelId, c._id]));
+
+      const availableCameras = camerasData.cameras.map((cam) => ({
+        ...cam,
+        isAdded: addedMap.has(cam.channelId),
+        dbId: addedMap.get(cam.channelId) || null,
+      }));
+
+      return res.status(200).json(
+        Response.userSuccessResp("Edit cameras retrieved successfully", { nvr, availableCameras }),
+      );
+    } catch (error) {
+      logger.error("Edit NVR Cameras Error:", error);
+      return res.status(500).json(Response.errorResp("Failed to fetch edit data", error.message));
     }
   }
 
