@@ -913,6 +913,27 @@ export default defineConfig({
         // {UserDetails/UserDetails,Users/UserForm}.test.jsx.
         "src/page/user/UserDetails/UserDetails.jsx",
         "src/page/user/Users/UserForm.jsx",
+        // Round 86: Detection/components/zonemarking/AreaMarkingControls
+        // — the action-bar of buttons rendered beneath the zone-marking
+        // canvas inside Innersettings / AreaSettingsPreview. Pure props/
+        // ref-driven (no API of its own): validateDetectionType gates
+        // every handler with a "Please select Detection Type" toast,
+        // selectedType="lineCrossingSettings" branches to a Draw Line
+        // button (suppressing Max/Min/Start-Drawing), Max/Min Area write
+        // the documented full-screen / 100..300 rectangle through
+        // cameraStreamRef.setPoints + flip drawingMode off / moveMode on,
+        // Start Drawing toggles drawingMode + clears empty points via
+        // clearPoints, Save Area validates "draw an area" + the
+        // selectedsettingType-required guard before opening the save
+        // modal, the save modal Submit validates both names are non-
+        // blank and ≤ MAX_NAME_LENGTH, and Clear All opens
+        // DeleteConfirmation -> handleDeleteArea on confirm. Tested under
+        // tests/unit/page/user/Detection/components/zonemarking/
+        // AreaMarkingControls.test.jsx.
+        // (R86 also covered Users/EmployeeRegister in the private repo;
+        // that source file doesn't exist on the public mirror so the
+        // include + test live only on the private clone.)
+        "src/page/user/Detection/components/zonemarking/AreaMarkingControls.jsx",
       ],
       exclude: [
         "tests/**",
