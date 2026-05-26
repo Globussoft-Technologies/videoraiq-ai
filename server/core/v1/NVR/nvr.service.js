@@ -14,6 +14,7 @@ import config from "config";
 import { autoSyncLocations } from "../../../utils/helperFunctions.js";
 import { buildRTSPUrl, updateCameraStream, registerCameraStream } from "../../../utils/rtspStream.js";
 import { parseXml } from "../../../utils/xmlParse.js";
+import mongoose from "mongoose";
 const APP_ENV = config.get("APP_ENV");
 
 class NVRService {
@@ -1276,6 +1277,17 @@ class NVRService {
           );
       }
 
+      if (!mongoose.Types.ObjectId.isValid(nvrId)) {
+        return res
+          .status(400)
+          .json(
+            Response.userFailResp(
+              "Validation Failed",
+              "Invalid nvrId format",
+            ),
+          );
+      }
+
       const nvr = await NVR.findOne({ _id: nvrId, userId: user_id });
       if (!nvr) {
         return res.status(404).json(Response.notFoundResp("NVR not found"));
@@ -1352,6 +1364,10 @@ class NVRService {
         return res.status(400).json(Response.userFailResp("Validation Failed", "nvrId is required"));
       }
 
+      if (!mongoose.Types.ObjectId.isValid(nvrId)) {
+        return res.status(400).json(Response.userFailResp("Validation Failed", "Invalid nvrId format"));
+      }
+
       const nvr = await NVR.findOne({ _id: nvrId, userId: user_id });
       if (!nvr) {
         return res.status(404).json(Response.notFoundResp("NVR not found"));
@@ -1390,6 +1406,10 @@ class NVRService {
 
       if (!cameraId) {
         return res.status(400).json(Response.userFailResp("Validation Failed", "cameraId is required"));
+      }
+
+      if (!mongoose.Types.ObjectId.isValid(cameraId)) {
+        return res.status(400).json(Response.userFailResp("Validation Failed", "Invalid cameraId format"));
       }
 
       const camera = await Camera.findOne({ _id: cameraId, userId: user_id });
