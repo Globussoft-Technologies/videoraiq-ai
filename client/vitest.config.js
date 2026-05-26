@@ -1221,6 +1221,15 @@ export default defineConfig({
         // bar and disables every row checkbox. Tested under tests/unit/
         // page/user/RolePermissions/PermissionStep.test.jsx.
         "src/page/user/RolePermissions/PermissionStep.jsx",
+        // Round 104: routes/PrivateRoute — the simplest auth-gate route
+        // in the app. Checks Cookies.get('token') and either renders
+        // <Outlet /> or <Navigate to="/admin/login" />. Pure
+        // presentational gate with no useEffect / no async / no
+        // side-effects beyond the cookie read. The src/routes/** tree is
+        // otherwise excluded; this single file is now pulled into
+        // coverage via an explicit include path. Tested under tests/unit/
+        // routes/PrivateRoute.test.jsx.
+        "src/routes/PrivateRoute.jsx",
       ],
       exclude: [
         "tests/**",
