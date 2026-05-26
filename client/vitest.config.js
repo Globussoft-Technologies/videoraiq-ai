@@ -913,27 +913,54 @@ export default defineConfig({
         // {UserDetails/UserDetails,Users/UserForm}.test.jsx.
         "src/page/user/UserDetails/UserDetails.jsx",
         "src/page/user/Users/UserForm.jsx",
-        // Round 86: Detection/components/zonemarking/AreaMarkingControls
-        // — the action-bar of buttons rendered beneath the zone-marking
-        // canvas inside Innersettings / AreaSettingsPreview. Pure props/
-        // ref-driven (no API of its own): validateDetectionType gates
-        // every handler with a "Please select Detection Type" toast,
-        // selectedType="lineCrossingSettings" branches to a Draw Line
-        // button (suppressing Max/Min/Start-Drawing), Max/Min Area write
-        // the documented full-screen / 100..300 rectangle through
-        // cameraStreamRef.setPoints + flip drawingMode off / moveMode on,
-        // Start Drawing toggles drawingMode + clears empty points via
-        // clearPoints, Save Area validates "draw an area" + the
-        // selectedsettingType-required guard before opening the save
-        // modal, the save modal Submit validates both names are non-
-        // blank and ≤ MAX_NAME_LENGTH, and Clear All opens
-        // DeleteConfirmation -> handleDeleteArea on confirm. Tested under
-        // tests/unit/page/user/Detection/components/zonemarking/
-        // AreaMarkingControls.test.jsx.
-        // (R86 also covered Users/EmployeeRegister in the private repo;
-        // that source file doesn't exist on the public mirror so the
-        // include + test live only on the private clone.)
+        // Round 86: two more 0% surfaces —
+        //  - Detection/components/zonemarking/AreaMarkingControls: the
+        //    action-bar of buttons rendered beneath the zone-marking canvas
+        //    inside Innersettings / AreaSettingsPreview. Pure props/ref-
+        //    driven (no API of its own): validateDetectionType gates every
+        //    handler with a "Please select Detection Type" toast,
+        //    selectedType="lineCrossingSettings" branches to a Draw Line
+        //    button (suppressing Max/Min/Start-Drawing), Max/Min Area write
+        //    the documented full-screen / 100..300 rectangle through
+        //    cameraStreamRef.setPoints + flip drawingMode off / moveMode on,
+        //    Start Drawing toggles drawingMode + clears empty points via
+        //    clearPoints, Save Area validates "draw an area" + the
+        //    selectedsettingType-required guard before opening the save
+        //    modal, the save modal Submit validates both names are non-
+        //    blank and ≤ MAX_NAME_LENGTH, and Clear All opens
+        //    DeleteConfirmation -> handleDeleteArea on confirm.
+        //  - Users/EmployeeRegister: the public /employee-register screen
+        //    that bootstraps departments + employee locations on mount,
+        //    walks a two-step Formik flow (details -> photo upload via
+        //    react-webcam or file input), the Continue button runs the Yup
+        //    schema + checkEmail (fetch isEmailExist) before stepping, the
+        //    Register button posts to createUserAPI with FormData when
+        //    enough photos are uploaded (3, or 1 when VITE_ORGANISATION_ID
+        //    === "dubai") and toasts success / setRegistered(true).
+        // Each entry has a dedicated test under tests/unit/page/user/
+        // {Detection/components/zonemarking/AreaMarkingControls,
+        // Users/EmployeeRegister}.test.jsx.
         "src/page/user/Detection/components/zonemarking/AreaMarkingControls.jsx",
+        "src/page/user/Users/EmployeeRegister.jsx",
+        // Round 88: two more 0% surfaces —
+        //  - Streams/Nvrsettings: the NVR list-card variant rendered on the
+        //    top-level /streams Streams page (distinct from NvrLocalsettings
+        //    in R43). Empty-state placeholder, populated card render with
+        //    decrypt(ip) + truthy-gated IP/Username/RTSP-Port fields,
+        //    StreamHeader Add-NVR CTA, Edit-row Nvrform pre-fill, Camera
+        //    Settings + View CCTV Streams navigates, Manage Cameras opens
+        //    CameraDiscoveryModal, Delete -> DeleteConfirmation -> onDeleteNvr,
+        //    permission-gate hides Edit/Cameras/Delete when denied.
+        //  - Dashboard/EmployeesOnDuty: the "Authorized Employees" search +
+        //    scroll-paginated list card. On debounced search change calls
+        //    authorizedUsers(skip,limit,term); selecting a row opens a
+        //    Formik+Yup edit dialog that submits via updateAuthorizedUsers
+        //    when at least one field differs from the original (warning
+        //    toast on no-change). canEdit gates the inline SquarePen
+        //    edit-toggles + the Save Profile submit; non-200 surfaces
+        //    toast.error.
+        "src/page/user/Streams/Nvrsettings.jsx",
+        "src/page/user/Dashboard/EmployeesOnDuty.jsx",
       ],
       exclude: [
         "tests/**",
