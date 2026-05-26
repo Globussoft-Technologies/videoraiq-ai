@@ -3,6 +3,73 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R70 — full 4-phase round, +52 tests; **cv-faceauth suite hits 1000 passing; 3 files lifted to 98%+**)
+
+- **server** — pivoted from permissions.utility (already at 89.51%
+  stmts / 100% fns — diminishing) to `server/middlewares/verifyToken.js`.
+  The whole `decoded.memberId` user-token branch (lines 65-98) was
+  uncovered, plus the python-backend flag on a user-token (100-102)
+  and the orgId success arm (108-110). New
+  `server/tests/unit/middlewares/verifyToken.memberId.test.js`
+  (**7 tests, 2 mocks** — checkActivePlan + helperFunctions.getEmpAuthInfo,
+  same pattern as existing verifyToken.test.js). Covers: User.findOne +
+  authorizedChannelsModel.findOne + roleModel.aggregate `$lookup` on
+  `permissionschemas` (surfacing permissionConfig + authorizedChannel
+  on `req.verified`), empty-user / no-channels fall-through (the
+  commented-out "User not found" guard is dead code), python-backend
+  service flag on a USER-signed token → `decoded.system = true`,
+  orgId assignment from getEmpAuthInfo (success path + null-result +
+  empty-data arms), mainRoute 24-hex-ObjectId masking. Coverage of
+  verifyToken.js: **74.12% → 100%** statements; **80.95% → 100%**
+  branches. Suite 2531 → 2538 / +7. Public `0f3cb2f`, private mirror
+  `f704c96`.
+- **client** — `layout/Header/HeaderActions.jsx` (0% → **100%**, +5
+  tests, 1 mock — `@/components/ui/button` stubbed to plain `<button>`).
+  The top-right desktop-header action cluster has two distinct branches:
+  `UpgradeReqiore` [sic] false → Install button (installerStatus flips
+  label "Install"/"Installed" + disabled state) and true → Upgrade pill
+  (CircleFadingArrowUp + Version stamp + caption + FaBell). Both
+  interactive paths build a throwaway `<a href=<bucket-url>>.click()`
+  for download; `document.createElement` is spied so the anchor click
+  is observable without real navigation. Suite 1469 → 1474. Public
+  `95a0599`, private mirror `73ee420`.
+- **streaming** — `internal/logger` **91.0% → 92.5%** (+1.5pp).
+  `cleanupRoutine` 60.0% → **100%** (+40pp) and `deleteOldFiles`
+  60.0% → 66.7% (+6.7pp; remaining is the dead-code branch per
+  bug #96). New `streaming/internal/logger/logrotator_routine_test.go`
+  (2 tests). `TestLogRotator_DeleteOldFiles_ReadDirError` pins the
+  early `os.ReadDir` error return via a non-existent nested path.
+  `TestLogRotator_CleanupRoutine_TickFires` pins the previously-
+  unreached `<-lr.cleanupTick.C` arm by installing a 5ms ticker
+  directly on the rotator, running cleanupRoutine in a goroutine,
+  polling the FS for the rotation side-effect (no `time.Sleep` sync),
+  then closing `done` to drain the loop deterministically. Goroutine
+  join verified with 2s timeout. Private only `f76fdcd`.
+- **cv-faceauth** — `workers/api_clients.py` **46% → 98%** (+52pp,
+  173 of 179 missing lines now covered) — the biggest cv-faceauth
+  leverage available. New `cv-faceauth/tests/test_api_clients_http.py`
+  (**38 tests**). Pinned: retry loops for all 5 clients (Access,
+  Attendance, Incident, Registration, EntryLog); payload assembly
+  for every IncidentLogClient method (PPE / Crowd / PersonCount /
+  Light / LineCrossing); JWT refresh happy path + exception
+  swallowing + near-expiry re-refresh; lazy `_get_client` creation +
+  closed-client rebuild; 3 singleton factories
+  (`get_incident_log_client`, `get_registration_client`,
+  `get_entry_log_client`) both unconfigured-None and
+  configured-caching branches; `.close()` on every client.
+  **Suite 962 → 1000 passing / 7 skipped** — **first cv-faceauth
+  4-digit suite count.** Repo total 79% → 81%. Private only `6ce11da`.
+
+**No new bugs this round.** The R68-noted latent `roles.service.js
+::update` mongoose Schema.Types.ObjectId issue remains unfiled
+because no R70 agent touched roles.service.
+
+Cumulative R22→R70: **~2023 new tests across 131 test files; 0 product
+files touched across 49 rounds.** Serial execution still clean.
+
+Total pending bugs filed: **11 product (#96-#102, #104-#107)** + **1
+process (#103)** = 12 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R69 — full 4-phase round, +35 tests; **no new bugs; vehicle.service + redis_dispatcher near 100%**)
 
 - **server** — `core/v1/vehicle/vehicle.service.js` body. New
@@ -1267,7 +1334,7 @@ re-target):
 ### Client — page+component sweep
 
 **Done by area:**
-- Layout/Header: DesktopNav (R22), MobileNav (R24), UpgradeModal (R26), ProfileDropdown (R68), **HeaderSkeleton (R69)**
+- Layout/Header: DesktopNav (R22), MobileNav (R24), UpgradeModal (R26), ProfileDropdown (R68), HeaderSkeleton (R69), **HeaderActions (R70)**
 - Layout/Sidebar: LogsSidebar (R23), AdminSidebar (R49), SettingsSidebar + Sidebar (R67), **SidebarSkeleton (R69)**
 - EmployeeLogs: TimePickerComponents (R25), LogsFilterPopover (R31), BreakLogsDialog (R33)
 - StorageSetting: Googledrive (R27), S3 (R28), Sftp (R29), AddStorageModal (R61)
@@ -1337,11 +1404,10 @@ already done):**
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R69):**
+**Coverage state (after R70):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 95.2%,
-  `internal/config` 82.4%, `internal/logger` 91.0%, `internal/server`
-  **89.1%** (R69: checkPlaybackToken 82.6%→100%, handleCamera 79.0%→88.7%),
-  `internal/stream` **80.9%**
+  `internal/config` 82.4%, `internal/logger` **92.5%** (R70: cleanupRoutine
+  60→100%), `internal/server` **89.1%**, `internal/stream` **80.9%**
 
 **Known blocked on product-side seams** (per R67 agent investigation):
 - `cleanupInactiveStreams` / `cleanupInactiveSubStreams` / `cleanupInactivePlaybacks` — 5-min `time.NewTicker` blocking loops with no shutdown channel; would need product `init()` seam
