@@ -3,7 +3,109 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
-## TL;DR — what changed on 2026-05-26 (R102 — 3-phase round +91 tests; **storage.validator 100%; Detection/Api/put 4th clone divergence; api_obj/shard_runner 97% (10th new module)**)
+## TL;DR — what changed on 2026-05-26 (R103 — 3-phase round +126 tests; **helperFunctions 100%; PermissionStep covered; api_obj/manager 81% (11th + final new module)**)
+
+- **server** — `utils/helperFunctions.js` (auth/NVR registration
+  helpers: `getEmpAuthInfo` POST to empDomain `/auth/info`,
+  `autoSyncLocations` best-effort lowercasing + new-Location insert,
+  `syncPermissionLocations` patching 4 permission tiers).
+  New `server/tests/unit/utils/helperFunctions.test.js` (**35 tests,
+  8 mocks at cap** — axios + 5 Mongoose models + logger + console.error
+  spy). Coverage: **0% → 100%**. Suite 2802 → 2832 passing (+30 net,
+  +35 new file; pre-existing 121 failures unchanged). Private
+  `8bab51d`, public mirror `3b09cd9`.
+- **client** — `page/user/RolePermissions/PermissionStep.jsx`
+  (403-LOC permission-matrix sub-step in AddRoleDialog). New
+  `client/tests/unit/page/user/RolePermissions/PermissionStep.test.jsx`
+  (**33 tests, 3 mocks** — Checkbox/Tooltip/Button). Pinned:
+  updatePermission view/CRD bidirectional cascade, flat
+  `${module}_${action}` seed path, channels create/delete no-op +
+  Tooltip + disabled, readOnly bar suppression, label camelCase
+  humanisation, updateLogsSubPermission global view → all children
+  cascade, OR-of-children recompute on child toggle, child create
+  auto-flips child view, global view-off cascades to every child,
+  hidden trackLogs/deskLogs/guardLogs, handleSelectAll/ClearAll
+  union including edited-only modules, getPermissionValue
+  live > roleData > flat-key > false precedence. Also added src
+  to `client/vitest.config.js` include list. 0% → covered. Suite
+  1860 → 1893 passing (+33). Public `7a9959c`, private mirror
+  `f380f88`.
+- **streaming** — **SKIPPED** per R94/R95/R98 practical-ceiling.
+- **cv-faceauth** — `api_obj/manager.py` (237-stmt new module from
+  `59adc4c` refactor — **11th and FINAL new module** brought to
+  coverage). New `cv-faceauth/tests/test_api_obj_manager.py`
+  (**58 tests, 0 skips**, 11 test classes). Pinned: module surface
+  + `DETECTION_TO_PIPELINE` table; pipeline-key static helpers;
+  lookup helpers; persistence (load/save/upsert/remove with
+  tmp_path-redirected `PERSIST_FILE`); status queries
+  (`get_camera_status` / `_build_status` / `_active_logics_for` /
+  `get_logic_config` / `get_stream_url_for_camera` / `engine_id_for`);
+  capacity gate (psutil + pynvml stubs across 6 branches);
+  shard-load + `_get_or_create_shard`; `assign_camera_to_shard`
+  (mode translation + duplicate-key ValueError); `stop_camera` /
+  `_stop_pipeline_by_key` (specific-logic, all-logics, unknown-key,
+  queue-exception swallow, shard-shutdown-on-zero-load, busy-shard,
+  persistence flag); `_refresh_stream_url` (no-op + happy + boom);
+  `ObjEnginePool.get_status`. Per-test fixture stubs a fake
+  `multiprocessing` module BEFORE load_standalone so
+  `ObjDetectionManager.__init__` doesn't spawn a real Manager
+  helper. Coverage: **0% → 81%** (191/237). The 46 missed
+  statements are all `_spawn_shard` / `_shutdown_shard` /
+  `_cleanup_shard_background` / `stop_all` — real
+  multiprocessing.Process seams not appropriate for unit tests.
+  Suite 1566 → 1624 passing (+58). Private only `6d84ddb`.
+
+## #114-refactor new-module coverage (11 modules covered — recovery COMPLETE)
+
+- R93: `core/triton_model_specs.py` (48 tests, 100%)
+- R94: `api_obj/models/schemas.py` (48 tests, 100%)
+- R95: `core/stream_hub_client.py` (43 tests, 100%)
+- R96: `api_obj/deps.py` (28 tests, 100%)
+- R97: `core/shared_memory_manager.py` (29 tests, 100%)
+- R98: `api_obj/routers/system.py` (29 tests, 100%)
+- R99: `api_obj/routers/detectors.py` (28 tests, 100%)
+- R100: `api_obj/main.py` (41 tests, 96%)
+- R101: `api_obj/routers/streams.py` (42 tests, 98%)
+- R102: `api_obj/shard_runner.py` (36 tests, 97%)
+- **R103: `api_obj/manager.py` (58 tests, 81%)**
+
+**11 modules, ~430 tests recovered.** No more new-module candidates
+in `api_obj/`. Skip `api_obj/routers/revoke.py` (#120-blocked).
+Future cv-faceauth rounds should pivot to either: (a) extending
+existing module coverage (e.g., main.py 96% → 100%, streams.py
+98% → 100% once #121 fixed), (b) `core/` files not yet touched,
+or (c) waiting for product team to confirm legacy 155 tests can
+be deleted (#114).
+
+## Open bug count after R103
+
+- **16 product**: #97-#102, #104, #105, **#107 (WIP)**, #108, #112,
+  #114, #116, #117, #120, #121
+- **1 process** (#103)
+- **Total open: 17** (no change this round — no new bugs filed)
+- Fixed: #96 (R91/R92), #106 (R95)
+
+**No new bugs filed this round.**
+
+**Push-verification protocol worked (26th round in a row)**: all
+3 acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (31st round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R103: **~3674 new tests across 253 test files (priv)
+[155 broken by #114, product-owned]; 0 product files touched
+across 82 rounds.** Serial execution still clean (38 rounds since
+R66). cv-faceauth suite: 1624 passing.
+
+## Clone divergences (4 known, unchanged this round)
+
+1. R86: `EmployeeRegister.jsx` (private only)
+2. R90: `VehicleCountLogs.jsx` (private only)
+3. R91: `AttendanceLogsLive.jsx` (private only)
+4. R102: `Detection/Api/put/index.jsx` (private only)
+
+## Prior TL;DR — R102 (kept for context, +91 tests; storage.validator 100%; Detection/Api/put 4th clone divergence; api_obj/shard_runner 97% (10th new module))
 
 - **server** — `core/v1/storage/storage.validator.js` (Joi schema
   bundle: `googleDriveBodySchema`, `s3Validator`, `sftpValidator`).
@@ -54,48 +156,6 @@
   **0% → 97%** (4 missing: defensive try/except exception-swallow
   arms in `_stop_camera` and `_status_heartbeat`). Private only
   `8d62c84`.
-
-## #114-refactor new-module coverage (10 modules covered)
-
-- R93: `core/triton_model_specs.py` (48 tests, 100%)
-- R94: `api_obj/models/schemas.py` (48 tests, 100%)
-- R95: `core/stream_hub_client.py` (43 tests, 100%)
-- R96: `api_obj/deps.py` (28 tests, 100%)
-- R97: `core/shared_memory_manager.py` (29 tests, 100%)
-- R98: `api_obj/routers/system.py` (29 tests, 100%)
-- R99: `api_obj/routers/detectors.py` (28 tests, 100%)
-- R100: `api_obj/main.py` (41 tests, 96%)
-- R101: `api_obj/routers/streams.py` (42 tests, 98%)
-- **R102: `api_obj/shard_runner.py` (36 tests, 97%)**
-
-**10 modules, ~372 tests recovered**. Remaining new-module
-candidate: `api_obj/manager.py` (237 stmts — large). Skip
-`api_obj/routers/revoke.py` (#120-blocked).
-
-**No new bugs filed this round.** Open product bugs unchanged
-from R101 (#97-#102, #104, #105, #107 WIP, #108, #112, #114, #116,
-#117, #120, #121) + process #103.
-
-**Push-verification protocol worked (25th round in a row)**: all
-3 acting sub-agents confirmed `## main...origin/main` after pushes.
-
-**Process compliance perfect (30th round in a row)**: no agent
-prematurely edited TESTING_TODO.md.
-
-Cumulative R22→R102: **~3548 new tests across 250 test files (priv)
-[155 broken by #114, product-owned]; 0 product files touched
-across 81 rounds.** Serial execution still clean (37 rounds since
-R66). cv-faceauth suite: 1566 passing.
-
-Total pending bugs filed: **16 product** + **1 process** = **17
-issues open** (unchanged this round).
-
-## Clone divergences (4 known)
-
-1. R86: `EmployeeRegister.jsx` (private only)
-2. R90: `VehicleCountLogs.jsx` (private only)
-3. R91: `AttendanceLogsLive.jsx` (private only)
-4. **R102: `Detection/Api/put/index.jsx` (private only — public has equivalent under `Detection/Api/patch/index.jsx`)**
 
 ## Prior TL;DR — R101 (kept for context, +79 tests; **bug #121 filed; permissions.config 100%; alert.jsx covered; api_obj/routers/streams 98% (9th new module)**)
 
