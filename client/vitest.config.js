@@ -1028,6 +1028,22 @@ export default defineConfig({
         // "loading wins over canView=false" precedence invariant. Tested
         // under tests/unit/page/user/Detection/DetectionSetting.test.jsx.
         "src/page/user/Detection/DetectionSetting.jsx",
+        // Round 94: EmployeeLogs/AccessLog — the top-level "Access Logs"
+        // listing page mounted under /logs/access. The full page is heavy
+        // (TanStack-table via ReusableTablePage, LogEmployeeProfileDialog +
+        // ActionCameraPreview, LogsFilterPopover + AutoRefreshComponent,
+        // six Api/post endpoints + Api/get, jsPDF/autotable/xlsx export,
+        // sonner toasts, react-router-dom navigate, multiple useEffects
+        // firing at mount + on every filter change), but the permission
+        // gates at the bottom of the component short-circuit before the
+        // downstream ReusableTablePage tree mounts. Spec pins the
+        // null-render permissionsLoading branch, the AccessDenied branch
+        // when accessLogs.view is false, the "permissions object missing
+        // logs entirely" arm (resolveLogPerm `if (!logs) return false`
+        // path), and the "loading wins over canView=false" precedence
+        // invariant. Tested under tests/unit/page/user/EmployeeLogs/
+        // AccessLog.test.jsx.
+        "src/page/user/EmployeeLogs/AccessLog.jsx",
       ],
       exclude: [
         "tests/**",
