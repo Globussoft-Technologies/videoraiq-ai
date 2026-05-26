@@ -3,6 +3,83 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R81 — full 4-phase round, +52 tests; **NVR + Dashboard charts + robust_hls_reader 90%; cv-faceauth 89%**)
+
+- **server** — pivoted off accesslogs.service (now 90.77%, diminishing).
+  `core/v1/NVR/nvr.service.js` (1417 LOC) was the largest reachable
+  region remaining. New
+  `server/tests/integration/services/nvr.service.addNvr.test.js`
+  (**10 tests, 3 mocks** — delete.service, nvr.brands.js with single
+  hikvision handler driven end-to-end, helperFunctions partial mock).
+  Pinned: `registerNvr` brand-handler delegation happy + outer 500
+  catch; `addNvr` admin-missing 400, Joi validation 400, duplicate
+  `localNvrId` 400, 201 happy (NVR + cameras + cameraCount persisted
+  + autoSync fired), autoSync-rejection logger arm; `removeCamera`
+  missing cameraId 400, camera-not-found 404, happy 200 (deleteChannel
+  + cameraCount recompute), DeleteService throw → 500. Coverage of
+  nvr.service.js: **43.11% → 48.69%** lines (+5.58pp); branches
+  **72.22% → 77.60%** (+5.38pp); fns **70.58% → 76.47%** (+5.89pp).
+  Suite +10. Public `18ea316`, private mirror `f2fb26c`.
+- **client** — TWO Dashboard chart components covered:
+  - `Dashboard/Linechart.jsx` (amCharts5 ComparisonChart) 0% →
+    **91.54%** lines (4 tests, 4 mocks)
+  - `Dashboard/AlertGauge.jsx` (alert gauge carousel card) 0% →
+    **86.64%** lines (3 tests, 5 mocks)
+  
+  Suite 1594 → 1601 / +7. Public `529493c`, private mirror `9802b22`.
+- **streaming** — `internal/logger` 94.5% → **95.0%** (+0.5pp).
+  `cleanupOldLogs` 96.0% → **100.0%** via the previously-uncovered
+  `os.ReadFile` error early-return arm. Technique: point `l.logFile`
+  at a directory under `t.TempDir()` — `os.Stat` succeeds (outer
+  `err == nil` guard passes), `os.ReadFile` fails with EISDIR-
+  equivalent on all GOOS, forcing the silent-return arm. Pre-flight
+  `t.Skip()` against future runtime behavior changes. New
+  `streaming/internal/logger/iplogger_cleanup_readfile_error_test.go`
+  (1 test). Total streaming: 87.6% → **87.7%** (+0.1pp). Private
+  only `daca5d3`.
+- **cv-faceauth** — `stream/robust_hls_reader.py` **38% → 90%**
+  (+52pp). The R53 coverage was just the metadata surface; R81
+  attacked the active code paths via per-test `sys.modules` fixture
+  (av/cv2/requests/jwt/stream/config/core — R71/R75-R80 lesson).
+  New `cv-faceauth/tests/test_robust_hls_reader_paths.py`
+  (**34 tests, 0 skips**, 1024 LOC). Pinned: `SegmentDownloader.run`
+  (relative+absolute .ts URL parsing, blank/comment lines, HTTP 200
+  happy, non-200 errors, RequestException, outer Exception arm,
+  segment shedding when buffer > 80% max_size);
+  `SegmentDownloader._download_segment` (200 writes, non-200 error
+  counter, network exception, running=False short-circuit, `_in_stall`
+  recovery callback handoff); `RobustHLSReader._rebuild_container`
+  (happy + no-video-stream RuntimeError + av.open exception);
+  `_run_stall_watchdog` (stop-already-set, not-open continue,
+  no-downloads continue, stall-detected close-container-and-buffer);
+  `open` (happy NVDEC=cpu, no-video-stream RuntimeError, av.open
+  exception, NVDEC requested but CodecContext.create raises →
+  fallback to CPU); `read_batch` (critical-buffer hard-flush,
+  adaptive-skip, stable-above-safe debug log, reconnect attempt
+  increment, max-reconnect give-up, StopIteration break, to_ndarray
+  exception break, skip-ratio frame burning, mid-batch `_is_open=False`
+  flip break); `release` (full teardown + idempotent when resources
+  None); `release_async` delegates. Suite 1186 → **1220 passing**
+  / 7 skipped. Total cv-faceauth coverage 87% → **89%**. Private
+  only `a48f01c`.
+
+**No new bugs filed this round.** R68's roles.service.js mongoose
+issue and R72's permissions.utility deletePermissions issue remain
+unfiled.
+
+**Push-verification protocol worked (4th round in a row)**: all 4
+sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (9th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R81: **~2469 new tests across 179 test files; 0
+product files touched across 60 rounds.** Serial execution still
+clean. cv-faceauth suite: 1220 passing.
+
+Total pending bugs filed: **12 product (#96-#102, #104-#108)** +
+**1 process (#103)** = 13 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R80 — full 4-phase round, +69 tests; **accesslogs 90.77%; bug #108 filed; Dashboard widgets covered; pyav_reader 85%**)
 
 - **server** — pivoted from users.service to `core/v1/accesslogs/accesslogs.service.js`.
@@ -2249,12 +2326,12 @@ already done):**
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R80):**
+**Coverage state (after R81):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 96.8%,
-  `internal/config` 82.4%, `internal/logger` **94.5%** (R80:
-  LogRotator.Start 80→100% via MkdirAll error arm), `internal/server` 97.7%,
+  `internal/config` 82.4%, `internal/logger` **95.0%** (R81:
+  cleanupOldLogs 96→100% via ReadFile-error arm), `internal/server` 97.7%,
   `internal/stream` 80.9%
-- Total streaming: **87.6%** (was 87.5%)
+- Total streaming: **87.7%** (was 87.6%)
 
 **Practical ceiling note** (per R73 agent investigation): all
 remaining `internal/stream` and most `internal/server` gaps are
