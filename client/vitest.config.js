@@ -985,6 +985,21 @@ export default defineConfig({
         //    selectedImageType with face/person/frame fall-through.
         "src/page/user/EmployeeLogs/VisibilityLog.jsx",
         "src/page/user/EmployeeLogs/TrackLog.jsx",
+        // Round 90: EmployeeLogs/GuardLog — per-channel 24-hour
+        // presence/absence sibling of VisibilityLog (R89). Fires
+        // getGuardChannelGraph(searchQuery, skip, limit, { date }) on
+        // mount + on [currentPage, selectedDate, searchQuery] dep change,
+        // maps each channel's incidents into presence/absence segments,
+        // and forwards data / columns (4: channelId / totalPresenceTime
+        // / totalAbsenceTime / segments) / searchKeys / loading /
+        // attendanceLogsCount / setCurrentPage / onSearchChange to
+        // ReusableTablePage. The children slot renders a date <input>,
+        // the Export-Logs Excel button (xlsx-js-style book_new ->
+        // json_to_sheet -> book_append_sheet -> writeFile with
+        // `camera_logs_<date>.xlsx`), and a presence/absence legend.
+        // VehicleCountLogs (also targeted in R90) is private-only and
+        // omitted here per the R86 git-ls-files divergence rule.
+        "src/page/user/EmployeeLogs/GuardLog.jsx",
       ],
       exclude: [
         "tests/**",
