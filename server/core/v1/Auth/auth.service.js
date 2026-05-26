@@ -410,8 +410,16 @@ class AUTHService {
           let attendanceServiceRevokeSecretKey = config.get(
             "attendanceServiceRevokeSecretKey"
           );
-          await this.revokeDetectionService(detectionServiceRevokeSecretKey);
-          await this.revokeAttendanceService(attendanceServiceRevokeSecretKey);
+          try {
+            await this.revokeDetectionService(detectionServiceRevokeSecretKey);
+          } catch (error) {
+            logger.error("Failed to revoke detection service:", error.message);
+          }
+          try {
+            await this.revokeAttendanceService(attendanceServiceRevokeSecretKey);
+          } catch (error) {
+            logger.error("Failed to revoke attendance service:", error.message);
+          }
         }
         return res.status(403).json({
           ok: true,
