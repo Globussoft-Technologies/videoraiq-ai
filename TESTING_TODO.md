@@ -3,6 +3,66 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R96 — 3-phase round +43 tests, streaming SKIPPED; **permissionMiddleware 100%; Layout 98.36%; api_obj/deps 100%**)
+
+- **server** — `server/middlewares/permissionMiddleware.js` +
+  `permissionConfigChecker.js` leftover branch gaps. New
+  `server/tests/unit/middlewares/permissionMiddleware.catchAndConfig.test.js`
+  (**7 tests, 0 mocks** — defensive-programming arms). Coverage:
+  - `permissionMiddleware.js`: 94.87% lines / 85.71% branches → **100% / 100%**
+  - `permissionConfigChecker.js`: 100% lines / 87.5% branches → **100% / 100%**
+  - **Whole middlewares/ scope now 100/100/100/100**
+  
+  Suite +7. Public `82bdf7e`, private mirror `651161a`.
+- **client** — `layout/Layout.jsx` (top-level page chrome —
+  pathname-driven sidebar selector + scrollTo-to-top effect on
+  route change). New `client/tests/unit/layout/Layout.test.jsx`
+  (**8 tests, 6 mocks** — Header, Sidebar, SettingsSidebar,
+  AdminSidebar, LogsSidebar, TitleUpdater). Pinned: dashboard-path
+  no-sidebar arm, /settings → SettingsSidebar + gap-class wrapper,
+  /admin/roles/* → AdminSidebar, /logs/* → LogsSidebar, arbitrary
+  path (/incidents) → no-sidebar, `scrollTo({top:0, behavior:'auto'})`
+  effect call, missing-container no-op guard. Coverage: 0% →
+  **98.36% lines, 88.88% branches, 100% functions** (only line 49
+  — commented-out `/dashboard` Sidebar branch — uncovered). Suite
+  1801 → 1809. Public `525035f`, private mirror `0460820`.
+- **streaming** — **SKIPPED** per R94/R95 practical-ceiling.
+- **cv-faceauth** — `api_obj/deps.py` (15-stmt new module from
+  `59adc4c` refactor / #114 umbrella). New
+  `cv-faceauth/tests/test_api_obj_deps.py` (**28 tests, 0 skips**).
+  Pinned: module-level defaults (`detection_manager`, `engine_pool`,
+  `metrics_collector` start None; `start_time = 0.0`); `init_stubs()`
+  (constructs `ObjDetectionManager` + `ObjEnginePool`, wires pool
+  to manager, stamps start_time, idempotent rebuild, leaves
+  metrics_collector untouched, returns None); `require_init()`
+  (raises real `fastapi.HTTPException(503, "Service not initialised")`
+  when either singleton is None; returns None when both set).
+  Per-test fixture loads via `importlib.util.spec_from_file_location`;
+  stubs `api_obj` package + `api_obj.manager` with
+  `FakeObjDetectionManager` / `FakeObjEnginePool` (no real
+  multiprocessing); `try/finally` rollback of 3 sys.modules keys.
+  Coverage: **0% → 100%** (15/15). Suite 1333 → **1361 passing**
+  / 9 skipped (155 #114 unchanged). Private only `e520867`.
+
+**No new bugs filed this round.** R94's #116 + #117 and R95's #120
+remain pending product team. #106 stays fixed (R95). #107 fix
+branch still in flight on public mirror.
+
+**Push-verification protocol worked (19th round in a row)**: all
+3 acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (24th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R96: **~3171 new tests across 233 test files (priv)
+[155 broken by #114, product-owned]; 0 product files touched
+across 75 rounds.** Serial execution still clean. cv-faceauth
+suite: 1361 passing.
+
+Total pending bugs filed: **15 product (#97-#102, #104, #105,
+#107, #108, #112, #114, #116, #117, #120)** + **1 process (#103)**
+= **16 issues open**.
+
 ## TL;DR — what changed on 2026-05-26 (R95 — 3-phase round +56 tests, streaming SKIPPED; **bug #106 CONFIRMED FIXED + new bug #120; detectionObjects 100%; stream_hub_client 100%**)
 
 - **server** — `core/v1/detectionObjects/objects.service.js` error
