@@ -3,6 +3,103 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R82 — full 4-phase round, +34 tests; **cv-faceauth hits 90% total; nvr.service 67.96%; handlePlaybackStart 100%**)
+
+- **server** — `core/v1/NVR/nvr.service.js` private helper
+  `_fetchCamerasFromNvr` (lines ~988-1261, ~270 LOC). New
+  `server/tests/integration/services/nvr.service.fetchCameras.test.js`
+  (**6 tests, 1 mock** — `digest-fetch` default-export class with
+  a queue-driven `.fetch()` spy returning `{ ok, text() }` responses).
+  Called `NVRService._fetchCamerasFromNvr(brand, ip, port, user, pass)`
+  directly. Pinned: hikvision happy + auth-fail, cpplus happy + auth-fail
+  (key=value plain-text parser + `groupArrayProperties` + Encode regex
+  extraction), unsupported-brand else-arm, outer-catch on thrown fetch.
+  Coverage of nvr.service.js: **48.69% → 67.96%** lines (+19.27pp); fns
+  **76.47% → 84.21%** (+7.74pp; 13/17 → 16/19); branches 79.06% → 69.07%
+  on % (raw covered: 102 → 134; denominator grew because new code paths
+  added branches to the universe). Suite +6. Public `51d6013`, private
+  mirror `3a81504`.
+- **client** — TWO 0% Dashboard components covered:
+  - `Dashboard/VideoCanvasStream.jsx` (273-LOC HLS-video tile, 5 mocks
+    — useHlsPlayer, CameraStreamWithDetection, StreamModal,
+    UserContext, useDetection)
+  - `Dashboard/Alertcards/ActiveCamera.jsx` (417-LOC "Cameras with
+    Detections" page, 7 mocks — Api/post, Api/get, react-router-dom,
+    sonner, ui/select, Pagination, react-loading-skeleton)
+  
+  Both 0% → covered. 7 tests (3 + 4). Suite 1601 → 1608. Public
+  `07985a0`, private mirror `2879943`.
+- **streaming** — `internal/server` 97.7% → **98.1%** (+0.4pp).
+  `handlePlaybackStart` 96.4% → **100%** (+3.6pp) via the previously
+  uncovered success-arm JSON envelope (server.go:357-362) returning
+  `{session_id, playback_url, status:"success"}`. New
+  `streaming/internal/server/handle_playback_start_success_test.go`
+  (1 test). Technique: **nil-channel parking** — `sm.ffmpegPool` left
+  at zero value (nil), so the spawned `runPlaybackPipeline` goroutine
+  blocks forever on its first instruction (send on nil channel blocks
+  per Go spec, doesn't panic). Handler returns synchronously; no
+  ffmpeg spawned. RTSP URL encrypted via `util.E("rtsp://nvr-test.example/Channels/101")`
+  to pass StartPlayback's "Channels" sentinel check. Pinned status 200,
+  Content-Type, JSON body shape with all 3 keys, session_id format
+  `pb-<camID>-<n>`, playback_url literal `playback/<sid>/playlist.m3u8`,
+  PlaybackStream map registration + OutputDir layout. Total streaming:
+  87.7% → **87.8%** (+0.1pp). Private only `927cad6`.
+- **cv-faceauth** — `orchestrator/manager.py` **59% → 91%** (+32pp).
+  R56 covered some surface (42 tests) but significant gaps remained.
+  New `cv-faceauth/tests/test_manager_extras.py` (**20 tests**, all
+  passing). Pinned: `initialize()` success + matcher-failure;
+  `can_accept_new_camera()` all 3 branches (max-cameras / high-RAM /
+  pynvml-missing) with `psutil`+`pynvml` stubbed per-test;
+  `_cleanup_data_dirs()` happy / missing / `rglob`-raises;
+  `_cleanup_camera_background()` graceful / timeout-cancel /
+  outer-exception-still-runs-finally; `stop_all()` populated dict +
+  dispatcher + ThreadPool shutdown; `start_all()` init + iterate +
+  skip-init when dispatcher set; `_stop_pipeline_by_key()` persistence-
+  prune + `update_persistence=False` + `stop()` exception; `wait()`
+  with non-empty `_tasks`; `get_status()` `pipeline.modes` precedence.
+  Per-test fixture sys.modules stubs for `psutil`/`pynvml`/
+  `recognition.local_matcher`/`stream.*`/`workers.redis_dispatcher`
+  (R71/R75-R81 lesson). Suite 1220 → **1240 passing** / 7 skipped.
+  Total cv-faceauth coverage 89% → **90%** (18567 stmts, 1891 missed).
+  Private only `00cfa51`. **🎉 cv-faceauth has now crossed 90% total
+  coverage** — up from R23's ~30% baseline.
+
+## Product team activity between R81 and R82
+
+Between R81 (docs `2d37ab2`) and R82 start, the product team merged
+**1 fix** on the private repo:
+
+- `bd274e5 fix(permissions): case-insensitive module name matching
+  in bulkPermissionDelete` (Afzal A, 2026-05-26 12:17 IST) — fixes
+  a separate bug where `bulkPermissionDelete` lowercased moduleName
+  before checking permissionConfig keys, causing "Modules not found"
+  errors for mixed-case keys ("NVR", "Users", "Locations"). Unrelated
+  to our filed bugs (#107 is about `collectionName.deleteMany`
+  ReferenceError, not casing). Merged via PR #43 with branch name
+  `fix/accesslogs-formatduration` — branch name is misnamed (the
+  diff is permissions code, not accesslogs).
+
+None of the 12 filed product bugs (#96-#102, #104-#108) have been
+addressed yet. This is the FIRST product fix to land between cron
+rounds.
+
+**No new bugs filed this round.** R68's roles.service.js mongoose
+issue and R72's permissions.utility deletePermissions issue remain
+unfiled.
+
+**Push-verification protocol worked (5th round in a row)**: all 4
+sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (10th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R82: **~2503 new tests across 183 test files; 0
+product files touched across 61 rounds.** Serial execution still
+clean. cv-faceauth suite: 1240 passing, **90% total coverage**.
+
+Total pending bugs filed: **12 product (#96-#102, #104-#108)** +
+**1 process (#103)** = 13 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R81 — full 4-phase round, +52 tests; **NVR + Dashboard charts + robust_hls_reader 90%; cv-faceauth 89%**)
 
 - **server** — pivoted off accesslogs.service (now 90.77%, diminishing).
@@ -2326,12 +2423,12 @@ already done):**
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R81):**
+**Coverage state (after R82):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 96.8%,
-  `internal/config` 82.4%, `internal/logger` **95.0%** (R81:
-  cleanupOldLogs 96→100% via ReadFile-error arm), `internal/server` 97.7%,
+  `internal/config` 82.4%, `internal/logger` 95.0%, `internal/server`
+  **98.1%** (R82: handlePlaybackStart 96.4→100% via success JSON envelope),
   `internal/stream` 80.9%
-- Total streaming: **87.7%** (was 87.6%)
+- Total streaming: **87.8%** (was 87.7%)
 
 **Practical ceiling note** (per R73 agent investigation): all
 remaining `internal/stream` and most `internal/server` gaps are
