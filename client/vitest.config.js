@@ -631,6 +631,29 @@ export default defineConfig({
         // under tests/unit/page/user/EmployeeLogs/
         // ActionCameraPreview.test.jsx.
         "src/page/user/EmployeeLogs/ActionCameraPreview.jsx",
+        // Round 76: Streams/CameraDiscoveryModal — the "Manage Cameras"
+        // fixed overlay popped up by the Streams page. On mount fetches
+        // ${VITE_BACKEND}/api/v1/nvr/edit/${nvrId} via axios + token header,
+        // shows a Loader2 spinner while loading, "No cameras found" empty
+        // line, or a list of camera checkboxes. Save computes toAdd /
+        // toRemove diff sets against the initial isAdded+dbId map: empty
+        // diff -> info toast + onClose, otherwise calls addSelectedCameras
+        // once for additions and removeCamera(String(dbId)) per removal,
+        // surfacing per-error toasts on partial failures. Tested under
+        // tests/unit/page/user/Streams/CameraDiscoveryModal.test.jsx.
+        "src/page/user/Streams/CameraDiscoveryModal.jsx",
+        // Round 76: Streams/CameraPlay/PlaybackStreams — the JSMpeg-driven
+        // playback tile (a canvas inside a forwardRef'd container). On
+        // mount with window.JSMpeg + playbackChannel it constructs
+        // `new window.JSMpeg.Player(${VITE_SOCKET_URL}/${playbackChannel},
+        // { canvas, autoplay: isPlaying, audio: true, onSourceCompleted,
+        // onPlay, onPause })`, fires onLoadedMetadata ~100ms later,
+        // forwards Player.onPlay -> onPlaying / Player.onPause -> onEnded,
+        // writes playbackRate through, drives a per-frame onTimeUpdate
+        // loop while isPlaying, and destroys the player on unmount.
+        // Tested under tests/unit/page/user/Streams/CameraPlay/
+        // PlaybackStreams.test.jsx.
+        "src/page/user/Streams/CameraPlay/PlaybackStreams.jsx",
         // Round 75: Detection/components/AlertReceiversSection — the
         // "Alert Receivers Email Id/Phone No" dropdown panel rendered
         // inside the Detection settings card. Purely props-driven (no
