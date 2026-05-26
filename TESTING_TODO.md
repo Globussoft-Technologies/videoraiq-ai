@@ -3,6 +3,86 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R98 — 3-phase round +41 tests, streaming SKIPPED; **api_obj/routers/system 100% (6th new module); Header.jsx covered; admin.service logsSound branches**)
+
+- **server** — `core/v1/admin/admin.service.js` `updateLogsSound`/
+  `fetchLogsSound`/`getDeletionProgress` branches. New
+  `server/tests/integration/services/admin.service.logsSound.test.js`
+  (**5 tests, 1 mock** — axios). Branches newly covered:
+  member-context happy paths for both updateLogsSound + fetchLogsSound;
+  `fetchLogsSound` `userSettings.logsSound || false` default branch;
+  `fetchLogsSound` "Invalid Token!" else arm (no adminId / no
+  memberId); `getDeletionProgress` happy path with exported
+  `deletionJobs` Map populated. Coverage of admin.service.js
+  (scoped): lines 88.11% → 88.55%; **branches 68.14% → 71.18%**
+  (+3.04pp); fns held at 92.85%. Suite +5. Public `b125cda`, private
+  mirror `c8e2420`.
+- **client** — `layout/Header/Header.jsx` (268-LOC, was excluded
+  from include scope). New
+  `client/tests/unit/layout/Header/Header.test.jsx` (**7 tests, 7
+  mocks** — AuthContext, PermissionContext, AllDetectionContext +
+  4 child stubs + WebSocket stub + UserContext.Provider wrapper).
+  Pinned: HeaderSkeleton renders while AuthContext.isLoading; full
+  chrome after 1.5s mount timer; mute button toggles via
+  AllDetections.toggleMute; aria-label swaps on isMuted=true;
+  Welcome strip suppressed when `user.name_f` is missing; empty
+  permissions passes through all 8 baseNavLinks unfiltered; Settings
+  tab filtered when every settings sub-perm view is false. 0% →
+  covered. Suite 1812 → 1819. Public `4ba306c`, private mirror
+  `21764ed`.
+- **streaming** — **SKIPPED** per R94/R95 practical-ceiling.
+- **cv-faceauth** — `api_obj/routers/system.py` (24-stmt new module
+  from `59adc4c` refactor / #114 umbrella). New
+  `cv-faceauth/tests/test_api_obj_routers_system.py` (**29 tests, 0
+  skips**). Pinned: module surface (router type, callable handlers,
+  3 registered routes); `GET /` (HTMLResponse, `include_in_schema=False`,
+  brand text, doc-links, TestClient content-type); `GET /status`
+  (`require_init` 503 arm, both metrics_collector branches with
+  call args pinned, empty engines/cameras, get_status/get_camera_status
+  call counts, engine `pid` defaulting, `_map_logics_external`
+  propagation); `GET /health` (happy with pool, no-require_init
+  process-alive probe, fallback to `{}` when engine_pool is None,
+  round(uptime, 1) precision, float type). Per-test fixture installs
+  fakes for `api_obj` package + sub-modules with scoped `try/finally`
+  rollback; real `api_obj.models.schemas` loaded so pydantic
+  `response_model` validation runs on actual classes. Coverage:
+  **0% → 100%** (24/24). Suite 1390 → **1419 passing** / 9 skipped
+  (155 #114 unchanged). Private only `42faaf3`.
+
+## #114-refactor new-module coverage (6 modules at 100% now)
+
+- R93: `core/triton_model_specs.py` (48 tests)
+- R94: `api_obj/models/schemas.py` (48 tests)
+- R95: `core/stream_hub_client.py` (43 tests)
+- R96: `api_obj/deps.py` (28 tests)
+- R97: `core/shared_memory_manager.py` (29 tests)
+- **R98: `api_obj/routers/system.py` (29 tests)**
+
+Remaining new-module candidates: `api_obj/main.py` (48 stmts),
+`api_obj/manager.py` (237 stmts — large), `api_obj/shard_runner.py`
+(118 stmts), `api_obj/routers/detectors.py` (26 stmts),
+`api_obj/routers/streams.py` (114 stmts). Skip `api_obj/routers/revoke.py`
+(#120-blocked).
+
+**No new bugs filed this round.** R94's #116/#117 + R95's #120
+still pending product team. #106 fixed (R95). #107 fix branch in
+flight on public mirror.
+
+**Push-verification protocol worked (21st round in a row)**: all
+3 acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (26th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R98: **~3247 new tests across 239 test files (priv)
+[155 broken by #114, product-owned]; 0 product files touched
+across 77 rounds.** Serial execution still clean. cv-faceauth
+suite: 1419 passing.
+
+Total pending bugs filed: **15 product (#97-#102, #104, #105,
+#107, #108, #112, #114, #116, #117, #120)** + **1 process (#103)**
+= **16 issues open**.
+
 ## TL;DR — what changed on 2026-05-26 (R97 — 3-phase round +35 tests, streaming SKIPPED; **delete.service 100%; shared_memory_manager 100% (5th new module); Playback page gates**)
 
 - **server** — `services/delete.service.js` previously-uncovered
