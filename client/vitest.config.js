@@ -690,6 +690,34 @@ export default defineConfig({
         // when !loading && hasMore). Tested under tests/unit/page/
         // user/Detection/components/AlertReceiversSection.test.jsx.
         "src/page/user/Detection/components/AlertReceiversSection.jsx",
+        // Round 78: two more Detection/components leaves —
+        //  - Innersettings: the top-level Detection Settings page mounted
+        //    from the camera-row detection link. Reads rowData / channelData
+        //    / currentNvr off useLocation().state, orchestrates Header /
+        //    LiveFeedSection / DeviceDetail / SettingsCard +
+        //    ProfileSelectionDialog + ResetConfirmationDialog children, fires
+        //    getAppliedProfile(channelId) on mount when channelId is truthy,
+        //    and the reset-confirm flow either deletes a per-type detection
+        //    setting (when one exists for selectedsettingType) or surfaces a
+        //    no-detection-found toast. Spec captures the InnerSettingsProvider
+        //    value bag, the no-channelId no-fetch arm, and both reset-confirm
+        //    branches (delete-with-id vs no-detection-error).
+        //  - StaticAreaMarking: the static-image fallback variant of the
+        //    zone-marker. forwardRef'd component that mounts an <img> + a
+        //    <canvas> overlay, exposes an imperative getPoints / setPoints /
+        //    clearPoints / captureScreenshot / getResolution API via
+        //    useImperativeHandle, drives draw via a points-effect that walks
+        //    points[0..n-1] and closes the path at length 4, fans the
+        //    useAreaMarking hook callbacks through AreaMarkingControls, and
+        //    the Preview button pipes the canvas screenshot through
+        //    callMarkPointsApi -> DetectionPreviewModal + MiniCameraPreview.
+        //    Spec mounts the canvas with the documented 1280x720 internal
+        //    resolution, asserts each AreaMarkingControls forwarded handler,
+        //    the Preview round-trip, and the drawingMode-gated canvas onClick.
+        // Each entry has a dedicated test under tests/unit/page/user/
+        // Detection/components/{Innersettings,StaticAreaMarking}.test.jsx.
+        "src/page/user/Detection/components/Innersettings.jsx",
+        "src/page/user/Detection/components/StaticAreaMarking.jsx",
       ],
       exclude: [
         "tests/**",
