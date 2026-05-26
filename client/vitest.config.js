@@ -782,6 +782,37 @@ export default defineConfig({
         // Dashboard/{Linechart,AlertGauge}.test.jsx.
         "src/page/user/Dashboard/Linechart.jsx",
         "src/page/user/Dashboard/AlertGauge.jsx",
+        // Round 82: two more Dashboard surfaces —
+        //  - Dashboard/VideoCanvasStream: the HLS-video tile rendered inside
+        //    the dashboard's CameraView. useMemo computes the playable URL
+        //    (VITE_LOCAL_SETUP=true passes raw hlsUrl[0] through; otherwise
+        //    prefixes VITE_STREAM_URL), useHlsPlayer drives the <video>
+        //    lifecycle (onStarted hides isWaiting, onError surfaces the
+        //    "Unable to load stream" pane), the maximize button +
+        //    double-click both call setSelectedVideo({cameraId,config}) +
+        //    setStreamModalShow(true), and the StreamModal child only
+        //    mounts when streamModalShow && selectedVideo.cameraId === cameraId.
+        //    isMini=true suppresses the maximize button + label uses the
+        //    small text class. onInteractionDisabledChange is fired with
+        //    (isWaiting || isLoading || hasError) on each transition.
+        //  - Dashboard/Alertcards/ActiveCamera: the "Cameras with Detections"
+        //    full-page modal popped up from the dashboard StatCards. Fetches
+        //    getIncidentData(ActiveChannels:true, today, today, ...) on mount
+        //    and on [nvrId, cameraId, searchTerm, skip, limit] change;
+        //    getNvrNames() on mount; getCamerasBasedOnNvr(nvrId) when nvrId
+        //    flips. Renders a back button whose label + route swap on
+        //    location.state.dashboard (Back to Dashboard / Back to Incidents),
+        //    a four-column tanstack table with CameraName / Model /
+        //    Firmware / NVR-name accessors that fall back to '---' on
+        //    missing values, a Search input that lowercases, NVR + Camera
+        //    Selects (camera disabled until NVR is picked), the FilterX
+        //    "Clear Filters" button that resets all three filters, the
+        //    skeleton loading state, the No-data-found copy, and the
+        //    Pagination footer wired to handlePageChange (skip = (page-1)*limit).
+        // Each entry has a dedicated test under tests/unit/page/user/
+        // Dashboard/{VideoCanvasStream,Alertcards/ActiveCamera}.test.jsx.
+        "src/page/user/Dashboard/VideoCanvasStream.jsx",
+        "src/page/user/Dashboard/Alertcards/ActiveCamera.jsx",
       ],
       exclude: [
         "tests/**",
