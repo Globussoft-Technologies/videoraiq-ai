@@ -3,6 +3,59 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R88 — 3-phase round +42 tests, streaming SKIPPED; **profiles.service 93%, quality.py 100%, Nvrsettings + EmployeesOnDuty covered**)
+
+- **server** — `core/v1/profiles/profiles.service.js` export paths.
+  New `server/tests/integration/services/profiles.service.exports.test.js`
+  (**5 tests, 6 mocks** — 1 `vi.mock("archiver")` + 5 `vi.spyOn(fs, ...)`).
+  Pinned: `exportProfile` success happy path + download-cb error arm
+  + outer-catch (writeFileSync throws → 500); `bulkExportProfiles`
+  happy path (archiver `output.on('close')` → res.download +
+  cleanup) + download-cb error arm. Coverage of profiles.service.js:
+  **78.18% → 92.91%** lines (+14.73pp); branches **81.53% → 85.13%**
+  (+3.60pp); fns hold at 100%. Suite +5. Public `de459d6`, private
+  mirror `2a70a35`.
+- **client** — TWO 0% pages covered:
+  - `Streams/Nvrsettings.jsx` (331-LOC NVR settings UI) — 11 tests,
+    8 mocks (at cap)
+  - `Dashboard/EmployeesOnDuty.jsx` (493-LOC dashboard widget) —
+    10 tests, 5 mocks
+  
+  Suite 1689 → 1710 / +21. Public `d3aeb24`, private mirror `350b409`.
+- **streaming** — **SKIPPED** per R83-R87 practical-ceiling.
+- **cv-faceauth** — `processor/quality.py` **71% → 100%** (+29pp,
+  25 missing → 0). New `cv-faceauth/tests/test_quality_fiqa.py`
+  (**16 tests, 0 skips**, 395 LOC). Pinned: `_load_model` happy
+  + non-ImportError exception arm (RuntimeError during construction)
+  + non-ImportError via raising attribute access; `score()` FIQA
+  branch returns `float(...)`-wrapped score (incl. numpy scalar
+  coercion) + empty FIQA falls through to `_basic_quality_check`
+  + FIQA-raises fallback; `score_batch()` all-valid single batched
+  call in-order + mixed valid/invalid re-aligned with `None` +
+  all-invalid short-circuits to `[None]*N` + more-inputs-than-scores
+  pads with `None` via `score_idx` guard + batched-infer-exception
+  per-item fallback loop; `is_acceptable()` with FIQA scores above/
+  below threshold. Suite 1305 → **1321 passing** / 8 skipped.
+  Total cv-faceauth coverage holds at **92%** (denominator grew).
+  Private only `a12d50d`.
+
+**No new bugs filed this round.** R68's roles.service.js mongoose
+issue and R72's permissions.utility deletePermissions issue remain
+unfiled.
+
+**Push-verification protocol worked (11th round in a row)**: all
+3 acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (16th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R88: **~2787 new tests across 205 test files; 0
+product files touched across 67 rounds.** Serial execution still
+clean. cv-faceauth suite: 1321 passing, **92% total coverage**.
+
+Total pending bugs filed: **13 product (#96-#102, #104-#108, #112)** +
+**1 process (#103)** = 14 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R87 — 3-phase round +34 tests, streaming SKIPPED; **cv-faceauth 92%; jobs.service 99%; base_pipeline 95%**)
 
 - **server** — `core/v1/jobs/jobs.service.js`. New
