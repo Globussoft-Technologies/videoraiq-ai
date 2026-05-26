@@ -851,6 +851,40 @@ export default defineConfig({
         // {EmployeeLogs/ReusableTablePage,Dashboard/ActivityChart}.test.jsx.
         "src/page/user/EmployeeLogs/ReusableTablePage.jsx",
         "src/page/user/Dashboard/ActivityChart.jsx",
+        // Round 84: two more 0% surfaces —
+        //  - Detection/components/LiveFeedSection: the "Zone Marking"
+        //    parent inside the Innersettings page. Fires
+        //    getAllDetectionTypes() once on mount, refetches
+        //    getAppliedProfile(channelId) whenever selectedsettingType
+        //    flips, loads a per-type detection via
+        //    getDetectionSettingType(type, channelId) when a type is
+        //    picked, and mounts AreaSettingsPreview with a forwarded
+        //    ref so the Edit button can call setChannelPoints with the
+        //    normalised referencePoints. Spec pins the mount-time API
+        //    fan-out, the read-only Detection Name + Zone Name inputs
+        //    that only render when appliedDetection is non-null, the
+        //    Edit click -> setChannelPoints round-trip + editable=true
+        //    re-render, the derivedActiveCamera fallback chain
+        //    (referencePoints keys -> defaultActiveCamera), the empty
+        //    channelData.linkedCameras invariants (null defaultActive
+        //    camera + no getAppliedProfile fire), and the
+        //    selectedsettingType-change re-fetch.
+        //  - Streams/Camerasettings: the Camera Settings page mounted
+        //    from the NVR row "manage cameras" action. The page is heavy
+        //    (TanStack-table cameras, AddNVRForm + DeleteConfirmation,
+        //    alias popover with department multi-select, five Api
+        //    modules, decrypt helper, LiveViewModal with the
+        //    useHlsPlayer chain), but the permission gates at the top
+        //    short-circuit before any of those run. The new spec pins
+        //    the two early-return branches: permissionsLoading ->
+        //    <PageLoader />, and !canViewNVR -> <AccessDenied
+        //    message="…permission to view NVR's." />. Includes the
+        //    "permissions object missing NVR entirely" arm so the
+        //    canViewNVR=undefined fall-through is covered too.
+        // Each entry has a dedicated test under tests/unit/page/user/
+        // {Detection/components/LiveFeedSection,Streams/Camerasettings}.test.jsx.
+        "src/page/user/Detection/components/LiveFeedSection.jsx",
+        "src/page/user/Streams/Camerasettings.jsx",
       ],
       exclude: [
         "tests/**",
