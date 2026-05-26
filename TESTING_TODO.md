@@ -3,6 +3,75 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R87 — 3-phase round +34 tests, streaming SKIPPED; **cv-faceauth 92%; jobs.service 99%; base_pipeline 95%**)
+
+- **server** — `core/v1/jobs/jobs.service.js`. New
+  `server/tests/integration/services/jobs.service.bullkeys.test.js`
+  (**8 tests, 4 mocks** — scheduleJobs, utils/database redis stub,
+  jobs/utils/time.util, utils/logger). Covered: `mockDeleteAllJobs`
+  cursor traversal (multi-page + zero-keys + catch path);
+  `mockCreateJobs` outer catch (Profile.findById throws);
+  `handleProfileStart` no-channels-for-profile branch;
+  `handleProfileStop` catch path (no-throw guarantee);
+  `handleProfileNotification` default `return false` + catch path.
+  Coverage of jobs.service.js: **76.47% → 99.01%** lines (+22.54pp);
+  **fns 66.66% → 100%** (+33.34pp, all 6/6); branches **83.33% →
+  92.45%** (+9.12pp). Public `b5a9580`, private mirror `b2a4afb`.
+- **client** — TWO Detection sub-components covered:
+  - `Detection/components/EvidenceSeverity.jsx` (7 tests, 1 mock
+    — InnerSettingsContext) — pure presentational
+  - `Detection/components/DeviceDetail.jsx` (9 tests, 1 mock
+    — InnerSettingsContext) — pure presentational
+  
+  Both files were ALREADY in vitest.config.js include list but
+  lacked dedicated test files (0% covered). No config changes
+  needed. Both files verified present on BOTH clones via
+  `git ls-files` per R86 lesson. Suite 1673 → 1689 / +16. Public
+  `11a6490`, private mirror `dfc4638`.
+- **streaming** — **SKIPPED** per R83/R84/R85/R86 practical-ceiling.
+- **cv-faceauth** — `orchestrator/base_pipeline.py` **55% → 95%**
+  (+40pp). R57 had covered some surface but left the lifecycle
+  body uncovered. New `cv-faceauth/tests/test_base_pipeline_lifecycle.py`
+  (**10 tests, 0 skips**). Pinned: `initialize()` private reader
+  path (creates via `_create_stream_reader`, sets `_owns_stream=True`);
+  shared reader path (acquires from `SharedStreamReaderPool`, reads
+  ref-count); `initialize() then stop()` end-to-end with shared
+  pool release; `run()` early-return when `stream.start()` returns
+  False; early-return when `stream.start()` raises (exception
+  through executor); happy-path one batch of 3 frames processed
+  via `read_batch` then `_running=False` exits cleanly through
+  `_on_shutdown` + `stream.stop()`; empty-batch arm (`if not
+  batch_frames: await sleep; continue`); fallback `get_frame()`
+  loop when stream lacks `read_batch`; outer `except Exception`
+  arm with `_handle_error` (read_batch raises, recovery, clean
+  shutdown); `stream_fps = 25.0` default when stream object has
+  no `fps` attribute. Per-test `base_pipeline_env` fixture with
+  `monkeypatch.setattr` on bound names inside `orchestrator.base_pipeline`
+  module dict (so stubs take effect regardless of when the module
+  was first imported). Suite 1295 → **1305 passing** / 8 skipped.
+  Total cv-faceauth coverage **91% → 92%**. Private only `34dfc0f`.
+
+**No new bugs filed this round.** R68's roles.service.js mongoose
+issue and R72's permissions.utility deletePermissions issue remain
+unfiled.
+
+**Push-verification protocol worked (10th round in a row)**: all
+3 acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (15th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+**Clone divergence check working**: R87 client agent verified
+EvidenceSeverity.jsx + DeviceDetail.jsx exist on BOTH clones via
+`git ls-files` before committing — R86 lesson absorbed.
+
+Cumulative R22→R87: **~2745 new tests across 202 test files; 0
+product files touched across 66 rounds.** Serial execution still
+clean. cv-faceauth suite: 1305 passing, **92% total coverage**.
+
+Total pending bugs filed: **13 product (#96-#102, #104-#108, #112)** +
+**1 process (#103)** = 14 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R86 — 3-phase round +66 tests, streaming SKIPPED; **dashboard.service 85.14%, dispatch_cache 100%, clone divergence discovered**)
 
 - **server** — `core/v1/dashboard/dashboard.service.js` body-filter
