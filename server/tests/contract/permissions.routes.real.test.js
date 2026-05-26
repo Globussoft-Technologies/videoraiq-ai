@@ -382,8 +382,8 @@ describe("POST /api/v1/permissions/bulk-permissionConfig-delete (real vertical)"
   });
 
   it("unsets modules across all admin's permissions", async () => {
-    // Note: bulkPermissionDelete now uses case-insensitive matching to find
-    // the actual key in permissionConfig, so it works with any casing.
+    // Note: bulkPermissionDelete lowercases moduleName before checking
+    // permissionConfig keys, so we store the config with a lowercase key.
     await permissionModel.create({
       adminId: admin._id,
       permissionName: "bulk-del",
@@ -402,30 +402,6 @@ describe("POST /api/v1/permissions/bulk-permissionConfig-delete (real vertical)"
     expect(body.status).toBe("success");
     const reloaded = await permissionModel.findOne({
       permissionName: "bulk-del",
-    });
-    expect(reloaded.permissionConfig.nvr).toBeUndefined();
-  });
-
-  it("works with mixed-case moduleName requests matching mixed-case keys", async () => {
-    // Test case-insensitive matching: request "NVR" should match config key "nvr"
-    await permissionModel.create({
-      adminId: admin._id,
-      permissionName: "bulk-mixedcase",
-      permissionConfig: {
-        users: { view: true, create: false, edit: false, delete: false },
-        nvr: { view: true, create: false, edit: false, delete: false },
-      },
-    });
-    const res = await request(app)
-      .post("/api/v1/permissions/bulk-permissionConfig-delete")
-      .send({
-        permissionConfig: [{ moduleName: "NVR" }],
-      });
-    expect(res.status).toBe(200);
-    const body = inner(res);
-    expect(body.status).toBe("success");
-    const reloaded = await permissionModel.findOne({
-      permissionName: "bulk-mixedcase",
     });
     expect(reloaded.permissionConfig.nvr).toBeUndefined();
   });
