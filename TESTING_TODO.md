@@ -3,6 +3,98 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R79 — full 4-phase round, +37 tests; **embedder.py 100%; users.service 76.42%; SavedConfiguration 90.57%**)
+
+- **server** — `core/v1/users/users.service.js` tail 500-catch arms
+  across the lighter user-management methods. R78 took the file to
+  74.86%; R79 attacks the catch-arm cluster that became the largest
+  remaining reachable region after `runImport` (R77) +
+  `authUserLogin` (R78). New
+  `server/tests/integration/services/users.service.errorCatches.test.js`
+  (**9 tests, 3 module mocks + per-test `vi.spyOn` against Admin/
+  Users/AuthorizedUsers/Roles/Response**). Pinned 500-catch arms for
+  `bulkDeleteAuthUser`, `forgotPassword`, `resetPassword`,
+  `changePassword`, `checkEmpAdmin`, `isEmailExist`, `importUsers`
+  outer, `getImportProgress`, plus the `forgotPassword` email-send
+  warn arm. Coverage of users.service.js: **74.86% → 76.42%** lines
+  (+1.56pp); branches **89.10% → 92.21%** (+3.11pp); fns 60%
+  unchanged. Suite 128 → 137 users-related tests. Public `719189f`,
+  private mirror `ddb5fff`. **R77's note that lines 1428-1860
+  helpers are unreachable (commented-out call sites) holds — catch
+  arms are now the largest remaining reachable cluster.**
+- **client** — `page/user/Detection/components/SavedConfiguration.jsx`
+  (376 LOC) — 0% → **90.57% lines / 76.36% branches / 61.53% fns**.
+  The "Saved Configurations" expandable panel on the legacy
+  DetectionSetting page. New
+  `client/tests/unit/page/user/Detection/components/SavedConfiguration.test.jsx`
+  (**7 tests, 7 mocks** — Profile/Api/get, Profile/Api/delete,
+  sonner, EditDetectionSettingModal, DeleteConfirmation,
+  ConfigSearchControl, react-loading-skeleton). Pinned: mount +
+  empty + `Action` falsy `setAddedDetection(false)` arm; reject
+  → error pane; populated card asserts; Edit click → modal with
+  chosen item; Delete confirm → `deleteDetectionSettings("ds-1")`
+  → success toast + refetch + close; Delete non-200 → error toast
+  + modal stays open + no refetch; header chevron collapses body;
+  no-alerts populated branch + `Action="action"` fallbacks
+  ("N/A" NVR / "No receivers"). Suite 1569 → 1576. Public
+  `afd6ade`, private mirror `1911001`. **Note**: both commits have
+  identical subject `test(client): cover SavedConfiguration
+  detection panel (R79)` — the public mirror is missing the
+  `(mirror)` suffix per convention. Cosmetic, content matches.
+- **streaming** — `internal/server` 97.5% → **97.7%** (+0.2pp).
+  `handlePlaybackStart` 94.6% → **96.4%** (+1.8pp) via the
+  previously-0% `Config.Save()` error arm at server.go:345-347
+  (log-and-continue body). New
+  `streaming/internal/server/handle_playback_start_save_error_test.go`
+  (1 test). Technique mirrors the R75 handleCamera pattern:
+  pre-create `./config.json` as a DIRECTORY in `t.Chdir`'d temp
+  dir → `os.WriteFile` inside `Config.Save` fails. Paired with a
+  camera whose decrypted RTSP URL lacks "Channels" so
+  `StartPlayback` fails at playback.go:55-57 BEFORE spawning
+  `runPlaybackPipeline` goroutine. No ffmpeg, no sockets, no
+  goroutine leaks. Total streaming holds at **87.5%** (sub-pp
+  absolute gain rounds away). Private only `adb2e15`. **The Save-
+  error arm pattern is now applied twice (handleCamera R75 +
+  handlePlaybackStart R79)**.
+- **cv-faceauth** — `processor/embedder.py` **62% → 100%** (200
+  stmts, 0 missing). New `cv-faceauth/tests/test_embedder_inference.py`
+  (**20 tests, 0 skips**, 613 LOC). Per-test `app_stub`/
+  `face_align_patched` fixtures with scoped sys.modules rollback
+  (R71/R75/R76/R77/R78 lesson). Pinned: `_load_model` happy-path
+  (FaceAnalysis ctor + prepare + provider-logging loop), provider
+  list for cuda vs cpu, debug branch when sub-model has no
+  `session`, non-ImportError exception (RuntimeError caught →
+  `is_loaded=False`); `_extract_yaw` exception branch (pose raises)
+  for pose-wise on and off; `extract()` `face_crop.size == 0`
+  per-face continue, outer exception wrapper; `extract_batch`
+  ThreadPoolExecutor worker exception (slot replaced with `[]`);
+  `extract_aligned_faces` happy-path with 2 bboxes + norm_crop
+  integration, empty bboxes, kpss=None per face, detection
+  exception; `get_aligned_faces_batch` multi-frame (mixed face
+  counts), bboxes=None per frame, batch-level exception;
+  `get_embeddings_from_aligned` batch (N,512), single (512,),
+  recognition exception. Suite 1134 → **1154 passing** / 7
+  skipped. Total cv-faceauth coverage holds at **86%** (absolute
+  lines covered: 14326 → 14738). Private only `18ee931`.
+
+**No new bugs filed this round.** R68's roles.service.js mongoose
+issue and R72's permissions.utility deletePermissions issue remain
+unfiled.
+
+**Push-verification protocol worked again (2nd round in a row)**:
+all 4 sub-agents reported `## main...origin/main` after pushes.
+Cron driver verified both clones in sync.
+
+**Process compliance perfect (7th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R79: **~2348 new tests across 171 test files; 0
+product files touched across 58 rounds.** Serial execution still
+clean. cv-faceauth suite: 1154 passing.
+
+Total pending bugs filed: **11 product (#96-#102, #104-#107)** +
+**1 process (#103)** = 12 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R78 — full 4-phase round, +30 tests; **redis_client 100%; ServeHLS 97%; users.service authUserLogin pinned**)
 
 - **server** — `core/v1/users/users.service.js` `authUserLogin` happy
@@ -2059,11 +2151,12 @@ already done):**
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R78):**
+**Coverage state (after R79):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 96.8%,
   `internal/config` 82.4%, `internal/logger` 94.0%, `internal/server`
-  **97.5%** (R78: ServeHLS 93.9→97.0% via StartQueue drain), `internal/stream` 80.9%
-- Total streaming: **87.5%** (was 87.3%)
+  **97.7%** (R79: handlePlaybackStart 94.6→96.4% via Config.Save error arm),
+  `internal/stream` 80.9%
+- Total streaming: 87.5% (unchanged at 3-sig-fig precision)
 
 **Practical ceiling note** (per R73 agent investigation): all
 remaining `internal/stream` and most `internal/server` gaps are
