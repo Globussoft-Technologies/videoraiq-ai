@@ -22,6 +22,58 @@ test.describe("Roles & permissions", () => {
     );
   });
 
+  test("admin sees role-management primary actions on /roles-permissions", async ({
+    page,
+  }) => {
+    await page.goto("/roles-permissions");
+    await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
+
+    test.skip(
+      !/\/roles-permissions/.test(page.url()),
+      "user does not have access to /roles-permissions"
+    );
+
+    // "Add New Role" is the headline action and stays present even when no
+    // roles are defined yet. The role-search input uses a "Search roles..."
+    // placeholder distinct from the generic "Search" used elsewhere.
+    await expect(
+      page.getByRole("button", { name: /add new role/i }).first()
+    ).toBeVisible({ timeout: 15_000 });
+
+    const roleSearch = page.getByPlaceholder(/search roles/i).first();
+    await expect(roleSearch).toBeVisible({ timeout: 15_000 });
+    await roleSearch.fill("zzz-no-such-role");
+    await expect(roleSearch).toHaveValue("zzz-no-such-role");
+    await roleSearch.fill("");
+  });
+
+  test("admin sees employee-onboarding primary actions on /register-users", async ({
+    page,
+  }) => {
+    await page.goto("/register-users");
+    await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
+
+    test.skip(
+      !/\/register-users/.test(page.url()),
+      "user does not have access to /register-users"
+    );
+
+    // These four toolbar buttons mark the page as the admin-only employee
+    // onboarding hub — a non-admin would not see all of them at once.
+    await expect(async () => {
+      for (const label of [
+        /register new employee/i,
+        /register bulk employee/i,
+        /verify user/i,
+        /import emp users/i,
+      ]) {
+        await expect(page.getByRole("button", { name: label }).first()).toBeVisible({
+          timeout: 5_000,
+        });
+      }
+    }).toPass({ timeout: 15_000 });
+  });
+
   test.describe("read-only user RBAC", () => {
     test.skip(
       () => !process.env.TEST_USERNAME_READONLY,

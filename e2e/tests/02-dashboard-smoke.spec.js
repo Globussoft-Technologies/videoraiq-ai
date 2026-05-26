@@ -60,4 +60,71 @@ test.describe("Dashboard smoke", () => {
     await dashboard.expectLoaded();
     expect(Date.now() - start).toBeLessThan(15_000);
   });
+
+  test("renders the headline KPI panels", async ({ page }) => {
+    await page.goto("/dashboard");
+    await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
+
+    // Four headline cards rendered by the dashboard summary widgets.
+    // We assert on heading text rather than aria-labels so a wording tweak
+    // surfaces clearly. Each card paints even when counts are zero.
+    await expect(async () => {
+      for (const label of [
+        /today'?s critical incidents/i,
+        /today'?s total incidents/i,
+        /cameras:?\s*detected\s*\/\s*total/i,
+        /incidents resolved/i,
+      ]) {
+        await expect(page.getByRole("heading", { name: label }).first()).toBeVisible({
+          timeout: 5_000,
+        });
+      }
+    }).toPass({ timeout: 15_000 });
+  });
+
+  test("renders the live-notifications + authorized-employees side panels", async ({
+    page,
+  }) => {
+    await page.goto("/dashboard");
+    await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
+
+    // Two right-rail panels that always paint regardless of data state.
+    await expect(
+      page.getByRole("heading", { name: /live notifications/i }).first()
+    ).toBeVisible({ timeout: 15_000 });
+
+    // The authorized-employees heading concatenates the user count (e.g.
+    // "Authorized Employees16"); match the prefix loosely.
+    await expect(
+      page.getByRole("heading", { name: /authorized employees/i }).first()
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("employee-search input on the dashboard accepts typing", async ({ page }) => {
+    await page.goto("/dashboard");
+    await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
+
+    // Authorized-employees panel renders a "Search Employees" input.
+    const search = page.getByPlaceholder(/search employees/i).first();
+    await expect(search).toBeVisible({ timeout: 15_000 });
+    await search.fill("zzz-no-such-employee");
+    await expect(search).toHaveValue("zzz-no-such-employee");
+    await search.fill("");
+    await expect(search).toHaveValue("");
+  });
+
+  test("multi-camera activity review section is present", async ({ page }) => {
+    await page.goto("/dashboard");
+    await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
+
+    // This section heading is wired up by the comparison widget; wrap in
+    // toPass for slow live-tile hydration.
+    await expect(async () => {
+      await expect(
+        page
+          .getByRole("heading", { name: /multi-camera activity review/i })
+          .first()
+      ).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 15_000 });
+  });
 });

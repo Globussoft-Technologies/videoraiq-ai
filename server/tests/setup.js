@@ -81,6 +81,12 @@ const testConfig = {
   sendgrid: { apiKey: "SG.test", from: "noreply@test" },
   twilio: { accountSid: "AC_test", authToken: "test", from: "+15555550000" },
   telegram: { botToken: "test:bot" },
+  // TelegramService reads these at module load via `config.get`.
+  domainPoint: {
+    botToken: "test:domain-bot",
+    chatId: "test-chat-id",
+    email: "domains@test",
+  },
 
   // Misc
   Frontend: { storagePage: "http://frontend.test/storage" },

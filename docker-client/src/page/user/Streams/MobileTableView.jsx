@@ -74,7 +74,7 @@ export function MobileTableView({ table }) {
                 value={row.original.control}
                 onValueChange={(newValue) => {
                   row.original.control = newValue;
-                  table.options.meta?.updateData(row.index, 'control', newValue);
+                  table.options.meta?.updateData?.(row.index, 'control', newValue);
                 }}
               >
                 <SelectTrigger className={styles.selectTrigger}>
