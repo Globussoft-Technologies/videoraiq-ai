@@ -3,6 +3,113 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## 🎉 TL;DR — R100 MILESTONE — 3-phase round +64 tests, streaming SKIPPED; **3 more server models to 100% + Dashboard gates + 8th new #114 module (api_obj/main.py)**
+
+- **server** — TWO new test files covering 3 previously-uncovered
+  models:
+  - `core/v1/accesslogs/reworkedAccesslogs.model.js` (TestAccessLogs):
+    **0% → 100%** lines/branches/funcs
+  - `core/v1/locations/location.model.js`: 78.33% → **100%** lines
+    (81.81% branches)
+  - `core/v1/departments/departments.model.js`: 72.94% → **100%**
+    lines (83.33% branches)
+  
+  New `server/tests/integration/models/reworkedAccesslogs.model.test.js`
+  (8 tests) + `access-hooks.model.test.js` (11 tests, covering
+  Location + Department `pre('find')` access-control hooks with
+  `memberId`/`authorizedChannels` scenarios). Both files 0 mocks
+  (pure schema-level). Suite 130 → 149 model integration tests
+  (+19). Public `ab9f05a`, private mirror `873710a`.
+- **client** — `Dashboard/Dashboard.jsx` (top-level user dashboard
+  page) permission gates. New
+  `client/tests/unit/page/user/Dashboard/Dashboard.test.jsx`
+  (**4 tests, 8 mocks at cap**). Pinned: permissionsLoading →
+  PageLoader; `!canView` + showDenied false → empty div placeholder;
+  `!canView` + 2s setTimeout elapsed → AccessDenied (fake timers +
+  act); permissions object missing `dashboard` entirely → empty
+  div fall-through. Also added `Settings/StorageSetting/components/S3Form.jsx`
+  and `SftpForm.jsx` to vitest include scope (R27-era tests
+  existed but src wasn't being measured). Suite 1840 → 1844.
+  Public `f02b5a4`, private mirror `46014c1`.
+- **streaming** — **SKIPPED** per R94/R95/R98 practical-ceiling.
+- **cv-faceauth** — `api_obj/main.py` (48-stmt new module from
+  `59adc4c` refactor — **8th new module brought to coverage**).
+  New `cv-faceauth/tests/test_api_obj_main.py` (**41 tests, 0
+  skips**). Pinned: FastAPI app instance (title "Object Detection
+  API", version "1.0.0", /docs + /redoc, PPE/Crowd description);
+  `CORSMiddleware` with `["*"]` origins/methods/headers +
+  `allow_credentials=True`, including TestClient preflight; 4
+  routers mounted at documented prefixes (`streams → /stream`,
+  `detectors → /detectors`, `system → root`, `revoke → root`);
+  `_restore_pipelines` (empty-saved early return + env filter +
+  happy CameraConfig build with all kwargs + zone defaults +
+  already-restored skip + `_parse_pipeline_key` exception arm +
+  `assign_camera_to_shard` failure arm + missing `stream_url`
+  default + info-log counts); `startup_event` (deps.init_stubs +
+  late-binding restore); `shutdown_event` (manager.stop_all when
+  set, no-op when None); lifecycle hooks registered on
+  app.router.on_startup/on_shutdown. Per-test fixture with
+  `try/finally` scoped `sys.modules` rollback. Coverage: **0% →
+  96%** (48 stmts, only `if __name__ == "__main__": uvicorn.run(...)`
+  CLI block (lines 136-137) intentionally not exercised). Suite
+  1447 → **1488 passing** / 9 skipped. Private only `a265043`.
+
+## #114-refactor new-module coverage (8 modules covered)
+
+- R93: `core/triton_model_specs.py` (48 tests, 100%)
+- R94: `api_obj/models/schemas.py` (48 tests, 100%)
+- R95: `core/stream_hub_client.py` (43 tests, 100%)
+- R96: `api_obj/deps.py` (28 tests, 100%)
+- R97: `core/shared_memory_manager.py` (29 tests, 100%)
+- R98: `api_obj/routers/system.py` (29 tests, 100%)
+- R99: `api_obj/routers/detectors.py` (28 tests, 100%)
+- **R100: `api_obj/main.py` (41 tests, 96%)** — CLI block excluded
+  by design
+
+**8 modules, ~294 tests recovered** to bring the #114-impacted
+slice toward stable coverage. Remaining new-module candidates:
+`api_obj/routers/streams.py` (114 stmts), `api_obj/shard_runner.py`
+(118 stmts), `api_obj/manager.py` (237 stmts — large). Skip
+`api_obj/routers/revoke.py` (#120-blocked).
+
+**No new bugs filed this round.** R94's #116/#117 + R95's #120
+still pending product team. #106 fixed (R95). #107 fix branch
+still in flight on public mirror.
+
+**Push-verification protocol worked (23rd round in a row)**: all
+3 acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (28th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+## R100 milestone stats
+
+- **79 rounds executed** (R22 → R100; cron began at R22 in May 2026)
+- **~3378 new tests** authored by cron across **244 test files**
+  (private clone; mirror near-parity minus streaming + cv-faceauth)
+- **155 cron-authored tests** currently broken on private only
+  due to product team's #114 refactor; their fix is in progress
+- **0 product files touched** by cron across 79 rounds
+- **Serial execution unbroken** (since R66, 35 rounds straight)
+- **Push-verification protocol unbroken** (since R78, 23 rounds straight)
+- **2 bugs confirmed fixed by product team** (#96 R91/R92, #106 R95)
+- **15 product bugs open**: #97-#102, #104, #105, #107 (WIP), #108,
+  #112, #114 (product refactor regression), #116, #117, #120
+- **1 process bug open** (#103 — parallel-agent index race from
+  R66; mitigated by serial execution)
+- **16 issues open total** (down from peak 17 at R94)
+- **cv-faceauth suite**: 1488 passing — up from R66's 1000 milestone
+- **Clone divergences**: 3 (R86 EmployeeRegister, R90 VehicleCountLogs,
+  R91 AttendanceLogsLive — all priv-only client files)
+
+Cumulative R22→R100: **~3378 new tests across 244 test files
+(priv) [155 broken by #114, product-owned]; 0 product files
+touched across 79 rounds.**
+
+Total pending bugs filed: **15 product (#97-#102, #104, #105,
+#107, #108, #112, #114, #116, #117, #120)** + **1 process (#103)**
+= **16 issues open**.
+
 ## TL;DR — what changed on 2026-05-26 (R99 — 3-phase round +67 tests, streaming SKIPPED; **9 server models covered; CriticalAlerts 79.8%; 7th new #114 module (detectors.py) at 100%**)
 
 - **server** — TWO new test files covering **9 previously-untested
