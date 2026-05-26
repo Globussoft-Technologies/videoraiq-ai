@@ -3,6 +3,137 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R94 — full 4-phase round +58 tests; **R68+R72 latent finally filed as #116 + #117; cameraRestrictions FIXED by product team; cv-faceauth recovering**)
+
+- **server** — `core/v1/roles/roles.service.js` reachable gap branches.
+  New `server/tests/integration/services/roles.service.gaps.test.js`
+  (**5 tests, 1 spy**). Pinned: `createRoles` Joi validation fail
+  (23-25); `createRoles` mixed new + existing roles success arm
+  (77-79); `update` `ADMIN_NOT_EXIST` short-circuit (197-198);
+  `delete` "No role found" negative arm (line 352); `delete` outer
+  catch via `Role.findOne` spy throw (376-379). Coverage of
+  roles.service.js (across the 3 roles.service test files): **90.62%
+  → 93.48%** lines (+2.86pp); branches **73.68% → 80.21%** (+6.53pp);
+  fns hold at 100%. Suite +5. Public `cacd0eb`, private mirror
+  `93fa455`. **TWO latent bugs finally filed (from R68 & R72)**:
+  - **#116 — `roles.service.js::update` mongoose `Schema.Types.ObjectId`
+    mismatch** (the R68 latent finding from May. now formal).
+    `import { ObjectId } from "mongoose"` resolves to `SchemaObjectId`,
+    not `Types.ObjectId`; `new ObjectId(...)` returns a wrapper that
+    never matches a real ObjectId in `$match`, making the duplicate-
+    role-name guard structurally dead.
+  - **#117 — `permissions.utility.deletePermissions` undefined
+    `collectionName` + ObjectId mismatch** (the R72 latent finding).
+    Always throws `ReferenceError` swallowed by outer catch, plus
+    string-vs-ObjectId aggregate `$match`; the all-permissions
+    success arm is unreachable.
+- **client** — `EmployeeLogs/AccessLog.jsx` (permission-gate pattern).
+  New `client/tests/unit/page/user/EmployeeLogs/AccessLog.test.jsx`
+  (**4 tests, 8 mocks** — at the budget cap). Pinned loading null-
+  render + AccessDenied deny + missing-logs-key fallback + loading-
+  wins precedence. 0% → covered (gates only). **Side observation
+  not filed**: AccessLog imports plain `moment` but uses
+  `moment.tz.guess()`; production works because sibling files import
+  `moment-timezone` which augments the global moment singleton —
+  load-order dependency, not a runtime bug. Suite 1789 → 1793. Public
+  `74d674a`, private mirror `8818a2a`.
+- **streaming** — `internal/stream/UpdateConfig` (StreamManager
+  method, stream.go:261). New
+  `streaming/internal/stream/update_config_write_error_test.go`
+  (1 test). Coverage of UpdateConfig: **75.0% → 87.5%** (+12.5pp);
+  the `os.WriteFile` error arm at stream.go:267-270 newly covered.
+  87.5% is the practical ceiling — the `json.MarshalIndent` arm
+  above is unreachable for the closed `*config.Config` struct shape.
+  Dir-as-file filesystem injection at hard-coded relative
+  `"config.json"` path — same R75/R79/R82 pattern. Private only
+  `d420002`. **Remaining streaming gaps confirmed seam-blocked**
+  per R83-R92 catalog.
+- **cv-faceauth** — `api_obj/models/schemas.py` (new module from
+  the `59adc4c` refactor; targeted intentionally per the R93 #114
+  recovery plan — pick stable NEW modules, not the broken legacy
+  surface). New `cv-faceauth/tests/test_api_obj_schemas.py`
+  (**48 tests, 0 skips, 0 mocks**). Pinned: `DetectionLogic` enum
+  (10 camelCase values + str-enum identity + value lookup + unknown
+  rejection); `DetectorConfig` defaults; `validate_line_coordinates`
+  field-validator (all 6 arms); `validate_obstruction_reqs` model-
+  validator (zones-missing, threshold-missing, empty-zones falsy,
+  happy, non-obstruction short-circuit); `StreamRequest` required +
+  `min_length=1` + `validate_stream_url` (None, http, rtsp,
+  missing-scheme, missing-netloc, empty); `StopStreamRequest` enum
+  coercion; `UpdateLogicRequest` required + min_length; all response
+  models (StreamResponse, CameraStatus, EngineStatus, ServiceStatus,
+  HealthResponse) — defaults + required-field enforcement +
+  per-instance independent list defaults. Coverage:
+  api_obj/models/schemas.py **0% → 100%** (105/105 lines). Suite
+  1242 → **1290 passing** / 9 skipped (155 #114-related failures
+  unchanged — product-owned). Private only `2bb3518`.
+
+## Product team activity between R93 and R94
+
+**Private** gained:
+- `78ab4cd fix(cameraRestrictions): resolve comma-operator and
+  ObjectId comparison bugs in fetchChannels` — product fix for
+  cameraRestrictions
+- `3c64e3d` merge of PR #48
+
+**Public mirror** gained:
+- `4914cae` + `4e6bcfb` + `d409194` — same fix landed via different
+  hash chain through PR #115, plus product team modified our
+  cron-authored test (`cameraRestrictions.service.fetchChannels.test.js`
+  per R89) to reflect the fixes
+- NEW branch visible: `fix/issue-106-auth-axios` — **product team
+  is starting work on our bug #106** (auth.service.js missing
+  `axios` import from R67)
+
+**Implications**:
+1. PR #115 introduced as a new product-side bug tracker entry —
+   not ours.
+2. The cameraRestrictions fix may affect our R89 test (which the
+   product team explicitly updated on the public mirror via
+   `4e6bcfb`).
+3. **Product team starting to work through our backlog** —
+   `fix/issue-106-auth-axios` branch is encouraging.
+
+## Open bug count after R94
+
+- **15 product** (was 13 before R94):
+  - **#97-#102, #104-#108, #112, #114** (carried)
+  - **#116** (NEW R94) — roles.service.update mongoose ObjectId mismatch
+  - **#117** (NEW R94) — permissions.utility.deletePermissions undefined collectionName + ObjectId mismatch
+- **1 process** (#103)
+- **#96 still fixed** (R91/R92 product fix confirmed)
+- **Total open: 16**
+
+## Streaming status
+
+R94 covered the last clean non-seam-blocked target (UpdateConfig
+WriteFile arm). Remaining gaps all blocked on:
+- ffmpeg/ffprobe binaries (runFFmpegPipeline*, getVideoCodec)
+- seam refactor (cleanupInactive*, processStartQueue,
+  StartCleanupRoutine, MonitorFFmpeg second tick)
+- dead code (handleRestart RTSP-error 503 arm, Save() Unquote
+  fallback, NewRAMWatcher zero-Sys fallback)
+
+Future streaming rounds will likely SKIP until product seam work.
+
+## Clone divergences (no change)
+
+Private-only client files: R86 `EmployeeRegister.jsx`, R90
+`VehicleCountLogs.jsx`, R91 `AttendanceLogsLive.jsx`.
+
+**Push-verification protocol worked (17th round in a row)**: all 4
+acting sub-agents confirmed `## main...origin/main` after pushes.
+
+**Process compliance perfect (22nd round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R94: **~3072 new tests across 226 test files (priv)
+[155 broken by #114, product-owned]; 0 product files touched
+across 73 rounds.** Serial execution still clean.
+
+Total pending bugs filed: **15 product (#97-#102, #104-#108, #112,
+#114, #116, #117)** + **1 process (#103)** = **16 issues open**.
+
 ## TL;DR — what changed on 2026-05-26 (R93 — full 4-phase round +57 tests; **MAJOR product refactor `59adc4c` broke 155 cron tests; bug #114 filed; +1 streaming arm; triton_model_specs 0→100%**)
 
 - **server** — `core/v1/locations/location.service.js` outer-catch
