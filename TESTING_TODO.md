@@ -3,6 +3,90 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R75 — full 4-phase round, +59 tests; **face_auth_api handler bodies 32→96%; storage 88.49%; handleCamera 98.4%**)
+
+- **server** — `core/v1/storage/storage.service.js` — TWO new test
+  files this round (server's biggest single-round delta in many
+  rounds). New
+  `server/tests/integration/services/storage.service.uploadGoogleDrive.test.js`
+  (3 tests, 5 mocks — pins `uploadFile → uploadToGoogleDrive` +
+  `findOrCreateFolder` cold/warm branches + upload catch arm) and
+  `storage.service.smartStream.test.js` (8 tests, 5 mocks — pins
+  `smartStreamFile` input validation, regex short-circuit,
+  global-SFTP success + traversal guard, fallback chain
+  path-miss → _id-hit, total-miss → 404, outer URIError catch).
+  Coverage of storage.service.js: **78.42% → 88.49%** lines
+  (+10.07pp); branches 80.74% → 86.03% (+5.29pp); fns **84% →
+  92%** (+8pp). Storage module overall: 73.91% → 76.08%. Suite
+  2545 → 2556 / +11. Public `0f19fc6`, private mirror `d5b9854`.
+  **Across R73 → R74 → R75 the storage.service.js journey: ~64% →
+  78% → 88%**.
+- **client** — `page/user/Detection/components/AlertReceiversSection.jsx`
+  (0% → **82.6% lines / 90.32% branches / 69.23% fns**) — 314-line
+  props-driven dropdown panel for the Detection settings card
+  (chip strip + toggleable Select-Recipients dropdown +
+  Select-All / Clear-All header + verified-only filter +
+  per-row Checkbox + Remove + VerifiedBadge / Verify-with-navigate +
+  Escape-while-open dropdown close + scroll-to-bottom pagination
+  hook). New
+  `client/tests/unit/page/user/Detection/components/AlertReceiversSection.test.jsx`
+  (**14 tests, 6 mocks** — checkbox, badge, button, Tooltip,
+  RecipientList.VerifiedBadge, react-router-dom). Suite 1513 →
+  1527 / +14. Public `432ab48`, private mirror `615aa83`.
+- **streaming** — `internal/server` **95.7% → 96.9%** (+1.2pp).
+  `handleCamera` 88.7% → **98.4%** (+9.7pp) via the previously-0%
+  PUT and DELETE `Config.Save()` error arms (server.go:211-215 +
+  249-253). New
+  `streaming/internal/server/handle_camera_save_error_test.go`
+  (2 tests). Approach: `t.Chdir(tmp)` + `os.Mkdir("config.json",
+  0755)` forces `os.WriteFile` inside `Config.Save()` to fail,
+  exposing the handler's 500 error arm without touching product
+  code. No goroutines, no ffmpeg, no sockets. Total streaming:
+  86.6% → **87.1%** (+0.5pp). **Streaming continued to lift modestly
+  despite the practical-ceiling diagnosis** — handleCamera Save
+  error arms were a clean exception requiring just an `os.Mkdir`
+  trick. Private only `62cf297`.
+- **cv-faceauth** — `api/face_auth_api.py` **32% → 96%** (+64pp
+  on 177 lines). R65 covered the metadata surface (33 tests on
+  schemas/route map/lazy singleton) but the actual handler bodies
+  weren't reached because of lazy imports. R75 hit the handler
+  bodies via FastAPI TestClient + sys.modules stubs for every
+  lazy-imported dep (`orchestrator.manager`,
+  `orchestrator.face_auth_pipeline`, `config.settings`,
+  `core.memory_monitor`, `core.health_monitor`, `processor.embedder`,
+  `recognition.local_matcher`, `qdrant_client`, `httpx`). New
+  `cv-faceauth/tests/test_face_auth_api_routes.py` (**32 tests**).
+  Pinned: `_restore_pipelines` (empty state + env-mismatch filter +
+  already-running skip + happy CameraConfig construction + failure
+  path with state-removal); `start_camera` (503 capacity / 409 dup /
+  200 happy + state persisted / 500 init failure / dispatcher
+  lazy-init); `stop_camera` (no-fa-pipelines early success / happy
+  stopped+remaining lists / 500 manager error); `stop_all_cameras`
+  iteration; `register_face` (400 empty profileImages / 400 no face /
+  500 no embeddings / 200 with UUID pass-through / uuid5 derivation
+  for non-UUID uid / default_db fallback / local-matcher None /
+  500 remote Qdrant failure); `list_cameras` filtering; `get_camera_status`
+  (404 + happy); `health_check{,_detailed,_get_error_details}`;
+  `startup_event` + `shutdown_event` lifecycle including
+  `asyncio.wait_for` timeout branch. Scoped `finally:` rollback
+  tracks each sys.modules key it touched. Suite 1062 → **1094
+  passing** / 7 skipped. Total cv-faceauth coverage 83% → **84%**.
+  Private only `3168cb7`.
+
+**No new bugs filed this round.** R68's roles.service.js issue
+and R72's permissions.utility deletePermissions issue remain
+unfiled.
+
+**Process compliance perfect** (3rd round in a row): no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R75: **~2211 new tests across 152 test files; 0
+product files touched across 54 rounds.** Serial execution still
+clean. cv-faceauth suite: 1094 passing.
+
+Total pending bugs filed: **11 product (#96-#102, #104-#107)** +
+**1 process (#103)** = 12 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R74 — full 4-phase round, +34 tests; **storage SFTP + LocalMatcher 99% + ActionCameraPreview 0→covered**)
 
 - **server** — `core/v1/storage/storage.service.js` SFTP streaming
@@ -1728,12 +1812,11 @@ already done):**
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R74):**
+**Coverage state (after R75):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 95.2%,
-  `internal/config` 82.4%, `internal/logger` **93.0%** (R74:
-  appendToLogFile 83.3→100%), `internal/server` 95.7%, `internal/stream`
-  80.9%
-- Total streaming: 86.6% (unchanged at 3-sig-fig precision)
+  `internal/config` 82.4%, `internal/logger` 93.0%, `internal/server`
+  **96.9%** (R75: handleCamera 88.7→98.4%), `internal/stream` 80.9%
+- Total streaming: **87.1%** (was 86.6%)
 
 **Practical ceiling note** (per R73 agent investigation): all
 remaining `internal/stream` and most `internal/server` gaps are
