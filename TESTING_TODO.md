@@ -3,6 +3,76 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R74 — full 4-phase round, +34 tests; **storage SFTP + LocalMatcher 99% + ActionCameraPreview 0→covered**)
+
+- **server** — `core/v1/storage/storage.service.js` SFTP streaming
+  surface (`getSftpClient` + `streamFromSFTP` + `handleRangeRequest`
+  206 path) — remaining storage gap after R73 landed Google Drive.
+  New
+  `server/tests/integration/services/storage.service.streamSFTP.test.js`
+  (**6 tests, 5 mocks** — ssh2-sftp-client, @aws-sdk/client-s3,
+  googleapis, utils/newSFTPConnectionCheck.js, utils/database.js).
+  Coverage of storage.service.js: **71.64% → 78.42%** stmts (+6.78pp);
+  branches **77.85% → 80.74%** (+2.89pp); fns **79.16% → 84%**
+  (+4.84pp). Suite 2548 → 2554 / +6. Public `89d4f9e`, private
+  mirror `5b576e8`.
+- **client** — `page/user/EmployeeLogs/ActionCameraPreview.jsx`
+  (0% → covered) — 387-line carousel + dialog component shown on
+  Attendance/Access log entry click. New
+  `client/tests/unit/page/user/EmployeeLogs/ActionCameraPreview.test.jsx`
+  (**14 tests, 1 mock** — `@/components/ui/dialog`). Pinned: dialog
+  open/closed null-guard, 0/1/multi imageUrls branches (counter +
+  chevron suppression), module='attendancelogs' vs 'accesslogs'
+  header copy + per-module rows, Next/Previous chevron wrap-around,
+  ArrowRight/ArrowLeft/Escape key handlers + `!isOpen` keyboard
+  guard, Close button onClose, BASE_URL prefixing for string vs
+  `{url, timestamp, cameraType}` entries, img onLoad/onError +
+  window resize listener, '--/--/----' date placeholder + 'Employee
+  Name' header fallback. Suite 1499 → 1513. Public `b2db8b6`,
+  private mirror `b3cb92b`.
+- **streaming** — `internal/logger` 92.5% → **93.0%** (+0.5pp).
+  `(*IPLogger).appendToLogFile` **83.3% → 100%** via the `os.OpenFile`
+  error early-return arm (l.logFile is a directory → EISDIR /
+  Windows access-denied). New
+  `streaming/internal/logger/iplogger_append_error_test.go` (1 test,
+  in-package, deterministic — `t.TempDir()` + direct struct
+  construction; no sleeps/sockets/goroutines). Total streaming:
+  86.6% → 86.6% (sub-percent gain on a small package diluted to
+  zero at 3-sig-fig precision). Agent confirmed R73's "practical
+  ceiling" diagnosis largely held — `appendToLogFile`'s OpenFile
+  error was a clean exception that didn't need a seam refactor;
+  most other gaps remain blocked. **Streaming is at the diminishing-
+  returns floor: ~1 test per round of marginal lift will be the
+  norm.** Private only `824da55`.
+- **cv-faceauth** — `recognition/local_matcher.py` **55% → 99%**
+  (+44pp). New `cv-faceauth/tests/test_local_matcher_sync.py`
+  (**13 tests, 0 skips**). Pinned: `_init_local()` happy path +
+  suffix-fallback (`path + "_1"`) on first-attempt `QdrantClient`
+  failure; `sync()` orchestration (skip-not-on-source, per-collection-
+  failure-continue, source-client-failure); `_sync_collection()`
+  (scroll-and-upsert with `vector is None` skipping, page-end
+  termination, `delete_collection` exception swallowing); `close()`
+  with/without `_local_client`; `get_local_matcher` singleton-
+  caches-first-args contract; `init_matcher_sync` propagates `sync()`
+  return value (both True + False). Remaining 1% (lines 36-37,
+  module-import-time `dbs.json` exception handler) unreachable
+  without a fresh module reload. Suite 1049 → **1062 passing** /
+  7 skipped. Total coverage 82% → 83%. Private only `91ffb17`.
+
+**No new bugs filed this round.** R68's roles.service.js mongoose
+issue and R72's permissions.utility deletePermissions ObjectId-vs-
+string issue both remain unfiled (no R74 agent touched those files).
+
+**Process compliance perfect**: no agent prematurely edited
+TESTING_TODO.md (R72 lesson absorbed, 2nd round in a row).
+
+Cumulative R22→R74: **~2152 new tests across 147 test files; 0
+product files touched across 53 rounds.** Serial execution still
+clean. cv-faceauth suite: 1062 passing.
+
+Total pending bugs filed: **11 product (#96-#102, #104-#107)** +
+**1 process (#103)** = 12 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R73 — full 4-phase round, +26 tests; **face_auth_onfly_pipeline.py hits 100%; storage Google Drive + PlaybackHeader from 0%**)
 
 - **server** — pivoted off permissions.utility (95.13%, diminishing).
@@ -1658,11 +1728,12 @@ already done):**
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R73):**
+**Coverage state (after R74):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 95.2%,
-  `internal/config` 82.4%, `internal/logger` 92.5%, `internal/server`
-  **95.7%** (R73: validateAndUpdateToken 90→100%), `internal/stream` 80.9%
-- Total streaming: **86.6%** (was 86.4%)
+  `internal/config` 82.4%, `internal/logger` **93.0%** (R74:
+  appendToLogFile 83.3→100%), `internal/server` 95.7%, `internal/stream`
+  80.9%
+- Total streaming: 86.6% (unchanged at 3-sig-fig precision)
 
 **Practical ceiling note** (per R73 agent investigation): all
 remaining `internal/stream` and most `internal/server` gaps are
