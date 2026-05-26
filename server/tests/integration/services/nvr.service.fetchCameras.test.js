@@ -62,9 +62,11 @@ class DigestFetchStub {
     return fetchSpy(url);
   }
 }
-vi.mock("digest-fetch", () => ({ default: DigestFetchStub }));
 
-const { NVRService } = await import(
+vi.doMock("digest-fetch", () => ({ default: DigestFetchStub }));
+
+// Import after mock is setup using dynamic import
+const { default: NVRService } = await import(
   "../../../core/v1/NVR/nvr.service.js"
 );
 
@@ -316,7 +318,7 @@ describe("NVRService._fetchCamerasFromNvr — unsupported + error arms", () => {
       "p",
     );
     expect(out).toEqual({
-      error: "NVR brand not yet supported",
+      error: "This brand is not yet supported for camera discovery",
     });
     // Never reaches a fetch — the brand check happens before any fetch call.
     expect(fetchSpy).not.toHaveBeenCalled();
