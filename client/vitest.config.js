@@ -1159,6 +1159,21 @@ export default defineConfig({
         "src/page/user/Dashboard/Dashboard.jsx",
         "src/page/user/Settings/StorageSetting/components/S3Form.jsx",
         "src/page/user/Settings/StorageSetting/components/SftpForm.jsx",
+        // Round 101: Dashboard/Alertwidgets/alert.jsx — the FireAlert
+        // wrapper that fans switchOn[] entries through a per-incidentType
+        // switch to one of six BaseAlertCard variants (PersonCount /
+        // VehicleCount / MotionDetection / ObjectDetection / Unauthorized /
+        // Authorized Loitering) or falls back to <NoDataCard incidentName=
+        // {...} /> on an unknown type. BaseAlertCard renders a header
+        // strip (icon + heading + Severity chip), a preview pane (video /
+        // .webp image / "No Image Available" fallback), a Maximize button
+        // gated on totalWidgets (single-tile layout only), and a metadata
+        // grid (one cell per metaData entry or a "Metadata: N/A" fallback).
+        // The lineCrossing case at line 52 is product-bug #97 (lowercase
+        // <lineCrossingAlertCard> JSX tag) and is skipped in the new
+        // spec with an it.skip annotation. Tested under tests/unit/page/
+        // user/Dashboard/Alertwidgets/alert.test.jsx.
+        "src/page/user/Dashboard/Alertwidgets/alert.jsx",
         // Round 97: Playback/Playback.jsx — the top-level "CCTV Playbacks"
         // page mounted under /playback. The full page is heavy
         // (useReducer-driven filters/state machine, PlaybackHeader +
