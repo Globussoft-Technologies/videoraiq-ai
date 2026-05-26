@@ -1135,6 +1135,30 @@ export default defineConfig({
         // copy. Tested under tests/unit/page/user/Dashboard/Alertcards/
         // CriticalAlerts.test.jsx.
         "src/page/user/Dashboard/Alertcards/CriticalAlerts.jsx",
+        // Round 100: three more 0% surfaces —
+        //  - Dashboard/Dashboard.jsx: the top-level user dashboard page
+        //    mounted under /dashboard. Full page is heavy (StatCards /
+        //    RecentAlerts / EmployeesOnDuty / AlertGauge / ActivityChart /
+        //    CameraStream / VideoCanvasStream / AttendanceLogsLive children,
+        //    four Api/get calls via three pre-gate useEffects, five
+        //    contexts), but the permission gates near the bottom of the
+        //    component short-circuit the downstream tree:
+        //      if (permissionsLoading) return <PageLoader />;
+        //      if (!canView) return showDenied ? <AccessDenied /> : <div></div>;
+        //    The new spec pins all three early-return arms (loading,
+        //    immediate-placeholder, post-2s-AccessDenied) plus the missing-
+        //    dashboard-permissions fall-through using fake timers + 8 mocks.
+        //  - Settings/StorageSetting/components/S3Form.jsx and SftpForm.jsx:
+        //    sibling presentational sub-forms alongside the already-included
+        //    GoogledriveForm (R27). Pure controlled Formik sub-forms (no
+        //    effects, no fetch) — existing tests under tests/unit/page/user/
+        //    Settings/StorageSetting/components/{S3Form,SftpForm}.test.jsx
+        //    were authored without adding the src files to the include
+        //    scope. Adding them here so the coverage report counts their
+        //    pre-existing tests.
+        "src/page/user/Dashboard/Dashboard.jsx",
+        "src/page/user/Settings/StorageSetting/components/S3Form.jsx",
+        "src/page/user/Settings/StorageSetting/components/SftpForm.jsx",
         // Round 97: Playback/Playback.jsx — the top-level "CCTV Playbacks"
         // page mounted under /playback. The full page is heavy
         // (useReducer-driven filters/state machine, PlaybackHeader +
