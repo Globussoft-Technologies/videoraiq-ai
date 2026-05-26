@@ -50,8 +50,8 @@ class AuthorizedChannelService{
                 let filteredNVRIds = allNVRIds;
 
                 if (nvrIds?.length) {
-                const nvrSet = new Set(nvrIds);
-                filteredNVRIds = allNVRIds?.filter(id => nvrSet?.has(id));
+                const nvrSet = new Set(nvrIds.map(String));
+                filteredNVRIds = allNVRIds?.filter(id => nvrSet?.has(id.toString()));
                 }
 
                 //collect all channels based on NVR Ids
@@ -82,7 +82,7 @@ class AuthorizedChannelService{
             }
 
             //To fetch NVRs based on NVR Ids and Locations
-            if((nvrs && nvrs===true) && (selectedLocationIds && selectedLocationIds.length>=0),(nvrIds && nvrIds.length>0)){
+            if((nvrs && nvrs===true) && (selectedLocationIds && selectedLocationIds.length>=0) && (nvrIds && nvrIds.length>0)){
 
                 let NVRs = await NVR.find(
                 {
@@ -99,10 +99,10 @@ class AuthorizedChannelService{
                 let filteredNVRIds = allNVRIds;
 
                 if (nvrIds?.length) {
-                const nvrSet = new Set(nvrIds);
-                filteredNVRIds = allNVRIds?.filter(id => nvrSet?.has(id));
+                const nvrSet = new Set(nvrIds.map(String));
+                filteredNVRIds = allNVRIds?.filter(id => nvrSet?.has(id.toString()));
                 }
-                NVRs = filteredNVRIds 
+                NVRs = NVRs.filter(nvr => filteredNVRIds.some(id => id.toString() === nvr._id.toString()));
                 return res.send(Response.SuccessResp("NVRs fetched successfully", NVRs));
             }
 
