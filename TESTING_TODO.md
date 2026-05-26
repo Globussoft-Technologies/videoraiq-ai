@@ -3,6 +3,93 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R76 — full 4-phase round, +40 tests; **face_auth_onfly_api hits 100%; storage 93.36%; getLocationFromAPI 100%**)
+
+- **server** — `core/v1/storage/storage.service.js` `uploadToSFTP`
+  body (lines 908-965, the largest remaining uncovered region) +
+  `handleRangeRequest` error arms (1311-1316). New
+  `server/tests/integration/services/storage.service.uploadSFTP.test.js`
+  (**6 tests, 5 mocks** — ssh2-sftp-client, @aws-sdk/client-s3,
+  googleapis, mime-types, utils/newSFTPConnectionCheck). Pinned:
+  uploadToSFTP happy path (cold-start pool, mkdir, pipeline, Files
+  persist, temp delete, 200 JSON), folderName override branch,
+  mkdir "Failure" already-exists swallow branch, non-"Failure"
+  mkdir error → catch + finally bookkeeping; handleRangeRequest
+  ERR_STREAM_PREMATURE_CLOSE swallow vs re-throw. Coverage of
+  storage.service.js: **88.49% → 93.36%** stmts (+4.87pp); branches
+  **86.03% → 87.30%** (+1.27pp); fns **92% → 96%** (+4pp). Suite
+  2542 → 2548 / +6. **Across R73→R74→R75→R76 storage.service.js:
+  ~64% → 78% → 88.49% → 93.36%**. Public `456bf93`, private mirror
+  `497bddd`.
+- **client** — TWO 0% Streams files covered in one round:
+  - `page/user/Streams/CameraDiscoveryModal.jsx` (166-line
+    "Manage Cameras" axios+sonner modal). New
+    `client/tests/unit/page/user/Streams/CameraDiscoveryModal.test.jsx`
+    (9 tests, 7 mocks). Pinned: loading spinner, empty state,
+    populated list, checkbox toggle, Save no-diff info-toast path,
+    Save add path with `addSelectedCameras`, Save remove path with
+    `removeCamera(String(dbId))`, error response, GET-failure-on-mount,
+    X+Cancel close wiring.
+  - `page/user/Streams/CameraPlay/PlaybackStreams.jsx` (180-line
+    JSMpeg forwardRef canvas tile). New
+    `client/tests/unit/page/user/Streams/CameraPlay/PlaybackStreams.test.jsx`
+    (9 tests, **0 mocks**). Pinned: canvas render, function-ref +
+    object-ref forwarding, no-JSMpeg/no-channel guards, JSMpeg
+    Player constructor URL+options, ~100ms `onLoadedMetadata` fire,
+    `onPlay`→`onPlaying`/`onPause`→`onEnded` hooks, `playbackRate`
+    writethrough, unmount destroy.
+  
+  Suite 1527 → 1545 / +18. Public `55f53d6`, private mirror `738d69d`.
+- **streaming** — `internal/logger` 93.0% → **94.0%** (+1.0pp).
+  `getLocationFromAPI` **87.5% → 100%** (+12.5pp). Two error arms
+  pinned (both 0% before): `io.ReadAll` body-read failure (custom
+  `http.RoundTripper` returns 200 with erroring Body — also
+  verifies `defer resp.Body.Close()` runs), and `json.Unmarshal`
+  failure (httptest serves 200 + malformed JSON). New
+  `streaming/internal/logger/iplogger_geoapi_error_test.go` (2 tests,
+  channel-sync / synchronous transport, no goroutines, no real
+  sockets, no ffmpeg). Total streaming: 87.1% → **87.2%** (+0.1pp).
+  **Streaming continues to lift modestly via clean error-arm
+  exceptions** despite the practical-ceiling diagnosis. Private only
+  `3240249`.
+- **cv-faceauth** — `api/face_auth_onfly_api.py` **46% → 100%**
+  (+54pp). New `cv-faceauth/tests/test_face_auth_onfly_api_routes.py`
+  (**14 tests**). Pinned: `get_face_auth_onfly_manager()` lazy
+  singleton (creates `CameraManager(max_cameras=0)`, repeat call
+  returns same instance); POST `/poc/api/v1/cameras/start` (happy +
+  409 dup + 500 init failure + `registration_api_url` override
+  mutates `settings`); POST `/poc/api/v1/cameras/stop` (404 missing
+  pipeline + happy with stopped list + `pipeline_mode=face_auth_onfly`);
+  GET `/poc/api/v1/cameras` (get_status values + empty); GET
+  `/poc/api/v1/db/stats` (PersistentMatcher counters/path); GET
+  `/poc/api/v1/health` (redis_dispatcher ok vs missing, active_cameras,
+  uptime); `startup_event` (configure_logging + log_gpu_status +
+  `manager._clear_state()` + RedisDispatcher construction);
+  `shutdown_event` (`manager.stop_all()`). Suite 1094 → **1108
+  passing** / 7 skipped. Total cv-faceauth coverage 84% → **85%**.
+  Private only `f75a51a`. **Implementation lesson re-applied**: agent's
+  first draft installed sys.modules stubs at module-level which
+  polluted neighbouring test files during pytest collection (124
+  cascading failures in test_persistent_matcher, test_base_pipeline,
+  etc.). Refactored to per-test `patched_lazy_imports` fixture with
+  `try/finally` scoped rollback — matching R75's
+  `test_face_auth_api_routes.py` pattern. Module-level only does
+  `load_standalone` of the target.
+
+**No new bugs filed this round.** R68's roles.service.js mongoose
+issue and R72's permissions.utility deletePermissions issue remain
+unfiled.
+
+**Process compliance perfect (4th round in a row)**: no agent
+prematurely edited TESTING_TODO.md.
+
+Cumulative R22→R76: **~2251 new tests across 157 test files; 0
+product files touched across 55 rounds.** Serial execution still
+clean. cv-faceauth suite: 1108 passing.
+
+Total pending bugs filed: **11 product (#96-#102, #104-#107)** +
+**1 process (#103)** = 12 issues open.
+
 ## TL;DR — what changed on 2026-05-26 (R75 — full 4-phase round, +59 tests; **face_auth_api handler bodies 32→96%; storage 88.49%; handleCamera 98.4%**)
 
 - **server** — `core/v1/storage/storage.service.js` — TWO new test
@@ -1812,11 +1899,12 @@ already done):**
 
 ### Streaming Go — diminishing returns on existing pkgs; pivot to remaining 0% pkgs after that
 
-**Coverage state (after R75):**
+**Coverage state (after R76):**
 - `internal/fmt` 100%, `internal/ram` 96.4%, `internal/util` 95.2%,
-  `internal/config` 82.4%, `internal/logger` 93.0%, `internal/server`
-  **96.9%** (R75: handleCamera 88.7→98.4%), `internal/stream` 80.9%
-- Total streaming: **87.1%** (was 86.6%)
+  `internal/config` 82.4%, `internal/logger` **94.0%** (R76:
+  getLocationFromAPI 87.5→100%), `internal/server` 96.9%, `internal/stream`
+  80.9%
+- Total streaming: **87.2%** (was 87.1%)
 
 **Practical ceiling note** (per R73 agent investigation): all
 remaining `internal/stream` and most `internal/server` gaps are
