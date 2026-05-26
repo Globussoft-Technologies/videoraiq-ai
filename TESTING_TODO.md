@@ -3,6 +3,38 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
+## TL;DR — what changed on 2026-05-26 (R72 — server phase, +5 tests; **permissions.utility.js tail-branches pinned, 91.18 → 95.13%**)
+
+- **server** — `core/v1/permission/permissions.utility.js` tail
+  branches not reached by R67/R71. New
+  `server/tests/integration/services/permissions.service.tailBranches.test.js`
+  (**5 tests, 3 mocks** — `vi.spyOn` on `roleModel.aggregate`,
+  `Admin.findOne`, and `res.send` capture; per-test
+  `restoreAllMocks` in `beforeEach`). Pins:
+  `deletePermissions` no-permissionId empty branch (lines 301-307,
+  314, 316 — the success-resp arm at 315 remains unreachable from
+  unit-test surface because the inner aggregate `$match:{adminId}`
+  compares string-typed adminId against ObjectId field; JWT-decoded
+  adminId is also a string in production, so this is a latent
+  product issue independent of bug #107's `collectionName`
+  ReferenceError on line 312); `fetchRolesPermission` admin-missing
+  permissionConfig path (343-346); `fetchRolesPermission` outer
+  catch (407-409); `bulkPermissionUpdate` no-authorized-users tail
+  (422-423 — the missing `return` means both line 422 and the
+  success-resp at 447 fire, verified via `res.send` spy call-count);
+  `bulkPermissionUpdate` outer catch (450-452). Coverage of
+  permissions.utility.js: **91.18% → 95.13%** statements (+3.95pp);
+  branches **83.8% → 87.33%** (+3.53pp); fns remain 100%. Remaining
+  uncovered: 311-312 (bug #107 unreachable) and 320-322
+  (deletePermissions outer catch — would need a `req.query` access
+  spy or a model-level throw on the permissionId branch).
+  Suite 2543 → 2548 / +5. Pre-existing
+  `incidents.service.crud` 2 flakes unchanged.
+
+**No new bugs filed this round.** R68's latent `roles.service.js
+::update` mongoose `Schema.Types.ObjectId` issue remains unfiled
+(this round did not touch roles.service).
+
 ## TL;DR — what changed on 2026-05-26 (R71 — full 4-phase round, +35 tests; **dispatcher.py hits 100%, ServeHLS stale-cleanup pinned**)
 
 - **server** — `core/v1/permission/permissions.utility.js` outer-catch
