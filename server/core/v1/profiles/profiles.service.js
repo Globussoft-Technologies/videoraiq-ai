@@ -8,7 +8,7 @@ import Response from "../../../utils/response.js";
 import { decryptData, encryptData } from "../../../utils/cryptoUtils.js";
 import fs from "node:fs";
 import path from "node:path";
-import archiver from "archiver";
+import * as archiver from "archiver";
 import { createJobsForNextDays } from "../jobs/utils/scheduleJobs.js";
 
 class ProfilesServices {
