@@ -5,7 +5,8 @@ import {RolesMessageNew,PermissionMiddlewareMessage} from '../../../language/lan
 import { completeConfig, adminConfig, readConfig, writeConfig } from './../permission/permissions.config.js';
 import logger from "../../../utils/logger.js";
 import permissionModel from "../permission/permissions.model.js";
-import { ObjectId } from "mongoose";
+import mongoose from "mongoose";
+const { ObjectId } = mongoose.Types;
 import userModel from "../authorizedUsers/authorizedUsers.model.js";
 import adminModel from "../admin/admin.model.js";
 import userSchema from "../../v1/users/users.model.js"
