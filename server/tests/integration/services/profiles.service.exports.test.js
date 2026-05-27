@@ -38,29 +38,31 @@ import { serviceCtx, payload } from "../../helpers/service.js";
 // the configured terminal event on the most-recently-piped output stream.
 const archiveState = { mode: "close" };
 vi.mock("archiver", () => {
+  class MockZipArchive {
+    constructor() {
+      this._output = null;
+      this.on = vi.fn();
+    }
+    pipe(out) { this._output = out; return out; }
+    directory = vi.fn();
+    async finalize() {
+      // Defer to allow the service to attach listeners after piping
+      // Need to use process.nextTick twice to ensure the listener is attached
+      await new Promise((r) => process.nextTick(r));
+      await new Promise((r) => process.nextTick(r));
+      if (archiveState.mode === "error") {
+        // Simulate an archive-level error event. The service registers
+        // archive.on('error', err => { throw err }) so this would throw
+        // synchronously inside the listener; instead we route via output
+        // emitting 'error' which lets the test observe the final 500.
+        this._output?.emit("error", new Error("archive blew up"));
+      } else {
+        this._output?.emit("close");
+      }
+    }
+  }
   return {
-    default: () => {
-      const archive = {
-        _output: null,
-        on: vi.fn(),
-        pipe(out) { this._output = out; return out; },
-        directory: vi.fn(),
-        async finalize() {
-          // Defer longer to allow the service to attach listeners after piping
-          await new Promise((r) => setTimeout(r, 10));
-          if (archiveState.mode === "error") {
-            // Simulate an archive-level error event. The service registers
-            // archive.on('error', err => { throw err }) so this would throw
-            // synchronously inside the listener; instead we route via output
-            // emitting 'error' which lets the test observe the final 500.
-            this._output?.emit("error", new Error("archive blew up"));
-          } else {
-            this._output?.emit("close");
-          }
-        },
-      };
-      return archive;
-    },
+    ZipArchive: MockZipArchive,
   };
 });
 
