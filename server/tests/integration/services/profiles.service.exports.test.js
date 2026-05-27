@@ -46,8 +46,8 @@ vi.mock("archiver", () => {
         pipe(out) { this._output = out; return out; },
         directory: vi.fn(),
         async finalize() {
-          // Defer to the next tick so the service can attach its listeners.
-          await new Promise((r) => setImmediate(r));
+          // Defer longer to allow the service to attach listeners after piping
+          await new Promise((r) => setTimeout(r, 10));
           if (archiveState.mode === "error") {
             // Simulate an archive-level error event. The service registers
             // archive.on('error', err => { throw err }) so this would throw
