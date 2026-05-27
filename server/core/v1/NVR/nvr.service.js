@@ -1337,13 +1337,16 @@ class NVRService {
         cameraResults.push(savedCam);
       }
 
-      // Update camera count
       const totalCameras = await Camera.countDocuments({ nvrId });
-      await NVR.findByIdAndUpdate(nvrId, { cameraCount: totalCameras });
-      console.log(totalCameras);
-      
+      const updatedNvr = await NVR.findByIdAndUpdate(
+        nvrId,
+        { cameraCount: totalCameras },
+        { new: true }
+      );
+
       return res.status(201).json(
         Response.userSuccessResp("Cameras added successfully", {
+          nvr: updatedNvr,
           cameras: cameraResults,
         }),
       );
