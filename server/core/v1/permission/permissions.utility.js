@@ -299,7 +299,7 @@ class PermissionService {
                         res.send(Response.SuccessResp(PermissionMessageNew['DELETE_PERMISSIONS'][language ?? 'en'], data));
                 } else {
                     const data = await permissionModel.deleteMany({
-                        adminId: adminId,
+                        adminId: new ObjectId(adminId),
                         is_default: { $ne: true },
                         'createdBy.userId': userId
                     });
