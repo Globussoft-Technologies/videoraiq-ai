@@ -266,23 +266,22 @@ class NVRController {
 
   async addSelectedCameras(req, res, next) {
     /* #swagger.tags = ['NVR']
-       #swagger.description = 'Add selected cameras to an NVR and register their streams'
+       #swagger.description = 'Update camera selection - mark cameras in cameraIds as added (isAdded=true), others as not added (isAdded=false)'
        #swagger.parameters['data'] = {
            in: 'body',
-           description: 'NVR ID and selected camera IDs',
+           description: 'NVR ID and selected camera channel IDs',
            required: true,
            schema: {
                type: 'object',
                properties: {
                    nvrId: { type: 'string', description: 'MongoDB ID of the NVR' },
-                   cameraIds: { type: 'array', items: { type: 'string' }, description: 'Array of channel IDs to add' },
-                   cameras: { type: 'array', description: 'Camera details from previous response' }
+                   cameraIds: { type: 'array', items: { type: 'string' }, description: 'Array of channel IDs to select as added. Cameras not in this list will be marked as not added' }
                },
-               required: ['nvrId', 'cameraIds', 'cameras']
+               required: ['nvrId', 'cameraIds']
            }
        }
-       #swagger.responses[201] = {
-           description: 'Cameras added and registered successfully'
+       #swagger.responses[200] = {
+           description: 'Camera selection updated successfully'
        }
        #swagger.responses[400] = {
            description: 'Validation error or missing required fields'

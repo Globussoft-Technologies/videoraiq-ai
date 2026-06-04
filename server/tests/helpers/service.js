@@ -45,13 +45,5 @@ export function serviceCtx({
   return { req, res, next };
 }
 
-/** Unwrap the response body. Handles both Response-wrapped and direct json() calls. */
-export const payload = (res) => {
-  if (!res._body) return undefined;
-  // If _body.body exists (from res.status().json(response.body)), use the inner body
-  if (res._body.body && typeof res._body.body === 'object') {
-    return res._body.body;
-  }
-  // Otherwise _body is the raw object (from direct res.json() calls)
-  return res._body;
-};
+/** Unwrap the double-nested response body → { status, message, data | error }. */
+export const payload = (res) => res._body?.body;

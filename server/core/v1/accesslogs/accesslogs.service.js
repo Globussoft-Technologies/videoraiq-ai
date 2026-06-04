@@ -178,8 +178,7 @@ class AccessLogsService {
         if (departmentIds?.length) {
           const found = await departmentModel.countDocuments({ _id: { $in: departmentIds } });
           if (found !== departmentIds.length) {
-            const response = Response.errorResp("Incorrect department", "Validation failed");
-            return res.status(response.statusCode).json(response.body);
+            return res.send(Response.errorResp("Incorrect department", "Validation failed"));
           }
         }
 
@@ -547,8 +546,7 @@ async getLogs(req, res, next) {
         if (departmentIds?.length) {
           const found = await departmentModel.countDocuments({ _id: { $in: departmentIds } });
           if (found !== departmentIds.length) {
-            const response = Response.errorResp("Incorrect department", "Validation failed");
-            return res.status(response.statusCode).json(response.body);
+            return res.send(Response.errorResp("Incorrect department", "Validation failed"));
           }
         }
 
@@ -711,14 +709,15 @@ async getLogs(req, res, next) {
 
         let accessLogsStartDate = await OptimizedAccessLogs.findOne().sort({ createdAt: 1 }).select("createdAt");
 
-        const response = Response.userSuccessResp("Access logs fetched successfully", {
-          accessLogsStartDate,
-          total,
-          skip,
-          limit,
-          usersLogs: logs
-        });
-        return res.status(response.statusCode).json(response.body);
+        return res.send(
+          Response.userSuccessResp("Access logs fetched successfully", {
+            accessLogsStartDate,
+            total,
+            skip,
+            limit,
+            usersLogs: logs
+          })
+        );
 
   } catch (error) {
       console.log(error);

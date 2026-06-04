@@ -171,7 +171,7 @@ class PythonService {
 
       if (detection_modes?.includes("intrusion")) {
         detectors.push({
-          name: "ZoneIntrusionSettings",
+          name: "zoneIntrusionSettings",
           zones: [zones] || [],
           severity,
         });
@@ -302,7 +302,7 @@ class PythonService {
 
       if (detection_modes?.includes("intrusion")) {
         detectors.push({
-          name: "ZoneIntrusionSettings",
+          name: "zoneIntrusionSettings",
           zones: [zones] || [],
           severity,
         });
@@ -435,7 +435,7 @@ class PythonService {
       }
 
       if (detectionModes?.includes("intrusion")) {
-        detectors.push("ZoneIntrusionSettings");
+        detectors.push("zoneIntrusionSettings");
       }
 
       if (detectionModes?.includes("conveyor")) {

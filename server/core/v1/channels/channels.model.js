@@ -64,6 +64,10 @@ const cloudSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    isAdded: {
+      type: Boolean,
+      default: false,
+    },
     profile: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Profile",
@@ -130,6 +134,10 @@ const localSchema = new mongoose.Schema(
       required: true,
     },
     name: String,
+    isAdded: {
+      type: Boolean,
+      default: false,
+    },
     profile: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Profile",
@@ -202,9 +210,17 @@ ChannelSchema.pre("save", function (next) {
 
 ChannelSchema.pre(/^find/, async function () {
   const memberId = this.options?.memberId;
+  const includeInactive = this.options?.includeInactive;
+
+  // Only filter by isAdded if not explicitly including inactive channels
+  if (!includeInactive) {
+    const existingQuery = this.getQuery();
+    this.where({
+      $and: [existingQuery, { isAdded: true }],
+    });
+  }
 
   // No member → allow full access
-
   if (!memberId) return;
 
   // Fetch allowed channels
@@ -228,5 +244,13 @@ ChannelSchema.pre(/^find/, async function () {
     $and: [existingQuery, { _id: { $in: allowed } }],
   });
 });
+
+ChannelSchema.statics.findActive = function (filter = {}) {
+  return this.find({ ...filter, isAdded: true });
+};
+
+ChannelSchema.statics.findByIdActive = function (id) {
+  return this.findById(id).where({ isAdded: true });
+};
 
 export default mongoose.model("Channel", ChannelSchema);

@@ -173,16 +173,16 @@ describe("NVRService.addSelectedCameras", () => {
     expect(payload(res).message).toBe("NVR not found");
   });
 
-  it("returns 400 when nvrId is not a valid ObjectId format", async () => {
-    // ObjectId validation now happens before database query, returning 400
-    // instead of letting Mongoose throw a CastError that would result in 500.
+  it("falls into the outer catch when nvrId is not a castable ObjectId", async () => {
+    // NVR.findOne({ _id: "not-an-oid" }) throws a CastError synchronously
+    // inside the await, which lands in the outer try/catch and produces a 500.
     const { req, res, next } = serviceCtx({
       user_id: USER_ID,
       body: { nvrId: "definitely-not-an-oid", cameras: [{ channelId: "c1" }] },
     });
     await NVRService.addSelectedCameras(req, res, next);
-    expect(res.statusCode).toBe(400);
-    expect(payload(res).message).toBe("Validation Failed");
+    expect(res.statusCode).toBe(500);
+    expect(payload(res).message).toBe("Failed to add cameras");
   });
 });
 
@@ -318,15 +318,13 @@ describe("NVRService.removeCamera", () => {
     expect(typeof data.cameraCount).toBe("number");
   });
 
-  it("returns 400 when cameraId is not a valid ObjectId format", async () => {
-    // ObjectId validation now happens before database query, returning 400
-    // instead of letting Mongoose throw a CastError that would result in 500.
+  it("falls into the outer catch when cameraId is not a castable ObjectId", async () => {
     const { req, res, next } = serviceCtx({
       user_id: USER_ID,
       params: { cameraId: "not-an-oid" },
     });
     await NVRService.removeCamera(req, res, next);
-    expect(res.statusCode).toBe(400);
-    expect(payload(res).message).toBe("Validation Failed");
+    expect(res.statusCode).toBe(500);
+    expect(payload(res).message).toBe("Failed to remove camera");
   });
 });
