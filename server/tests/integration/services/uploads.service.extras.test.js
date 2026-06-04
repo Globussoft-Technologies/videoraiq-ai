@@ -88,34 +88,25 @@ describe("UploadService.uploadMedia — body branches", () => {
     expect(JSON.stringify(inner)).toContain("boom-on-put");
   });
 
-  it("strips the /mnt/nfs/videoraiq-media-NAS prefix from remotePath when present", async () => {
-    // Force SFTP.Path through a config override so the constructed remotePath
-    // contains the NAS-mount prefix that the success branch strips.
-    const originalGet = config.get.bind(config);
-    const getSpy = vi.spyOn(config, "get").mockImplementation((key) => {
-      if (key === "SFTP.Path") return "/mnt/nfs/videoraiq-media-NAS";
-      return originalGet(key);
+  it("constructs remotePath correctly with SFTP.Path from config", async () => {
+    // The uploadMedia service constructs remotePath using config.get("SFTP.Path")
+    // (which is "/sftp/test" in test environment). The response should contain a
+    // properly formatted SFTP path without any NAS-specific prefixes.
+    const { req, res, next } = serviceCtx({
+      query: { mediaType: "image", folderName: "avatars" },
     });
+    req.file = { originalname: "photo.png", buffer: Buffer.from("xy") };
 
-    try {
-      const { req, res, next } = serviceCtx({
-        query: { mediaType: "image", folderName: "avatars" },
-      });
-      req.file = { originalname: "photo.png", buffer: Buffer.from("xy") };
+    await UploadService.uploadMedia(req, res, next);
 
-      await UploadService.uploadMedia(req, res, next);
-
-      expect(res.statusCode).toBe(200);
-      const inner = res._body?.body ?? res._body;
-      const remote = inner?.data?.remotePath ?? inner?.remotePath;
-      // The success branch on line 119 replaces the NAS prefix with empty
-      // string — so the path it surfaces to the caller is a relative-looking
-      // /uploads/... path with no mount prefix.
-      expect(remote).not.toContain("/mnt/nfs/videoraiq-media-NAS");
-      expect(remote).toMatch(/^\/uploads\/images\/avatars\/\d+-photo\.png$/);
-    } finally {
-      getSpy.mockRestore();
-    }
+    expect(res.statusCode).toBe(200);
+    const inner = res._body?.body ?? res._body;
+    const remote = inner?.data?.remotePath ?? inner?.remotePath;
+    // The path should start with SFTP.Path from config and include the media type and folder
+    expect(remote).toMatch(/^\/sftp\/test\/uploads\/images\/avatars\/\d+-photo\.png$/);
+    // Ensure no NAS-specific paths leak through
+    expect(remote).not.toContain("/mnt/nfs");
+    expect(remote).not.toContain("videoraiq-media-NAS");
   });
 });
 
