@@ -73,6 +73,7 @@ beforeEach(async () => {
     streamingPath: "/s",
     localChannelId: "1",
     name: "Session-Cam",
+    isAdded: true,
   });
   authUser = await AuthorizedUsers.create({
     adminId: admin._id,

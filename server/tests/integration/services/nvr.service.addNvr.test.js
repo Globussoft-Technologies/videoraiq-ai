@@ -234,7 +234,7 @@ describe("NVRService.addNvr — validation + duplicate + happy + autoSync", () =
     // Confirm collections actually populated
     const dbNvr = await NVR.findOne({ localNvrId: "new-local-1" });
     expect(dbNvr).toBeTruthy();
-    const dbCams = await Channel.find({ nvrId: dbNvr._id });
+    const dbCams = await Channel.find({ nvrId: dbNvr._id }).setOptions({ includeInactive: true });
     expect(dbCams).toHaveLength(2);
 
     // autoSyncLocations called fire-and-forget with the resolved admin and
@@ -335,7 +335,7 @@ describe("NVRService.removeCamera", () => {
     // collection unless we delete it ourselves. Simulate the delete by
     // routing the spy through `Channel.findByIdAndDelete`.
     DeleteService.deleteChannel.mockImplementationOnce(async (id) => {
-      await Channel.findByIdAndDelete(id);
+      await Channel.findByIdAndDelete(id).setOptions({ includeInactive: true });
       return true;
     });
 

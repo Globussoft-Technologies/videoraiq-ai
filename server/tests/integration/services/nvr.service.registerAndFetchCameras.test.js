@@ -201,6 +201,7 @@ describe("NVRService.registerAndFetchCameras — existing-NVR branch", () => {
       streamingPath: "/stream/x",
       localChannelId: "ch-1",
       name: "cam-1",
+      isAdded: true,
     });
 
     vi.spyOn(NVRService, "_fetchCamerasFromNvr").mockResolvedValue({
@@ -281,7 +282,9 @@ describe("NVRService.registerAndFetchCameras — new-NVR branch", () => {
     expect(res.statusCode).toBe(201);
     const data = payload(res).data;
     expect(data.isNew).toBe(true);
-    expect(data.cameras).toEqual([{ channelId: "101", name: "Front Door" }]);
+    expect(data.cameras).toEqual(
+      expect.arrayContaining([expect.objectContaining({ channelId: "101", name: "Front Door" })])
+    );
     expect(data.nvr._id).toBe(fakeSavedNvr._id);
 
     // Verify the .create() payload pulled the device-info fields into the

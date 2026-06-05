@@ -110,6 +110,7 @@ beforeEach(async () => {
     name: "Cam-A",
     customName: "Lobby",
     department: [deptA._id],
+    isAdded: true,
   });
   chB = await Channel.create({
     nvrId: nvrA._id,
@@ -119,6 +120,7 @@ beforeEach(async () => {
     name: "Cam-B",
     customName: "Reception",
     department: [deptB._id],
+    isAdded: true,
   });
   chC = await Channel.create({
     nvrId: nvrB._id,
@@ -128,6 +130,7 @@ beforeEach(async () => {
     name: "Cam-C",
     customName: "Gate",
     department: [deptA._id, deptB._id],
+    isAdded: true,
   });
   chD = await Channel.create({
     nvrId: nvrB._id,
@@ -138,6 +141,7 @@ beforeEach(async () => {
     customName: "Backdoor",
     department: [deptB._id],
     checkType: "checkin",
+    isAdded: true,
   });
 });
 

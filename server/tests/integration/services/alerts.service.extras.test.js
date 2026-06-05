@@ -93,6 +93,7 @@ async function makeChannel() {
     streamingPath: "/Streaming/Channels/101",
     localChannelId: "1",
     name: "Lobby Cam",
+    isAdded: true,
   });
 }
 

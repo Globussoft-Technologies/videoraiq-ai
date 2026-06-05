@@ -91,7 +91,7 @@ describe("PythonService.startNewDetection", () => {
     { mode: "vehicles", name: "countVehiclesSettings" },
     { mode: "persons", name: "countPersonsSettings" },
     { mode: "ANPR", name: "numberPlateDetectionSettings" },
-    { mode: "intrusion", name: "ZoneIntrusionSettings" },
+    { mode: "intrusion", name: "zoneIntrusionSettings" },
     { mode: "conveyor", name: "conveyorDetectionSettings" },
     { mode: "crusher", name: "crusherDetectionSettings" },
     { mode: "water_spillage", name: "waterSpillageDetectionSettings" },
@@ -257,7 +257,7 @@ describe("PythonService.stopNewDetection", () => {
         "personalProtectiveEquipmentSettings",
         "crowdDetectionSettings",
         "countVehiclesSettings",
-        "ZoneIntrusionSettings",
+        "zoneIntrusionSettings",
       ]),
     );
   });

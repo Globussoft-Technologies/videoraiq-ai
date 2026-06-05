@@ -92,6 +92,7 @@ beforeEach(async () => {
     localChannelId: "1",
     name: "Cam-A",
     department: [deptA._id],
+    isAdded: true,
   });
   chB = await Channel.create({
     nvrId: nvrA._id,
@@ -100,6 +101,7 @@ beforeEach(async () => {
     localChannelId: "2",
     name: "Cam-B",
     department: [deptB._id],
+    isAdded: true,
   });
   chC = await Channel.create({
     nvrId: nvrB._id,
@@ -108,6 +110,7 @@ beforeEach(async () => {
     localChannelId: "3",
     name: "Cam-C",
     department: [deptA._id, deptB._id],
+    isAdded: true,
   });
 });
 

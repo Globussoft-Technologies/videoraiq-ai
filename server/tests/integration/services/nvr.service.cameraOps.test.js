@@ -124,6 +124,7 @@ function makeChannel(over = {}) {
     streamingPath: "/stream/x",
     localChannelId: "ch-1",
     name: "cam-1",
+    isAdded: true,
     ...over,
   });
 }

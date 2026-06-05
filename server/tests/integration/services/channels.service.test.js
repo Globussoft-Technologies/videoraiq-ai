@@ -54,6 +54,7 @@ function makeChannel(over = {}) {
     streamingPath: "/Streaming/Channels/101",
     localChannelId: "1",
     name: "Lobby Cam",
+    isAdded: true,
     ...over,
   });
 }
@@ -181,7 +182,7 @@ describe("ChannelsService.bulkUpdateChannels", () => {
     });
     await ChannelsService.bulkUpdateChannels(req, res, next);
     expect(res.statusCode).toBe(200);
-    expect((await Channel.findById(c1._id)).control).toBe(1);
+    expect((await Channel.findById(c1._id).setOptions({ includeInactive: true })).control).toBe(1);
   });
 });
 

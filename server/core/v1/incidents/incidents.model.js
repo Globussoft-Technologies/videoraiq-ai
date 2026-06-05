@@ -439,5 +439,6 @@ export  {
   GuardAbsenceIncident,
   ConveyorDetectionIncident,
   CrusherDetectionIncident,
-  VehicleTypeDetectionIncident
+  VehicleTypeDetectionIncident,
+  WaterSpillageDetectionIncident,
 };

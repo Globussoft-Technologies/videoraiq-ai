@@ -86,6 +86,7 @@ function makeChannel(nvrId, over = {}) {
     streamingPath: "/Streaming/Channels/101",
     localChannelId: "1",
     name: "Cam-A",
+    isAdded: true,
     ...over,
   });
 }
