@@ -7,7 +7,7 @@ import mongoose from "mongoose";
 import Response from "../../../utils/response.js";
 import { sendPayloadToUser } from "../../../socket.js";
 import momentTZ from "moment-timezone";
-import { connectSFTP } from "../../../utils/newSFTPConnectionCheck.js";
+import { withSFTPConnection } from "../../../utils/newSFTPConnectionCheck.js";
 import path from "path";
 import fs from "fs";
 
@@ -27,11 +27,12 @@ import {
   LightStatusIncident,
   BagDetectionIncident,
   VehicleDetectionIncident,
+  VehicleObstructionIncident,
   DeskAbsenceIncident,
   GuardAbsenceIncident,
   ConveyorDetectionIncident,
   CrusherDetectionIncident,
-  WaterSpillageDetectionIncident,
+  VehicleTypeDetectionIncident
 } from "./incidents.model.js";
 const modelMap = {
   countPersons: CountPersonIncident,
@@ -48,11 +49,12 @@ const modelMap = {
   lightDetection: LightStatusIncident,
   bagDetection: BagDetectionIncident,
   vehicleDetection: VehicleDetectionIncident,
+  vehicleObstruction: VehicleObstructionIncident,
   deskAbsence: DeskAbsenceIncident,
   guardAbsence: GuardAbsenceIncident,
   conveyorDetection: ConveyorDetectionIncident,
   crusherDetection: CrusherDetectionIncident,
-  waterSpillageDetection: WaterSpillageDetectionIncident,
+  vehicleTypeDetection: VehicleTypeDetectionIncident
 };
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
@@ -109,11 +111,11 @@ class IncidentsService {
         );
       }
 
-      const userId = isAdminExist.user_id?.toString();
-
-      let channel = await Channel.findOne({ _id: channelId, nvrId })
+      const userId = isAdminExist.user_id?.toString();   
+      let channel = await Channel.findOne({})
         .populate("profile")
         .lean();
+        // return res.status(200).json({ channel });
       if (!channel) {
         return res.status(400).json({ error: "Invalid Channel or NVR ID" });
       }
@@ -133,7 +135,7 @@ class IncidentsService {
           "countPersons",
           "countVehicles",
           "genericObjectDetection",
-          // "lineCrossing",
+          "lineCrossing",
           "doorDetection",
         ].includes(incidentType)
       ) {
@@ -197,7 +199,7 @@ class IncidentsService {
             recentIncident.timeOfIncident = req?.body?.timeOfIncident;
             recentIncident.croudCount = req.body.count;
             recentIncident.timeSeries.push({
-              count: req.body.count ?? 0, // or appropriate value
+              croudCount: req.body.count ?? 0, // or appropriate value
             });
           } else if (incidentType === "personalProtectiveEquipment") {
             recentIncident.timeOfIncident = req?.body?.timeOfIncident;
@@ -312,7 +314,7 @@ class IncidentsService {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.croudCount = req.body.count;
         newIncident.timeSeries.push({
-          count: req.body.count ?? 0, // or appropriate value
+          croudCount: req.body.count ?? 0, // or appropriate value
         });
       } else if (incidentType === "personalProtectiveEquipment") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
@@ -333,7 +335,7 @@ class IncidentsService {
       } else if (incidentType === "lightDetection") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.currentStatus = req.body?.lightDetection?.status;
-        newIncident.currentImage = req.body?.lightDetection?.Image;
+        newIncident.currentImage = req.body?.lightDetection?.image;
         newIncident.timeSeries.push({
           status: req.body?.lightDetection?.status,
           Image: req.body?.lightDetection?.Image,
@@ -362,6 +364,14 @@ class IncidentsService {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.personPresent = req?.body?.personPresent;
         newIncident.Image = req?.body?.Image;
+      } else if (incidentType === "vehicleObstruction") {
+        newIncident.timeOfIncident = req?.body?.timeOfIncident;
+        ((newIncident.count = req?.body?.count),
+          (newIncident.Image = req?.body?.Image));
+      } else if (incidentType === "vehicleTypeDetection") {
+        newIncident.timeOfIncident = req?.body?.timeOfIncident;
+        ((newIncident.vehicleType = req?.body?.vehicleType),
+          (newIncident.Image = req?.body?.Image));
       }
 
       const incidentObj = await newIncident.save();
@@ -891,7 +901,6 @@ class IncidentsService {
   }
 
   async deleteIncident(req, res, next) {
-    let sftp;
     try {
       const { id: incidentId } = req.params;
 
@@ -920,14 +929,15 @@ class IncidentsService {
         }
 
         try {
-          sftp = await connectSFTP();
-          const exists = await sftp.exists(incident.Image);
-          if (exists) {
-            await sftp.delete(incident.Image);
-            console.log(`Deleted from SFTP: ${incident.Image}`);
-          } else {
-            console.warn(`SFTP file missing: ${incident.Image}`);
-          }
+          await withSFTPConnection(async (sftp) => {
+            const exists = await sftp.exists(incident.Image);
+            if (exists) {
+              await sftp.delete(incident.Image);
+              console.log(`Deleted from SFTP: ${incident.Image}`);
+            } else {
+              console.warn(`SFTP file missing: ${incident.Image}`);
+            }
+          });
         } catch (err) {
           console.error("SFTP delete failed:", err.message);
         }
@@ -941,15 +951,12 @@ class IncidentsService {
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to delete Incident", 500));
-    } finally {
-      if (sftp) await sftp.end();
     }
   }
 
   async deleteIncidentsByIds(req, res, next) {
     try {
       //Find all the incidents by ids and delete in SFTP and mongodb
-      let sftp;
       const { incidentIds } = req.body;
 
       if (!incidentIds || incidentIds.length === 0) {
@@ -983,14 +990,15 @@ class IncidentsService {
           }
 
           try {
-            sftp = await connectSFTP();
-            const exists = await sftp.exists(incident.Image);
-            if (exists) {
-              await sftp.delete(incident.Image);
-              console.log(`Deleted from SFTP: ${incident.Image}`);
-            } else {
-              console.warn(`SFTP file missing: ${incident.Image}`);
-            }
+            await withSFTPConnection(async (sftp) => {
+              const exists = await sftp.exists(incident.Image);
+              if (exists) {
+                await sftp.delete(incident.Image);
+                console.log(`Deleted from SFTP: ${incident.Image}`);
+              } else {
+                console.warn(`SFTP file missing: ${incident.Image}`);
+              }
+            });
           } catch (err) {
             console.error("SFTP delete failed:", err.message);
             next(new AppError("Failed to delete incidents", 500));
@@ -1125,9 +1133,9 @@ class IncidentsService {
                 { "detections.doorDetectionSettings.enabled": true },
                 { "detections.lightDetectionSettings.enabled": true },
                 { "detections.vehicleDetectionSettings.enabled": true },
+                { "detections.vehicleObstructionSettings.enabled": true },
                 { "detections.conveyorDetectionSettings.enabled": true },
                 { "detections.crusherDetectionSettings.enabled": true },
-                { "detections.waterSpillageDetectionSettings.enabled": true },
               ],
             },
             // Case 2: detections field does not exist or is empty
@@ -1548,7 +1556,7 @@ class IncidentsService {
         {
           $match: {
             userId: isAdminExist.user_id.toString(),
-            incidentType: { $nin: ["countPersons", "countVehicles"] },
+            incidentType: { $nin: ["countPersons", "lineCrossing"] },
           },
         },
         {
@@ -1576,7 +1584,7 @@ class IncidentsService {
         {
           $match: {
             userId: isAdminExist.user_id.toString(),
-            incidentType: { $nin: ["countPersons", "countVehicles"] },
+            incidentType: { $nin: ["countPersons", "lineCrossing"] },
           },
         },
         {

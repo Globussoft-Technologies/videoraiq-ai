@@ -345,6 +345,14 @@ const VehicleDetectionSchema = new Schema({
 });
 const VehicleDetectionIncident = Incident.discriminator('vehicleDetection', VehicleDetectionSchema);
 
+// Cylinder Stack Height Detection
+const vehicleObstructionSchema = new Schema({
+  count: {type:Number,default:0},
+  triggerNotification: { type: Boolean, default: true },
+  vehicleNumber:{type:String,default:null}
+});
+const VehicleObstructionIncident = Incident.discriminator('vehicleObstruction', vehicleObstructionSchema);
+
 const DeskAbsenceSchema = new Schema({
   personPresent: { type: Boolean },
   triggerNotification: { type: Boolean, default: true },
@@ -389,6 +397,13 @@ const CrusherDetectionIncident = Incident.discriminator(
   CrusherDetectionSchema,
 );
 
+// Cylinder Stack Height Detection
+const VehicleTypeDetectionSchema = new Schema({
+  count: {type:Number,default:0},
+  triggerNotification: { type: Boolean, default: true },
+  vehicleType:{type:String,default:null}
+});
+const VehicleTypeDetectionIncident = Incident.discriminator('vehicleTypeDetection', VehicleTypeDetectionSchema);
 const WaterSpillageDetectionSchema = new Schema({
   currentStatus: {
     type: String,
@@ -419,9 +434,10 @@ export  {
   LightStatusIncident,
   BagDetectionIncident,
   VehicleDetectionIncident,
+  VehicleObstructionIncident,
   DeskAbsenceIncident,
   GuardAbsenceIncident,
   ConveyorDetectionIncident,
   CrusherDetectionIncident,
-  WaterSpillageDetectionIncident,
+  VehicleTypeDetectionIncident
 };
