@@ -112,7 +112,8 @@ class IncidentsService {
       }
 
       const userId = isAdminExist.user_id?.toString();   
-      let channel = await Channel.findOne({})
+      let channel = await Channel.findOne({ _id: channelId })
+        .setOptions({ includeInactive: true })
         .populate("profile")
         .lean();
         // return res.status(200).json({ channel });
@@ -153,6 +154,7 @@ class IncidentsService {
 
         const channelData = await channelsModel
           .findOne({ _id: channelId })
+          .setOptions({ includeInactive: true })
           .populate("profile")
           .lean();
         let detectionType = channelData.detections[`${incidentType}Settings`];
@@ -379,6 +381,7 @@ class IncidentsService {
 
       const channelData = await channelsModel
         .findOne({ _id: channelId })
+        .setOptions({ includeInactive: true })
         .populate("profile")
         .lean();
 
@@ -467,7 +470,7 @@ class IncidentsService {
 
         const isChannelExist = await channelsModel.findOne({
           _id: value.channelId,
-        });
+        }).setOptions({ includeInactive: true });
         if (!isChannelExist)
           return res.status(400).json({ error: "No channel found." });
 
