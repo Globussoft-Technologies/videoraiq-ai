@@ -55,7 +55,7 @@ class AttendanceService {
             )
           );
       }
-      const channel = await Channels.findById(channelId).populate("nvrId");
+      const channel = await Channels.findById(channelId).setOptions({ includeInactive: true }).populate("nvrId");
       if (!channel) {
         return res.status(404).json(Response.notFoundResp("Channel not found"));
       }
@@ -753,7 +753,7 @@ class AttendanceService {
       const populatedEvents = await Promise.all(sortedEvents.map(async (ev) => {
         let cameraName = "Unknown";
         if (ev.channel) {
-          const ch = await Channels.findById(ev.channel).select("name customName");
+          const ch = await Channels.findById(ev.channel).setOptions({ includeInactive: true }).select("name customName");
           if (ch) {
             cameraName = ch.customName || ch.name;
           }

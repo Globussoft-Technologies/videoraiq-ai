@@ -69,7 +69,7 @@ describe("PythonService.updateNewDetection — per-mode branches", () => {
     },
     { mode: "vehicles", name: "countVehiclesSettings" },
     { mode: "persons", name: "countPersonsSettings" },
-    { mode: "intrusion", name: "ZoneIntrusionSettings" },
+    { mode: "intrusion", name: "zoneIntrusionSettings" },
     { mode: "conveyor", name: "conveyorDetectionSettings" },
     { mode: "crusher", name: "crusherDetectionSettings" },
     { mode: "water_spillage", name: "waterSpillageDetectionSettings" },
@@ -128,7 +128,7 @@ describe("PythonService.updateNewDetection — per-mode branches", () => {
     const names = body.detectors.map((d) => d.name).sort();
     expect(names).toEqual(
       [
-        "ZoneIntrusionSettings",
+        "zoneIntrusionSettings",
         "crusherDetectionSettings",
         "personalProtectiveEquipmentSettings",
       ].sort(),
@@ -229,7 +229,7 @@ describe("PythonService.stopNewDetection — remaining mode branches", () => {
         "countVehiclesSettings",
         "countPersonsSettings",
         "VehicleObstructionSettings",
-        "ZoneIntrusionSettings",
+        "zoneIntrusionSettings",
         "conveyorDetectionSettings",
         "crusherDetectionSettings",
         "waterSpillageDetectionSettings",

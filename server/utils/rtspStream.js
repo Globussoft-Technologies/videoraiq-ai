@@ -30,6 +30,8 @@ export const getStreamingUrl = async (id, rtspUrl) => {
 
       if (response.data?.status === "success") {
         streamUrl = response.data.url;
+        // Fix double "stream" in URL if present
+        streamUrl = streamUrl.replace(/\/streamstream\//g, '/stream/');
         await redis.set(redisKey, streamUrl); // optionally set expiration
       }
     } catch (err) {
@@ -137,6 +139,7 @@ export const registerCameraStream = async (id, rtspUrl) => {
       let streamUrl = response?.data?.url;
       await redis.set(redisKey, streamUrl); // optionally set expiration
     }
+    buildStreamingUrl(nvrValidate,channelId)
   } catch (err) {
     logger.error(`Failed to add camera`, err.message);
   }

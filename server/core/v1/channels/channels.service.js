@@ -1171,6 +1171,7 @@ class ChannelService {
 
       // Step 1: Fetch channels with top-level populate and lean
       const channels = await Channel.find(filter)
+        .setOptions({ includeInactive: true })
         .sort({ createdAt: -1 })
         .populate("nvrId")
         .lean();

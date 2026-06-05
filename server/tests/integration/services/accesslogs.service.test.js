@@ -73,6 +73,7 @@ describe("AccessLogsService.createAccessLog", () => {
       streamingPath: "/s",
       localChannelId: "1",
       name: "Cam",
+      isAdded: true,
     });
     const { req, res, next } = serviceCtx({
       body: {

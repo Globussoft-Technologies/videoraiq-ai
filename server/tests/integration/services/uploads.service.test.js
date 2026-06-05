@@ -17,6 +17,7 @@ const sftp = vi.hoisted(() => ({
 }));
 vi.mock("../../../utils/newSFTPConnectionCheck.js", () => ({
   connectSFTP: vi.fn().mockResolvedValue(sftp),
+  withSFTPConnection: vi.fn().mockImplementation((cb) => cb(sftp)),
 }));
 vi.mock("../../../utils/sftpConnectionCheck.js", () => ({
   checkSftpConnection: vi.fn().mockResolvedValue(sftp),

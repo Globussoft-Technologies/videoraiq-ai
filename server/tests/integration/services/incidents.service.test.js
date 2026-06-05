@@ -10,13 +10,21 @@ import { serviceCtx, payload } from "../../helpers/service.js";
 vi.mock("../../../socket.js", () => ({
   sendPayloadToUser: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("../../../utils/newSFTPConnectionCheck.js", () => ({
-  connectSFTP: vi.fn().mockResolvedValue({
+vi.mock("../../../utils/newSFTPConnectionCheck.js", () => {
+  const sftpClient = {
     exists: vi.fn().mockResolvedValue(false),
     delete: vi.fn().mockResolvedValue(undefined),
     end: vi.fn().mockResolvedValue(undefined),
-  }),
-}));
+  };
+  return {
+    connectSFTP: vi.fn().mockResolvedValue(sftpClient),
+    checkSftpConnection: vi.fn().mockResolvedValue(sftpClient),
+    withSFTPConnection: vi.fn(async (callback) => callback(sftpClient)),
+    disconnectSFTP: vi.fn().mockResolvedValue(undefined),
+    getPoolStats: vi.fn().mockReturnValue({}),
+    debugPool: vi.fn().mockReturnValue({}),
+  };
+});
 vi.mock("../../../core/v1/alerts/alert.events.js", () => ({
   triggerAlertOnIncident: vi.fn().mockResolvedValue(undefined),
 }));

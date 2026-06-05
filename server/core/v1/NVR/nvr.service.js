@@ -12,7 +12,7 @@ import adminModel from "../admin/admin.model.js";
 import net from "net";
 import config from "config";
 import { autoSyncLocations } from "../../../utils/helperFunctions.js";
-import { buildRTSPUrl, updateCameraStream, registerCameraStream } from "../../../utils/rtspStream.js";
+import { buildRTSPUrl, updateCameraStream, registerCameraStream, buildStreamingUrl } from "../../../utils/rtspStream.js";
 import { parseXml } from "../../../utils/xmlParse.js";
 import mongoose from "mongoose";
 const APP_ENV = config.get("APP_ENV");
@@ -211,7 +211,7 @@ class NVRService {
           // Fetch existing channels for this NVR
           const existingChannels = await Camera.find({
             nvrId: existingNvr._id,
-          });
+          }).setOptions({ includeInactive: true });
           const channelMap = new Map(
             existingChannels.map((ch) => [ch.localChannelId, ch]),
           );
@@ -265,7 +265,7 @@ class NVRService {
           // Update camera count
           const totalCameras = await Camera.countDocuments({
             nvrId: existingNvr._id,
-          });
+          }).setOptions({ includeInactive: true });
           nvrUpdate.cameraCount = totalCameras;
         }
 
@@ -785,6 +785,7 @@ class NVRService {
 
       // Get all channels for the user
       const channels = await Channel.find({ userId: user_id })
+        .setOptions({ includeInactive: true })
         .select("name nvrId detections")
         .lean();
 
@@ -910,10 +911,14 @@ class NVRService {
       let existingNvr = null;
 
       for (const nvr of allNvrs) {
-        const decryptedIp = decrypt(nvr.ip);
-        if (decryptedIp === ip) {
-          existingNvr = nvr;
-          break;
+        try {
+          const decryptedIp = nvr.ip ? decrypt(nvr.ip) : null;
+          if (decryptedIp === ip) {
+            existingNvr = nvr;
+            break;
+          }
+        } catch {
+          // skip NVRs with unreadable ip
         }
       }
 
@@ -926,15 +931,73 @@ class NVRService {
       }
 
       if (existingNvr) {
-        // NVR exists - show all available cameras + mark which ones are already added
-        const addedCameras = await Camera.find({ nvrId: existingNvr._id });
-        const addedChannelIds = addedCameras.map((c) => c.channelId);
+        // NVR exists - add any new cameras and show all available cameras with isAdded status
+        const plainPassword = existingNvr.password ? decrypt(existingNvr.password) : null;
 
-        // Mark cameras that are already added
-        const camerasWithStatus = camerasData.cameras.map((cam) => ({
-          ...cam,
-          isAdded: addedChannelIds.includes(cam.channelId),
-        }));
+        // Add all cameras that don't exist yet (without setting isAdded=true)
+        for (const cam of camerasData.cameras) {
+          const existing = await Camera.findOne({
+            nvrId: existingNvr._id,
+            channelId: cam.channelId,
+          }).setOptions({ includeInactive: true });
+
+          if (!existing) {
+            // Create new camera with isAdded=false
+            try {
+              const uid = `${existingNvr._id}-${cam.channelId}`;
+              const newCam = await Camera.create({
+                nvrId: existingNvr._id,
+                userId: user_id,
+                channelId: cam.channelId,
+                rtspChannels: cam.rtspChannels || [],
+                name: cam.name || "",
+                ipAddress: cam.ipAddress || "",
+                model: cam.model || "",
+                serialNumber: cam.serialNumber || "",
+                firmwareVersion: cam.firmwareVersion || "",
+                streamEndpoint: cam.streamEndpoint || "default",
+                isAdded: false,
+              });
+
+              // Register stream but mark as not added yet
+              const rtspUrl = buildRTSPUrl(existingNvr, newCam, "main");
+              try {
+                await registerCameraStream(uid, rtspUrl);
+              } catch (streamErr) {
+                logger.error(`Failed to register stream for camera ${cam.channelId}`, streamErr.message);
+              }
+            } catch (camErr) {
+              logger.error(`Failed to create camera ${cam.channelId}`, camErr.message);
+            }
+          }
+        }
+
+        // Fetch all cameras and return with their isAdded status (including inactive)
+        const allCameras = await Camera.find({ nvrId: existingNvr._id }).setOptions({ includeInactive: true });
+        const camerasMap = new Map(allCameras.map((c) => [c.channelId, { isAdded: c.isAdded, _id: c._id }]));
+
+        // Build cameras with status and streaming URLs
+        const camerasWithStatus = await Promise.all(
+          camerasData.cameras.map(async (cam) => {
+            const dbCam = camerasMap.get(cam.channelId);
+            let streamingUrl = null;
+
+            // Build streaming URL for all cameras (for preview in discovery modal)
+            if (dbCam) {
+              streamingUrl = await buildStreamingUrl(existingNvr, { ...cam, _id: dbCam._id });
+            }
+
+            return {
+              ...cam,
+              isAdded: dbCam ? dbCam.isAdded : false,
+              streamingUrl,
+            };
+          })
+        );
+
+        // Update camera count (only count added cameras)
+        const addedCount = allCameras.filter(c => c.isAdded).length;
+        await NVR.findByIdAndUpdate(existingNvr._id, { cameraCount: addedCount });
 
         return res.status(200).json(
           Response.userSuccessResp("Cameras retrieved successfully", {
@@ -945,7 +1008,7 @@ class NVRService {
         );
       }
 
-      // Save NVR without cameras
+      // Save new NVR and add all its cameras with isAdded=false
       const savedNvr = await NVR.create({
         userId: user_id,
         ip,
@@ -965,10 +1028,66 @@ class NVRService {
         cameraCount: 0,
       });
 
+      // Add all cameras for new NVR with isAdded=false
+      const createdCameras = [];
+      for (const cam of camerasData.cameras) {
+        try {
+          const newCam = await Camera.create({
+            nvrId: savedNvr._id,
+            userId: user_id,
+            channelId: cam.channelId,
+            rtspChannels: cam.rtspChannels || [],
+            name: cam.name || "",
+            ipAddress: cam.ipAddress || "",
+            model: cam.model || "",
+            serialNumber: cam.serialNumber || "",
+            firmwareVersion: cam.firmwareVersion || "",
+            streamEndpoint: cam.streamEndpoint || "default",
+            isAdded: false,
+          });
+
+          createdCameras.push(newCam);
+
+          // Register stream
+          const uid = `${savedNvr._id}-${newCam._id}`;
+          const rtspUrl = buildRTSPUrl(savedNvr, newCam, "main");
+          try {
+            await registerCameraStream(uid, rtspUrl);
+          } catch (streamErr) {
+            logger.error(`Failed to register stream for camera ${cam.channelId}`, streamErr.message);
+          }
+        } catch (camErr) {
+          logger.error(`Failed to create camera ${cam.channelId}`, camErr.message);
+        }
+      }
+
+      // Build streaming URLs for all cameras
+      const camerasWithUrl = await Promise.all(
+        camerasData.cameras.map(async (cam, index) => {
+          const createdCam = createdCameras[index];
+          let streamingUrl = null;
+          if (createdCam) {
+            try {
+              streamingUrl = await buildStreamingUrl(savedNvr, createdCam);
+            } catch {
+              // non-fatal
+            }
+          }
+          return {
+            ...cam,
+            isAdded: false,
+            streamingUrl,
+          };
+        })
+      );
+
+      // Update camera count (initially 0 since all are isAdded=false)
+      await NVR.findByIdAndUpdate(savedNvr._id, { cameraCount: 0 });
+
       return res.status(201).json(
         Response.userSuccessResp("NVR registered and cameras fetched successfully", {
           nvr: savedNvr,
-          cameras: camerasData.cameras,
+          cameras: camerasWithUrl,
           isNew: true,
         }),
       );
@@ -1264,15 +1383,16 @@ class NVRService {
   async addSelectedCameras(req, res, _next) {
     try {
       const user_id = req?.verified?.userData?.user_id;
-      const { nvrId, cameras } = req.body;
+      const { nvrId, cameraIds, cameras: camerasInput } = req.body;
+      const cameraList = cameraIds ?? camerasInput;
 
-      if (!nvrId || !Array.isArray(cameras) || cameras.length === 0) {
+      if (!nvrId || !Array.isArray(cameraList) || cameraList.length === 0) {
         return res
           .status(400)
           .json(
             Response.userFailResp(
               "Validation Failed",
-              "nvrId and cameras array are required",
+              "nvrId and cameraIds array are required",
             ),
           );
       }
@@ -1293,68 +1413,39 @@ class NVRService {
         return res.status(404).json(Response.notFoundResp("NVR not found"));
       }
 
-      // Get plain password for stream registration
-      const plainPassword = nvr.getDecryptedPassword?.() || nvr.password;
-      const plainIp = decrypt(nvr.ip);
+      // Get all cameras for this NVR (including inactive ones)
+      const allCameras = await Camera.find({ nvrId }).setOptions({ includeInactive: true });
 
-      const client = new DigestFetch(nvr.username, plainPassword);
-      const cameraResults = [];
+      // Normalize cameraIds to strings for comparison
+      const selectedSet = new Set(cameraList.map(id => String(id)));
+      const bulkOps = allCameras.map((cam) => ({
+        updateOne: {
+          filter: { _id: cam._id },
+          update: { $set: { isAdded: selectedSet.has(String(cam.channelId)) } },
+        },
+      }));
 
-      // Add selected cameras
-      for (const camera of cameras) {
-        const { channelId } = camera;
-
-        // Check if camera already exists
-        const existingCam = await Camera.findOne({
-          nvrId,
-          channelId,
-        });
-
-        if (existingCam) {
-          cameraResults.push(existingCam);
-          continue;
-        }
-
-        // Create new camera
-        const savedCam = await Camera.create({
-          nvrId,
-          userId: user_id,
-          channelId,
-          rtspChannels: camera.rtspChannels || [],
-          name: camera.name || "",
-          ipAddress: camera.ipAddress || "",
-          model: camera.model || "",
-          serialNumber: camera.serialNumber || "",
-          firmwareVersion: camera.firmwareVersion || "",
-          streamEndpoint: camera.streamEndpoint || "",
-        });
-
-        // Register camera stream
-        const uid = `${nvrId}-${savedCam._id}`;
-        const rtspUrl = buildRTSPUrl(nvr, savedCam, "main");
-        await registerCameraStream(uid, rtspUrl);
-
-        cameraResults.push(savedCam);
+      if (bulkOps.length > 0) {
+        await Camera.bulkWrite(bulkOps);
       }
 
-      const totalCameras = await Camera.countDocuments({ nvrId });
-      const updatedNvr = await NVR.findByIdAndUpdate(
-        nvrId,
-        { cameraCount: totalCameras },
-        { new: true }
-      );
+      // Update camera count (count only added cameras)
+      const addedCount = await Camera.countDocuments({ nvrId, isAdded: true });
+      await NVR.findByIdAndUpdate(nvrId, { cameraCount: addedCount });
 
-      return res.status(201).json(
-        Response.userSuccessResp("Cameras added successfully", {
-          nvr: updatedNvr,
-          cameras: cameraResults,
+      // Fetch all updated cameras (including inactive for complete state)
+      const cameras = await Camera.find({ nvrId }).setOptions({ includeInactive: true });
+
+      return res.status(200).json(
+        Response.userSuccessResp("Cameras selection updated successfully", {
+          cameras,
         }),
       );
     } catch (error) {
       logger.error("Add Selected Cameras Error:", error);
       return res
         .status(500)
-        .json(Response.errorResp("Failed to add cameras", error.message));
+        .json(Response.errorResp("Failed to update cameras", error.message));
     }
   }
 
@@ -1384,13 +1475,13 @@ class NVRService {
         return res.status(400).json(Response.userFailResp("Failed to fetch cameras", camerasData.error));
       }
 
-      const addedCameras = await Camera.find({ nvrId });
-      const addedMap = new Map(addedCameras.map((c) => [c.channelId, c._id]));
+      const addedCameras = await Camera.find({ nvrId }).setOptions({ includeInactive: true });
+      const addedMap = new Map(addedCameras.map((c) => [c.channelId, { _id: c._id, isAdded: c.isAdded }]));
 
       const availableCameras = camerasData.cameras.map((cam) => ({
         ...cam,
-        isAdded: addedMap.has(cam.channelId),
-        dbId: addedMap.get(cam.channelId) || null,
+        isAdded: addedMap.has(cam.channelId) ? addedMap.get(cam.channelId).isAdded : false,
+        dbId: addedMap.has(cam.channelId) ? addedMap.get(cam.channelId)._id : null,
       }));
 
       return res.status(200).json(
@@ -1415,7 +1506,7 @@ class NVRService {
         return res.status(400).json(Response.userFailResp("Validation Failed", "Invalid cameraId format"));
       }
 
-      const camera = await Camera.findOne({ _id: cameraId, userId: user_id });
+      const camera = await Camera.findOne({ _id: cameraId, userId: user_id }).setOptions({ includeInactive: true });
       if (!camera) {
         return res.status(404).json(Response.notFoundResp("Camera not found"));
       }
@@ -1424,7 +1515,7 @@ class NVRService {
 
       await DeleteService.deleteChannel(cameraId);
 
-      const totalCameras = await Camera.countDocuments({ nvrId });
+      const totalCameras = await Camera.countDocuments({ nvrId }).setOptions({ includeInactive: true });
       await NVR.findByIdAndUpdate(nvrId, { cameraCount: totalCameras });
 
       return res.status(200).json(

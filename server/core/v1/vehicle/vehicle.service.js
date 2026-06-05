@@ -46,6 +46,7 @@ class VehicleService {
 
       // 🔹 Validate Channel (and NVR)
       const channel = await Channels.findById(channelId)
+        .setOptions({ includeInactive: true })
         .populate("nvrId")
         .populate("profile");
       if (!channel) {

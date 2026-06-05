@@ -139,12 +139,12 @@ describe("NVRService.updateNvr — happy path", () => {
     expect(data.cameras.skipped[0].localChannelId).toBe("ch-2");
 
     // Verify DB state was actually persisted.
-    const reloadedCh1 = await Channel.findById(existingCh._id);
+    const reloadedCh1 = await Channel.findById(existingCh._id).setOptions({ includeInactive: true });
     expect(reloadedCh1.name).toBe("Cam-1-Renamed");
-    const newCh = await Channel.findOne({ localChannelId: "ch-3" });
+    const newCh = await Channel.findOne({ localChannelId: "ch-3" }).setOptions({ includeInactive: true });
     expect(newCh).toBeTruthy();
     expect(newCh.streamingPath).toBe("/Streaming/Channels/301");
-    expect(await Channel.countDocuments({ nvrId: nvr._id })).toBe(3);
+    expect(await Channel.countDocuments({ nvrId: nvr._id }).setOptions({ includeInactive: true })).toBe(3);
   });
 
   it("returns successfully even when no cameras array is provided (metadata-only update)", async () => {

@@ -73,6 +73,7 @@ beforeEach(async () => {
     streamingPath: "/s",
     localChannelId: "1",
     name: "Cam1",
+    isAdded: true,
   });
 });
 

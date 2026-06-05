@@ -72,6 +72,7 @@ function makeChannel(over = {}) {
     streamingPath: "/Streaming/Channels/101",
     localChannelId: "1",
     name: "Lobby Cam",
+    isAdded: true,
     ...over,
   });
 }
@@ -303,7 +304,7 @@ describe("ChannelsService.bulkUpdateChannels — extra branches", () => {
     expect(res.statusCode).toBe(200);
     const reloaded = await Channel.find({
       _id: { $in: [c1._id, c2._id] },
-    });
+    }).setOptions({ includeInactive: true });
     for (const r of reloaded) expect(r.control).toBe(0);
   });
 

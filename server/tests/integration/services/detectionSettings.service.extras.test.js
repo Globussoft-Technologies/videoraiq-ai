@@ -60,6 +60,7 @@ function makeChannel(over = {}) {
     streamingPath: "/Streaming/Channels/101",
     localChannelId: "1",
     name: "Cam-A",
+    isAdded: true,
     ...over,
   });
 }
@@ -276,7 +277,7 @@ describe("DetectionSettingsService.attachDetectionSetting", () => {
     });
     await DetectionSettingsService.attachDetectionSetting(req, res, next);
     expect(res.statusCode).toBe(200);
-    const reloaded = await Channel.findById(ch._id);
+    const reloaded = await Channel.findById(ch._id).setOptions({ includeInactive: true });
     expect(
       reloaded.detections?.motionDetectionSettings?.id?.toString() ||
         reloaded.detections?.motionDetectionSettings?.toString(),
@@ -354,7 +355,7 @@ describe("DetectionSettingsService.detachDetectionSetting", () => {
     });
     await DetectionSettingsService.detachDetectionSetting(req, res, next);
     expect(res.statusCode).toBe(200);
-    const reloaded = await Channel.findById(ch._id);
+    const reloaded = await Channel.findById(ch._id).setOptions({ includeInactive: true });
     expect(reloaded.detections?.motionDetectionSettings).toBeFalsy();
   });
 });
