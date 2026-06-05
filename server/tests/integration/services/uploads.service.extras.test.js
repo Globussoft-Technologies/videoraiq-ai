@@ -37,6 +37,11 @@ const sftp = vi.hoisted(() => ({
 }));
 vi.mock("../../../utils/newSFTPConnectionCheck.js", () => ({
   connectSFTP: vi.fn().mockResolvedValue(sftp),
+  checkSftpConnection: vi.fn().mockResolvedValue(sftp),
+  withSFTPConnection: vi.fn(async (callback) => callback(sftp)),
+  disconnectSFTP: vi.fn().mockResolvedValue(undefined),
+  getPoolStats: vi.fn().mockReturnValue({}),
+  debugPool: vi.fn().mockReturnValue({}),
 }));
 // Silence the service's logger.error / logger.warn calls in the catch
 // branches; we don't want spam in the test output.
