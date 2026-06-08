@@ -64,6 +64,8 @@ let admin, channel, channel2, nvr, nvr2;
 
 beforeAll(async () => {
   await connectMongo();
+  // Create the index that accesslogs service uses
+  await OptimizedAccessLogs.collection.createIndex({ admin: 1, createdAt: -1 });
 });
 afterAll(async () => {
   await disconnectMongo();
@@ -97,6 +99,7 @@ beforeEach(async () => {
     streamingPath: "/s",
     localChannelId: "1",
     name: "Cam1",
+    isAdded: true,
   });
   channel2 = await Channel.create({
     nvrId: nvr2._id,
@@ -104,6 +107,7 @@ beforeEach(async () => {
     streamingPath: "/s2",
     localChannelId: "2",
     name: "Cam2",
+    isAdded: true,
   });
 });
 

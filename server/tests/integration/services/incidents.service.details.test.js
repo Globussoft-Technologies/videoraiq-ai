@@ -85,6 +85,7 @@ async function seedChannel(over = {}) {
     userId: "100",
     streamingPath: `/stream/${channelSeq}`,
     localChannelId: `local-${channelSeq}`,
+    isAdded: true,
     detections: {
       countPersonsSettings: { enabled: true },
     },
@@ -185,7 +186,7 @@ describe("IncidentsService.getIncidentsDetails — resolvedIncidents", () => {
 describe("IncidentsService.getIncidentsDetails — totalIncidents", () => {
   it("returns all qualifying incidents (excluding countPersons / lineCrossing)", async () => {
     await seedIncident();
-    await seedIncident({ resolved: true });
+    await seedIncident({ resolved: false });
     await seedIncident({ incidentType: "countPersons" });
     await seedIncident({ incidentType: "lineCrossing" });
 
