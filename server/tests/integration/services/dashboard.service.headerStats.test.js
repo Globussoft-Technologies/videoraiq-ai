@@ -217,6 +217,7 @@ describe("DashboardService.headerStats", () => {
         nvrId: new mongoose.Types.ObjectId(),
         localChannelId: "lc-1",
         streamingPath: "/s1",
+        isAdded: true,
         detections: {
           motionDetectionSettings: { enabled: true },
         },
@@ -228,6 +229,7 @@ describe("DashboardService.headerStats", () => {
         nvrId: new mongoose.Types.ObjectId(),
         localChannelId: "lc-2",
         streamingPath: "/s2",
+        isAdded: true,
         detections: {
           motionDetectionSettings: { enabled: false },
         },

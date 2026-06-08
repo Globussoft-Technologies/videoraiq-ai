@@ -208,7 +208,7 @@ ChannelSchema.pre("save", function (next) {
   }
 });
 
-ChannelSchema.pre(/^find/, async function () {
+const applyChannelFilters = async function () {
   const memberId = this.options?.memberId;
   const includeInactive = this.options?.includeInactive;
 
@@ -243,7 +243,10 @@ ChannelSchema.pre(/^find/, async function () {
   this.where({
     $and: [existingQuery, { _id: { $in: allowed } }],
   });
-});
+};
+
+ChannelSchema.pre(/^find/, applyChannelFilters);
+ChannelSchema.pre('countDocuments', applyChannelFilters);
 
 ChannelSchema.statics.findActive = function (filter = {}) {
   return this.find({ ...filter, isAdded: true });
