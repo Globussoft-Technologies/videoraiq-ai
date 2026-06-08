@@ -32,7 +32,8 @@ import {
   GuardAbsenceIncident,
   ConveyorDetectionIncident,
   CrusherDetectionIncident,
-  VehicleTypeDetectionIncident
+  VehicleTypeDetectionIncident,
+  WaterSpillageDetectionIncident,
 } from "./incidents.model.js";
 const modelMap = {
   countPersons: CountPersonIncident,
@@ -54,7 +55,8 @@ const modelMap = {
   guardAbsence: GuardAbsenceIncident,
   conveyorDetection: ConveyorDetectionIncident,
   crusherDetection: CrusherDetectionIncident,
-  vehicleTypeDetection: VehicleTypeDetectionIncident
+  vehicleTypeDetection: VehicleTypeDetectionIncident,
+  waterSpillageDetection: WaterSpillageDetectionIncident
 };
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
@@ -136,7 +138,7 @@ class IncidentsService {
           "countPersons",
           "countVehicles",
           "genericObjectDetection",
-          "lineCrossing",
+          // "lineCrossing",
           "doorDetection",
         ].includes(incidentType)
       ) {
@@ -1112,6 +1114,7 @@ class IncidentsService {
 
         const matchStage = {
           userId: data.user_id.toString(),
+          isAdded: true,
           $or: [
             // Case 1: detections exist and have valid ObjectIds
             {
@@ -1126,12 +1129,8 @@ class IncidentsService {
                 { "detections.lineCrossingSettings.enabled": true },
                 { "detections.fireSmokeDetectionSettings.enabled": true },
                 { "detections.weaponDetectionSettings.enabled": true },
-                {
-                  "detections.unattendedBaggageDetectionSettings.enabled": true,
-                },
-                {
-                  "detections.personalProtectiveEquipmentSettings.enabled": true,
-                },
+                { "detections.unattendedBaggageDetectionSettings.enabled": true,},
+                { "detections.personalProtectiveEquipmentSettings.enabled": true,},
                 { "detections.crowdDetectionSettings.enabled": true },
                 { "detections.doorDetectionSettings.enabled": true },
                 { "detections.lightDetectionSettings.enabled": true },
@@ -1139,6 +1138,15 @@ class IncidentsService {
                 { "detections.vehicleObstructionSettings.enabled": true },
                 { "detections.conveyorDetectionSettings.enabled": true },
                 { "detections.crusherDetectionSettings.enabled": true },
+                { "detections.waterSpillageDetectionSettings.enabled": true },
+                { "detections.guardPresentSettings.enabled": true },
+                { "detections.deskAbsenceSettings.enabled": true },
+                { "detections.vehicleTypeDetectionSettings.enabled": true },
+                { "detections.personalProtectiveEquipmentSettings.enabled": true },
+                { "detections.crowdDetectionSettings.enabled": true },
+                { "detections.countPersonsSettings.enabled": true,},
+                { "detections.vehicleObstructionSettings.enabled": true, },
+                { "detections.vehicleTypeDetectionSettings.enabled": true, }
               ],
             },
             // Case 2: detections field does not exist or is empty
@@ -1221,8 +1229,11 @@ class IncidentsService {
         const query = {
           ...userMatch,
           severity: "high",
-          Image: { $exists: true, $nin: [null, "", undefined, "https://"] },
+          Image: {'$exists': true, '$nin': [null, '', undefined, 'https://']},
           userId: data.user_id.toString(),
+          incidentType: { '$nin': ['countPersons', 'lineCrossing', 'countVehicles'] },
+          resolved: false,
+          incidentName: { '$not': /Guard Present/i }
         };
         if (nvrId) {
           query.nvrId = new mongoose.Types.ObjectId(nvrId);
@@ -1406,8 +1417,10 @@ class IncidentsService {
         let searchMatchStage = {};
         const query = {
           ...userMatch,
-          incidentType: { $nin: ["countPersons", "lineCrossing"] },
-          Image: { $exists: true, $nin: [null, "", undefined, "https://"] },
+          incidentType: { $nin:  ['countPersons', 'lineCrossing', 'countVehicles']},
+          Image: {'$exists': true, '$nin': [null, '', undefined, 'https://'] },
+          resolved: false,
+          incidentName: { '$not': /Guard Present/i }
         };
         if (nvrId) {
           query.nvrId = new mongoose.Types.ObjectId(nvrId);
@@ -1559,7 +1572,7 @@ class IncidentsService {
         {
           $match: {
             userId: isAdminExist.user_id.toString(),
-            incidentType: { $nin: ["countPersons", "lineCrossing"] },
+            incidentType: { $nin: ["countPersons", "lineCrossing","countVehicles"] },
           },
         },
         {
@@ -1587,7 +1600,7 @@ class IncidentsService {
         {
           $match: {
             userId: isAdminExist.user_id.toString(),
-            incidentType: { $nin: ["countPersons", "lineCrossing"] },
+            incidentType: { $nin: ["countPersons", "lineCrossing","countVehicles"] },
           },
         },
         {

@@ -395,8 +395,6 @@ class DashboardService {
 
 
 
-
-
           const [activeCameras,overAllCameraCount, incidentsResolved, totalAlerts, criticalAlerts] = await Promise.all([
               channelsModel.countDocuments({
                 ...channelFilter,
@@ -421,12 +419,31 @@ class DashboardService {
                   { "detections.conveyorDetectionSettings.enabled": true },
                   { "detections.crusherDetectionSettings.enabled": true },
                   { "detections.waterSpillageDetectionSettings.enabled": true },
+                  { "detections.vehicleObstructionSettings.enabled": true },
+                  { "detections.vehicleTypeDetectionSettings.enabled": true },
                 ]
               }),
-              channelsModel.countDocuments(channelFilter),
+            (async () => {
+              const query = channelsModel.find(channelFilter);
+              query.setOptions({ includeInactive: true });
+              return await query.countDocuments();
+            })(),
             Incident.countDocuments({ ...userMatch, resolved: true }),
-            Incident.countDocuments({ ...userMatch }),
-            Incident.countDocuments({ ...userMatch, severity: 'high' }),
+            Incident.countDocuments({
+              ...userMatch,
+              Image: { '$exists': true, '$nin': [null, '', undefined, 'https://'] },
+              incidentType: { '$nin': ['countPersons', 'lineCrossing', 'countVehicles'] },
+              resolved: false,
+              incidentName: { '$not': /Guard Present/i }
+            }),
+            Incident.countDocuments({
+              ...userMatch,
+              severity: 'high',
+              Image: { '$exists': true, '$nin': [null, '', undefined, 'https://'] },
+              incidentType: { '$nin': ['countPersons', 'lineCrossing', 'countVehicles'] },
+              resolved: false,
+              incidentName: { '$not': /Guard Present/i }
+            }),
           ]);
           
       
