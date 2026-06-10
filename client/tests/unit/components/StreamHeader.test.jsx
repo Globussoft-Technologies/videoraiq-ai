@@ -58,14 +58,15 @@ describe("StreamHeader", () => {
   });
 
   it("hides the config button when VITE_LOCAL_SETUP env is 'true'", () => {
-    vi.stubEnv('VITE_LOCAL_SETUP', 'true');
+    const prev = import.meta.env.VITE_LOCAL_SETUP;
+    import.meta.env.VITE_LOCAL_SETUP = "true";
     try {
       render(<StreamHeader title="Streams" showConfigButton />);
       expect(
         screen.queryByRole("button", { name: /CCTV Configurations/i })
       ).not.toBeInTheDocument();
     } finally {
-      vi.unstubAllEnvs();
+      import.meta.env.VITE_LOCAL_SETUP = prev;
     }
   });
 });
