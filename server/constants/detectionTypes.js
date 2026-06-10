@@ -29,6 +29,9 @@ export const DETECTION_TYPES = {
   // fireSmokeDetectionSettings: "Fire and Smoke Detection",
   // weaponDetectionSettings: "Weapon Detection",
   // unattendedBaggageDetectionSettings: "Unattended Baggage Detection",
+  vehicleTypeDetectionSettings: "Vehicle Type Detection",
+  loiteringDetectionSettings: "Loitering Detection",
+  vehicleObstructionSettings: "Vehicle & Obstruction Detection",
 };
 
 export const TYPE_MAP = {
@@ -53,6 +56,9 @@ export const TYPE_MAP = {
   conveyorDetectionSettings: "conveyorDetection",
   crusherDetectionSettings: "crusherDetection",
   waterSpillageDetectionSettings: "waterSpillageDetection",
+  vehicleTypeDetectionSettings: "vehicleTypeDetection",
+  loiteringDetectionSettings: "loiteringDetection",
+  vehicleObstructionSettings: "vehicleObstruction",
 };
 
 export const DETECTION_MODES_MAP = {
@@ -70,6 +76,9 @@ export const DETECTION_MODES_MAP = {
   crusherDetectionSettings: ["crusher"],
   waterSpillageDetectionSettings: ["water_spillage"],
   vehicleDetectionSettings: ["ANPR"],
+  vehicleTypeDetectionSettings: ["vehicleType"],
+  loiteringDetectionSettings: ["loitering"],
+  vehicleObstructionSettings: ["vehicleObstruction"],
 };
 
 export const DETECTION_OBJECTS_TYPES_MAP = {
@@ -101,6 +110,9 @@ export const toPopulateDetections = [
   { path: "detections.conveyorDetectionSettings.id" },
   { path: "detections.crusherDetectionSettings.id" },
   { path: "detections.waterSpillageDetectionSettings.id" },
+  { path: "detections.vehicleTypeDetectionSettings.id" },
+  { path: "detections.loiteringDetectionSettings.id" },
+  { path: "detections.vehicleObstructionSettings.id" },
 ];
 
 // sample payloads
@@ -698,6 +710,93 @@ export const waterSpillageDetectionSettings = {
     alertThreshold: 1,
     videoResolution: [1280, 720],
     obstruction_threshold_sec: 0,
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+
+export const vehicleObstructionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "vehicleObstructionSettings",
+  name: "Vehicle Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    crowdCountThreshold: 10,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+
+export const vehicleTypeDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "vehicleTypeDetectionSettings",
+  name: "Vehicle Type Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    crowdCountThreshold: 10,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+
+export const loiteringDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "loiteringDetectionSettings",
+  name: "Loitering Detection - Area 1",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    crowdCountThreshold: 10,
+    videoResolution: [1280, 720],
     referencePoints: {
       1: [
         [50, 50],

@@ -99,6 +99,12 @@ export const triggerAlertOnIncident = async ({res, detectionType, nvrId, channel
           let mailResponse = await MailResponse.crusherDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
         } else if(detectionType==="waterSpillageDetection"){
           let mailResponse = await MailResponse.waterSpillageDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
+        } else if(detectionType==="vehicleObstruction"){
+          let mailResponse = await MailResponse.vehicleObstruction(emailAddresses,incidentData,detectionType,nvrData,channelData)
+        } else if(detectionType==="vehicleTypeDetection"){
+          let mailResponse = await MailResponse.vehicleTypeDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
+        } else if(detectionType==="loiteringDetection"){
+          let mailResponse = await MailResponse.loiteringDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
         }
     }
     const smsRecipients = await RecipientModel.find({ _id: { $in: groupedAlerts} ,type:'phone'})

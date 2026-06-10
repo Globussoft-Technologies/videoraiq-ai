@@ -32,8 +32,9 @@ import {
   GuardAbsenceIncident,
   ConveyorDetectionIncident,
   CrusherDetectionIncident,
-  VehicleTypeDetectionIncident,
   WaterSpillageDetectionIncident,
+  VehicleTypeDetectionIncident,
+  LoiteringDetectionIncident
 } from "./incidents.model.js";
 const modelMap = {
   countPersons: CountPersonIncident,
@@ -55,8 +56,9 @@ const modelMap = {
   guardAbsence: GuardAbsenceIncident,
   conveyorDetection: ConveyorDetectionIncident,
   crusherDetection: CrusherDetectionIncident,
+  waterSpillageDetection: WaterSpillageDetectionIncident,
   vehicleTypeDetection: VehicleTypeDetectionIncident,
-  waterSpillageDetection: WaterSpillageDetectionIncident
+  loiteringDetection: LoiteringDetectionIncident
 };
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
@@ -376,6 +378,9 @@ class IncidentsService {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         ((newIncident.vehicleType = req?.body?.vehicleType),
           (newIncident.Image = req?.body?.Image));
+      } else if (incidentType === "loiteringDetection") {
+        newIncident.timeOfIncident = req?.body?.timeOfIncident;
+        newIncident.Image = req?.body?.Image;
       }
 
       const incidentObj = await newIncident.save();
@@ -854,7 +859,7 @@ class IncidentsService {
           },
         },
       ]);
-
+      
       const totalCount = await Incident.countDocuments({
         ...matchStage,
         // $or: [
@@ -1186,7 +1191,7 @@ class IncidentsService {
         if (Object.keys(searchMatchStage).length > 0) {
           basePipeline.push({ $match: searchMatchStage });
         }
-
+        
         const [countResult, channels] = await Promise.all([
           channelsModel.aggregate([...basePipeline, { $count: "totalCount" }]),
           channelsModel.aggregate([

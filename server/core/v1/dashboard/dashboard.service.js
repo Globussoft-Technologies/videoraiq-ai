@@ -423,7 +423,7 @@ class DashboardService {
                   { "detections.vehicleTypeDetectionSettings.enabled": true },
                 ]
               }),
-            (async () => {
+              (async () => {
               const query = channelsModel.find(channelFilter);
               query.setOptions({ includeInactive: true });
               return await query.countDocuments();
@@ -432,7 +432,7 @@ class DashboardService {
             Incident.countDocuments({
               ...userMatch,
               Image: { '$exists': true, '$nin': [null, '', undefined, 'https://'] },
-              ...(userMatch.incidentType ? {} : { incidentType: { '$nin': ['countPersons', 'lineCrossing', 'countVehicles'] } }),
+              incidentType: { '$nin': ['countPersons', 'lineCrossing', 'countVehicles'] },
               resolved: false,
               incidentName: { '$not': /Guard Present/i }
             }),
@@ -440,7 +440,7 @@ class DashboardService {
               ...userMatch,
               severity: 'high',
               Image: { '$exists': true, '$nin': [null, '', undefined, 'https://'] },
-              ...(userMatch.incidentType ? {} : { incidentType: { '$nin': ['countPersons', 'lineCrossing', 'countVehicles'] } }),
+              incidentType: { '$nin': ['countPersons', 'lineCrossing', 'countVehicles'] },
               resolved: false,
               incidentName: { '$not': /Guard Present/i }
             }),
