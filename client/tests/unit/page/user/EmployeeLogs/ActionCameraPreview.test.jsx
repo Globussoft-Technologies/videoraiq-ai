@@ -33,12 +33,12 @@ vi.mock("@/components/ui/dialog", () => {
   return { Dialog, DialogContent };
 });
 
+// Mock environment variable before importing the component
+vi.stubEnv('VITE_BACKEND', 'https://api.test');
+
 const { default: ActionCameraPreview } = await import(
   "../../../../../src/page/user/EmployeeLogs/ActionCameraPreview.jsx"
 );
-
-// Force a stable backend env value so the BASE_URL is predictable.
-import.meta.env.VITE_BACKEND = "https://api.test";
 
 const BASE = "https://api.test/api/v1/uploads";
 

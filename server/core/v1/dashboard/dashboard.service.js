@@ -37,7 +37,7 @@ class DashboardService {
             };
           }
           
-          const userMatch = { userId: data?.user_id.toString(), Image: { $exists: true, $nin: [null, "", undefined, "https://"] },incidentType:{$nin:["countPersons","lineCrossing"]}, ...dateFilter };
+          const userMatch = { userId: data?.user_id.toString(), Image: { $exists: true, $nin: [null, "", undefined, "https://"] }, incidentType: { $nin: ["countPersons", "lineCrossing"] }, ...dateFilter };
           
           // Exclude incidents where triggerNotification is true and exists
           const notificationExclusion = {
@@ -383,7 +383,7 @@ class DashboardService {
 
               //Default if incidentTypeFilter is not provided
               if(incidentTypeFilter?.length){
-                userMatch.incidentType = {$nin:["countPersons","lineCrossing"],$in:incidentTypeFilter}
+                userMatch.incidentType = { $in: incidentTypeFilter };
               }
 
               /* ---------------------------------------
