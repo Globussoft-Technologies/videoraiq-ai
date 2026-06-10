@@ -22,6 +22,8 @@ import {
   crusherDetectionSettings,
   waterSpillageDetectionSettings,
   toPopulateDetections,
+  vehicleObstructionSettings,
+  loiteringDetectionSettings
 } from "../../../constants/detectionTypes.js";
 import pythonService from "../../../services/python.service.js";
 import logger from "../../../utils/logger.js";
@@ -50,6 +52,9 @@ import {
   ConveyorDetectionSetting,
   CrusherDetectionSetting,
   WaterSpillageDetectionSetting,
+  VehicleTypeDetectionSetting,
+  LoiteringDetectionSetting,
+  VehicleObstructionDetectionSetting,
 } from "./detectionSettings.model.js";
 import Channel from "../channels/channels.model.js";
 import mongoose, { Types } from "mongoose";
@@ -76,6 +81,9 @@ const modelMap = {
   conveyorDetectionSettings: ConveyorDetectionSetting,
   crusherDetectionSettings: CrusherDetectionSetting,
   waterSpillageDetectionSettings: WaterSpillageDetectionSetting,
+  vehicleTypeDetectionSettings: VehicleTypeDetectionSetting,
+  loiteringDetectionSettings: LoiteringDetectionSetting,
+  vehicleObstructionSettings: VehicleObstructionDetectionSetting,
 };
 
 class DetectionSettingService {

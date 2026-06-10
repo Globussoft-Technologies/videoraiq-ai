@@ -37,7 +37,14 @@ class DashboardService {
             };
           }
           
-          const userMatch = { userId: data?.user_id.toString(), Image: { $exists: true, $nin: [null, "", undefined, "https://"] },incidentType:{$nin:["countPersons","lineCrossing"]}, ...dateFilter };
+          const userMatch = { userId: data?.user_id.toString(), Image: { $exists: true, $nin: [null, "", undefined, "https://"] }, ...dateFilter };
+
+          // Apply default or custom incident type filter
+          if (incidentTypeFilter?.length) {
+            userMatch.incidentType = { $in: incidentTypeFilter };
+          } else {
+            userMatch.incidentType = { $nin: ["countPersons", "lineCrossing"] };
+          }
           
           // Exclude incidents where triggerNotification is true and exists
           const notificationExclusion = {
@@ -381,10 +388,6 @@ class DashboardService {
                 orConditions.push(ppeMatch);
               }
 
-              //Default if incidentTypeFilter is not provided
-              if(incidentTypeFilter?.length){
-                userMatch.incidentType = {$nin:["countPersons","lineCrossing"],$in:incidentTypeFilter}
-              }
 
               /* ---------------------------------------
                 Apply OR logic
@@ -423,7 +426,7 @@ class DashboardService {
                   { "detections.vehicleTypeDetectionSettings.enabled": true },
                 ]
               }),
-            (async () => {
+              (async () => {
               const query = channelsModel.find(channelFilter);
               query.setOptions({ includeInactive: true });
               return await query.countDocuments();
@@ -431,16 +434,12 @@ class DashboardService {
             Incident.countDocuments({ ...userMatch, resolved: true }),
             Incident.countDocuments({
               ...userMatch,
-              Image: { '$exists': true, '$nin': [null, '', undefined, 'https://'] },
-              ...(userMatch.incidentType ? {} : { incidentType: { '$nin': ['countPersons', 'lineCrossing', 'countVehicles'] } }),
               resolved: false,
               incidentName: { '$not': /Guard Present/i }
             }),
             Incident.countDocuments({
               ...userMatch,
               severity: 'high',
-              Image: { '$exists': true, '$nin': [null, '', undefined, 'https://'] },
-              ...(userMatch.incidentType ? {} : { incidentType: { '$nin': ['countPersons', 'lineCrossing', 'countVehicles'] } }),
               resolved: false,
               incidentName: { '$not': /Guard Present/i }
             }),

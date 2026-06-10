@@ -39,6 +39,9 @@ const detectionFields = {
   conveyorDetectionSettings: detectionSettingSchema,
   crusherDetectionSettings: detectionSettingSchema,
   waterSpillageDetectionSettings: detectionSettingSchema,
+  loiteringDetectionSettings: detectionSettingSchema,
+  vehicleTypeDetectionSettings: detectionSettingSchema,
+  vehicleObstructionSettings: detectionSettingSchema,
 };
 
 // ! old

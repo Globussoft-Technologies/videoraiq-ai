@@ -201,6 +201,38 @@ class PythonService {
         });
       }
 
+
+      if (detection_modes?.includes("intrusion")) {
+        detectors.push({
+          name: "zoneIntrusionSettings",
+          zones: [zones] || [],
+        });
+      }
+
+      if (detection_modes?.includes("vehicleType")) {
+        detectors.push({
+          name: "vehicleTypeDetectionSettings",
+          obstruction_threshold_sec: obstruction_threshold_sec,
+          zones: [zones] || [],
+        });
+      }
+
+      if( detection_modes?.includes("loitering")) {
+        detectors.push({
+          name: "loiteringDetectionSettings",
+          obstruction_threshold_sec: obstruction_threshold_sec,
+          zones: [zones] || [],
+        });
+      }
+
+      if (detection_modes?.includes("vehicleObstruction")) {
+        detectors.push({
+          name: "vehicleObstructionSettings",
+          obstruction_threshold_sec: obstruction_threshold_sec,
+          zones: [zones] || [],
+        });
+      }
+
       // ❗️ Validation
       if (!detectors.length) {
         throw new Error("No configurations found");
@@ -332,6 +364,30 @@ class PythonService {
         });
       }
 
+      if (detection_modes?.includes("vehicleType")) {
+        detectors.push({
+          name: "vehicleTypeDetectionSettings",
+          obstruction_threshold_sec: obstruction_threshold_sec,
+          zones: [zones] || [],
+        });
+      }
+
+      if( detection_modes?.includes("loitering")) {
+        detectors.push({
+          name: "loiteringDetectionSettings",
+          obstruction_threshold_sec: obstruction_threshold_sec,
+          zones: [zones] || [],
+        });
+      }
+
+      if (detection_modes?.includes("vehicleObstruction")) {
+        detectors.push({
+          name: "vehicleObstructionSettings",
+          obstruction_threshold_sec: obstruction_threshold_sec,
+          zones: [zones] || [],
+        });
+      }
+
       // ❗️ Validation
       if (!detectors.length) {
         throw new Error("No configurations found");
@@ -448,6 +504,15 @@ class PythonService {
 
       if (detectionModes?.includes("water_spillage")) {
         detectors.push("waterSpillageDetectionSettings");
+      }
+      if (detectionModes?.includes("vehicleType")) {
+        detectors.push("vehicleTypeDetectionSettings");
+      }
+      if( detectionModes?.includes("loitering")) {
+        detectors.push("loiteringDetectionSettings");
+      }
+      if( detectionModes?.includes("vehicleObstruction")) {
+        detectors.push("vehicleObstructionSettings");
       }
 
       // 🔹 Build payload

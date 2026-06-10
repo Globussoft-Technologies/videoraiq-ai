@@ -779,6 +779,109 @@ const WaterSpillageDetectionSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: WaterSpillageDetectionSchema }),
 );
 
+
+
+const VehicleTypeDetectionSchema = new mongoose.Schema({
+  imageRequired: {
+    type: Boolean,
+    default: false,
+  },
+  videoLinkRequirement: {
+    type: Boolean,
+    default: false,
+  },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "moderate",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  videoResolution: [Number],
+  referencePoints: Object,
+  obstruction_threshold_sec: { type: Number, default: 0 },
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+
+const VehicleTypeDetectionSetting = DetectionSetting.discriminator(
+  "vehicleTypeDetectionSettings",
+  new mongoose.Schema({ settings: VehicleTypeDetectionSchema }),
+);
+
+const LoiteringDetectionSchema = new mongoose.Schema({
+  imageRequired: {
+    type: Boolean,
+    default: false,
+  },
+  videoLinkRequirement: {
+    type: Boolean,
+    default: false,
+  },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "moderate",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  videoResolution: [Number],
+  referencePoints: Object,
+  obstruction_threshold_sec: { type: Number, default: 0 },
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+
+const LoiteringDetectionSetting = DetectionSetting.discriminator(
+  "loiteringDetectionSettings",
+  new mongoose.Schema({ settings: LoiteringDetectionSchema }),
+);
+
+const VehicleObstructionDetectionSchema = new mongoose.Schema({
+  imageRequired: {
+    type: Boolean,
+    default: false,
+  },
+  videoLinkRequirement: {
+    type: Boolean,
+    default: false,
+  },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "moderate",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  videoResolution: [Number],
+  referencePoints: Object,
+  obstruction_threshold_sec: { type: Number, default: 0 },
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+
+const VehicleObstructionDetectionSetting = DetectionSetting.discriminator(
+  "vehicleObstructionSettings",
+  new mongoose.Schema({ settings: VehicleObstructionDetectionSchema }),
+);
+
+
+
 export {
   DetectionSetting,
   CountPersonsDetectionSetting,
@@ -802,4 +905,7 @@ export {
   ConveyorDetectionSetting,
   CrusherDetectionSetting,
   WaterSpillageDetectionSetting,
+  VehicleTypeDetectionSetting,
+  LoiteringDetectionSetting,
+  VehicleObstructionDetectionSetting
 };
