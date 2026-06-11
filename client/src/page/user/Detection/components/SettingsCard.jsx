@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+﻿import React, { useState, useRef, useEffect } from 'react';
 import { InnerSettingsProvider, useInnerSettings } from './InnerSettingsContext';
 import AppliedProfile from './AppliedProfile';
 import BasicSettings from './BasicSettings';
@@ -6,7 +6,7 @@ import NotificationSettings from './NotificationSettings';
 import EvidenceSeverity from './EvidenceSeverity';
 import DefaultDetectionSettings from './DefaultDetectionSettings';
 import { getVerifiedRecipients } from '../Api/get';
-import { updateCameraSettingById } from '../../Streams/Api/pacth';
+import { updateCameraSettingById } from '../../Streams/Api/patch';
 import { toast } from 'sonner';
 
 const SettingsCard = () => {

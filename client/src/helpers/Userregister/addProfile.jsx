@@ -394,12 +394,13 @@ const AddProfile = () => {
 
   const debouncedSearch = useDebounce(search, 500);
 
-  const limit = 8;
+  const [limit, setLimit] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
   const nasUrl = import.meta.env.VITE_BACKEND;
 
   useEffect(() => {
     fetchUsers();
-  }, [currentPage, debouncedSearch, selectedLocations, selectedDepartments]);
+  }, [currentPage, debouncedSearch, selectedLocations, selectedDepartments, limit]);
 
   const loadLocations = async () => {
     try {
@@ -450,8 +451,10 @@ const AddProfile = () => {
       const result = await authorizedUsers(skip, limit, debouncedSearch, data);
 
       if (result.body.status === 'success') {
+        const count = result.body.data.totalCount || 0;
         setUsers(result.body.data.users || []);
-        setTotalPages(Math.ceil((result.body.data.totalCount || 0) / limit));
+        setTotalCount(count);
+        setTotalPages(Math.ceil(count / limit));
       }
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -869,13 +872,15 @@ const AddProfile = () => {
           {viewMode === 'grid' ? (
             /* ── Grid View ── */
             loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
-                {[...Array(8)].map((_, index) => (
-                  <UserCardSkeleton key={index} />
-                ))}
+              <div className="max-h-[70vh] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+                  {[...Array(8)].map((_, index) => (
+                    <UserCardSkeleton key={index} />
+                  ))}
+                </div>
               </div>
             ) : (
-              <>
+              <div className="max-h-[70vh] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
                   {users.map((user) => (
                     <UserCard
@@ -894,11 +899,11 @@ const AddProfile = () => {
                 {!loading && users.length === 0 && (
                   <div className="text-center py-12 text-gray-500">No users found.</div>
                 )}
-              </>
+              </div>
             )
           ) : (
             /* ── Table View ── */
-            <div className="w-full overflow-x-auto rounded-xl border border-gray-100 shadow-sm mt-2">
+            <div className="w-full overflow-x-auto overflow-y-auto max-h-[70vh] rounded-xl border border-gray-100 shadow-sm mt-2">
               <table className="w-full min-w-[700px] text-left border-collapse bg-white table-fixed">
                 <colgroup>
                   <col style={{width: '36px'}} />
@@ -910,7 +915,7 @@ const AddProfile = () => {
                   <col style={{width: '13%'}} />
                   <col style={{width: '13%'}} />
                 </colgroup>
-                <thead>
+                <thead className="sticky top-0 z-10">
                   <tr className="bg-[#F3F6FA] text-[#07486A]">
                     <th className="px-3 py-3 text-[11px] font-semibold text-center">
                       <input
@@ -964,11 +969,34 @@ const AddProfile = () => {
 
         {/* ── Pagination ── */}
         {users.length > 0 && (
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-          />
+          <div className="mt-6 grid items-center gap-4" style={{gridTemplateColumns: 'auto 1fr auto'}}>
+            <div className="text-sm text-[#333333] bg-[#F5F5F5] px-2.5 py-1.5 font-normal rounded-[5px] inline-flex items-center gap-2 w-fit">
+              Total users -{' '}
+              <span className="text-[#07486A] font-medium bg-[#E3F5FF] px-2.5 py-1 rounded-md">
+                {totalCount}
+              </span>
+            </div>
+            <div className="flex items-center justify-center">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                className="flex justify-center"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-1.5">
+              <span className="text-xs text-[#595959] whitespace-nowrap">Rows:</span>
+              <select
+                value={limit}
+                onChange={(e) => { setLimit(Number(e.target.value)); setCurrentPage(1); }}
+                className="h-9 border border-[#C7C7C7] rounded-lg text-xs text-[#595959] bg-white px-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#07486A]"
+              >
+                {[10, 20, 30, 50, 100].map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </div>
+          </div>
         )}
       </div>
 

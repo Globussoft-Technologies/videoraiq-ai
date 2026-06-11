@@ -13,8 +13,10 @@ const CameraStreamDisplay = ({
   setSelectedVideo,
   cameraChannels,
   isMini = false,
+  streamIndex = 0,
 }) => {
   const { streamModalShow, setStreamModalShow } = useContext(UserContext);
+  const [isInteractionDisabled, setIsInteractionDisabled] = useState(true);
   const hlsUrlMemo = useMemo(
     () => camera?.config?.StreamingUrl || null,
     [camera?.config?.StreamingUrl]
@@ -68,7 +70,7 @@ const CameraStreamDisplay = ({
   return (
     <div
       className="relative overflow-hidden w-full h-full"
-      onClick={!isMini ? openModal : undefined}
+      onClick={!isMini && !isInteractionDisabled ? openModal : undefined}
     >
       <VideoCanvasStream
         config={{ ...camera.config, cameraId: camera.value }}
@@ -85,6 +87,8 @@ const CameraStreamDisplay = ({
         streamModalShow={streamModalShow}
         setStreamModalShow={setStreamModalShow}
         isMini={isMini}
+        streamIndex={streamIndex}
+        onInteractionDisabledChange={setIsInteractionDisabled}
         // zoneName={zoneName}
       />
 

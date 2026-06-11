@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle} from 'react';
+﻿import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle} from 'react';
 import { toast } from 'sonner';
 import MiniCameraPreview from '@/page/user/Detection/components/MiniCameraPreview';
 import Delete from '@/assets/Delete.svg';
@@ -8,7 +8,7 @@ import ConfirmationModal from './DeleteConfirmation';
 import { getNvrNames, getCamerasBasedOnNvr } from '../../Dashboard/Api/get';
 import { useDetection } from '@/context/Sockets/DetectionContext';
 import CameraStreamWithArea from './CameraStreamWithArea';
-import { updateDetectionSettings } from '../Api/patch';
+import { updateDetectionSettings } from '../Api/put';
 import Skeleton from 'react-loading-skeleton';
 import DetectionPreviewModal from './DetectionPreviewModal';
 import { callMarkPointsApi } from '@/utils/callMarkPointsApi';

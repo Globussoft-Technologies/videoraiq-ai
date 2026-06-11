@@ -119,10 +119,6 @@ handleGetObjectDetails()
     }
   }, [options, form.selectedObject, setFieldValue]);
 
-  useEffect(() => {
-  console.log('Formik selectedObject:', form.selectedObject);
-}, [form.selectedObject]);
-
 
 
 
@@ -229,8 +225,6 @@ handleGetObjectDetails()
             className="bg-[#07486A] data-[state=unchecked]:bg-gray-200"
           />
         </div>
-        {console.log(form ,'form')}
-
         {form.enableGenericObject && (
           <div className="flex flex-col gap-2">
             {/* <label className="text-sm text-[#686868] ml-1">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import {
@@ -28,7 +28,7 @@ import BasicsStep from './BasicsStep';
 import { addProfile } from './Api/post';
 import { toast } from 'sonner';
 import { updateProfile } from './Api/put';
-import { updateCameraSettingById } from '@/page/user/Streams/Api/pacth';
+import { updateCameraSettingById } from '@/page/user/Streams/Api/patch';
 import { timezones } from '@/utils/Alltimezone';
 import { validationSchema } from '@/schema/profille/profilecreate';
 

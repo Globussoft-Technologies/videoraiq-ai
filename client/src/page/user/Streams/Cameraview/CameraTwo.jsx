@@ -70,8 +70,7 @@ const CameraTwo = ({
             selectedVideo={selectedVideo}
             setSelectedVideo={setSelectedVideo}
             cameraChannels={cameraChannels}
-            // streamModalShow={streamModalShow}
-            // setStreamModalShow={setStreamModalShow}
+            streamIndex={idx}
           />
         </div>
       ))}

@@ -39,8 +39,16 @@ import ForgotPassword from "@/page/user/Users/ForgotPassword"
 import ResetPassword from "@/page/user/Users/ResetPassword"
 import { DashboardFiltersProvider } from '@/context/UserContext/DashboardFiltersContext';
 import AdminLoginForm from "@/page/admin/Login/AdminLoginForm"
+import EmployeeRegister from "@/page/user/Users/EmployeeRegister"
 import GuardLog from '@/page/user/EmployeeLogs/GuardLog';
+import CrusherLogs from '@/page/user/EmployeeLogs/CrusherLogs';
+import ConveyorLogs from '@/page/user/EmployeeLogs/ConveyorLogs';
+import VehicleObstructionLogs from '@/page/user/EmployeeLogs/VehicleObstructionLogs';
+import VehicleCountLogs from '@/page/user/EmployeeLogs/VehicleCountLogs';
+import LineCrossingLogs from '@/page/user/EmployeeLogs/LineCrossingLogs';
 import Departments from '@/page/user/Departments/Departments';
+import WaterSpillageLogs from '@/page/user/EmployeeLogs/WaterSpillageLogs';
+import UnauthorizedAccess from '@/page/user/EmployeeLogs/UnauthorizedAccess';
 import ANPRLogs from '@/page/user/EmployeeLogs/ANPRLogs';
 
 
@@ -50,6 +58,7 @@ export const routes = createBrowserRouter(
   createRoutesFromElements(
     <>
       <Route path='/user-login' element={<UserForm />} />
+      <Route path='/register-employee' element={<EmployeeRegister />} />
       <Route path='/admin-login' element={<AdminLoginForm />} />
       <Route path='/forgot-password' element={<ForgotPassword />} />
       <Route path='/reset-password' element={<ResetPassword />} />
@@ -113,6 +122,13 @@ export const routes = createBrowserRouter(
         <Route path="logs/track" element={<TrackLog />} />
         <Route path="logs/desk" element={<VisibilityLog />} />
         <Route path="logs/guard" element={<GuardLog />} />
+        <Route path="logs/crusher" element={<CrusherLogs />} />
+        <Route path="logs/conveyor" element={<ConveyorLogs />} />
+        <Route path="logs/vehicle-obstruction" element={<VehicleObstructionLogs />} />
+        <Route path="logs/vehicle-count" element={<VehicleCountLogs />} />
+        <Route path="logs/line-crossing" element={<LineCrossingLogs />} />
+        <Route path="logs/water-spill" element={<WaterSpillageLogs />} />
+         <Route path="logs/unauthorized-access" element={<UnauthorizedAccess />} />
         <Route path="logs/ANPR" element={<ANPRLogs />} />
         <Route path="user-details" element={<UserDetails />} />
         <Route path="locations" element={<Locations />} />

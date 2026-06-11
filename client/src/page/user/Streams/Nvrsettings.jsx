@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { SquarePen, TriangleAlert, Trash2 } from 'lucide-react';
+import { SquarePen, TriangleAlert, Trash2, ListVideo } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import Camera from '../../../assets/Camera.svg';
 import AddNVRForm from './Nvrform';
@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 import { decrypt } from '@/helpers/decriptNvr';
 import { usePermissions } from '@/context/Permission/PermissionContext';
 import DeleteConfirmation from '../Detection/components/DeleteConfirmation';
+import CameraDiscoveryModal from './CameraDiscoveryModal';
 
 // Commonly used Tailwind classes
 const STYLES = {
@@ -40,6 +41,7 @@ const Nvrsettings = ({ nvrDetails, fetchNvrData, onDeleteNvr }) => {
   const [editingNvr, setEditingNvr] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [manageCamerasNvrId, setManageCamerasNvrId] = useState(null);
   const navigate = useNavigate();
 
   const handleCameraSettings = (nvrId) => {
@@ -158,7 +160,24 @@ const Nvrsettings = ({ nvrDetails, fetchNvrData, onDeleteNvr }) => {
                       <p>View {nvr?.nvrName ?? ''} Camera Settings</p>
                     </TooltipContent>
                   </Tooltip>{' '}
-                                      
+
+                  {canEdit && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          className={STYLES.BUTTON_SECONDARY + " h-7 md:h-7 2xl:h-9"}
+                          onClick={() => setManageCamerasNvrId(nvr._id)}
+                        >
+                          <ListVideo className="w-3 h-3 md:w-3.5 md:h-3.5 2xl:w-5 2xl:h-5" />
+                          <span className="hidden sm:inline">Cameras</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Manage Cameras</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+
                   { canEdit && (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -297,6 +316,13 @@ const Nvrsettings = ({ nvrDetails, fetchNvrData, onDeleteNvr }) => {
         confirmLabel="Delete"
         cancelLabel="Cancel"
       />
+      {manageCamerasNvrId && (
+        <CameraDiscoveryModal
+          nvrId={manageCamerasNvrId}
+          onClose={() => setManageCamerasNvrId(null)}
+          onSaved={fetchNvrData}
+        />
+      )}
     </div>
     
   );

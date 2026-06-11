@@ -53,15 +53,17 @@ export const AllDetectionProvider = ({ children }) => {
 
   const toggleMute = async () => {
     const nextMuted = !isMutedRef.current;
-    const prevMuted = isMutedRef.current;
-    // Optimistic local flip so the icon responds instantly.
+    // Update the ref synchronously so any socket event firing in the same
+    // tick as the click reads the new mute value (the state-driven effect
+    // only updates the ref on the next render).
+    isMutedRef.current = nextMuted;
     setIsMuted(nextMuted);
     try {
       await updateLogsSound(!nextMuted);
     } catch (err) {
+      // Don't revert local mute on a persistence failure — the user's click
+      // is the source of truth for what should be audible right now.
       console.log('Failed to persist logsSound preference:', err);
-      // Revert on failure so UI stays consistent with the server.
-      setIsMuted(prevMuted);
     }
   };
 

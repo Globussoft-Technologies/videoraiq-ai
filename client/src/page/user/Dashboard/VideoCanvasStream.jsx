@@ -1,4 +1,4 @@
-import React, { useContext, useRef, useState, useMemo, useEffect } from 'react';
+import React, { useContext, useRef, useState, useMemo, useEffect, useCallback } from 'react';
 import { LuMaximize } from 'react-icons/lu';
 import { BiTargetLock } from "react-icons/bi";
 import UserContext from '@/context/UserContext/Context';
@@ -23,6 +23,8 @@ const VideoCanvasStream = ({
   streamModalShow,
   setStreamModalShow,
   isMini = false,
+  streamIndex = 0,
+  onInteractionDisabledChange,
   // zoneName
 }) => {
   const videoRef = useRef(null);
@@ -31,6 +33,7 @@ const VideoCanvasStream = ({
   const baseUrl = import.meta.env.VITE_STREAM_URL;
   const status = import.meta.env.VITE_LOCAL_SETUP;
   const [isLoading, setIsLoading] = useState(true);
+  const [isWaiting, setIsWaiting] = useState(streamIndex > 0);
   const [hasError, setHasError] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const memoizedUrl = useMemo(() => {
@@ -69,19 +72,30 @@ const VideoCanvasStream = ({
   // const enabled = true; // grid streams always enabled
   useEffect(() => {
     setIsLoading(true);
+    setIsWaiting(streamIndex > 0);
     setHasError(false);
     setErrorMsg('');
   }, [memoizedUrl, cameraId]);
 
+  const handleStarted = useCallback(() => setIsWaiting(false), []);
+  const handleError = useCallback((msg) => {
+    setIsWaiting(false);
+    setErrorMsg(msg);
+    setIsLoading(false);
+    setHasError(true);
+  }, []);
+
   useHlsPlayer(videoRef, memoizedUrl, {
     autoPlay: true,
     enabled,
-    onError: (msg) => {
-      setErrorMsg(msg);
-      setIsLoading(false);
-      setHasError(true);
-    },
+    startDelayMs: streamIndex * 1000,
+    onStarted: handleStarted,
+    onError: handleError,
   });
+
+  useEffect(() => {
+    onInteractionDisabledChange?.(isWaiting || isLoading || hasError);
+  }, [isWaiting, isLoading, hasError, onInteractionDisabledChange]);
 
   const closeModal = () => {
     setStreamModalShow(false);
@@ -148,11 +162,11 @@ const VideoCanvasStream = ({
     <>
       <div
         ref={containerRef}
-        onDoubleClick={openModalInFullscreen}
+        onDoubleClick={isWaiting || isLoading || hasError ? undefined : openModalInFullscreen}
         className="relative w-full h-full bg-black"
       >
         {/* Loading Overlay */}
-        {isLoading && (
+        {(isWaiting || isLoading) && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-20">
             <div
               className={`loader border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin ${isMini ? 'w-5 h-5' : 'w-10 h-10'}`}
@@ -228,7 +242,12 @@ const VideoCanvasStream = ({
         {!isMini && (
           <button
             onClick={openModalInFullscreen}
-            className={`${maxminBtnclass} cursor-pointer hover:bg-[#3f3f3fba] transition-colors`}
+            disabled={isWaiting || isLoading || hasError}
+            className={`${maxminBtnclass} transition-colors ${
+              isWaiting || isLoading || hasError
+                ? 'opacity-40'
+                : 'cursor-pointer hover:bg-[#3f3f3fba]'
+            }`}
           >
             <LuMaximize className={maxsize} />
           </button>

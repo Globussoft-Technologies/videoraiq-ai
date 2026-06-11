@@ -1,4 +1,4 @@
-  import React, { useState, useMemo, useEffect } from 'react';
+﻿  import React, { useState, useMemo, useEffect } from 'react';
   import { useNavigate } from 'react-router-dom';
   import { Cctv, ChevronDown, RotateCcw } from 'lucide-react';
   import { Input } from '@/components/ui/input';
@@ -12,14 +12,14 @@
   import Monitorcog from '@/components/ui/Monitorcog';
   import { TbHexagonPlus } from 'react-icons/tb';
   import Pagination from '@/components/Pagination';
-  import { updateCameraSettingById } from '../Streams/Api/pacth';
+  import { updateCameraSettingById } from '../Streams/Api/patch';
   import { Switch } from '@/components/ui/switch';
   import { toast } from 'sonner';
   import { usePermissions } from '@/context/Permission/PermissionContext';
   import AccessDenied from '@/components/AccessDenied';
   import PageLoader from '@/components/PageLoader';
   import { Popover, PopoverTrigger,PopoverContent } from '@/components/ui/popover';
-  import { enableDetectionSettings } from './Api/patch';
+  import { enableDetectionSettings } from './Api/put';
 
   function ProfilesTable({ data, columns, loading, onRowClick, detectionSettings }) {
     const table = useReactTable({

@@ -34,6 +34,7 @@ import Skeleton from 'react-loading-skeleton';
 import { OBJECT_ICONS } from '../Streams/CameraStreamsModal/StreamModal';
 import FireAlert from './Alertwidgets/alert';
 import VideoCanvasStream from './VideoCanvasStream';
+import AttendanceLogsLive from './AttendanceLogsLive';
 import { useAllDetections } from '@/context/Sockets/AllDetectionContext';
 import { useDashboardFiltersContext } from '@/context/UserContext/DashboardFiltersContext';
 import { usePermissions } from '@/context/Permission/PermissionContext';
@@ -759,23 +760,19 @@ const Dashboard = () => {
             </div>
           </div>
         )}
-        {/* Access log and employees on duty */}
-        <div className="grid grid-cols-1 2xl:grid-cols-9 xl:grid-cols-11 gap-3 mt-2 ">
-          <div className={isAccessLogVisible ? 'contents' : 'hidden'}>
+        {/* Access log (full width row) */}
+        {isAccessLogVisible && (
+          <div className="grid grid-cols-1 gap-3 mt-2">
             <AccessLog onVisibilityChange={setIsAccessLogVisible} />
           </div>
-          <div
-            className={
-              isAccessLogVisible
-                ? '2xl:col-span-3 xl:col-span-4 col-span-12'
-                : '2xl:col-span-9 xl:col-span-11 col-span-12'
-            }
-          >
-            <EmployeesOnDuty
-              canEdit={canEdit}
-              isAccessLogVisible={isAccessLogVisible}
-            />
-          </div>
+        )}
+        {/* Live attendance + Authorized employees side by side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
+          <AttendanceLogsLive />
+          <EmployeesOnDuty
+            canEdit={canEdit}
+            isAccessLogVisible={isAccessLogVisible}
+          />
         </div>
       </div>
     </div>

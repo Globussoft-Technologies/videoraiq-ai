@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import moment from 'moment';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { updateCameraSettingById } from '../../Streams/Api/pacth';
+import { updateCameraSettingById } from '../../Streams/Api/patch';
 import { getAppliedProfile } from '../Api/get';
 
 import { InnerSettingsProvider } from './InnerSettingsContext';

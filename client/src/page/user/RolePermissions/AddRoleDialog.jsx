@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ import { updateRole } from './Api/put';
 const AddRoleDialog = ({ trigger, editRole, onSave, onClose, fetchRoles }) => {
   const isEditMode = !!editRole;
   const [open, setOpen] = useState(false);
+  const wasOpenRef = useRef(false);
 
   const formik = useFormik({
     initialValues: { roles: '', sendEmail: true },
@@ -87,11 +88,12 @@ const AddRoleDialog = ({ trigger, editRole, onSave, onClose, fetchRoles }) => {
   };
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      wasOpenRef.current = true;
+    } else if (wasOpenRef.current) {
       formik.resetForm();
-      // setQuery('');
+      wasOpenRef.current = false;
     }
-
   }, [open]);
 
   return (

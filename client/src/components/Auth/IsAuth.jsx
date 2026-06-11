@@ -60,7 +60,27 @@ const REDIRECT_LOGIN = import.meta.env.VITE_FRONTEND;
 const REDIRECT_MEMBER_PAGE = import.meta.env.VITE_FRONTEND + '/member/index';
 const url=import.meta.env.VITE_ENV;
 const LOCAL_SETUP = import.meta.env.VITE_LOCAL_SETUP === 'true';
-const LOGIN_REDIRECT = LOCAL_SETUP ? '/admin-login' : REDIRECT_MEMBER_PAGE;
+
+// Same-origin login fallback: if the configured aMember redirect target would
+// resolve back to this SPA's own origin (e.g. missing/misconfigured
+// VITE_FRONTEND), bouncing there just re-renders IsAuth and never reaches a
+// login page. In that case, redirect inside the SPA to /admin-login instead.
+function redirectToLogin(navigate) {
+  if (LOCAL_SETUP) {
+    navigate('/admin-login', { replace: true });
+    return;
+  }
+  try {
+    const target = new URL(REDIRECT_MEMBER_PAGE, window.location.href);
+    if (target.origin === window.location.origin) {
+      navigate('/admin-login', { replace: true });
+      return;
+    }
+    window.location.replace(REDIRECT_MEMBER_PAGE);
+  } catch {
+    navigate('/admin-login', { replace: true });
+  }
+}
 export function deleteCookie(name, path = '/') {
   const domain = `.${window.location.hostname.split('.').slice(-2).join('.')}`;
   document.cookie = `${name}=; domain=${domain}; path=${path}; expires=Thu, 01 Jan 1970 00:00:00 UTC;`;
@@ -110,11 +130,8 @@ function IsAuth({ children }) {
     const password = Cookies.get('amember_pass')|| "";
 
     if (!(userName && password) && !getAccessToken()) {
-      if (LOCAL_SETUP) {
-        navigate(LOGIN_REDIRECT);
-      } else {
-        window.location.href = REDIRECT_MEMBER_PAGE;
-      }
+      setIsLoading(false);
+      redirectToLogin(navigate);
       return;
     }
 
@@ -130,11 +147,9 @@ function IsAuth({ children }) {
 
           const result = await response.json();
           if (!result?.ok) {
-            if (LOCAL_SETUP) {
-              return navigate(LOGIN_REDIRECT);
-            } else {
-              return window.location.href = REDIRECT_MEMBER_PAGE;
-            }
+            setIsLoading(false);
+            redirectToLogin(navigate);
+            return;
           }
           if (result?.expired)
             return (window.location.href = `${REDIRECT_MEMBER_PAGE}`);
@@ -198,11 +213,9 @@ function IsAuth({ children }) {
 
           const result = await response.json();
           if (!result?.success) {
-            if (LOCAL_SETUP) {
-              navigate(LOGIN_REDIRECT);
-            } else {
-              window.location.href = REDIRECT_MEMBER_PAGE;
-            }
+            setIsLoading(false);
+            redirectToLogin(navigate);
+            return;
           }
           setUser(result.data); // set user data from token
         }

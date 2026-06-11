@@ -202,6 +202,7 @@ const GridViewModal = ({
                     setSelectedVideo={setSelectedVideo}
                     cameraChannels={cameraChannels}
                     isMini={true}
+                    streamIndex={index}
                   />
                 </div>
 

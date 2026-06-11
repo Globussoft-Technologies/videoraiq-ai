@@ -3,19 +3,21 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
 const routeTitles = {
-  "/": "VideoralQ | Dashboard",
-  "/dashboard": "Dashboard | VideoralQ",
-  '/incidents': "Incidents | VideoralQ",
-  '/nvr-settings': "NVR-Settings | VideoralQ",
-  "/cameraview": "Live-Streaming | VideoralQ",
-  "/Playback": "Playback | VideoralQ",
-  "/detection-settings": "Detection-Settings | VideoralQ",
-  "/notification-recipients": "Alert-Recipients | VideoralQ",
-  "/active-cameras": "Active-Cameras | VideoralQ",
-  "/critical-incidents": "Critical-Incidents | VideoralQ",
-  "/total-incidents": "Total-Incidents | VideoralQ",
-  "/incidents-resolved": "Resolved-Incidents | VideoralQ",
-  "/streams/camera-settings": "Camera-Settings | VideoralQ",
+  "/": "VideoraIQ | Dashboard",
+  "/dashboard": "Dashboard | VideoraIQ",
+  '/incidents': "Incidents | VideoraIQ",
+  '/nvr-settings': "NVR-Settings | VideoraIQ",
+  "/cameraview": "Live-Streaming | VideoraIQ",
+  "/Playback": "Playback | VideoraIQ",
+  "/detection-settings": "Detection-Settings | VideoraIQ",
+  "/notification-recipients": "Alert-Recipients | VideoraIQ",
+  "/active-cameras": "Active-Cameras | VideoraIQ",
+  "/critical-incidents": "Critical-Incidents | VideoraIQ",
+  "/total-incidents": "Total-Incidents | VideoraIQ",
+  "/incidents-resolved": "Resolved-Incidents | VideoraIQ",
+  "/streams/camera-settings": "Camera-Settings | VideoraIQ",
+  "/locations": "Locations | VideoraIQ",
+  "/departments": "Departments | VideoraIQ",
 };
 
 export default function TitleUpdater() {
@@ -23,7 +25,7 @@ export default function TitleUpdater() {
 
   useEffect(() => {
     const currentPath = location.pathname;
-    const pageTitle = routeTitles[currentPath] || "VideoralQ";
+    const pageTitle = routeTitles[currentPath] || "VideoraIQ";
     document.title = pageTitle;
   }, [location]);
 

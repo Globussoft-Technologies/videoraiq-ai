@@ -1,8 +1,21 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { UserCheck, MapPinCheck, Activity } from 'lucide-react';
+import { UserCheck, MapPinCheck, Activity, Hammer, GitBranch, Car, OctagonAlert, Ban } from 'lucide-react';
+import { GiRoad, GiWaterSplash } from 'react-icons/gi';
 import ANPRIcon from '../../assets/ANPR.png';
 import { usePermissions } from '@/context/Permission/PermissionContext';
+
+const isStevinrockClient = import.meta.env.VITE_CLIENT == 'stevinrock';
+
+const stevinrockItems = [
+  { label: 'Conveyor Logs', icon: GiRoad, route: '/logs/conveyor', permissionKey: 'conveyorLogs' },
+  { label: 'Vehicle Obstruction Logs', icon: OctagonAlert, route: '/logs/vehicle-obstruction', permissionKey: 'vehicleObstructionLogs' },
+  { label: 'Vehicle Count Logs', icon: Car, route: '/logs/vehicle-count', permissionKey: 'vehicleCountLogs' },
+  { label: 'Crusher Logs', icon: Hammer, route: '/logs/crusher', permissionKey: 'crusherLogs' },
+  { label: 'Line Crossing Logs', icon: GitBranch, route: '/logs/line-crossing', permissionKey: 'lineCrossingLogs' },
+  { label: 'Water Spill Logs', icon: GiWaterSplash, route: '/logs/water-spill', permissionKey: 'waterSpillLogs' },
+  { label: 'Unauthorized Access Logs', icon: Ban, route: '/logs/unauthorized-access', permissionKey: 'unauthorizedAccessLogs' },
+];
 
 // Per-item route + the `logs.<key>` sub-permission that gates visibility.
 const vehicleClientItems = [
@@ -19,16 +32,20 @@ const vehicleClientItems = [
 const defaultClientItems = [
   { label: 'Attendance Logs', icon: UserCheck, route: '/logs/attendance', permissionKey: 'attendanceLogs' },
   { label: 'Access Logs', icon: MapPinCheck, route: '/logs/access', permissionKey: 'accessLogs' },
-  { label: 'ANPR Logs', icon: null, img: ANPRIcon, route: '/logs/ANPR', permissionKey: 'ANPRLogs' },
+  // { label: 'ANPR Logs', icon: null, img: ANPRIcon, route: '/logs/ANPR', permissionKey: 'ANPRLogs' },
   // { label: 'Vehcile  Logs', icon: Activity, route: '/logs/track', permissionKey: 'trackLogs' },
   // { label: 'Guard Logs', icon: Activity, route: '/logs/guard', permissionKey: 'guardLogs' },
   // { label: 'Track Logs', icon: Activity, route: '/logs/desk', permissionKey: 'deskLogs' },
 ];
 
-const baseSidebarItems =
+const baseClientItems =
   import.meta.env.VITE_VEHICLE_CLIENT === 'true'
     ? vehicleClientItems
     : defaultClientItems;
+
+const baseSidebarItems = isStevinrockClient
+  ? [...baseClientItems, ...stevinrockItems]
+  : baseClientItems;
 
 // Logs permissions may be nested ({global, accessLogs, ...}) or legacy flat
 // ({view,...}). When nested sub-section objects exist, only the explicit

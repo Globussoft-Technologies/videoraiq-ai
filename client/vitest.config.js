@@ -1221,6 +1221,20 @@ export default defineConfig({
         // bar and disables every row checkbox. Tested under tests/unit/
         // page/user/RolePermissions/PermissionStep.test.jsx.
         "src/page/user/RolePermissions/PermissionStep.jsx",
+        // Round 105: Playback/components/Timeline — the per-camera playback
+        // timeline strip used inside PlaybackVideo. Purely presentational
+        // (no API of its own) but with several branches: loading skeleton
+        // vs interactive track, per-30-minute label strip + buffered + base
+        // overlays, valid-segment Tooltip mapping (invalid date pairs are
+        // skipped), the segment-click stopPropagation -> absolute-time
+        // routing, the track-click percent-of-duration routing, wheel +
+        // ctrlKey zoomLevel clamp to [0.5, 5], video.timeupdate ->
+        // handleTimeSelect wiring, ArrowRight / ArrowLeft / unrelated-key
+        // window keydown branches, the clickedTime playhead column and
+        // its {seconds, date} tooltip-label fallback, and the unmount
+        // listener-cleanup invariant. Tested under tests/unit/page/user/
+        // Playback/components/Timeline.test.jsx.
+        "src/page/user/Playback/components/Timeline.jsx",
         // Round 104: routes/PrivateRoute — the simplest auth-gate route
         // in the app. Checks Cookies.get('token') and either renders
         // <Outlet /> or <Navigate to="/admin/login" />. Pure

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { X, CheckCircle2, Search, SearchSlash, Cctv, CirclePlus } from 'lucide-react';
 import {
   Dialog,
@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { getProfileDetails } from '../../Profile/Api/get';
-import { updateCameraSettingById } from '../../Streams/Api/pacth';
+import { updateCameraSettingById } from '../../Streams/Api/patch';
 import { toast } from 'sonner';
 import MultiStepForm from '../../Profile/MultiStepForm';
 import { usePermissions } from '@/context/Permission/PermissionContext';

@@ -16,9 +16,9 @@ const RegisterFormStep1 = ({ departments, locations = [] }) => {
   const allLocations = Array.from(new Set([values.location, ...locations])).filter(Boolean);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-6">
       {/* ... (First Name, Last Name, Email, Designation fields) */}
-      <div className="space-y-2">
+      <div className="space-y-1 sm:space-y-2">
         <label className="text-sm font-medium text-gray-700">First Name*</label>
         <Field
           as={Input}
@@ -29,7 +29,7 @@ const RegisterFormStep1 = ({ departments, locations = [] }) => {
         />
         <ErrorMessage name="firstName" component="div" className="text-xs text-red-500" />
       </div>
-      <div className="space-y-2">
+      <div className="space-y-1 sm:space-y-2">
         <label className="text-sm font-medium text-gray-700">Last Name*</label>
         <Field
           as={Input}
@@ -39,7 +39,7 @@ const RegisterFormStep1 = ({ departments, locations = [] }) => {
         />
         <ErrorMessage name="lastName" component="div" className="text-xs text-red-500" />
       </div>
-      <div className="space-y-2">
+      <div className="space-y-1 sm:space-y-2">
         <label className="text-sm font-medium text-gray-700">Email*</label>
         <Field
           as={Input}
@@ -49,7 +49,7 @@ const RegisterFormStep1 = ({ departments, locations = [] }) => {
         />
         <ErrorMessage name="email" component="div" className="text-xs text-red-500" />
       </div>
-      <div className="space-y-2">
+      <div className="space-y-1 sm:space-y-2">
         <label className="text-sm font-medium text-gray-700">Designation*</label>
         <Field
           as={Input}
@@ -60,7 +60,7 @@ const RegisterFormStep1 = ({ departments, locations = [] }) => {
         <ErrorMessage name="designation" component="div" className="text-xs text-red-500" />
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-1 sm:space-y-2">
         <label className="text-sm font-medium text-gray-700">Location</label>
         <Select
           onValueChange={(value) => setFieldValue('location', value)}
@@ -83,7 +83,7 @@ const RegisterFormStep1 = ({ departments, locations = [] }) => {
         </Select>
         <ErrorMessage name="location" component="div" className="text-xs text-red-500" />
       </div>
-      <div className="space-y-2">
+      <div className="space-y-1 sm:space-y-2">
         <label className="text-sm font-medium text-gray-700">Department*</label>
         <Select
           onValueChange={(value) => setFieldValue('departmentId', value)}

@@ -1,9 +1,9 @@
 import React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-const Pagination = ({ currentPage, totalPages, onPageChange }) => {
+const Pagination = ({ currentPage, totalPages, onPageChange, className = "mt-6 flex justify-center" }) => {
   return (
-    <div className="mt-6 flex justify-center ">
+    <div className={className}>
       <div className="flex items-center gap-2 ">
         {/* Previous Button */}
         <button

@@ -13,3 +13,14 @@ export const deleteNVR = async function (nvrId) {
         },
     });
 };
+
+export const removeCamera = async function (cameraId) {
+    const token = getAccessToken();
+
+    return axios.delete(`${HOST}/api/v1/nvr/camera/${cameraId}`, {
+        headers: {
+            Accept: 'application/json',
+            'x-access-token': token,
+        },
+    });
+};

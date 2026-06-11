@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { Edit3, Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useInnerSettings } from "./InnerSettingsContext";
-import { updateCameraSettingById } from "../../Streams/Api/pacth";
+import { updateCameraSettingById } from "../../Streams/Api/patch";
 import { toast } from "sonner";
 import MultiStepForm from "../../Profile/MultiStepForm";
 import DeleteConfirmation from "../components/DeleteConfirmation";

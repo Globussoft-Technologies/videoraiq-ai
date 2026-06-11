@@ -16,21 +16,21 @@ const RegisterFormStep2 = ({
       const org_id=import.meta.env.VITE_ORGANISATION_ID;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
      <p className="text-sm text-gray-500 font-medium">
   Uploaded {uploadedImagePaths.filter(img => img && (typeof img === 'string' ? img.trim() !== "" : true)).length} / {org_id == 'dubai' ? 1 : 3} images*
 </p>
-      
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-        {['Front', 'Right', 'Left'].map((angle, index) => (
-          <div key={angle} className="flex flex-col items-center gap-3">
-            <div className="w-full aspect-[4/5] bg-white rounded-2xl border border-gray-200 flex items-center justify-center p-4 relative group hover:shadow-md transition-shadow">
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6">
+        {(org_id === 'dubai' ? ['Front'] : ['Front', 'Right', 'Left']).map((angle, index) => (
+          <div key={angle} className="flex flex-col items-center gap-2 sm:gap-3">
+            <div className={`w-full ${uploadedImagePaths[index] ? 'aspect-square sm:aspect-[4/5] max-h-[260px] sm:max-h-none' : 'sm:aspect-[4/5]'} bg-white rounded-2xl sm:border sm:border-gray-200 flex items-center justify-center p-0 sm:p-4 relative group sm:hover:shadow-md transition-shadow`}>
               {uploadedImagePaths[index] ? (
                 <>
                   <img 
                     src={uploadedImageUrls[index] || `${uploadDomain}${uploadedImagePaths[index]}`} 
                     alt={angle} 
-                    className="w-full h-full object-cover rounded-xl"
+                    className="w-full h-full object-contain rounded-xl"
                   />
                   <button
                     type="button"
@@ -41,7 +41,7 @@ const RegisterFormStep2 = ({
                   </button>
                 </>
               ) : (
-                <div className="flex flex-col items-center gap-3 w-full">
+                <div className="flex flex-col items-center gap-2 sm:gap-3 w-full">
                   <label className="w-full cursor-pointer">
                     <input
                       type="file"
@@ -61,7 +61,7 @@ const RegisterFormStep2 = ({
                               onUploadFile(file, values.firstName.trim(), index);
                             }}
                     />
-                    <div className="flex items-center justify-center gap-2 w-full py-3 px-3 bg-[#E3F5FF] text-[#07486A] rounded-lg text-sm font-medium hover:bg-[#d0ebfd] transition-colors">
+                    <div className="flex items-center justify-center gap-2 w-full py-2 sm:py-3 px-3 bg-[#E3F5FF] text-[#07486A] rounded-lg text-sm font-medium hover:bg-[#d0ebfd] transition-colors">
                       <Upload className="w-4 h-4" />
                       Click From Files
                     </div>
@@ -69,7 +69,7 @@ const RegisterFormStep2 = ({
                   <button
                     type="button"
                     onClick={() => onOpenCamera(angle)}
-                    className="flex items-center justify-center gap-2 w-full py-3 bg-[#F5F5F5] text-[#595959] rounded-lg text-sm font-medium hover:bg-[#e5e5e5] transition-colors"
+                    className="flex items-center justify-center gap-2 w-full py-2 sm:py-3 bg-[#F5F5F5] text-[#595959] rounded-lg text-sm font-medium hover:bg-[#e5e5e5] transition-colors"
                   >
                     <Camera className="w-4 h-4" />
                     Take Photo

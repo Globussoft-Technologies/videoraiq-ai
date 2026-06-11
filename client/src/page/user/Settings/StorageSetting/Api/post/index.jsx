@@ -3,7 +3,6 @@ import getAccessToken from '@/utils/getAccessToken';
 import axios from 'axios';
 
 export const addStorage = async function (data) {
-  console.log("api",data);
   const token = getAccessToken();
   return await axios.post(`${HOST}/api/v1/storage`, data, {
     headers: {      

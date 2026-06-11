@@ -51,7 +51,7 @@ const FireAlert = ({ switchOn = [] }) => {
     switch (key) {
       case 'lineCrossing':
         return (
-          <lineCrossingAlertCard
+          <LineCrossingAlertCard
             key={`${key}-${index}`}
             totalWidgets={isSingleToggle}
             heading={incident?.incidentName ?? ''}
@@ -396,7 +396,7 @@ const AuthorizedLoiteringAlertCard = (props) => (
 const LineCrossingAlertCard = (props) => (
   <AlertCard
     {...props}
-    icon={lineCrossing}
+    icon={countPersons}
     statusBg="bg-[#FFE4C5]"
     statusText="text-[#EF8000]"
   />

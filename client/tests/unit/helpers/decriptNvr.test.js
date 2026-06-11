@@ -1,12 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-// SKIPPED — the source file `src/helpers/decriptNvr.js` imports `crypto-js`,
-// which is not declared in client/package.json dependencies. Importing the
-// module here fails to resolve. Tracked in:
-//   https://github.com/Globussoft-Technologies/videoraiq-ai/issues/22
-// Unskip once the dependency gap is fixed in product code.
-
-describe.skip("decriptNvr (encrypt / decrypt)", () => {
+describe("decriptNvr (encrypt / decrypt)", () => {
   it("round-trips a plaintext string", async () => {
     const { encrypt, decrypt } = await import(
       "../../../src/helpers/decriptNvr.js"

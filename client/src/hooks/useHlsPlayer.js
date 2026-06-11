@@ -5,7 +5,7 @@ import getAccessToken from "@/utils/getAccessToken";
 export default function useHlsPlayer(
   videoRef,
   url,
-  { autoPlay = true, enabled = true, onError } = {}
+  { autoPlay = true, enabled = true, startDelayMs = 0, onError, onStarted } = {}
 ) {
   const hlsRef = useRef(null);
   const lastUrlRef = useRef("");
@@ -13,6 +13,13 @@ export default function useHlsPlayer(
   const retryTimerRef = useRef(null);
   const liveSyncIntervalRef = useRef(null);
   const isInitializingRef = useRef(false);
+  const startDelayTimerRef = useRef(null);
+
+  // Keep callbacks in refs so they never cause the effect to re-run
+  const onErrorRef = useRef(onError);
+  const onStartedRef = useRef(onStarted);
+  useEffect(() => { onErrorRef.current = onError; }, [onError]);
+  useEffect(() => { onStartedRef.current = onStarted; }, [onStarted]);
 
   useEffect(() => {
     const video = videoRef?.current;
@@ -21,6 +28,11 @@ export default function useHlsPlayer(
     /* ---------------- CLEANUP ---------------- */
     const cleanup = () => {
       hasPlayedRef.current = false;
+
+      if (startDelayTimerRef.current) {
+        clearTimeout(startDelayTimerRef.current);
+        startDelayTimerRef.current = null;
+      }
 
       if (retryTimerRef.current) {
         clearTimeout(retryTimerRef.current);
@@ -56,7 +68,7 @@ export default function useHlsPlayer(
       isInitializingRef.current = false;
       return;
     }
-    
+
     // Prevent double initialization during React StrictMode
     if (isInitializingRef.current) {
       return;
@@ -93,7 +105,7 @@ export default function useHlsPlayer(
 
         maxBufferLength: 2,
         maxMaxBufferLength: 4,
-        backBufferLength: 0, // VERY IMPORTANT
+        backBufferLength: 0,
 
         maxBufferHole: 0.1,
 
@@ -134,12 +146,12 @@ export default function useHlsPlayer(
 
         /*  404 BEFORE PLAYBACK → ERROR + RETRY */
         if (statusCode === 404 && !hasPlayedRef.current) {
-          onError?.("Stream not found (404)");
+          onErrorRef.current?.("Stream not found (404)");
 
           if (!retryTimerRef.current) {
             retryTimerRef.current = setTimeout(() => {
               retryTimerRef.current = null;
-              startPlayer(); //  retry
+              startPlayer();
             }, 2000);
           }
           return;
@@ -148,13 +160,13 @@ export default function useHlsPlayer(
         /*  404 AFTER PLAYBACK → IGNORE */
         if (statusCode === 404 && hasPlayedRef.current) return;
 
-        /* 🛠 MEDIA ERROR → RECOVER */
+        /* MEDIA ERROR → RECOVER */
         if (data.fatal && data.type === Hls.ErrorTypes.MEDIA_ERROR) {
           hls.recoverMediaError();
           return;
         }
 
-        /*  NETWORK ERROR → LIVE RESYNC */
+        /* NETWORK ERROR → LIVE RESYNC */
         if (data.fatal && data.type === Hls.ErrorTypes.NETWORK_ERROR) {
           hls.startLoad(-1);
         }
@@ -170,7 +182,7 @@ export default function useHlsPlayer(
         if (video.readyState < 3 && hlsRef.current) {
           hlsRef.current.startLoad(-1);
         }
-      }, 15000); // every 15s
+      }, 15000);
 
       /* ---------------- AUTOPLAY ---------------- */
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -190,12 +202,22 @@ export default function useHlsPlayer(
       };
     };
 
-    startPlayer();
+    if (startDelayMs > 0) {
+      startDelayTimerRef.current = setTimeout(() => {
+        startDelayTimerRef.current = null;
+        onStartedRef.current?.();
+        startPlayer();
+      }, startDelayMs);
+    } else {
+      onStartedRef.current?.();
+      startPlayer();
+    }
+
     return () => {
       cleanup();
       isInitializingRef.current = false;
     };
-  }, [url, enabled, autoPlay]);
+  }, [url, enabled, autoPlay, startDelayMs]);
 
   return hlsRef;
 }

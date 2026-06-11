@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 
 import { Input } from '@/components/ui/input';
 import {
@@ -30,7 +30,7 @@ import { useFormik } from 'formik';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import AreaSettingsPreview from './AreaSettingsPreview';
-import { updateDetectionSettings } from '../Api/patch';
+import { updateDetectionSettings } from '../Api/put';
 import {
   Tooltip,
   TooltipContent,

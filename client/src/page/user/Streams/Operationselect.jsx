@@ -1,4 +1,4 @@
-import {
+﻿import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -6,7 +6,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { ChevronDown, Circle } from 'lucide-react';
 import { useState } from 'react';
-import { updateBulkCameraSettings } from './Api/pacth';
+import { updateBulkCameraSettings } from './Api/patch';
 import { toast } from 'sonner';
 
 export default function OperationSelect({ selectedIds = [], onBulkUpdate }) {

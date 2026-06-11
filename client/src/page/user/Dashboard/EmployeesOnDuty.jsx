@@ -213,7 +213,7 @@ const EmployeesOnDuty = ({ canEdit, isAccessLogVisible }) => {
       <div
         className={
           !isAccessLogVisible
-            ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 overflow-auto h-[500px] pr-[4px]'
+            ? 'grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-2 overflow-auto h-[500px] pr-[4px]'
             : 'space-y-1.5 overflow-auto h-[500px] pr-[4px]'
         }
         ref={listRef}
@@ -222,7 +222,7 @@ const EmployeesOnDuty = ({ canEdit, isAccessLogVisible }) => {
           <div
             className={
               !isAccessLogVisible
-                ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4'
+                ? 'grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-2 col-span-1 sm:col-span-2 2xl:col-span-3'
                 : 'space-y-1.5 pr-2'
             }
           >
@@ -240,7 +240,7 @@ const EmployeesOnDuty = ({ canEdit, isAccessLogVisible }) => {
                 return (
                   <div
                     key={employee._id}
-                    className={`hover:bg-gray-50 rounded-lg transition-colors cursor-pointer p-1.5 sm:p-2 ${
+                    className={`hover:bg-gray-50 rounded-lg transition-colors cursor-pointer p-1.5 sm:p-2 min-w-0 ${
                       !isAccessLogVisible
                         ? 'flex flex-col items-start'
                         : 'flex items-center'
@@ -307,14 +307,23 @@ const EmployeesOnDuty = ({ canEdit, isAccessLogVisible }) => {
                         } ${loaded ? 'block' : 'hidden'}`}
                       />
                     )}
-                    <div className="flex-1">
-                      <p className="text-[13px] sm:text-[14px] xl:text-[14px] font-[500] text-[#323232]">
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className="text-[13px] sm:text-[14px] xl:text-[14px] font-[500] text-[#323232] truncate"
+                        title={employee?.userName || ''}
+                      >
                         {employee?.userName || ''}
                       </p>
-                      <p className="text-[12px] sm:text-[13px] xl:text-[13px] font-[400] text-[#7a7a7a]">
+                      <p
+                        className="text-[12px] sm:text-[13px] xl:text-[13px] font-[400] text-[#7a7a7a] truncate"
+                        title={employee?.departmentId?.departmentName || ''}
+                      >
                         {employee?.departmentId?.departmentName}
                       </p>
-                      <p className="text-[10px] sm:text-[11px] xl:text-[11px] text-[#7a7a7a] font-[400]">
+                      <p
+                        className="text-[10px] sm:text-[11px] xl:text-[11px] text-[#7a7a7a] font-[400] truncate"
+                        title={employee.email}
+                      >
                         {employee.email}
                       </p>
                     </div>
@@ -325,7 +334,7 @@ const EmployeesOnDuty = ({ canEdit, isAccessLogVisible }) => {
               Array.isArray(employees) &&
               employees.length === 0 ? (
               <div
-                className={`flex items-center justify-center h-[507px] ${!isAccessLogVisible ? 'col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4' : ''}`}
+                className={`flex items-center justify-center h-[507px] ${!isAccessLogVisible ? 'col-span-1 sm:col-span-2 2xl:col-span-3' : ''}`}
               >
                 <p className="text-center text-sm text-gray-400 py-2">
                   No Employees Found
