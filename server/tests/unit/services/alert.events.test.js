@@ -75,6 +75,9 @@ vi.mock("../../../mailService/mail.helper.js", () => ({
     conveyorDetection: vi.fn().mockResolvedValue("sent"),
     crusherDetection: vi.fn().mockResolvedValue("sent"),
     waterSpillageDetection: vi.fn().mockResolvedValue("sent"),
+    vehicleObstruction: vi.fn().mockResolvedValue("sent"),
+    vehicleTypeDetection: vi.fn().mockResolvedValue("sent"),
+    loiteringDetection: vi.fn().mockResolvedValue("sent"),
   },
 }));
 
@@ -388,6 +391,9 @@ describe("triggerAlertOnIncident", () => {
       ["conveyorDetection", "conveyorDetection"],
       ["crusherDetection", "crusherDetection"],
       ["waterSpillageDetection", "waterSpillageDetection"],
+      ["vehicleObstruction", "vehicleObstruction"],
+      ["vehicleTypeDetection", "vehicleTypeDetection"],
+      ["loiteringDetection", "loiteringDetection"],
     ];
 
     for (const [detectionType, mailMethod] of cases) {
