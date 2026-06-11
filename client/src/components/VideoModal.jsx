@@ -86,6 +86,7 @@ const VideoModal = ({
   let totalDetected = 0;
 const [isNavigating, setIsNavigating] = useState(false);
 const [navDirection, setNavDirection] = useState(null);
+const [isCollapsed, setIsCollapsed] = useState(false);
   if (videoData?.objectsDetected) {
     videoData.objectsDetected.forEach((obj) => {
       Object.entries(obj).forEach(([key, value]) => {
@@ -179,7 +180,7 @@ useEffect(() => {
   }
   const stats = [
     {
-      icon: PeopleImg,
+      // icon: PeopleImg,
       value: videoData.unknownCount ? videoData.unknownCount : undefined,
       label: 'Unknown People',
     },
@@ -261,16 +262,28 @@ useEffect(() => {
             )}
 
             {/* {stats.length > 0 && ( */}
-            <div className="absolute bottom-8 left-8 z-10 w-fit max-w-[1200px]">
-  {/* Geometric Container - Transparent but readable */}
-  <div 
-    className="relative bg-slate-950/50 border border-white/20 shadow-2xl overflow-hidden"
-    style={{
-      clipPath: "polygon(0 0, 95% 0, 100% 20%, 100% 100%, 5% 100%, 0 80%)"
-    }}
-  >
-    {/* High-Contrast Left Accent Line */}
-    <div className="absolute left-0 top-0 bottom-0 w-1 bg-sky-400" />
+            <div className="absolute bottom-8 left-8 z-10 w-fit max-w-[1200px] flex items-stretch">
+
+  {/* Geometric Container — always in DOM so bar height stays consistent */}
+  <div className={`relative flex items-stretch`}>
+    {/* Left blue accent bar — fixed height pill, always same size */}
+    <div className="flex items-center mr-1" style={{ alignSelf: 'center' }}>
+      <button
+        onClick={() => setIsCollapsed(prev => !prev)}
+        className="w-4 h-30 bg-sky-400 hover:bg-sky-300 transition-colors cursor-pointer flex items-center justify-center flex-shrink-0 rounded-sm z-10"
+      >
+        {isCollapsed
+          ? <ChevronRight className="w-3 h-3 text-slate-900" />
+          : <ChevronLeft className="w-3 h-3 text-slate-900" />}
+      </button>
+    </div>
+
+    {/* Panel — always in DOM, hidden via width when collapsed */}
+    <div
+      className={`relative bg-slate-950/50 border border-white/20 shadow-2xl overflow-hidden transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 border-0 pointer-events-none' : 'opacity-100'}`}
+      style={!isCollapsed ? { clipPath: "polygon(0 0, 95% 0, 100% 20%, 100% 100%, 5% 100%, 0 80%)" } : {}}
+    >
+    <div className="absolute left-0 top-0 bottom-0 w-0" />
 
     <div className="relative px-10 py-7">
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-10 mb-8">
@@ -342,7 +355,7 @@ useEffect(() => {
                   </span>
                   <div className="flex items-center gap-2.5">
                     <span className="text-sky-400">{stat.icon}</span>
-                    <span className="text-sm font-mono font-bold text-white uppercase">
+                    <span className="text-2xl font-mono font-black text-white uppercase">
                       {stat.value}
                     </span>
                   </div>
@@ -362,8 +375,9 @@ useEffect(() => {
     
     {/* Decorative corner accent */}
     <div className="absolute top-0 right-0 w-12 h-12 bg-white/5 -rotate-45 translate-x-6 -translate-y-6" />
-  </div>
-</div>
+    </div>{/* end panel */}
+  </div>{/* end relative wrapper */}
+</div>{/* end absolute container */}
           </div>
         </div>
       </DialogContent>

@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import StatCards from '../Dashboard/StatCards'; // Assuming StatCards can accept skeleton props or render its own
 import Skeleton from 'react-loading-skeleton'; // Import Skeleton
 import 'react-loading-skeleton/dist/skeleton.css'; // Import Skeleton CSS
@@ -17,7 +18,7 @@ import IncidentCard from './components/IncidentCard';
 import IncidentPagination from './components/IncidentPagination';
 import ReportIncidentModal from './components/ReportIncidentModal';
 import { Button } from '@/components/ui/button';
-import { fetchAllIncidents, fetchIncidentsStats } from './Api/post';
+import { fetchAllIncidents, fetchIncidentsStats, deleteIncidentsByIds } from './Api/post';
 import { useAuth } from '@/context/AuthContext';
 import { DateRangePickerComponent } from '@/components/ui/calendar';
 import { formatDateRange } from '@/utils/formatDateRange';
@@ -25,7 +26,6 @@ import fallbackThumbnail from '@/assets/CounterImg2.png';
 import { markAlertResolved } from '../Dashboard/Api/put';
 import { toast } from 'sonner';
 import AccessDenied from '@/components/AccessDenied';
-import PageLoader from '@/components/PageLoader';
 import { usePermissions } from '@/context/Permission/PermissionContext';
 import { useDashboardFiltersContext } from '@/context/UserContext/DashboardFiltersContext';
 import MultiSelect from '@/components/ui/multiselect';
@@ -33,21 +33,21 @@ import { Switch } from '@/components/ui/switch';
 import AutoRefreshComponent from '../EmployeeLogs/components/AutoRefreshComponent';
 import { getObjectDetectionList } from '../Profile/Api/get';
 import { getAllDetectionsList } from './Api/get';
+import PageLoader from '@/components/PageLoader';
 
 // import { getNvrNames } from '../Cameras/Api/get';
 const PAGE_SIZE = 9;
 
 const Incidents = () => {
-  const { permissions, loading: permissionsLoading } = usePermissions();
+ const { permissions, loading: permissionsLoading } = usePermissions();
   const canView = permissions?.incidents?.view;
   const canEdit = permissions?.incidents?.edit;
 
-  if (permissionsLoading) return <PageLoader />;
-  if (!canView) {
-    return (
-      <AccessDenied message="You don't have permission to view Incidents." />
-    );
-  }
+  const location = useLocation();
+  const isDeleteMode = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.has('delete-incidents');
+  }, [location.search]);
 
   const userDetails = useAuth();
 
@@ -87,6 +87,8 @@ const Incidents = () => {
   const [reportingIncidentId, setReportingIncidentId] = useState(null);
   const [options, setOptions] = useState([]);
   const [isIncidentsFullscreen, setIsIncidentsFullscreen] = useState(false);
+  const [selectedForDelete, setSelectedForDelete] = useState([]);
+  const [deleting, setDeleting] = useState(false);
 
   // const incidentTypeOptions = [
   //   { id: 'Check -In', label: 'Check -In' },
@@ -430,6 +432,31 @@ const Incidents = () => {
 
   //     fetchNvrNames();
   //   }, []);
+  const handleToggleSelectForDelete = (id) => {
+    setSelectedForDelete((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedForDelete.length === 0) return;
+    setDeleting(true);
+    try {
+      const result = await deleteIncidentsByIds(selectedForDelete);
+      if (result?.statusCode === 200 || result?.status === 'success' || result?.message?.toLowerCase().includes('success')) {
+        toast.success('Incidents deleted successfully');
+        setSelectedForDelete([]);
+        await loadData();
+      } else {
+        toast.error(result?.message || 'Failed to delete incidents');
+      }
+    } catch (err) {
+      toast.error('Failed to delete incidents');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleNavigateByIndex = async (globalIndex) => {
     const page = Math.floor(globalIndex / PAGE_SIZE) + 1;
     const indexInPage = globalIndex % PAGE_SIZE;
@@ -440,7 +467,20 @@ const Incidents = () => {
 
       // wait for incidents to load
       const skip = (page - 1) * PAGE_SIZE;
-      const filter = undefined; // or your current filter logic if needed
+      let filter = { incidentTypeFilter: selectedIncidentType };
+      if (dateRange.start && dateRange.end) {
+        const startDate = new Date(dateRange.start);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(dateRange.end);
+        endDate.setHours(23, 59, 59, 999);
+        filter = {
+          ...filter,
+          startDate: `${startDate.getFullYear()}-${(startDate.getMonth() + 1).toString().padStart(2, '0')}-${startDate.getDate().toString().padStart(2, '0')}`,
+          endDate: `${endDate.getFullYear()}-${(endDate.getMonth() + 1).toString().padStart(2, '0')}-${endDate.getDate().toString().padStart(2, '0')}`,
+        };
+      }
+      if (selectedDepartment) filter = { ...filter, department: selectedDepartment };
+      if (selectedLocation) filter = { ...filter, location: selectedLocation };
       const response = await fetchAllIncidents(skip, PAGE_SIZE, filter);
 
       if (response?.status === 200 && Array.isArray(response?.data?.data)) {
@@ -509,6 +549,14 @@ const Incidents = () => {
       }
     }
   }, [isIncidentsFullscreen]);
+  
+  if (permissionsLoading) return <PageLoader />;
+
+  if (!canView) {
+    return (
+      <AccessDenied message="You don't have permission to view Incidents." />
+    );
+  }
 
   return (
     <div
@@ -632,6 +680,22 @@ const Incidents = () => {
       {/* Stat Cards */}
       <StatCards stats={stats} date={dateRange} incidentsPage={true} />
 
+      {/* Delete mode action bar */}
+      {isDeleteMode && (
+        <div className="flex items-center justify-between mb-3 mt-2 px-1">
+          <p className="text-sm text-[#5D5D5D]">
+            {selectedForDelete.length} incident{selectedForDelete.length !== 1 ? 's' : ''} selected
+          </p>
+          <Button
+            onClick={handleDeleteSelected}
+            disabled={selectedForDelete.length === 0 || deleting}
+            className="bg-[#CE241C] hover:bg-[#a81c16] text-white text-sm px-4 py-2 rounded-lg disabled:opacity-50"
+          >
+            {deleting ? 'Deleting...' : 'Delete Selected'}
+          </Button>
+        </div>
+      )}
+
       {/* Video Grid */}
       <div className="grid gap-4 mt-5 grid-cols-1 min-[835px]:grid-cols-2 min-[1119px]:grid-cols-3">
         {loading ? (
@@ -666,9 +730,12 @@ const Incidents = () => {
               onMarkResolved={(newResolved) =>
                 handleMarkResolved(item.id, item.incidentType, newResolved)
               }
-              onClick={() => setSelectedIncident(item)}
+              onClick={() => !isDeleteMode && setSelectedIncident(item)}
               onReport={() => handleReportIncident(item.id)}
               canEdit={canEdit}
+              deleteMode={isDeleteMode}
+              selectedForDelete={selectedForDelete.includes(item.id)}
+              onToggleDelete={() => handleToggleSelectForDelete(item.id)}
             />
           ))
         )}
