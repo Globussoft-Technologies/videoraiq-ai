@@ -1429,14 +1429,9 @@ class NVRService {
         await Camera.bulkWrite(bulkOps);
       }
 
-      // Update camera count (count only added cameras)
-      const addedCount = await Camera.countDocuments({ nvrId, isAdded: true });
-      await NVR.findByIdAndUpdate(nvrId, { cameraCount: addedCount });
-
       // Fetch all updated cameras (including inactive for complete state)
       const cameras = await Camera.find({ nvrId }).setOptions({ includeInactive: true });
 
-      // Update camera count based on isAdded cameras
       const addedCount = await Camera.countDocuments({ nvrId, isAdded: true });
       await NVR.findByIdAndUpdate(nvrId, { cameraCount: addedCount });
 
