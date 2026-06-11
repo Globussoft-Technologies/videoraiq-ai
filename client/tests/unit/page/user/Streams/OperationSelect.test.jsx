@@ -24,15 +24,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 const updateBulkCameraSettings = vi.hoisted(() => vi.fn());
-vi.mock("@/page/user/Streams/Api/pacth", () => ({
+vi.mock("@/page/user/Streams/Api/patch", () => ({
   updateBulkCameraSettings,
   updateNVRById: vi.fn(),
   updateCameraSettingById: vi.fn(),
 }));
-// The product file imports via the relative `./Api/pacth` specifier, so
+// The product file imports via the relative `./Api/patch` specifier, so
 // the path-alias mock above doesn't intercept it. Mirror the mock onto the
-// relative path Vitest will resolve from src/page/user/Streams/.
-vi.mock("../../../../../src/page/user/Streams/Api/pacth", () => ({
+// relative path Vitest will resolve from src/page/user/Streams/. The
+// directory was renamed from the original typo "pacth" -> "patch" in the
+// post-pull product update.
+vi.mock("../../../../../src/page/user/Streams/Api/patch", () => ({
   updateBulkCameraSettings,
   updateNVRById: vi.fn(),
   updateCameraSettingById: vi.fn(),

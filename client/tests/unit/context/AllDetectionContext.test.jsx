@@ -300,7 +300,11 @@ describe("AllDetectionContext", () => {
     expect(updateLogsSoundMock).toHaveBeenCalledWith(true);
   });
 
-  it("toggleMute reverts local state if updateLogsSound rejects", async () => {
+  it("toggleMute keeps the optimistic flip if updateLogsSound rejects", async () => {
+    // Product behaviour (AllDetectionContext.jsx): on persistence failure the
+    // local mute state is NOT reverted — the user's click is treated as the
+    // source of truth for what should be audible right now. The error is
+    // logged and swallowed.
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     fetchLogsSoundMock.mockResolvedValue({
       data: { body: { data: { logsSound: false } } },
@@ -314,8 +318,9 @@ describe("AllDetectionContext", () => {
     await act(async () => {
       await result.current.det.toggleMute();
     });
-    // Optimistic flip then revert -> back to true
-    expect(result.current.det.isMuted).toBe(true);
+    // Optimistic flip stays — initial isMuted was true (logsSound=false),
+    // toggleMute flips to false and the failed persistence does not revert.
+    expect(result.current.det.isMuted).toBe(false);
     spy.mockRestore();
   });
 

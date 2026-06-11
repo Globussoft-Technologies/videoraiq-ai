@@ -22,22 +22,22 @@ function renderAt(pathname) {
 describe("TitleUpdater", () => {
   it("sets the dashboard title for /dashboard", () => {
     renderAt("/dashboard");
-    expect(document.title).toBe("Dashboard | VideoralQ");
+    expect(document.title).toBe("Dashboard | VideoraIQ");
   });
 
   it("sets the root-path title for /", () => {
     renderAt("/");
-    expect(document.title).toBe("VideoralQ | Dashboard");
+    expect(document.title).toBe("VideoraIQ | Dashboard");
   });
 
   it("sets the incidents title for /incidents", () => {
     renderAt("/incidents");
-    expect(document.title).toBe("Incidents | VideoralQ");
+    expect(document.title).toBe("Incidents | VideoraIQ");
   });
 
   it("falls back to the generic title for an unknown path", () => {
     renderAt("/this-route-does-not-exist");
-    expect(document.title).toBe("VideoralQ");
+    expect(document.title).toBe("VideoraIQ");
   });
 
   it("renders nothing in the DOM", () => {

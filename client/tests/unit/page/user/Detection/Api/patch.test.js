@@ -1,7 +1,8 @@
 /**
- * src/page/user/Detection/Api/patch/index.jsx — updateDetectionSettings and
- * enableDetectionSettings both use axios.put (the file is named "patch" but
- * the calls are PUTs).
+ * src/page/user/Detection/Api/put/index.jsx — updateDetectionSettings and
+ * enableDetectionSettings both use axios.put. (Earlier the file lived under
+ * `Api/patch/` despite using PUT; the post-pull product rename moved it
+ * under `Api/put/` to match the verb.)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -12,7 +13,7 @@ const tokenMock = vi.hoisted(() => vi.fn(() => "AUTH_T"));
 vi.mock("@/utils/getAccessToken", () => ({ default: tokenMock }));
 
 const { updateDetectionSettings, enableDetectionSettings } = await import(
-  "../../../../../../src/page/user/Detection/Api/patch/index.jsx"
+  "../../../../../../src/page/user/Detection/Api/put/index.jsx"
 );
 
 beforeEach(() => {

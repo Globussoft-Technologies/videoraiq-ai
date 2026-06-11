@@ -133,7 +133,7 @@ describe("deleteCookie helper", () => {
 });
 
 describe("IsAuth component", () => {
-  it("renders nothing (just an empty loading div) while still checking access", () => {
+  it("does not leak children when unauthenticated (returns null after the loading flush)", () => {
     cookiesGet.mockReturnValue(undefined);
     getAccessTokenMock.mockReturnValue(null);
     const { container } = render(
@@ -141,9 +141,11 @@ describe("IsAuth component", () => {
         <div data-testid="child">child</div>
       </IsAuth>
     );
-    // No access token + no amember cookies -> navigates to LOGIN_REDIRECT and
-    // stays in the loading div before access is granted.
-    expect(container.firstChild).not.toBeNull();
+    // No access token + no amember cookies -> the mount effect synchronously
+    // sets isLoading=false and the unauth render branch returns `null` (the
+    // empty-loading `<div></div>` is only momentarily painted before the
+    // effect flush). What matters for the contract is that the protected
+    // children are never exposed to an unauthenticated user.
     expect(screen.queryByTestId("child")).not.toBeInTheDocument();
   });
 

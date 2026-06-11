@@ -69,12 +69,14 @@ describe("layout/Sidebar/LogsSidebar", () => {
 
   it("renders every base item while permissions are still loading", () => {
     // permissionsLoading=true should bypass the per-item filter so the
-    // sidebar isn't blank during the initial fetch.
+    // sidebar isn't blank during the initial fetch. Under the default
+    // (non-vehicle) client variant ANPR Logs is commented out of the base
+    // list, leaving Attendance + Access.
     setPerms({}, true);
     renderAt("/logs/attendance");
     expect(screen.getByText("Attendance Logs")).toBeInTheDocument();
     expect(screen.getByText("Access Logs")).toBeInTheDocument();
-    expect(screen.getByText("ANPR Logs")).toBeInTheDocument();
+    expect(screen.queryByText("ANPR Logs")).not.toBeInTheDocument();
   });
 
   it("filters items by their per-section logs.<key>.view flag", () => {
@@ -82,13 +84,11 @@ describe("layout/Sidebar/LogsSidebar", () => {
       logs: {
         attendanceLogs: { view: true },
         accessLogs: { view: false },
-        ANPRLogs: { view: true },
       },
     });
     renderAt("/logs/attendance");
     expect(screen.getByText("Attendance Logs")).toBeInTheDocument();
     expect(screen.queryByText("Access Logs")).not.toBeInTheDocument();
-    expect(screen.getByText("ANPR Logs")).toBeInTheDocument();
   });
 
   it("does NOT fall back to flat logs.view when nested sections exist", () => {
@@ -111,7 +111,6 @@ describe("layout/Sidebar/LogsSidebar", () => {
     renderAt("/logs/attendance");
     expect(screen.getByText("Attendance Logs")).toBeInTheDocument();
     expect(screen.getByText("Access Logs")).toBeInTheDocument();
-    expect(screen.getByText("ANPR Logs")).toBeInTheDocument();
   });
 
   it("returns null (no rail) when every item is filtered out", () => {
@@ -137,7 +136,7 @@ describe("layout/Sidebar/LogsSidebar", () => {
   it("navigates to the item's route when clicked", () => {
     setPerms({ logs: { view: true } });
     renderAt("/logs/attendance");
-    fireEvent.click(screen.getByText("ANPR Logs"));
-    expect(navigateSpy).toHaveBeenCalledWith("/logs/ANPR");
+    fireEvent.click(screen.getByText("Access Logs"));
+    expect(navigateSpy).toHaveBeenCalledWith("/logs/access");
   });
 });

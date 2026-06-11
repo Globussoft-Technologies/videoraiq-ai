@@ -1,7 +1,9 @@
 /**
- * src/page/user/Streams/Api/pacth/index.jsx — note the typo ("pacth").
- * Contains updateNVRById (PATCH), updateCameraSettingById (PUT) and
- * updateBulkCameraSettings (PUT).
+ * src/page/user/Streams/Api/patch/index.jsx — contains updateNVRById
+ * (PATCH), updateCameraSettingById (PUT) and updateBulkCameraSettings
+ * (PUT). The directory was renamed from the original typo "pacth" -> "patch"
+ * in the post-pull product update; this test file keeps its historical name
+ * (pacth.test.js) so coverage history stays continuous.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -19,7 +21,7 @@ const {
   updateCameraSettingById,
   updateBulkCameraSettings,
 } = await import(
-  "../../../../../../src/page/user/Streams/Api/pacth/index.jsx"
+  "../../../../../../src/page/user/Streams/Api/patch/index.jsx"
 );
 
 beforeEach(() => {

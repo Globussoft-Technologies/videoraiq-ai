@@ -18,10 +18,19 @@ const mockSetSelectedVideo = vi.fn();
 const mockSetStreamModalShow = vi.fn();
 const allDetectionsMock = vi.hoisted(() => ({ value: [] }));
 
+// VideoCanvasStream is the source-of-truth for whether the parent's
+// click-to-open handler is gated (CameraStreamDisplay seeds
+// `isInteractionDisabled = true` and flips it only when this child invokes
+// `onInteractionDisabledChange(false)`). The mock simulates a ready stream by
+// firing that callback once on mount so click-driven tests can exercise the
+// openModal path.
 vi.mock("../../../../../../src/page/user/Dashboard/VideoCanvasStream.jsx", () => ({
-  default: ({ label, cameraId }) => (
-    <div data-testid="canvas-stream">{`${label}|${cameraId}`}</div>
-  ),
+  default: ({ label, cameraId, onInteractionDisabledChange }) => {
+    React.useEffect(() => {
+      onInteractionDisabledChange?.(false);
+    }, [onInteractionDisabledChange]);
+    return <div data-testid="canvas-stream">{`${label}|${cameraId}`}</div>;
+  },
 }));
 vi.mock("@/utils/DynamicDateTime", () => ({
   default: () => <span data-testid="datetime" />,

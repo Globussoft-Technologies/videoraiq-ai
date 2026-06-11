@@ -9,11 +9,18 @@
  * + dbId). The Save button computes diff sets (toAdd = newly checked,
  * toRemove = previously added but now unchecked), short-circuits with an
  * "No changes made" info toast + onClose when both lists are empty,
- * otherwise calls addSelectedCameras for the additions and per-camera
- * removeCamera(String(dbId)) for the removals, surfacing per-error toasts
- * on partial failures, success toast + onSaved + onClose on a clean run.
+ * otherwise sends the FULL current selection in one call —
+ *   addSelectedCameras({ nvrId, cameraIds: Array.from(selected) })
+ * — backend reconciles by marking any omitted previously-added cameras as
+ * removed. On success it toasts a parts-joined message ("N camera(s) added",
+ * "M camera(s) removed", or both) + onSaved + onClose. On a non-success
+ * response body it surfaces the error message and skips onSaved/onClose.
  * Cancel just calls onClose; the top-right X close-button also calls
  * onClose. While saving the Save button shows a "Saving..." label.
+ *
+ * (Post-pull rewrite: the old "per-removal removeCamera(dbId)" path was
+ * removed in favour of a single bulk POST. Tests that previously asserted
+ * removeCamera() calls were re-pinned accordingly.)
  *
  * Branches we exercise:
  *   - loading branch shows the Loader2 spinner (no camera rows yet)
@@ -21,10 +28,10 @@
  *   - populated branch lists each camera with its Added pill iff isAdded
  *   - checkbox toggle updates the selected set
  *   - Save with no diff fires the "No changes made" info toast + onClose
- *   - Save with toAdd only calls addSelectedCameras with the new entries
- *     then toasts success + onSaved + onClose
- *   - Save with toRemove only calls removeCamera(String(dbId)) once per
- *     removed camera then toasts the removal-success message
+ *   - Save with toAdd only calls addSelectedCameras with the new selection
+ *     then toasts "N camera added" + onSaved + onClose
+ *   - Save with toRemove only sends a shrunken cameraIds list and toasts
+ *     "M camera removed"
  *   - Save error path: a non-success response from addSelectedCameras
  *     toasts the body.message error and skips onSaved + onClose
  *   - fetch failure: GET throws -> "Failed to load cameras from NVR"
@@ -35,9 +42,9 @@
  *   1) axios (named .get used for the initial GET)
  *   2) sonner toast (success / error / info)
  *   3) ./Api/post (addSelectedCameras)
- *   4) ./Api/delete (removeCamera)
+ *   4) @/hooks/useHlsPlayer (CameraPreviewModal child uses it; stubbed no-op)
  *   5) @/utils/getAccessToken
- *   6) lucide-react (Loader2 + X passthrough to keep DOM lean)
+ *   6) lucide-react (Loader2 + X + Play + Maximize2 + Minimize2 sentinels)
  *   7) @/components/ui/button (plain <button> passthrough so disabled flips
  *      pass through naturally)
  */
@@ -49,27 +56,27 @@ const {
   mockAxiosGet,
   mockToast,
   mockAddSelectedCameras,
-  mockRemoveCamera,
 } = vi.hoisted(() => ({
   mockAxiosGet: vi.fn(),
   mockToast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
   mockAddSelectedCameras: vi.fn(),
-  mockRemoveCamera: vi.fn(),
 }));
 
 vi.mock("axios", () => ({ default: { get: (...args) => mockAxiosGet(...args) } }));
 
 vi.mock("sonner", () => ({ toast: mockToast }));
 
+// Product file imports via the bare specifier `./Api/post` (no /index.jsx
+// extension), so the relative mock path must match exactly what Vite
+// resolves from src/page/user/Streams/.
 vi.mock(
-  "../../../../../src/page/user/Streams/Api/post/index.jsx",
+  "../../../../../src/page/user/Streams/Api/post",
   () => ({ addSelectedCameras: (...args) => mockAddSelectedCameras(...args) })
 );
 
-vi.mock(
-  "../../../../../src/page/user/Streams/Api/delete/index.jsx",
-  () => ({ removeCamera: (...args) => mockRemoveCamera(...args) })
-);
+vi.mock("@/hooks/useHlsPlayer", () => ({
+  default: () => {},
+}));
 
 vi.mock("../../../../../src/utils/getAccessToken.js", () => ({
   default: () => "tok-test",
@@ -78,6 +85,10 @@ vi.mock("../../../../../src/utils/getAccessToken.js", () => ({
 vi.mock("lucide-react", () => ({
   X: (props) => <span data-testid="icon-x" {...props} />,
   Loader2: (props) => <span data-testid="icon-loader" {...props} />,
+  // Added by the post-pull preview-stream UI on Added cameras.
+  Play: (props) => <span data-testid="icon-play" {...props} />,
+  Maximize2: (props) => <span data-testid="icon-maximize" {...props} />,
+  Minimize2: (props) => <span data-testid="icon-minimize" {...props} />,
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -103,7 +114,6 @@ const okFetchResponse = (cams = fakeAvailable) => ({
 beforeEach(() => {
   mockAxiosGet.mockReset();
   mockAddSelectedCameras.mockReset();
-  mockRemoveCamera.mockReset();
   mockToast.success.mockReset();
   mockToast.error.mockReset();
   mockToast.info.mockReset();
@@ -188,7 +198,6 @@ describe("Streams/CameraDiscoveryModal", () => {
     );
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(mockAddSelectedCameras).not.toHaveBeenCalled();
-    expect(mockRemoveCamera).not.toHaveBeenCalled();
     expect(onSaved).not.toHaveBeenCalled();
   });
 
@@ -213,12 +222,15 @@ describe("Streams/CameraDiscoveryModal", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Save$/ }));
 
     await waitFor(() => expect(mockAddSelectedCameras).toHaveBeenCalledTimes(1));
+    // Post-pull: one bulk POST carrying the full current selection (the
+    // backend reconciles additions vs. removals from the merged list).
     const [arg] = mockAddSelectedCameras.mock.calls[0];
     expect(arg.nvrId).toBe("nvr-1");
-    expect(arg.cameras).toHaveLength(1);
-    expect(arg.cameras[0].channelId).toBe(1);
+    // After ticking the newly-checked Lobby Cam (channelId 1) on top of the
+    // already-added Garage Cam (channelId 2), cameraIds carries both.
+    expect(arg.cameraIds).toEqual(expect.arrayContaining([1, 2]));
+    expect(arg.cameraIds).toHaveLength(2);
 
-    expect(mockRemoveCamera).not.toHaveBeenCalled();
     await waitFor(() =>
       expect(mockToast.success).toHaveBeenCalledWith("1 camera added")
     );
@@ -226,9 +238,9 @@ describe("Streams/CameraDiscoveryModal", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("Save with newly-unchecked cameras calls removeCamera(String(dbId)) once per removal", async () => {
+  it("Save with newly-unchecked cameras posts the shrunken selection and toasts the removal summary", async () => {
     mockAxiosGet.mockResolvedValue(okFetchResponse());
-    mockRemoveCamera.mockResolvedValue({
+    mockAddSelectedCameras.mockResolvedValue({
       data: { body: { status: "success" } },
     });
     const onClose = vi.fn();
@@ -246,9 +258,13 @@ describe("Streams/CameraDiscoveryModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^Save$/ }));
 
-    await waitFor(() => expect(mockRemoveCamera).toHaveBeenCalledTimes(1));
-    expect(mockRemoveCamera).toHaveBeenCalledWith("db-2");
-    expect(mockAddSelectedCameras).not.toHaveBeenCalled();
+    // Single bulk call with the now-empty selection — the previously added
+    // Garage Cam is conspicuously absent from cameraIds, signalling removal.
+    await waitFor(() => expect(mockAddSelectedCameras).toHaveBeenCalledTimes(1));
+    const [arg] = mockAddSelectedCameras.mock.calls[0];
+    expect(arg.nvrId).toBe("nvr-1");
+    expect(arg.cameraIds).toEqual([]);
+
     await waitFor(() =>
       expect(mockToast.success).toHaveBeenCalledWith("1 camera removed")
     );
