@@ -1436,9 +1436,14 @@ class NVRService {
       // Fetch all updated cameras (including inactive for complete state)
       const cameras = await Camera.find({ nvrId }).setOptions({ includeInactive: true });
 
+      // Update camera count based on isAdded cameras
+      const addedCount = await Camera.countDocuments({ nvrId, isAdded: true });
+      await NVR.findByIdAndUpdate(nvrId, { cameraCount: addedCount });
+
       return res.status(200).json(
         Response.userSuccessResp("Cameras selection updated successfully", {
           cameras,
+          cameraCount: addedCount,
         }),
       );
     } catch (error) {

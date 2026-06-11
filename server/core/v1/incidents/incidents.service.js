@@ -32,6 +32,7 @@ import {
   GuardAbsenceIncident,
   ConveyorDetectionIncident,
   CrusherDetectionIncident,
+  VehicleTypeDetectionIncident,
   WaterSpillageDetectionIncident,
   VehicleTypeDetectionIncident,
   LoiteringDetectionIncident
