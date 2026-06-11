@@ -3,7 +3,89 @@
 > Pick-up document for the testing initiative. Read this first, then jump to
 > the wave you want. Last refreshed: **2026-05-26**.
 
-## TL;DR — what changed on 2026-05-26 (R104 — 3-phase round +47 tests; **database.js 100%; PrivateRoute covered; orchestrator/_shm_mixin 100% (12th new module — first POST-recovery pivot to `orchestrator/`)**)
+## 🚀 2026-05-26 — 100%-coverage campaign session (post-R104)
+
+User redirected the cron from incremental 1-2-tests-per-phase to a
+**drive-to-100%-coverage campaign**. Mock cap LIFTED, per-round budget
+LIFTED. Strict QA only — tests + bug-issues, no product fixes.
+Unreachable code (GPU/Triton/CUDA/ffmpeg/multiprocess/C++ ext) gets
+documented exclusions.
+
+### Coverage delta (campaign session, post-pull)
+
+| suite | session start | session end | Δ | notes |
+|---|---|---|---|---|
+| **server** | 87.68% | **88.61%** | +0.93pp | would be ~92% once #147+#148 unblock 8 tests |
+| **client** | 73.72% | **78.91%** | +5.19pp | 21 files swept across r1+r2; 165 new tests |
+| **cv-faceauth** | 17% | **70%** | **+53pp** | ~20,400 statements newly covered; 47 unreachable files in EXCLUSIONS |
+| **streaming** | ~95% | ~95% | 0 | practical ceiling held; +1 test pinning handleCamera PUT |
+
+### Phase-by-phase
+
+**Phase 1 — Stabilization (post-pull triage):** 78 broken tests across server/client/cv-faceauth fixed.
+- Server: 5 fails → 0 (`1be5392`); 4 re-pins + #145 skip (priv-only dashboard regression vs public `d81654f`).
+- Client: 20 fails + 6 errors → 0 (`9f28b13` / `c9046ea`); 9 test files re-pinned to renamed paths + branding fix.
+- cv-faceauth: 12 fails + 41 errors → 0 (`a0ef1f6`); all re-pinned against the `59adc4c`-refactor contract.
+
+**Phase 2 — Coverage baseline:** see table above.
+
+**Phase 3 — cv-faceauth EXCLUSIONS ledger (`e94b57c`):**
+- 100 product .py files surveyed → **47 UNREACHABLE / 53 REACHABLE**.
+- Excluded: GPU/Triton/CUDA bindings (`processor/tracker.py +813 LOC`, all `_triton.py` files), real ffmpeg pipelines, real-multiprocess spawn seams, C++ extension wrappers (`ring_buffer_cpp/python/`), top-level diagnostic scripts (`diag_*`, `benchmark_*`, top-level `test_*.py`), 11 orchestrator pipeline classes (real Triton dispatch).
+- See `cv-faceauth/EXCLUSIONS.md`.
+
+**Phase 4 — Server gap-fill** (`3eaa02b` → `5974ff4`; +49 tests):
+- 100% achieved: `utils/logger.js`, `utils/sftpConnectionCheck.js`, `utils/rtspStream.js`, `shifts.service.js`, `vehicle.service.js`.
+- 95-98%: `newSFTPConnectionCheck.js` 54%→95% (rest UNREACHABLE — module-private API), `profiles.service.js` 93→98%, `storage.service.js` 93→95%, `permissions.utility.js` 97→98%, `roles.service.js` 94→95%.
+- 8 tests written for `incidents.service.js` + `incidents.model.js` + `users.service.js` **blocked by #147/#148** — will auto-pass on product-side fix.
+
+**Phase 5 — Client gap-fill r1+r2** (`47f0825` → `bf1d301`, mirrored; +165 tests):
+- r1: 14 small files swept. Notable 100%s: `Streams/Api/post`, `Streams/Api/delete`, `AttendanceCheckLog`, `CameraStreamDisplay branches`, `CameraStreamWithDetection branches`, `EditCameraInfo`, `ZoneSelector`.
+- r2: 7 large pages: `RolesandPermission` 23%→**99%**, `UserDetails` 24%→**99%**, `Streams.jsx` 41%→**100%**, `Cameraview` 45%→**90%**, `StreamModal` 61%→**97%** (+1 #149 skip), `Camerasettings` 20%→**87%**, `EmployeeRegister` (priv-only) 54%→**90%**.
+
+**Phase 6 — cv-faceauth REACHABLE sweep (3 parallel agents):**
+- *api/pipelines* (`97b50a9` → `e8871eb`; +42 new + 30+ re-pinned): `pipelines/registry.py` 31%→**100%**, `api/registration_router.py` 24%→**62%**, `api/face_auth_api.py` 47%→**63%**, `api/face_auth_onfly_api.py` 64%→**77%**. Re-pinned routes against shard-manager refactor + FaceRegisterRequest field changes.
+- *workers/core* (`af396fe` → `3637743`; +130 tests): `core/domains.py` 41%→**100%**, `workers/recognition_jobs.py` 38%→**100%**, `workers/recognition_consumer.py` 16%→**100%**, `workers/api_clients.py` 90%→**100%**, `workers/redis_dispatcher.py` 88%→**100%**, `core/memory_monitor.py` 95%→**100%**, `core/redis_client.py` 95%→**100%**, `workers/nas_uploader.py` 86%→**93%**.
+- *stream/processor* (`2c42913` → `e5e33ec`; +103 tests + 10 re-pinned): `processor/detection_cache.py` 0%→**100%**, `stream/base.py` 75%→**100%**, `recognition/qdrant_client.py` 93%→**100%**, `processor/batch_processor.py` 54%→**100%** (also re-pinned to async-flush), `processor/visualization.py` 11%→**100%** (cv2.* args validated), `recognition/local_matcher.py` 91%→**98%**, `stream/frame_source.py` 17%→**64%** (ShmFrameSource portion stays UNREACHABLE).
+
+**Phase 7 — Streaming gap-fill** (`a3d5a73`; +1 test):
+- 1 new test pinning previously-uncovered `handleCamera` PUT goroutine arm.
+- Confirmed practical ceiling: `cmd/server/main.go` UNREACHABLE (bootstrap entry), `internal/stream` UNREACHABLE (real ffmpeg + AppLocker-blocked on dev box), various defensive guards on impossible inputs, ticker goroutines without shutdown hooks.
+
+### 🚨 New product bugs filed this session (5)
+
+| # | severity | file | issue |
+|---|---|---|---|
+| **#145** | medium (priv-only) | `dashboard.service.js` | `totalAlerts`/`criticalAlerts` countDocuments calls re-assign `incidentType` after spreading `userMatch`, clobbering the user filter. Public has the fix (`d81654f`); private is missing it. |
+| **#146** | low (test cleanup) | `face_auth_api_routes` | 8 register-face route tests patch the old `face_auth_api.cv2` path; registration moved to `registration_router.py`. New coverage exists in `test_api_registration_router.py`. |
+| **#147** | **CRITICAL** | `incidents.model.js:421-426` | Byte-identical duplicate declaration of `VehicleTypeDetectionSchema` + `VehicleTypeDetectionIncident` (also at `:401-406`). Causes `SyntaxError: Identifier already declared` on import — blocks 60 test files. Fix: delete `:421-426`. |
+| **#148** | **CRITICAL** | `nvr.service.js:1433`/`:1440` | Duplicate `const addedCount` in same function scope. Same merge-artifact pattern as #147. Fix: delete one of the two lines. |
+| **#149** | medium | `StreamModal.jsx vehicleCount useMemo` | Unconditionally calls `.reduce()` on `det.objectsDetected` for `genericObjectDetection` events, crashing the whole modal on malformed payloads. The lower stats handler already guards with `Array.isArray`; the memo should too. |
+
+### Open bug count after this session
+
+- **21 product**: #97-#102, #104-#105, #107 (WIP), #108, #112, #114, #116, #117 (PR merged but caused #147+#148 regressions), #120, #121, **#145**, **#146**, **#147**, **#148**, **#149**
+- **1 process** (#103)
+- **Total open: 22**
+
+### Push verification
+
+All 40+ commits this session pushed with `## main...origin/main` verified (no silent push failures). 4 parallel sweep agents collided on cv-faceauth test files at one point (R65-style race) — the api-sweep agent recovered by re-applying edits in tight loops.
+
+### Cumulative tests authored this session
+
+**~600 new tests / re-pins** across 4 suites + 40+ commits. Largest deltas: cv-faceauth (+~20,400 statements covered), client (+165 tests for ~5pp gain).
+
+### Unreachable surface — documented
+
+- **cv-faceauth**: 47 files / ~12,540 statements (see `EXCLUSIONS.md`).
+- **streaming**: `cmd/server` + `internal/stream` (ffmpeg/AppLocker).
+- **client**: ~6 documented in-code-UNREACHABLE branches (commented-out tooltip handlers, dead else-branches, no-setter-wired state).
+- **server**: `newSFTPConnectionCheck.js` module-private cleanup-prune loop reachable only via internal `release()`; some defensive `.catch()` arms swallow errors before propagation.
+
+---
+
+## Prior TL;DR — R104 (kept for context, +47 tests; **database.js 100%; PrivateRoute covered; orchestrator/_shm_mixin 100% (12th new module — first POST-recovery pivot to `orchestrator/`)**)
 
 - **server** — `utils/database.js` (26-LOC connectDB + module-scope
   Redis client wiring). New `server/tests/unit/utils/database.test.js`
