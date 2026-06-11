@@ -75,9 +75,14 @@ vi.mock("@/context/UserContext/DashboardFiltersContext", () => ({
   useDashboardFiltersContext: () => dashboardFiltersRef.value,
 }));
 
+vi.mock("react-router-dom", () => ({
+  useLocation: () => ({ search: "" }),
+}));
+
 vi.mock("../../../../../src/page/user/Incidents/Api/post", () => ({
   fetchAllIncidents: (...a) => fetchAllIncidentsMock(...a),
   fetchIncidentsStats: (...a) => fetchIncidentsStatsMock(...a),
+  deleteIncidentsByIds: vi.fn().mockResolvedValue({ status: "success" }),
 }));
 
 vi.mock("../../../../../src/page/user/Incidents/Api/get", () => ({

@@ -149,7 +149,7 @@ describe("VideoModal", () => {
   });
 
   it("hides nav arrows when there's only a single incident", () => {
-    render(
+    const { container } = render(
       <VideoModal
         isOpen={true}
         onClose={() => {}}
@@ -161,11 +161,16 @@ describe("VideoModal", () => {
         onNavigateByIndex={() => {}}
       />
     );
-    // The Report button is always present, so we expect at least 1 button
-    // but no chevron-styled prev/next buttons. Only close + report.
+    // Round 4 re-pin: VideoModal now mounts a side-panel collapse button
+    // in addition to close + report (3 buttons when single incident vs 5+
+    // when nav arrows render). The presence of ChevronLeft/ChevronRight
+    // icons via the prev/next arrows is the more direct invariant: when
+    // there's only one incident the dedicated nav-arrow buttons should
+    // not be rendered, but the panel-collapse chevron may still appear.
+    // We assert button count stays at or below 3 (close + report +
+    // collapse) — strictly fewer than the 5 we'd see with nav arrows.
     const buttons = screen.getAllByRole("button");
-    // close + report => 2; nav arrows would push to 3+.
-    expect(buttons.length).toBeLessThan(3);
+    expect(buttons.length).toBeLessThanOrEqual(3);
   });
 
   it("renders next arrow and invokes onNavigateByIndex with the next global index", async () => {

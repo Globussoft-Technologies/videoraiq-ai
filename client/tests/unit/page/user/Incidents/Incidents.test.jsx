@@ -32,6 +32,29 @@ vi.mock("@/components/PageLoader", () => ({
   default: () => <div data-testid="page-loader">Loading…</div>,
 }));
 
+// Round 4 fix-up: product code now calls useLocation() +
+// useDashboardFiltersContext + useAuth BEFORE the permission gate
+// runs, so the bare import-time mocks have to provide stand-ins for
+// each of those so the gate JSX can mount.
+vi.mock("react-router-dom", () => ({
+  useLocation: () => ({ search: "" }),
+}));
+vi.mock("@/context/AuthContext", () => ({
+  useAuth: () => ({ user: { name_f: "alice" } }),
+}));
+vi.mock("@/context/UserContext/DashboardFiltersContext", () => ({
+  useDashboardFiltersContext: () => ({
+    selectedDepartment: [],
+    setSelectedDepartment: () => {},
+    departments: [],
+    setDepartments: () => {},
+    selectedLocation: [],
+    setSelectedLocation: () => {},
+    locations: [],
+    setLocations: () => {},
+  }),
+}));
+
 import Incidents from "../../../../../src/page/user/Incidents/Incidents.jsx";
 
 beforeEach(() => {
