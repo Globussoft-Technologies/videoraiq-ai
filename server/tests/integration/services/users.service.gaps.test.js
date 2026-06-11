@@ -75,7 +75,7 @@ const { deleteAuthorizedUserById } = await import(
   "../../../core/v1/users/users.service.js"
 );
 const authorizedUsers = (
-  await import("../../../core/v1/AuthorizedUsers/authorizedUsers.model.js")
+  await import("../../../core/v1/authorizedUsers/authorizedUsers.model.js")
 ).default;
 
 beforeAll(async () => {
