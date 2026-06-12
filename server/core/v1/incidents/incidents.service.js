@@ -34,7 +34,6 @@ import {
   CrusherDetectionIncident,
   VehicleTypeDetectionIncident,
   WaterSpillageDetectionIncident,
-  VehicleTypeDetectionIncident,
   LoiteringDetectionIncident
 } from "./incidents.model.js";
 const modelMap = {
