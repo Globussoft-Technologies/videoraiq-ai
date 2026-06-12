@@ -1,0 +1,166 @@
+name: videoraiq-api CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - '.github/workflows/deploy-videoraiq-api.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - '.github/workflows/deploy-videoraiq-api.yml'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry-run: rsync --dry-run, no pm2 restart'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('videoraiq-api-pr-{0}', github.ref) || 'videoraiq-api-deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci:
+    name: CI (install + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+        # No `cache: npm` — update to `cache: npm` once a package-lock.json is committed.
+
+      - name: Install deps
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      # - name: Test
+      #   # Hard-fail: a failing test fails the ci job, and `deploy` has
+      #   # `needs: ci`, so deploy is skipped unless tests pass. These are
+      #   # unit tests — if any need a live DB/Redis the runner doesn't have,
+      #   # flip this to `npm run test || true` or add a service container.
+      #   run: npm run test
+
+      # No build step: videoraiq-api is a plain Node server,
+      # nothing to compile.
+
+  deploy:
+    name: Deploy to dev server
+    needs: ci
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      # Per-service server + login -> repo Secrets, prefixed VIDEORAIQ_API_*.
+      # The login user MUST be the unix user that owns REMOTE_PATH and runs
+      # pm2 — we run everything directly as them, no sudo.
+      REMOTE_HOST: ${{ secrets.VIDEORAIQ_API_DEPLOY_HOST }}
+      REMOTE_USER: ${{ secrets.VIDEORAIQ_API_DEPLOY_USER }}
+      # Per-service values -> repo Variables, prefixed VIDEORAIQ_API_*.
+      # Set them in Settings -> Secrets and variables -> Actions -> Variables.
+      REMOTE_PATH: ${{ vars.VIDEORAIQ_API_REMOTE_PATH }}    # absolute path the app lives in on the server
+      PM2_PROCESS: ${{ vars.VIDEORAIQ_API_PM2_PROCESS }}    # pm2 process NAME (pm2 list) to restart
+      APP_PORT: ${{ vars.VIDEORAIQ_API_APP_PORT }}          # port the API listens on (health check)
+      DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate service config
+        # Fail fast with a clear message if a per-service Variable is unset,
+        # instead of rsync-ing into an empty path or grepping an empty port.
+        run: |
+          missing=0
+          for v in REMOTE_PATH PM2_PROCESS APP_PORT; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Variable VIDEORAIQ_API_${v} is not set (Settings -> Secrets and variables -> Actions -> Variables)"
+              missing=1
+            fi
+          done
+          [ "$missing" = "0" ]
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VIDEORAIQ_API_DEPLOY_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          if [ -n "${{ secrets.VIDEORAIQ_API_DEPLOY_KNOWN_HOSTS }}" ]; then
+            echo "${{ secrets.VIDEORAIQ_API_DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+            chmod 644 ~/.ssh/known_hosts
+          fi
+          cat >> ~/.ssh/config <<EOF
+          Host deploy
+            HostName $REMOTE_HOST
+            User $REMOTE_USER
+            IdentityFile ~/.ssh/deploy_key
+            StrictHostKeyChecking accept-new
+            ConnectTimeout 30
+            ServerAliveInterval 30
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Sanity-check SSH + server state
+        run: |
+          ssh deploy "hostname; id; test -d $REMOTE_PATH && echo 'REMOTE_PATH ok' || (echo 'REMOTE_PATH missing!'; exit 2)"
+          ssh deploy "test -f $REMOTE_PATH/.env && echo 'server .env present' || echo 'WARNING: no .env on server — the API may fail to start (DB/Redis creds, PORT, etc.)'"
+
+      - name: Rsync source
+        run: |
+          RSYNC_FLAGS="-avz --human-readable"
+          if [ "$DRY_RUN" = "true" ]; then
+            RSYNC_FLAGS="$RSYNC_FLAGS --dry-run"
+            echo "### DRY RUN — no files will be written ###"
+          fi
+          rsync $RSYNC_FLAGS \
+            --exclude='node_modules/' \
+            --exclude='coverage/' \
+            --exclude='logs/' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='*.log' \
+            --exclude='*.sqlite' \
+            --exclude='*.sqlite3' \
+            --exclude='*.db' \
+            server/ \
+            deploy:"$REMOTE_PATH/"
+
+      - name: Install dependencies on server
+        if: env.DRY_RUN != 'true'
+        run: |
+          ssh deploy "bash -lc '\
+            source ~/.nvm/nvm.sh && \
+            cd $REMOTE_PATH && \
+            npm install --no-audit --no-fund'"
+
+      # No build step on the server either — plain Node server.
+
+      - name: Restart pm2 process
+        if: env.DRY_RUN != 'true'
+        run: |
+          ssh deploy "bash -lc '\
+            source ~/.nvm/nvm.sh && \
+            pm2 restart $PM2_PROCESS --update-env && \
+            pm2 save'"
+
+      - name: Health check
+        if: env.DRY_RUN != 'true'
+        run: |
+          sleep 5
+          # `ss` without sudo/-p: no root needed, we only need to see the port bound.
+          ssh deploy "ss -tln | grep ':$APP_PORT ' || (echo 'port $APP_PORT not listening'; exit 3)"
+          ssh deploy "curl -sS -o /dev/null -w '%{http_code}\n' --max-time 10 http://127.0.0.1:$APP_PORT/health || (echo 'API /health not reachable'; exit 4)"
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
