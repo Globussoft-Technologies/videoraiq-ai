@@ -36,3 +36,17 @@ export const updateIncidentReportStatus = async (data) => {
     });
     return response?.data?.body;
 };
+
+export const deleteIncidentsByIds = async (selectedForDelete) => {
+  const token = getAccessToken();
+  const response = await axios.delete(`${HOST}/api/v1/incidents/delete-by-incidentIds`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+    data: {
+      incidentIds: selectedForDelete,
+    },
+  });
+  return response?.data;
+};

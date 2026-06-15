@@ -46,6 +46,11 @@ const Header = () => {
       const userId = decodedToken?.user_id;
       
       if (!userId) return false;
+
+      // Hide playback module specifically for user ID 42
+      if (String(userId) === '42') {
+        return true;
+      }
       
       // Parse the comma-separated user IDs from env variable
       const hiddenUserIds = HIDE_PLAYBACK_FEATURE.split(',').map(id => id.trim()).filter(id => id);
@@ -90,7 +95,7 @@ const Header = () => {
     if (permissionKey === 'logs') {
       const logs = permissions?.logs;
       if (!logs) return false;
-      if (typeof logs.global.view === 'boolean') return logs.global.view === true;
+      if (typeof logs?.global?.view === 'boolean') return logs.global.view === true;
       return Object.values(logs).some((v) => v?.view === true);
     }
     return permissions?.[permissionKey]?.view === true;

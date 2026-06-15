@@ -316,10 +316,10 @@ useEffect(() => {
       }
     }
     if (Array.isArray(pointsArr) && cameraStreamRef.current && !initialPointsLoaded) {
-      // Convert array of [x, y] to array of {x, y}
-      const formattedPoints = pointsArr.map(pt => ({ x: pt[0], y: pt[1] }));
+      // Pass raw array (flat single polygon or nested multi-zone);
+      // CameraStreamWithArea normalizes it internally.
       if (cameraStreamRef.current.setPoints) {
-        cameraStreamRef.current.setPoints(formattedPoints);
+        cameraStreamRef.current.setPoints(pointsArr);
         setInitialPointsLoaded(true);
       }
     }
@@ -330,7 +330,7 @@ useEffect(() => {
   const handleSaveSettings = () => {
     if (cameraStreamRef.current && selectedCamera) {
       const resolution = cameraStreamRef.current.getResolution();
-      const points = cameraStreamRef.current.getPoints();
+      const zones = cameraStreamRef.current.getZones?.() || [];
 
       const channelObj = cameraChannels.find(c => c._id === selectedCamera);
       if (!channelObj) return null;
@@ -339,10 +339,8 @@ useEffect(() => {
     // const zoneName =  detectionSettingName || "Zone";
 
       const updated = {
-        [cameraId]: {
-          zone_name: zoneName,
-          points: points.map(pt => [pt.x, pt.y]),
-        },
+        [cameraId]: zones,
+        zone_name: zoneName,
       };
 
       const merged = { ...channelPoints, ...updated };
@@ -376,8 +374,8 @@ useEffect(() => {
         const firstCam = channelIds[0];
         const pts = pointsObj[firstCam];
         if (Array.isArray(pts) && cameraStreamRef.current && cameraStreamRef.current.setPoints) {
-          const formatted = pts.length && Array.isArray(pts[0]) ? pts.map(p => ({ x: p[0], y: p[1] })) : pts;
-          cameraStreamRef.current.setPoints(formatted);
+          // Pass raw array (flat or nested); CameraStreamWithArea normalizes it.
+          cameraStreamRef.current.setPoints(pts);
           if (cameraStreamRef.current.setMoveMode) {
             cameraStreamRef.current.setMoveMode(true);
           }
@@ -415,8 +413,10 @@ useEffect(() => {
     //   return;
     // }
 
+    // Multi-zone: nested array of polygons [[ [x,y], ... ], ...]
+    const zones = cameraStreamRef.current.getZones?.() || [];
     const points = cameraStreamRef.current.getPoints?.() || [];
-    if (!points || points.length === 0) {
+    if (!zones.length || !points.length) {
       toast.error('Please draw an area first');
       return;
     }
@@ -433,23 +433,6 @@ useEffect(() => {
 
  // Get resolution from camera stream
     const resolution = cameraStreamRef.current.getResolution?.() || '1280x720'; 
-      // Build the payload with detection settings and marked points
-      const payload = {
-        linkedCameras: [cameraId],
-        detectionSetting: {
-          name: detectionName,
-          enabled: detectionEnabled,
-          settings: {
-            referencePoints: {
-              [cameraId]: {
-                zone_name: zoneName,
-                points: points.map(pt => [pt.x, pt.y]),
-              },
-            },
-          },
-        },
-      };
-
       const pay = {
         "name": detectionName,
         "enabled": false,
@@ -458,16 +441,14 @@ useEffect(() => {
         "channelId": [
           cameraId
         ],
-        // referencePoints: {
-        //   [cameraId]: points.map(pt => [pt.x, pt.y]),
-        // },
         "settings": {
           levelOfImportance:priority,
-             referencePoints: {
-          [cameraId]: points.map(pt => [pt.x, pt.y]),
-             zone_name: zoneName,
-        },
-        obstruction_threshold_sec: obstruction_threshold_sec,
+          referencePoints: {
+            // nested array of zones: [[ [x,y], ... ], [ [x,y], ... ]]
+            [cameraId]: zones,
+            zone_name: zoneName,
+          },
+          obstruction_threshold_sec: obstruction_threshold_sec,
           videoResolution: resolution
         }
 
@@ -482,11 +463,13 @@ useEffect(() => {
           ...(detectionSetting?.settings || {}),
           referencePoints: {
             ...(detectionSetting?.settings?.referencePoints || {}),
-            [cameraId]: points.map(pt => [pt.x, pt.y]),
+            [cameraId]: zones,
           },
           videoResolution: resolution,
         },
       };
+      // TEMP: inspect the exact payload (zones per camera) being sent
+      console.log('[detection-settings] payload =>', JSON.stringify(pay, null, 2));
       try {
         let resp;
         let success = false;
@@ -516,12 +499,13 @@ useEffect(() => {
           setLocalZoneName(zone);
           setLocalZoneEnabled(localZoneEnabled);
 
-          const savedPoints = points.map(pt => [pt.x, pt.y]);
-          setChannelPoints(prev => ({ ...prev, [cameraId]: savedPoints }));
+          // savedZones: nested array of polygons for this channel
+          const savedZones = zones;
+          setChannelPoints(prev => ({ ...prev, [cameraId]: savedZones }));
 
-          // Also push points into the camera stream component so it reflects changes
+          // Also push zones into the camera stream component so it reflects changes
           if (cameraStreamRef.current?.setPoints) {
-            cameraStreamRef.current.setPoints(savedPoints.map(p => ({ x: p[0], y: p[1] })));
+            cameraStreamRef.current.setPoints(savedZones);
           }
 
           // mark initial points as loaded so we don't override user edits
@@ -536,7 +520,7 @@ useEffect(() => {
               ...((activeDs || detectionSetting)?.settings || {}),
               referencePoints: {
                 ...((activeDs || detectionSetting)?.settings?.referencePoints || {}),
-                [cameraId]: savedPoints,
+                [cameraId]: savedZones,
               },
               videoResolution: resolution,
             },
@@ -564,7 +548,7 @@ useEffect(() => {
             // Notify parent area change if provided
             if (onAreaSettingsChange) {
               const resolutionArr = Array.isArray(resolution) ? resolution : (Array.isArray(cameraStreamRef.current?.getResolution?.()) ? cameraStreamRef.current.getResolution() : [1280,720]);
-              onAreaSettingsChange(resolutionArr, { ...channelPoints, [cameraId]: savedPoints });
+              onAreaSettingsChange(resolutionArr, { ...channelPoints, [cameraId]: savedZones });
             }
         }
       } catch (err) {
@@ -694,7 +678,9 @@ useEffect(() => {
                  }
                }
 
-               return pointsArr.map(pt => ({ x: pt[0], y: pt[1] }));
+               // Pass raw array (flat single polygon or nested multi-zone);
+               // CameraStreamWithArea normalizes it into zones internally.
+               return pointsArr;
            })()}
               drawingMode={drawingMode}
               moveMode={moveMode}

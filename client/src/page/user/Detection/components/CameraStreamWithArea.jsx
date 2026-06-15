@@ -12,6 +12,27 @@ import { Maximize, Minimize } from "lucide-react";
 import UserContext from "@/context/UserContext/Context";
 import useHlsPlayer from "@/hooks/useHlsPlayer";
 
+// Convert a single point ([x,y] or {x,y}) to {x,y}
+const toPointObj = (p) => (Array.isArray(p) ? { x: p[0], y: p[1] } : p);
+
+// Normalize an incoming reference-points value into an array of zones,
+// where each zone is an array of {x,y} points.
+// Accepts:
+//   - flat single polygon:  [[x,y], ...]  or  [{x,y}, ...]
+//   - nested multi-zone:    [[[x,y], ...], [[x,y], ...]]
+const normalizeToZones = (input) => {
+  if (!Array.isArray(input) || input.length === 0) return [];
+  const first = input[0];
+  const isNested = Array.isArray(first) && Array.isArray(first[0]);
+  if (isNested) {
+    return input
+      .filter((poly) => Array.isArray(poly) && poly.length > 0)
+      .map((poly) => poly.map(toPointObj));
+  }
+  // single flat polygon
+  return [input.map(toPointObj)];
+};
+
 const CameraStreamWithArea = forwardRef(
   (
     {
@@ -38,21 +59,28 @@ const CameraStreamWithArea = forwardRef(
     const videoRef = useRef(null);
     const drawCanvasRef = useRef(null);
     const containerRef = useRef(null);
-        // points state (array of {x,y} or rectangle closed with repeated first point)
-    const [points, setPoints] = useState(Array.isArray(initialPoints) ? initialPoints : []);
-    const pointsRef = useRef(points);
-    pointsRef.current = points;
 
-    const [maxPoints, setMaxPoints] = useState(points.length > 0 ? points.length :   3); // default = 3
+    // zones: array of committed polygons. Each polygon is an array of {x,y}
+    // (closed polygons keep the first point repeated as the last point).
+    const [zones, setZones] = useState(() => normalizeToZones(initialPoints));
+    const zonesRef = useRef(zones);
+    zonesRef.current = zones;
+
+    // drawingPoints: the in-progress polygon currently being drawn.
+    const [drawingPoints, setDrawingPoints] = useState([]);
+    const drawingPointsRef = useRef(drawingPoints);
+    drawingPointsRef.current = drawingPoints;
+
+    // max points allowed for the polygon currently being drawn
+    const [maxPoints, setMaxPoints] = useState(3); // default = 3
     const { streamModalShow, setStreamModalShow } = useContext(UserContext);
+
+    // Trim in-progress polygon if the user lowers the max-points limit
     useEffect(() => {
-  if (drawingPoints.length > maxPoints) {
-    const trimmed = drawingPoints.slice(0, maxPoints);
-    setDrawingPoints(trimmed);
-    setPoints(trimmed);
-    draw(trimmed);
-  }
-}, [maxPoints]);
+      if (drawingPointsRef.current.length > maxPoints) {
+        setDrawingPoints((prev) => prev.slice(0, maxPoints));
+      }
+    }, [maxPoints]);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isDrawingMode, setIsDrawingMode] = useState(drawingMode);
@@ -63,26 +91,22 @@ const CameraStreamWithArea = forwardRef(
     const panRef = useRef({ x: 0, y: 0 });
     const [showZoomHint, setShowZoomHint] = useState(true);
 
-
     // const [hasError, setHasError] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
 
     const streamBaseUrl = import.meta.env.VITE_STREAM_URL;
     const local_status = import.meta.env.VITE_LOCAL_SETUP;
 
-
-
-    // drawingPoints is helper while drawing new rectangle (keeps intermediate points)
-    const [drawingPoints, setDrawingPoints] = useState([]);
     const rafRef = useRef(null);
 
-    // dragging state for move mode
+    // dragging state for move mode (tracks which zone/corner is being moved)
     const dragState = useRef({
       dragging: false,
+      zoneIndex: null,
+      cornerIndex: null,
       startX: 0,
       startY: 0,
-      origPoints: [],
-      cornerIndex: null,
+      origZone: [],
       offsetX: 0,
       offsetY: 0,
     });
@@ -96,16 +120,13 @@ const CameraStreamWithArea = forwardRef(
     // If initialPoints prop changes — apply once (do not continuously override)
     useEffect(() => {
       if (!initialPoints) return;
-      // convert array-of-arrays ([ [x,y], ... ]) to array-of-objects for internal usage
-      const parsed = initialPoints.map((p) => (Array.isArray(p) ? { x: p[0], y: p[1] } : p));
-      // only update if different
+      const parsed = normalizeToZones(initialPoints);
       const areSame =
-        parsed.length === pointsRef.current.length &&
-        JSON.stringify(parsed) === JSON.stringify(pointsRef.current);
+        JSON.stringify(parsed) === JSON.stringify(zonesRef.current);
       if (!areSame) {
-        setPoints(parsed);
-        // draw immediately
-        requestAnimationFrame(() => draw(parsed));
+        setZones(parsed);
+        setDrawingPoints([]);
+        requestAnimationFrame(() => draw(parsed, []));
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initialPoints]);
@@ -115,7 +136,7 @@ const CameraStreamWithArea = forwardRef(
       ref,
       () => ({
         clearPoints: () => {
-          setPoints([]);
+          setZones([]);
           setDrawingPoints([]);
           const canvas = drawCanvasRef.current;
           if (canvas) {
@@ -128,13 +149,19 @@ const CameraStreamWithArea = forwardRef(
             setTimeout(() => setIsDrawingMode(true), 0);
           }
         },
+        // Accepts a flat single polygon or a nested multi-zone array.
         setPoints: (pts) => {
-          // normalize input to array of objects
-          const normalized = (Array.isArray(pts) ? pts : []).map((p) =>
-            Array.isArray(p) ? { x: p[0], y: p[1] } : p
-          );
-          setPoints(normalized);
-          requestAnimationFrame(() => draw(normalized));
+          const normalized = normalizeToZones(pts);
+          setZones(normalized);
+          setDrawingPoints([]);
+          requestAnimationFrame(() => draw(normalized, []));
+        },
+        // Explicit multi-zone setter (same normalization as setPoints).
+        setZones: (z) => {
+          const normalized = normalizeToZones(z);
+          setZones(normalized);
+          setDrawingPoints([]);
+          requestAnimationFrame(() => draw(normalized, []));
         },
         setDrawingMode: (mode) => {
           setIsDrawingMode(mode);
@@ -194,12 +221,15 @@ const CameraStreamWithArea = forwardRef(
 
           return tempCanvas.toDataURL("image/jpeg", 0.95);
         },
-        getPoints: () => pointsRef.current.map((p) => ({ ...p })), // return copy
+        // Backward-compatible: flat list of all points (used for emptiness checks)
+        getPoints: () => zonesRef.current.flat().map((p) => ({ ...p })),
+        // Multi-zone output as nested [[ [x,y], ... ], ...]
+        getZones: () => zonesRef.current.map((z) => z.map((p) => [p.x, p.y])),
         getResolution: () =>
           videoRef.current ? [videoRef.current.videoWidth || 1280, videoRef.current.videoHeight || 720] : [0, 0],
       }),
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [points, isDrawingMode, isMoveMode]
+      [zones, drawingPoints, isDrawingMode, isMoveMode]
     );
 
     // Canvas resize & initial draw when video metadata loads
@@ -212,12 +242,8 @@ const CameraStreamWithArea = forwardRef(
         // Use video's native resolution as canvas pixel-size
         canvas.width = video.videoWidth || 1280;
         canvas.height = video.videoHeight || 720;
-
-        // match CSS sizes for crisp rendering (if you use Tailwind/object-contain the canvas display size is controlled by CSS)
-        // draw existing points after resize
-        if (pointsRef.current && pointsRef.current.length > 0) {
-          draw(pointsRef.current);
-        }
+        // draw existing zones after resize
+        draw(zonesRef.current, drawingPointsRef.current);
       };
 
       video.addEventListener("loadedmetadata", updateCanvasSize);
@@ -235,6 +261,11 @@ const CameraStreamWithArea = forwardRef(
         ro.disconnect();
       };
     }, []);
+
+    // Redraw whenever zones or the in-progress polygon change
+    useEffect(() => {
+      draw(zones, drawingPoints);
+    }, [zones, drawingPoints]);
 
     // create final stream url once
     const streamUrl = useMemo(() => {
@@ -257,50 +288,49 @@ const CameraStreamWithArea = forwardRef(
       },
     });
 
-    // --- Drawing function (draws a given array of {x,y}) ---
-    const draw = (pts = []) => {
-      const canvas = drawCanvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+    // --- Draw a single polygon (closed or open) ---
+    const drawPolygon = (ctx, pts, { closed, cornerSize }) => {
       if (!pts || pts.length === 0) return;
       ctx.save();
       ctx.lineWidth = 5;
       ctx.strokeStyle = "red";
       ctx.beginPath();
-
-      if (pts.length > 0) {
-        // draw polyline / polygon
-        ctx.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < pts.length; i++) {
-          ctx.lineTo(pts[i].x, pts[i].y);
-        }
-
-        // close path if last equals first (closed polygon)
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        ctx.lineTo(pts[i].x, pts[i].y);
+      }
+      if (closed) {
         const first = pts[0];
         const last = pts[pts.length - 1];
         if (first.x === last.x && first.y === last.y) {
           ctx.closePath();
         }
       }
-
       ctx.stroke();
 
-      // draw corners or points
+      // draggable corners
       ctx.fillStyle = "orange";
-      const rect = canvas.getBoundingClientRect();
-      const cornerSize = Math.max(4, (CORNER_RADIUS / 2) * (canvas.width / Math.max(rect.width, 1)));
-
-      // Draw every point as a draggable corner
       for (let i = 0; i < pts.length; i++) {
         const pt = pts[i];
         ctx.beginPath();
         ctx.arc(pt.x, pt.y, cornerSize, 0, 2 * Math.PI);
         ctx.fill();
       }
-
       ctx.restore();
+    };
+
+    // --- Draw all committed zones plus the in-progress polygon ---
+    const draw = (zonesArr = zonesRef.current, active = drawingPointsRef.current) => {
+      const canvas = drawCanvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const rect = canvas.getBoundingClientRect();
+      const cornerSize = Math.max(4, (CORNER_RADIUS / 2) * (canvas.width / Math.max(rect.width, 1)));
+
+      (zonesArr || []).forEach((z) => drawPolygon(ctx, z, { closed: true, cornerSize }));
+      drawPolygon(ctx, active, { closed: false, cornerSize });
     };
 
     // Helpers used during drag/draw
@@ -327,46 +357,43 @@ const CameraStreamWithArea = forwardRef(
     };
 
     const handleCanvasMouseDown = (e) => {
-      if (!isMoveMode || pointsRef.current.length < 2) return;
+      if (!isMoveMode) return;
       const { x: currX, y: currY } = getCanvasCoords(e.clientX, e.clientY);
-      dragState.current.origPoints = pointsRef.current.map((pt) => ({ ...pt }));
+      const zs = zonesRef.current;
 
-      // Line (2 points) specific logic
-      if (pointsRef.current.length === 2) {
-        const idx = isNearCorner(currX, currY, pointsRef.current);
+      // 1) Try to grab a corner of any zone
+      for (let zi = 0; zi < zs.length; zi++) {
+        const idx = isNearCorner(currX, currY, zs[zi]);
         if (idx !== -1) {
-          dragState.current.dragging = true;
-          dragState.current.cornerIndex = idx;
-          dragState.current.offsetX = currX - pointsRef.current[idx].x;
-          dragState.current.offsetY = currY - pointsRef.current[idx].y;
-          return;
-        }
-        // distance to line
-        const [p1, p2] = pointsRef.current;
-        const distanceToLine =
-          Math.abs((p2.y - p1.y) * currX - (p2.x - p1.x) * currY + p2.x * p1.y - p2.y * p1.x) /
-          Math.hypot(p2.y - p1.y, p2.x - p1.x);
-        if (distanceToLine < CORNER_RADIUS) {
-          dragState.current.dragging = true;
-          dragState.current.startX = currX;
-          dragState.current.startY = currY;
-          dragState.current.cornerIndex = null;
+          dragState.current = {
+            dragging: true,
+            zoneIndex: zi,
+            cornerIndex: idx,
+            origZone: zs[zi].map((pt) => ({ ...pt })),
+            offsetX: currX - zs[zi][idx].x,
+            offsetY: currY - zs[zi][idx].y,
+            startX: currX,
+            startY: currY,
+          };
           return;
         }
       }
 
-      // Rectangle/corners
-      const cornerIdx = isNearCorner(currX, currY, pointsRef.current);
-      if (cornerIdx !== -1) {
-        dragState.current.dragging = true;
-        dragState.current.cornerIndex = cornerIdx;
-        dragState.current.offsetX = currX - pointsRef.current[cornerIdx].x;
-        dragState.current.offsetY = currY - pointsRef.current[cornerIdx].y;
-      } else if (isInsideRect(currX, currY, pointsRef.current)) {
-        dragState.current.dragging = true;
-        dragState.current.cornerIndex = null;
-        dragState.current.startX = currX;
-        dragState.current.startY = currY;
+      // 2) Otherwise try to grab a whole zone (drag inside its bounds)
+      for (let zi = 0; zi < zs.length; zi++) {
+        if (isInsideRect(currX, currY, zs[zi])) {
+          dragState.current = {
+            dragging: true,
+            zoneIndex: zi,
+            cornerIndex: null,
+            origZone: zs[zi].map((pt) => ({ ...pt })),
+            startX: currX,
+            startY: currY,
+            offsetX: 0,
+            offsetY: 0,
+          };
+          return;
+        }
       }
     };
 
@@ -375,94 +402,81 @@ const CameraStreamWithArea = forwardRef(
       const { x: currX, y: currY } = getCanvasCoords(e.clientX, e.clientY);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
 
-      const newPoints = dragState.current.origPoints.map((pt) => ({ ...pt }));
+      const { zoneIndex, cornerIndex, origZone } = dragState.current;
+      let newZone = origZone.map((pt) => ({ ...pt }));
 
-      // If line (2 points)
-      if (pointsRef.current.length === 2) {
-        if (dragState.current.cornerIndex != null) {
-          newPoints[dragState.current.cornerIndex] = {
-            x: currX - dragState.current.offsetX,
-            y: currY - dragState.current.offsetY,
-          };
-        } else {
-          const dx = currX - dragState.current.startX;
-          const dy = currY - dragState.current.startY;
-          for (let i = 0; i < newPoints.length; i++) {
-            newPoints[i] = { x: newPoints[i].x + dx, y: newPoints[i].y + dy };
+      if (cornerIndex != null) {
+        newZone[cornerIndex] = {
+          x: currX - dragState.current.offsetX,
+          y: currY - dragState.current.offsetY,
+        };
+        // keep polygon closed if first/last coincide
+        const lastIdx = newZone.length - 1;
+        if (newZone.length > 1) {
+          const f = origZone[0];
+          const l = origZone[lastIdx];
+          if (f.x === l.x && f.y === l.y) {
+            if (cornerIndex === 0) newZone[lastIdx] = { ...newZone[0] };
+            else if (cornerIndex === lastIdx) newZone[0] = { ...newZone[lastIdx] };
           }
         }
       } else {
-        // Generic polygon/corners behavior
-        if (dragState.current.cornerIndex != null) {
-          newPoints[dragState.current.cornerIndex] = {
-            x: currX - dragState.current.offsetX,
-            y: currY - dragState.current.offsetY,
-          };
-          // if polygon was closed (last equals first), keep closure by mirroring first->last
-          if (newPoints.length > 1) {
-            const first = newPoints[0];
-            const last = newPoints[newPoints.length - 1];
-            if (first.x === last.x && first.y === last.y) {
-              newPoints[newPoints.length - 1] = { ...newPoints[0] };
-            }
-          }
-        } else {
-          const dx = currX - dragState.current.startX;
-          const dy = currY - dragState.current.startY;
-          for (let i = 0; i < newPoints.length; i++) {
-            newPoints[i] = { x: newPoints[i].x + dx, y: newPoints[i].y + dy };
-          }
-        }
+        const dx = currX - dragState.current.startX;
+        const dy = currY - dragState.current.startY;
+        newZone = origZone.map((pt) => ({ x: pt.x + dx, y: pt.y + dy }));
       }
 
-      // Draw and update live points so external callers get current state
+      const updatedZones = zonesRef.current.map((z, i) => (i === zoneIndex ? newZone : z));
+
       rafRef.current = requestAnimationFrame(() => {
-        draw(newPoints);
-        setPoints(newPoints);
-        pointsRef.current = newPoints;
+        setZones(updatedZones);
+        zonesRef.current = updatedZones;
+        draw(updatedZones, drawingPointsRef.current);
       });
     };
 
     const handleCanvasMouseUp = () => {
       if (!isMoveMode) return;
       dragState.current.dragging = false;
+      dragState.current.zoneIndex = null;
       dragState.current.cornerIndex = null;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      // commit already setPoints in mousemove; nothing else required
     };
 
-  const handleCanvasClick = (e) => {
-  if (isMoveMode || !isDrawingMode) return;
-  if (!drawCanvasRef.current) return;
-
-  const { x, y } = getCanvasCoords(e.clientX, e.clientY);
-
-  // 🚫 Restrict max points
-  if (drawingPoints.length >= maxPoints) {
-    return;
-  }
-
-  // ✅ Close polygon if clicked near first point AND min 3 points
-  if (drawingPoints.length >= 3) {
-    const idx = isNearCorner(x, y, drawingPoints);
-    if (idx === 0) {
-      const closed = [...drawingPoints, { ...drawingPoints[0] }];
-      setPoints(closed);
+    // Commit the in-progress polygon as a closed zone (first point repeated as
+    // the last) and reset so the next zone can be drawn immediately.
+    const commitZone = (pts) => {
+      if (!pts || pts.length < 3) return;
+      const closed = [...pts, { ...pts[0] }];
+      setZones((prev) => [...prev, closed]);
       setDrawingPoints([]);
-      setIsDrawingMode(false);
-      setIsMoveMode(true);
-      draw(closed);
-      return;
-    }
-  }
+    };
 
-  const updatedPoints = [...drawingPoints, { x, y }];
-  setDrawingPoints(updatedPoints);
-  setPoints(updatedPoints);
-  draw(updatedPoints);
-};
+    const handleCanvasClick = (e) => {
+      if (isMoveMode || !isDrawingMode) return;
+      if (!drawCanvasRef.current) return;
 
-    // attach handlers via props on canvas element directly (onClick/onMouseDown etc. in JSX)
+      const { x, y } = getCanvasCoords(e.clientX, e.clientY);
+
+      // 🚫 Restrict max points — the count from the +/- control is just how
+      // many points the user wants to place (same behaviour as before).
+      if (drawingPoints.length >= maxPoints) {
+        return;
+      }
+
+      // ✅ Close polygon if clicked near first point AND min 3 points.
+      // Commit it as a zone and stay in drawing mode so the user can
+      // immediately start drawing the next zone.
+      if (drawingPoints.length >= 3) {
+        const idx = isNearCorner(x, y, drawingPoints);
+        if (idx === 0) {
+          commitZone(drawingPoints);
+          return;
+        }
+      }
+
+      setDrawingPoints((prev) => [...prev, { x, y }]);
+    };
 
     // Clean up RAF on unmount
     useEffect(() => {
@@ -521,7 +535,6 @@ const CameraStreamWithArea = forwardRef(
       });
     };
 
-
     const handleMouseDownPan = (e) => {
       if (scale <= 1) return; // only pan if zoomed
       setIsDragging(true);
@@ -530,7 +543,6 @@ const CameraStreamWithArea = forwardRef(
         y: e.clientY - pos.y,
       };
     };
-
 
     const handleMouseMovePan = (e) => {
       if (!isDragging) return;
@@ -557,8 +569,6 @@ const CameraStreamWithArea = forwardRef(
     const handleMouseUpPan = () => setIsDragging(false);
     const handleMouseLeavePan = () => setIsDragging(false);
 
-
-
     // Render
     return (
       <>
@@ -571,13 +581,7 @@ const CameraStreamWithArea = forwardRef(
           onMouseMove={handleMouseMovePan}
           onMouseUp={handleMouseUpPan}
           onMouseLeave={handleMouseLeavePan}
-        // style={{
-        //   transform: `scale(${scale}) translate(${pos.x / scale}px, ${pos.y / scale}px)`,
-        //   transformOrigin: "center center",
-        // }}
         >
-
-
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-20">
               <div className="loader border-4 border-gray-300 border-t-blue-500 rounded-full w-10 h-10 animate-spin" />
@@ -616,15 +620,6 @@ const CameraStreamWithArea = forwardRef(
           />
 
           {/* drawing overlay canvas (pixel-size matched to video width/height) */}
-          {/* <canvas
-            ref={drawCanvasRef}
-            onClick={handleCanvasClick}
-            onMouseDown={handleCanvasMouseDown}
-            onMouseMove={handleCanvasMouseMove}
-            onMouseUp={handleCanvasMouseUp}
-            className="w-full h-full rounded absolute top-0 left-0 pointer-events-auto"
-            style={{ touchAction: "none" }}
-          /> */}
           <canvas
             ref={drawCanvasRef}
             onClick={handleCanvasClick}
@@ -638,30 +633,28 @@ const CameraStreamWithArea = forwardRef(
 
           {/* Maximize/Minimize Button */}
           <div className="absolute top-3 left-3 flex gap-2 z-30">
-  {/* Minus Button */}
-
-</div>
+          </div>
 
           <div className="absolute top-3 right-3 flex items-center justify-center">
-              <button
-    onClick={() => setMaxPoints((prev) => Math.max(3, prev - 1))}
-    className="w-7 h-7 bg-black/60 text-white rounded-full"
-  >
-    −
-  </button>
+            <button
+              onClick={() => setMaxPoints((prev) => Math.max(3, prev - 1))}
+              className="w-7 h-7 bg-black/60 text-white rounded-full"
+            >
+              −
+            </button>
 
-  {/* Display Count */}
-  <div className="px-2 py-1 bg-black/60 text-white text-xs rounded">
-    {maxPoints}
-  </div>
+            {/* Display Count */}
+            <div className="px-2 py-1 bg-black/60 text-white text-xs rounded">
+              {maxPoints}
+            </div>
 
-  {/* Plus Button */}
-  <button
-    onClick={() => setMaxPoints((prev) => prev + 1)}
-    className="w-7 h-7 bg-black/60 text-white rounded-full"
-  >
-    +
-  </button>
+            {/* Plus Button */}
+            <button
+              onClick={() => setMaxPoints((prev) => prev + 1)}
+              className="w-7 h-7 bg-black/60 text-white rounded-full"
+            >
+              +
+            </button>
             <button
               type="button"
               onClick={() => setIsFullscreen((s) => !s)}

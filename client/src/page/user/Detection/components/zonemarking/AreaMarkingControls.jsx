@@ -139,9 +139,14 @@ const [obstructionThreshold, setObstructionThreshold] = useState(10);
 return;
  } else{
      if (drawingMode) {
+      // Stop drawing and switch to move mode so the drawn zones stay editable
       setDrawingMode(false);
+      setMoveMode(true);
       if (cameraStreamRef.current && cameraStreamRef.current.setDrawingMode) {
         cameraStreamRef.current.setDrawingMode(false);
+      }
+      if (cameraStreamRef.current && cameraStreamRef.current.setMoveMode) {
+        cameraStreamRef.current.setMoveMode(true);
       }
     } else {
       setDrawingMode(true);
