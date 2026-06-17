@@ -36,6 +36,7 @@ const ReusableTablePage = ({
   attendanceLogsCount,
   currentPage,
   setCurrentPage,
+  onPageChange,
   loading,
   from,
   gridCard,

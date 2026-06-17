@@ -156,7 +156,6 @@ Yup.object({
       otherwise: (schema) => schema.notRequired(),
     }),
   }),
-  ,
   Yup.object({
     enableFaceAuth: Yup.boolean(),
     selectedFaces: Yup.array()

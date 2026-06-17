@@ -301,6 +301,9 @@ const ImportEmpUsersModal = ({ open, onClose, fetchUsers, refreshLocations, refr
       return;
     }
 
+    // Declared at function scope so the unmount cleanup below can clear it.
+    let interval;
+
     try {
       setLoading(true);
 
@@ -322,7 +325,6 @@ const ImportEmpUsersModal = ({ open, onClose, fetchUsers, refreshLocations, refr
 
 
       const res = await addempUsers(payloadForApi);
-      let interval;
 
       if (res?.statusCode === 200 && res?.body?.status === "success") {
         toast.warning("Importing employees...");
