@@ -710,6 +710,7 @@ const doc = {
       employeeLocations:["bangalore","hyderabad"],
       getAccessLogs: false,
       isExport: false,
+      tag: null,
       skip: 0,
       limit: 10,
     },

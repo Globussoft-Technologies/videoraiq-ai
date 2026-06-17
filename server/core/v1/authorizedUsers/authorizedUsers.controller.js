@@ -318,6 +318,34 @@ class AuthUserController {
     */
     return authorizedUsersService.fetchUniqueLocations(req, res, next);
   }
+  
+  async tagUser(req, res, next) {
+    /*
+    #swagger.tags = ['AuthorizedUsers']
+    #swagger.description = 'Tag or untag an authorized user. Calls AI service (/tag or /untag) and updates tag status on both the authorized user and the access log on success.'
+    #swagger.parameters['userId'] = {
+      in: 'query',
+      description: 'Authorized user _id to tag/untag',
+      required: true,
+      type: 'string',
+    }
+    #swagger.parameters['data'] = {
+      in: 'body',
+      required: true,
+      schema: {
+        tag: true,
+        profileImages: ['https://example.com/images/photo.jpg'],
+        accessLogId: '664f1a2b3c4d5e6f7a8b9c0d'
+      }
+    }
+    #swagger.responses[200] = { description: 'User tag updated successfully' }
+    #swagger.responses[400] = { description: 'Validation error or missing required fields' }
+    #swagger.responses[404] = { description: 'User or admin not found, or no face match in AI service' }
+    #swagger.responses[502] = { description: 'AI service error' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return authorizedUsersService.tagUser(req, res, next);
+  }
 
   async verifyUser(req,res,next){
     /* 

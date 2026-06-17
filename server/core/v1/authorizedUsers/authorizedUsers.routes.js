@@ -14,6 +14,7 @@ router.put("/update",upload.array('file', 3),verifyToken,editAccessCheck,authUse
 router.delete("/delete",verifyToken,deleteAccessCheck,authUserController.deleteAuthUser);
 router.delete("/delete-all", verifyToken, deleteAccessCheck, authUserController.deleteAllAuthUsers);
 router.post("/bulk-import",verifyToken,createAccessCheck,authUserController.bulkImportAuthUser);
+router.patch("/tag-user",verifyToken,editAccessCheck,authUserController.tagUser);
 router.post("/verifyUser",verifyToken,upload.array('file', 3),authUserController.verifyUser);       
 router.post("/fetch-unique-locations",verifyToken,viewAccessCheck,authUserController.fetchUniqueLocations);
 

@@ -502,7 +502,7 @@ async getLogs(req, res, next) {
           return res.status(400).json(Response.errorResp("Missing adminId"));
         }
 
-        let { skip = 0, limit = 10, startDate, endDate, searchQuery, departmentIds, channelIds, nvrIds ,removeUnknown, fromTime, toTime,isExport=false,employeeLocations=[]} = req.body;
+        let { skip = 0, limit = 10, startDate, endDate, searchQuery, departmentIds, channelIds, nvrIds ,removeUnknown, fromTime, toTime,isExport=false,employeeLocations=[],tag} = req.body;
         skip = Number(skip);
         limit = Number(limit);
 
@@ -576,6 +576,10 @@ async getLogs(req, res, next) {
 
           // Remove unknown users if requested
           ...(removeUnknown ? [{ $match: { userId: { $ne: null } } }] : []),
+
+          
+          // tag: true → tagged only | tag: false → untagged + old docs | tag: null/omitted → all
+          ...(tag === null || tag === undefined ? [] : tag ? [{ $match: { tag: true } }] : [{ $match: { $or: [{ tag: false }, { tag: { $exists: false } }] } }]),
 
           // Filter by authorized locations
           ...(authorizedEmployeeIds.length ? [{ $match: { userId: { $in: authorizedEmployeeIds.map(id => new ObjectId(id)) } } }] : []),
@@ -689,6 +693,7 @@ async getLogs(req, res, next) {
             updatedAt: 1,
             userId: "$userInfo._id",
             lastCreatedAt: 1,
+            tag: 1,
             sessions: 1,
             userInfo: {
               _id: "$userInfo._id",

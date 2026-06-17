@@ -21,6 +21,8 @@ import mongoose from "mongoose";
 import shiftModel from "./../shifts/shifts.model.js"
 import channelsModel from "../channels/channels.model.js";
 import LocationModel from "../locations/location.model.js";
+import OptimizedAccessLogs from "../accesslogs/newAccessLogs.model.js";
+
 
 import fs from 'fs';
 import {
@@ -1275,6 +1277,94 @@ async bulkImportAuthUser(req, res, next) {
       return res.status(500).json(
         Response.errorResp("Failed to fetch unique locations.", error.message)
       );
+    }
+  }
+
+  async tagUser(req, res, _next) {
+    try {
+      const data = req?.verified?.userData;
+      const { userId } = req.query;
+      const { tag, profileImages, accessLogId } = req.body;
+
+      if (!userId) {
+        return res.status(400).json(Response.userFailResp("Missing userId in query", "Validation Failed!"));
+      }
+
+      if (typeof tag !== 'boolean') {
+        return res.status(400).json(Response.userFailResp("tag must be a boolean", "Validation Failed!"));
+      }
+
+      const isAdminExist = await adminModel.findOne({
+        user_id: data?.user_id?.toString(),
+        email: data?.user_email,
+      });
+
+      if (!isAdminExist) {
+        return res.status(404).json(Response.userFailResp("Admin not found!", "Validation Failed!"));
+      }
+
+      const isUserExist = await authorizedUsersModel.findOne({ _id: userId, adminId: isAdminExist._id });
+      if (!isUserExist) {
+        return res.status(404).json(Response.userFailResp("Authorized user not found", "Validation Failed!"));
+      }
+
+      // Call /tag or /untag based on tag value — only update DB if API returns success
+      let dsResponse;
+      try {
+        if (tag) {
+          dsResponse = await axios.post(
+            `${this.DSAuthUsersAPI}/tag`,
+            {
+              uid: isUserExist._id.toString(),
+              firstName: isUserExist.firstName,
+              lastName: isUserExist.lastName,
+              profileImages: profileImages,
+              admin_id: isAdminExist._id.toString(),
+              db: this.getDbName(isAdminExist._id),
+            },
+            { headers: { accept: 'application/json' } }
+          );
+        } else {
+          dsResponse = await axios.post(
+            `${this.DSAuthUsersAPI}/untag`,
+            {
+              uid: isUserExist._id.toString(),
+              firstName: isUserExist.firstName,
+              lastName: isUserExist.lastName,
+              profileImages: profileImages,
+              admin_id: isAdminExist._id.toString(),
+              db: this.getDbName(isAdminExist._id),
+            },
+            { headers: { accept: 'application/json' } }
+          );
+        }
+      } catch (err) {
+        logger.error(`DS ${tag ? 'tag' : 'untag'} API error:`, err?.response?.data || err.message);
+        const errData = err?.response?.data;
+        if (errData?.status === 404 && errData?.success === false) {
+          return res.status(404).json(Response.userFailResp(errData.message, "AI Service: No Match Found"));
+        }
+        return res.status(502).json(Response.errorResp(`Failed to ${tag ? 'tag' : 'untag'} user in AI service.`, errData?.message || err.message));
+      }
+
+      if (!dsResponse || dsResponse.status < 200 || dsResponse.status >= 300) {
+        return res.status(502).json(Response.errorResp("AI service did not return a success response."));
+      }
+
+      const updatedUser = await authorizedUsersModel.findByIdAndUpdate(
+        userId,
+        { tag },
+        { new: true }
+      );
+
+      if (accessLogId) {
+        await OptimizedAccessLogs.findByIdAndUpdate(accessLogId, { tag });
+      }
+
+      return res.status(200).json(Response.userSuccessResp("User tag updated successfully", updatedUser));
+    } catch (error) {
+      logger.error(error);
+      return res.status(500).json(Response.errorResp("Failed to update user tag.", error.message));
     }
   }
 

@@ -92,6 +92,10 @@ const authorizedUsersSchema = new mongoose.Schema({
   numberPlate:{
     type:String,
     default:null
+  },
+  tag:{
+    type:Boolean,
+    default:false
   }
   // password: {type: String, required: true},  
 }, {

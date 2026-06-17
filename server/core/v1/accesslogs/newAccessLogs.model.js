@@ -20,6 +20,8 @@ const accessLogSchema = new mongoose.Schema({
 
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "authorizedUsers", index: true },
 
+  tag: { type: Boolean, default: false },
+
   sessions: { type: [sessionSchema], default: [] }
 
 }, { timestamps: true });
