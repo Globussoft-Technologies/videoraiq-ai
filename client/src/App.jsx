@@ -16,6 +16,7 @@ function App() {
     if (isDevtoolsDetectEnabled) {
       const interval = setInterval(() => {
         const start = performance.now();
+        // eslint-disable-next-line no-debugger -- intentional DevTools-open detection
         debugger; // This pauses only when DevTools is open
         const end = performance.now();
 

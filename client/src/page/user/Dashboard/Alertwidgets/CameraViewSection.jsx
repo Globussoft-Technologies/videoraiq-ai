@@ -15,7 +15,7 @@ import Nuetral from '@/assets/Facesvg.svg';
 import PhoneNew from '@/assets/Phonesvg.svg';
 import DynamicDateTime from '@/utils/DynamicDateTime';
 import CameraStream from '../../Streams/CameraPlay/CameraStream';
-import lineCrossing from '@/assets/LineCrossing.svg';
+import lineCrossingIcon from '@/assets/lineCrossing.svg';
 
 const CameraViewSection = ({
   nvrList,
@@ -195,7 +195,7 @@ const CameraViewSection = ({
         />
         {lineCrossing && (lineCrossing.atoB >= 0 || lineCrossing.btoA >= 0) && (
           <DetectionInfo
-            icon={lineCrossing} // or a different icon if preferred
+            icon={lineCrossingIcon}
             count={`A → B: ${lineCrossing.atoB ?? '--'}, B → A: ${lineCrossing.btoA ?? '--'}`}
             label="Line Crossing Detected"
           />
