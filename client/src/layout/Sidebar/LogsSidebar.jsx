@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { UserCheck, MapPinCheck, Activity, Hammer, GitBranch, Car, OctagonAlert, Ban } from 'lucide-react';
+import { UserCheck, MapPinCheck, Activity, Hammer, GitBranch, Car, OctagonAlert, Ban, Tags } from 'lucide-react';
 import { GiRoad, GiWaterSplash } from 'react-icons/gi';
 import ANPRIcon from '../../assets/ANPR.png';
 import { usePermissions } from '@/context/Permission/PermissionContext';
@@ -21,6 +21,7 @@ const stevinrockItems = [
 const vehicleClientItems = [
   { label: 'Attendance Logs', icon: UserCheck, route: '/logs/attendance', permissionKey: 'attendanceLogs' },
   { label: 'Access Logs', icon: MapPinCheck, route: '/logs/access', permissionKey: 'accessLogs' },
+  { label: 'Tagged Users', icon: Tags, route: '/logs/tagged-users', permissionKey: 'accessLogs' },
   { label: 'ANPR Logs', icon: null, img: ANPRIcon, route: '/logs/ANPR', permissionKey: 'ANPRLogs' },
   // { label: 'Track Logs', icon: Activity, route: '/logs/track', permissionKey: 'trackLogs' },
   // { label: 'Desk Logs', icon: Activity, route: '/logs/desk', permissionKey: 'deskLogs' },
@@ -32,6 +33,7 @@ const vehicleClientItems = [
 const defaultClientItems = [
   { label: 'Attendance Logs', icon: UserCheck, route: '/logs/attendance', permissionKey: 'attendanceLogs' },
   { label: 'Access Logs', icon: MapPinCheck, route: '/logs/access', permissionKey: 'accessLogs' },
+  { label: 'Tagged Users', icon: Tags, route: '/logs/tagged-users', permissionKey: 'accessLogs' },
   // { label: 'ANPR Logs', icon: null, img: ANPRIcon, route: '/logs/ANPR', permissionKey: 'ANPRLogs' },
   // { label: 'Vehcile  Logs', icon: Activity, route: '/logs/track', permissionKey: 'trackLogs' },
   // { label: 'Guard Logs', icon: Activity, route: '/logs/guard', permissionKey: 'guardLogs' },

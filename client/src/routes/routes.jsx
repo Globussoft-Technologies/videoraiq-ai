@@ -28,6 +28,7 @@ import StorageSettings from '@/page/user/Settings/StorageSetting/StorageSettings
 import Profile from '@/page/user/Profile/Profile';
 import Logs from '@/page/user/EmployeeLogs/AttendanceLog';
 import AccessLogs from '@/page/user/EmployeeLogs/AccessLog';
+import TaggedUsers from '@/page/user/EmployeeLogs/TaggedUsers';
 import ProductivityLog from '@/page/user/EmployeeLogs/ProductivityLog';
 import TrackLog from '@/page/user/EmployeeLogs/TrackLog';
 import VisibilityLog from '@/page/user/EmployeeLogs/VisibilityLog';
@@ -118,6 +119,7 @@ export const routes = createBrowserRouter(
         <Route path="logs" element={<Navigate to="/logs/attendance" />} />
         <Route path="logs/attendance" element={<Logs />} />
         <Route path="logs/access" element={<AccessLogs />} />
+        <Route path="logs/tagged-users" element={<TaggedUsers />} />
         <Route path="logs/productivity" element={<ProductivityLog />} />
         <Route path="logs/track" element={<TrackLog />} />
         <Route path="logs/desk" element={<VisibilityLog />} />

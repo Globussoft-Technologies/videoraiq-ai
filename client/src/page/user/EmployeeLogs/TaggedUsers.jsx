@@ -49,8 +49,6 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { tagUser } from '@/page/user/Dashboard/Api/put';
-import { authorizedUsers } from '@/page/user/Dashboard/Api/get';
-import TagUserDropdown from './components/TagUserDropdown';
 
 const styles = {
   text: 'text-[#333333] text-xs font-normal',
@@ -165,7 +163,7 @@ function reducer(state, action) {
   }
 }
 
-const AccessLogs = () => {
+const TaggedUsers = () => {
   const nasUrl = import.meta.env.VITE_BACKEND || '';
   const region = moment.tz.guess();
   const [limit, setLimit] = useState(10);
@@ -178,9 +176,9 @@ const AccessLogs = () => {
     endDate: todayISO,
   });
 
-  const ACCESS_REFRESH_KEY = 'access_auto_refresh_enabled';
-  const ACCESS_INTERVAL_KEY = 'access_auto_refresh_interval';
-  const ACCESS_VIEW_MODE_KEY = 'access_view_mode';
+  const ACCESS_REFRESH_KEY = 'tagged_users_auto_refresh_enabled';
+  const ACCESS_INTERVAL_KEY = 'tagged_users_auto_refresh_interval';
+  const ACCESS_VIEW_MODE_KEY = 'tagged_users_view_mode';
 
   const [autoRefresh, setAutoRefresh] = useState(() => {
     const saved = localStorage.getItem(ACCESS_REFRESH_KEY);
@@ -370,10 +368,6 @@ const AccessLogs = () => {
   const fetchLogs = useCallback(async () => {
     dispatch({ type: 'SET_LOADING', value: true });
     dispatch({ type: 'SET_ERROR', value: null });
-    // Reset local tag overrides so freshly fetched server state wins
-    setTagOverrides({});
-    setPickedNames({});
-    setPickedUserIds({});
 
     try {
       const utcFromTime = convertToUTC(startDate, fromTime, region);
@@ -392,6 +386,7 @@ const AccessLogs = () => {
         employeeLocations,
         removeUnknown,
         isExport:false,
+        tag: true,
         ...(fromTime && toTime && { fromTime: utcFromTime, toTime: utcToTime }),
       };
 
@@ -508,6 +503,7 @@ const AccessLogs = () => {
         employeeLocations,
         removeUnknown,
         isExport:true,
+        tag: true,
     ...(fromTime && toTime && { fromTime: utcFromTime, toTime: utcToTime }),
   };
 
@@ -701,144 +697,22 @@ const handleExport = async (format) => {
     };
   }, [autoRefresh, refreshInterval, fetchLogs]);
 
-  const [taggingId, setTaggingId] = useState(null);
-  // Local override of the tag state per access log, so toggles reflect
-  // immediately without refetching: { [accessLogId]: boolean }
-  const [tagOverrides, setTagOverrides] = useState({});
-  // Name of the authorized user picked per access log: { [accessLogId]: name }
-  const [pickedNames, setPickedNames] = useState({});
-  // Id of the authorized user picked per access log, so an untag right after a
-  // tag (no refetch) targets the same user: { [accessLogId]: userId }
-  const [pickedUserIds, setPickedUserIds] = useState({});
-  // Open dropdown: { item, rect } — rect anchors the floating panel.
-  const [dropdown, setDropdown] = useState(null);
-  // Lookup of authorized user _id by email/username, used to resolve the
-  // ?userId= for untag when the access log itself doesn't carry userId.
-  const [authUserMap, setAuthUserMap] = useState({ byEmail: {}, byName: {} });
+  // This page lists only tagged entries, so every toggle starts ON. The user
+  // can only turn it OFF (untag); doing so removes the row from this list.
+  const [untaggingId, setUntaggingId] = useState(null);
 
-  useEffect(() => {
-    const loadAuthorizedUsers = async () => {
-      try {
-        const res = await authorizedUsers(0, 1000, '');
-        if (res?.body?.status === 'success') {
-          const byEmail = {};
-          const byName = {};
-          (res.body.data.users || []).forEach((u) => {
-            if (u.email) byEmail[u.email.toLowerCase()] = u._id;
-            const name = u.userName || `${u.firstName || ''} ${u.lastName || ''}`.trim();
-            if (name) byName[name.toLowerCase()] = u._id;
-          });
-          setAuthUserMap({ byEmail, byName });
-        }
-      } catch (err) {
-        console.error('Failed to load authorized users', err);
-      }
-    };
-    loadAuthorizedUsers();
-  }, []);
-
-  const isTagged = (item) =>
-    item?.accessLogId in tagOverrides
-      ? tagOverrides[item.accessLogId]
-      : !!item?.tag;
-
-  // Resolve the authorized user _id for an entry: prefer the id picked in this
-  // session, then the id the access log carries, then match by email/username.
-  const resolveUserId = (item) => {
-    if (pickedUserIds[item.accessLogId]) return pickedUserIds[item.accessLogId];
-    if (item.userId) return item.userId;
-    const byEmail =
-      item.email && item.email !== '--'
-        ? authUserMap.byEmail[item.email.toLowerCase()]
-        : null;
-    if (byEmail) return byEmail;
-    const byName = item.name ? authUserMap.byName[item.name.toLowerCase()] : null;
-    return byName || null;
-  };
-
-  // Toggle click: when turning ON, open the user-picker dropdown; when turning
-  // OFF (already tagged), untag the entry directly.
-  const handleToggle = (item, evt) => {
-    if (taggingId || !item?.accessLogId) return;
-    if (isTagged(item)) {
-      untagEntry(item);
-    } else {
-      const rect = evt?.currentTarget?.getBoundingClientRect?.();
-      setDropdown({ item, rect });
-    }
-  };
-
-  // Tag the entry against a specific authorized user picked from the dropdown.
-  const tagWithUser = async (item, pickedUser) => {
-    if (taggingId) return;
-    const profileImages = item.personImages || [];
-    if (profileImages.length === 0) {
-      toast.error('No person images found for this entry');
-      return;
-    }
-    setTaggingId(item.accessLogId);
+  const handleUntag = async (item) => {
+    if (untaggingId || !item?.accessLogId) return;
+    setUntaggingId(item.accessLogId);
     try {
-      const result = await tagUser(pickedUser._id, {
-        tag: true,
-        profileImages,
-        accessLogId: item.accessLogId,
-      });
-      if (result?.body?.status === 'success' || result?.statusCode === 200) {
-        setTagOverrides((prev) => ({ ...prev, [item.accessLogId]: true }));
-        setPickedNames((prev) => ({
-          ...prev,
-          [item.accessLogId]:
-            pickedUser.userName ||
-            `${pickedUser.firstName || ''} ${pickedUser.lastName || ''}`.trim(),
-        }));
-        setPickedUserIds((prev) => ({
-          ...prev,
-          [item.accessLogId]: pickedUser._id,
-        }));
-        setDropdown(null);
-        toast.success('User tagged successfully');
-      } else {
-        toast.error(result?.body?.error || result?.body?.message || 'Failed to tag user');
-      }
-    } catch (error) {
-      console.error('Failed to tag user', error);
-      toast.error(
-        error?.response?.data?.body?.error ||
-          error?.response?.data?.body?.message ||
-          error?.response?.data?.message ||
-          'Failed to tag user'
-      );
-    } finally {
-      setTaggingId(null);
-    }
-  };
-
-  const untagEntry = async (item) => {
-    const userId = resolveUserId(item);
-    if (!userId) {
-      toast.error('Could not resolve user for this entry');
-      return;
-    }
-    setTaggingId(item.accessLogId);
-    try {
-      const result = await tagUser(userId, {
+      const result = await tagUser(item.userId, {
         tag: false,
         profileImages: item.personImages || [],
         accessLogId: item.accessLogId,
       });
       if (result?.body?.status === 'success' || result?.statusCode === 200) {
-        setTagOverrides((prev) => ({ ...prev, [item.accessLogId]: false }));
-        setPickedNames((prev) => {
-          const next = { ...prev };
-          delete next[item.accessLogId];
-          return next;
-        });
-        setPickedUserIds((prev) => {
-          const next = { ...prev };
-          delete next[item.accessLogId];
-          return next;
-        });
         toast.success('User untagged successfully');
+        fetchLogs(); // refetch so the untagged row drops off this list
       } else {
         toast.error(result?.body?.error || result?.body?.message || 'Failed to untag user');
       }
@@ -851,7 +725,7 @@ const handleExport = async (format) => {
           'Failed to untag user'
       );
     } finally {
-      setTaggingId(null);
+      setUntaggingId(null);
     }
   };
 
@@ -1099,10 +973,7 @@ const handleExport = async (format) => {
         accessorKey: 'action',
         header: 'Action',
         cell: ({ row }) => {
-          const tagged = isTagged(row.original);
-          const busy = taggingId === row.original.accessLogId;
-          const pickedName = pickedNames[row.original.accessLogId];
-          const disabled = !row.original.accessLogId || busy;
+          const busy = untaggingId === row.original.accessLogId;
           return (
             <div className="flex items-center gap-2">
               <button
@@ -1119,33 +990,24 @@ const handleExport = async (format) => {
                 <Play className="w-5 h-5 text-[#07486A]" />
               </button>
 
-              {/* Tag toggle + status pill */}
+              {/* Always-on toggle — can only be turned OFF (untag) */}
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  disabled={disabled}
-                  onClick={(e) => handleToggle(row.original, e)}
+                  disabled={busy}
+                  onClick={() => handleUntag(row.original)}
                   className="disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={tagged ? 'Untag user' : 'Tag user'}
+                  title="Untag user"
                 >
-                  <Switch checked={tagged} className="pointer-events-none" />
+                  <Switch checked={true} className="pointer-events-none" />
                 </button>
-                <span
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap max-w-[140px] ${
-                    tagged
-                      ? 'bg-[#E3F5FF] text-[#07486A] border-[#CFEFFF]'
-                      : 'bg-gray-50 text-gray-500 border-gray-200'
-                  }`}
-                  title={pickedName || (tagged ? 'Tagged' : 'Untagged')}
-                >
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap bg-[#E3F5FF] text-[#07486A] border-[#CFEFFF]">
                   {busy ? (
-                    <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                    <Loader2 className="w-3 h-3 animate-spin" />
                   ) : (
-                    <Tag className="w-3 h-3 shrink-0" fill={tagged ? '#07486A' : 'none'} />
+                    <Tag className="w-3 h-3" fill="#07486A" />
                   )}
-                  <span className="truncate">
-                    {tagged ? pickedName || 'Tagged' : 'Untagged'}
-                  </span>
+                  Tagged
                 </span>
               </div>
             </div>
@@ -1153,7 +1015,7 @@ const handleExport = async (format) => {
         },
       },
     ],
-    [sortField, sortOrder, taggingId, tagOverrides, pickedNames]
+    [sortField, sortOrder, untaggingId]
   );
 
   const renderAccessCard = (item) => {
@@ -1267,38 +1129,27 @@ const handleExport = async (format) => {
           </div>
         </div>
 
-        {/* Tag toggle + status pill */}
+        {/* Always-on toggle — can only be turned OFF (untag) */}
         <div
           className="w-full mt-3 md:mt-4 pt-3 border-t border-gray-100 flex items-center justify-between gap-2"
           onClick={(e) => e.stopPropagation()}
         >
-          <span
-            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] md:text-xs font-semibold border whitespace-nowrap max-w-[70%] ${
-              isTagged(item)
-                ? 'bg-[#E3F5FF] text-[#07486A] border-[#CFEFFF]'
-                : 'bg-gray-50 text-gray-500 border-gray-200'
-            }`}
-            title={pickedNames[item.accessLogId] || (isTagged(item) ? 'Tagged' : 'Untagged')}
-          >
-            {taggingId === item.accessLogId ? (
-              <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] md:text-xs font-semibold border whitespace-nowrap bg-[#E3F5FF] text-[#07486A] border-[#CFEFFF]">
+            {untaggingId === item.accessLogId ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
             ) : (
-              <Tag className="w-3 h-3 shrink-0" fill={isTagged(item) ? '#07486A' : 'none'} />
+              <Tag className="w-3 h-3" fill="#07486A" />
             )}
-            <span className="truncate">
-              {isTagged(item)
-                ? pickedNames[item.accessLogId] || 'Tagged'
-                : 'Untagged'}
-            </span>
+            Tagged
           </span>
           <button
             type="button"
-            disabled={!item.accessLogId || taggingId === item.accessLogId}
-            onClick={(e) => handleToggle(item, e)}
+            disabled={untaggingId === item.accessLogId}
+            onClick={() => handleUntag(item)}
             className="disabled:opacity-50 disabled:cursor-not-allowed"
-            title={isTagged(item) ? 'Untag user' : 'Tag user'}
+            title="Untag user"
           >
-            <Switch checked={isTagged(item)} className="pointer-events-none" />
+            <Switch checked={true} className="pointer-events-none" />
           </button>
         </div>
       </div>
@@ -1315,16 +1166,6 @@ const handleExport = async (format) => {
 
   return (
     <>
-      {/* Authorized-user picker dropdown (opens beside the toggle) */}
-      {dropdown?.rect && (
-        <TagUserDropdown
-          anchorRect={dropdown.rect}
-          busy={!!taggingId}
-          onSelect={(user) => tagWithUser(dropdown.item, user)}
-          onClose={() => setDropdown(null)}
-        />
-      )}
-
       {/* Preview window */}
       <ActionCameraPreview
         module="accesslogs"
@@ -1461,4 +1302,4 @@ const handleExport = async (format) => {
   );
 };
 
-export default AccessLogs;
+export default TaggedUsers;
