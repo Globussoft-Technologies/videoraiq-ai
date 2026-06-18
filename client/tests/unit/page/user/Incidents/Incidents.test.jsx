@@ -55,6 +55,16 @@ vi.mock("@/context/UserContext/DashboardFiltersContext", () => ({
   }),
 }));
 
+// The page's first useEffect calls handleGetObjectDetails() -> getAllDetectionsList()
+// on mount, which fires a real axios request in jsdom (AxiosError: Network Error)
+// even though the permission gate short-circuits the render. Mock it so the gate
+// tests stay hermetic.
+vi.mock("../../../../../src/page/user/Incidents/Api/get", () => ({
+  getAllDetectionsList: vi.fn().mockResolvedValue({
+    data: { body: { data: { result: [] } } },
+  }),
+}));
+
 import Incidents from "../../../../../src/page/user/Incidents/Incidents.jsx";
 
 beforeEach(() => {

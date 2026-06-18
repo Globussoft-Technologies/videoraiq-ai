@@ -476,6 +476,11 @@ const Playback = () => {
      
     // Parse custom timestamp format (e.g. 20251104T102824Z)
     const parseCustomDate = (ts) => {
+      // Callers pass either a Date (e.g. handleSelectSearchResult) or the
+      // custom timestamp string format (e.g. 20251104T102824Z). Guard both so
+      // a Date input doesn't throw "ts.match is not a function".
+      if (ts instanceof Date) return ts;
+      if (typeof ts !== 'string') return null;
       const match = ts.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
       if (!match) return null;
       const [_, y, m, d, hh, mm, ss] = match;
