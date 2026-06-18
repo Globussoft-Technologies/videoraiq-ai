@@ -42,7 +42,7 @@ jobs:
           node-version: 22
 
       - name: Install
-        run: npm ci || npm install
+        run: npm install
 
       - name: Lint
         # ESLint config is present in both client and docker-client.
@@ -92,7 +92,7 @@ jobs:
           node-version: 22
 
       - name: Install
-        run: npm ci || npm install
+        run: npm install
 
       - name: Run unit tests
         run: npm run test:coverage
