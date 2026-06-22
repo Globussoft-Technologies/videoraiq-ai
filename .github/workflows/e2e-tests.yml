@@ -90,7 +90,7 @@ jobs:
 
       - name: Run Playwright
         env:
-          BASE_URL: ${{ github.event.inputs.base_url || secrets.E2E_BASE_URL || 'https://dev.videoraiq.com' }}
+          BASE_URL: ${{ github.event.inputs.base_url || secrets.E2E_BASE_URL || 'https://dev-dashboard.videoraiq.com' || 'https://dev.videoraiq.com' }}
           BACKEND_URL: ${{ secrets.E2E_BACKEND_URL || 'https://dev-api.videoraiq.com' }}
           STREAMING_URL: ${{ secrets.E2E_STREAMING_URL || 'https://dev-stream.videoraiq.com' }}
           AUTH_COOKIE_NAME: ${{ secrets.E2E_AUTH_COOKIE_NAME || 'dev-access-token' }}
