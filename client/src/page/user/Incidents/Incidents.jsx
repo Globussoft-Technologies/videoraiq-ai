@@ -31,8 +31,10 @@ import { useDashboardFiltersContext } from '@/context/UserContext/DashboardFilte
 import MultiSelect from '@/components/ui/multiselect';
 import { Switch } from '@/components/ui/switch';
 import AutoRefreshComponent from '../EmployeeLogs/components/AutoRefreshComponent';
+import LogsFilterPopover from '../EmployeeLogs/components/LogsFilterPopover';
 import { getObjectDetectionList } from '../Profile/Api/get';
 import { getAllDetectionsList } from './Api/get';
+import { getNVRs, getchannels } from '../EmployeeLogs/Api/post';
 import PageLoader from '@/components/PageLoader';
 
 // import { getNvrNames } from '../Cameras/Api/get';
@@ -61,6 +63,9 @@ const Incidents = () => {
   const [stats, setStats] = useState(null); // Keep stats as null initially
   const [resolved, setResolved] = useState(false);
   const [nvrList, setNvrList] = useState([]);
+  const [nvrIds, setNvrIds] = useState([]);
+  const [cameraList, setCameraList] = useState([]);
+  const [channelIds, setChannelIds] = useState([]);
   const [autoRefresh, setAutoRefresh] = useState(() => {
     const savedInterval = localStorage.getItem('incidents_refresh_interval');
     const parsedInterval = parseInt(savedInterval, 10);
@@ -124,6 +129,32 @@ const Incidents = () => {
     handleGetObjectDetails();
   }, []);
 
+  // Load NVR list once (same source/shape as the logs pages)
+  useEffect(() => {
+    const fetchNvrs = async () => {
+      try {
+        const response = await getNVRs();
+        setNvrList(response?.data?.body?.data || []);
+      } catch (error) {
+        console.error('Error fetching NVRs:', error);
+      }
+    };
+    fetchNvrs();
+  }, []);
+
+  // Cameras follow the selected NVR(s)
+  useEffect(() => {
+    const fetchChannels = async () => {
+      try {
+        const response = await getchannels({ nvrIds });
+        setCameraList(response?.data?.body?.data || []);
+      } catch (error) {
+        console.error('Error fetching channels:', error);
+      }
+    };
+    fetchChannels();
+  }, [nvrIds]);
+
   useEffect(() => {
     localStorage.setItem('incidents_auto_refresh', autoRefresh);
   }, [autoRefresh]);
@@ -155,16 +186,27 @@ const Incidents = () => {
     setSelectedLocation([]);
   }, []);
 
+  // Use the location name as the option id so the popover stores name strings,
+  // matching `selectedLocation` and the backend `location` contract.
+  const locationOptions = useMemo(
+    () => (locations || []).map((loc) => ({ id: loc.label, label: loc.label })),
+    [locations]
+  );
+
   const fetchIncidentData = async (
     skip = 0,
     limit = PAGE_SIZE,
     filterData = undefined
   ) => {
     setLoading(true); // Start loading when fetching incidents
+    // Only include filters that have a selection. The backend treats an empty
+    // array as a real filter (`{ $in: [] }`), which would match nothing.
     const finalFilterData = {
       ...filterData,
-      department: selectedDepartment,
-      location: selectedLocation,
+      ...(selectedDepartment?.length ? { department: selectedDepartment } : {}),
+      ...(selectedLocation?.length ? { location: selectedLocation } : {}),
+      ...(nvrIds?.length ? { nvrId: nvrIds } : {}),
+      ...(channelIds?.length ? { channelId: channelIds } : {}),
     };
     try {
       const response = await fetchAllIncidents(skip, limit, finalFilterData);
@@ -311,6 +353,8 @@ const Incidents = () => {
     selectedLocation,
     selectedDepartment,
     selectedIncidentType,
+    nvrIds,
+    channelIds,
   ]);
 
   // Effect 1: Manual/Filter trigger
@@ -333,7 +377,7 @@ const Incidents = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [dateRange, selectedIncidentType]);
+  }, [dateRange, selectedIncidentType, nvrIds, channelIds, selectedDepartment, selectedLocation]);
   // Map API data to IncidentCard/VideoModal expected props
   const mappedIncidents = incidents.map((item) => ({
     id: item._id,
@@ -649,6 +693,25 @@ const Incidents = () => {
             }
             popoverClassName="mt-1 z-50 2xl:mt-2"
             calendarClassName="p-3 bg-white shadow-lg border border-[#D8D8D8]"
+          />
+
+          <LogsFilterPopover
+            nvrIds={nvrIds}
+            setNvrId={(value) => {
+              setNvrIds(value);
+              if (!value || value.length === 0) setChannelIds([]);
+            }}
+            nvrList={nvrList}
+            cameraId={channelIds}
+            setCameraId={setChannelIds}
+            cameraList={cameraList}
+            departments={departments}
+            selectedDepartments={selectedDepartment}
+            setSelectedDepartments={(v) => setSelectedDepartment(v || [])}
+            showLocationFilter={true}
+            employeeLocations={selectedLocation}
+            setEmployeeLocations={(v) => setSelectedLocation(v || [])}
+            locationOptions={locationOptions}
           />
 
           <AutoRefreshComponent

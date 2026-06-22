@@ -96,6 +96,8 @@ const Header = () => {
       const logs = permissions?.logs;
       if (!logs) return false;
       if (typeof logs?.global?.view === 'boolean') return logs.global.view === true;
+      // Flat shape: { view, create, edit, delete }
+      if (typeof logs.view === 'boolean') return logs.view === true;
       return Object.values(logs).some((v) => v?.view === true);
     }
     return permissions?.[permissionKey]?.view === true;

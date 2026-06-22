@@ -408,10 +408,20 @@ const AccessLogs = () => {
 
       const mapped = userlogs.map((log) => {
         const sessions = log.sessions || [];
+        const firstSessionImg = sessions
+          .map(
+            (s) =>
+              s?.images?.faceImage ||
+              s?.images?.personImage ||
+              s?.images?.frameImage
+          )
+          .find(Boolean);
         const image =
           log.userInfo?.profilePics?.length > 0
             ? `${nasUrl}/api/v1/uploads${log.userInfo.profilePics[0]}`
-            : unknownimg;
+            : firstSessionImg
+              ? `${nasUrl}/api/v1/uploads${firstSessionImg}`
+              : unknownimg;
         const imageUrls = sessions.map((session) => {
           const images = session.images;
           return images?.frameImage || images?.personImage || images?.faceImage;
@@ -1172,14 +1182,16 @@ const handleExport = async (format) => {
           dispatch({ type: 'SET_SELECTED_LOG', value: item });
           dispatch({ type: 'SET_SHOW_PROFILE', value: true });
         }}
-        className="bg-white rounded-2xl p-3 sm:p-4 md:p-5 lg:p-6 shadow-sm border border-gray-100 flex flex-col items-center relative group hover:shadow-md transition-shadow cursor-pointer h-full w-full min-w-0"
+        className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 flex flex-col relative group hover:shadow-md transition-shadow cursor-pointer h-full w-full min-w-0"
       >
-        {/* Department badge top-left */}
-        <div className="absolute top-2 left-2 md:top-3 md:left-3 z-20 max-w-[55%]">
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] md:text-[10px] font-semibold bg-[#E3F5FF] text-[#07486A] border border-[#CFEFFF] shadow-sm truncate max-w-full">
-            {item.department}
-          </span>
-        </div>
+        {/* Department badge top-left (hidden when no department) */}
+        {item.department && item.department !== '--' && (
+          <div className="absolute top-2 left-2 md:top-3 md:left-3 z-20 max-w-[55%]">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] md:text-[10px] font-semibold bg-[#E3F5FF] text-[#07486A] border border-[#CFEFFF] shadow-sm truncate max-w-full">
+              {item.department}
+            </span>
+          </div>
+        )}
 
         {/* Action button top-right */}
         <div className="absolute top-2 right-2 flex flex-row flex-nowrap items-center gap-0.5 sm:gap-1 z-30">
@@ -1197,16 +1209,17 @@ const handleExport = async (format) => {
           </button>
         </div>
 
-        {/* Avatar */}
-        <div className="relative mb-3 md:mb-5 mt-6 sm:mt-4 flex items-center justify-center w-full">
-          <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 lg:w-32 lg:h-32 rounded-full overflow-hidden shadow-sm shrink-0 ring-4 ring-gray-50 group-hover:ring-[#CFEFFF] transition-all">
-            <img
-              src={item.image}
-              alt={item.name}
-              className="w-full h-full object-cover"
-            />
-          </div>
+        {/* Avatar — full-bleed across the top of the card */}
+        <div className="relative w-full h-40 sm:h-44 md:h-48 lg:h-52 overflow-hidden">
+          <img
+            src={item.personImages?.[0] || item.image}
+            alt={item.name}
+            className="w-full h-full object-cover object-top"
+          />
         </div>
+
+        {/* Content below the image */}
+        <div className="flex flex-col p-3 sm:p-4 md:p-5">
 
         {/* Name */}
         <div className="w-full text-center mb-2 md:mb-3 px-2">
@@ -1300,6 +1313,7 @@ const handleExport = async (format) => {
           >
             <Switch checked={isTagged(item)} className="pointer-events-none" />
           </button>
+        </div>
         </div>
       </div>
     );
