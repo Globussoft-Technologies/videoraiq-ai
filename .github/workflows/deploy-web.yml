@@ -86,7 +86,7 @@ jobs:
 
           # Note: If your Webhook daemon port is exposed natively on 9000 without an Nginx proxy, 
           # adjust the URL formatting scheme below to "http://${{ secrets.SERVER_IP_OR_DOMAIN }}:9000$WEBHOOK_PATH"
-          URL="http://${{ secrets.SERVER_IP_OR_DOMAIN }}:9000$WEBHOOK_PATH"
+          URL="https://${{ secrets.SERVER_IP_OR_DOMAIN }}$WEBHOOK_PATH"
           echo "POST $URL (dry_run=$DRY_RUN)"
 
           # Execute the request and fail the runner on any non-2xx status code
