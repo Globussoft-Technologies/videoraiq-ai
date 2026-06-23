@@ -16,6 +16,9 @@ const detectionSettingSchema = new mongoose.Schema(
   },
   { _id: false }, // prevent nested _id creation
 );
+//newchanges
+
+
 
 const detectionFields = {
   countPersonsSettings: detectionSettingSchema,
