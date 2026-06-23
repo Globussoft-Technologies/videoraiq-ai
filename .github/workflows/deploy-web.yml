@@ -4,12 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - 'client/'
+      - 'client/**'
       - '.github/workflows/deploy-web.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'client/'
+      - 'client/**'
       - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
     inputs:
@@ -47,7 +47,7 @@ jobs:
 
       - name: Lint
         # Soft-fail preserves execution pipeline — flip to hard-fail once warnings are cleaned up
-        run: npm run lint  true
+        run: npm run lint || true
 
       - name: Validate Production Build
         run: npm run build
@@ -60,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       WEBHOOK_PATH: /hooks/redeploy-web
-      DRY_RUN: ${{ github.event.inputs.dry_run  'false' }}
+      DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
     steps:
       - name: Dispatch secure webhook request
         run: |
@@ -100,10 +100,10 @@ jobs:
             "$URL")
 
           echo "Response ($HTTP_CODE):"
-          cat /tmp/webhook_response.txt  true
+          cat /tmp/webhook_response.txt || true
           echo
 
-          if [ "$HTTP_CODE" -lt 200 ]  [ "$HTTP_CODE" -ge 300 ]; then
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
             echo "::error::Webhook returned HTTP $HTTP_CODE — redeploy script rejected or failed"
             exit 1
           fi
