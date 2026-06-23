@@ -63,6 +63,7 @@ const ReusableTablePage = ({
       ? onSearchChange
       : setInternalSearchInput;
   const [onLoading, setOnLoading] = useState(false);
+  const [pageInput, setPageInput] = useState('');
   const limit = typeof limitProp === 'number' ? limitProp : internalLimit;
   const setLimit = typeof onLimitChange === 'function'
     ? (v) => { onLimitChange(v); setCurrentPage(1); }
@@ -139,6 +140,15 @@ const ReusableTablePage = ({
     if (useServerPagination && typeof onPageChange === 'function') {
       onPageChange(page);
     }
+  };
+
+  // "Go to page" input handler — clamp to a valid page, ignore empty/invalid.
+  const handleGoToPage = () => {
+    const page = parseInt(pageInput, 10);
+    if (!Number.isFinite(page)) return;
+    const clamped = Math.min(Math.max(page, 1), totalPages);
+    handlePageChange(clamped);
+    setPageInput('');
   };
 
   // Reset to first page when filters/search/data change. For server pagination, also request page 1.
@@ -365,17 +375,46 @@ const ReusableTablePage = ({
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex items-center justify-end gap-1.5">
-              <span className="text-xs text-[#595959] whitespace-nowrap">Rows:</span>
-              <select
-                value={limit}
-                onChange={(e) => setLimit(Number(e.target.value))}
-                className="h-9 border border-[#C7C7C7] rounded-lg text-xs text-[#595959] bg-white px-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#07486A]"
-              >
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>{size}</option>
-                ))}
-              </select>
+
+            <div className="flex items-center justify-end gap-3">
+              {/* Go to page */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-[#595959] whitespace-nowrap">Go to:</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={totalPages}
+                  value={pageInput}
+                  onChange={(e) => setPageInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleGoToPage();
+                  }}
+                  placeholder="Page"
+                  className="h-9 w-16 border border-[#C7C7C7] rounded-lg text-xs text-[#595959] bg-white px-2 focus:outline-none focus:ring-1 focus:ring-[#07486A]"
+                />
+                <button
+                  type="button"
+                  onClick={handleGoToPage}
+                  disabled={pageInput === ''}
+                  className="h-9 px-3 rounded-lg text-xs font-medium bg-[#07486A] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#063a55]"
+                >
+                  Go
+                </button>
+              </div>
+
+              {/* Rows per page */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-[#595959] whitespace-nowrap">Rows:</span>
+                <select
+                  value={limit}
+                  onChange={(e) => setLimit(Number(e.target.value))}
+                  className="h-9 border border-[#C7C7C7] rounded-lg text-xs text-[#595959] bg-white px-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#07486A]"
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         )}
