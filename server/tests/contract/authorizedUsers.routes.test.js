@@ -11,6 +11,7 @@ vi.mock("../../core/v1/authorizedUsers/authorizedUsers.controller.js", () => ({
     deleteAuthUser: vi.fn(async (req, res) => res.status(200).json({ success: true })),
     deleteAllAuthUsers: vi.fn(async (req, res) => res.status(200).json({ success: true })),
     bulkImportAuthUser: vi.fn(async (req, res) => res.status(200).json({ success: true })),
+    tagUser: vi.fn(async (req, res) => res.status(200).json({ success: true })),
     verifyUser: vi.fn(async (req, res) => res.status(200).json({ success: true, verified: true })),
     fetchUniqueLocations: vi.fn(async (req, res) => res.status(200).json({ success: true, data: [] })),
   },
