@@ -21,26 +21,38 @@ const getInitialsPlaceholder = (firstName, lastName) => {
  * tagged/untagged pill). Clicking a user calls onSelect(user). Positioned next
  * to the anchor element via a portal so it isn't clipped by table overflow.
  */
+const PAGE_SIZE = 10;
+
 const TagUserDropdown = ({ anchorRect, busy, onSelect, onClose }) => {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 400);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
   const panelRef = useRef(null);
+  const listRef = useRef(null);
+  // Avoids overlapping scroll fetches; ref so the scroll handler reads it live.
+  const fetchingRef = useRef(false);
 
+  // Initial load + reload whenever the search term changes. Resets the list.
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
+      fetchingRef.current = true;
       try {
-        const res = await authorizedUsers(0, 10, debouncedSearch || '');
+        const res = await authorizedUsers(0, PAGE_SIZE, debouncedSearch || '');
         if (!cancelled && res?.body?.status === 'success') {
           setUsers(res.body.data.users || []);
+          setTotalCount(res.body.data.totalCount || 0);
+          if (listRef.current) listRef.current.scrollTop = 0;
         }
       } catch (err) {
         console.error('Failed to load authorized users', err);
       } finally {
         if (!cancelled) setLoading(false);
+        fetchingRef.current = false;
       }
     };
     load();
@@ -48,6 +60,38 @@ const TagUserDropdown = ({ anchorRect, busy, onSelect, onClose }) => {
       cancelled = true;
     };
   }, [debouncedSearch]);
+
+  // Fetch the next page and append. Guarded so it never overlaps a load.
+  const loadMore = async () => {
+    if (fetchingRef.current) return;
+    if (users.length >= totalCount) return; // nothing more to fetch
+    fetchingRef.current = true;
+    setLoadingMore(true);
+    try {
+      const res = await authorizedUsers(
+        users.length,
+        PAGE_SIZE,
+        debouncedSearch || ''
+      );
+      if (res?.body?.status === 'success') {
+        setUsers((prev) => [...prev, ...(res.body.data.users || [])]);
+        setTotalCount(res.body.data.totalCount || 0);
+      }
+    } catch (err) {
+      console.error('Failed to load more authorized users', err);
+    } finally {
+      setLoadingMore(false);
+      fetchingRef.current = false;
+    }
+  };
+
+  // Trigger a fetch when scrolled near the bottom of the list.
+  const handleScroll = (e) => {
+    const el = e.currentTarget;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 60) {
+      loadMore();
+    }
+  };
 
   // Close on outside click / escape
   useEffect(() => {
@@ -98,7 +142,11 @@ const TagUserDropdown = ({ anchorRect, busy, onSelect, onClose }) => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div
+        ref={listRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto"
+      >
         {loading ? (
           <div className="flex items-center justify-center py-8 text-gray-400">
             <Loader2 className="w-5 h-5 animate-spin" />
@@ -150,6 +198,13 @@ const TagUserDropdown = ({ anchorRect, busy, onSelect, onClose }) => {
               </button>
             );
           })
+        )}
+
+        {/* Loading-more indicator for infinite scroll */}
+        {loadingMore && !loading && (
+          <div className="flex items-center justify-center py-3 text-gray-400">
+            <Loader2 className="w-4 h-4 animate-spin" />
+          </div>
         )}
       </div>
     </div>,

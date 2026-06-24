@@ -9,6 +9,7 @@ import {
   ArrowDownUp,
   LayoutGrid,
   List as ListIcon,
+  Loader2,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { formatDateRange } from '@/utils/formatDateRange';
@@ -248,34 +249,42 @@ const ReusableTablePage = ({
             </div>
           </div>
 
-          {showGrid ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
-              {(paginated || []).map((item, idx) => (
-                <React.Fragment key={item?.id ?? item?.email ?? idx}>
-                  {gridCard(item, idx)}
-                </React.Fragment>
-              ))}
+          {loading ? (
+            // While the API is pending (filter change / navigation), show a
+            // single centered spinner instead of stale rows.
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <Loader2 className="w-10 h-10 text-[#07486A] animate-spin" />
             </div>
           ) : (
-            <div className="w-full overflow-x-auto overflow-y-auto max-h-[60vh]">
-              <ProfilesTable
-                data={paginated}
-                columns={columns}
-                loading={onLoading}
-              />
-            </div>
+            <>
+              {showGrid ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+                  {(paginated || []).map((item, idx) => (
+                    <React.Fragment key={item?.id ?? item?.email ?? idx}>
+                      {gridCard(item, idx)}
+                    </React.Fragment>
+                  ))}
+                </div>
+              ) : (
+                <div className="w-full overflow-x-auto overflow-y-auto max-h-[60vh]">
+                  <ProfilesTable
+                    data={paginated}
+                    columns={columns}
+                    loading={onLoading}
+                  />
+                </div>
+              )}
+              {(paginated || []).length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 min-h-[60vh]">
+                  <img
+                    src={notfound}
+                    alt="No logs found"
+                    className="w-64 h-64 mb-4"
+                  />
+                </div>
+              ) : null}
+            </>
           )}
-          {loading ? (
-            <div className="text-center py-4 text-gray-500">Loading..</div>
-          ) : (paginated || []).length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 min-h-[60vh]">
-              <img
-                src={notfound}
-                alt="No logs found"
-                className="w-64 h-64 mb-4"
-              />
-            </div>
-          ) : null}
         </div>
         {!loading && (paginated || []).length > 0 && (
           <div className="mt-6 grid grid-cols-3 items-center gap-4">
