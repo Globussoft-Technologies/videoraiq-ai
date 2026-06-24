@@ -801,6 +801,31 @@ class ChannelService {
           .json(Response.notFoundResp("Channel or NVR not found"));
       }
 
+      const nvr = await NVR.findById(channel.nvrId);
+      if (!nvr) {
+        return res.status(404).json(Response.notFoundResp("NVR not found"));
+      }
+
+      const brand = (nvr.brand || "").toLowerCase();
+
+      // Tiandy: build RTSP playback URL directly from NVR — no external media server needed
+      if (brand === "tiandy") {
+        const ip = decrypt(nvr.ip);
+        const username = nvr.username || "admin";
+        const password = decrypt(nvr.password);
+        const rtspPort = nvr.rtspPort || 554;
+        const chId = channel.channelId;
+        // normalise compact format 20260611T000000Z → 2026-06-11T00:00:00Z
+        const normalise = (t) => /^\d{8}T\d{6}Z$/.test(t)
+          ? `${t.slice(0,4)}-${t.slice(4,6)}-${t.slice(6,8)}T${t.slice(9,11)}:${t.slice(11,13)}:${t.slice(13,15)}Z`
+          : t;
+        const start = new Date(normalise(startTime)).toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+        const end   = new Date(normalise(endTime)).toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+        const playbackUrl = `rtsp://${username}:${password}@${ip}:${rtspPort}/${chId}/1?starttime=${start}&endtime=${end}`;
+        return res.status(200).json(
+          Response.userSuccessResp("Playback URL retrieved successfully", { playbackUrl })
+        );
+      }
 
       const camera_id = APP_ENV === 'local' ? channel?.localChannelId :`${channel.nvrId}-${channel._id}`;
 
@@ -882,7 +907,7 @@ class ChannelService {
       let headers = {};
       let body = "";
 
-      if (brand === "hikvision" || brand === "prama") {
+      if (brand === "hikvision" || brand === "prama" || brand === "tiandy") {
         url = `http://${ip}:${port}/ISAPI/ContentMgmt/search`;
         headers = { "Content-Type": "application/xml" };
         body = hikvisionXml;
@@ -1236,6 +1261,10 @@ class ChannelService {
       }
       // Check if detection setting exists and is linked
       const existingLink = channel?.detections?.[detectionType];
+      logger.debug(
+        `toggleDetection - channelId: ${channelId}, detectionType: ${detectionType}, existingLink: ${JSON.stringify(existingLink)}`
+      );
+
       if (existingLink && existingLink?.id) {
         // Check if already in desired state
         const currentStatus = channel?.detections?.[detectionType]?.enabled;
@@ -1256,12 +1285,12 @@ class ChannelService {
         // Linked: Update enabled status
         channel.detections[detectionType].enabled = enable;
         // Send data to python backend
-        const detectionSetting = existingLink.id;
+        const detectionSetting = channel?.detections?.[detectionType]?.id;
+        const detectionSettingDoc = await DetectionSetting.findById(detectionSetting);
         const zones =
-          detectionSetting?.settings?.referencePoints?.[channelId] || [];
-        const obstruction_threshold_sec = detectionSetting?.settings?.obstruction_threshold_sec || 0;
-        const videoResolution =
-          detectionSetting?.settings?.videoResolution || [];
+          detectionSettingDoc?.settings?.referencePoints?.[channelId] || [];
+        const obstruction_threshold_sec = detectionSettingDoc?.settings?.obstruction_threshold_sec || 0;
+        const videoResolution = detectionSettingDoc?.settings?.videoResolution || [];
         const severity = detectionSetting?.settings?.levelOfImportance;
         if (String(channel.userId) === "32") {
           return res

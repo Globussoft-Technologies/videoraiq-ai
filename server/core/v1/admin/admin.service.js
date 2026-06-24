@@ -619,6 +619,54 @@ class AdminService {
     }
   }
 
+  async getAllowedDetections(req, res, next) {
+    try {
+      const adminId = req?.verified?.userData?.adminId;
+      const admin = await adminModel.findById(adminId).select("detectionConfig").lean();
+      if (!admin) {
+        return res.status(404).json(Response.userFailResp("Admin not found"));
+      }
+      return res.status(200).json(
+        Response.userSuccessResp("Detection config fetched successfully", {
+          detectionConfig: admin.detectionConfig || {},
+        })
+      );
+    } catch (error) {
+      next(new AppError(error, 500));
+    }
+  }
+
+  async updateAllowedDetections(req, res, next) {
+    try {
+      const { targetAdminId, detectionConfig } = req.body;
+
+      if (!targetAdminId) {
+        return res.status(400).json(Response.userFailResp("targetAdminId is required"));
+      }
+      if (!detectionConfig || typeof detectionConfig !== "object" || Array.isArray(detectionConfig)) {
+        return res.status(400).json(Response.userFailResp("detectionConfig must be an object"));
+      }
+
+      const admin = await adminModel.findByIdAndUpdate(
+        targetAdminId,
+        { detectionConfig },
+        { new: true, select: "detectionConfig" }
+      ).lean();
+
+      if (!admin) {
+        return res.status(404).json(Response.userFailResp("Admin not found"));
+      }
+
+      return res.status(200).json(
+        Response.userSuccessResp("Detection config updated successfully", {
+          detectionConfig: admin.detectionConfig,
+        })
+      );
+    } catch (error) {
+      next(new AppError(error, 500));
+    }
+  }
+
   async updateLogsSound(req, res, next) {
     try {
       const { adminId, memberId } = req?.verified?.userData;

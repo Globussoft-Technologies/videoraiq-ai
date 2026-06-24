@@ -109,6 +109,23 @@ export const buildRTSPUrl = (nvr, channel, streamType = "main") => {
     const subtype = streamType === "main" ? 0 : 1;
 
     return `rtsp://${username}:${decryptedPassword}@${decryptedIp}:${nvr.rtspPort}${streamEndpoint}?channel=${channelId}&subtype=${subtype}`;
+  } else if (nvr.brand === "tiandy") {
+    // Tiandy: rtsp://user:pass@ip:rtspPort/ChannelNo/StreamType
+    // StreamType: 1 = main stream, 2 = sub stream
+    const channelId = channel.channelId;
+    const subtype = streamType === "main" ? 1 : 2;
+
+    return `rtsp://${username}:${decryptedPassword}@${decryptedIp}:${nvr.rtspPort}/${channelId}/${subtype}`;
+  } else if (nvr.brand === "securus") {
+    // XiongMai Sofia: rtsp://ip:rtspPort/user=U&password=HASH&channel=N&stream=S.sdp?real_stream
+    // Password must be the Sofia MD5 hash (8 chars from even MD5 hex positions, uppercased)
+    const md5 = createHash("md5").update(decryptedPassword).digest("hex");
+    let sofiaHash = "";
+    for (let i = 0; i < 8; i++) sofiaHash += md5[i * 2];
+    sofiaHash = sofiaHash.toUpperCase();
+    const channelId = channel.channelId;
+    const stream = streamType === "main" ? 0 : 1;
+    return `rtsp://${decryptedIp}:${nvr.rtspPort}/user=${username}&password=${sofiaHash}&channel=${channelId}&stream=${stream}.sdp?real_stream`;
   } else if (nvr.brand === "camera") {
     // Generic Camera: rtsp://user:pass@ip:port/stream
     const streamEndpoint = channel.streamEndpoint; // e.g., /stream

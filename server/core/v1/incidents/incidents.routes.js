@@ -83,6 +83,11 @@ router.get(
   incidentsController.getVehicleCountLogs,
 );
 router.get(
+  "/logs/person-count",
+  viewAccessCheck,
+  incidentsController.getPersonCountLogs,
+);
+router.get(
   "/logs/line-crossing",
   viewAccessCheck,
   incidentsController.getLineCrossingLogs,

@@ -16,9 +16,10 @@ import usersModel from '../users/users.model.js';
 
 class PermissionService {
     async create(req, res) {
-        try {
-            const result = req.verified;
-            let { _id: userId, language, orgId, planData, adminId, firstName: Name, profilePic: userProfilePic, lastName, creatorId,userName} = result.userData;
+        const result = req.verified;
+        let { _id: userId, language, orgId, planData, adminId, firstName: Name, profilePic: userProfilePic, lastName, creatorId,userName} = result.userData.userData;
+
+            try {
                 const data = req.body;
                 const permissionConfig = data.permissionConfig;
                 const permissionDetails = data?.permissionName;

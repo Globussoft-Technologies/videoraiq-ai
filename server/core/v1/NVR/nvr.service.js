@@ -931,73 +931,15 @@ class NVRService {
       }
 
       if (existingNvr) {
-        // NVR exists - add any new cameras and show all available cameras with isAdded status
-        const plainPassword = existingNvr.password ? decrypt(existingNvr.password) : null;
+        // NVR exists - show all available cameras + mark which ones are already added
+        const addedCameras = await Camera.find({ nvrId: existingNvr._id });
+        const addedChannelIds = addedCameras.map((c) => c.channelId);
 
-        // Add all cameras that don't exist yet (without setting isAdded=true)
-        for (const cam of camerasData.cameras) {
-          const existing = await Camera.findOne({
-            nvrId: existingNvr._id,
-            channelId: cam.channelId,
-          }).setOptions({ includeInactive: true });
-
-          if (!existing) {
-            // Create new camera with isAdded=false
-            try {
-              const uid = `${existingNvr._id}-${cam.channelId}`;
-              const newCam = await Camera.create({
-                nvrId: existingNvr._id,
-                userId: user_id,
-                channelId: cam.channelId,
-                rtspChannels: cam.rtspChannels || [],
-                name: cam.name || "",
-                ipAddress: cam.ipAddress || "",
-                model: cam.model || "",
-                serialNumber: cam.serialNumber || "",
-                firmwareVersion: cam.firmwareVersion || "",
-                streamEndpoint: cam.streamEndpoint || "default",
-                isAdded: false,
-              });
-
-              // Register stream but mark as not added yet
-              const rtspUrl = buildRTSPUrl(existingNvr, newCam, "main");
-              try {
-                await registerCameraStream(uid, rtspUrl);
-              } catch (streamErr) {
-                logger.error(`Failed to register stream for camera ${cam.channelId}`, streamErr.message);
-              }
-            } catch (camErr) {
-              logger.error(`Failed to create camera ${cam.channelId}`, camErr.message);
-            }
-          }
-        }
-
-        // Fetch all cameras and return with their isAdded status (including inactive)
-        const allCameras = await Camera.find({ nvrId: existingNvr._id }).setOptions({ includeInactive: true });
-        const camerasMap = new Map(allCameras.map((c) => [c.channelId, { isAdded: c.isAdded, _id: c._id }]));
-
-        // Build cameras with status and streaming URLs
-        const camerasWithStatus = await Promise.all(
-          camerasData.cameras.map(async (cam) => {
-            const dbCam = camerasMap.get(cam.channelId);
-            let streamingUrl = null;
-
-            // Build streaming URL for all cameras (for preview in discovery modal)
-            if (dbCam) {
-              streamingUrl = await buildStreamingUrl(existingNvr, { ...cam, _id: dbCam._id });
-            }
-
-            return {
-              ...cam,
-              isAdded: dbCam ? dbCam.isAdded : false,
-              streamingUrl,
-            };
-          })
-        );
-
-        // Update camera count (only count added cameras)
-        const addedCount = allCameras.filter(c => c.isAdded).length;
-        await NVR.findByIdAndUpdate(existingNvr._id, { cameraCount: addedCount });
+        // Mark cameras that are already added
+        const camerasWithStatus = camerasData.cameras.map((cam) => ({
+          ...cam,
+          isAdded: addedChannelIds.includes(cam.channelId),
+        }));
 
         return res.status(200).json(
           Response.userSuccessResp("Cameras retrieved successfully", {
@@ -1008,12 +950,15 @@ class NVRService {
         );
       }
 
-      // Save new NVR and add all its cameras with isAdded=false
+      // Tiandy NVR password fields are capped at 15 chars — store trimmed value so RTSP URLs authenticate correctly
+      const storedPassword = brand.toLowerCase() === "tiandy" ? password.slice(0, 15) : password;
+
+      // Save NVR
       const savedNvr = await NVR.create({
         userId: user_id,
         ip,
         username,
-        password,
+        password: storedPassword,
         port,
         rtspPort,
         nvrName,
@@ -1024,70 +969,44 @@ class NVRService {
         macAddress: camerasData.deviceInfo?.macAddress || "",
         firmwareVersion: camerasData.deviceInfo?.firmwareVersion || "",
         deviceType: camerasData.deviceInfo?.deviceType || "",
-        location: location || "",
+        location: location?.toLowerCase()  || "",
         cameraCount: 0,
       });
 
-      // Add all cameras for new NVR with isAdded=false
-      const createdCameras = [];
+      // Save all fetched cameras
+      const savedCameras = [];
       for (const cam of camerasData.cameras) {
-        try {
-          const newCam = await Camera.create({
-            nvrId: savedNvr._id,
-            userId: user_id,
-            channelId: cam.channelId,
-            rtspChannels: cam.rtspChannels || [],
-            name: cam.name || "",
-            ipAddress: cam.ipAddress || "",
-            model: cam.model || "",
-            serialNumber: cam.serialNumber || "",
-            firmwareVersion: cam.firmwareVersion || "",
-            streamEndpoint: cam.streamEndpoint || "default",
-            isAdded: false,
-          });
+        const savedCam = await Camera.create({
+          nvrId: savedNvr._id,
+          userId: user_id,
+          channelId: cam.channelId,
+          name: cam.name || `Camera ${cam.channelId}`,
+          ipAddress: cam.ipAddress || "",
+          model: cam.model || "",
+          serialNumber: cam.serialNumber || "",
+          firmwareVersion: cam.firmwareVersion || "",
+          streamEndpoint: cam.streamEndpoint || "",
+          rtspChannels: cam.rtspChannels || [],
+        });
 
-          createdCameras.push(newCam);
-
-          // Register stream
-          const uid = `${savedNvr._id}-${newCam._id}`;
-          const rtspUrl = buildRTSPUrl(savedNvr, newCam, "main");
-          try {
-            await registerCameraStream(uid, rtspUrl);
-          } catch (streamErr) {
-            logger.error(`Failed to register stream for camera ${cam.channelId}`, streamErr.message);
-          }
-        } catch (camErr) {
-          logger.error(`Failed to create camera ${cam.channelId}`, camErr.message);
-        }
+        const uid = `${savedNvr._id}-${savedCam._id}`;
+        const rtspUrl = buildRTSPUrl(savedNvr, savedCam, "main");
+        registerCameraStream(uid, rtspUrl);
+        savedCameras.push(savedCam);
       }
 
-      // Build streaming URLs for all cameras
-      const camerasWithUrl = await Promise.all(
-        camerasData.cameras.map(async (cam, index) => {
-          const createdCam = createdCameras[index];
-          let streamingUrl = null;
-          if (createdCam) {
-            try {
-              streamingUrl = await buildStreamingUrl(savedNvr, createdCam);
-            } catch {
-              // non-fatal
-            }
-          }
-          return {
-            ...cam,
-            isAdded: false,
-            streamingUrl,
-          };
-        })
-      );
+      await NVR.findByIdAndUpdate(savedNvr._id, { cameraCount: savedCameras.length });
 
-      // Update camera count (initially 0 since all are isAdded=false)
-      await NVR.findByIdAndUpdate(savedNvr._id, { cameraCount: 0 });
+      const adminId = req?.verified?.userData?.adminId;
+      autoSyncLocations(
+        { _id: adminId },
+        { user_id }
+      ).catch((e) => logger.error("Post-NVR registration sync failed", e));
 
       return res.status(201).json(
         Response.userSuccessResp("NVR registered and cameras fetched successfully", {
-          nvr: savedNvr,
-          cameras: camerasWithUrl,
+          nvr: { ...savedNvr._doc, cameraCount: savedCameras.length },
+          cameras: savedCameras,
           isNew: true,
         }),
       );
@@ -1371,6 +1290,283 @@ class NVRService {
           deviceInfo,
           cameras: cameraList,
         };
+      } else if (brand.toLowerCase() === "tiandy") {
+        const { createHash } = await import("crypto");
+
+        // Tiandy NVR password fields are capped at 15 chars — trim to match what NVR stored
+        const effectivePassword = password.slice(0, 15);
+
+        // Step 1: SessionCheck — public endpoint, requires If-Modified-Since: 0
+        let scRes;
+        try {
+          scRes = await fetch(
+            `http://${ip}:${port}/CGI/Security/SessionCheck?timeStamp=${Date.now()}`,
+            { headers: { "If-Modified-Since": "0" }, signal: AbortSignal.timeout(10000) }
+          );
+        } catch (err) {
+          return { error: `Tiandy SessionCheck failed — ${err.message}` };
+        }
+        if (!scRes.ok) return { error: "Tiandy SessionCheck failed — device unreachable" };
+
+        const scXml = await scRes.text();
+        const scExtract = (tag) => (scXml.match(new RegExp(`<${tag}>([^<]+)</${tag}>`)) || [])[1] || "";
+        const session    = scExtract("session");
+        const key        = scExtract("key");
+        const iterations = parseInt(scExtract("iterations")) || 10;
+
+        // Step 2: SHA256 hash chain (Tiandy GetSessionPW logic)
+        let hash = createHash("sha256").update(username + effectivePassword).digest("hex").toUpperCase();
+        for (let i = 0; i < iterations; i++) {
+          hash = createHash("sha256").update(hash + key).digest("hex").toUpperCase();
+        }
+
+        // Step 3: POST Logon — no XML declaration (matches browser behavior)
+        const loginXml = `<User><username>${username}</username><passwd>${hash}</passwd><sessionTmp>${session}</sessionTmp></User>`;
+        let logonRes;
+        try {
+          logonRes = await fetch(
+            `http://${ip}:${port}/CGI/Security/Logon?timeStamp=${Date.now()}`,
+            { method: "POST", headers: { "Content-Type": "application/xml; charset=utf-8", "If-Modified-Since": "0" }, body: loginXml, signal: AbortSignal.timeout(10000) }
+          );
+        } catch (err) {
+          return { error: `Tiandy Logon failed — ${err.message}` };
+        }
+        const logonXml = await logonRes.text();
+        const statusValue   = (logonXml.match(/<statusValue>([^<]+)<\/statusValue>/) || [])[1];
+        const sessionToken  = (logonXml.match(/<session>([^<]+)<\/session>/) || [])[1] || "";
+        const passwdLeft    = (logonXml.match(/<passwdLeftValue>([^<]+)<\/passwdLeftValue>/) || [])[1];
+
+        if (statusValue !== "200" || !sessionToken) {
+          return { error: `Tiandy authentication failed (attempts left: ${passwdLeft})` };
+        }
+
+        const authHeaders = { HttpSession: sessionToken, "If-Modified-Since": "0" };
+
+        // Step 4: Device info
+        let deviceInfo = { deviceName: "", model: "", serialNumber: "", firmwareVersion: "", macAddress: "", deviceType: "NVR" };
+        try {
+          const devRes = await fetch(`http://${ip}:${port}/ISAPI/System/deviceInfo`, { headers: authHeaders, signal: AbortSignal.timeout(10000) });
+          if (devRes.ok) {
+            const devXml = await devRes.text();
+            const x = (tag) => (devXml.match(new RegExp(`<${tag}>([^<]+)</${tag}>`)) || [])[1] || "";
+            deviceInfo = {
+              deviceName: x("deviceName"),
+              model: x("model"),
+              serialNumber: x("serialNumber"),
+              macAddress: x("macAddress"),
+              firmwareVersion: x("firmwareVersion"),
+              deviceType: "NVR",
+            };
+          }
+        } catch (_) { /* use default deviceInfo */ }
+
+        // Step 5: Channel list
+        let channels = [];
+        try {
+        const chRes = await fetch(`http://${ip}:${port}/ISAPI/ContentMgmt/InputProxy/channels`, { headers: authHeaders, signal: AbortSignal.timeout(10000) });
+        if (chRes.ok) {
+          const chXml = await chRes.text();
+          const chMatches = [...chXml.matchAll(/<InputProxyChannel>([\s\S]*?)<\/InputProxyChannel>/g)];
+          channels = chMatches.map((m) => {
+            const cx = (tag) => (m[1].match(new RegExp(`<${tag}>([^<]+)</${tag}>`)) || [])[1] || "";
+            const chNum = cx("id");
+            const resolvedName = cx("channelName") || cx("name") || `Camera ${chNum}`;
+            return {
+              channelId: chNum,
+              name: resolvedName,
+              ipAddress: cx("ipAddress"),
+              serialNumber: cx("serialnumber"),
+              model: "",
+              firmwareVersion: "",
+              streamEndpoint: "/Streaming/Channels/",
+              rtspChannels: [
+                { id: `${chNum}_1`, resolution: { width: 0, height: 0 } },
+                { id: `${chNum}_2`, resolution: { width: 0, height: 0 } },
+              ],
+            };
+          });
+        }
+        } catch (_) { /* use empty channels, fallback applies below */ }
+
+        // Fallback: 16 channels if list empty
+        const cameras = channels.length > 0 ? channels : Array.from({ length: 16 }, (_, i) => {
+          const ch = String(i + 1);
+          return {
+            channelId: ch,
+            name: `Camera ${ch}`,
+            ipAddress: "",
+            model: "",
+            serialNumber: "",
+            firmwareVersion: "",
+            streamEndpoint: "",
+            rtspChannels: [
+              { id: `${ch}_1`, resolution: { width: 0, height: 0 } },
+              { id: `${ch}_2`, resolution: { width: 0, height: 0 } },
+            ],
+          };
+        });
+
+        return { deviceInfo, cameras };
+      } else if (brand.toLowerCase() === "securus") {
+        // XiongMai Sofia DVR/NVR — three sources: ONVIF (port 8899) + DVRIP (port 34567) + HTML
+        const { createHash } = await import("crypto");
+        const dvripPort = 34567;
+        const onvifPort = 8899;
+
+        // Sofia password hash: 8 chars from even-indexed MD5 hex positions, uppercased
+        const sofiaPwdHash = (pwd) => {
+          const md5 = createHash("md5").update(pwd).digest("hex");
+          let h = "";
+          for (let i = 0; i < 8; i++) h += md5[i * 2];
+          return h.toUpperCase();
+        };
+
+        const buildPacket = (sessionId, seq, msgId, jsonBody) => {
+          const body = Buffer.from(jsonBody + "\n\0", "utf8");
+          const hdr = Buffer.alloc(20);
+          hdr[0] = 0xff;
+          hdr.writeUInt32LE(sessionId, 4);
+          hdr.writeUInt32LE(seq, 8);
+          hdr.writeUInt16LE(msgId, 14);
+          hdr.writeUInt32LE(body.length, 16);
+          return Buffer.concat([hdr, body]);
+        };
+
+        // Step 1: ONVIF GetDeviceInformation on port 8899 (no auth required on XiongMai)
+        let onvifDeviceInfo = {};
+        try {
+          const soapBody = `<?xml version="1.0" encoding="UTF-8"?><s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"><s:Body><tds:GetDeviceInformation xmlns:tds="http://www.onvif.org/ver10/device/wsdl"/></s:Body></s:Envelope>`;
+          const onvifRes = await fetch(`http://${ip}:${onvifPort}/onvif/device_service`, {
+            method: "POST",
+            headers: { "Content-Type": "application/soap+xml; charset=utf-8" },
+            body: soapBody,
+            signal: AbortSignal.timeout(5000),
+          });
+          if (onvifRes.ok) {
+            const xml = await onvifRes.text();
+            const tag = (t) => xml.match(new RegExp(`<[^:>]*:?${t}>([^<]+)<`))?.[1]?.trim() || "";
+            onvifDeviceInfo = {
+              manufacturer:    tag("Manufacturer"),
+              model:           tag("Model"),
+              firmwareVersion: tag("FirmwareVersion"),
+              serialNumber:    tag("SerialNumber"),
+              hardwareId:      tag("HardwareId"),
+            };
+          }
+        } catch (_) { /* ONVIF port not reachable */ }
+
+        // Step 2: DVRIP login → ConfigGet "IPCamera" (per-channel IP camera info for NVRs)
+        //         + SystemInfo query as fallback for device metadata
+        const dvripResult = await new Promise((resolve) => {
+          const sock = net.createConnection({ host: ip, port: dvripPort, timeout: 10000 });
+          let buf = Buffer.alloc(0);
+          let seq = 0;
+          let sessionId = 0;
+          let loginDone = false;
+          const result = { ipcChannels: [] };
+          let timer = null;
+
+          const finish = () => { clearTimeout(timer); sock.destroy(); resolve(result); };
+
+          sock.on("connect", () => {
+            sock.write(buildPacket(0, seq++, 1000, JSON.stringify({
+              EncryptType: "MD5", LoginType: "DVRIP",
+              PassWord: sofiaPwdHash(password), UserName: username,
+            })));
+          });
+
+          sock.on("data", (chunk) => {
+            buf = Buffer.concat([buf, chunk]);
+            while (buf.length >= 20) {
+              const dataLen = buf.readUInt32LE(16);
+              if (buf.length < 20 + dataLen) break;
+              const pktMsgId = buf.readUInt16LE(14);
+              sessionId = buf.readUInt32LE(4);
+              const rawBody = buf.slice(20, 20 + dataLen);
+              buf = buf.slice(20 + dataLen);
+
+              if (pktMsgId === 1001 && !loginDone) {
+                // Login response — binary: first 4 bytes = 0 means success
+                const binaryRet = rawBody.length >= 4 ? rawBody.readUInt32LE(0) : -1;
+                if (binaryRet !== 0) return finish(); // wrong credentials, resolve empty
+                loginDone = true;
+                const sidHex = "0x" + sessionId.toString(16).padStart(8, "0").toUpperCase();
+                // ConfigGet IPCamera — returns per-channel IP, port, credentials for NVR IP cameras
+                sock.write(buildPacket(sessionId, seq++, 1042, JSON.stringify({ Name: "IPCamera", SessionID: sidHex })));
+                // SystemInfo as fallback for device metadata
+                sock.write(buildPacket(sessionId, seq++, 1020, JSON.stringify({ Name: "SystemInfo", SessionID: sidHex })));
+                timer = setTimeout(finish, 4000);
+              } else if (pktMsgId === 1043) {
+                // ConfigGet response — try JSON (some firmware) else log ASCII for debugging
+                try {
+                  const parsed = JSON.parse(rawBody.toString("utf8").replace(/\0/g, "").trim());
+                  if (Array.isArray(parsed.IPCamera)) result.ipcChannels = parsed.IPCamera;
+                  else if (Array.isArray(parsed)) result.ipcChannels = parsed;
+                } catch (_) {
+                  const ascii = rawBody.toString("latin1").replace(/[^\x20-\x7e]/g, "|");
+                  console.log(`ConfigGet binary response (${dataLen}B): ${ascii.substring(0, 300)}`);
+                }
+              } else if (pktMsgId === 1021) {
+                // SystemInfo response — try JSON
+                try { Object.assign(result, JSON.parse(rawBody.toString("utf8").replace(/\0/g, "").trim())); } catch (_) {}
+              }
+            }
+          });
+
+          sock.on("timeout", () => finish());
+          sock.on("error", () => finish());
+        });
+
+        // Step 3: HTML page — channel count + fallback device info from embedded JS vars
+        let channelCount = 4;
+        let htmlDeviceInfo = {};
+        try {
+          const htmlRes = await fetch(`http://${ip}:${port}/`, { signal: AbortSignal.timeout(5000) });
+          if (htmlRes.ok) {
+            const html = await htmlRes.text();
+            const chMatch = html.match(/g_channelNum\s*=\s*(\d+)/);
+            if (chMatch) channelCount = parseInt(chMatch[1]);
+            const extract = (re) => { const m = html.match(re); return m ? m[1].trim() : ""; };
+            const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+            htmlDeviceInfo = {
+              model:           extract(/g_devType\s*=\s*["']([^"']+)["']/) || (titleMatch ? titleMatch[1].trim() : ""),
+              serialNumber:    extract(/g_serialNo\s*=\s*["']([^"']+)["']/),
+              firmwareVersion: extract(/g_softVersion\s*=\s*["']([^"']+)["']/),
+              macAddress:      extract(/g_macAddr\s*=\s*["']([^"']+)["']/),
+            };
+          }
+        } catch (_) { /* use defaults */ }
+
+        // Merge device info: ONVIF (most reliable) > DVRIP SystemInfo > HTML vars
+        const deviceInfo = {
+          deviceName:      onvifDeviceInfo.manufacturer   || dvripResult.DeviceName      || "",
+          model:           onvifDeviceInfo.model          || dvripResult.HardWare        || htmlDeviceInfo.model          || "",
+          serialNumber:    onvifDeviceInfo.serialNumber   || dvripResult.SerialNo        || htmlDeviceInfo.serialNumber   || "",
+          firmwareVersion: onvifDeviceInfo.firmwareVersion|| dvripResult.SoftWareVersion || htmlDeviceInfo.firmwareVersion|| "",
+          macAddress:                                        dvripResult.MACAddress       || htmlDeviceInfo.macAddress     || "",
+          deviceType: "DVR",
+        };
+
+        // Build camera list — use IPC channel data if available (NVR), else generic (analog DVR)
+        const cameras = Array.from({ length: channelCount }, (_, i) => {
+          const ch = String(i + 1);
+          const ipc = dvripResult.ipcChannels[i] || {};
+          return {
+            channelId: ch,
+            name:      ipc.Name || ipc.ChannelName || `Camera ${ch}`,
+            ipAddress: ipc.IPCAddress || ipc.IPAddress || "",
+            model:     ipc.DeviceType || "",
+            serialNumber: "",
+            firmwareVersion: "",
+            streamEndpoint: "",
+            rtspChannels: [
+              { id: `${ch}_0`, resolution: { width: 0, height: 0 } },
+              { id: `${ch}_1`, resolution: { width: 0, height: 0 } },
+            ],
+          };
+        });
+
+        return { deviceInfo, cameras };
       } else {
         return { error: "This brand is not yet supported for camera discovery" };
       }
@@ -1413,39 +1609,64 @@ class NVRService {
         return res.status(404).json(Response.notFoundResp("NVR not found"));
       }
 
-      // Get all cameras for this NVR (including inactive ones)
-      const allCameras = await Camera.find({ nvrId }).setOptions({ includeInactive: true });
+      // Get plain password for stream registration
+      const plainPassword = nvr.getDecryptedPassword?.() || nvr.password;
+      const plainIp = decrypt(nvr.ip);
 
-      // Normalize cameraIds to strings for comparison
-      const selectedSet = new Set(cameraList.map(id => String(id)));
-      const bulkOps = allCameras.map((cam) => ({
-        updateOne: {
-          filter: { _id: cam._id },
-          update: { $set: { isAdded: selectedSet.has(String(cam.channelId)) } },
-        },
-      }));
+      const client = new DigestFetch(nvr.username, plainPassword);
+      const cameraResults = [];
 
-      if (bulkOps.length > 0) {
-        await Camera.bulkWrite(bulkOps);
+      // Add selected cameras
+      for (const camera of cameras) {
+        const { channelId } = camera;
+
+        // Check if camera already exists
+        const existingCam = await Camera.findOne({
+          nvrId,
+          channelId,
+        });
+
+        if (existingCam) {
+          cameraResults.push(existingCam);
+          continue;
+        }
+
+        // Create new camera
+        const savedCam = await Camera.create({
+          nvrId,
+          userId: user_id,
+          channelId,
+          rtspChannels: camera.rtspChannels || [],
+          name: camera.name || "",
+          ipAddress: camera.ipAddress || "",
+          model: camera.model || "",
+          serialNumber: camera.serialNumber || "",
+          firmwareVersion: camera.firmwareVersion || "",
+          streamEndpoint: camera.streamEndpoint || "",
+        });
+
+        // Register camera stream
+        const uid = `${nvrId}-${savedCam._id}`;
+        const rtspUrl = buildRTSPUrl(nvr, savedCam, "main");
+        await registerCameraStream(uid, rtspUrl);
+
+        cameraResults.push(savedCam);
       }
 
-      // Fetch all updated cameras (including inactive for complete state)
-      const cameras = await Camera.find({ nvrId }).setOptions({ includeInactive: true });
-
-      const addedCount = await Camera.countDocuments({ nvrId, isAdded: true });
-      await NVR.findByIdAndUpdate(nvrId, { cameraCount: addedCount });
-
-      return res.status(200).json(
-        Response.userSuccessResp("Cameras selection updated successfully", {
-          cameras,
-          cameraCount: addedCount,
+      // Update camera count
+      const totalCameras = await Camera.countDocuments({ nvrId });
+      await NVR.findByIdAndUpdate(nvrId, { cameraCount: totalCameras });
+      
+      return res.status(201).json(
+        Response.userSuccessResp("Cameras added successfully", {
+          cameras: cameraResults,
         }),
       );
     } catch (error) {
       logger.error("Add Selected Cameras Error:", error);
       return res
         .status(500)
-        .json(Response.errorResp("Failed to update cameras", error.message));
+        .json(Response.errorResp("Failed to add cameras", error.message));
     }
   }
 

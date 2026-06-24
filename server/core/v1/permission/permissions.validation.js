@@ -5,12 +5,12 @@ class PermissionValidation {
         const permissionObjectSchema = Joi.object()
             .pattern(
                 Joi.string().regex(/^[a-zA-Z0-9_-]+$/), // Custom keys for permission attributes like `view`, `create`, etc.
-                Joi.alternatives().try(Joi.boolean(), Joi.object()).required() // Allow boolean or nested objects
+                Joi.boolean().required() // All values must be boolean
             )
             .required()
             .messages({
                 "object.pattern.key": "Permission attributes must be alphanumeric with optional underscores or dashes.",
-                "alternatives.types": "Permission attribute values must be boolean or object.",
+                "boolean.base": "Permission attribute values must be boolean.",
             });
     
         const schema = Joi.object().keys({
@@ -41,12 +41,12 @@ class PermissionValidation {
         const permissionObjectSchema = Joi.object()
             .pattern(
                 Joi.string().regex(/^[a-zA-Z0-9_-]+$/), // Custom keys for permission attributes like `view`, `create`, etc.
-                Joi.alternatives().try(Joi.boolean(), Joi.object()).required() // Allow boolean or nested objects
+                Joi.boolean().required() // All values must be boolean
             )
             .required()
             .messages({
                 "object.pattern.key": "Permission attributes must be alphanumeric with optional underscores or dashes.",
-                "alternatives.types": "Permission attribute values must be boolean or object.",
+                "boolean.base": "Permission attribute values must be boolean.",
             });
     
         const schema = Joi.object().keys({

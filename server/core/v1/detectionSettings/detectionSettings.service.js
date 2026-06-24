@@ -1,3 +1,4 @@
+import Admin from "../admin/admin.model.js";
 import {
   DETECTION_TYPES,
   countPersonsSettings,
@@ -23,7 +24,9 @@ import {
   waterSpillageDetectionSettings,
   toPopulateDetections,
   vehicleObstructionSettings,
-  loiteringDetectionSettings
+  loiteringDetectionSettings,
+  tableOccupancyDetectionSettings,
+  foodServicePPEDetectionSettings
 } from "../../../constants/detectionTypes.js";
 import pythonService from "../../../services/python.service.js";
 import logger from "../../../utils/logger.js";
@@ -55,6 +58,8 @@ import {
   VehicleTypeDetectionSetting,
   LoiteringDetectionSetting,
   VehicleObstructionDetectionSetting,
+  TableOccupancyDetectionSetting,
+  FoodServicePPEDetectionSetting
 } from "./detectionSettings.model.js";
 import Channel from "../channels/channels.model.js";
 import mongoose, { Types } from "mongoose";
@@ -84,14 +89,30 @@ const modelMap = {
   vehicleTypeDetectionSettings: VehicleTypeDetectionSetting,
   loiteringDetectionSettings: LoiteringDetectionSetting,
   vehicleObstructionSettings: VehicleObstructionDetectionSetting,
+  tableOccupancyDetectionSettings: TableOccupancyDetectionSetting,
+  foodServicePPEDetectionSettings: FoodServicePPEDetectionSetting
 };
 
 class DetectionSettingService {
   async getDetectionTypes(req, res, _next) {
     try {
+      const adminId = req?.verified?.userData?.adminId;
+      const admin = await Admin.findById(adminId).select("detectionConfig").lean();
+
+      const config = admin?.detectionConfig;
+      let detectionTypes = DETECTION_TYPES;
+
+      if (config && Object.keys(config).length > 0) {
+        detectionTypes = Object.fromEntries(
+          Object.entries(DETECTION_TYPES)
+            .filter(([key]) => key in config)
+            .map(([key, defaultName]) => [key, config[key] || defaultName])
+        );
+      }
+
       return res.status(200).json(
         Response.userSuccessResp("Detection types fetched successfully", {
-          detectionTypes: DETECTION_TYPES,
+          detectionTypes,
         }),
       );
     } catch (error) {
@@ -118,7 +139,17 @@ class DetectionSettingService {
           .json(Response.userFailResp("Validation Failed", error.message));
       }
 
-      // 2. Save to DB for each channelId
+      // 2. Check if admin is allowed to use this detection type
+      const adminId = req?.verified?.userData?.adminId;
+      const admin = await Admin.findById(adminId).select("detectionConfig").lean();
+      const config = admin?.detectionConfig;
+      if (config && Object.keys(config).length > 0 && !(value.settingType in config)) {
+        return res
+          .status(403)
+          .json(Response.userFailResp("You are not authorized to use this detection type"));
+      }
+
+      // 3. Save to DB for each channelId
       const data = { ...value, userId: user_id };
 
       const existing = await DetectionSetting.findOne({
@@ -647,6 +678,7 @@ class DetectionSettingService {
         conveyorDetectionSettings,
         crusherDetectionSettings,
         waterSpillageDetectionSettings,
+        vehicleObstructionSettings,
       };
 
       return res.status(200).json(

@@ -34,7 +34,9 @@ import {
   CrusherDetectionIncident,
   VehicleTypeDetectionIncident,
   WaterSpillageDetectionIncident,
-  LoiteringDetectionIncident
+  LoiteringDetectionIncident,
+  TableOccupancyDetectionIncident,
+  FoodServicePPEDetectionIncident,
 } from "./incidents.model.js";
 const modelMap = {
   countPersons: CountPersonIncident,
@@ -58,7 +60,9 @@ const modelMap = {
   crusherDetection: CrusherDetectionIncident,
   waterSpillageDetection: WaterSpillageDetectionIncident,
   vehicleTypeDetection: VehicleTypeDetectionIncident,
-  loiteringDetection: LoiteringDetectionIncident
+  loiteringDetection: LoiteringDetectionIncident,
+  tableOccupancyDetection: TableOccupancyDetectionIncident,
+  foodServicePPEDetection: FoodServicePPEDetectionIncident
 };
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
@@ -140,7 +144,7 @@ class IncidentsService {
           "countPersons",
           "countVehicles",
           "genericObjectDetection",
-          // "lineCrossing",
+          "lineCrossing",
           "doorDetection",
         ].includes(incidentType)
       ) {
@@ -381,7 +385,37 @@ class IncidentsService {
       } else if (incidentType === "loiteringDetection") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.Image = req?.body?.Image;
+      } else if (incidentType === "tableOccupancyDetection") {
+        newIncident.timeOfIncident = req?.body?.timeOfIncident;
+        newIncident.Image = req?.body?.Image;
+      } else if (incidentType === "foodServicePPEDetection") {
+        newIncident.timeOfIncident = req?.body?.timeOfIncident;
+        newIncident.Image = req?.body?.Image;
+        newIncident.timeSeries.push({
+          croudCount: req.body.count ?? 0, // or appropriate value
+          ppe: {
+            gloves: {
+              yes: req.body.ppe?.gloves?.yes ?? 0,
+              no: req.body.ppe?.gloves?.no ?? 0,
+            },
+            apron: {
+              yes: req.body.ppe?.apron?.yes ?? 0,
+              no: req.body.ppe?.apron?.no ?? 0,
+            }, 
+            vest: {
+              yes: req.body.ppe?.vest?.yes ?? 0,
+              no: req.body.ppe?.vest?.no ?? 0,
+            },
+            mask: {
+              yes: req.body.ppe?.mask?.yes ?? 0,
+              no: req.body.ppe?.mask?.no ?? 0,
+            }, 
+
+          },
+        });
       }
+
+
 
       const incidentObj = await newIncident.save();
       let saved = incidentObj.toObject();
@@ -581,6 +615,20 @@ class IncidentsService {
         incidentName: { $not: /Guard Present/i }
       };
 
+      // Collect every channel/nvr scoping filter as a candidate set of string ids.
+      // These are intersected (AND) at the end so multiple filters narrow together
+      // instead of overwriting each other. An empty set => no matches (not "all").
+      const channelIdFilterSets = [];
+      const nvrIdFilterSets = [];
+      const toIdArray = (val) =>
+        (Array.isArray(val)
+          ? val
+          : String(val).split(",").map((s) => s.trim())
+        ).filter(Boolean);
+      const toIdStr = (id) => id?.toString?.() ?? String(id);
+      // True only when a filter actually has values (ignores [] and "").
+      const hasFilter = (val) => toIdArray(val ?? "").length > 0;
+
       if (checkInOrCheckOutCamera === "checkin") {
         let checkInCameraIds = [];
         if (memberId === undefined) {
@@ -597,9 +645,9 @@ class IncidentsService {
           checkInCameraIds.push(...channels);
         }
 
-        matchStage.channelId = {
-          $in: checkInCameraIds.map((camera) => camera._id),
-        };
+        channelIdFilterSets.push(
+          checkInCameraIds.map((camera) => toIdStr(camera._id)),
+        );
       } else if (checkInOrCheckOutCamera === "checkout") {
         let checkoutCameraIds = [];
         if (memberId === undefined) {
@@ -616,9 +664,9 @@ class IncidentsService {
           checkoutCameraIds.push(...channels);
         }
 
-        matchStage.channelId = {
-          $in: checkoutCameraIds.map((camera) => camera._id),
-        };
+        channelIdFilterSets.push(
+          checkoutCameraIds.map((camera) => toIdStr(camera._id)),
+        );
       } else if (checkInOrCheckOutCamera === "both") {
         let checkoutCameraIds = [];
         if (memberId === undefined) {
@@ -635,9 +683,9 @@ class IncidentsService {
           checkoutCameraIds.push(...channels);
         }
 
-        matchStage.channelId = {
-          $in: checkoutCameraIds.map((camera) => camera._id),
-        };
+        channelIdFilterSets.push(
+          checkoutCameraIds.map((camera) => toIdStr(camera._id)),
+        );
       }
 
       if (startDate && endDate) {
@@ -751,58 +799,58 @@ class IncidentsService {
         matchStage.$or = orConditions;
       }
 
-      // Filter: specific NVR
-      if (nvrId) {
-        const nvrIds = Array.isArray(nvrId)
-          ? nvrId
-          : nvrId.split(",").map((id) => id.trim());
-        matchStage.nvrId = {
-          $in: nvrIds.map((id) => new mongoose.Types.ObjectId(id)),
-        };
+      // Filter: specific NVR (id, comma-separated string, or array)
+      if (hasFilter(nvrId)) {
+        nvrIdFilterSets.push(toIdArray(nvrId));
       }
 
-      // Filter: specific channel
-      if (channelId) {
-        const channelIds = Array.isArray(channelId)
-          ? channelId
-          : channelId.split(",").map((id) => id.trim());
-        matchStage.channelId = {
-          $in: channelIds.map((id) => new mongoose.Types.ObjectId(id)),
-        };
+      // Filter: specific channel/camera (id, comma-separated string, or array)
+      if (hasFilter(channelId)) {
+        channelIdFilterSets.push(toIdArray(channelId));
       }
 
-      // Filter: by location → fetch NVRs that match
-      if (location) {
-        const locations = Array.isArray(location)
-          ? location
-          : location.split(",").map((l) => l.trim());
+      // Filter: by location → constrain to NVRs in those locations
+      if (hasFilter(location)) {
+        const locations = toIdArray(location);
         const nvrs = await nvrModel
           .find({ userId: user_id.toString(), location: { $in: locations } })
           .select("_id");
-        const nvrIds = nvrs.map((nvr) => nvr._id);
-        if (nvrIds.length) matchStage.nvrId = { $in: nvrIds };
+        nvrIdFilterSets.push(nvrs.map((nvr) => toIdStr(nvr._id)));
       }
 
-      // Filter: by department → fetch Channels that match
-      if (department) {
-        const deptIds = Array.isArray(department)
-          ? department
-          : department.split(",").map((d) => d.trim());
+      // Filter: by department → constrain to channels in those departments
+      if (hasFilter(department)) {
+        const deptIds = toIdArray(department);
         const channels = await channelsModel
           .find({ userId: user_id.toString(), department: { $in: deptIds } })
           .select("_id");
-        const channelIds = channels.map((ch) => ch._id);
-        if (channelIds.length) matchStage.channelId = { $in: channelIds };
+        channelIdFilterSets.push(channels.map((ch) => toIdStr(ch._id)));
       }
 
-      //If channelId property is not in matchstage, apply member restrictions
-      if (!matchStage.channelId && memberId) {
-        if (authorizedChannels.length > 0) {
-          matchStage.channelId = { $in: authorizedChannels };
-        } else {
-          // No authorized channels for member
-          matchStage.channelId = { $in: [] };
-        }
+      // Member restriction: limit to the member's authorized channels.
+      if (memberId) {
+        channelIdFilterSets.push((authorizedChannels || []).map(toIdStr));
+      }
+
+      // Intersect all collected sets (AND). Empty intersection => no results.
+      const intersectIds = (sets) =>
+        sets.reduce((acc, set) => {
+          const cur = new Set(set);
+          return acc.filter((id) => cur.has(id));
+        });
+
+      if (channelIdFilterSets.length > 0) {
+        const ids = intersectIds(channelIdFilterSets);
+        matchStage.channelId = {
+          $in: ids.map((id) => new mongoose.Types.ObjectId(id)),
+        };
+      }
+
+      if (nvrIdFilterSets.length > 0) {
+        const ids = intersectIds(nvrIdFilterSets);
+        matchStage.nvrId = {
+          $in: ids.map((id) => new mongoose.Types.ObjectId(id)),
+        };
       }
 
       // Aggregated paginated data
@@ -1119,7 +1167,6 @@ class IncidentsService {
 
         const matchStage = {
           userId: data.user_id.toString(),
-          isAdded: true,
           $or: [
             // Case 1: detections exist and have valid ObjectIds
             {
@@ -1134,8 +1181,8 @@ class IncidentsService {
                 { "detections.lineCrossingSettings.enabled": true },
                 { "detections.fireSmokeDetectionSettings.enabled": true },
                 { "detections.weaponDetectionSettings.enabled": true },
-                { "detections.unattendedBaggageDetectionSettings.enabled": true,},
-                { "detections.personalProtectiveEquipmentSettings.enabled": true,},
+                { "detections.unattendedBaggageDetectionSettings.enabled": true },
+                { "detections.personalProtectiveEquipmentSettings.enabled": true },
                 { "detections.crowdDetectionSettings.enabled": true },
                 { "detections.doorDetectionSettings.enabled": true },
                 { "detections.lightDetectionSettings.enabled": true },
@@ -1146,13 +1193,8 @@ class IncidentsService {
                 { "detections.waterSpillageDetectionSettings.enabled": true },
                 { "detections.guardPresentSettings.enabled": true },
                 { "detections.deskAbsenceSettings.enabled": true },
-                { "detections.vehicleTypeDetectionSettings.enabled": true },
-                { "detections.personalProtectiveEquipmentSettings.enabled": true },
-                { "detections.crowdDetectionSettings.enabled": true },
-                { "detections.countPersonsSettings.enabled": true,},
-                { "detections.vehicleObstructionSettings.enabled": true, },
-                { "detections.vehicleTypeDetectionSettings.enabled": true, }
-              ],
+                { "detections.vehicleTypeDetectionSettings.enabled": true }
+              ]
             },
             // Case 2: detections field does not exist or is empty
             // { detections: { $exists: false } },
@@ -2501,6 +2543,27 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch vehicle count logs", 500));
+    }
+  }
+
+  async getPersonCountLogs(req, res, next) {
+    try {
+      const { minCount, maxCount } = req.query;
+      const extraMatch = {};
+      if (minCount !== undefined || maxCount !== undefined) {
+        extraMatch.count = {};
+        if (minCount !== undefined) extraMatch.count.$gte = Number(minCount);
+        if (maxCount !== undefined) extraMatch.count.$lte = Number(maxCount);
+      }
+      return await this._fetchIncidentLogs({
+        req,
+        res,
+        incidentType: "countPersons",
+        extraMatch,
+      });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch person count logs", 500));
     }
   }
 

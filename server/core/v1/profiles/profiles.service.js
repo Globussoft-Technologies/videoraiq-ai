@@ -317,8 +317,6 @@ class ProfilesServices {
 
       const payload = {
         user: req?.verified?.userData?.adminId,
-        userType: req?.verified?.userData?.userType ?? "Admin",
-        createdBy: req?.verified?.userData?.adminId,
         basics: profileData?.basics || {},
         notification: profileData?.notification || {},
         evidenceSeverity: profileData?.evidenceSeverity || {},

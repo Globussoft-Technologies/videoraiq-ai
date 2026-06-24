@@ -498,6 +498,30 @@ class IncidentsController {
     return await incidentsService.getVehicleCountLogs(req, res, next);
   }
 
+    async getPersonCountLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Person Count (countPersons) logs (tabular). Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, minCount, maxCount, search. Paginated via skip/limit.'
+    #swagger.parameters['skip'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['endDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['nvrId'] = { in: 'query', type: 'string' }
+    #swagger.parameters['nvrIds'] = { in: 'query', type: 'string' }
+    #swagger.parameters['channelId'] = { in: 'query', type: 'string' }
+    #swagger.parameters['channelIds'] = { in: 'query', type: 'string' }
+    #swagger.parameters['severity'] = { in: 'query', type: 'string', enum: ['low','moderate','high'] }
+    #swagger.parameters['resolved'] = { in: 'query', type: 'boolean' }
+    #swagger.parameters['reportStatus'] = { in: 'query', type: 'boolean' }
+    #swagger.parameters['minCount'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['maxCount'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['search'] = { in: 'query', type: 'string' }
+    #swagger.responses[200] = { description: 'Person count logs fetched successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.getPersonCountLogs(req, res, next);
+  }
+
   async getLineCrossingLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get Line Crossing logs (tabular). Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, minAtoB, maxAtoB, minBtoA, maxBtoA, search. Paginated via skip/limit.'

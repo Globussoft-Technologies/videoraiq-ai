@@ -23,7 +23,7 @@ class LocationService {
       // Check for duplicate locationName (case-insensitive) for this admin
       if (locationName && locationName.trim() !== "") {
         const dupName = await locationModel.findOne({
-          locationName: { $regex: `^${locationName.trim()}$`, $options: "i" },
+          locationName: { $regex: `^${locationName.trim().toLowerCase()}$`, $options: "i" },
           adminId
         });
         if (dupName) {
@@ -39,7 +39,7 @@ class LocationService {
       }
 
       const newLocation = await locationModel.create({
-        locationName,
+        locationName: locationName.trim().toLowerCase(),
         empLocationId,
         adminId
       });
@@ -217,10 +217,10 @@ class LocationService {
               { adminId, location: oldName },
               { $set: { location: fallbackName } }
             ),
-            // NVRModel.updateMany(
-            //   { userId: data?.user_id?.toString(), location: oldName },
-            //   { $set: { location: fallbackName } }
-            // )
+            NVRModel.updateMany(
+              { userId: data?.user_id?.toString(), location: oldName },
+              { $set: { location: fallbackName } }
+            )
           ]);
         }
       }

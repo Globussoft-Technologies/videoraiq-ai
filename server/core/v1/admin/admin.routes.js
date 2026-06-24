@@ -14,6 +14,8 @@ router.put("/update-emp-email",verifyToken,adminController.updateEMPEmail);
 router.delete("/delete-emp-email",verifyToken,adminController.deleteEMPEmail);
 router.get("/get-location-by-emp-email",verifyToken,adminController.getLocationByEmpEmail)
 router.get("/delete-emp-email-progress",verifyToken,adminController.getDeletionProgress);
+router.get("/allowed-detections",verifyToken,adminController.getAllowedDetections);
+router.put("/allowed-detections",verifyToken,adminController.updateAllowedDetections);
 router.put("/update-logs-sound",verifyToken,adminController.updateLogsSound);
 router.get("/fetch-logs-sound",verifyToken,adminController.fetchLogsSound);
 

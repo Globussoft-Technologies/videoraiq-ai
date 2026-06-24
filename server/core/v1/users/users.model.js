@@ -88,6 +88,19 @@ usersSchema.pre("save", function (next) {
   next();
 });
 
+// // ✅ For findByIdAndUpdate / findOneAndUpdate
+// usersSchema.pre("findOneAndUpdate", function (next) {
+//   const update = this.getUpdate();
+//   encrypt(update);
+//   next();
+// });
+
+// // ✅ For updateOne / updateMany
+// usersSchema.pre(["updateOne", "updateMany"], function (next) {
+//   const update = this.getUpdate();
+//   encrypt(update);
+//   next();
+// });
 
 // Add a method to decrypt password when needed
 usersSchema.methods.getDecryptedPassword = function () {
