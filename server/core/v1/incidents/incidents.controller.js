@@ -570,6 +570,22 @@ class IncidentsController {
     */
     return await incidentsService.getDeskAbsenceLogs(req, res, next);
   }
+
+  async getDeskAbsenceZoneNames(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get unique zone names for desk absence logs filtering'
+    #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['endDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['nvrId'] = { in: 'query', type: 'string' }
+    #swagger.parameters['nvrIds'] = { in: 'query', type: 'string', description: 'Comma-separated NVR IDs' }
+    #swagger.parameters['channelId'] = { in: 'query', type: 'string' }
+    #swagger.parameters['channelIds'] = { in: 'query', type: 'string', description: 'Comma-separated channel IDs' }
+    #swagger.responses[200] = { description: 'Zone names fetched successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.getDeskAbsenceZoneNames(req, res, next);
+  }
 }
 
 export default new IncidentsController();

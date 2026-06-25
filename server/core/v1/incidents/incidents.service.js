@@ -2748,6 +2748,86 @@ console.log(result,'result');
       next(new AppError("Failed to fetch desk absence logs", 500));
     }
   }
+
+  async getDeskAbsenceZoneNames(req, res, next) {
+    try {
+      const data = req?.verified?.userData;
+      if (!data?.user_id) {
+        return res.send(
+          Response.userFailResp("User authentication failed.", "Unauthorized"),
+        );
+      }
+
+      const {
+        startDate,
+        endDate,
+        nvrId,
+        nvrIds,
+        channelId,
+        channelIds,
+      } = req.query;
+
+      const toArray = (v) =>
+        v ? v.split(",").map((x) => x.trim()).filter(Boolean) : [];
+
+      const matchStage = {
+        userId: data.user_id.toString(),
+        incidentType: "deskAbsence",
+      };
+
+      if (startDate && endDate) {
+        matchStage.timeOfIncident = {
+          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+        };
+      }
+
+      const nvrFilter = nvrId ? [nvrId] : toArray(nvrIds);
+      if (nvrFilter.length) {
+        matchStage.nvrId = {
+          $in: nvrFilter.map((id) => new mongoose.Types.ObjectId(id)),
+        };
+      }
+
+      const channelFilter = channelId ? [channelId] : toArray(channelIds);
+      const authorizedChannels = req?.verified?.authorizedChannel?.channels;
+      let effectiveChannelIds = null;
+      if (channelFilter.length && Array.isArray(authorizedChannels)) {
+        const authSet = new Set(authorizedChannels.map((c) => c.toString()));
+        effectiveChannelIds = channelFilter.filter((c) => authSet.has(c));
+      } else if (channelFilter.length) {
+        effectiveChannelIds = channelFilter;
+      } else if (Array.isArray(authorizedChannels)) {
+        effectiveChannelIds = authorizedChannels.map((c) => c.toString());
+      }
+      if (Array.isArray(effectiveChannelIds)) {
+        matchStage.channelId = {
+          $in: effectiveChannelIds.map((id) => new mongoose.Types.ObjectId(id)),
+        };
+      }
+
+      const zoneNames = await Incident.aggregate([
+        { $match: matchStage },
+        { $unwind: { path: "$timeSeries", preserveNullAndEmptyArrays: true } },
+        {
+          $group: {
+            _id: "$timeSeries.zoneName",
+          },
+        },
+        { $match: { _id: { $ne: null } } },
+        { $sort: { _id: 1 } },
+      ]);
+
+      return res.status(200).json(
+        Response.userSuccessResp("Zone names fetched successfully", {
+          zoneNames: zoneNames.map((z) => z._id),
+        }),
+      );
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch zone names", 500));
+    }
+  }
 }
 
 export default new IncidentsService();

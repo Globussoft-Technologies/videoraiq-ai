@@ -98,4 +98,10 @@ router.get(
   incidentsController.getDeskAbsenceLogs,
 );
 
+router.get(
+  "/logs/desk-absence/filter/zone-names",
+  viewAccessCheck,
+  incidentsController.getDeskAbsenceZoneNames,
+);
+
 export default router;
