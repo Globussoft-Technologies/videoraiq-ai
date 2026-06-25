@@ -12,7 +12,7 @@ class PermissionValidation {
                 "object.pattern.key": "Permission attributes must be alphanumeric with optional underscores or dashes.",
                 "boolean.base": "Permission attribute values must be boolean.",
             });
-    
+
         const schema = Joi.object().keys({
             permissionName: Joi.string()
                 .required()
@@ -22,7 +22,13 @@ class PermissionValidation {
             permissionConfig: Joi.object()
                 .pattern(
                     Joi.string().regex(/^[a-zA-Z0-9_-]+$/), // Custom permission names like `customPermission1`, `featureX`
-                    permissionObjectSchema // Each custom permission follows the structure of `permissionObjectSchema`
+                    Joi.alternatives().try(
+                        permissionObjectSchema,
+                        Joi.object().pattern(
+                            Joi.string().regex(/^[a-zA-Z0-9_-]+$/),
+                            permissionObjectSchema
+                        ).required()
+                    )
                 )
                 .required()
                 .min(1) // At least one permission must be defined
@@ -31,43 +37,54 @@ class PermissionValidation {
                     "object.base": "Permission Config must be a valid object.",
                 }),
         });
-    
+
         const result = schema.validate(body, { abortEarly: false });
         return result;
     }
     
     
     updatePermission(body) {
-        const permissionObjectSchema = Joi.object()
+        const booleanValueSchema = Joi.object()
             .pattern(
-                Joi.string().regex(/^[a-zA-Z0-9_-]+$/), // Custom keys for permission attributes like `view`, `create`, etc.
-                Joi.boolean().required() // All values must be boolean
+                Joi.string().regex(/^[a-zA-Z0-9_-]+$/),
+                Joi.boolean().required()
             )
-            .required()
             .messages({
                 "object.pattern.key": "Permission attributes must be alphanumeric with optional underscores or dashes.",
                 "boolean.base": "Permission attribute values must be boolean.",
             });
-    
+
+        const nestedValueSchema = Joi.object()
+            .pattern(
+                Joi.string().regex(/^[a-zA-Z0-9_-]+$/),
+                booleanValueSchema
+            )
+            .messages({
+                "object.pattern.key": "Nested permission keys must be alphanumeric with optional underscores or dashes.",
+            });
+
         const schema = Joi.object().keys({
             permissionName: Joi.string()
-                .required()
                 .min(1)
                 .max(30)
-                .trim(true).optional(),
+                .trim(true)
+                .optional(),
             permissionConfig: Joi.object()
                 .pattern(
-                    Joi.string().regex(/^[a-zA-Z0-9_-]+$/), // Custom permission names like `customPermission1`, `featureX`
-                    permissionObjectSchema // Each custom permission follows the structure of `permissionObjectSchema`
+                    Joi.string().regex(/^[a-zA-Z0-9_-]+$/),
+                    Joi.alternatives().try(
+                        booleanValueSchema,
+                        nestedValueSchema
+                    )
                 )
-                .required()
-                .min(1) // At least one permission must be defined
+                .min(1)
                 .messages({
                     "object.pattern.key": "Permission Config keys must be alphanumeric with optional underscores or dashes.",
                     "object.base": "Permission Config must be a valid object.",
-                }).optional(),
+                })
+                .optional(),
         });
-    
+
         const result = schema.validate(body, { abortEarly: false });
         return result;
     }
