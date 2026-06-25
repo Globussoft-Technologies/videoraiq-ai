@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrushCleaning, SaveAll, TriangleAlert } from 'lucide-react';
+import { BrushCleaning, SaveAll, TriangleAlert, ChevronDown } from 'lucide-react';
 import { FaRegStopCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
@@ -130,6 +130,14 @@ const [obstructionThreshold, setObstructionThreshold] = useState(10);
     selectedsettingType === 'vehicleDetectionSettings' ||
     selectedType === 'vehicleDetectionSettings' ||
     appliedDetection?.settings?.obstruction_threshold_sec !== undefined;
+
+  // Per-zone capacity/threshold config is only for Desk Absence Detection.
+  // `selectedsettingType` is the setting key (e.g. 'deskAbsenceSettings');
+  // `selectedType` may arrive as the human label ('Desk Absence Detection').
+  const showZoneConfigs =
+    selectedsettingType === 'deskAbsenceSettings' ||
+    selectedType === 'deskAbsenceSettings' ||
+    selectedType === 'Desk Absence Detection';
 
   const   handleToggleDrawing = (selectedType) => {
     console.log("selectedType", selectedType);
@@ -294,6 +302,11 @@ return;
   const [showClearModal, setShowClearModal] = useState(false);
   const [priority, setPriority] = useState("moderate");
   const [showSaveModal, setShowSaveModal] = useState(false);
+  // Per-zone UI config: one entry per zone the user drew on the stream.
+  // Shape: { name, capacity, threshold }. UI-only for now (not persisted).
+  const [zoneConfigs, setZoneConfigs] = useState([]);
+  // Index of the currently expanded zone section (first one open by default).
+  const [expandedZoneIndex, setExpandedZoneIndex] = useState(0);
   const [zoneName, setZoneName] = useState(
     appliedDetection?.settings?.referencePoints?.zone_name || ''
   );
@@ -324,9 +337,57 @@ console.log('appliedDetection', appliedDetection);
       setDetectionName(appliedDetection?.name || '');
       setDetectionEnabled(appliedDetection?.enabled || false);
       setObstructionThreshold(appliedDetection?.settings?.obstruction_threshold_sec || 10);
+
+      // Build one zone-config block per drawn zone. getZones() returns a nested
+      // array of polygons: [[ [x,y], ... ], ...] => zones.length === zone count.
+      // Only for Desk Absence Detection; other types keep the original modal.
+      if (showZoneConfigs) {
+        const drawnZones = cameraStreamRef?.current?.getZones?.() || [];
+        setZoneConfigs(
+          drawnZones.map(() => ({
+            name: '',
+            capacity: '',
+            threshold: '',
+          }))
+        );
+        // First zone expanded, rest collapsed.
+        setExpandedZoneIndex(0);
+      } else {
+        setZoneConfigs([]);
+      }
+
       setErrors({ zoneName: false, detectionName: false });
       setShowSaveModal(true);
     }
+  };
+
+  // Update a single field of one zone config (UI-only).
+  const handleZoneConfigChange = (index, field, value) => {
+    setZoneConfigs((prev) =>
+      prev.map((zone, i) => (i === index ? { ...zone, [field]: value } : zone))
+    );
+  };
+
+  // Toggle which zone section is expanded (collapse if already open).
+  const handleToggleZone = (index) => {
+    setExpandedZoneIndex((prev) => (prev === index ? -1 : index));
+  };
+
+  // Accept only positive integers (or empty) for capacity/threshold inputs.
+  const handlePositiveIntChange = (index, field, raw) => {
+    if (raw === '') {
+      handleZoneConfigChange(index, field, '');
+      return;
+    }
+    // Strip anything that isn't a digit (blocks '-', '.', 'e', etc.)
+    const digitsOnly = raw.replace(/[^0-9]/g, '');
+    if (digitsOnly === '') {
+      handleZoneConfigChange(index, field, '');
+      return;
+    }
+    // Drop leading zeros so "0" / "01" can't sneak through as non-positive.
+    const normalized = String(parseInt(digitsOnly, 10));
+    handleZoneConfigChange(index, field, normalized);
   };
 
 const handleMaxArea = () => {
@@ -402,7 +463,9 @@ const handleMinArea = () => {
 
     const newErrors = { zoneName: false, detectionName: false };
 
-    if (!zoneName || !zoneName.trim()) {
+    // Standalone Zone Name is hidden for Desk Absence (per-zone names used instead),
+    // so only require it for other detection types.
+    if (!showZoneConfigs && (!zoneName || !zoneName.trim())) {
       newErrors.zoneName = true;
       hasErrorLocal = true;
     }
@@ -427,6 +490,22 @@ const handleMinArea = () => {
 
     if (hasErrorLocal) return;
 
+    // For Desk Absence: every zone needs a name, a positive capacity and threshold.
+    if (showZoneConfigs) {
+      const invalid = zoneConfigs.some(
+        (z) =>
+          !z.name.trim() ||
+          !z.capacity ||
+          Number(z.capacity) <= 0 ||
+          !z.threshold ||
+          Number(z.threshold) <= 0
+      );
+      if (invalid) {
+        toast.error('Please fill name, capacity and threshold for every zone.');
+        return;
+      }
+    }
+
     // If valid, save
     const saveData = {
       zoneName,
@@ -436,6 +515,14 @@ const handleMinArea = () => {
     };
     if (showObstructionThreshold) {
       saveData.obstruction_threshold_sec = obstructionThreshold;
+    }
+    // Desk Absence only: per-zone config sent inside settings.zone_configs.
+    if (showZoneConfigs) {
+      saveData.zone_configs = zoneConfigs.map((z) => ({
+        name: z.name.trim(),
+        capacity: Number(z.capacity),
+        threshold_sec: Number(z.threshold),
+      }));
     }
     handleSaveAreaWithDetection(saveData);
 
@@ -580,33 +667,35 @@ const handleMinArea = () => {
                   )}
                 </div>
 
-                {/* Zone Name */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Zone Name
-                  </label>
-                  <input
-                    type="text"
-                    value={zoneName}
-                    onChange={(e) => {
-                      const val = e.target.value || '';
-                      setZoneName(val);
-                      if (val.length > MAX_NAME_LENGTH) {
-                        setErrors((prev) => ({ ...prev, zoneName: `Zone Name must be at most ${MAX_NAME_LENGTH} characters` }));
-                      } else {
-                        setErrors((prev) => ({ ...prev, zoneName: false }));
-                      }
-                    }}
-                    className={`w-full border rounded-md px-3 py-2 text-sm
+                {/* Zone Name (hidden for Desk Absence — each zone has its own name field) */}
+                {!showZoneConfigs && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Zone Name
+                    </label>
+                    <input
+                      type="text"
+                      value={zoneName}
+                      onChange={(e) => {
+                        const val = e.target.value || '';
+                        setZoneName(val);
+                        if (val.length > MAX_NAME_LENGTH) {
+                          setErrors((prev) => ({ ...prev, zoneName: `Zone Name must be at most ${MAX_NAME_LENGTH} characters` }));
+                        } else {
+                          setErrors((prev) => ({ ...prev, zoneName: false }));
+                        }
+                      }}
+                      className={`w-full border rounded-md px-3 py-2 text-sm
             ${errors.zoneName ? 'border-red-500' : 'border-gray-300'}`}
-                    placeholder="Enter zone name"
-                  />
-                  {errors.zoneName && (
-                    <p className="text-xs text-red-500 mt-1">
-                      {typeof errors.zoneName === 'string' ? errors.zoneName : 'Zone Name is required'}
-                    </p>
-                  )}
-                </div>
+                      placeholder="Enter zone name"
+                    />
+                    {errors.zoneName && (
+                      <p className="text-xs text-red-500 mt-1">
+                        {typeof errors.zoneName === 'string' ? errors.zoneName : 'Zone Name is required'}
+                      </p>
+                    )}
+                  </div>
+                )}
                 {/* Priority */}
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -631,6 +720,97 @@ const handleMinArea = () => {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Per-zone config (Desk Absence only): one collapsible section per drawn zone */}
+                {showZoneConfigs && zoneConfigs.length > 0 && (
+                  <div className="mb-4 space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                    {zoneConfigs.map((zone, index) => {
+                      const isOpen = expandedZoneIndex === index;
+                      return (
+                        <div
+                          key={index}
+                          className="border border-gray-200 rounded-md overflow-hidden"
+                        >
+                          {/* Header: plain "Zone N" label + expand/collapse toggle.
+                              Clicking anywhere on the row toggles the whole box. */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleZone(index)}
+                            className="w-full flex items-center justify-between gap-2 bg-gray-50 px-3 py-2 text-left hover:bg-gray-100"
+                            aria-expanded={isOpen}
+                            aria-label={isOpen ? 'Collapse zone' : 'Expand zone'}
+                          >
+                            <span className="text-sm font-medium text-gray-700">
+                              Zone {index + 1}
+                            </span>
+                            <ChevronDown
+                              className={`h-4 w-4 shrink-0 text-gray-600 transition-transform ${
+                                isOpen ? 'rotate-180' : ''
+                              }`}
+                            />
+                          </button>
+
+                          {/* Body: Zone name + Capacity + Threshold (all collapse together) */}
+                          {isOpen && (
+                            <div className="px-3 py-3 space-y-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                  Zone Name
+                                </label>
+                                <input
+                                  type="text"
+                                  value={zone.name}
+                                  onChange={(e) =>
+                                    handleZoneConfigChange(index, 'name', e.target.value)
+                                  }
+                                  className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#07486A]"
+                                  placeholder={`Zone ${index + 1} name`}
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                  Capacity
+                                </label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  inputMode="numeric"
+                                  value={zone.capacity}
+                                  onChange={(e) =>
+                                    handlePositiveIntChange(index, 'capacity', e.target.value)
+                                  }
+                                  className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#07486A]"
+                                  placeholder="Enter capacity"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                  Threshold
+                                </label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  inputMode="numeric"
+                                  value={zone.threshold}
+                                  onChange={(e) =>
+                                    handlePositiveIntChange(index, 'threshold', e.target.value)
+                                  }
+                                  className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#07486A]"
+                                  placeholder="Enter threshold"
+                                />
+                              </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {showObstructionThreshold && (
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -22,7 +22,7 @@ const LiveFeedSection = ({
   currentNvr
 
 }) => {
-  const channelId = channelData?.linkedCameras[0]?._id || null;
+  const channelId = channelData?.linkedCameras?.[0]?._id || null;
   const previewRef = useRef();
 
   const [detectionOptions, setDetectionOptions] = useState([]);
@@ -250,8 +250,8 @@ const handlesettingType = async (type) => {
       appliedDetection?.name || appliedDetection?.detectionName || '';
     setZoneName(name);
     if (typeof appliedDetection?.enabled === 'boolean')
-      // setZoneEnabled(appliedDetection.enabled);  
-      setZoneEnabled(appliedDetection?.linkedCameras[0].detections[selectedsettingType]?.enabled);
+      // setZoneEnabled(appliedDetection.enabled);
+      setZoneEnabled(appliedDetection?.linkedCameras?.[0]?.detections?.[selectedsettingType]?.enabled);
 
   }, [appliedDetection]);
 
@@ -410,7 +410,8 @@ const handlesettingType = async (type) => {
                 </div>
               )} */}
 
-              {appliedDetection !== null && (
+              {/* Edit button hidden — drawing/editing is handled by the canvas controls below */}
+              {/* {appliedDetection !== null && (
                 <div className="flex items-center">
                   {!isEditing && (
                     <Button
@@ -422,7 +423,7 @@ const handlesettingType = async (type) => {
                     </Button>
                   )}
                 </div>
-              )}
+              )} */}
             </div>
           </div>
         </div>

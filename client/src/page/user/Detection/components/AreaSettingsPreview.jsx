@@ -387,11 +387,12 @@ useEffect(() => {
   }));
 
   // Save area with detection settings
-  const handleSaveAreaWithDetection = async ({   
+  const handleSaveAreaWithDetection = async ({
     zoneName,
     detectionName,
     detectionEnabled,
-    priority,obstruction_threshold_sec
+    priority,obstruction_threshold_sec,
+    zone_configs
   }) => {
     setIsSaving(true);
     if (!selectedCamera || !cameraStreamRef.current) {
@@ -452,6 +453,10 @@ useEffect(() => {
           videoResolution: resolution
         }
 
+      }
+      // Desk Absence only: attach per-zone config inside settings.
+      if (selectedsettingType === 'deskAbsenceSettings' && Array.isArray(zone_configs)) {
+        pay.settings.zone_configs = zone_configs;
       }
       // Build an edited detection object for logging / editing flows
       const editedDetection = {
