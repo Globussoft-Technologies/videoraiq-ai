@@ -126,6 +126,7 @@ class PythonService {
         stream_url,
         detection_modes,
         zones,
+        zone_configs,
         obstruction_threshold_sec,
         severity,
       } = payload;
@@ -275,9 +276,9 @@ class PythonService {
         detectors.push({
           name: "deskAbsenceDetection",
           zones: zones || [],
+          zone_configs
         });
-      }
-
+      }  
 
       // ❗️ Validation
       if (!detectors.length) {
@@ -290,8 +291,7 @@ class PythonService {
         nvr_id,
         admin_id,
         detectors,
-      };
-
+      };      
       // include stream_url only if present
       if (stream_url) {
         newPayload.stream_url = stream_url;

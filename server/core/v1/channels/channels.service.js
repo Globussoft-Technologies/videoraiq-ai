@@ -1289,6 +1289,7 @@ class ChannelService {
         const detectionSettingDoc = await DetectionSetting.findById(detectionSetting);
         const zones =
           detectionSettingDoc?.settings?.referencePoints?.[channelId] || [];
+        const zone_configs = detectionSettingDoc?.settings?.zone_configs || [];
         const obstruction_threshold_sec = detectionSettingDoc?.settings?.obstruction_threshold_sec || 0;
         const videoResolution = detectionSettingDoc?.settings?.videoResolution || [];
         const severity = detectionSetting?.settings?.levelOfImportance;
@@ -1306,7 +1307,8 @@ class ChannelService {
           zones,
           videoResolution,
           obstruction_threshold_sec,
-          severity
+          severity,
+          zone_configs
         );
 
         await channel.save();

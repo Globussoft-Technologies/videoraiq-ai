@@ -635,6 +635,13 @@ const DeskAbsenceDetectionSchema = new mongoose.Schema({
   videoResolution: [Number],
   detectionTimeGap: { type: Number, default: 30 },
   referencePoints: Object,
+  zone_configs: [
+    {
+      name: { type: String },
+      capacity: { type: Number },
+      threshold_sec: { type: Number },
+    },
+  ],
   metricType: {
     type: String,
     enum: ["gauge", "counter", "binary"],
