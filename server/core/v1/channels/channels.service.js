@@ -1305,10 +1305,10 @@ class ChannelService {
           enable,
           detectionType,
           zones,
+          zone_configs,
           videoResolution,
           obstruction_threshold_sec,
           severity,
-          zone_configs
         );
 
         await channel.save();
