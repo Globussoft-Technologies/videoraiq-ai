@@ -33,21 +33,24 @@ const fetchDeskAbsenceLogs = async ({
   endDate,
   nvrIds,
   channelIds,
-  zoneName,
+  zoneNames,
 }) => {
   const token = getAccessToken();
-  return axios.get(`${HOST}/api/v1/incidents/logs/desk-absence`, {
-    params: {
-      skip,
-      limit,
-      ...(startDate && { startDate }),
-      ...(endDate && { endDate }),
-      ...(Array.isArray(nvrIds) && nvrIds.length > 0 && { nvrIds: nvrIds.join(',') }),
-      ...(Array.isArray(channelIds) && channelIds.length > 0 && { channelIds: channelIds.join(',') }),
-      ...(zoneName && { zoneName }),
-    },
+  // POST: the server reads these filters from the body. nvrIds/channelIds are
+  // comma-separated strings; zoneNames is an array of strings.
+  const body = {
+    skip,
+    limit,
+    ...(startDate && { startDate }),
+    ...(endDate && { endDate }),
+    ...(Array.isArray(nvrIds) && nvrIds.length > 0 && { nvrIds: nvrIds.join(',') }),
+    ...(Array.isArray(channelIds) && channelIds.length > 0 && { channelIds: channelIds.join(',') }),
+    ...(Array.isArray(zoneNames) && zoneNames.length > 0 && { zoneNames }),
+  };
+  return axios.post(`${HOST}/api/v1/incidents/logs/desk-absence`, body, {
     headers: {
       Accept: 'application/json',
+      'Content-Type': 'application/json',
       'x-access-token': token,
     },
   });
@@ -71,14 +74,20 @@ const buildChart = (record) => {
   const nvrName = record.nvrData?.nvrName || '--';
   const cameraName = record.channelData?.name || '--';
 
-  // Presence state over time: 1 = person present, 0 = absent (desk vacant).
-  // zoneName/personCount are carried for the tooltip.
+  // Person count over time. zoneName/personPresent carried for the tooltip.
   const seriesData = (record.timeSeries || []).map((pt) => ({
     x: new Date(pt.timestamp).getTime(),
-    y: pt.personPresent ? 1 : 0,
-    personCount: pt.personCount ?? 0,
+    y: pt.personCount ?? 0,
+    personPresent: !!pt.personPresent,
     zoneName: pt.zoneName || '',
   }));
+
+  // Build a whole-number y-axis. For a small max (e.g. 3) show one tick per
+  // integer; for a large max (e.g. 100) cap at ~10 evenly-spaced whole ticks
+  // so the axis never lists every integer 0..100.
+  const maxCount = seriesData.reduce((m, p) => Math.max(m, p.y || 0), 0);
+  const yMax = Math.max(1, maxCount);
+  const yTicks = yMax <= 10 ? yMax : Math.min(10, yMax);
 
   const options = {
     chart: {
@@ -128,7 +137,7 @@ const buildChart = (record) => {
       },
     },
     stroke: {
-      curve: 'stepline',
+      curve: 'smooth',
       width: 1.5,
       colors: ['#5BA4CF'],
     },
@@ -155,15 +164,16 @@ const buildChart = (record) => {
     },
     yaxis: {
       title: {
-        text: 'Presence',
+        text: 'Person Count',
         style: { fontSize: '11px', color: '#555', fontWeight: 500 },
       },
       min: 0,
-      max: 1,
-      tickAmount: 1,
+      max: yMax,
+      tickAmount: yTicks,
+      forceNiceScale: yMax > 10,
       labels: {
         style: { fontSize: '11px', colors: '#888' },
-        formatter: (val) => (val >= 1 ? 'Present' : 'Absent'),
+        formatter: (val) => Math.round(val),
       },
     },
     tooltip: {
@@ -174,9 +184,8 @@ const buildChart = (record) => {
       y: {
         formatter: (val, { dataPointIndex, w }) => {
           const point = w?.config?.series?.[0]?.data?.[dataPointIndex] || {};
-          const status = val >= 1 ? 'Present' : 'Absent';
           const zone = point.zoneName ? ` · Zone: ${point.zoneName}` : '';
-          return `${status} (persons: ${point.personCount ?? 0})${zone}`;
+          return `${val} persons${zone}`;
         },
       },
     },
@@ -244,7 +253,7 @@ const DeskAbsenceLogs = () => {
         endDate,
         nvrIds,
         channelIds,
-        zoneName: zoneNames.join(','),
+        zoneNames,
       });
       const body = res?.data?.body?.data;
       setRecords(body?.data || []);
@@ -547,7 +556,7 @@ const DeskAbsenceLogs = () => {
                   ) : (
                     <ReactApexChart
                       options={chart.options}
-                      series={[{ name: 'Presence', data: chart.seriesData }]}
+                      series={[{ name: 'Person Count', data: chart.seriesData }]}
                       type="area"
                       height={280}
                     />

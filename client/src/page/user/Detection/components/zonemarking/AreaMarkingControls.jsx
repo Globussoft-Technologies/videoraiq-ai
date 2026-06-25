@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrushCleaning, SaveAll, TriangleAlert, ChevronDown } from 'lucide-react';
+import { BrushCleaning, SaveAll, TriangleAlert, ChevronDown, Undo2 } from 'lucide-react';
 import { FaRegStopCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
@@ -118,6 +118,8 @@ const AreaMarkingControls = ({
   isLoading,
   // Clear the right-side Zone Settings panel when "Clear All" is confirmed.
   onClearZoneConfigs,
+  // Forget parent-held points so cleared zones don't reappear (all types).
+  onClearAll,
   // Persist the cleared (empty) state for a saved Desk Absence detection.
   onClearAllPersist
 }) => {
@@ -277,24 +279,13 @@ return;
     ref.setPoints([]);
   }
 
-  // Force drawing mode to restart cleanly
-  if (ref.setDrawingMode) {
-    // Turn off drawing mode. For line-type settings we should NOT
-    // automatically re-enable drawing after clearing; that would allow
-    // starting the draw flow for line settings unintentionally.
-    ref.setDrawingMode(false);
-    const isLineType = selectedType === 'lineCrossingSettings' || selectedType === 'lineCrossing';
-    if (!isLineType) {
-      requestAnimationFrame(() => {
-        ref.setDrawingMode(true);
-      });
-    }
-  }
-
-  // Ensure move mode is off
-  if (ref.setMoveMode) {
-    ref.setMoveMode(false);
-  }
+  // Leave BOTH drawing and move modes OFF, on the parent state and the canvas,
+  // so they stay in sync. The user must click "Start Drawing" to draw again —
+  // clearing must never silently leave the canvas in drawing mode.
+  setDrawingMode(false);
+  setMoveMode(false);
+  if (ref.setDrawingMode) ref.setDrawingMode(false);
+  if (ref.setMoveMode) ref.setMoveMode(false);
 };
 
   const hasPoints = !!(
@@ -627,6 +618,18 @@ const handleMinArea = () => {
           <button
             type="button"
             className="flex hover:text-[#07486A] hover:border-[#07486A] cursor-pointer items-center gap-1 sm:gap-2 border px-2 sm:px-3 py-1 sm:py-1.5 rounded-[6px] text-[11px] sm:text-[13px] hover:bg-gray-100 text-gray-700 border-gray-300"
+            onClick={() => {
+              if (cameraStreamRef?.current?.undoLastPoint) {
+                cameraStreamRef.current.undoLastPoint();
+              }
+            }}
+          >
+            <Undo2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <span className="whitespace-nowrap">Undo</span>
+          </button>
+          <button
+            type="button"
+            className="flex hover:text-[#07486A] hover:border-[#07486A] cursor-pointer items-center gap-1 sm:gap-2 border px-2 sm:px-3 py-1 sm:py-1.5 rounded-[6px] text-[11px] sm:text-[13px] hover:bg-gray-100 text-gray-700 border-gray-300"
         onClick={() => setShowClearModal(true)}
           >
             <BrushCleaning className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
@@ -798,7 +801,7 @@ const handleMinArea = () => {
                               </div>
                               <div>
                                 <label className="block text-xs font-medium text-gray-700 mb-1">
-                                  Threshold
+                                  Threshold (sec)
                                 </label>
                                 <input
                                   type="number"
@@ -943,7 +946,9 @@ const handleMinArea = () => {
         cancelLabel="Cancel"
         onClose={() => setShowClearModal(false)}
         onConfirm={() => {
-          handleDeleteArea(); // actual clear logic
+          handleDeleteArea(); // actual clear logic (clears the canvas)
+          // Forget parent-held points so they don't reappear (all types).
+          if (typeof onClearAll === 'function') onClearAll();
           // Also clear the right-side Zone Settings panel (Desk Absence).
           if (typeof onClearZoneConfigs === 'function') onClearZoneConfigs();
           // Persist the empty state so re-selecting the detection doesn't

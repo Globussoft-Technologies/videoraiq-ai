@@ -71,6 +71,10 @@ const AreaSettingsPreview = forwardRef(({setIsEditing, selectedType, activeCamer
   // Keep debug log
   // Track if initial points have been loaded for selected camera
   const [initialPointsLoaded, setInitialPointsLoaded] = useState(false);
+  // Set when the user explicitly clears all areas, so the ds-sync effect does
+  // not restore the saved reference points on subsequent re-renders. Reset only
+  // when a genuinely different detection is selected.
+  const manuallyClearedRef = useRef(false);
   const [processedImage, setProcessedImage] = useState(null);
   const [loadingPreviewImg, setLoadingPreviewImg] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -113,6 +117,12 @@ const AreaSettingsPreview = forwardRef(({setIsEditing, selectedType, activeCamer
       ? initialReferencePoints
       : (activeDs?.settings?.referencePoints || {});
 
+  // When a genuinely different detection is selected, allow the saved points
+  // to load again (undo the manual-clear lock).
+  useEffect(() => {
+    manuallyClearedRef.current = false;
+  }, [activeDs?._id]);
+
   // Sync local editable fields and channelPoints when detectionSetting prop changes
   // BUT: skip syncing zoneName and zoneEnabled if user has edited them locally (to preserve edits after save)
   useEffect(() => {
@@ -128,9 +138,11 @@ const AreaSettingsPreview = forwardRef(({setIsEditing, selectedType, activeCamer
       setLocalZoneEnabled(typeof activeDs.enabled === 'boolean' ? activeDs.enabled : (typeof zoneEnabled === 'boolean' ? zoneEnabled : true));
     }
 
-    // Sync reference points into channelPoints state so camera initialPoints can pick them up
+    // Sync reference points into channelPoints state so camera initialPoints can pick them up.
+    // Skip this if the user just cleared all areas, so the cleared canvas isn't
+    // overwritten by the saved reference points on a re-render.
     const refPoints = activeDs?.settings?.referencePoints || {};
-    if (refPoints && Object.keys(refPoints).length > 0) {
+    if (!manuallyClearedRef.current && refPoints && Object.keys(refPoints).length > 0) {
       setChannelPoints(refPoints);
       // allow the camera stream to pick up new initial points
       setInitialPointsLoaded(false);
@@ -409,6 +421,9 @@ useEffect(() => {
         priority: appliedDetection?.settings?.levelOfImportance || 'moderate',
         zone_configs: nextConfigs,
         zonesOverride: nextZones,
+        // Allow deleting the LAST zone — the empty state must still persist,
+        // otherwise the canvas clears but the zone_config stays on the server.
+        allowEmpty: true,
       });
     },
   }));
@@ -770,6 +785,14 @@ useEffect(() => {
           onEnableEdit={() => setInitialPointsLoaded(true)}
           handleSaveAreaWithDetection={handleSaveAreaWithDetection}
           onClearZoneConfigs={onClearZoneConfigs}
+          onClearAll={() => {
+            // Clear the parent-held points for ALL detection types so the
+            // canvas stays empty and the saved reference points are not
+            // re-applied after a local canvas clear.
+            manuallyClearedRef.current = true;
+            setChannelPoints({});
+            setInitialPointsLoaded(true);
+          }}
           onClearAllPersist={() => {
             // Desk Absence with a saved detection: persist the cleared (empty)
             // state so re-selecting the detection doesn't restore the zones.

@@ -149,11 +149,8 @@ const CameraStreamWithArea = forwardRef(
             const ctx = canvas.getContext("2d");
             ctx.clearRect(0, 0, canvas.width, canvas.height);
           }
-          // toggle drawing mode to force redraw state if required
-          if (isDrawingMode) {
-            setIsDrawingMode(false);
-            setTimeout(() => setIsDrawingMode(true), 0);
-          }
+          // Do NOT toggle drawing mode here — clearing must not silently
+          // re-enable drawing. The caller controls the drawing/move modes.
         },
         // Accepts a flat single polygon or a nested multi-zone array.
         setPoints: (pts) => {
@@ -168,6 +165,37 @@ const CameraStreamWithArea = forwardRef(
           setZones(normalized);
           setDrawingPoints([]);
           requestAnimationFrame(() => draw(normalized, []));
+        },
+        // Undo the last placed point (and the line leading to it).
+        // - If a polygon is in progress, drop its last point.
+        // - Otherwise reopen the most recently committed zone and drop its last
+        //   point, so undo flows continuously across the close-polygon step.
+        undoLastPoint: () => {
+          const active = drawingPointsRef.current || [];
+          if (active.length > 0) {
+            const next = active.slice(0, -1);
+            setDrawingPoints(next);
+            requestAnimationFrame(() => draw(zonesRef.current, next));
+            return;
+          }
+          const zs = zonesRef.current || [];
+          if (zs.length > 0) {
+            const last = zs[zs.length - 1];
+            // Strip the duplicated closing point, then remove the last vertex.
+            let reopened = last.slice();
+            if (
+              reopened.length > 1 &&
+              reopened[0].x === reopened[reopened.length - 1].x &&
+              reopened[0].y === reopened[reopened.length - 1].y
+            ) {
+              reopened = reopened.slice(0, -1);
+            }
+            reopened = reopened.slice(0, -1);
+            const remainingZones = zs.slice(0, -1);
+            setZones(remainingZones);
+            setDrawingPoints(reopened);
+            requestAnimationFrame(() => draw(remainingZones, reopened));
+          }
         },
         setDrawingMode: (mode) => {
           setIsDrawingMode(mode);
