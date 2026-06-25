@@ -92,7 +92,7 @@ router.get(
   viewAccessCheck,
   incidentsController.getLineCrossingLogs,
 );
-router.get(
+router.post(
   "/logs/desk-absence",
   viewAccessCheck,
   incidentsController.getDeskAbsenceLogs,

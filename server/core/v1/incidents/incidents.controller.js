@@ -550,21 +550,15 @@ class IncidentsController {
 
   async getDeskAbsenceLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
-    #swagger.description = 'Get Desk Absence (deskAbsence) time-series logs for graphing. Each record is a per-camera/per-day incident with a timeSeries array of { timestamp, personCount, zoneName } points, plus nvrData and channelData. Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, zoneName, search. Paginated via skip/limit.'
-    #swagger.parameters['skip'] = { in: 'query', type: 'integer' }
-    #swagger.parameters['limit'] = { in: 'query', type: 'integer' }
-    #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
-    #swagger.parameters['endDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
-    #swagger.parameters['nvrId'] = { in: 'query', type: 'string' }
-    #swagger.parameters['nvrIds'] = { in: 'query', type: 'string', description: 'Comma-separated NVR IDs' }
-    #swagger.parameters['channelId'] = { in: 'query', type: 'string' }
-    #swagger.parameters['channelIds'] = { in: 'query', type: 'string', description: 'Comma-separated channel IDs' }
-    #swagger.parameters['severity'] = { in: 'query', type: 'string', enum: ['low','moderate','high'] }
-    #swagger.parameters['resolved'] = { in: 'query', type: 'boolean' }
-    #swagger.parameters['reportStatus'] = { in: 'query', type: 'boolean' }
-    #swagger.parameters['zoneName'] = { in: 'query', type: 'string', description: 'Filter records having at least one time-series point in this zone' }
-    #swagger.parameters['search'] = { in: 'query', type: 'string' }
+    #swagger.description = 'Get Desk Absence (deskAbsence) time-series logs for graphing. Each record is a per-camera/per-day incident with a timeSeries array of { timestamp, personCount, zoneName } points, plus nvrData and channelData.'
+    #swagger.parameters['data'] = {
+      in: 'body',
+      description: 'Filter parameters',
+      required: false,
+      schema: { $ref: "#/definitions/DeskAbsenceLogsFilter" }
+    }
     #swagger.responses[200] = { description: 'Desk absence logs fetched successfully' }
+    #swagger.responses[400] = { description: 'Validation error' }
     #swagger.responses[500] = { description: 'Internal server error' }
     #swagger.security = [{ "EncryptedAuthToken": [] }]
     */

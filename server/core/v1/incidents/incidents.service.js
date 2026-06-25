@@ -2624,8 +2624,8 @@ console.log(result,'result');
         nvrIds,
         channelId,
         channelIds,
-        zoneName,
-      } = req.query;
+        zoneNames,
+      } = req.body;
 
       const toArray = (v) =>
         v ? v.split(",").map((x) => x.trim()).filter(Boolean) : [];
@@ -2669,10 +2669,11 @@ console.log(result,'result');
         };
       }
 
-      // Optional zoneName filter applied per time-series point.
+      // Optional zoneNames filter applied per time-series point.
       const pointMatch = {};
-      if (zoneName && typeof zoneName === "string" && zoneName.trim()) {
-        pointMatch["point.zoneName"] = zoneName.trim();
+      const zoneFilter = Array.isArray(zoneNames) ? zoneNames.filter(Boolean) : [];
+      if (zoneFilter.length) {
+        pointMatch["point.zoneName"] = { $in: zoneFilter };
       }
 
       const basePipeline = [
