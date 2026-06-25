@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import moment from 'moment';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -10,6 +10,7 @@ import Header from './Header';
 import LiveFeedSection from './LiveFeedSection';
 import DeviceDetail from './DeviceDetail';
 import SettingsCard from './SettingsCard';
+import ZoneSettingsPanel from './zonemarking/ZoneSettingsPanel';
 import ProfileSelectionDialog from './ProfileSelectionDialog';
 import ResetConfirmationDialog from '@/components/ui/ResetConfirmationDialog';
 import { deleteDetectionSettings } from '../Api/delete';
@@ -27,6 +28,9 @@ const Innersettings = () => {
   const [appliedProfileData, setAppliedProfileData] = useState(null);
     const [appliedDetection, setAppliedDetection] = useState(null);
       const [selectedsettingType, setSelectedsettingType] = useState('');
+  // Shared ref to AreaSettingsPreview so the right-side Zone Settings panel can
+  // reuse the same save-area flow (save / delete a zone).
+  const previewRef = useRef(null);
   
 
   const fetchAppliedProfile = async (id = channelId) => {
@@ -124,11 +128,17 @@ const handleResetConfirm = async () => {
           <Header />
           <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-4">
             <div className="space-y-4">
-              <LiveFeedSection currentNvr={currentNvr} setSelectedsettingType={setSelectedsettingType} selectedsettingType={selectedsettingType}  channelData={channelData} appliedDetection={appliedDetection} setAppliedDetection={setAppliedDetection} />
+              <LiveFeedSection previewRef={previewRef} currentNvr={currentNvr} setSelectedsettingType={setSelectedsettingType} selectedsettingType={selectedsettingType}  channelData={channelData} appliedDetection={appliedDetection} setAppliedDetection={setAppliedDetection} />
             </div>
             <div className="space-y-4">
               <DeviceDetail channelData={channelData} />
               <SettingsCard fetchAppliedProfile={fetchAppliedProfile} appliedProfile={appliedProfileData} channelData={channelData} onOpenProfileDialog={() => setShowProfileDialog(true)} />
+              {selectedsettingType === 'deskAbsenceSettings' && appliedDetection?._id && (
+                <ZoneSettingsPanel
+                  appliedDetection={appliedDetection}
+                  previewRef={previewRef}
+                />
+              )}
             </div>
           </div>
         </div>

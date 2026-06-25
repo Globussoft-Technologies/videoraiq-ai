@@ -115,7 +115,11 @@ const AreaMarkingControls = ({
   onEnableEdit,
   handleSaveAreaWithDetection,
   hasError,
-  isLoading
+  isLoading,
+  // Clear the right-side Zone Settings panel when "Clear All" is confirmed.
+  onClearZoneConfigs,
+  // Persist the cleared (empty) state for a saved Desk Absence detection.
+  onClearAllPersist
 }) => {
   console.log(selectedType ,'selectedType in AreaMarkingControls');
   const validateDetectionType = () => {
@@ -340,15 +344,22 @@ console.log('appliedDetection', appliedDetection);
 
       // Build one zone-config block per drawn zone. getZones() returns a nested
       // array of polygons: [[ [x,y], ... ], ...] => zones.length === zone count.
+      // Pre-fill each block from the saved zone_configs (index-aligned with the
+      // polygons), so edits/deletes made in the side panel are reflected here.
       // Only for Desk Absence Detection; other types keep the original modal.
       if (showZoneConfigs) {
         const drawnZones = cameraStreamRef?.current?.getZones?.() || [];
+        const savedConfigs = appliedDetection?.settings?.zone_configs || [];
         setZoneConfigs(
-          drawnZones.map(() => ({
-            name: '',
-            capacity: '',
-            threshold: '',
-          }))
+          drawnZones.map((_, i) => {
+            const saved = savedConfigs[i] || {};
+            return {
+              name: saved.name ?? '',
+              capacity: saved.capacity != null ? String(saved.capacity) : '',
+              threshold:
+                saved.threshold_sec != null ? String(saved.threshold_sec) : '',
+            };
+          })
         );
         // First zone expanded, rest collapsed.
         setExpandedZoneIndex(0);
@@ -933,6 +944,11 @@ const handleMinArea = () => {
         onClose={() => setShowClearModal(false)}
         onConfirm={() => {
           handleDeleteArea(); // actual clear logic
+          // Also clear the right-side Zone Settings panel (Desk Absence).
+          if (typeof onClearZoneConfigs === 'function') onClearZoneConfigs();
+          // Persist the empty state so re-selecting the detection doesn't
+          // restore the zones from the server (Desk Absence, saved detection).
+          if (typeof onClearAllPersist === 'function') onClearAllPersist();
           // setIsEditing(true);
           setShowClearModal(false);
         }}

@@ -52,13 +52,19 @@ const CameraStreamWithArea = forwardRef(
       hasError,
       setHasError,
       isLoading,
-      setIsLoading
+      setIsLoading,
+      // Optional per-zone names (index-aligned to zones) drawn on each polygon.
+      zoneNames = []
     },
     ref
   ) => {
     const videoRef = useRef(null);
     const drawCanvasRef = useRef(null);
     const containerRef = useRef(null);
+
+    // Keep latest zone names in a ref so draw() (called from listeners) sees them.
+    const zoneNamesRef = useRef(zoneNames);
+    zoneNamesRef.current = zoneNames;
 
     // zones: array of committed polygons. Each polygon is an array of {x,y}
     // (closed polygons keep the first point repeated as the last point).
@@ -262,10 +268,11 @@ const CameraStreamWithArea = forwardRef(
       };
     }, []);
 
-    // Redraw whenever zones or the in-progress polygon change
+    // Redraw whenever zones, the in-progress polygon, or zone names change
     useEffect(() => {
       draw(zones, drawingPoints);
-    }, [zones, drawingPoints]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [zones, drawingPoints, zoneNames]);
 
     // create final stream url once
     const streamUrl = useMemo(() => {
@@ -319,6 +326,31 @@ const CameraStreamWithArea = forwardRef(
       ctx.restore();
     };
 
+    // --- Draw a zone's name label near its top edge ---
+    const drawZoneLabel = (ctx, pts, name, scaleFactor) => {
+      if (!name || !pts || pts.length === 0) return;
+      // Anchor at the polygon's top-left-most point.
+      let anchor = pts[0];
+      for (const p of pts) {
+        if (p.y < anchor.y || (p.y === anchor.y && p.x < anchor.x)) anchor = p;
+      }
+      const fontPx = Math.max(10, Math.round(14 * scaleFactor));
+      ctx.save();
+      ctx.font = `600 ${fontPx}px sans-serif`;
+      ctx.textBaseline = "top";
+      const padX = fontPx * 0.4;
+      const padY = fontPx * 0.25;
+      const textW = ctx.measureText(name).width;
+      const boxX = anchor.x;
+      const boxY = Math.max(0, anchor.y - (fontPx + padY * 2) - 4);
+      // Background pill for readability over the video.
+      ctx.fillStyle = "rgba(7, 72, 106, 0.85)";
+      ctx.fillRect(boxX, boxY, textW + padX * 2, fontPx + padY * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(name, boxX + padX, boxY + padY);
+      ctx.restore();
+    };
+
     // --- Draw all committed zones plus the in-progress polygon ---
     const draw = (zonesArr = zonesRef.current, active = drawingPointsRef.current) => {
       const canvas = drawCanvasRef.current;
@@ -328,8 +360,14 @@ const CameraStreamWithArea = forwardRef(
 
       const rect = canvas.getBoundingClientRect();
       const cornerSize = Math.max(4, (CORNER_RADIUS / 2) * (canvas.width / Math.max(rect.width, 1)));
+      // Scale label size to the canvas/display ratio so text stays legible.
+      const scaleFactor = canvas.width / Math.max(rect.width, 1);
+      const names = zoneNamesRef.current || [];
 
-      (zonesArr || []).forEach((z) => drawPolygon(ctx, z, { closed: true, cornerSize }));
+      (zonesArr || []).forEach((z, i) => {
+        drawPolygon(ctx, z, { closed: true, cornerSize });
+        drawZoneLabel(ctx, z, names[i], scaleFactor);
+      });
       drawPolygon(ctx, active, { closed: false, cornerSize });
     };
 

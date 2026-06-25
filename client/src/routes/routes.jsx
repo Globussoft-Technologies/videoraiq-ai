@@ -52,6 +52,7 @@ import WaterSpillageLogs from '@/page/user/EmployeeLogs/WaterSpillageLogs';
 import UnauthorizedAccess from '@/page/user/EmployeeLogs/UnauthorizedAccess';
 import ANPRLogs from '@/page/user/EmployeeLogs/ANPRLogs';
 import PersonCountLogs from '@/page/user/EmployeeLogs/PersonCountLogs';
+import DeskAbsenceLogs from '@/page/user/EmployeeLogs/DeskAbsenceLogs';
 
 
 const { VITE_FRONTEND } = import.meta.env;
@@ -133,6 +134,7 @@ export const routes = createBrowserRouter(
         <Route path="logs/water-spill" element={<WaterSpillageLogs />} />
          <Route path="logs/unauthorized-access" element={<UnauthorizedAccess />} />
          <Route path="logs/person-count" element={<PersonCountLogs />} />
+         <Route path="logs/desk-absence" element={<DeskAbsenceLogs />} />
         <Route path="logs/ANPR" element={<ANPRLogs />} />
         <Route path="user-details" element={<UserDetails />} />
         <Route path="locations" element={<Locations />} />
