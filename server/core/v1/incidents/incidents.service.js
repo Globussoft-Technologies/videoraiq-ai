@@ -145,8 +145,7 @@ class IncidentsService {
           "countVehicles",
           "genericObjectDetection",
           "lineCrossing",
-          "doorDetection",
-          "deskAbsence"
+          "doorDetection"
         ].includes(incidentType)
       ) {
         // update the same document in a day
@@ -2609,19 +2608,141 @@ console.log(result,'result');
 
   async getDeskAbsenceLogs(req, res, next) {
     try {
-      // Optional zoneName filter: keep only records that have at least one
-      // time-series point recorded for the requested zone.
-      const { zoneName } = req.query;
-      const extraMatch = {};
-      if (zoneName && typeof zoneName === "string" && zoneName.trim()) {
-        extraMatch["timeSeries.zoneName"] = zoneName.trim();
+      const data = req?.verified?.userData;
+      if (!data?.user_id) {
+        return res.send(
+          Response.userFailResp("User authentication failed.", "Unauthorized"),
+        );
       }
-      return await this._fetchIncidentLogs({
-        req,
-        res,
+
+      const {
+        skip = 0,
+        limit = 10,
+        startDate,
+        endDate,
+        nvrId,
+        nvrIds,
+        channelId,
+        channelIds,
+        zoneName,
+      } = req.query;
+
+      const toArray = (v) =>
+        v ? v.split(",").map((x) => x.trim()).filter(Boolean) : [];
+
+      // Every desk-absence detection is stored as its own document, so the
+      // graph must collect the points across all of a camera's documents
+      // (within the date range) and merge them into a single time-series.
+      const matchStage = {
+        userId: data.user_id.toString(),
         incidentType: "deskAbsence",
-        extraMatch,
-      });
+      };
+
+      if (startDate && endDate) {
+        matchStage.timeOfIncident = {
+          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+        };
+      }
+
+      const nvrFilter = nvrId ? [nvrId] : toArray(nvrIds);
+      if (nvrFilter.length) {
+        matchStage.nvrId = {
+          $in: nvrFilter.map((id) => new mongoose.Types.ObjectId(id)),
+        };
+      }
+
+      const channelFilter = channelId ? [channelId] : toArray(channelIds);
+      const authorizedChannels = req?.verified?.authorizedChannel?.channels;
+      let effectiveChannelIds = null;
+      if (channelFilter.length && Array.isArray(authorizedChannels)) {
+        const authSet = new Set(authorizedChannels.map((c) => c.toString()));
+        effectiveChannelIds = channelFilter.filter((c) => authSet.has(c));
+      } else if (channelFilter.length) {
+        effectiveChannelIds = channelFilter;
+      } else if (Array.isArray(authorizedChannels)) {
+        effectiveChannelIds = authorizedChannels.map((c) => c.toString());
+      }
+      if (Array.isArray(effectiveChannelIds)) {
+        matchStage.channelId = {
+          $in: effectiveChannelIds.map((id) => new mongoose.Types.ObjectId(id)),
+        };
+      }
+
+      // Optional zoneName filter applied per time-series point.
+      const pointMatch = {};
+      if (zoneName && typeof zoneName === "string" && zoneName.trim()) {
+        pointMatch["point.zoneName"] = zoneName.trim();
+      }
+
+      const basePipeline = [
+        { $match: matchStage },
+        // Each document carries its own timeSeries entries; flatten them so
+        // points from every document of a camera can be regrouped together.
+        { $unwind: { path: "$timeSeries", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            channelId: 1,
+            nvrId: 1,
+            point: {
+              timestamp: {
+                $ifNull: ["$timeSeries.timestamp", "$timeOfIncident"],
+              },
+              personCount: "$timeSeries.personCount",
+              zoneName: "$timeSeries.zoneName",
+              personPresent: {
+                $ifNull: ["$timeSeries.personPresent", "$personPresent"],
+              },
+            },
+          },
+        },
+        ...(Object.keys(pointMatch).length ? [{ $match: pointMatch }] : []),
+        { $sort: { "point.timestamp": 1 } },
+        {
+          $group: {
+            _id: "$channelId",
+            nvrId: { $first: "$nvrId" },
+            timeSeries: { $push: "$point" },
+          },
+        },
+        {
+          $lookup: {
+            from: "nvrs",
+            localField: "nvrId",
+            foreignField: "_id",
+            pipeline: [{ $project: { _id: 1, nvrName: 1 } }],
+            as: "nvrData",
+          },
+        },
+        { $unwind: { path: "$nvrData", preserveNullAndEmptyArrays: true } },
+        {
+          $lookup: {
+            from: "channels",
+            localField: "_id",
+            foreignField: "_id",
+            pipeline: [{ $project: { _id: 1, name: 1, customName: 1 } }],
+            as: "channelData",
+          },
+        },
+        { $unwind: { path: "$channelData", preserveNullAndEmptyArrays: true } },
+        { $sort: { "channelData.name": 1 } },
+      ];
+
+      const [countResult, logs] = await Promise.all([
+        Incident.aggregate([...basePipeline, { $count: "totalCount" }]),
+        Incident.aggregate([
+          ...basePipeline,
+          { $skip: parseInt(skip) },
+          { $limit: parseInt(limit) },
+        ]),
+      ]);
+
+      return res.status(200).json(
+        Response.userSuccessResp("deskAbsence logs fetched successfully", {
+          totalCount: countResult[0]?.totalCount || 0,
+          data: logs,
+        }),
+      );
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch desk absence logs", 500));
