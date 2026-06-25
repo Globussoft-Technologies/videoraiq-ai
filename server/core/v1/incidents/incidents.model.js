@@ -356,6 +356,17 @@ const VehicleObstructionIncident = Incident.discriminator('vehicleObstruction', 
 const DeskAbsenceSchema = new Schema({
   personPresent: { type: Boolean },
   triggerNotification: { type: Boolean, default: true },
+  timeSeries: [
+    {
+      timestamp: {
+        type: Date,
+        default: Date.now,
+      },
+      personCount: { type: Number },
+      zoneName: { type: String },
+      personPresent: { type: Boolean },
+    }
+  ],
 });
 const DeskAbsenceIncident = Incident.discriminator(
   "deskAbsence",

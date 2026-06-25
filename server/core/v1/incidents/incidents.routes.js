@@ -92,5 +92,10 @@ router.get(
   viewAccessCheck,
   incidentsController.getLineCrossingLogs,
 );
+router.get(
+  "/logs/desk-absence",
+  viewAccessCheck,
+  incidentsController.getDeskAbsenceLogs,
+);
 
 export default router;

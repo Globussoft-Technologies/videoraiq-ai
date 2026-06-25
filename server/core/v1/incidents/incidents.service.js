@@ -146,6 +146,7 @@ class IncidentsService {
           "genericObjectDetection",
           "lineCrossing",
           "doorDetection",
+          "deskAbsence"
         ].includes(incidentType)
       ) {
         // update the same document in a day
@@ -244,6 +245,14 @@ class IncidentsService {
             recentIncident.timeSeries.push({
               status: req?.body?.doorDetectionPayload?.status,
               Image: req?.body?.doorDetectionPayload?.Image,
+            });
+          } else if(incidentType === "deskAbsence") {
+            recentIncident.timeOfIncident = req?.body?.timeOfIncident;
+            recentIncident.personPresent = req?.body?.personPresent;
+            recentIncident.timeSeries.push({
+              personCount: req.body.personCount ?? 0,
+              zoneName: req.body.zoneName,
+              personPresent: req.body.personPresent,
             });
           }
 
@@ -370,6 +379,11 @@ class IncidentsService {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.personPresent = req?.body?.personPresent;
         newIncident.Image = req?.body?.Image;
+        newIncident.timeSeries.push({
+          personCount: req.body.personCount ?? 0,
+          zoneName: req.body.zoneName,
+          personPresent: req.body.personPresent,
+        });
       } else if (incidentType === "guardAbsence") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.personPresent = req?.body?.personPresent;
@@ -2590,6 +2604,27 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch line crossing logs", 500));
+    }
+  }
+
+  async getDeskAbsenceLogs(req, res, next) {
+    try {
+      // Optional zoneName filter: keep only records that have at least one
+      // time-series point recorded for the requested zone.
+      const { zoneName } = req.query;
+      const extraMatch = {};
+      if (zoneName && typeof zoneName === "string" && zoneName.trim()) {
+        extraMatch["timeSeries.zoneName"] = zoneName.trim();
+      }
+      return await this._fetchIncidentLogs({
+        req,
+        res,
+        incidentType: "deskAbsence",
+        extraMatch,
+      });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch desk absence logs", 500));
     }
   }
 }
