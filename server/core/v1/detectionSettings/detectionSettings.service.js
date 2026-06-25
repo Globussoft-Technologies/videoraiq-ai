@@ -96,23 +96,9 @@ const modelMap = {
 class DetectionSettingService {
   async getDetectionTypes(req, res, _next) {
     try {
-      const adminId = req?.verified?.userData?.adminId;
-      const admin = await Admin.findById(adminId).select("detectionConfig").lean();
-
-      const config = admin?.detectionConfig;
-      let detectionTypes = DETECTION_TYPES;
-
-      if (config && Object.keys(config).length > 0) {
-        detectionTypes = Object.fromEntries(
-          Object.entries(DETECTION_TYPES)
-            .filter(([key]) => key in config)
-            .map(([key, defaultName]) => [key, config[key] || defaultName])
-        );
-      }
-
       return res.status(200).json(
         Response.userSuccessResp("Detection types fetched successfully", {
-          detectionTypes,
+          detectionTypes: DETECTION_TYPES,
         }),
       );
     } catch (error) {
@@ -143,11 +129,11 @@ class DetectionSettingService {
       const adminId = req?.verified?.userData?.adminId;
       const admin = await Admin.findById(adminId).select("detectionConfig").lean();
       const config = admin?.detectionConfig;
-      if (config && Object.keys(config).length > 0 && !(value.settingType in config)) {
-        return res
-          .status(403)
-          .json(Response.userFailResp("You are not authorized to use this detection type"));
-      }
+      // if (config && Object.keys(config).length > 0 && !(value.settingType in config)) {
+      //   return res
+      //     .status(403)
+      //     .json(Response.userFailResp("You are not authorized to use this detection type"));
+      // }
 
       // 3. Save to DB for each channelId
       const data = { ...value, userId: user_id };

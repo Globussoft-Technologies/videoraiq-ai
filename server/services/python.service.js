@@ -171,6 +171,8 @@ class PythonService {
           zones: zones || [],
           severity,
         });
+        console.log(zones,'detectors');
+        
       }
 
       if (detection_modes?.includes("ANPR")) {
