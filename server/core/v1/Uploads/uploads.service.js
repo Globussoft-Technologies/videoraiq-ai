@@ -1,13 +1,14 @@
 import path from "path";
 import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
-import config from "config";
-import stream from 'stream';
 import fs from 'fs';
-import { pipeline } from 'stream/promises';
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
-import { withSFTPConnection } from "../../../utils/newSFTPConnectionCheck.js";
-import usersModel from "../users/users.model.js";
+import {
+    putMedia,
+    streamMedia,
+    deleteMedia as deleteMediaFromStorage,
+    mediaExists,
+} from "../../../utils/mediaStorage.js";
 
 const cacheDir = path.join('/tmp', 'media-cache'); // You can change this to './cache' or any path
 if (!fs.existsSync(cacheDir)) {
@@ -56,17 +57,11 @@ class UploadService {
                 );
             }
 
-            const mainPath = config.get("SFTP.Path");
-            const remoteDir = `${mainPath}/uploads/${mediaType}s/${folderName}`;
-            const timestamp = Date.now();
-            const remotePath = `${remoteDir}/${timestamp}-${file.originalname}`;
-
-            const result = await withSFTPConnection(async (sftp) => {
-                await sftp.mkdir(remoteDir, true).catch(() => {});
-                const bufferStream = new stream.PassThrough();
-                bufferStream.end(file.buffer);
-                await sftp.put(bufferStream, remotePath);
-                return remotePath;
+            const result = await putMedia({
+                buffer: file.buffer,
+                mediaType,
+                folderName,
+                originalName: file.originalname,
             });
 
             return res.status(200).json({
@@ -109,16 +104,7 @@ class UploadService {
             res.setHeader("Cross-Origin-Opener-Policy", "*");
             res.setHeader("Cross-Origin-Resource-Policy", "*");
 
-            await withSFTPConnection(async (sftp) => {
-                const sftpStream = await sftp.createReadStream(mediaPath);
-                sftpStream.on("error", (err) => {
-                    console.error("SFTP stream error:", err);
-                    if (!res.headersSent) {
-                        res.status(500).json({ status: "failed", message: "Error streaming file from SFTP." });
-                    }
-                });
-                await pipeline(sftpStream, res);
-            });
+            await streamMedia(mediaPath, res);
 
         } catch (error) {
             console.error("Error fetching media:", error);
@@ -144,12 +130,12 @@ class UploadService {
                 fs.unlinkSync(cachedFilePath);
             }
 
-            const exists = await withSFTPConnection((sftp) => sftp.exists(mediaPath));
+            const exists = await mediaExists(mediaPath);
             if (!exists) {
-                return res.status(404).json({ status: 'failed', message: 'File not found on SFTP server.' });
+                return res.status(404).json({ status: 'failed', message: 'File not found in storage.' });
             }
 
-            await withSFTPConnection((sftp) => sftp.delete(mediaPath));
+            await deleteMediaFromStorage(mediaPath);
 
             return res.status(200).json({ status: 'success', message: 'Media deleted successfully.' });
 
@@ -183,12 +169,12 @@ class UploadService {
                 fs.unlinkSync(cachedFilePath);
             }
 
-            const exists = await withSFTPConnection((sftp) => sftp.exists(mediaPath));
+            const exists = await mediaExists(mediaPath);
             if (!exists) {
-                return res.status(404).json({ status: 'failed', message: 'File not found on SFTP server.' });
+                return res.status(404).json({ status: 'failed', message: 'File not found in storage.' });
             }
 
-            await withSFTPConnection((sftp) => sftp.delete(mediaPath));
+            await deleteMediaFromStorage(mediaPath);
 
             return res.status(200).json({ status: 'success', message: 'Media deleted successfully.' });
 
