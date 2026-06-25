@@ -324,6 +324,7 @@ class PythonService {
         stream_url,
         detection_modes,
         zones,
+        zone_configs,
         obstruction_threshold_sec,
         severity,
       } = payload;
@@ -438,6 +439,7 @@ class PythonService {
         detectors.push({
           name: "deskAbsenceDetection",
           zones: zones || [],
+          zone_configs,
         });
       }
 
@@ -485,6 +487,7 @@ class PythonService {
     admin_id,
     type,
     zones,
+    zone_configs,
     videoResolution,
     obstruction_threshold_sec,
     severity,
@@ -508,6 +511,7 @@ class PythonService {
       pipeline_mode: "object_detection",
       detection_modes: detectionModes,
       zones,
+      zone_configs,
       videoResolution,
       obstruction_threshold_sec,
       severity,
