@@ -316,10 +316,23 @@ class RolesServices{
                 const updatedPermissionConfig = { ...permission.permissionConfig };
                 for (const key in updatedPermissionConfig) {
                     if (updatedPermissionConfig[key]) {
-                        updatedPermissionConfig[key].view = roleView ?? updatedPermissionConfig[key].view;
-                        updatedPermissionConfig[key].create = roleCreate ?? updatedPermissionConfig[key].create;
-                        updatedPermissionConfig[key].edit = roleEdit ?? updatedPermissionConfig[key].edit;
-                        updatedPermissionConfig[key].delete = roleDelete ?? updatedPermissionConfig[key].delete;
+                        // Handle nested logs structure separately
+                        if (key === 'logs' && typeof updatedPermissionConfig[key] === 'object') {
+                            for (const subKey in updatedPermissionConfig[key]) {
+                                if (updatedPermissionConfig[key][subKey]) {
+                                    updatedPermissionConfig[key][subKey].view = roleView ?? updatedPermissionConfig[key][subKey].view;
+                                    updatedPermissionConfig[key][subKey].create = roleCreate ?? updatedPermissionConfig[key][subKey].create;
+                                    updatedPermissionConfig[key][subKey].edit = roleEdit ?? updatedPermissionConfig[key][subKey].edit;
+                                    updatedPermissionConfig[key][subKey].delete = roleDelete ?? updatedPermissionConfig[key][subKey].delete;
+                                }
+                            }
+                        } else {
+                            // Handle flat structure for other modules
+                            updatedPermissionConfig[key].view = roleView ?? updatedPermissionConfig[key].view;
+                            updatedPermissionConfig[key].create = roleCreate ?? updatedPermissionConfig[key].create;
+                            updatedPermissionConfig[key].edit = roleEdit ?? updatedPermissionConfig[key].edit;
+                            updatedPermissionConfig[key].delete = roleDelete ?? updatedPermissionConfig[key].delete;
+                        }
                     }
                 }
                 let permissionUpdate= await permissionModel.updateOne(
