@@ -10,6 +10,7 @@ import momentTZ from "moment-timezone";
 import { withSFTPConnection } from "../../../utils/newSFTPConnectionCheck.js";
 import path from "path";
 import fs from "fs";
+import { deletionQueue } from "../jobs/utils/deletionQueue.js";
 
 import {
   Incident,
@@ -2827,6 +2828,169 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch zone names", 500));
+    }
+  }
+
+  async deleteIncidentsByAdminAndDateRange(req, res, next) {
+    try {
+      const { error, value } = incidentsValidate.deleteIncidentsByAdminAndDateRange(req.body);
+      if (error) {
+        return res.status(400).json(
+          Response.validationFailResp("Validation failed", error.message)
+        );
+      }
+
+      const { startDate, endDate } = value;
+      const userId = req?.verified?.userData?.user_id;
+
+      if (!userId) {
+        return res.status(401).json(
+          Response.validationFailResp(
+            "User not authenticated",
+            "Authentication required"
+          )
+        );
+      }
+
+      // Validate date range if provided
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        if (start > end) {
+          return res.status(400).json(
+            Response.validationFailResp(
+              "Invalid date range",
+              "startDate must be before endDate"
+            )
+          );
+        }
+      }
+
+      // Get count of incidents that will be deleted (for user awareness)
+      const query = { userId };
+      if (startDate || endDate) {
+        query.timeOfIncident = {};
+        if (startDate) {
+          query.timeOfIncident.$gte = new Date(startDate);
+        }
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          query.timeOfIncident.$lte = end;
+        }
+      }
+
+      const incidentCount = await Incident.countDocuments(query);
+
+      if (incidentCount === 0) {
+        return res.status(400).json(
+          Response.validationFailResp(
+            "No incidents found",
+            "No incidents match the specified criteria"
+          )
+        );
+      }
+
+      // Queue the deletion job
+      const job = await deletionQueue.add(
+        "delete-incidents",
+        {
+          adminId: userId,
+          startDate,
+          endDate,
+        },
+        {
+          removeOnComplete: { age: 3600 }, // Keep completed job for 1 hour
+          removeOnFail: { age: 86400 }, // Keep failed job for 24 hours
+          attempts: 3,
+          backoff: {
+            type: "exponential",
+            delay: 2000,
+          },
+        }
+      );
+
+      logger.info(
+        `Deletion job ${job.id} queued for admin ${userId}. Will delete ${incidentCount} incidents.`
+      );
+
+      return res.status(202).json(
+        Response.userSuccessResp(
+          "Deletion job queued successfully",
+          {
+            jobId: job.id,
+            incidentCount,
+            startDate: startDate || null,
+            endDate: endDate || null,
+            message: `${incidentCount} incident(s) will be deleted. You will receive a confirmation email when the deletion is complete.`,
+          }
+        )
+      );
+    } catch (error) {
+      logger.error("Error queuing deletion job:", error);
+      next(new AppError("Failed to queue deletion job", 500));
+    }
+  }
+
+  async getDeletionJobStatus(req, res, next) {
+    try {
+      const { jobId } = req.params;
+      const userId = req?.verified?.userData?.user_id;
+
+      if (!userId || !jobId) {
+        return res.status(400).json(
+          Response.validationFailResp(
+            "Missing required parameters",
+            "jobId and authentication required"
+          )
+        );
+      }
+
+      const job = await deletionQueue.getJob(jobId);
+
+      if (!job) {
+        return res.status(404).json(
+          Response.notFoundResp("Deletion job not found")
+        );
+      }
+
+      const progress = job.progress();
+      const state = await job.getState();
+      const attempts = job.attemptsMade;
+      const failedReason = job.failedReason;
+
+      let status = "unknown";
+      if (state === "completed") {
+        status = "completed";
+      } else if (state === "failed") {
+        status = "failed";
+      } else if (state === "active") {
+        status = "processing";
+      } else if (state === "waiting" || state === "delayed") {
+        status = "queued";
+      }
+
+      const jobData = job.data;
+      const jobResult =
+        state === "completed" ? await job.returnvalue : null;
+
+      return res.status(200).json(
+        Response.userSuccessResp("Job status retrieved successfully", {
+          jobId,
+          status,
+          progress: typeof progress === "number" ? progress : 0,
+          incidentCount: jobData.incidentCount,
+          startDate: jobData.startDate || null,
+          endDate: jobData.endDate || null,
+          attempts,
+          failedReason: failedReason || null,
+          result: jobResult || null,
+        })
+      );
+    } catch (error) {
+      logger.error("Error retrieving job status:", error);
+      next(new AppError("Failed to retrieve job status", 500));
     }
   }
 }

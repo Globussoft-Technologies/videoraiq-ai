@@ -104,4 +104,16 @@ router.get(
   incidentsController.getDeskAbsenceZoneNames,
 );
 
+router.post(
+  "/delete-by-admin-and-date",
+  deleteAccessCheck,
+  incidentsController.deleteIncidentsByAdminAndDateRange,
+);
+
+router.get(
+  "/deletion-status/:jobId",
+  viewAccessCheck,
+  incidentsController.getDeletionJobStatus,
+);
+
 export default router;

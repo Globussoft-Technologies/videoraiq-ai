@@ -580,6 +580,35 @@ class IncidentsController {
     */
     return await incidentsService.getDeskAbsenceZoneNames(req, res, next);
   }
+
+  async deleteIncidentsByAdminAndDateRange(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Queue deletion of incidents for authenticated admin, optionally filtered by date range. Deletion is processed asynchronously. All associated images are deleted from storage.'
+    #swagger.parameters['data'] = {
+      in: 'body',
+      description: 'Deletion parameters',
+      required: true,
+      schema: { $ref: "#/definitions/deleteIncidentsByAdminAndDateRange" }
+    }
+    #swagger.responses[202] = { description: 'Deletion job queued successfully' }
+    #swagger.responses[400] = { description: 'Invalid parameters' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.deleteIncidentsByAdminAndDateRange(req, res, next);
+  }
+
+  async getDeletionJobStatus(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get status of a deletion job'
+    #swagger.parameters['jobId'] = { in: 'path', type: 'string', required: true, description: 'Deletion job ID' }
+    #swagger.responses[200] = { description: 'Job status fetched successfully' }
+    #swagger.responses[404] = { description: 'Job not found' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.getDeletionJobStatus(req, res, next);
+  }
 }
 
 export default new IncidentsController();
