@@ -617,8 +617,14 @@ const handleMinArea = () => {
       )} */}
           <button
             type="button"
-            className="flex hover:text-[#07486A] hover:border-[#07486A] cursor-pointer items-center gap-1 sm:gap-2 border px-2 sm:px-3 py-1 sm:py-1.5 rounded-[6px] text-[11px] sm:text-[13px] hover:bg-gray-100 text-gray-700 border-gray-300"
+            disabled={!drawingMode}
+            className={`flex items-center gap-1 sm:gap-2 border px-2 sm:px-3 py-1 sm:py-1.5 rounded-[6px] text-[11px] sm:text-[13px] text-gray-700 border-gray-300 ${
+              drawingMode
+                ? 'cursor-pointer hover:text-[#07486A] hover:border-[#07486A] hover:bg-gray-100'
+                : 'opacity-50 cursor-not-allowed'
+            }`}
             onClick={() => {
+              if (!drawingMode) return;
               if (cameraStreamRef?.current?.undoLastPoint) {
                 cameraStreamRef.current.undoLastPoint();
               }

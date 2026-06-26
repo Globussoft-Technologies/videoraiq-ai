@@ -371,9 +371,24 @@ const CameraStreamWithArea = forwardRef(
       const textW = ctx.measureText(name).width;
       const boxX = anchor.x;
       const boxY = Math.max(0, anchor.y - (fontPx + padY * 2) - 4);
-      // Background pill for readability over the video.
-      ctx.fillStyle = "rgba(7, 72, 106, 0.85)";
-      ctx.fillRect(boxX, boxY, textW + padX * 2, fontPx + padY * 2);
+      const boxW = textW + padX * 2;
+      const boxH = fontPx + padY * 2;
+      const radius = Math.min(boxH / 2, fontPx * 0.45);
+      // Rounded red pill background for readability over the video.
+      ctx.fillStyle = "rgba(220, 38, 38, 0.9)";
+      ctx.beginPath();
+      if (typeof ctx.roundRect === "function") {
+        ctx.roundRect(boxX, boxY, boxW, boxH, radius);
+      } else {
+        // Fallback rounded-rect path for older canvas implementations.
+        ctx.moveTo(boxX + radius, boxY);
+        ctx.arcTo(boxX + boxW, boxY, boxX + boxW, boxY + boxH, radius);
+        ctx.arcTo(boxX + boxW, boxY + boxH, boxX, boxY + boxH, radius);
+        ctx.arcTo(boxX, boxY + boxH, boxX, boxY, radius);
+        ctx.arcTo(boxX, boxY, boxX + boxW, boxY, radius);
+        ctx.closePath();
+      }
+      ctx.fill();
       ctx.fillStyle = "#ffffff";
       ctx.fillText(name, boxX + padX, boxY + padY);
       ctx.restore();

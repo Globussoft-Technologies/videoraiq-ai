@@ -408,6 +408,8 @@ const AddNVRForm = ({ onClose, isEdit, initialData, fetchNvrData, title }) => {
                                                 <SelectContent className='bg-white shadow-md'>
                                                     <SelectItem value='hikvision'>Hikvision</SelectItem>
                                                     <SelectItem value='cpplus'>CP Plus</SelectItem>
+                                                    <SelectItem value='tiandy'>Tiandy</SelectItem>
+                                                    <SelectItem value='securus'>Securus</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         )}

@@ -118,7 +118,7 @@ const ZoneSettingsPanel = ({ appliedDetection, previewRef, canEdit = true }) => 
                 <button
                   type="button"
                   onClick={() => toggle(index)}
-                  className="flex-1 flex items-center gap-2 text-left"
+                  className="flex-1 flex items-center gap-2 text-left cursor-pointer"
                   aria-expanded={isOpen}
                 >
                   <span className="text-sm font-medium text-gray-700 truncate">
@@ -135,7 +135,7 @@ const ZoneSettingsPanel = ({ appliedDetection, previewRef, canEdit = true }) => 
                     type="button"
                     onClick={() => setDeleteIndex(index)}
                     disabled={busy}
-                    className="shrink-0 p-1 rounded hover:bg-red-50 text-red-500 disabled:opacity-50"
+                    className="shrink-0 p-1 rounded hover:bg-red-50 text-red-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                     aria-label="Delete zone"
                     title="Delete zone"
                   >
