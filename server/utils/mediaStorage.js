@@ -55,9 +55,11 @@ export function getActiveProvider() {
   return provider === "oracle" ? "oracle" : "nas";
 }
 
-/** Strip leading slashes so NAS-style and key-style paths compare cleanly. */
+/** Strip leading slashes and collapse consecutive slashes so paths compare cleanly. */
 function normalizeKey(mediaPath) {
-  return String(mediaPath).replace(/^\/+/, "");
+  return String(mediaPath)
+    .replace(/^\/+/, "") // Remove leading slashes
+    .replace(/\/+/g, "/"); // Collapse consecutive slashes to single slash
 }
 
 /** True when a stored path points at Oracle Object Storage. */
@@ -80,7 +82,8 @@ function sanitizeSegment(seg) {
 
 // Canonical shape produced by putMedia — used to constrain reads/deletes so a
 // caller can't address arbitrary keys in the bucket via the mediaPath param.
-const ORACLE_KEY_RE = /^oracle\/uploads\/(?:image|video)s\/[^/]+\/[^/]+$/;
+// Matches both oracle/ prefixed and non-prefixed paths for backward compatibility
+const ORACLE_KEY_RE = /^(?:oracle\/)?uploads\/(?:image|video)s\/[^/]+\/[^/]+$/;
 
 /** Validate + normalize an Oracle object key, rejecting out-of-namespace keys. */
 function oracleKeyFor(mediaPath) {
@@ -159,7 +162,8 @@ export async function putMedia({ buffer, mediaType, folderName, originalName }) 
 
   if (getActiveProvider() === "oracle") {
     const { client, bucket } = getOracle();
-    const objectName = `${ORACLE_PREFIX}uploads/${mediaType}s/${folder}/${leaf}`;
+    // Store without oracle/ prefix to match existing images
+    const objectName = `uploads/${mediaType}s/${folder}/${leaf}`;
     await client.send(
       new PutObjectCommand({
         Bucket: bucket,
@@ -169,8 +173,7 @@ export async function putMedia({ buffer, mediaType, folderName, originalName }) 
         ContentType: contentTypeFor(leaf),
       })
     );
-    // Leading slash keeps the stored path shape consistent with NAS paths for
-    // client-side `base + path` URL building; reads strip it via normalizeKey.
+    // Return path without leading slash for consistency with existing images
     return `/${objectName}`;
   }
 
@@ -206,6 +209,32 @@ export async function streamMedia(mediaPath, res) {
     }
     await pipeline(data.Body, res);
     return;
+  }
+
+  // If provider is Oracle, try fetching from Oracle even without oracle/ prefix
+  if (getActiveProvider() === "oracle") {
+    try {
+      const { client, bucket } = getOracle();
+      const normalizedPath = normalizeKey(mediaPath);
+      const data = await client.send(
+        new GetObjectCommand({ Bucket: bucket, Key: normalizedPath })
+      );
+      // Forward the stored content metadata so the response is accurate.
+      if (!res.headersSent && typeof res.setHeader === "function") {
+        if (data.ContentType) res.setHeader("Content-Type", data.ContentType);
+        if (data.ContentLength != null) {
+          res.setHeader("Content-Length", String(data.ContentLength));
+        }
+      }
+      await pipeline(data.Body, res);
+      return;
+    } catch (err) {
+      // If not found in Oracle with this path, fall back to NAS
+      const code = err?.$metadata?.httpStatusCode;
+      if (!(err?.name === "NotFound" || err?.name === "NoSuchKey" || code === 404)) {
+        throw err;
+      }
+    }
   }
 
   await withSFTPConnection(async (sftp) => {
