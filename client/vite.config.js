@@ -3,7 +3,6 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import tailwindcss from '@tailwindcss/vite';
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -11,31 +10,34 @@ export default defineConfig({
       '@': path.resolve(__dirname, 'src'),
     },
   },
+  // FORCE ESBUILD TO USE ONLY 1 CPU CORE
+  // This stops those multiple heavy 'esbuild --service' lines eating your CPU/RAM
+  esbuild: {
+    supported: { 'dynamic-import': true },
+  },
+  worker: {
+    plugins: () => [react(), tailwindcss()],
+  },
   build: {
-    // 1. Disable sourcemaps completely to save massive amounts of RAM
     sourcemap: false,
+    cssMinify: 'esbuild',
+    minify: 'esbuild',
     
-    // 2. Disable CSS code splitting if your project can handle it, 
-    // or leave it default. Minimizing minifier overhead:
-    cssMinify: 'esbuild', // esbuild is extremely light on CPU compared to lightningcss/clean-css
-
+    // Crucial constraints for low-resource servers:
     rollupOptions: {
-      // 3. Restrict concurrent file writes so CPU cores aren't overwhelmed
-      maxParallelFileOps: 2, 
+      // 1. Force Rollup to process files strictly one-by-one
+      maxParallelFileOps: 1, 
       
       output: {
-        // 4. Split heavy node_modules into smaller chunks so Rollup doesn't 
-        // hold one massive 'vendor' chunk in memory all at once.
+        // 2. Turn off advanced multi-threading features in Rollup
+        experimentalMinChunkSize: 10000,
+        
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            // Group dependencies by package name
             return id.toString().split('node_modules/')[1].split('/')[0].toString();
           }
         },
       },
     },
-    
-    // 5. Use esbuild for minification (fastest, lowest CPU/RAM usage)
-    minify: 'esbuild',
   },
 });
