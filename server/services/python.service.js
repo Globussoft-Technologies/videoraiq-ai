@@ -59,6 +59,7 @@ class PythonService {
     enable,
     type,
     zones,
+    zone_configs,
     videoResolution,
     obstruction_threshold_sec,
     severity,
@@ -80,6 +81,19 @@ class PythonService {
       // ! new
       // const streamingUrl = `${nvr?.domain}${channel?.streamingPath}`;
 
+      // const payload = {
+      //   camera_id: channel?._id?.toString(),
+      //   nvr_id: channel?.nvrId?._id?.toString(),
+      //   admin_id,
+      //   stream_url: streamingUrl,
+      //   camera_type: channel?.checkType || "",
+      //   camera_name: channel?.customName || channel?.name,
+      //   pipeline_mode: "object_detection",
+      //   detection_modes: detectionModes,
+      //   zones,
+      //   videoResolution
+      // };
+      // return await this.startDetection(payload);
       const payload = {
         camera_id: channel?._id?.toString(),
         nvr_id: channel?.nvrId?._id?.toString(),
@@ -90,6 +104,7 @@ class PythonService {
         pipeline_mode: "object_detection",
         detection_modes: detectionModes,
         zones,
+        zone_configs,
         videoResolution,
         obstruction_threshold_sec,
         severity,
@@ -113,6 +128,7 @@ class PythonService {
         stream_url,
         detection_modes,
         zones,
+        zone_configs,
         obstruction_threshold_sec,
         severity,
       } = payload;
@@ -123,7 +139,7 @@ class PythonService {
       if (["helmet", "vest"].some((mode) => detection_modes?.includes(mode))) {
         detectors.push({
           name: "personalProtectiveEquipmentSettings",
-          zones: [zones] || [],
+          zones: zones || [],
           severity,
         });
       }
@@ -131,7 +147,7 @@ class PythonService {
       if (detection_modes?.includes("crowd")) {
         detectors.push({
           name: "crowdDetectionSettings",
-          zones: [zones] || [],
+          zones: zones || [],
           severity,
         });
       }
@@ -147,65 +163,27 @@ class PythonService {
       if (detection_modes?.includes("vehicles")) {
         detectors.push({
           name: "countVehiclesSettings",
-          zones: [zones] || [],
+          zones: zones || [],
           severity,
         });
       }
 
-      if (detection_modes?.includes("persons")) {
+      if (detection_modes?.includes("countPersons")) {
         detectors.push({
           name: "countPersonsSettings",
-          zones: [zones] || [],
+          zones: zones || [],
           severity,
         });
+        console.log(zones,'detectors');
+        
       }
 
       if (detection_modes?.includes("ANPR")) {
         detectors.push({
           name: "numberPlateDetectionSettings",
           // obstruction_threshold_sec: obstruction_threshold_sec,
-          zones: [zones] || [],
+          zones: zones || [],
           severity,
-        });
-      }
-
-      if (detection_modes?.includes("intrusion")) {
-        detectors.push({
-          name: "zoneIntrusionSettings",
-          zones: [zones] || [],
-          severity,
-        });
-      }
-
-      if (detection_modes?.includes("conveyor")) {
-        detectors.push({
-          name: "conveyorDetectionSettings",
-          zones: [zones] || [],
-          severity,
-        });
-      }
-
-      if (detection_modes?.includes("crusher")) {
-        detectors.push({
-          name: "crusherDetectionSettings",
-          zones: [zones] || [],
-          severity,
-        });
-      }
-
-      if (detection_modes?.includes("water_spillage")) {
-        detectors.push({
-          name: "waterSpillageDetectionSettings",
-          zones: [zones] || [],
-          severity,
-        });
-      }
-
-
-      if (detection_modes?.includes("intrusion")) {
-        detectors.push({
-          name: "zoneIntrusionSettings",
-          zones: [zones] || [],
         });
       }
 
@@ -213,7 +191,55 @@ class PythonService {
         detectors.push({
           name: "vehicleTypeDetectionSettings",
           obstruction_threshold_sec: obstruction_threshold_sec,
-          zones: [zones] || [],
+          zones: zones || [],
+        });
+      }
+
+      if (detection_modes?.includes("intrusion")) {
+        detectors.push({
+          name: "zoneIntrusionSettings",
+          zones: zones || [],
+          severity,
+        });
+      }
+
+      if (detection_modes?.includes("conveyor")) {
+        detectors.push({
+          name: "conveyorDetectionSettings",
+          zones: zones || [],
+          severity,
+        });
+      }
+
+      if (detection_modes?.includes("crusher")) {
+        detectors.push({
+          name: "crusherDetectionSettings",
+          zones: zones || [],
+          severity,
+        });
+      }
+
+      if (detection_modes?.includes("water_spillage")) {
+        detectors.push({
+          name: "waterSpillageDetectionSettings",
+          zones: zones || [],
+          severity,
+        });
+      }
+
+
+      if (detection_modes?.includes("intrusion")) {
+        detectors.push({
+          name: "zoneIntrusionSettings",
+          zones: zones || [],
+        });
+      }
+
+      if (detection_modes?.includes("vehicleType")) {
+        detectors.push({
+          name: "vehicleTypeDetectionSettings",
+          obstruction_threshold_sec: obstruction_threshold_sec,
+          zones: zones || [],
         });
       }
 
@@ -221,7 +247,7 @@ class PythonService {
         detectors.push({
           name: "loiteringDetectionSettings",
           obstruction_threshold_sec: obstruction_threshold_sec,
-          zones: [zones] || [],
+          zones: zones || [],
         });
       }
 
@@ -229,9 +255,32 @@ class PythonService {
         detectors.push({
           name: "vehicleObstructionSettings",
           obstruction_threshold_sec: obstruction_threshold_sec,
-          zones: [zones] || [],
+          zones: zones || [],
         });
       }
+      if( detection_modes?.includes("tableOccupancySettings")) {
+        
+        detectors.push({
+          name: "tableOccupancySettings",
+          obstruction_threshold_sec: obstruction_threshold_sec,
+          zones: zones || [],
+        });
+      }
+
+      if( detection_modes?.includes("foodServicePPEDetection")) {
+        detectors.push({
+          name: "foodServicePPEDetection",
+          zones: zones || [],
+        });
+      }
+
+      if( detection_modes?.includes("desk_absence")) {
+        detectors.push({
+          name: "deskAbsenceDetection",
+          zones: zones || [],
+          zone_configs
+        });
+      }  
 
       // ❗️ Validation
       if (!detectors.length) {
@@ -244,8 +293,7 @@ class PythonService {
         nvr_id,
         admin_id,
         detectors,
-      };
-
+      };      
       // include stream_url only if present
       if (stream_url) {
         newPayload.stream_url = stream_url;
@@ -276,6 +324,7 @@ class PythonService {
         stream_url,
         detection_modes,
         zones,
+        zone_configs,
         obstruction_threshold_sec,
         severity,
       } = payload;
@@ -286,16 +335,14 @@ class PythonService {
       if (["helmet", "vest"].some((mode) => detection_modes?.includes(mode))) {
         detectors.push({
           name: "personalProtectiveEquipmentSettings",
-          zones: [zones] || [],
-          severity,
+          zones: zones || [],
         });
       }
 
       if (detection_modes?.includes("crowd")) {
         detectors.push({
           name: "crowdDetectionSettings",
-          zones: [zones] || [],
-          severity,
+          zones: zones || [],
         });
       }
 
@@ -303,55 +350,49 @@ class PythonService {
         detectors.push({
           name: "lineCrossingSettings",
           line_coordinates: zones || [],
-          severity,
         });
       }
 
       if (detection_modes?.includes("vehicles")) {
         detectors.push({
           name: "countVehiclesSettings",
-          zones: [zones] || [],
-          severity,
+          zones: zones || [],
         });
       }
 
-      if (detection_modes?.includes("persons")) {
+      if (detection_modes?.includes("countPersons")) {
         detectors.push({
           name: "countPersonsSettings",
-          zones: [zones] || [],
-          severity,
+          zones: zones || [],
         });
       }
 
       if (detection_modes?.includes("vehicle_obstruction")) {
         detectors.push({
-          name: "VehicleObstructionSettings",
+          name: "vehicleObstructionSettings",
           obstruction_threshold_sec: obstruction_threshold_sec,
-          zones: [zones] || [],
-          severity,
+          zones: zones || [],
         });
       }
 
       if (detection_modes?.includes("intrusion")) {
         detectors.push({
           name: "zoneIntrusionSettings",
-          zones: [zones] || [],
-          severity,
+          zones: zones || [],
         });
       }
 
       if (detection_modes?.includes("conveyor")) {
         detectors.push({
           name: "conveyorDetectionSettings",
-          zones: [zones] || [],
-          severity,
+          zones: zones || [],
         });
       }
 
       if (detection_modes?.includes("crusher")) {
         detectors.push({
           name: "crusherDetectionSettings",
-          zones: [zones] || [],
+          zones: zones || [],
           severity,
         });
       }
@@ -359,7 +400,7 @@ class PythonService {
       if (detection_modes?.includes("water_spillage")) {
         detectors.push({
           name: "waterSpillageDetectionSettings",
-          zones: [zones] || [],
+          zones: zones || [],
           severity,
         });
       }
@@ -368,7 +409,7 @@ class PythonService {
         detectors.push({
           name: "vehicleTypeDetectionSettings",
           obstruction_threshold_sec: obstruction_threshold_sec,
-          zones: [zones] || [],
+          zones: zones || [],
         });
       }
 
@@ -376,17 +417,32 @@ class PythonService {
         detectors.push({
           name: "loiteringDetectionSettings",
           obstruction_threshold_sec: obstruction_threshold_sec,
-          zones: [zones] || [],
+          zones: zones || [],
         });
       }
-
       if (detection_modes?.includes("vehicleObstruction")) {
         detectors.push({
           name: "vehicleObstructionSettings",
           obstruction_threshold_sec: obstruction_threshold_sec,
-          zones: [zones] || [],
+          zones: zones || [],
         });
       }
+      if( detection_modes?.includes("tableOccupancySettings")) {
+        detectors.push({
+          name: "tableOccupancySettings",
+          obstruction_threshold_sec: obstruction_threshold_sec,
+          zones: zones || [],
+        });
+      }
+
+      if( detection_modes?.includes("desk_absence")) {
+        detectors.push({
+          name: "deskAbsenceDetection",
+          zones: zones || [],
+          zone_configs,
+        });
+      }
+
 
       // ❗️ Validation
       if (!detectors.length) {
@@ -431,6 +487,7 @@ class PythonService {
     admin_id,
     type,
     zones,
+    zone_configs,
     videoResolution,
     obstruction_threshold_sec,
     severity,
@@ -454,6 +511,7 @@ class PythonService {
       pipeline_mode: "object_detection",
       detection_modes: detectionModes,
       zones,
+      zone_configs,
       videoResolution,
       obstruction_threshold_sec,
       severity,
@@ -482,12 +540,12 @@ class PythonService {
         detectors.push("countVehiclesSettings");
       }
 
-      if (detectionModes?.includes("persons")) {
+      if (detectionModes?.includes("countPersons")) {
         detectors.push("countPersonsSettings");
       }
 
-      if (detectionModes?.includes("vehicle_obstruction")) {
-        detectors.push("VehicleObstructionSettings");
+      if (detectionModes?.includes("vehicleObstruction")) {
+        detectors.push("vehicleObstructionSettings");
       }
 
       if (detectionModes?.includes("intrusion")) {
@@ -505,6 +563,15 @@ class PythonService {
       if (detectionModes?.includes("water_spillage")) {
         detectors.push("waterSpillageDetectionSettings");
       }
+
+      if (detectionModes?.includes("ANPR")) {
+        detectors.push("numberPlateDetectionSettings");
+      }
+
+      if( detectionModes?.includes("loitering")) {
+        detectors.push("loiteringDetectionSettings");
+      }
+
       if (detectionModes?.includes("vehicleType")) {
         detectors.push("vehicleTypeDetectionSettings");
       }
@@ -514,7 +581,13 @@ class PythonService {
       if( detectionModes?.includes("vehicleObstruction")) {
         detectors.push("vehicleObstructionSettings");
       }
+      if( detectionModes?.includes("tableOccupancySettings")) {
+        detectors.push("tableOccupancyDetectionSettings");
+      }
 
+      if( detectionModes?.includes("desk_absence")) {
+        detectors.push("deskAbsenceSettings");
+      }
       // 🔹 Build payload
       const payload = {
         camera_id,

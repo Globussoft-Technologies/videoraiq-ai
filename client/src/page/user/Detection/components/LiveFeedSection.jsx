@@ -19,11 +19,15 @@ const LiveFeedSection = ({
   appliedDetection,
   selectedsettingType,
   setSelectedsettingType,
-  currentNvr
+  currentNvr,
+  // Optional ref from parent so the right-side Zone Settings panel can reach
+  // the same AreaSettingsPreview (shared save-area flow).
+  previewRef: externalPreviewRef
 
 }) => {
-  const channelId = channelData?.linkedCameras[0]?._id || null;
-  const previewRef = useRef();
+  const channelId = channelData?.linkedCameras?.[0]?._id || null;
+  const internalPreviewRef = useRef();
+  const previewRef = externalPreviewRef || internalPreviewRef;
 
   const [detectionOptions, setDetectionOptions] = useState([]);
   const [selectedDetection, setSelectedDetection] = useState('');
@@ -250,8 +254,8 @@ const handlesettingType = async (type) => {
       appliedDetection?.name || appliedDetection?.detectionName || '';
     setZoneName(name);
     if (typeof appliedDetection?.enabled === 'boolean')
-      // setZoneEnabled(appliedDetection.enabled);  
-      setZoneEnabled(appliedDetection?.linkedCameras[0].detections[selectedsettingType]?.enabled);
+      // setZoneEnabled(appliedDetection.enabled);
+      setZoneEnabled(appliedDetection?.linkedCameras?.[0]?.detections?.[selectedsettingType]?.enabled);
 
   }, [appliedDetection]);
 
@@ -410,7 +414,8 @@ const handlesettingType = async (type) => {
                 </div>
               )} */}
 
-              {appliedDetection !== null && (
+              {/* Edit button hidden — drawing/editing is handled by the canvas controls below */}
+              {/* {appliedDetection !== null && (
                 <div className="flex items-center">
                   {!isEditing && (
                     <Button
@@ -422,7 +427,7 @@ const handlesettingType = async (type) => {
                     </Button>
                   )}
                 </div>
-              )}
+              )} */}
             </div>
           </div>
         </div>
@@ -453,6 +458,18 @@ const handlesettingType = async (type) => {
             detectionOptions={detectionOptions}
             onPointsChange={(refPoints) => handlePreviewPointsChange(refPoints)}
             editable={isEditing}
+            onClearZoneConfigs={() => {
+              // Clear All also empties the right-side Zone Settings panel by
+              // dropping the saved zone_configs from the in-memory detection.
+              setAppliedDetection((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      settings: { ...(prev.settings || {}), zone_configs: [] },
+                    }
+                  : prev
+              );
+            }}
           />
         </div>
       </div>

@@ -597,6 +597,191 @@ async function handleSingleCameraRegistration(req, res) {
   }
 }
 
+// ─── Tiandy Auth Helpers ────────────────────────────────────────────────────
+
+async function tiandyLogin(ip, port, username, password) {
+  const { createHash } = await import("crypto");
+
+  // Step 1: GET SessionCheck — public endpoint, returns session/key/iterations
+  const scRes = await fetch(
+    `http://${ip}:${port}/CGI/Security/SessionCheck?timeStamp=${Date.now()}`,
+    { headers: { "If-Modified-Since": "0" } }
+  );
+  if (!scRes.ok) throw new Error("Tiandy SessionCheck failed");
+
+  const scXml = await scRes.text();
+  const extract = (tag) => (scXml.match(new RegExp(`<${tag}>([^<]+)</${tag}>`)) || [])[1] || "";
+
+  const session    = extract("session");
+  const key        = extract("key");
+  const iterations = parseInt(extract("iterations")) || 10;
+
+  // Tiandy NVR password fields are capped at 15 chars — trim to match what NVR stored
+  const effectivePassword = password.slice(0, 15);
+
+  // Step 2: Compute SHA256 hash chain (matches Tiandy JS GetSessionPW logic)
+  let hash = createHash("sha256").update(username + effectivePassword).digest("hex").toUpperCase();
+  for (let i = 0; i < iterations; i++) {
+    hash = createHash("sha256").update(hash + key).digest("hex").toUpperCase();
+  }
+
+  // Step 3: POST Logon XML
+  const loginXml = `<User><username>${username}</username><passwd>${hash}</passwd><sessionTmp>${session}</sessionTmp></User>`;
+  const logonRes = await fetch(
+    `http://${ip}:${port}/CGI/Security/Logon?timeStamp=${Date.now()}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/xml; charset=utf-8",
+        "If-Modified-Since": "0",
+      },
+      body: loginXml,
+    }
+  );
+
+  const logonXml = await logonRes.text();
+  const statusValue = (logonXml.match(/<statusValue>([^<]+)<\/statusValue>/) || [])[1];
+  const activeSession = (logonXml.match(/<session>([^<]+)<\/session>/) || [])[1] || "";
+
+  if (statusValue !== "200" || !activeSession) {
+    const passwdLeft = (logonXml.match(/<passwdLeftValue>([^<]+)<\/passwdLeftValue>/) || [])[1];
+    throw new Error(`Tiandy login failed (status ${statusValue}, attempts left: ${passwdLeft})`);
+  }
+
+  return activeSession; // Use as HttpSession header for all subsequent requests
+}
+
+async function tiandyGet(ip, port, path, sessionToken) {
+  const res = await fetch(`http://${ip}:${port}${path}`, {
+    headers: {
+      HttpSession: sessionToken,
+      "If-Modified-Since": "0",
+    },
+  });
+  return res;
+}
+
+// ─── Tiandy Registration Handler ────────────────────────────────────────────
+
+async function handleTiandyRegistration(req, res) {
+  const {
+    ip,
+    username,
+    password,
+    port = 8181,
+    rtspPort = 554,
+    nvrName,
+    location = "",
+  } = req.body;
+  const user_id = req?.verified?.userData?.user_id;
+
+  try {
+    // Step 1: Login — SessionCheck → SHA256 hash → Logon
+    let sessionToken;
+    try {
+      sessionToken = await tiandyLogin(ip, port, username, password);
+    } catch (authErr) {
+      return res.status(400).json(Response.userFailResp("NVR Authentication failed", authErr.message));
+    }
+
+    // Step 2: Fetch device info
+    let deviceName = nvrName, model = "", serialNumber = "", firmwareVersion = "", macAddress = "";
+    const devRes = await tiandyGet(ip, port, "/ISAPI/System/deviceInfo", sessionToken);
+    if (devRes.ok) {
+      const devXml = await devRes.text();
+      const x = (tag) => (devXml.match(new RegExp(`<${tag}>([^<]+)</${tag}>`)) || [])[1] || "";
+      deviceName    = x("deviceName") || nvrName;
+      model         = x("model");
+      serialNumber  = x("serialNumber");
+      macAddress    = x("macAddress");
+      firmwareVersion = x("firmwareVersion");
+    }
+
+    // Step 3: Fetch camera channels
+    const chRes = await tiandyGet(ip, port, "/ISAPI/ContentMgmt/InputProxy/channels", sessionToken);
+    await tiandyGet(ip, port, "/ISAPI/ContentMgmt/InputProxy/channels/status", sessionToken);
+
+    let channels = [];
+    if (chRes.ok) {
+      const chXml = await chRes.text();
+      const chMatches = [...chXml.matchAll(/<InputProxyChannel>([\s\S]*?)<\/InputProxyChannel>/g)];
+      channels = chMatches.map((m) => {
+        const cx = (tag) => (m[1].match(new RegExp(`<${tag}>([^<]+)</${tag}>`)) || [])[1] || "";
+        return { id: cx("id"), name: cx("name"), ipAddress: cx("ipAddress") };
+      });
+    }
+
+    // Step 4: Save NVR
+    const savedNVR = await NVR.create({
+      userId: user_id,
+      ip,
+      username,
+      password,
+      port,
+      rtspPort,
+      nvrName,
+      brand: "tiandy",
+      deviceName,
+      model,
+      serialNumber,
+      macAddress,
+      firmwareVersion,
+      deviceType: "NVR",
+      location,
+    });
+
+    // Step 5: Save cameras (fallback to 16 if channel list empty)
+    const totalChannels = channels.length > 0 ? channels.length : 16;
+    const cameraResults = [];
+
+    for (let i = 0; i < totalChannels; i++) {
+      const ch = channels[i];
+      const chNum = ch ? ch.id : String(i + 1);
+      const savedCam = await Camera.create({
+        nvrId: savedNVR._id,
+        userId: user_id,
+        channelId: chNum,
+        rtspChannels: [
+          { id: `${chNum}_1`, resolution: { width: 0, height: 0 } },
+          { id: `${chNum}_2`, resolution: { width: 0, height: 0 } },
+        ],
+        name: ch?.name || `Camera ${chNum}`,
+        ipAddress: ch?.ipAddress || "",
+        model: "",
+        serialNumber: "",
+        firmwareVersion: "",
+        streamEndpoint: "",
+      });
+
+      const uid = `${savedNVR._id}-${savedCam._id}`;
+      const rtspUrl = buildRTSPUrl(savedNVR, savedCam, "main");
+      registerCameraStream(uid, rtspUrl);
+      cameraResults.push(savedCam);
+    }
+
+    await NVR.findByIdAndUpdate(savedNVR._id, { cameraCount: cameraResults.length });
+
+    autoSyncLocations(
+      { _id: req?.verified?.userData?.adminId },
+      { user_id }
+    ).catch((e) => logger.error("Post-NVR registration sync failed", e));
+
+    return res.status(201).json(
+      Response.userSuccessResp("Tiandy NVR and channels registered successfully", {
+        nvr: { ...savedNVR?._doc, cameraCount: cameraResults.length },
+        channels: cameraResults,
+      })
+    );
+  } catch (error) {
+    logger.error("Tiandy Register NVR Error:", error);
+    const isDuplicateError = error?.message?.includes("E11000");
+    const errMsg = isDuplicateError ? "NVR already exists" : error.message || "Unknown error";
+    return res.status(500).json(Response.errorResp("NVR registration failed", errMsg));
+  }
+}
+
+
+
 async function handleDahuaRegistration(req, res) {
   return res
     .status(500)
@@ -921,7 +1106,274 @@ async function updateCPPlusChannels(nvr, plainPassword, res) {
   }
 }
 
-async function updateDahuaChannels(nvr, plainPassword, res) {
+
+async function updateTiandyChannels(nvr, plainPassword, res) {
+  const { _id: nvrId, userId, port } = nvr;
+  const ip = decrypt(nvr.ip);
+
+  try {
+    // Re-authenticate with correct Tiandy session flow
+    let sessionToken;
+    try {
+      sessionToken = await tiandyLogin(ip, port, nvr.username, plainPassword);
+    } catch (authErr) {
+      return res.status(400).json(Response.userFailResp("NVR Authentication failed", authErr.message));
+    }
+
+    const authHeaders = { HttpSession: sessionToken, "If-Modified-Since": "0" };
+
+    // Fetch live channel list from device
+    let channels = [];
+    const chRes = await fetch(`http://${ip}:${port}/ISAPI/ContentMgmt/InputProxy/channels`, { headers: authHeaders });
+    if (chRes.ok) {
+      const chXml = await chRes.text();
+      const chMatches = [...chXml.matchAll(/<InputProxyChannel>([\s\S]*?)<\/InputProxyChannel>/g)];
+      channels = chMatches.map((m) => {
+        const cx = (tag) => (m[1].match(new RegExp(`<${tag}>([^<]+)</${tag}>`)) || [])[1] || "";
+        return { id: cx("id"), name: cx("name"), ipAddress: cx("ipAddress") };
+      });
+    }
+
+    const totalChannels = channels.length > 0 ? channels.length : 16;
+    const cameraResults = [];
+
+    for (let i = 0; i < totalChannels; i++) {
+      const ch = channels[i];
+      const chNum = ch ? ch.id : String(i + 1);
+
+      let existingCam = await Camera.findOne({ nvrId, channelId: chNum });
+
+      if (existingCam) {
+        if (ch?.name) existingCam.name = ch.name;
+        if (ch?.ipAddress) existingCam.ipAddress = ch.ipAddress;
+        await existingCam.save();
+        cameraResults.push(existingCam);
+      } else {
+        const savedCam = await Camera.create({
+          nvrId,
+          userId,
+          channelId: chNum,
+          rtspChannels: [
+            { id: `${chNum}_1`, resolution: { width: 0, height: 0 } },
+            { id: `${chNum}_2`, resolution: { width: 0, height: 0 } },
+          ],
+          name: ch?.name || `Camera ${chNum}`,
+          ipAddress: ch?.ipAddress || "",
+          model: "",
+          serialNumber: "",
+          firmwareVersion: "",
+          streamEndpoint: "",
+        });
+
+        const uid = `${nvrId}-${savedCam._id}`;
+        const rtspUrl = buildRTSPUrl(nvr, savedCam, "main");
+        await registerCameraStream(uid, rtspUrl);
+        cameraResults.push(savedCam);
+      }
+    }
+
+    const totalCameras = await Camera.countDocuments({ nvrId });
+    await NVR.findByIdAndUpdate(nvrId, { cameraCount: totalCameras });
+
+    return res.status(200).json(Response.userSuccessResp("Tiandy NVR channels updated successfully", {}));
+  } catch (error) {
+    logger.error("Tiandy Update Channels Error:", error);
+    return res.status(500).json(Response.errorResp("Channel update failed", error.message));
+  }
+}
+
+// ─── Securus (XiongMai Sofia DVR/NVR) ────────────────────────────────────────
+// Protocol: DVRIP binary TCP on port 34567
+// Packet: 20-byte header + JSON body
+// Auth: Sofia password hash = first 8 chars of even-indexed MD5 hex, uppercased
+
+import net from "net";
+
+function sofiaPwdHash(password, createHash) {
+  const md5 = createHash("md5").update(password).digest("hex");
+  let hash = "";
+  for (let i = 0; i < 16; i++) hash += md5[i * 2];
+  return hash.toUpperCase();
+}
+
+function dvripPacket(sessionId, sequence, msgId, jsonBody) {
+  const body = Buffer.from(jsonBody + "\n\0", "utf8");
+  const header = Buffer.alloc(20);
+  header[0] = 0xff;
+  header.writeUInt32LE(sessionId, 4);
+  header.writeUInt32LE(sequence, 8);
+  header.writeUInt16LE(msgId, 14);
+  header.writeUInt32LE(body.length, 16);
+  return Buffer.concat([header, body]);
+}
+
+function dvripSend(socket, sessionId, seq, msgId, payload) {
+  socket.write(dvripPacket(sessionId, seq, msgId, JSON.stringify(payload)));
+}
+
+function dvripConnect(ip, dvripPort, username, password, createHash) {
+  return new Promise((resolve, reject) => {
+    const sock = net.createConnection({ host: ip, port: dvripPort, timeout: 8000 });
+    let buf = Buffer.alloc(0);
+    let sessionId = 0;
+    let seq = 0;
+    let loggedIn = false;
+
+    const results = {};
+    const pending = {};
+    let pendingCount = 0;
+
+    sock.on("connect", () => {
+      const hash = sofiaPwdHash(password, createHash);
+      dvripSend(sock, 0, seq++, 1000, {
+        EncryptType: "MD5",
+        LoginType: "DVRIP",
+        PassWord: hash,
+        UserName: username,
+      });
+    });
+
+    sock.on("data", (chunk) => {
+      buf = Buffer.concat([buf, chunk]);
+      while (buf.length >= 20) {
+        const dataLen = buf.readUInt32LE(16);
+        if (buf.length < 20 + dataLen) break;
+        const msgId = buf.readUInt16LE(14);
+        sessionId = buf.readUInt32LE(4);
+        const jsonStr = buf.slice(20, 20 + dataLen).toString("utf8").replace(/\0/g, "").trim();
+        buf = buf.slice(20 + dataLen);
+
+        let parsed = {};
+        try { parsed = JSON.parse(jsonStr); } catch (_) { /* ignore */ }
+
+        if (msgId === 1001) {
+          // Login response
+          if (parsed.Ret !== 100) {
+            sock.destroy();
+            return reject(new Error(`DVRIP login failed (Ret=${parsed.Ret})`));
+          }
+          loggedIn = true;
+          const sidHex = "0x" + sessionId.toString(16).padStart(8, "0").toUpperCase();
+
+          // Request SystemInfo
+          dvripSend(sock, sessionId, seq++, 1020, { Name: "SystemInfo", SessionID: sidHex });
+          // Request ChannelTitle
+          dvripSend(sock, sessionId, seq++, 1042, { Name: "ChannelTitle", SessionID: sidHex });
+          // Request Encode (channel count)
+          dvripSend(sock, sessionId, seq++, 1042, { Name: "Encode", SessionID: sidHex });
+          pendingCount = 3;
+        } else if (msgId === 1021) {
+          results.systemInfo = parsed.Name === "SystemInfo" ? parsed : {};
+          if (--pendingCount === 0) { sock.destroy(); resolve(results); }
+        } else if (msgId === 1043) {
+          if (parsed.Name === "ChannelTitle") results.channelTitle = parsed;
+          else if (parsed.Name === "Encode") results.encode = parsed;
+          if (--pendingCount === 0) { sock.destroy(); resolve(results); }
+        }
+      }
+    });
+
+    sock.on("timeout", () => { sock.destroy(); reject(new Error("DVRIP connection timeout")); });
+    sock.on("error", (err) => reject(err));
+  });
+}
+
+async function handleSecurusRegistration(req, res) {
+  try {
+    const { createHash } = await import("crypto");
+    const user_id = req?.verified?.userData?.user_id;
+    const { ip, port, username, password, rtspPort, nvrName, location } = req.body;
+
+    // DVRIP always uses port 34567 regardless of HTTP port
+    const dvripPort = 34567;
+    const dvripData = await dvripConnect(ip, dvripPort, username, password, createHash);
+
+    // Parse device info
+    const si = dvripData.systemInfo || {};
+    const deviceInfo = {
+      deviceName: si.DeviceName || nvrName || "",
+      model: si.HardWare || si.BoardSerialNo || "",
+      serialNumber: si.SerialNo || "",
+      firmwareVersion: si.SoftWareVersion || "",
+      macAddress: "",
+      deviceType: "NVR",
+    };
+
+    // Parse channel titles
+    const titleTable = dvripData.channelTitle?.ChannelTitle || [];
+    const channelTitles = titleTable.map((t) => t.Name || "");
+
+    // Parse channel count from Encode config
+    let channelCount = channelTitles.length || 4;
+    const encodeTable = dvripData.encode?.Encode || [];
+    if (encodeTable.length > 0) channelCount = encodeTable.length;
+
+    // Save NVR
+    const savedNVR = await NVR.create({
+      userId: user_id,
+      ip, username, password, port, rtspPort, nvrName, location: location || "",
+      brand: "securus",
+      deviceName: deviceInfo.deviceName,
+      model: deviceInfo.model,
+      serialNumber: deviceInfo.serialNumber,
+      firmwareVersion: deviceInfo.firmwareVersion,
+      macAddress: deviceInfo.macAddress,
+      deviceType: deviceInfo.deviceType,
+      cameraCount: 0,
+    });
+
+    // Save channels
+    const cameraResults = [];
+    for (let i = 0; i < channelCount; i++) {
+      const chNum = String(i + 1);
+      const savedCam = await Camera.create({
+        nvrId: savedNVR._id,
+        userId: user_id,
+        channelId: chNum,
+        name: channelTitles[i] || `Camera ${chNum}`,
+        ipAddress: "",
+        model: "",
+        serialNumber: "",
+        firmwareVersion: "",
+        streamEndpoint: "",
+        rtspChannels: [
+          { id: `${chNum}_0`, resolution: { width: 0, height: 0 } },
+          { id: `${chNum}_1`, resolution: { width: 0, height: 0 } },
+        ],
+      });
+
+      const uid = `${savedNVR._id}-${savedCam._id}`;
+      const rtspUrl = buildRTSPUrl(savedNVR, savedCam, "main");
+      registerCameraStream(uid, rtspUrl);
+      cameraResults.push(savedCam);
+    }
+
+    await NVR.findByIdAndUpdate(savedNVR._id, { cameraCount: cameraResults.length });
+
+    autoSyncLocations(
+      { _id: req?.verified?.userData?.adminId },
+      { user_id }
+    ).catch((e) => logger.error("Post-NVR registration sync failed", e));
+
+    return res.status(201).json(
+      Response.userSuccessResp("Securus NVR and channels registered successfully", {
+        nvr: { ...savedNVR._doc, cameraCount: cameraResults.length },
+        channels: cameraResults,
+      })
+    );
+  } catch (error) {
+    logger.error("Securus Register NVR Error:", error);
+    const isDuplicate = error?.message?.includes("E11000");
+    const errMsg = isDuplicate ? "NVR already exists" : error.message || "Unknown error";
+    return res.status(500).json(Response.errorResp("NVR registration failed", errMsg));
+  }
+}
+
+async function updateSecurusChannels(_nvr, _plainPassword, res) {
+  return res.status(500).json(Response.errorResp("Channel update failed", "Securus channel update not yet implemented"));
+}
+
+async function updateDahuaChannels(_nvr, _plainPassword, res) {
   return res
     .status(500)
     .json(
@@ -929,7 +1381,7 @@ async function updateDahuaChannels(nvr, plainPassword, res) {
     );
 }
 
-async function updatePramaChannels(nvr, plainPassword, res) {
+async function updatePramaChannels(_nvr, _plainPassword, res) {
   return res
     .status(500)
     .json(
@@ -940,16 +1392,20 @@ async function updatePramaChannels(nvr, plainPassword, res) {
 export const registrationHandlers = {
   hikvision: handleHikvisionRegistration,
   cpplus: handleCPPlusRegistration,
+  tiandy: handleTiandyRegistration,
   dahua: handleDahuaRegistration,
   prama: handlePramaRegistration,
+  securus: handleSecurusRegistration,
   camera: handleSingleCameraRegistration,
 };
 
 export const updateHandlers = {
   hikvision: updateHikvisionChannels,
   cpplus: updateCPPlusChannels,
+  tiandy: updateTiandyChannels,
   dahua: updateDahuaChannels,
   prama: updatePramaChannels,
+  securus: updateSecurusChannels,
 };
 
 export default registrationHandlers;

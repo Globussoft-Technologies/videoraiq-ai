@@ -19,7 +19,7 @@ import useAreaMarking from '@/hooks/useAreaMarking';
 import { addNewDetectionConfiguration } from '../Api/post';
 import { usePermissions } from '@/context/Permission/PermissionContext';
 
-const AreaSettingsPreview = forwardRef(({setIsEditing, selectedType, activeCamera, cameraList, selectedChannelIds, isModal, onAreaSettingsChange, onDetectionSaved, initialReferencePoints = {}, detectionSettingName,zoneEnabled,zoneName, detectionSetting = null, detectionOptions = [],selectedsettingType,appliedDetection,currentNvr }, ref) => {
+const AreaSettingsPreview = forwardRef(({setIsEditing, selectedType, activeCamera, cameraList, selectedChannelIds, isModal, onAreaSettingsChange, onDetectionSaved, initialReferencePoints = {}, detectionSettingName,zoneEnabled,zoneName, detectionSetting = null, detectionOptions = [],selectedsettingType,appliedDetection,currentNvr, onClearZoneConfigs }, ref) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalIcon, setModalIcon] = useState(null);
   const [modalType, setModalType] = useState('');
@@ -71,6 +71,10 @@ const AreaSettingsPreview = forwardRef(({setIsEditing, selectedType, activeCamer
   // Keep debug log
   // Track if initial points have been loaded for selected camera
   const [initialPointsLoaded, setInitialPointsLoaded] = useState(false);
+  // Set when the user explicitly clears all areas, so the ds-sync effect does
+  // not restore the saved reference points on subsequent re-renders. Reset only
+  // when a genuinely different detection is selected.
+  const manuallyClearedRef = useRef(false);
   const [processedImage, setProcessedImage] = useState(null);
   const [loadingPreviewImg, setLoadingPreviewImg] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -113,6 +117,12 @@ const AreaSettingsPreview = forwardRef(({setIsEditing, selectedType, activeCamer
       ? initialReferencePoints
       : (activeDs?.settings?.referencePoints || {});
 
+  // When a genuinely different detection is selected, allow the saved points
+  // to load again (undo the manual-clear lock).
+  useEffect(() => {
+    manuallyClearedRef.current = false;
+  }, [activeDs?._id]);
+
   // Sync local editable fields and channelPoints when detectionSetting prop changes
   // BUT: skip syncing zoneName and zoneEnabled if user has edited them locally (to preserve edits after save)
   useEffect(() => {
@@ -128,9 +138,11 @@ const AreaSettingsPreview = forwardRef(({setIsEditing, selectedType, activeCamer
       setLocalZoneEnabled(typeof activeDs.enabled === 'boolean' ? activeDs.enabled : (typeof zoneEnabled === 'boolean' ? zoneEnabled : true));
     }
 
-    // Sync reference points into channelPoints state so camera initialPoints can pick them up
+    // Sync reference points into channelPoints state so camera initialPoints can pick them up.
+    // Skip this if the user just cleared all areas, so the cleared canvas isn't
+    // overwritten by the saved reference points on a re-render.
     const refPoints = activeDs?.settings?.referencePoints || {};
-    if (refPoints && Object.keys(refPoints).length > 0) {
+    if (!manuallyClearedRef.current && refPoints && Object.keys(refPoints).length > 0) {
       setChannelPoints(refPoints);
       // allow the camera stream to pick up new initial points
       setInitialPointsLoaded(false);
@@ -358,11 +370,7 @@ useEffect(() => {
     return null;
   };
 
-  useImperativeHandle(ref, () => ({
-    saveSettings: handleSaveSettings,
-  }));
-
-  // Expose helper to allow parent to force set channel points into the internal camera stream
+  // Expose helpers to the parent (LiveFeedSection / Zone Settings panel).
   useImperativeHandle(ref, () => ({
     saveSettings: handleSaveSettings,
     setChannelPoints: (pointsObj) => {
@@ -383,15 +391,55 @@ useEffect(() => {
       } catch (e) {
         console.debug('[AreaSettingsPreview.setChannelPoints] error:', e);
       }
-    }
+    },
+    // Save edited zone_configs through the SAME save-area flow (same API/payload).
+    saveZoneConfigs: (zoneConfigs) =>
+      handleSaveAreaWithDetection({
+        zoneName: appliedDetection?.settings?.referencePoints?.zone_name || '',
+        detectionName: appliedDetection?.name || detectionSettingName || '',
+        detectionEnabled: appliedDetection?.enabled || false,
+        priority: appliedDetection?.settings?.levelOfImportance || 'moderate',
+        zone_configs: zoneConfigs,
+      }),
+    // Delete one zone: drop its polygon from the canvas AND its zone_config,
+    // then persist via the SAME save-area flow.
+    deleteZone: (index, zoneConfigs) => {
+      const ref = cameraStreamRef.current;
+      const currentZones = ref?.getZones?.() || [];
+      const nextZones = currentZones.filter((_, i) => i !== index);
+      // Remove the polygon from the stream immediately.
+      if (ref?.setZones) {
+        ref.setZones(nextZones);
+      } else if (ref?.setPoints) {
+        ref.setPoints(nextZones);
+      }
+      const nextConfigs = (zoneConfigs || []).filter((_, i) => i !== index);
+      return handleSaveAreaWithDetection({
+        zoneName: appliedDetection?.settings?.referencePoints?.zone_name || '',
+        detectionName: appliedDetection?.name || detectionSettingName || '',
+        detectionEnabled: appliedDetection?.enabled || false,
+        priority: appliedDetection?.settings?.levelOfImportance || 'moderate',
+        zone_configs: nextConfigs,
+        zonesOverride: nextZones,
+        // Allow deleting the LAST zone — the empty state must still persist,
+        // otherwise the canvas clears but the zone_config stays on the server.
+        allowEmpty: true,
+      });
+    },
   }));
 
   // Save area with detection settings
-  const handleSaveAreaWithDetection = async ({   
+  const handleSaveAreaWithDetection = async ({
     zoneName,
     detectionName,
     detectionEnabled,
-    priority,obstruction_threshold_sec
+    priority,obstruction_threshold_sec,
+    zone_configs,
+    // Optional explicit polygons (used by delete, which has already computed the
+    // spliced zones and can't rely on getZones() before the canvas re-renders).
+    zonesOverride,
+    // Allow persisting an empty area (used by Clear All to wipe zones on server).
+    allowEmpty = false
   }) => {
     setIsSaving(true);
     if (!selectedCamera || !cameraStreamRef.current) {
@@ -414,10 +462,13 @@ useEffect(() => {
     // }
 
     // Multi-zone: nested array of polygons [[ [x,y], ... ], ...]
-    const zones = cameraStreamRef.current.getZones?.() || [];
-    const points = cameraStreamRef.current.getPoints?.() || [];
-    if (!zones.length || !points.length) {
+    const zones = Array.isArray(zonesOverride)
+      ? zonesOverride
+      : (cameraStreamRef.current.getZones?.() || []);
+    const points = zones.flat();
+    if (!allowEmpty && (!zones.length || !points.length)) {
       toast.error('Please draw an area first');
+      setIsSaving(false);
       return;
     }
 
@@ -452,6 +503,10 @@ useEffect(() => {
           videoResolution: resolution
         }
 
+      }
+      // Desk Absence only: attach per-zone config inside settings.
+      if (selectedsettingType === 'deskAbsenceSettings' && Array.isArray(zone_configs)) {
+        pay.settings.zone_configs = zone_configs;
       }
       // Build an edited detection object for logging / editing flows
       const editedDetection = {
@@ -682,6 +737,14 @@ useEffect(() => {
                // CameraStreamWithArea normalizes it into zones internally.
                return pointsArr;
            })()}
+              // Desk Absence: label each polygon with its saved zone name.
+              zoneNames={
+                selectedsettingType === 'deskAbsenceSettings'
+                  ? (appliedDetection?.settings?.zone_configs || []).map(
+                      (z) => z?.name || ''
+                    )
+                  : []
+              }
               drawingMode={drawingMode}
               moveMode={moveMode}
             />
@@ -721,6 +784,31 @@ useEffect(() => {
           handleEnableEdit={handleEnableEdit}
           onEnableEdit={() => setInitialPointsLoaded(true)}
           handleSaveAreaWithDetection={handleSaveAreaWithDetection}
+          onClearZoneConfigs={onClearZoneConfigs}
+          onClearAll={() => {
+            // Clear the parent-held points for ALL detection types so the
+            // canvas stays empty and the saved reference points are not
+            // re-applied after a local canvas clear.
+            manuallyClearedRef.current = true;
+            setChannelPoints({});
+            setInitialPointsLoaded(true);
+          }}
+          onClearAllPersist={() => {
+            // Desk Absence with a saved detection: persist the cleared (empty)
+            // state so re-selecting the detection doesn't restore the zones.
+            const detectionId = localDetection?._id || localDetection?.id;
+            if (selectedsettingType === 'deskAbsenceSettings' && detectionId) {
+              return handleSaveAreaWithDetection({
+                zoneName: '',
+                detectionName: appliedDetection?.name || detectionSettingName || '',
+                detectionEnabled: appliedDetection?.enabled || false,
+                priority: appliedDetection?.settings?.levelOfImportance || 'moderate',
+                zone_configs: [],
+                zonesOverride: [],
+                allowEmpty: true,
+              });
+            }
+          }}
         />}
       </div>
       {/* Footer CTA - responsive */}

@@ -453,7 +453,7 @@
                     <div className="text-[10px] font-semibold text-[#878787] uppercase tracking-wider border-b border-[#D8D8D8] pb-2">
                       Detection Types
                     </div>
-                    <div className="space-y-3">
+                    <div className="space-y-3 max-h-[180px] overflow-y-auto pr-1">
                       {detections.map((det) => {
                         const enabled = isDetectionEnabled(row.original, det.key);
 

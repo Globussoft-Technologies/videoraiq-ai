@@ -635,12 +635,23 @@ const DeskAbsenceDetectionSchema = new mongoose.Schema({
   videoResolution: [Number],
   detectionTimeGap: { type: Number, default: 30 },
   referencePoints: Object,
+  zone_configs: [
+    {
+      name: { type: String },
+      capacity: { type: Number },
+      threshold_sec: { type: Number },
+    },
+  ],
   metricType: {
     type: String,
     enum: ["gauge", "counter", "binary"],
     default: "gauge",
   },
 });
+const DeskAbsenceDetectionSetting = DetectionSetting.discriminator(
+  "deskAbsenceSettings",
+  new mongoose.Schema({ settings: DeskAbsenceDetectionSchema }),
+);
 
 const GuardAbsenceDetectionSchema = new mongoose.Schema({
   imageRequired: {
@@ -670,10 +681,7 @@ const GuardAbsenceDetectionSchema = new mongoose.Schema({
   },
 });
 
-const DeskAbsenceDetectionSetting = DetectionSetting.discriminator(
-  "deskAbsenceSettings",
-  new mongoose.Schema({ settings: DeskAbsenceDetectionSchema }),
-);
+
 
 const GuardAbsenceDetectionSetting = DetectionSetting.discriminator(
   "guardAbsenceSettings",
@@ -847,6 +855,40 @@ const LoiteringDetectionSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: LoiteringDetectionSchema }),
 );
 
+
+const TableOccupancyDetectionSchema = new mongoose.Schema({
+  imageRequired: {
+    type: Boolean,
+    default: false,
+  },
+  videoLinkRequirement: {
+    type: Boolean,
+    default: false,
+  },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "moderate",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  videoResolution: [Number],
+  referencePoints: Object,
+  obstruction_threshold_sec: { type: Number, default: 0 },
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+
+const TableOccupancyDetectionSetting = DetectionSetting.discriminator(
+  "tableOccupancyDetectionSettings",
+  new mongoose.Schema({ settings: TableOccupancyDetectionSchema }),
+);
+
 const VehicleObstructionDetectionSchema = new mongoose.Schema({
   imageRequired: {
     type: Boolean,
@@ -880,6 +922,39 @@ const VehicleObstructionDetectionSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: VehicleObstructionDetectionSchema }),
 );
 
+const FoodServicePPEDetectionSchema = new mongoose.Schema({
+  imageRequired: {
+    type: Boolean,
+    default: false,
+  },
+  videoLinkRequirement: {
+    type: Boolean,
+    default: false,
+  },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "moderate",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  videoResolution: [Number],
+  referencePoints: Object,
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+
+const FoodServicePPEDetectionSetting = DetectionSetting.discriminator(
+  "foodServicePPEDetectionSettings",
+  new mongoose.Schema({ settings: FoodServicePPEDetectionSchema }),
+);
+
+
 
 
 export {
@@ -907,5 +982,7 @@ export {
   WaterSpillageDetectionSetting,
   VehicleTypeDetectionSetting,
   LoiteringDetectionSetting,
-  VehicleObstructionDetectionSetting
+  VehicleObstructionDetectionSetting,
+  TableOccupancyDetectionSetting,
+  FoodServicePPEDetectionSetting
 };

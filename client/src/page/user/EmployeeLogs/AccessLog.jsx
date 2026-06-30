@@ -18,6 +18,8 @@ import {
   Video,
   Tag,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import ReusableTablePage from './ReusableTablePage';
 import LogEmployeeProfileDialog from './LogEmployeeProfileDialog';
@@ -54,6 +56,54 @@ import TagUserDropdown from './components/TagUserDropdown';
 
 const styles = {
   text: 'text-[#333333] text-xs font-normal',
+};
+
+// Full-bleed image area for a grid card. When a log has multiple session
+// images, shows left/right arrows + a counter to flip through them.
+const SessionImageCarousel = ({ images = [], fallback, alt }) => {
+  const list = images && images.length > 0 ? images : fallback ? [fallback] : [];
+  const [index, setIndex] = useState(0);
+  const safeIndex = Math.min(index, Math.max(list.length - 1, 0));
+  const hasMultiple = list.length > 1;
+
+  const go = (e, delta) => {
+    e.stopPropagation();
+    setIndex((prev) => (prev + delta + list.length) % list.length);
+  };
+
+  return (
+    <div className="relative w-full h-40 sm:h-44 md:h-48 lg:h-52 overflow-hidden">
+      <img
+        src={list[safeIndex] || fallback}
+        alt={alt}
+        className="w-full h-full object-cover object-top"
+      />
+
+      {hasMultiple && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => go(e, -1)}
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-20 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors cursor-pointer"
+            aria-label="Previous image"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => go(e, 1)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-20 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors cursor-pointer"
+            aria-label="Next image"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+          <span className="absolute bottom-2 right-2 z-20 bg-black/50 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full">
+            {safeIndex + 1}/{list.length}
+          </span>
+        </>
+      )}
+    </div>
+  );
 };
 
 const initialState = {
@@ -808,13 +858,13 @@ const handleExport = async (format) => {
         setDropdown(null);
         toast.success('User tagged successfully');
       } else {
-        toast.error(result?.body?.error || result?.body?.message || 'Failed to tag user');
+        toast.error(result?.body?.message || result?.body?.error || 'Failed to tag user');
       }
     } catch (error) {
       console.error('Failed to tag user', error);
       toast.error(
-        error?.response?.data?.body?.error ||
-          error?.response?.data?.body?.message ||
+        error?.response?.data?.body?.message ||
+          error?.response?.data?.body?.error ||
           error?.response?.data?.message ||
           'Failed to tag user'
       );
@@ -850,13 +900,13 @@ const handleExport = async (format) => {
         });
         toast.success('User untagged successfully');
       } else {
-        toast.error(result?.body?.error || result?.body?.message || 'Failed to untag user');
+        toast.error(result?.body?.message || result?.body?.error || 'Failed to untag user');
       }
     } catch (error) {
       console.error('Failed to untag user', error);
       toast.error(
-        error?.response?.data?.body?.error ||
-          error?.response?.data?.body?.message ||
+        error?.response?.data?.body?.message ||
+          error?.response?.data?.body?.error ||
           error?.response?.data?.message ||
           'Failed to untag user'
       );
@@ -1209,14 +1259,12 @@ const handleExport = async (format) => {
           </button>
         </div>
 
-        {/* Avatar — full-bleed across the top of the card */}
-        <div className="relative w-full h-40 sm:h-44 md:h-48 lg:h-52 overflow-hidden">
-          <img
-            src={item.personImages?.[0] || item.image}
-            alt={item.name}
-            className="w-full h-full object-cover object-top"
-          />
-        </div>
+        {/* Avatar — full-bleed across the top, with arrows for multiple session images */}
+        <SessionImageCarousel
+          images={item.personImages}
+          fallback={item.image}
+          alt={item.name}
+        />
 
         {/* Content below the image */}
         <div className="flex flex-col p-3 sm:p-4 md:p-5">
@@ -1392,14 +1440,14 @@ const handleExport = async (format) => {
       className="bg-[#07486A] text-white rounded-[8px] px-3 py-2 text-sm cursor-pointer"
       onClick={() => handleExport("excel")}
     >
-      Export Excel
+     Export Excel
     </Button>
 
     <Button
       className="bg-[#07486A] text-white rounded-[8px] px-3 py-2 text-sm cursor-pointer"
       onClick={() => handleExport("pdf")}
     >
-      Export PDF
+     Export PDF
     </Button>
   </>
 )}

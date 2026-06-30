@@ -9,6 +9,7 @@ import {
   ArrowDownUp,
   LayoutGrid,
   List as ListIcon,
+  Loader2,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { formatDateRange } from '@/utils/formatDateRange';
@@ -63,6 +64,7 @@ const ReusableTablePage = ({
       ? onSearchChange
       : setInternalSearchInput;
   const [onLoading, setOnLoading] = useState(false);
+  const [pageInput, setPageInput] = useState('');
   const limit = typeof limitProp === 'number' ? limitProp : internalLimit;
   const setLimit = typeof onLimitChange === 'function'
     ? (v) => { onLimitChange(v); setCurrentPage(1); }
@@ -139,6 +141,15 @@ const ReusableTablePage = ({
     if (useServerPagination && typeof onPageChange === 'function') {
       onPageChange(page);
     }
+  };
+
+  // "Go to page" input handler — clamp to a valid page, ignore empty/invalid.
+  const handleGoToPage = () => {
+    const page = parseInt(pageInput, 10);
+    if (!Number.isFinite(page)) return;
+    const clamped = Math.min(Math.max(page, 1), totalPages);
+    handlePageChange(clamped);
+    setPageInput('');
   };
 
   // Reset to first page when filters/search/data change. For server pagination, also request page 1.
@@ -238,34 +249,42 @@ const ReusableTablePage = ({
             </div>
           </div>
 
-          {showGrid ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
-              {(paginated || []).map((item, idx) => (
-                <React.Fragment key={item?.id ?? item?.email ?? idx}>
-                  {gridCard(item, idx)}
-                </React.Fragment>
-              ))}
+          {loading ? (
+            // While the API is pending (filter change / navigation), show a
+            // single centered spinner instead of stale rows.
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <Loader2 className="w-10 h-10 text-[#07486A] animate-spin" />
             </div>
           ) : (
-            <div className="w-full overflow-x-auto overflow-y-auto max-h-[60vh]">
-              <ProfilesTable
-                data={paginated}
-                columns={columns}
-                loading={onLoading}
-              />
-            </div>
+            <>
+              {showGrid ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+                  {(paginated || []).map((item, idx) => (
+                    <React.Fragment key={item?.id ?? item?.email ?? idx}>
+                      {gridCard(item, idx)}
+                    </React.Fragment>
+                  ))}
+                </div>
+              ) : (
+                <div className="w-full overflow-x-auto overflow-y-auto max-h-[60vh]">
+                  <ProfilesTable
+                    data={paginated}
+                    columns={columns}
+                    loading={onLoading}
+                  />
+                </div>
+              )}
+              {(paginated || []).length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 min-h-[60vh]">
+                  <img
+                    src={notfound}
+                    alt="No logs found"
+                    className="w-64 h-64 mb-4"
+                  />
+                </div>
+              ) : null}
+            </>
           )}
-          {loading ? (
-            <div className="text-center py-4 text-gray-500">Loading..</div>
-          ) : (paginated || []).length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 min-h-[60vh]">
-              <img
-                src={notfound}
-                alt="No logs found"
-                className="w-64 h-64 mb-4"
-              />
-            </div>
-          ) : null}
         </div>
         {!loading && (paginated || []).length > 0 && (
           <div className="mt-6 grid grid-cols-3 items-center gap-4">
@@ -365,17 +384,46 @@ const ReusableTablePage = ({
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex items-center justify-end gap-1.5">
-              <span className="text-xs text-[#595959] whitespace-nowrap">Rows:</span>
-              <select
-                value={limit}
-                onChange={(e) => setLimit(Number(e.target.value))}
-                className="h-9 border border-[#C7C7C7] rounded-lg text-xs text-[#595959] bg-white px-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#07486A]"
-              >
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>{size}</option>
-                ))}
-              </select>
+
+            <div className="flex items-center justify-end gap-3">
+              {/* Go to page */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-[#595959] whitespace-nowrap">Go to:</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={totalPages}
+                  value={pageInput}
+                  onChange={(e) => setPageInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleGoToPage();
+                  }}
+                  placeholder="Page"
+                  className="h-9 w-16 border border-[#C7C7C7] rounded-lg text-xs text-[#595959] bg-white px-2 focus:outline-none focus:ring-1 focus:ring-[#07486A]"
+                />
+                <button
+                  type="button"
+                  onClick={handleGoToPage}
+                  disabled={pageInput === ''}
+                  className="h-9 px-3 rounded-lg text-xs font-medium bg-[#07486A] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#063a55]"
+                >
+                  Go
+                </button>
+              </div>
+
+              {/* Rows per page */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-[#595959] whitespace-nowrap">Rows:</span>
+                <select
+                  value={limit}
+                  onChange={(e) => setLimit(Number(e.target.value))}
+                  className="h-9 border border-[#C7C7C7] rounded-lg text-xs text-[#595959] bg-white px-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#07486A]"
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         )}

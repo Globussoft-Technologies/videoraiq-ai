@@ -2044,6 +2044,200 @@ export const countPersonsTemplate = (incidentData, nvrData, channelData) => {
 `;
 };
 
+export const personDetectedTemplate = (incidentData, nvrData, channelData) => {
+  const {
+    incidentName,
+    timeOfIncident,
+    zone,
+    severity,
+    description,
+    Image,
+    count,
+    _id,
+  } = incidentData;
+
+  const getSeverityStyles = (level = "low") => {
+    switch (level) {
+      case "high":
+        return { bg: "#FDECEA", text: "#B42318", label: "High" };
+      case "moderate":
+        return { bg: "#FFF4E5", text: "#B54708", label: "Moderate" };
+      case "low":
+      default:
+        return { bg: "#E8F1FF", text: "#1D4ED8", label: "Low" };
+    }
+  };
+
+  const severityStyle = getSeverityStyles(severity);
+
+  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    hour12: true,
+  });
+
+  let nvrIp = "N/A";
+  try {
+    nvrIp = nvrData?.ip ? decrypt(nvrData.ip) : "N/A";
+  } catch (_) {
+    nvrIp = "N/A";
+  }
+
+  const imageSrc = Image
+    ? Image.startsWith("http")
+      ? Image
+      : config.get("ImageView") + Image
+    : "";
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Person Detected Incident Report</title>
+</head>
+
+<body style="margin:0;padding:0;background-color:#F4F6F8;font-family:Poppins,Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center" style="padding:24px;">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;">
+
+          <!-- Logo -->
+          <tr>
+            <td align="center" style="padding:20px 0;">
+              <img src="https://i.postimg.cc/ryCwbgMJ/Videora_IQlogo.png" alt="VideoraIQ" style="max-width:200px;display:block;">
+            </td>
+          </tr>
+
+          <!-- Icon -->
+          <tr>
+            <td align="center" style="padding:10px;">
+              <table width="80" height="80" cellpadding="0" cellspacing="0" border="0" style="background:#ffe5e5;border-radius:50%;text-align:center;">
+                <tr>
+                  <td align="center">
+                    <img src="https://i.postimg.cc/fWjRF5D3/Person.png" alt="Person" style="width:46px;">
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Title -->
+          <tr>
+            <td align="center" style="padding:6px 20px;">
+              <h2 style="margin:0;font-size:20px;color:#333333;font-weight:500;">
+                Person Detected - <span style="color:red;">Incident Report</span>
+              </h2>
+            </td>
+          </tr>
+
+          <!-- Details -->
+          <tr>
+            <td style="padding:20px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e5e5;border-radius:6px;font-size:14px;color:#333333;">
+
+                <tr>
+                  <td colspan="2" style="padding:15px;">
+                    <h3 style="margin:0 0 10px 0;color:#07486A;font-size:16px;">Incident Details</h3>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td width="50%" style="padding:6px 10px;"><strong>Incident Name</strong></td>
+                  <td style="padding:6px 10px;color:#626262;">${incidentName || "Person Detected"}</td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 10px;"><strong>Description</strong></td>
+                  <td style="padding:6px 10px;color:#626262;">${description || "A person was detected by the camera."}</td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 10px;"><strong>Time of Incident</strong></td>
+                  <td style="padding:6px 10px;color:#626262;">${formattedTime}</td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 10px;"><strong>Zone</strong></td>
+                  <td style="padding:6px 10px;color:#626262;">${zone || "N/A"}</td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 10px;"><strong>Severity</strong></td>
+                  <td style="padding:6px 10px;">
+                    <span style="background:${severityStyle.bg};font-size:14px;color:${severityStyle.text};padding:4px 20px;border-radius:4px;font-weight:500;">${severityStyle.label}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 10px;"><strong>Persons Detected</strong></td>
+                  <td style="padding:6px 10px;color:#1D4ED8;font-weight:bold;font-size:16px;">${count ?? 0}</td>
+                </tr>
+
+                <!-- Channel -->
+                <tr>
+                  <td colspan="2" style="padding:15px;border-top:1px solid #e5e5e5;">
+                    <h3 style="margin:0 0 10px 0;color:#07486A;font-size:16px;">Channel Details</h3>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 10px;"><strong>Name</strong></td>
+                  <td style="padding:6px 10px;">
+                    <a href="${config.get("webUrl") + "/streams/camera-settings"}" target="_blank" style="color:#1d4ed8;text-decoration:underline;">${channelData?.name || "N/A"}</a>
+                  </td>
+                </tr>
+
+                <!-- NVR -->
+                <tr>
+                  <td colspan="2" style="padding:15px;border-top:1px solid #e5e5e5;">
+                    <h3 style="margin:0 0 10px 0;color:#07486A;font-size:16px;">NVR Details</h3>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 10px;"><strong>Name</strong></td>
+                  <td style="padding:6px 10px;">
+                    <a href="${config.get("webUrl") + "/nvr-settings"}" target="_blank" style="color:#1d4ed8;text-decoration:underline;">${nvrData?.nvrName || "N/A"}</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 10px;"><strong>IP</strong></td>
+                  <td style="padding:6px 10px;color:#626262;">${nvrIp}</td>
+                </tr>
+
+                <!-- Media -->
+                <tr>
+                  <td colspan="2" style="padding:15px;border-top:1px solid #e5e5e5;">
+                    <h3 style="margin:0 0 10px 0;color:#07486A;font-size:16px;">Incident Snapshot</h3>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="2" style="padding:15px;" align="center">
+                    ${
+                      imageSrc
+                        ? `<img src="${imageSrc}" alt="Incident Image" style="max-width:100%;border-radius:10px;display:block;">`
+                        : `<div style="padding:20px;text-align:center;font-size:14px;color:#64748B;border:1px dashed #CBD5E1;border-radius:6px;">No incident image available</div>`
+                    }
+                    <br><br>
+                    <a href="${config.get("webUrl") + "/incidents?incidentId=" + (_id || "")}" target="_blank" style="display:inline-block;padding:10px 20px;background:#07486A;color:#ffffff;text-decoration:none;border-radius:36px;">Login to your account</a>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 24px;background:#F8FAFC;font-size:12px;color:#64748B;text-align:center;">
+              This is an automated system-generated alert. Please do not reply to this email.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;
+};
+
 export const personalProtectiveEquipmentTemplate = (
   incidentData,
   nvrData,
@@ -2222,6 +2416,185 @@ export const personalProtectiveEquipmentTemplate = (
                   border:1px dashed #CBD5E1;
                   border-radius:6px;
                 ">
+                  No incident image available
+                </div>`
+              }
+            </td>
+          </tr>
+
+          <!-- Description -->
+          <tr>
+            <td style="padding:0 24px 24px;">
+              <strong>Description:</strong>
+              <p style="margin:6px 0 0;font-size:14px;color:#334155;">
+                ${description || "No additional description provided."}
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 24px;background:#F8FAFC;font-size:12px;color:#64748B;">
+              This is an automated system-generated alert.  
+              Please do not reply to this email.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;
+};
+
+export const foodServicePPEDetectionTemplate = (
+  incidentData,
+  nvrData,
+  channelData,
+) => {
+  const {
+    incidentName,
+    timeOfIncident,
+    zone,
+    severity,
+    description,
+    _id,
+    Image,
+  } = incidentData;
+
+  const getSeverityStyles = (level = "low") => {
+    switch (level) {
+      case "high":
+        return { bg: "#FDECEA", text: "#B42318", label: "High" };
+      case "moderate":
+        return { bg: "#FFF4E5", text: "#B54708", label: "Moderate" };
+      case "low":
+      default:
+        return { bg: "#E8F1FF", text: "#1D4ED8", label: "Low" };
+    }
+  };
+
+  const severityStyle = getSeverityStyles(severity);
+
+  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    hour12: true,
+  });
+
+  const latestPPE =
+    incidentData?.timeSeries?.[incidentData.timeSeries.length - 1]?.ppe || {};
+
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Food Service PPE Detection Incident Report</title>
+</head>
+
+<body style="margin:0;padding:0;background-color:#F4F6F8;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center" style="padding:24px;">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;">
+          <!-- Logo -->
+          <tr>
+            <td align="center" style="padding:20px 0;">
+              <img src="https://videoraiq.com/wp-content/uploads/2025/06/videoraIQ-dark-blue.webp" alt="VideoraIQ" style="max-width:200px;display:block;">
+            </td>
+          </tr>
+          <!-- Header -->
+          <tr>
+            <td style="padding:20px 24px;background:#0F172A;color:#ffffff;">
+              <h2 style="margin:0;font-size:20px;">Food Service PPE Detection Alert</h2>
+              <p style="margin:4px 0 0;font-size:13px;opacity:0.9;">
+                Automated Incident Notification
+              </p>
+            </td>
+          </tr>
+
+          <!-- Incident Summary -->
+          <tr>
+            <td style="padding:20px 24px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Incident Type:</strong> ${incidentName || "Food Service PPE Detection"}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Zone:</strong> ${zone || "N/A"}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Time of Incident:</strong> ${formattedTime}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding-top:10px;">
+                    <span style="
+                      display:inline-block;
+                      padding:6px 12px;
+                      font-size:12px;
+                      border-radius:20px;
+                      background:${severityStyle.bg};
+                      color:${severityStyle.text};
+                      font-weight:bold;">
+                      Severity: ${severityStyle.label}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Food Service PPE Summary -->
+          <tr>
+            <td style="padding:0 24px 24px;">
+              <h3 style="font-size:16px;margin-bottom:14px;color:#0F172A;">
+                Food Service PPE Summary
+              </h3>
+              <table width="100%" cellpadding="8" cellspacing="0" style="border-collapse:collapse;font-size:14px;">
+                <tr style="background:#F1F5F9;">
+                  <th align="left"   style="border:1px solid #E2E8F0;">PPE Item</th>
+                  <th align="center" style="border:1px solid #E2E8F0;">Detected</th>
+                  <th align="center" style="border:1px solid #E2E8F0;">Not Detected</th>
+                </tr>
+                ${
+                  Object.keys(latestPPE).length
+                    ? Object.entries(latestPPE).map(([key, val]) => `
+                <tr>
+                  <td style="border:1px solid #E2E8F0;">${key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</td>
+                  <td align="center" style="border:1px solid #E2E8F0;color:#15803D;">${val.yes ?? 0}</td>
+                  <td align="center" style="border:1px solid #E2E8F0;color:#B91C1C;">${val.no ?? 0}</td>
+                </tr>`).join("")
+                    : `<tr><td colspan="3" align="center" style="border:1px solid #E2E8F0;">No PPE data available</td></tr>`
+                }
+              </table>
+            </td>
+          </tr>
+
+          <!-- Incident Image -->
+          <tr>
+            <td style="padding:0 24px 20px;">
+              <h3 style="font-size:16px;margin-bottom:10px;color:#0F172A;">
+                Incident Snapshot
+              </h3>
+              ${
+                Image
+                  ? `<img
+                  src="${config.get("ImageView") + Image}"
+                  alt="Incident Image"
+                  width="100%"
+                  style="max-width:552px;border-radius:8px;border:1px solid #E2E8F0;display:block;"
+                />`
+                  : `<div style="padding:20px;text-align:center;font-size:14px;color:#64748B;border:1px dashed #CBD5E1;border-radius:6px;">
                   No incident image available
                 </div>`
               }
@@ -4498,4 +4871,193 @@ export const vehicleObstructionTemplate = (
   </table>
 </body>
 </html>`;
+};
+
+export let tableOccupancyDetectionTemplate = (incidentData, nvrData, channelData) => {
+  const {
+    incidentName,
+    timeOfIncident,
+    zone,
+    severity,
+    description,
+    Image,
+    count,
+    _id,
+  } = incidentData;
+
+  const getSeverityStyles = (level = "low") => {
+    switch (level) {
+      case "high":
+        return { bg: "#FDECEA", text: "#B42318", label: "High" };
+      case "moderate":
+        return { bg: "#FFF4E5", text: "#B54708", label: "Moderate" };
+      case "low":
+      default:
+        return { bg: "#E8F1FF", text: "#1D4ED8", label: "Low" };
+    }
+  };
+
+  const severityStyle = getSeverityStyles(severity);
+
+  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    hour12: true,
+  });
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Table Occupancy Detection Alert</title>
+</head>
+
+<body style="margin:0;padding:0;background-color:#F4F6F8;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center" style="padding:24px;">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;">
+
+          <!-- Logo -->
+          <tr>
+            <td align="center" style="padding:20px 0;">
+              <img src="https://videoraiq.com/wp-content/uploads/2025/06/videoraIQ-dark-blue.webp"
+                   alt="VideoraIQ"
+                   style="max-width:200px;display:block;">
+            </td>
+          </tr>
+
+          <!-- Header -->
+          <tr>
+            <td style="padding:20px 24px;background:#0F172A;color:#ffffff;">
+              <h2 style="margin:0;font-size:20px;">Table Occupancy Detection Alert</h2>
+              <p style="margin:4px 0 0;font-size:13px;opacity:0.9;">
+                Automated Incident Notification
+              </p>
+            </td>
+          </tr>
+
+          <!-- Incident Summary -->
+          <tr>
+            <td style="padding:20px 24px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Incident Type:</strong> ${incidentName || "Table Occupancy Detection"}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Zone:</strong> ${zone || "N/A"}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Time of Incident:</strong> ${formattedTime}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding-top:10px;">
+                    <span style="
+                      display:inline-block;
+                      padding:6px 12px;
+                      font-size:12px;
+                      border-radius:20px;
+                      background:${severityStyle.bg};
+                      color:${severityStyle.text};
+                      font-weight:bold;">
+                      Severity: ${severityStyle.label}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Table Occupancy Details -->
+          <tr>
+            <td style="padding:0 24px 20px;">
+              <h3 style="font-size:16px;margin-bottom:10px;color:#0F172A;">
+                Table Occupancy Summary
+              </h3>
+
+              <table width="100%" cellpadding="0" cellspacing="0"
+                     style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;">
+                <tr>
+                  <td style="padding:12px 16px;font-size:14px;color:#0F172A;">
+                    <strong>Occupied Tables:</strong>
+                    <span style="
+                      font-size:16px;
+                      font-weight:bold;
+                      color:#1D4ED8;
+                      margin-left:6px;">
+                      ${count != null ? count : "N/A"}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Incident Image -->
+          <tr>
+            <td style="padding:0 24px 20px;">
+              <h3 style="font-size:16px;margin-bottom:10px;color:#0F172A;">
+                Incident Snapshot
+              </h3>
+
+              ${
+                Image
+                  ? `
+                <img
+                  src="${config.get("ImageView") + Image}"
+                  alt="Table Occupancy Detection Image"
+                  width="100%"
+                  style="
+                    max-width:552px;
+                    border-radius:8px;
+                    border:1px solid #E2E8F0;
+                    display:block;
+                  "
+                />`
+                  : `
+                <div style="
+                  padding:20px;
+                  text-align:center;
+                  font-size:14px;
+                  color:#64748B;
+                  border:1px dashed #CBD5E1;
+                  border-radius:6px;
+                ">
+                  No incident image available
+                </div>`
+              }
+            </td>
+          </tr>
+
+          <!-- Description -->
+          <tr>
+            <td style="padding:0 24px 24px;">
+              <strong>Description:</strong>
+              <p style="margin:6px 0 0;font-size:14px;color:#334155;">
+                ${description || "No additional description provided."}
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 24px;background:#F8FAFC;font-size:12px;color:#64748B;">
+              This is an automated system-generated alert.
+              Please do not reply to this email.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;
 };

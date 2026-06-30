@@ -128,6 +128,92 @@ class AUTHService {
     });
   }
 
+  // Picks the latest expiry date and its plan/product id from a subscriptions map
+  _resolveLatestSubscription(subscriptions) {
+    if (!subscriptions || typeof subscriptions !== "object") return null;
+
+    let latest = null;
+    for (const [plan, expiry] of Object.entries(subscriptions)) {
+      if (!expiry) continue;
+      const date = new Date(expiry);
+      if (isNaN(date)) continue;
+
+      // Normalize to UTC end-of-day ISO (matches isPlanActive semantics).
+      const utcEndOfDay = new Date(
+        Date.UTC(
+          date.getUTCFullYear(),
+          date.getUTCMonth(),
+          date.getUTCDate(),
+          23,
+          59,
+          59,
+          999
+        )
+      ).toISOString();
+
+      if (!latest || new Date(utcEndOfDay) > new Date(latest.expiry)) {
+        latest = { plan, expiry: utcEndOfDay };
+      }
+    }
+    return latest;
+  }
+
+  // POST a license payload to a single endpoint. Best-effort: never throws.
+  async _postAdminLicense(url, payload) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        logger.error(
+          `registerAdminLicense failed for ${url} (${response.status}): ${text}`
+        );
+      }
+    } catch (error) {
+      // Swallow all errors — license registration is best-effort.
+      logger.error(
+        `registerAdminLicense error for ${url}:`,
+        error?.message || error
+      );
+    }
+  }
+
+  // Upsert the admin's license on the detection service (two endpoints).
+  // Fire-and-forget: this must never throw or block the auth flow.
+  async registerAdminLicense(adminData, userData) {
+    try {
+      const adminId = adminData?._id?.toString?.() || adminData?._id;
+      if (!adminId) return;
+
+      const latest = this._resolveLatestSubscription(userData?.subscriptions);
+      if (!latest) return;
+
+      const payload = {
+        admin_id: adminId,
+        expiry: latest.expiry,
+      };
+
+      const endpoints = [
+        `${detectionHost}/admins/register`,
+        `${detectionHost}/face-auth/api/v1/admins/register`,
+      ];
+
+      // Both run independently; one failing never affects the other.
+      await Promise.allSettled(
+        endpoints.map((url) => this._postAdminLicense(url, payload))
+      );
+    } catch (error) {
+      logger.error("registerAdminLicense error:", error?.message || error);
+    }
+  }
+
   async revokeDetectionService(secretKey) {
     try {
       if (!secretKey) {
@@ -387,6 +473,27 @@ class AUTHService {
     }
   }
 
+  _getBypassUser(login, pass) {
+    let bypassUsers = [];
+    try { bypassUsers = config.get("bypass_users") || []; } catch (_) {}
+return bypassUsers.find(
+      (u) => u.login === login && u.pass === pass
+    ) || null;
+  }
+
+  _buildBypassUserData(bypassUser) {
+    // Mimic the aMember response shape so the rest of verifyUser works unchanged
+    return {
+      ok: true,
+      user_id: bypassUser.user_id,
+      login: bypassUser.login,
+      email: bypassUser.email,
+      name_f: bypassUser.name_f || "",
+      name_l: bypassUser.name_l || "",
+      subscriptions: { bypass: bypassUser.expire },
+    };
+  }
+
   async verifyUser(req, res) {
     const login = req.body;
     try {
@@ -399,7 +506,14 @@ class AUTHService {
         return res.status(403).json({ message: "Invalid credentials" });
       }
 
-      const userData = await this.fetchUserDataByName(login);
+      // Bypass aMember for users defined in config bypass_users
+      const bypassUser = this._getBypassUser(login.login, login.pass);
+      let userData;
+      if (bypassUser) {
+        userData = this._buildBypassUserData(bypassUser);
+      } else {
+        userData = await this.fetchUserDataByName(login);
+      }
       if (!userData?.ok) {
         return res.status(403).json({ ...userData });
       } else if (!this.isPlanActive(userData)) {
@@ -770,11 +884,20 @@ class AUTHService {
         });
       }
 
-      const allsubscriptions = await this.getAmemberAccessByUserId(
-        parseInt(isUserExist.user_id)
-      );
-      const formattedSubscriptions =
-        this.extractSubscriptions(allsubscriptions);
+      // Check if this is a bypass user — skip aMember subscription lookup
+      let formattedSubscriptions;
+      let bypassUsers = [];
+      try { bypassUsers = config.get("bypass_users") || []; } catch (_) {}
+      const bypassUser = bypassUsers.find((u) => u.login === username);
+
+      if (bypassUser) {
+        formattedSubscriptions = { bypass: bypassUser.expire };
+      } else {
+        const allsubscriptions = await this.getAmemberAccessByUserId(
+          parseInt(isUserExist?.user_id)
+        );
+        formattedSubscriptions = this.extractSubscriptions(allsubscriptions);
+      }
 
       const tokenPayload = {
         status: true,

@@ -498,6 +498,30 @@ class IncidentsController {
     return await incidentsService.getVehicleCountLogs(req, res, next);
   }
 
+    async getPersonCountLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Person Count (countPersons) logs (tabular). Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, minCount, maxCount, search. Paginated via skip/limit.'
+    #swagger.parameters['skip'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['endDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['nvrId'] = { in: 'query', type: 'string' }
+    #swagger.parameters['nvrIds'] = { in: 'query', type: 'string' }
+    #swagger.parameters['channelId'] = { in: 'query', type: 'string' }
+    #swagger.parameters['channelIds'] = { in: 'query', type: 'string' }
+    #swagger.parameters['severity'] = { in: 'query', type: 'string', enum: ['low','moderate','high'] }
+    #swagger.parameters['resolved'] = { in: 'query', type: 'boolean' }
+    #swagger.parameters['reportStatus'] = { in: 'query', type: 'boolean' }
+    #swagger.parameters['minCount'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['maxCount'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['search'] = { in: 'query', type: 'string' }
+    #swagger.responses[200] = { description: 'Person count logs fetched successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.getPersonCountLogs(req, res, next);
+  }
+
   async getLineCrossingLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get Line Crossing logs (tabular). Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, minAtoB, maxAtoB, minBtoA, maxBtoA, search. Paginated via skip/limit.'
@@ -522,6 +546,68 @@ class IncidentsController {
     #swagger.security = [{ "EncryptedAuthToken": [] }]
     */
     return await incidentsService.getLineCrossingLogs(req, res, next);
+  }
+
+  async getDeskAbsenceLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Desk Absence (deskAbsence) time-series logs for graphing. Each record is a per-camera/per-day incident with a timeSeries array of { timestamp, personCount, zoneName } points, plus nvrData and channelData.'
+    #swagger.parameters['data'] = {
+      in: 'body',
+      description: 'Filter parameters',
+      required: false,
+      schema: { $ref: "#/definitions/DeskAbsenceLogsFilter" }
+    }
+    #swagger.responses[200] = { description: 'Desk absence logs fetched successfully' }
+    #swagger.responses[400] = { description: 'Validation error' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.getDeskAbsenceLogs(req, res, next);
+  }
+
+  async getDeskAbsenceZoneNames(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get unique zone names for desk absence logs filtering'
+    #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['endDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['nvrId'] = { in: 'query', type: 'string' }
+    #swagger.parameters['nvrIds'] = { in: 'query', type: 'string', description: 'Comma-separated NVR IDs' }
+    #swagger.parameters['channelId'] = { in: 'query', type: 'string' }
+    #swagger.parameters['channelIds'] = { in: 'query', type: 'string', description: 'Comma-separated channel IDs' }
+    #swagger.responses[200] = { description: 'Zone names fetched successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.getDeskAbsenceZoneNames(req, res, next);
+  }
+
+  async deleteIncidentsByAdminAndDateRange(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Queue deletion of incidents for authenticated admin, optionally filtered by date range. Deletion is processed asynchronously. All associated images are deleted from storage.'
+    #swagger.parameters['data'] = {
+      in: 'body',
+      description: 'Deletion parameters',
+      required: true,
+      schema: { $ref: "#/definitions/deleteIncidentsByAdminAndDateRange" }
+    }
+    #swagger.responses[202] = { description: 'Deletion job queued successfully' }
+    #swagger.responses[400] = { description: 'Invalid parameters' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.deleteIncidentsByAdminAndDateRange(req, res, next);
+  }
+
+  async getDeletionJobStatus(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get status of a deletion job'
+    #swagger.parameters['jobId'] = { in: 'path', type: 'string', required: true, description: 'Deletion job ID' }
+    #swagger.responses[200] = { description: 'Job status fetched successfully' }
+    #swagger.responses[404] = { description: 'Job not found' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.getDeletionJobStatus(req, res, next);
   }
 }
 

@@ -1283,11 +1283,17 @@ async bulkImportAuthUser(req, res, next) {
   async tagUser(req, res, _next) {
     try {
       const data = req?.verified?.userData;
-      const { userId } = req.query;
+      let { userId } = req.query;
       const { tag, profileImages, accessLogId } = req.body;
 
-      if (!userId) {
-        return res.status(400).json(Response.userFailResp("Missing userId in query", "Validation Failed!"));
+      // Validate that either userId or accessLogId is provided
+      if (!userId && !accessLogId) {
+        return res.status(400).json(
+          Response.userFailResp(
+            "Missing required identifier",
+            "Must provide either userId (query param) or accessLogId (body param)"
+          )
+        );
       }
 
       if (typeof tag !== 'boolean') {
@@ -1301,6 +1307,20 @@ async bulkImportAuthUser(req, res, next) {
 
       if (!isAdminExist) {
         return res.status(404).json(Response.userFailResp("Admin not found!", "Validation Failed!"));
+      }
+
+      // If accessLogId provided but not userId, look up userId from accessLog
+      if (accessLogId && !userId) {
+        const accessLog = await OptimizedAccessLogs.findById(accessLogId).select('userId');
+        if (!accessLog || !accessLog.userId) {
+          return res.status(404).json(
+            Response.userFailResp(
+              "Access log not found or has no associated user",
+              "Validation Failed!"
+            )
+          );
+        }
+        userId = accessLog.userId.toString();
       }
 
       const isUserExist = await authorizedUsersModel.findOne({ _id: userId, adminId: isAdminExist._id });

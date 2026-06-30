@@ -322,11 +322,11 @@ class AuthUserController {
   async tagUser(req, res, next) {
     /*
     #swagger.tags = ['AuthorizedUsers']
-    #swagger.description = 'Tag or untag an authorized user. Calls AI service (/tag or /untag) and updates tag status on both the authorized user and the access log on success.'
+    #swagger.description = 'Tag or untag an authorized user. Can use either userId (query param) or accessLogId (body param). Calls AI service (/tag or /untag) and updates tag status on both the authorized user and the access log on success.'
     #swagger.parameters['userId'] = {
       in: 'query',
-      description: 'Authorized user _id to tag/untag',
-      required: true,
+      description: 'Authorized user _id to tag/untag (optional if accessLogId provided)',
+      required: false,
       type: 'string',
     }
     #swagger.parameters['data'] = {
@@ -339,8 +339,8 @@ class AuthUserController {
       }
     }
     #swagger.responses[200] = { description: 'User tag updated successfully' }
-    #swagger.responses[400] = { description: 'Validation error or missing required fields' }
-    #swagger.responses[404] = { description: 'User or admin not found, or no face match in AI service' }
+    #swagger.responses[400] = { description: 'Validation error - must provide either userId or accessLogId' }
+    #swagger.responses[404] = { description: 'User, access log, or admin not found, or no face match in AI service' }
     #swagger.responses[502] = { description: 'AI service error' }
     #swagger.responses[500] = { description: 'Internal server error' }
     */

@@ -83,9 +83,37 @@ router.get(
   incidentsController.getVehicleCountLogs,
 );
 router.get(
+  "/logs/person-count",
+  viewAccessCheck,
+  incidentsController.getPersonCountLogs,
+);
+router.get(
   "/logs/line-crossing",
   viewAccessCheck,
   incidentsController.getLineCrossingLogs,
+);
+router.post(
+  "/logs/desk-absence",
+  viewAccessCheck,
+  incidentsController.getDeskAbsenceLogs,
+);
+
+router.get(
+  "/logs/desk-absence/filter/zone-names",
+  viewAccessCheck,
+  incidentsController.getDeskAbsenceZoneNames,
+);
+
+router.post(
+  "/delete-by-admin-and-date",
+  deleteAccessCheck,
+  incidentsController.deleteIncidentsByAdminAndDateRange,
+);
+
+router.get(
+  "/deletion-status/:jobId",
+  viewAccessCheck,
+  incidentsController.getDeletionJobStatus,
 );
 
 export default router;

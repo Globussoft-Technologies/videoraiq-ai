@@ -7,8 +7,7 @@
 */
 
 export const DETECTION_TYPES = {
-  personalProtectiveEquipmentSettings:
-    "Personal Protective Equipment Detection",
+  personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
   vehicleDetectionSettings: "ANPR Detection",
   unauthorizedAccessSettings: "Intrusion Detection",
   crowdDetectionSettings: "Crowd Detection",
@@ -17,11 +16,17 @@ export const DETECTION_TYPES = {
   conveyorDetectionSettings: "Conveyor Detection",
   crusherDetectionSettings: "Crusher Detection",
   waterSpillageDetectionSettings: "Water Spillage Detection",
+
   // countPersonsSettings: "Count Persons Detection",
+
   doorDetectionSettings: "Door Detection",
   lightDetectionSettings: "Light Detection",
+  vehicleObstructionSettings: "Vehicle & Obstruction Detection",
   deskAbsenceSettings: "Desk Absence Detection",
   guardAbsenceSettings: "Guard Absence Detection",
+
+  countPersonsSettings: "Count Persons Detection",
+
   // motionDetectionSettings: "Motion Detection",
   // genericObjectDetectionSettings: "Generic Object Detection",
   // loiteringWithoutAuthSettings: "Loitering Without Authorization Detection",
@@ -29,10 +34,12 @@ export const DETECTION_TYPES = {
   // fireSmokeDetectionSettings: "Fire and Smoke Detection",
   // weaponDetectionSettings: "Weapon Detection",
   // unattendedBaggageDetectionSettings: "Unattended Baggage Detection",
+
   vehicleTypeDetectionSettings: "Vehicle Type Detection",
   loiteringDetectionSettings: "Loitering Detection",
-  vehicleObstructionSettings: "Vehicle & Obstruction Detection",
-};
+  tableOccupancyDetectionSettings: "Table Occupancy Detection",
+  foodServicePPEDetectionSettings: "Food Service PPE Detection",
+}
 
 export const TYPE_MAP = {
   countPersonsSettings: "countPersons",
@@ -59,6 +66,8 @@ export const TYPE_MAP = {
   vehicleTypeDetectionSettings: "vehicleTypeDetection",
   loiteringDetectionSettings: "loiteringDetection",
   vehicleObstructionSettings: "vehicleObstruction",
+  tableOccupancyDetectionSettings: "tableOccupancySettings",
+  foodServicePPEDetectionSettings: "foodServicePPEDetection",
 };
 
 export const DETECTION_MODES_MAP = {
@@ -79,6 +88,9 @@ export const DETECTION_MODES_MAP = {
   vehicleTypeDetectionSettings: ["vehicleType"],
   loiteringDetectionSettings: ["loitering"],
   vehicleObstructionSettings: ["vehicleObstruction"],
+  tableOccupancyDetectionSettings: ["tableOccupancySettings"],
+  foodServicePPEDetectionSettings: ["foodServicePPEDetection"],
+  countPersonsSettings: ["countPersons"],
 };
 
 export const DETECTION_OBJECTS_TYPES_MAP = {
@@ -113,6 +125,8 @@ export const toPopulateDetections = [
   { path: "detections.vehicleTypeDetectionSettings.id" },
   { path: "detections.loiteringDetectionSettings.id" },
   { path: "detections.vehicleObstructionSettings.id" },
+  { path: "detections.tableOccupancyDetectionSettings.id" },
+  { path: "detections.foodServicePPEDetectionSettings.id" },
 ];
 
 // sample payloads
@@ -603,6 +617,10 @@ export const deskAbsenceSettings = {
         [50, 150],
       ],
     },
+    zone_configs: [
+          { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+          { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+      ],
     metricType: "gauge",
   },
 };
@@ -806,5 +824,64 @@ export const loiteringDetectionSettings = {
       ],
     },
     metricType: "gauge",
+  },
+};
+
+
+export const tableOccupancyDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "tableOccupancyDetectionSettings",
+  name: "Table Occupancy Detection - Table 1",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    crowdCountThreshold: 10,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+
+export const foodServicePPEDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "foodServicePPEDetectionSettings",
+  name: "Food Service PPE Detection - Kitchen",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    alertThreshold: 3,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+    ppeList: ["gloves", "mask", "hairnet", "apron", "vest"],
   },
 };

@@ -44,6 +44,8 @@ const detectionFields = {
   waterSpillageDetectionSettings: detectionSettingSchema,
   loiteringDetectionSettings: detectionSettingSchema,
   vehicleTypeDetectionSettings: detectionSettingSchema,
+  tableOccupancyDetectionSettings: detectionSettingSchema,
+  foodServicePPEDetectionSettings: detectionSettingSchema,
   vehicleObstructionSettings: detectionSettingSchema,
 };
 

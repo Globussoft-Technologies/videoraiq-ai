@@ -18,6 +18,8 @@ import {
   Video,
   Tag,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import ReusableTablePage from './ReusableTablePage';
 import LogEmployeeProfileDialog from './LogEmployeeProfileDialog';
@@ -52,6 +54,54 @@ import { tagUser } from '@/page/user/Dashboard/Api/put';
 
 const styles = {
   text: 'text-[#333333] text-xs font-normal',
+};
+
+// Full-bleed image area for a grid card. When a log has multiple session
+// images, shows left/right arrows + a counter to flip through them.
+const SessionImageCarousel = ({ images = [], fallback, alt }) => {
+  const list = images && images.length > 0 ? images : fallback ? [fallback] : [];
+  const [index, setIndex] = useState(0);
+  const safeIndex = Math.min(index, Math.max(list.length - 1, 0));
+  const hasMultiple = list.length > 1;
+
+  const go = (e, delta) => {
+    e.stopPropagation();
+    setIndex((prev) => (prev + delta + list.length) % list.length);
+  };
+
+  return (
+    <div className="relative w-full h-40 sm:h-44 md:h-48 lg:h-52 overflow-hidden">
+      <img
+        src={list[safeIndex] || fallback}
+        alt={alt}
+        className="w-full h-full object-cover object-top"
+      />
+
+      {hasMultiple && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => go(e, -1)}
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-20 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors cursor-pointer"
+            aria-label="Previous image"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => go(e, 1)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-20 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors cursor-pointer"
+            aria-label="Next image"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+          <span className="absolute bottom-2 right-2 z-20 bg-black/50 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-full">
+            {safeIndex + 1}/{list.length}
+          </span>
+        </>
+      )}
+    </div>
+  );
 };
 
 const initialState = {
@@ -403,10 +453,20 @@ const TaggedUsers = () => {
 
       const mapped = userlogs.map((log) => {
         const sessions = log.sessions || [];
+        const firstSessionImg = sessions
+          .map(
+            (s) =>
+              s?.images?.faceImage ||
+              s?.images?.personImage ||
+              s?.images?.frameImage
+          )
+          .find(Boolean);
         const image =
           log.userInfo?.profilePics?.length > 0
             ? `${nasUrl}/api/v1/uploads${log.userInfo.profilePics[0]}`
-            : unknownimg;
+            : firstSessionImg
+              ? `${nasUrl}/api/v1/uploads${firstSessionImg}`
+              : unknownimg;
         const imageUrls = sessions.map((session) => {
           const images = session.images;
           return images?.frameImage || images?.personImage || images?.faceImage;
@@ -714,13 +774,13 @@ const handleExport = async (format) => {
         toast.success('User untagged successfully');
         fetchLogs(); // refetch so the untagged row drops off this list
       } else {
-        toast.error(result?.body?.error || result?.body?.message || 'Failed to untag user');
+        toast.error(result?.body?.message || result?.body?.error || 'Failed to untag user');
       }
     } catch (error) {
       console.error('Failed to untag user', error);
       toast.error(
-        error?.response?.data?.body?.error ||
-          error?.response?.data?.body?.message ||
+        error?.response?.data?.body?.message ||
+          error?.response?.data?.body?.error ||
           error?.response?.data?.message ||
           'Failed to untag user'
       );
@@ -1034,14 +1094,16 @@ const handleExport = async (format) => {
           dispatch({ type: 'SET_SELECTED_LOG', value: item });
           dispatch({ type: 'SET_SHOW_PROFILE', value: true });
         }}
-        className="bg-white rounded-2xl p-3 sm:p-4 md:p-5 lg:p-6 shadow-sm border border-gray-100 flex flex-col items-center relative group hover:shadow-md transition-shadow cursor-pointer h-full w-full min-w-0"
+        className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 flex flex-col relative group hover:shadow-md transition-shadow cursor-pointer h-full w-full min-w-0"
       >
-        {/* Department badge top-left */}
-        <div className="absolute top-2 left-2 md:top-3 md:left-3 z-20 max-w-[55%]">
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] md:text-[10px] font-semibold bg-[#E3F5FF] text-[#07486A] border border-[#CFEFFF] shadow-sm truncate max-w-full">
-            {item.department}
-          </span>
-        </div>
+        {/* Department badge top-left (hidden when no department) */}
+        {item.department && item.department !== '--' && (
+          <div className="absolute top-2 left-2 md:top-3 md:left-3 z-20 max-w-[55%]">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] md:text-[10px] font-semibold bg-[#E3F5FF] text-[#07486A] border border-[#CFEFFF] shadow-sm truncate max-w-full">
+              {item.department}
+            </span>
+          </div>
+        )}
 
         {/* Action button top-right */}
         <div className="absolute top-2 right-2 flex flex-row flex-nowrap items-center gap-0.5 sm:gap-1 z-30">
@@ -1059,16 +1121,15 @@ const handleExport = async (format) => {
           </button>
         </div>
 
-        {/* Avatar */}
-        <div className="relative mb-3 md:mb-5 mt-6 sm:mt-4 flex items-center justify-center w-full">
-          <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 lg:w-32 lg:h-32 rounded-full overflow-hidden shadow-sm shrink-0 ring-4 ring-gray-50 group-hover:ring-[#CFEFFF] transition-all">
-            <img
-              src={item.image}
-              alt={item.name}
-              className="w-full h-full object-cover"
-            />
-          </div>
-        </div>
+        {/* Avatar — full-bleed across the top, with arrows for multiple session images */}
+        <SessionImageCarousel
+          images={item.personImages}
+          fallback={item.image}
+          alt={item.name}
+        />
+
+        {/* Content below the image */}
+        <div className="flex flex-col p-3 sm:p-4 md:p-5">
 
         {/* Name */}
         <div className="w-full text-center mb-2 md:mb-3 px-2">
@@ -1152,6 +1213,7 @@ const handleExport = async (format) => {
             <Switch checked={true} className="pointer-events-none" />
           </button>
         </div>
+        </div>
       </div>
     );
   };
@@ -1219,7 +1281,7 @@ const handleExport = async (format) => {
       className="bg-[#07486A] text-white rounded-[8px] px-3 py-2 text-sm cursor-pointer"
       onClick={() => handleExport("excel")}
     >
-      Export Excel
+       Export Excel
     </Button>
 
     <Button

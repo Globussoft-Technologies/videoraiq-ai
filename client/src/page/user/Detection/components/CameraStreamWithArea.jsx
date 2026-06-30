@@ -52,13 +52,19 @@ const CameraStreamWithArea = forwardRef(
       hasError,
       setHasError,
       isLoading,
-      setIsLoading
+      setIsLoading,
+      // Optional per-zone names (index-aligned to zones) drawn on each polygon.
+      zoneNames = []
     },
     ref
   ) => {
     const videoRef = useRef(null);
     const drawCanvasRef = useRef(null);
     const containerRef = useRef(null);
+
+    // Keep latest zone names in a ref so draw() (called from listeners) sees them.
+    const zoneNamesRef = useRef(zoneNames);
+    zoneNamesRef.current = zoneNames;
 
     // zones: array of committed polygons. Each polygon is an array of {x,y}
     // (closed polygons keep the first point repeated as the last point).
@@ -143,11 +149,8 @@ const CameraStreamWithArea = forwardRef(
             const ctx = canvas.getContext("2d");
             ctx.clearRect(0, 0, canvas.width, canvas.height);
           }
-          // toggle drawing mode to force redraw state if required
-          if (isDrawingMode) {
-            setIsDrawingMode(false);
-            setTimeout(() => setIsDrawingMode(true), 0);
-          }
+          // Do NOT toggle drawing mode here — clearing must not silently
+          // re-enable drawing. The caller controls the drawing/move modes.
         },
         // Accepts a flat single polygon or a nested multi-zone array.
         setPoints: (pts) => {
@@ -162,6 +165,37 @@ const CameraStreamWithArea = forwardRef(
           setZones(normalized);
           setDrawingPoints([]);
           requestAnimationFrame(() => draw(normalized, []));
+        },
+        // Undo the last placed point (and the line leading to it).
+        // - If a polygon is in progress, drop its last point.
+        // - Otherwise reopen the most recently committed zone and drop its last
+        //   point, so undo flows continuously across the close-polygon step.
+        undoLastPoint: () => {
+          const active = drawingPointsRef.current || [];
+          if (active.length > 0) {
+            const next = active.slice(0, -1);
+            setDrawingPoints(next);
+            requestAnimationFrame(() => draw(zonesRef.current, next));
+            return;
+          }
+          const zs = zonesRef.current || [];
+          if (zs.length > 0) {
+            const last = zs[zs.length - 1];
+            // Strip the duplicated closing point, then remove the last vertex.
+            let reopened = last.slice();
+            if (
+              reopened.length > 1 &&
+              reopened[0].x === reopened[reopened.length - 1].x &&
+              reopened[0].y === reopened[reopened.length - 1].y
+            ) {
+              reopened = reopened.slice(0, -1);
+            }
+            reopened = reopened.slice(0, -1);
+            const remainingZones = zs.slice(0, -1);
+            setZones(remainingZones);
+            setDrawingPoints(reopened);
+            requestAnimationFrame(() => draw(remainingZones, reopened));
+          }
         },
         setDrawingMode: (mode) => {
           setIsDrawingMode(mode);
@@ -262,10 +296,11 @@ const CameraStreamWithArea = forwardRef(
       };
     }, []);
 
-    // Redraw whenever zones or the in-progress polygon change
+    // Redraw whenever zones, the in-progress polygon, or zone names change
     useEffect(() => {
       draw(zones, drawingPoints);
-    }, [zones, drawingPoints]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [zones, drawingPoints, zoneNames]);
 
     // create final stream url once
     const streamUrl = useMemo(() => {
@@ -319,6 +354,46 @@ const CameraStreamWithArea = forwardRef(
       ctx.restore();
     };
 
+    // --- Draw a zone's name label near its top edge ---
+    const drawZoneLabel = (ctx, pts, name, scaleFactor) => {
+      if (!name || !pts || pts.length === 0) return;
+      // Anchor at the polygon's top-left-most point.
+      let anchor = pts[0];
+      for (const p of pts) {
+        if (p.y < anchor.y || (p.y === anchor.y && p.x < anchor.x)) anchor = p;
+      }
+      const fontPx = Math.max(10, Math.round(14 * scaleFactor));
+      ctx.save();
+      ctx.font = `600 ${fontPx}px sans-serif`;
+      ctx.textBaseline = "top";
+      const padX = fontPx * 0.4;
+      const padY = fontPx * 0.25;
+      const textW = ctx.measureText(name).width;
+      const boxX = anchor.x;
+      const boxY = Math.max(0, anchor.y - (fontPx + padY * 2) - 4);
+      const boxW = textW + padX * 2;
+      const boxH = fontPx + padY * 2;
+      const radius = Math.min(boxH / 2, fontPx * 0.45);
+      // Rounded red pill background for readability over the video.
+      ctx.fillStyle = "rgba(220, 38, 38, 0.9)";
+      ctx.beginPath();
+      if (typeof ctx.roundRect === "function") {
+        ctx.roundRect(boxX, boxY, boxW, boxH, radius);
+      } else {
+        // Fallback rounded-rect path for older canvas implementations.
+        ctx.moveTo(boxX + radius, boxY);
+        ctx.arcTo(boxX + boxW, boxY, boxX + boxW, boxY + boxH, radius);
+        ctx.arcTo(boxX + boxW, boxY + boxH, boxX, boxY + boxH, radius);
+        ctx.arcTo(boxX, boxY + boxH, boxX, boxY, radius);
+        ctx.arcTo(boxX, boxY, boxX + boxW, boxY, radius);
+        ctx.closePath();
+      }
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(name, boxX + padX, boxY + padY);
+      ctx.restore();
+    };
+
     // --- Draw all committed zones plus the in-progress polygon ---
     const draw = (zonesArr = zonesRef.current, active = drawingPointsRef.current) => {
       const canvas = drawCanvasRef.current;
@@ -328,8 +403,14 @@ const CameraStreamWithArea = forwardRef(
 
       const rect = canvas.getBoundingClientRect();
       const cornerSize = Math.max(4, (CORNER_RADIUS / 2) * (canvas.width / Math.max(rect.width, 1)));
+      // Scale label size to the canvas/display ratio so text stays legible.
+      const scaleFactor = canvas.width / Math.max(rect.width, 1);
+      const names = zoneNamesRef.current || [];
 
-      (zonesArr || []).forEach((z) => drawPolygon(ctx, z, { closed: true, cornerSize }));
+      (zonesArr || []).forEach((z, i) => {
+        drawPolygon(ctx, z, { closed: true, cornerSize });
+        drawZoneLabel(ctx, z, names[i], scaleFactor);
+      });
       drawPolygon(ctx, active, { closed: false, cornerSize });
     };
 

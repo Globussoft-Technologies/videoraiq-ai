@@ -9,6 +9,7 @@ import {
     doorDetectionTemplate,
     countVehiclesTemplate,
     countPersonsTemplate,
+    personDetectedTemplate,
     verifyEmailTemplate,
     personalProtectiveEquipmentTemplate,
     crowdDetectionTemplate,
@@ -24,7 +25,9 @@ import {
     waterSpillageDetectionTemplate,
     vehicleTypeDetectionTemplate,
     loiteringDetectionTemplate,
-    vehicleObstructionTemplate
+    vehicleObstructionTemplate,
+    tableOccupancyDetectionTemplate,
+    foodServicePPEDetectionTemplate,
 } from './IncidentsMailTemplates/mail.incidentsTemplate.js';
 import {
     forgotPasswordTemplate
@@ -153,6 +156,21 @@ class MailHelper {
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: countPersonsTemplate(data, nvrData, channelData),
+        };
+        let sendStatus = await sendGridMail.send(email);
+        return sendStatus;
+    }
+
+    async personDetected(emailAddresses, data, detectionType, nvrData, channelData) {
+        sendGridMail.setApiKey(config.get('sendgrid.key'));
+        const email = {
+            from: {
+                name: config.get('sendgrid.name'),
+                email: config.get('sendgrid.email'),
+            },
+            to: emailAddresses,
+            subject: `[Incident Alert] Person Detected${data?.count ? ` (${data.count})` : ''} – ${data?.incidentName || 'Person Detection'} | Severity: ${data?.severity || 'low'}`,
+            html: personDetectedTemplate(data, nvrData, channelData),
         };
         let sendStatus = await sendGridMail.send(email);
         return sendStatus;
@@ -291,6 +309,22 @@ class MailHelper {
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: vehicleDetectionTemplate(data, nvrData, channelData),
+        };
+        let sendStatus = await sendGridMail.send(email);
+
+        return sendStatus;
+    }
+
+    async vehicleObstruction(emailAddresses, data, detectionType, nvrData, channelData) {
+        sendGridMail.setApiKey(config.get('sendgrid.key'));
+        const email = {
+            from: {
+                name: config.get('sendgrid.name'),
+                email: config.get('sendgrid.email'),
+            },
+            to: emailAddresses,
+            subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
+            html: vehicleObstructionTemplate(data, nvrData, channelData),
         };
         let sendStatus = await sendGridMail.send(email);
 
@@ -452,6 +486,20 @@ class MailHelper {
         return sendStatus;
     }
 
+    async tableOccupancyDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+        sendGridMail.setApiKey(config.get('sendgrid.key'));
+        const email = {
+            from: {
+                name: config.get('sendgrid.name'),
+                email: config.get('sendgrid.email'),
+            },
+            to: emailAddresses,
+            subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
+            html: tableOccupancyDetectionTemplate(data, nvrData, channelData),
+        };
+        let sendStatus = await sendGridMail.send(email);
+        return sendStatus;
+    }
         async vehicleObstruction(emailAddresses, data, detectionType, nvrData, channelData) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
@@ -468,6 +516,20 @@ class MailHelper {
         return sendStatus;
     }
 
+    async foodServicePPEDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+        sendGridMail.setApiKey(config.get('sendgrid.key'));
+        const email = {
+            from: {
+                name: config.get('sendgrid.name'),
+                email: config.get('sendgrid.email'),
+            },
+            to: emailAddresses,
+            subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
+            html: foodServicePPEDetectionTemplate(data, nvrData, channelData),
+        };
+        let sendStatus = await sendGridMail.send(email);
+        return sendStatus;
+    }
 
 }
 

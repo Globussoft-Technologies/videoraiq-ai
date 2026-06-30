@@ -10,6 +10,7 @@ import momentTZ from "moment-timezone";
 import { withSFTPConnection } from "../../../utils/newSFTPConnectionCheck.js";
 import path from "path";
 import fs from "fs";
+import { deletionQueue } from "../jobs/utils/deletionQueue.js";
 
 import {
   Incident,
@@ -34,7 +35,9 @@ import {
   CrusherDetectionIncident,
   VehicleTypeDetectionIncident,
   WaterSpillageDetectionIncident,
-  LoiteringDetectionIncident
+  LoiteringDetectionIncident,
+  TableOccupancyDetectionIncident,
+  FoodServicePPEDetectionIncident,
 } from "./incidents.model.js";
 const modelMap = {
   countPersons: CountPersonIncident,
@@ -58,7 +61,9 @@ const modelMap = {
   crusherDetection: CrusherDetectionIncident,
   waterSpillageDetection: WaterSpillageDetectionIncident,
   vehicleTypeDetection: VehicleTypeDetectionIncident,
-  loiteringDetection: LoiteringDetectionIncident
+  loiteringDetection: LoiteringDetectionIncident,
+  tableOccupancyDetection: TableOccupancyDetectionIncident,
+  foodServicePPEDetection: FoodServicePPEDetectionIncident
 };
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
@@ -140,8 +145,8 @@ class IncidentsService {
           "countPersons",
           "countVehicles",
           "genericObjectDetection",
-          // "lineCrossing",
-          "doorDetection",
+          "lineCrossing",
+          "doorDetection"
         ].includes(incidentType)
       ) {
         // update the same document in a day
@@ -240,6 +245,14 @@ class IncidentsService {
             recentIncident.timeSeries.push({
               status: req?.body?.doorDetectionPayload?.status,
               Image: req?.body?.doorDetectionPayload?.Image,
+            });
+          } else if(incidentType === "deskAbsence") {
+            recentIncident.timeOfIncident = req?.body?.timeOfIncident;
+            recentIncident.personPresent = req?.body?.personPresent;
+            recentIncident.timeSeries.push({
+              personCount: req.body.personCount ?? 0,
+              zoneName: req.body.zoneName,
+              personPresent: req.body.personPresent,
             });
           }
 
@@ -366,6 +379,11 @@ class IncidentsService {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.personPresent = req?.body?.personPresent;
         newIncident.Image = req?.body?.Image;
+        newIncident.timeSeries.push({
+          personCount: req.body.personCount ?? 0,
+          zoneName: req.body.zoneName,
+          personPresent: req.body.personPresent,
+        });
       } else if (incidentType === "guardAbsence") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.personPresent = req?.body?.personPresent;
@@ -381,7 +399,37 @@ class IncidentsService {
       } else if (incidentType === "loiteringDetection") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.Image = req?.body?.Image;
+      } else if (incidentType === "tableOccupancyDetection") {
+        newIncident.timeOfIncident = req?.body?.timeOfIncident;
+        newIncident.Image = req?.body?.Image;
+      } else if (incidentType === "foodServicePPEDetection") {
+        newIncident.timeOfIncident = req?.body?.timeOfIncident;
+        newIncident.Image = req?.body?.Image;
+        newIncident.timeSeries.push({
+          croudCount: req.body.count ?? 0, // or appropriate value
+          ppe: {
+            gloves: {
+              yes: req.body.ppe?.gloves?.yes ?? 0,
+              no: req.body.ppe?.gloves?.no ?? 0,
+            },
+            apron: {
+              yes: req.body.ppe?.apron?.yes ?? 0,
+              no: req.body.ppe?.apron?.no ?? 0,
+            }, 
+            vest: {
+              yes: req.body.ppe?.vest?.yes ?? 0,
+              no: req.body.ppe?.vest?.no ?? 0,
+            },
+            mask: {
+              yes: req.body.ppe?.mask?.yes ?? 0,
+              no: req.body.ppe?.mask?.no ?? 0,
+            }, 
+
+          },
+        });
       }
+
+
 
       const incidentObj = await newIncident.save();
       let saved = incidentObj.toObject();
@@ -581,6 +629,20 @@ class IncidentsService {
         incidentName: { $not: /Guard Present/i }
       };
 
+      // Collect every channel/nvr scoping filter as a candidate set of string ids.
+      // These are intersected (AND) at the end so multiple filters narrow together
+      // instead of overwriting each other. An empty set => no matches (not "all").
+      const channelIdFilterSets = [];
+      const nvrIdFilterSets = [];
+      const toIdArray = (val) =>
+        (Array.isArray(val)
+          ? val
+          : String(val).split(",").map((s) => s.trim())
+        ).filter(Boolean);
+      const toIdStr = (id) => id?.toString?.() ?? String(id);
+      // True only when a filter actually has values (ignores [] and "").
+      const hasFilter = (val) => toIdArray(val ?? "").length > 0;
+
       if (checkInOrCheckOutCamera === "checkin") {
         let checkInCameraIds = [];
         if (memberId === undefined) {
@@ -597,9 +659,9 @@ class IncidentsService {
           checkInCameraIds.push(...channels);
         }
 
-        matchStage.channelId = {
-          $in: checkInCameraIds.map((camera) => camera._id),
-        };
+        channelIdFilterSets.push(
+          checkInCameraIds.map((camera) => toIdStr(camera._id)),
+        );
       } else if (checkInOrCheckOutCamera === "checkout") {
         let checkoutCameraIds = [];
         if (memberId === undefined) {
@@ -616,9 +678,9 @@ class IncidentsService {
           checkoutCameraIds.push(...channels);
         }
 
-        matchStage.channelId = {
-          $in: checkoutCameraIds.map((camera) => camera._id),
-        };
+        channelIdFilterSets.push(
+          checkoutCameraIds.map((camera) => toIdStr(camera._id)),
+        );
       } else if (checkInOrCheckOutCamera === "both") {
         let checkoutCameraIds = [];
         if (memberId === undefined) {
@@ -635,9 +697,9 @@ class IncidentsService {
           checkoutCameraIds.push(...channels);
         }
 
-        matchStage.channelId = {
-          $in: checkoutCameraIds.map((camera) => camera._id),
-        };
+        channelIdFilterSets.push(
+          checkoutCameraIds.map((camera) => toIdStr(camera._id)),
+        );
       }
 
       if (startDate && endDate) {
@@ -751,58 +813,58 @@ class IncidentsService {
         matchStage.$or = orConditions;
       }
 
-      // Filter: specific NVR
-      if (nvrId) {
-        const nvrIds = Array.isArray(nvrId)
-          ? nvrId
-          : nvrId.split(",").map((id) => id.trim());
-        matchStage.nvrId = {
-          $in: nvrIds.map((id) => new mongoose.Types.ObjectId(id)),
-        };
+      // Filter: specific NVR (id, comma-separated string, or array)
+      if (hasFilter(nvrId)) {
+        nvrIdFilterSets.push(toIdArray(nvrId));
       }
 
-      // Filter: specific channel
-      if (channelId) {
-        const channelIds = Array.isArray(channelId)
-          ? channelId
-          : channelId.split(",").map((id) => id.trim());
-        matchStage.channelId = {
-          $in: channelIds.map((id) => new mongoose.Types.ObjectId(id)),
-        };
+      // Filter: specific channel/camera (id, comma-separated string, or array)
+      if (hasFilter(channelId)) {
+        channelIdFilterSets.push(toIdArray(channelId));
       }
 
-      // Filter: by location → fetch NVRs that match
-      if (location) {
-        const locations = Array.isArray(location)
-          ? location
-          : location.split(",").map((l) => l.trim());
+      // Filter: by location → constrain to NVRs in those locations
+      if (hasFilter(location)) {
+        const locations = toIdArray(location);
         const nvrs = await nvrModel
           .find({ userId: user_id.toString(), location: { $in: locations } })
           .select("_id");
-        const nvrIds = nvrs.map((nvr) => nvr._id);
-        if (nvrIds.length) matchStage.nvrId = { $in: nvrIds };
+        nvrIdFilterSets.push(nvrs.map((nvr) => toIdStr(nvr._id)));
       }
 
-      // Filter: by department → fetch Channels that match
-      if (department) {
-        const deptIds = Array.isArray(department)
-          ? department
-          : department.split(",").map((d) => d.trim());
+      // Filter: by department → constrain to channels in those departments
+      if (hasFilter(department)) {
+        const deptIds = toIdArray(department);
         const channels = await channelsModel
           .find({ userId: user_id.toString(), department: { $in: deptIds } })
           .select("_id");
-        const channelIds = channels.map((ch) => ch._id);
-        if (channelIds.length) matchStage.channelId = { $in: channelIds };
+        channelIdFilterSets.push(channels.map((ch) => toIdStr(ch._id)));
       }
 
-      //If channelId property is not in matchstage, apply member restrictions
-      if (!matchStage.channelId && memberId) {
-        if (authorizedChannels.length > 0) {
-          matchStage.channelId = { $in: authorizedChannels };
-        } else {
-          // No authorized channels for member
-          matchStage.channelId = { $in: [] };
-        }
+      // Member restriction: limit to the member's authorized channels.
+      if (memberId) {
+        channelIdFilterSets.push((authorizedChannels || []).map(toIdStr));
+      }
+
+      // Intersect all collected sets (AND). Empty intersection => no results.
+      const intersectIds = (sets) =>
+        sets.reduce((acc, set) => {
+          const cur = new Set(set);
+          return acc.filter((id) => cur.has(id));
+        });
+
+      if (channelIdFilterSets.length > 0) {
+        const ids = intersectIds(channelIdFilterSets);
+        matchStage.channelId = {
+          $in: ids.map((id) => new mongoose.Types.ObjectId(id)),
+        };
+      }
+
+      if (nvrIdFilterSets.length > 0) {
+        const ids = intersectIds(nvrIdFilterSets);
+        matchStage.nvrId = {
+          $in: ids.map((id) => new mongoose.Types.ObjectId(id)),
+        };
       }
 
       // Aggregated paginated data
@@ -1119,7 +1181,6 @@ class IncidentsService {
 
         const matchStage = {
           userId: data.user_id.toString(),
-          isAdded: true,
           $or: [
             // Case 1: detections exist and have valid ObjectIds
             {
@@ -1134,8 +1195,8 @@ class IncidentsService {
                 { "detections.lineCrossingSettings.enabled": true },
                 { "detections.fireSmokeDetectionSettings.enabled": true },
                 { "detections.weaponDetectionSettings.enabled": true },
-                { "detections.unattendedBaggageDetectionSettings.enabled": true,},
-                { "detections.personalProtectiveEquipmentSettings.enabled": true,},
+                { "detections.unattendedBaggageDetectionSettings.enabled": true },
+                { "detections.personalProtectiveEquipmentSettings.enabled": true },
                 { "detections.crowdDetectionSettings.enabled": true },
                 { "detections.doorDetectionSettings.enabled": true },
                 { "detections.lightDetectionSettings.enabled": true },
@@ -1146,13 +1207,8 @@ class IncidentsService {
                 { "detections.waterSpillageDetectionSettings.enabled": true },
                 { "detections.guardPresentSettings.enabled": true },
                 { "detections.deskAbsenceSettings.enabled": true },
-                { "detections.vehicleTypeDetectionSettings.enabled": true },
-                { "detections.personalProtectiveEquipmentSettings.enabled": true },
-                { "detections.crowdDetectionSettings.enabled": true },
-                { "detections.countPersonsSettings.enabled": true,},
-                { "detections.vehicleObstructionSettings.enabled": true, },
-                { "detections.vehicleTypeDetectionSettings.enabled": true, }
-              ],
+                { "detections.vehicleTypeDetectionSettings.enabled": true }
+              ]
             },
             // Case 2: detections field does not exist or is empty
             // { detections: { $exists: false } },
@@ -2504,6 +2560,27 @@ console.log(result,'result');
     }
   }
 
+  async getPersonCountLogs(req, res, next) {
+    try {
+      const { minCount, maxCount } = req.query;
+      const extraMatch = {};
+      if (minCount !== undefined || maxCount !== undefined) {
+        extraMatch.count = {};
+        if (minCount !== undefined) extraMatch.count.$gte = Number(minCount);
+        if (maxCount !== undefined) extraMatch.count.$lte = Number(maxCount);
+      }
+      return await this._fetchIncidentLogs({
+        req,
+        res,
+        incidentType: "countPersons",
+        extraMatch,
+      });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch person count logs", 500));
+    }
+  }
+
   async getLineCrossingLogs(req, res, next) {
     try {
       const { minAtoB, maxAtoB, minBtoA, maxBtoA } = req.query;
@@ -2527,6 +2604,393 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch line crossing logs", 500));
+    }
+  }
+
+  async getDeskAbsenceLogs(req, res, next) {
+    try {
+      const data = req?.verified?.userData;
+      if (!data?.user_id) {
+        return res.send(
+          Response.userFailResp("User authentication failed.", "Unauthorized"),
+        );
+      }
+
+      const {
+        skip = 0,
+        limit = 10,
+        startDate,
+        endDate,
+        nvrId,
+        nvrIds,
+        channelId,
+        channelIds,
+        zoneNames,
+      } = req.body;
+
+      const toArray = (v) =>
+        v ? v.split(",").map((x) => x.trim()).filter(Boolean) : [];
+
+      // Every desk-absence detection is stored as its own document, so the
+      // graph must collect the points across all of a camera's documents
+      // (within the date range) and merge them into a single time-series.
+      const matchStage = {
+        userId: data.user_id.toString(),
+        incidentType: "deskAbsence",
+      };
+
+      if (startDate && endDate) {
+        matchStage.timeOfIncident = {
+          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+        };
+      }
+
+      const nvrFilter = nvrId ? [nvrId] : toArray(nvrIds);
+      if (nvrFilter.length) {
+        matchStage.nvrId = {
+          $in: nvrFilter.map((id) => new mongoose.Types.ObjectId(id)),
+        };
+      }
+
+      const channelFilter = channelId ? [channelId] : toArray(channelIds);
+      const authorizedChannels = req?.verified?.authorizedChannel?.channels;
+      let effectiveChannelIds = null;
+      if (channelFilter.length && Array.isArray(authorizedChannels)) {
+        const authSet = new Set(authorizedChannels.map((c) => c.toString()));
+        effectiveChannelIds = channelFilter.filter((c) => authSet.has(c));
+      } else if (channelFilter.length) {
+        effectiveChannelIds = channelFilter;
+      } else if (Array.isArray(authorizedChannels)) {
+        effectiveChannelIds = authorizedChannels.map((c) => c.toString());
+      }
+      if (Array.isArray(effectiveChannelIds)) {
+        matchStage.channelId = {
+          $in: effectiveChannelIds.map((id) => new mongoose.Types.ObjectId(id)),
+        };
+      }
+
+      // Optional zoneNames filter applied per time-series point.
+      const pointMatch = {};
+      const zoneFilter = Array.isArray(zoneNames) ? zoneNames.filter(Boolean) : [];
+      if (zoneFilter.length) {
+        pointMatch["point.zoneName"] = { $in: zoneFilter };
+      }
+
+      const basePipeline = [
+        { $match: matchStage },
+        // Each document carries its own timeSeries entries; flatten them so
+        // points from every document of a camera can be regrouped together.
+        { $unwind: { path: "$timeSeries", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            channelId: 1,
+            nvrId: 1,
+            point: {
+              timestamp: {
+                $ifNull: ["$timeSeries.timestamp", "$timeOfIncident"],
+              },
+              personCount: "$timeSeries.personCount",
+              zoneName: "$timeSeries.zoneName",
+              personPresent: {
+                $ifNull: ["$timeSeries.personPresent", "$personPresent"],
+              },
+            },
+          },
+        },
+        ...(Object.keys(pointMatch).length ? [{ $match: pointMatch }] : []),
+        { $sort: { "point.timestamp": 1 } },
+        {
+          $group: {
+            _id: "$channelId",
+            nvrId: { $first: "$nvrId" },
+            timeSeries: { $push: "$point" },
+          },
+        },
+        {
+          $lookup: {
+            from: "nvrs",
+            localField: "nvrId",
+            foreignField: "_id",
+            pipeline: [{ $project: { _id: 1, nvrName: 1 } }],
+            as: "nvrData",
+          },
+        },
+        { $unwind: { path: "$nvrData", preserveNullAndEmptyArrays: true } },
+        {
+          $lookup: {
+            from: "channels",
+            localField: "_id",
+            foreignField: "_id",
+            pipeline: [{ $project: { _id: 1, name: 1, customName: 1 } }],
+            as: "channelData",
+          },
+        },
+        { $unwind: { path: "$channelData", preserveNullAndEmptyArrays: true } },
+        { $sort: { "channelData.name": 1 } },
+      ];
+
+      const [countResult, logs] = await Promise.all([
+        Incident.aggregate([...basePipeline, { $count: "totalCount" }]),
+        Incident.aggregate([
+          ...basePipeline,
+          { $skip: parseInt(skip) },
+          { $limit: parseInt(limit) },
+        ]),
+      ]);
+
+      return res.status(200).json(
+        Response.userSuccessResp("deskAbsence logs fetched successfully", {
+          totalCount: countResult[0]?.totalCount || 0,
+          data: logs,
+        }),
+      );
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch desk absence logs", 500));
+    }
+  }
+
+  async getDeskAbsenceZoneNames(req, res, next) {
+    try {
+      const data = req?.verified?.userData;
+      if (!data?.user_id) {
+        return res.send(
+          Response.userFailResp("User authentication failed.", "Unauthorized"),
+        );
+      }
+
+      const {
+        startDate,
+        endDate,
+        nvrId,
+        nvrIds,
+        channelId,
+        channelIds,
+      } = req.query;
+
+      const toArray = (v) =>
+        v ? v.split(",").map((x) => x.trim()).filter(Boolean) : [];
+
+      const matchStage = {
+        userId: data.user_id.toString(),
+        incidentType: "deskAbsence",
+      };
+
+      if (startDate && endDate) {
+        matchStage.timeOfIncident = {
+          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+        };
+      }
+
+      const nvrFilter = nvrId ? [nvrId] : toArray(nvrIds);
+      if (nvrFilter.length) {
+        matchStage.nvrId = {
+          $in: nvrFilter.map((id) => new mongoose.Types.ObjectId(id)),
+        };
+      }
+
+      const channelFilter = channelId ? [channelId] : toArray(channelIds);
+      const authorizedChannels = req?.verified?.authorizedChannel?.channels;
+      let effectiveChannelIds = null;
+      if (channelFilter.length && Array.isArray(authorizedChannels)) {
+        const authSet = new Set(authorizedChannels.map((c) => c.toString()));
+        effectiveChannelIds = channelFilter.filter((c) => authSet.has(c));
+      } else if (channelFilter.length) {
+        effectiveChannelIds = channelFilter;
+      } else if (Array.isArray(authorizedChannels)) {
+        effectiveChannelIds = authorizedChannels.map((c) => c.toString());
+      }
+      if (Array.isArray(effectiveChannelIds)) {
+        matchStage.channelId = {
+          $in: effectiveChannelIds.map((id) => new mongoose.Types.ObjectId(id)),
+        };
+      }
+
+      const zoneNames = await Incident.aggregate([
+        { $match: matchStage },
+        { $unwind: { path: "$timeSeries", preserveNullAndEmptyArrays: true } },
+        {
+          $group: {
+            _id: "$timeSeries.zoneName",
+          },
+        },
+        { $match: { _id: { $ne: null } } },
+        { $sort: { _id: 1 } },
+      ]);
+
+      return res.status(200).json(
+        Response.userSuccessResp("Zone names fetched successfully", {
+          zoneNames: zoneNames.map((z) => z._id),
+        }),
+      );
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch zone names", 500));
+    }
+  }
+
+  async deleteIncidentsByAdminAndDateRange(req, res, next) {
+    try {
+      const { error, value } = incidentsValidate.deleteIncidentsByAdminAndDateRange(req.body);
+      if (error) {
+        return res.status(400).json(
+          Response.validationFailResp("Validation failed", error.message)
+        );
+      }
+
+      const { startDate, endDate } = value;
+      const userId = req?.verified?.userData?.user_id;
+
+      if (!userId) {
+        return res.status(401).json(
+          Response.validationFailResp(
+            "User not authenticated",
+            "Authentication required"
+          )
+        );
+      }
+
+      // Validate date range if provided
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        if (start > end) {
+          return res.status(400).json(
+            Response.validationFailResp(
+              "Invalid date range",
+              "startDate must be before endDate"
+            )
+          );
+        }
+      }
+
+      // Get count of incidents that will be deleted (for user awareness)
+      const query = { userId };
+      if (startDate || endDate) {
+        query.timeOfIncident = {};
+        if (startDate) {
+          query.timeOfIncident.$gte = new Date(startDate);
+        }
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          query.timeOfIncident.$lte = end;
+        }
+      }
+
+      const incidentCount = await Incident.countDocuments(query);
+
+      if (incidentCount === 0) {
+        return res.status(400).json(
+          Response.validationFailResp(
+            "No incidents found",
+            "No incidents match the specified criteria"
+          )
+        );
+      }
+
+      // Queue the deletion job
+      const job = await deletionQueue.add(
+        "delete-incidents",
+        {
+          adminId: userId,
+          startDate,
+          endDate,
+        },
+        {
+          removeOnComplete: { age: 3600 }, // Keep completed job for 1 hour
+          removeOnFail: { age: 86400 }, // Keep failed job for 24 hours
+          attempts: 3,
+          backoff: {
+            type: "exponential",
+            delay: 2000,
+          },
+        }
+      );
+
+      logger.info(
+        `Deletion job ${job.id} queued for admin ${userId}. Will delete ${incidentCount} incidents.`
+      );
+
+      return res.status(202).json(
+        Response.userSuccessResp(
+          "Deletion job queued successfully",
+          {
+            jobId: job.id,
+            incidentCount,
+            startDate: startDate || null,
+            endDate: endDate || null,
+            message: `${incidentCount} incident(s) will be deleted. You will receive a confirmation email when the deletion is complete.`,
+          }
+        )
+      );
+    } catch (error) {
+      logger.error("Error queuing deletion job:", error);
+      next(new AppError("Failed to queue deletion job", 500));
+    }
+  }
+
+  async getDeletionJobStatus(req, res, next) {
+    try {
+      const { jobId } = req.params;
+      const userId = req?.verified?.userData?.user_id;
+
+      if (!userId || !jobId) {
+        return res.status(400).json(
+          Response.validationFailResp(
+            "Missing required parameters",
+            "jobId and authentication required"
+          )
+        );
+      }
+
+      const job = await deletionQueue.getJob(jobId);
+
+      if (!job) {
+        return res.status(404).json(
+          Response.notFoundResp("Deletion job not found")
+        );
+      }
+
+      const progress = job.progress();
+      const state = await job.getState();
+      const attempts = job.attemptsMade;
+      const failedReason = job.failedReason;
+
+      let status = "unknown";
+      if (state === "completed") {
+        status = "completed";
+      } else if (state === "failed") {
+        status = "failed";
+      } else if (state === "active") {
+        status = "processing";
+      } else if (state === "waiting" || state === "delayed") {
+        status = "queued";
+      }
+
+      const jobData = job.data;
+      const jobResult =
+        state === "completed" ? await job.returnvalue : null;
+
+      return res.status(200).json(
+        Response.userSuccessResp("Job status retrieved successfully", {
+          jobId,
+          status,
+          progress: typeof progress === "number" ? progress : 0,
+          incidentCount: jobData.incidentCount,
+          startDate: jobData.startDate || null,
+          endDate: jobData.endDate || null,
+          attempts,
+          failedReason: failedReason || null,
+          result: jobResult || null,
+        })
+      );
+    } catch (error) {
+      logger.error("Error retrieving job status:", error);
+      next(new AppError("Failed to retrieve job status", 500));
     }
   }
 }

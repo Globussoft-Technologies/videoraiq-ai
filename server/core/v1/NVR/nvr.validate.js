@@ -49,8 +49,11 @@ class NVRValidation {
   }
   registerNVR(data) {
     return Joi.object({
-      ip: Joi.string()
-        .ip({ version: ["ipv4"], cidr: "forbidden" })
+      ip: Joi.alternatives()
+        .try(
+          Joi.string().ip({ version: ["ipv4"], cidr: "forbidden" }),
+          Joi.string().hostname()
+        )
         .required(),
       port: Joi.number().port().required(),
       rtspPort: Joi.number().port().required(),
@@ -113,10 +116,10 @@ class NVRValidation {
         "any.required": "nvrName is required",
       }),
       brand: Joi.string()
-        .valid("hikvision", "cpplus", "dahua", "prama")
+        .valid("hikvision", "cpplus", "dahua", "prama", "tiandy", "securus")
         .required()
         .messages({
-          "any.only": "brand must be one of hikvision, cpplus, dahua, prama",
+          "any.only": "brand must be one of hikvision, cpplus, dahua, prama, tiandy",
           "any.required": "brand is required",
         }),
       deviceName: Joi.string().allow("").optional(),
@@ -166,7 +169,7 @@ class NVRValidation {
     return Joi.object({
       nvrName: Joi.string().optional(),
       brand: Joi.string()
-        .valid("hikvision", "cpplus", "dahua", "prama")
+        .valid("hikvision", "cpplus", "dahua", "prama", "tiandy", "securus")
         .optional(),
       deviceName: Joi.string().allow("").optional(),
       location: Joi.string().allow("").optional(),

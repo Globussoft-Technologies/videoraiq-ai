@@ -28,7 +28,7 @@ const adminSchema = new mongoose.Schema({
     required: true,
     unique: true,
   },
-  //add emp emails and their orgId in an array of objects 
+  //add emp emails and their orgId in an array of objects
   empData: {
     type: Array,
     default: [],
@@ -38,6 +38,14 @@ const adminSchema = new mongoose.Schema({
     }
   },
   logsSound: { type: Boolean, default: false },
+  // Per-admin detection config. Key = settingType, value = custom display name.
+  // If a key is present, that detection is allowed for this admin.
+  // Empty object = all detections allowed with default names.
+  detectionConfig: {
+    type: Map,
+    of: String,
+    default: {},
+  }
 }, {
   timestamps: true,
 });

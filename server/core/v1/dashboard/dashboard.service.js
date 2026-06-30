@@ -388,6 +388,10 @@ class DashboardService {
                 orConditions.push(ppeMatch);
               }
 
+              //Default if incidentTypeFilter is not provided
+              if(incidentTypeFilter?.length){
+                userMatch.incidentType = {$nin:["countPersons","lineCrossing"],$in:incidentTypeFilter}
+              }
 
               /* ---------------------------------------
                 Apply OR logic

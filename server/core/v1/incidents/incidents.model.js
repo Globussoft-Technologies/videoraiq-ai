@@ -356,6 +356,17 @@ const VehicleObstructionIncident = Incident.discriminator('vehicleObstruction', 
 const DeskAbsenceSchema = new Schema({
   personPresent: { type: Boolean },
   triggerNotification: { type: Boolean, default: true },
+  timeSeries: [
+    {
+      timestamp: {
+        type: Date,
+        default: Date.now,
+      },
+      personCount: { type: Number },
+      zoneName: { type: String },
+      personPresent: { type: Boolean },
+    }
+  ],
 });
 const DeskAbsenceIncident = Incident.discriminator(
   "deskAbsence",
@@ -425,6 +436,79 @@ const loiteringDetectionSchema = new Schema({
 const LoiteringDetectionIncident = Incident.discriminator('loiteringDetection', loiteringDetectionSchema);
 
 
+const TableOccupancyDetectionSchema = new Schema({
+  count: {type:Number,default:0},
+  triggerNotification: { type: Boolean, default: true },
+});
+const TableOccupancyDetectionIncident = Incident.discriminator('tableOccupancyDetection', TableOccupancyDetectionSchema);
+
+
+const FoodServicePPEItemSchema = new Schema(
+  {
+    yes: { type: Number, default: 0 },
+    no: { type: Number, default: 0 }
+  },
+  { _id: false }
+);
+const FoodServicePPESchema = new Schema({
+  ppe: {
+        gloves: {
+          type: FoodServicePPEItemSchema,
+          default: () => ({})
+        },
+        apron: {
+          type: FoodServicePPEItemSchema,
+          default: () => ({})
+        },
+        vest: {
+          type: FoodServicePPEItemSchema,
+          default: () => ({})
+        },
+        hairnet: {
+          type: FoodServicePPEItemSchema,
+          default: () => ({})
+        },
+        mask: {
+          type: FoodServicePPEItemSchema,
+          default: () => ({})
+        },
+  },
+  croudCount: {type:Number},
+  triggerNotification: { type: Boolean, default: true },
+  timeSeries: [
+    {
+      timestamp: {
+        type: Date,
+        default: Date.now,
+      },
+      croudCount: {type:Number},
+      ppe: {
+        gloves: {
+          type: FoodServicePPEItemSchema,
+          default: () => ({})
+        },
+        apron: {
+          type: FoodServicePPEItemSchema,
+          default: () => ({})
+        },
+        vest: {
+          type: FoodServicePPEItemSchema,
+          default: () => ({})
+        },
+        hairnet: {
+          type: FoodServicePPEItemSchema,
+          default: () => ({})
+        },
+        mask: {
+          type: FoodServicePPEItemSchema,
+          default: () => ({})
+        },
+      }
+    }
+  ]
+});
+const FoodServicePPEDetectionIncident = Incident.discriminator('foodServicePPEDetection', FoodServicePPESchema);
+
 export  {
   Incident,
   CountPersonIncident,
@@ -448,5 +532,7 @@ export  {
   CrusherDetectionIncident,
   VehicleTypeDetectionIncident,
   WaterSpillageDetectionIncident,
-  LoiteringDetectionIncident
+  LoiteringDetectionIncident,
+  TableOccupancyDetectionIncident,
+  FoodServicePPEDetectionIncident
 };

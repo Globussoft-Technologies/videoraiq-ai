@@ -11,6 +11,7 @@ import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 import moment from "moment-timezone";
 import config from "config";
+import MailResponse from "../../../mailService/mail.helper.js";
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
 const ImageView = config.get("ImageView");
 
@@ -154,6 +155,44 @@ class AttendanceService {
         `attendanceLog_${user?._id}`,
         socketPayload
       );
+
+      // Best-effort: notify the admin via email that a person was detected.
+      // Fire-and-forget — failures here must not affect the attendance flow.
+      if (user?.email) {
+        const employeeName = [
+          populatedAttendance?.employee?.firstName,
+          populatedAttendance?.employee?.lastName,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+
+        const mailData = {
+          _id: populatedAttendance?._id,
+          incidentName: "Person Detected",
+          timeOfIncident: event?.timestamp,
+          zone: channel?.name || "N/A",
+          severity: "low",
+          description: `${employeeName || "A person"} detected at ${
+            channel?.name || "camera"
+          } (${cameraType}).`,
+          Image: Array.isArray(images) ? images[0] : images,
+          count: 1,
+        };
+
+        MailResponse.personDetected(
+          user.email,
+          mailData,
+          "countPersons",
+          channel?.nvrId,
+          channel
+        ).catch((err) =>
+          logger.error(
+            "personDetected email (attendance) error:",
+            err?.message || err
+          )
+        );
+      }
 
       return res
         .status(201)

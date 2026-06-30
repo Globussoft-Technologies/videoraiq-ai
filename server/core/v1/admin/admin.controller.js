@@ -201,6 +201,48 @@ class AdminController {
     return await adminService.getDeletionProgress(req, res, next);
   }
 
+  async getAllowedDetections(req, res, next) {
+    /* #swagger.tags = ['Admin']
+    #swagger.description = 'Get allowed detection types for the authenticated admin'
+    #swagger.responses[200] = { description: 'Allowed detections fetched successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return await adminService.getAllowedDetections(req, res, next);
+  }
+
+  async updateAllowedDetections(req, res, next) {
+    /* #swagger.tags = ['Admin']
+    #swagger.description = 'Set allowed detections and optional custom display names for a specific admin. Pass empty object {} to allow all with default names.'
+    #swagger.parameters['data'] = {
+        in: 'body',
+        required: true,
+        schema: {
+          targetAdminId: 'string',
+          detectionConfig: {
+            personalProtectiveEquipmentSettings: 'Personal Protective Equipment Detection',
+            crowdDetectionSettings: 'Crowd Detection',
+            doorDetectionSettings: 'Door Detection',
+            lightDetectionSettings: 'Light Detection',
+            lineCrossingSettings: 'Line Crossing Detection',
+            vehicleDetectionSettings: 'ANPR Detection',
+            vehicleObstructionSettings: 'Vehicle & Obstruction Detection',
+            deskAbsenceSettings: 'Desk Absence Detection',
+            guardAbsenceSettings: 'Guard Absence Detection',
+            countVehiclesSettings: 'Count Vehicles Detection',
+            unauthorizedAccessSettings: 'Intrusion Detection',
+            vehicleTypeDetectionSettings: 'Vehicle Type Detection',
+            loiteringDetectionSettings: 'Loitering Detection',
+            tableOccupancyDetectionSettings: 'Table Occupancy Detection',
+            foodServicePPEDetection: 'Food Service PPE Detection'
+          }
+        }
+    }
+    #swagger.responses[200] = { description: 'Allowed detections updated successfully' }
+    #swagger.responses[400] = { description: 'Validation error' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return await adminService.updateAllowedDetections(req, res, next);
+  }
   async updateLogsSound(req, res, next) {
     /* #swagger.tags = ['Admin']
     #swagger.description = 'Update logsSound preferences for Admin or User'
