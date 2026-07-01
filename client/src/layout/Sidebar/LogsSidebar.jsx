@@ -37,7 +37,7 @@ const defaultClientItems = [
   { label: 'Tagged Users', icon: Tags, route: '/logs/tagged-users', permissionKey: 'accessLogs' },
   { label: 'Person Count Logs', icon: UserCheck, route: '/logs/person-count', permissionKey: 'accessLogs' },
   { label: 'Desk Absence Logs', icon: Armchair, route: '/logs/desk-absence', permissionKey: 'accessLogs' },
-  // { label: 'ANPR Logs', icon: null, img: ANPRIcon, route: '/logs/ANPR', permissionKey: 'ANPRLogs' },
+  { label: 'ANPR Logs', icon: null, img: ANPRIcon, route: '/logs/ANPR', permissionKey: 'ANPRLogs' },
   // { label: 'Vehcile  Logs', icon: Activity, route: '/logs/track', permissionKey: 'trackLogs' },
   // { label: 'Guard Logs', icon: Activity, route: '/logs/guard', permissionKey: 'guardLogs' },
   // { label: 'Track Logs', icon: Activity, route: '/logs/desk', permissionKey: 'deskLogs' },
