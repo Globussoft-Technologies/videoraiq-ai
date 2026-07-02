@@ -1020,14 +1020,26 @@ class IncidentsService {
         }
       }
 
-      // Use updateOne + findById to ensure discriminator fields update correctly
-      await Incident.updateOne(
-        { _id: incidentId },
-        { $set: updates },
-        { runValidators: true }
-      );
+      // Find the incident first to determine its discriminator type
+      const incidentDoc = await Incident.findById(incidentId);
+      if (!incidentDoc) {
+        return res
+          .status(404)
+          .json(Response.notFoundResp("Incident not found"));
+      }
 
-      const updatedIncident = await Incident.findById(incidentId);
+      // Fields like vehicleNumber, licensePlate, etc. live on the discriminator
+      // schema (e.g. VehicleDetectionSchema), NOT on the base Incident schema.
+      // Updating through the base Incident model causes Mongoose to strip those
+      // paths (strict mode). Use the discriminator model that matches the
+      // incident's incidentType so all child-schema fields are updatable.
+      const UpdateModel = modelMap[incidentDoc.incidentType] || Incident;
+
+      const updatedIncident = await UpdateModel.findByIdAndUpdate(
+        incidentId,
+        { $set: updates },
+        { new: true, runValidators: true }
+      );
 
       if (!updatedIncident) {
         return res
