@@ -3,8 +3,15 @@ import { useOutletContext } from 'react-router-dom';
 import { Search, X, Maximize2, Minimize2 } from 'lucide-react';
 import { AsyncBoundary } from './States';
 import CameraStream from './CameraStream';
+import MultiSelect from './MultiSelect';
 import { useApi } from '../hooks/useApi';
-import { getChannels, getLocations } from '../helpers/monitoring';
+import { getChannels, getLocations, getNVRs, getDepartments } from '../helpers/monitoring';
+
+/* Camera-type maps to the channel `checkType` field on the backend. */
+const CAM_TYPE_OPTIONS = [
+  { id: 'checkin', label: 'Check In' },
+  { id: 'checkout', label: 'Check Out' },
+];
 
 /* ── Grid size configs (skip 1×1 in the toggle bar per design) ─────────── */
 const SIZES = [
@@ -54,16 +61,63 @@ export default function CameraGrid({ defaultCols = 3, hideSingleUp = false }) {
   const [sizeIdx,    setSizeIdx]    = useState(defaultIdx < 0 ? 2 : defaultIdx);
   const [page,       setPage]       = useState(0);
   const [search,     setSearch]     = useState('');
-  const [locFilter,    setLocFilter]    = useState('');
-  const [statusFilter, setStatusFilter] = useState(''); // '' | 'live' | 'offline'
   const [fullscreen, setFullscreen] = useState(null);
   const [isPageFS,   setIsPageFS]   = useState(false); // browser fullscreen
   const pageRef = useRef(null);
 
+  /* ── Multi-select filters (all arrays of ids/values) ────────────── */
+  const [selLoc,  setSelLoc]  = useState([]); // location names
+  const [selNvr,  setSelNvr]  = useState([]); // nvr ids
+  const [selCam,  setSelCam]  = useState([]); // channel ids
+  const [selDept, setSelDept] = useState([]); // department ids
+  const [selType, setSelType] = useState([]); // checkin | checkout
+
   const size     = SIZES[sizeIdx] || SIZES[2];
-  const channels = useApi(() => getChannels({ location: ctxLoc || locFilter, limit: 200 }), [ctxLoc, locFilter]);
+
+  /* Location/NVR/Department/CamType are applied server-side; camera is
+     applied client-side so its own selection never shrinks the options. */
+  const effLoc = ctxLoc ? [ctxLoc] : selLoc;
+  const channels = useApi(
+    () => getChannels({ location: effLoc, nvrId: selNvr, department: selDept, camType: selType, limit: 200 }),
+    [ctxLoc, selLoc.join(','), selNvr.join(','), selDept.join(','), selType.join(',')]
+  );
+
   const locsApi  = useApi(() => getLocations(0, 100), []);
+  const nvrsApi  = useApi(() => getNVRs(), []);
+  const deptApi  = useApi(() => getDepartments({ limit: 200 }), []);
   const locations = Array.isArray(locsApi.data) ? locsApi.data : [];
+
+  /* Filter option lists in MultiSelect's { id, label } shape */
+  const locOptions = useMemo(
+    () => locations.map((l) => { const name = l.locationName || l.name || l; return { id: name, label: name }; }),
+    [locations]
+  );
+  const nvrOptions = useMemo(
+    () => (Array.isArray(nvrsApi.data) ? nvrsApi.data : []).map((n) => ({ id: n._id, label: n.nvrName })),
+    [nvrsApi.data]
+  );
+  const deptOptions = useMemo(
+    () => (Array.isArray(deptApi.data) ? deptApi.data : []).map((d) => ({ id: d._id, label: d.departmentName })),
+    [deptApi.data]
+  );
+  const cameraOptions = useMemo(
+    () => (Array.isArray(channels.data) ? channels.data : []).map((c) => ({
+      id: c._id || c.channelId,
+      label: c.customName || c.name || c.channelId,
+    })),
+    [channels.data]
+  );
+
+  /* wrap setters so any filter change resets pagination to the first page */
+  const onFilter = (setter) => (v) => { setter(v); setPage(0); };
+
+  /* Clear-all: reset every filter (and search) in one click */
+  const hasActiveFilters =
+    selLoc.length || selNvr.length || selCam.length || selDept.length || selType.length || search.trim();
+  const clearFilters = () => {
+    setSelLoc([]); setSelNvr([]); setSelCam([]); setSelDept([]); setSelType([]);
+    setSearch(''); setPage(0);
+  };
 
   /* track which channels are live (updated by CameraStream via onLiveChange) */
   const [liveSet, setLiveSet] = useState(() => new Set());
@@ -83,10 +137,9 @@ export default function CameraGrid({ defaultCols = 3, hideSingleUp = false }) {
       const q = search.toLowerCase();
       arr = arr.filter(c => `${c.customName || ''} ${c.name || ''} ${c.location || ''}`.toLowerCase().includes(q));
     }
-    if (statusFilter === 'live')    arr = arr.filter(c => liveSet.has(c._id || c.channelId));
-    if (statusFilter === 'offline') arr = arr.filter(c => !liveSet.has(c._id || c.channelId));
+    if (selCam.length) arr = arr.filter(c => selCam.includes(c._id || c.channelId));
     return arr;
-  }, [channels.data, search, statusFilter, liveSet]);
+  }, [channels.data, search, selCam]);
 
   const pages    = Math.max(1, Math.ceil(list.length / size.perPage));
   const safePage = Math.min(page, pages - 1);
@@ -108,16 +161,6 @@ export default function CameraGrid({ defaultCols = 3, hideSingleUp = false }) {
     document.addEventListener('fullscreenchange', h);
     return () => document.removeEventListener('fullscreenchange', h);
   }, []);
-
-  /* pill — uses CSS vars so it works in both themes */
-  const pill = (active) => ({
-    display: 'flex', alignItems: 'center', gap: 6,
-    height: 34, padding: '0 16px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 500,
-    background: active ? 'var(--bg3)' : 'var(--bg2)',
-    color: active ? 'var(--tx)' : 'var(--tx2)',
-    border: `1px solid ${active ? 'var(--bd2)' : 'var(--bd)'}`,
-    userSelect: 'none', transition: 'all .15s',
-  });
 
   return (
     <div
@@ -170,41 +213,86 @@ export default function CameraGrid({ defaultCols = 3, hideSingleUp = false }) {
           })}
         </div>
 
-        {/* Location filter */}
-        <div style={{ position: 'relative' }}>
-          <select
-            value={locFilter}
-            onChange={e => { setLocFilter(e.target.value); setPage(0); }}
-            style={{ ...pill(!!locFilter), paddingRight: 28, appearance: 'none', cursor: 'pointer' }}
-          >
-            <option value="">All Locations</option>
-            {locations.map((l, i) => {
-              const name = l.locationName || l.name || l;
-              return <option key={i} value={name}>{name}</option>;
-            })}
-          </select>
-          <svg style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+        {/* Search (placed right after the grid toggles) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, height: 40, padding: '0 11px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', minWidth: 180 }}>
+          <Search size={13} style={{ color: 'var(--ph)', flexShrink: 0 }} />
+          <input
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(0); }}
+            placeholder="Search cameras…"
+            className="vq-ph-hl"
+            style={{ flex: 1, background: 'transparent', border: 0, outline: 'none', color: 'var(--tx)', fontSize: 12 }}
+          />
         </div>
 
-        {/* Status filter */}
-        <div style={{ position: 'relative' }}>
-          <select
-            value={statusFilter}
-            onChange={e => { setStatusFilter(e.target.value); setPage(0); }}
-            style={{ ...pill(!!statusFilter), paddingRight: 28, appearance: 'none', cursor: 'pointer' }}
-          >
-            <option value="">All Status</option>
-            <option value="live">Live</option>
-            <option value="offline">Offline</option>
-          </select>
-          <svg style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
-        </div>
+        {/* Multi-select filters (Location / NVR / Cameras / Department / Camera Type) */}
+        {!ctxLoc && (
+          <MultiSelect
+            options={locOptions}
+            value={selLoc}
+            onChange={onFilter(setSelLoc)}
+            placeholder="Select Location"
+            searchPlaceholder="Search Locations..."
+            className="w-40"
+            maxHeight="max-h-48"
+            msg="No Location Found"
+          />
+        )}
+        <MultiSelect
+          options={nvrOptions}
+          value={selNvr}
+          onChange={onFilter(setSelNvr)}
+          placeholder="Select NVR"
+          searchPlaceholder="Search NVRs..."
+          className="w-40"
+          maxHeight="max-h-48"
+          msg="No NVR Found"
+        />
+        <MultiSelect
+          options={cameraOptions}
+          value={selCam}
+          onChange={onFilter(setSelCam)}
+          placeholder="Select Cameras"
+          searchPlaceholder="Search Cameras..."
+          className="w-40"
+          maxHeight="max-h-48"
+          msg="No Camera Found"
+        />
+        <MultiSelect
+          options={deptOptions}
+          value={selDept}
+          onChange={onFilter(setSelDept)}
+          placeholder="Select Department"
+          searchPlaceholder="Search Departments..."
+          className="w-40"
+          maxHeight="max-h-48"
+          msg="No Department Found"
+        />
+        <MultiSelect
+          options={CAM_TYPE_OPTIONS}
+          value={selType}
+          onChange={onFilter(setSelType)}
+          placeholder="Select Camera Type"
+          searchPlaceholder="Search Camera Type..."
+          className="w-40"
+          maxHeight="max-h-48"
+          msg="No Type Found"
+        />
 
-        {/* All Detections */}
-        <div onClick={() => {}} style={pill(false)}>All Detections</div>
+        {/* Clear-all filters — only when a filter is active */}
+        {hasActiveFilters && (
+          <button
+            onClick={clearFilters}
+            title="Clear all filters"
+            style={{ display: 'flex', alignItems: 'center', gap: 5, height: 40, padding: '0 14px', borderRadius: 8, background: 'var(--brand)', border: '1px solid var(--brand)', cursor: 'pointer', color: '#fff', fontSize: 12.5, fontWeight: 600 }}
+          >
+            <X size={13} />
+            Clear
+          </button>
+        )}
 
         {/* Camera count */}
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)', marginLeft: 4 }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, color: 'var(--ph)', marginLeft: 4 }}>
           Showing {visible.length} of {list.length} cameras
         </span>
 
@@ -217,17 +305,6 @@ export default function CameraGrid({ defaultCols = 3, hideSingleUp = false }) {
             {activeCount} active detection{activeCount !== 1 ? 's' : ''}
           </div>
         )}
-
-        {/* Search */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, height: 34, padding: '0 11px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', minWidth: 180 }}>
-          <Search size={13} style={{ color: 'var(--tx3)', flexShrink: 0 }} />
-          <input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(0); }}
-            placeholder="Search cameras…"
-            style={{ flex: 1, background: 'transparent', border: 0, outline: 'none', color: 'var(--tx)', fontSize: 12 }}
-          />
-        </div>
 
         {/* Fullscreen page toggle */}
         <button

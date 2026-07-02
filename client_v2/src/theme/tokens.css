@@ -42,6 +42,8 @@
   /* Log-pages brand accent: brighter in dark so it stays legible. */
   --brand: #0094e2;
   --brand-hover: #33abed;
+  /* Filter/search placeholder highlight — slate tone in dark mode. */
+  --ph: #98a2bd;
 }
 
 [data-vq-theme='light'] {
@@ -67,6 +69,8 @@
   /* Log-pages brand accent: the original navy in light mode. */
   --brand: #07486A;
   --brand-hover: #063a55;
+  /* Filter/search placeholder highlight — slate tone in light mode. */
+  --ph: #52607c;
 }
 
 /* ---- Base element styling scoped to the V2 root ---- */
@@ -87,6 +91,11 @@
 .vq-root input::placeholder,
 .vq-root textarea::placeholder {
   color: var(--tx3);
+}
+/* Highlighted placeholder (e.g. Live Wall search) — theme-aware accent. */
+.vq-root input.vq-ph-hl::placeholder {
+  color: var(--ph);
+  opacity: 1;
 }
 .vq-root select {
   -webkit-appearance: none;
