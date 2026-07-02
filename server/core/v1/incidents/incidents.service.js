@@ -1020,14 +1020,14 @@ class IncidentsService {
         }
       }
 
-      const updatedIncident = await Incident.findByIdAndUpdate(
-        incidentId,
+      // Use updateOne + findById to ensure discriminator fields update correctly
+      await Incident.updateOne(
+        { _id: incidentId },
         { $set: updates },
-        {
-          new: true,
-          runValidators: true,
-        },
+        { runValidators: true }
       );
+
+      const updatedIncident = await Incident.findById(incidentId);
 
       if (!updatedIncident) {
         return res
