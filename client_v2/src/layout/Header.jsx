@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Search, MapPin, Bell, Sun, Moon, ChevronDown } from 'lucide-react';
+import { Search, MapPin, Bell, Sun, Moon, ChevronDown, Volume2, VolumeX } from 'lucide-react';
 import { useTheme } from '../theme/ThemeContext';
 import { useClock } from '../hooks/useClock';
+import { useAttendanceSocket } from '../context/AttendanceSocketContext';
 
 const iconBtn = {
   width: 36,
@@ -22,6 +23,7 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
   const [siteOpen, setSiteOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const { isMuted, toggleMute } = useAttendanceSocket() || {};
 
   const themeBtn = (active) => ({
     width: 30,
@@ -144,6 +146,23 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
           <Moon size={15} strokeWidth={1.8} />
         </div>
       </div>
+
+      {/* Audio alarm mute toggle */}
+      {toggleMute && (
+        <button
+          type="button"
+          onClick={toggleMute}
+          aria-label={isMuted ? 'Unmute detection audio' : 'Mute detection audio'}
+          title={isMuted ? 'Unmute detection audio' : 'Mute detection audio'}
+          style={iconBtn}
+        >
+          {isMuted ? (
+            <VolumeX size={17} strokeWidth={1.7} style={{ color: 'var(--tx2)' }} />
+          ) : (
+            <Volume2 size={17} strokeWidth={1.7} style={{ color: 'var(--tx2)' }} />
+          )}
+        </button>
+      )}
 
       {/* Notifications */}
       <div style={{ position: 'relative', flex: '0 0 auto' }}>

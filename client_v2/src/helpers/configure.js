@@ -79,3 +79,70 @@ export const getNvrsWithChannels = async (settingType = '') => {
   });
   return unwrap(res) || [];
 };
+
+/* ── NVR connect / onboard cameras ──────────────────────────────────────── */
+export const registerAndFetchCameras = async (data) => {
+  const token = getAccessToken();
+  return axios.post(`${Api_url}/api/v1/nvr/register-and-fetch`, data, {
+    headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+  });
+};
+
+export const addSelectedCameras = async (data) => {
+  const token = getAccessToken();
+  return axios.post(`${Api_url}/api/v1/nvr/add-cameras`, data, {
+    headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+  });
+};
+
+export const updateNvrById = async (id, data) => {
+  const token = getAccessToken();
+  return axios.patch(`${Api_url}/api/v1/nvr/${id}`, data, {
+    headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+  });
+};
+
+export const deleteNvrById = async (id) => {
+  const token = getAccessToken();
+  return axios.delete(`${Api_url}/api/v1/nvr/${id}`, {
+    headers: { 'x-access-token': token },
+  });
+};
+
+export const getNvrCamerasForEdit = async (nvrId) => {
+  const token = getAccessToken();
+  const res = await axios.get(`${Api_url}/api/v1/nvr/edit/${nvrId}`, {
+    headers: { 'x-access-token': token },
+  });
+  return res?.data?.body;
+};
+
+export const removeNvrCamera = async (cameraId) => {
+  const token = getAccessToken();
+  return axios.delete(`${Api_url}/api/v1/nvr/camera/${cameraId}`, {
+    headers: { 'x-access-token': token },
+  });
+};
+
+export const refetchNvrChannels = async (nvrId) => {
+  const token = getAccessToken();
+  return axios.patch(`${Api_url}/api/v1/nvr/refetch/${nvrId}`, {}, {
+    headers: { 'x-access-token': token },
+  });
+};
+
+/* ── Camera Settings page (per-NVR channel + department assignment) ────── */
+export const getNvrChannelDetails = async (nvrId) => {
+  const token = getAccessToken();
+  const res = await axios.get(`${Api_url}/api/v1/channel/nvr/${nvrId}`, {
+    headers: { 'x-access-token': token },
+  });
+  return res?.data?.body;
+};
+
+export const updateChannel = async (channelId, data) => {
+  const token = getAccessToken();
+  return axios.put(`${Api_url}/api/v1/channel/${channelId}`, data, {
+    headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+  });
+};

@@ -6,6 +6,7 @@ import AlertsView from './page/user/Alerts/AlertsView';
 import CameraView from './page/user/CameraView/CameraView';
 import LiveWall from './page/user/LiveWall/LiveWall';
 import NVRCameras from './page/user/Configure/NVRCameras';
+import CameraSettings from './page/user/Configure/CameraSettings';
 import DetectionSettings from './page/user/Configure/DetectionSettings';
 import UsersPage from './page/user/Administer/UsersPage';
 import SystemSettings from './page/user/Administer/SystemSettings';
@@ -48,6 +49,7 @@ export const v2Routes = (
 
     {/* Configure */}
     <Route path="cameras" element={<NVRCameras />} />
+    <Route path="camera-settings" element={<CameraSettings />} />
     <Route path="engines" element={<DetectionSettings />} />
     {/* Administer */}
     <Route path="users" element={<UsersPage />} />

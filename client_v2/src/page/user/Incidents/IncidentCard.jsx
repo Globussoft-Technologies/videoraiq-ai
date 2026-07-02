@@ -147,23 +147,8 @@ function btnStyle(variant) {
   return { ...base, background: 'var(--bg2)', color: 'var(--tx2)', border: '1px solid var(--bd)' };
 }
 
-/* ── Lightbox ─────────────────────────────────────────────────────────────── */
-function Lightbox({ src, alt, onClose }) {
-  return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(4,6,12,.93)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
-      <div onClick={e => e.stopPropagation()} style={{ position: 'relative', maxWidth: '94vw', maxHeight: '90vh' }}>
-        <img src={src} alt={alt} style={{ maxWidth: '94vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 10, display: 'block' }} />
-        <button onClick={onClose} style={{ position: 'absolute', top: -14, right: -14, width: 32, height: 32, borderRadius: 8, background: 'rgba(6,8,13,.8)', border: '1px solid rgba(255,255,255,.2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-          <X size={15} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
 /* ── Card ─────────────────────────────────────────────────────────────────── */
-export default function IncidentCard({ item, onClick, onRefresh }) {
-  const [lightbox,     setLightbox]     = useState(false);
+export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox }) {
   const [reportOpen,   setReportOpen]   = useState(false);
   const [resolving,    setResolving]    = useState(false);
   const [localResolved, setLocalResolved] = useState(item.resolved || false);
@@ -177,6 +162,11 @@ export default function IncidentCard({ item, onClick, onRefresh }) {
   const imgSrc   = item.Image ? mediaUrl(item.Image) : null;
   const sevColor = SEV_COLOR[(item.severity || '').toLowerCase()] || '#6b7796';
   const reported = item.report?.status === true;
+
+  function handleCardClick() {
+    if (imgSrc) onOpenLightbox?.(item);
+    onClick?.();
+  }
 
   async function handleMarkResolved(e) {
     e.stopPropagation();
@@ -196,11 +186,10 @@ export default function IncidentCard({ item, onClick, onRefresh }) {
 
   return (
     <>
-      {lightbox && imgSrc && <Lightbox src={imgSrc} alt={det} onClose={() => setLightbox(false)} />}
       {reportOpen && <ReportModal item={item} onClose={() => setReportOpen(false)} onSuccess={onRefresh} />}
 
       <div
-        onClick={onClick}
+        onClick={handleCardClick}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         style={{
@@ -208,7 +197,7 @@ export default function IncidentCard({ item, onClick, onRefresh }) {
           border: '1px solid var(--bd)',
           borderRadius: 12,
           overflow: 'hidden',
-          cursor: onClick ? 'pointer' : 'default',
+          cursor: imgSrc || onClick ? 'pointer' : 'default',
           display: 'flex',
           flexDirection: 'column',
           boxShadow: hover ? '0 4px 16px rgba(0,0,0,.14)' : '0 1px 4px rgba(0,0,0,.06)',
@@ -314,7 +303,7 @@ export default function IncidentCard({ item, onClick, onRefresh }) {
             {/* Expand / lightbox */}
             {imgSrc && (
               <span
-                onClick={e => { e.stopPropagation(); setLightbox(true); }}
+                onClick={e => { e.stopPropagation(); handleCardClick(); }}
                 style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(0,0,0,.55)', border: '1px solid rgba(255,255,255,.25)', backdropFilter: 'blur(4px)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
                 <Maximize2 size={12} color="#fff" />

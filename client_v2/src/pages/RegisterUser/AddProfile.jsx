@@ -7,12 +7,15 @@ import {
   Mail,
   User,
   Briefcase,
+  MapPin,
   PencilLine,
   ChevronLeft,
   ChevronRight,
   FilePlus,
   LayoutGrid,
   List,
+  Check,
+  CircleAlert,
 } from 'lucide-react';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
@@ -58,11 +61,13 @@ const getInitialsPlaceholder = (firstName, lastName, size = 128) => {
 
 const StatusBadge = ({ verified }) =>
   verified ? (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--ok)]/15 text-[var(--ok)] border border-[var(--ok)]/30">
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/20 text-white backdrop-blur-sm">
+      <Check className="w-3 h-3" strokeWidth={3} />
       Verified
     </span>
   ) : (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--crit)]/15 text-[var(--crit)] border border-[var(--crit)]/30">
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/15 text-white/90 backdrop-blur-sm">
+      <CircleAlert className="w-3 h-3" strokeWidth={2.5} />
       Not Verified
     </span>
   );
@@ -72,6 +77,14 @@ const UserCard = ({ user, handleEdit, handleDelete, setSelectedUser, setIsUserMo
   const [imgIdx, setImgIdx] = useState(0);
   const pics = user.profilePics || [];
   const many = pics.length > 1;
+  const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+  const handle = (user.userName || fullName || '').toLowerCase().replace(/\s+/g, '');
+
+  const infoRows = [
+    { icon: Mail, label: 'Email', value: user.email || 'N/A' },
+    { icon: Briefcase, label: 'Department', value: user.departmentId?.departmentName || 'Default' },
+    { icon: MapPin, label: 'Location', value: user.location || 'Default' },
+  ];
 
   return (
     <div
@@ -79,61 +92,71 @@ const UserCard = ({ user, handleEdit, handleDelete, setSelectedUser, setIsUserMo
         setSelectedUser(user);
         setIsUserModalOpen(true);
       }}
-      className="bg-[var(--bg1solid)] rounded-2xl p-5 border border-[var(--bd)] flex flex-col items-center relative hover:shadow-md transition-shadow cursor-pointer h-full"
+      className="bg-[var(--bg1solid)] rounded-2xl border border-[var(--bd)] flex flex-col relative shadow-[0_4px_16px_rgba(15,23,42,0.08)] hover:shadow-[0_10px_28px_rgba(15,23,42,0.14)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer h-full overflow-hidden"
     >
-      <div className="absolute top-3 left-3 z-20">
-        <StatusBadge verified={!!user.verified} />
+      {/* Header */}
+      <div
+        className={`relative h-20 shrink-0 ${
+          user.verified
+            ? 'bg-gradient-to-r from-[var(--blue)] to-[var(--violet)]'
+            : 'bg-gradient-to-r from-[var(--tx3)] to-[var(--tx2)]'
+        }`}
+      >
+        <div className="absolute top-3 left-3 z-20">
+          <StatusBadge verified={!!user.verified} />
+        </div>
+
+        <div className="absolute top-3 right-3 flex items-center gap-1 z-30">
+          <input
+            type="checkbox"
+            checked={selectedUserIds.includes(user._id)}
+            onChange={(e) => {
+              e.stopPropagation();
+              toggleUserSelection(user._id);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="h-4 w-4 rounded accent-[var(--blue)]"
+          />
+          <button
+            title="Edit User"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEdit(user);
+            }}
+            className="text-white bg-white/15 hover:bg-white/25 p-1.5 rounded-full transition-colors cursor-pointer"
+          >
+            <PencilLine className="w-4 h-4" />
+          </button>
+          <button
+            title="Delete User"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete(user._id);
+            }}
+            className="text-white bg-white/15 hover:bg-[var(--crit)] p-1.5 rounded-full transition-colors cursor-pointer"
+          >
+            <Trash className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      <div className="absolute top-3 right-3 flex items-center gap-1 z-30">
-        <input
-          type="checkbox"
-          checked={selectedUserIds.includes(user._id)}
-          onChange={(e) => {
-            e.stopPropagation();
-            toggleUserSelection(user._id);
-          }}
-          onClick={(e) => e.stopPropagation()}
-          className="h-4 w-4 rounded accent-[var(--blue)]"
-        />
-        <button
-          title="Edit User"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleEdit(user);
-          }}
-          className="text-[var(--blue)] hover:bg-[var(--blue)]/10 p-1.5 rounded-full transition-colors cursor-pointer"
-        >
-          <PencilLine className="w-4 h-4" />
-        </button>
-        <button
-          title="Delete User"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleDelete(user._id);
-          }}
-          className="text-[var(--crit)] hover:bg-[var(--crit)]/10 p-1.5 rounded-full transition-colors cursor-pointer"
-        >
-          <Trash className="w-4 h-4" />
-        </button>
-      </div>
-
-      <div className="relative mb-4 flex items-center justify-center gap-2 w-full">
+      {/* Avatar — overlaps header/body boundary */}
+      <div className="relative -mt-10 flex items-center justify-center gap-2 px-2">
         {many && (
           <button
             onClick={(e) => {
               e.stopPropagation();
               setImgIdx((p) => (p - 1 + pics.length) % pics.length);
             }}
-            className="p-1 cursor-pointer text-[var(--tx3)] hover:text-[var(--tx)] z-30"
+            className="relative top-4 p-1 cursor-pointer rounded-full bg-[var(--bg1solid)] shadow-sm text-[var(--tx3)] hover:text-[var(--tx)] z-30"
           >
-            <ChevronLeft className="w-6 h-6" />
+            <ChevronLeft className="w-5 h-5" />
           </button>
         )}
-        <div className="w-24 h-24 md:w-28 md:h-28 rounded-full overflow-hidden shrink-0 ring-4 ring-[var(--bg2)]">
+        <div className="w-20 h-20 rounded-full overflow-hidden shrink-0 ring-4 ring-[var(--bg1solid)] shadow-md">
           <img
             src={pics.length > 0 ? `${nasUrl}/api/v1/uploads/${pics[imgIdx]}` : getInitialsPlaceholder(user.firstName, user.lastName)}
-            alt={`${user.firstName} ${user.lastName}`}
+            alt={fullName}
             className="w-full h-full object-cover"
             onError={(e) => {
               e.target.onerror = null;
@@ -147,29 +170,41 @@ const UserCard = ({ user, handleEdit, handleDelete, setSelectedUser, setIsUserMo
               e.stopPropagation();
               setImgIdx((p) => (p + 1) % pics.length);
             }}
-            className="p-1 cursor-pointer text-[var(--tx3)] hover:text-[var(--tx)] z-30"
+            className="relative top-4 p-1 cursor-pointer rounded-full bg-[var(--bg1solid)] shadow-sm text-[var(--tx3)] hover:text-[var(--tx)] z-30"
           >
-            <ChevronRight className="w-6 h-6" />
+            <ChevronRight className="w-5 h-5" />
           </button>
         )}
       </div>
 
-      <div className="w-full h-px bg-[var(--bd)] mb-5" />
+      {/* Name / handle */}
+      <div className="text-center px-4 mt-2">
+        <h3 className="text-[15px] font-semibold text-[var(--tx)] truncate" title={fullName}>
+          {fullName || 'Unnamed User'}
+        </h3>
+        <p className="text-xs text-[var(--tx3)] truncate mt-0.5">
+          {handle && <span>@{handle}</span>}
+          {handle && ' · '}
+          <span className="text-[var(--blue)] font-medium">
+            {user.departmentId?.departmentName || 'Default'}
+          </span>
+        </p>
+      </div>
 
-      <div className="w-full space-y-3.5">
-        {[
-          { icon: Mail, label: 'Email', value: user.email },
-          { icon: User, label: 'Username', value: user.userName || `${user.firstName} ${user.lastName}` },
-          { icon: Briefcase, label: 'Dept', value: user.departmentId?.departmentName || 'N/A' },
-          { icon: Briefcase, label: 'Location', value: user.location || 'N/A' },
-        ].map(({ icon: Icon, label, value }) => (
+      {/* Info section */}
+      <div className="w-full px-4 pb-4 pt-4 mt-2 space-y-2.5">
+        {infoRows.map(({ icon: Icon, label, value }) => (
           <div key={label} className="flex items-center gap-3 text-sm">
-            <Icon className="w-5 h-5 text-[var(--tx2)] shrink-0" />
-            <span className="font-semibold text-[var(--tx)] w-24 shrink-0 text-[11px] uppercase tracking-wider">
-              {label}
+            <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--blue)]/10 text-[var(--blue)] shrink-0">
+              <Icon className="w-4 h-4" />
             </span>
-            <span className="text-[var(--tx2)] truncate flex-1 text-right" title={value}>
-              {value}
+            <span className="min-w-0 flex-1">
+              <span className="block text-[10px] font-semibold uppercase tracking-wider text-[var(--tx3)]">
+                {label}
+              </span>
+              <span className="block text-[13px] font-medium text-[var(--tx)] truncate" title={value}>
+                {value}
+              </span>
             </span>
           </div>
         ))}

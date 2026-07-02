@@ -1,7 +1,6 @@
 import {
   LayoutDashboard,
   Grid2x2,
-  Video,
   TriangleAlert,
   ShieldAlert,
   BarChart3,
@@ -13,7 +12,6 @@ import {
   Tags,
   UserCheck,
   Cctv,
-  SlidersHorizontal,
   Users,
   Settings,
   MapPin,
@@ -32,7 +30,6 @@ export const NAV_GROUPS = [
     items: [
       { key: 'overview', label: 'Command Center', path: 'dashboard', icon: LayoutDashboard, end: true },
       { key: 'wall', label: 'Live Wall', path: 'live', icon: Grid2x2 },
-      { key: 'camera', label: 'Camera View', path: 'camera', icon: Video },
       { key: 'alerts', label: 'Alerts', path: 'alerts', icon: TriangleAlert, badgeKey: 'alerts' },
       { key: 'incidents', label: 'Incident Center', path: 'incidents', icon: ShieldAlert },
     ],
@@ -58,10 +55,8 @@ export const NAV_GROUPS = [
   },
   {
     label: 'CONFIGURE',
-    hidden: true,
     items: [
       { key: 'cameras', label: 'Cameras & NVRs', path: 'cameras', icon: Cctv },
-      { key: 'engines', label: 'Detections', path: 'engines', icon: SlidersHorizontal },
     ],
   },
    {

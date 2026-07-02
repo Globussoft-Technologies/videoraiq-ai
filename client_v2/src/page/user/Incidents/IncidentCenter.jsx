@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Search, Calendar, X, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
+import { Search, Calendar, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { AsyncBoundary } from '../../../components/States';
 import IncidentCard from './IncidentCard';
 import RefreshControl from '../../../components/RefreshControl';
 import { useApi } from '../../../hooks/useApi';
-import { num, detectionLabel } from '../../../lib/format';
+import { num, detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
 import { fetchIncidents, fetchIncidentStats, fetchDetectionTypes } from '../../../helpers/incidents';
 import { getLocations, getChannels } from '../../../helpers/monitoring';
 import { getNvrs } from '../../../helpers/configure';
@@ -422,7 +422,7 @@ async function fetchDepartments() {
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
   const data = res?.data?.body?.data;
-  return Array.isArray(data) ? data : data?.departments ?? [];
+  return Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
 }
 
 /* Collapsible section used inside FiltersPopover */
@@ -468,6 +468,17 @@ function CheckList({ options, selected, onChange, getLabel, getId, placeholder }
     onChange(next);
   };
 
+  const filteredIds = filtered.map(getId);
+  const allSelected = filteredIds.length > 0 && filteredIds.every(id => selected.includes(id));
+
+  const toggleAll = () => {
+    if (allSelected) {
+      onChange(selected.filter(id => !filteredIds.includes(id)));
+    } else {
+      onChange([...new Set([...selected, ...filteredIds])]);
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ position: 'relative' }}>
@@ -485,6 +496,34 @@ function CheckList({ options, selected, onChange, getLabel, getId, placeholder }
           }}
         />
       </div>
+      {filtered.length > 0 && (
+        <div
+          onClick={toggleAll}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '5px 6px',
+            borderRadius: 6, cursor: 'pointer',
+            borderBottom: '1px solid var(--bd)', marginBottom: 2, paddingBottom: 8,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg2)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+        >
+          <div style={{
+            width: 15, height: 15, borderRadius: 4, flexShrink: 0,
+            border: `1.5px solid ${allSelected ? 'var(--blue)' : 'var(--bd2)'}`,
+            background: allSelected ? 'var(--blue)' : 'var(--bg1solid)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {allSelected && (
+              <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
+                <path d="M1 3L3 5L7 1" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx2)', lineHeight: 1.4 }}>
+            {allSelected ? 'Deselect all' : 'Select all'}
+          </span>
+        </div>
+      )}
       <div style={{ maxHeight: 140, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
         {filtered.length === 0 ? (
           <div style={{ fontSize: 11, color: 'var(--tx3)', padding: '6px 4px' }}>No results</div>
@@ -648,6 +687,110 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
   );
 }
 
+/* ── Full-screen incident viewer with prev/next navigation ──────────────────
+   Gallery-style lightbox: click arrows, use ←/→ keys, or scroll the wheel to
+   move through the currently-filtered `items` list without closing the modal. */
+function navBtnStyle(side) {
+  return {
+    position: 'absolute', top: '39vh', [side]: -22, transform: 'translateY(-50%)',
+    width: 46, height: 46, borderRadius: '50%',
+    background: 'rgba(15,23,42,.55)', border: '1px solid rgba(255,255,255,.15)',
+    backdropFilter: 'blur(6px)', color: '#fff',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: 'pointer', transition: 'background-color .15s, transform .1s', zIndex: 10,
+  };
+}
+
+function IncidentLightbox({ items, index, onIndexChange, onClose }) {
+  const item = items[index];
+  const hasPrev = index > 0;
+  const hasNext = index < items.length - 1;
+  const wheelLockRef = useRef(false);
+
+  const goPrev = useCallback(() => { if (hasPrev) onIndexChange(index - 1); }, [hasPrev, index, onIndexChange]);
+  const goNext = useCallback(() => { if (hasNext) onIndexChange(index + 1); }, [hasNext, index, onIndexChange]);
+
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === 'ArrowLeft')  goPrev();
+      else if (e.key === 'ArrowRight') goNext();
+      else if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [goPrev, goNext, onClose]);
+
+  function onWheel(e) {
+    if (wheelLockRef.current) return;
+    if (Math.abs(e.deltaY) < 10) return;
+    wheelLockRef.current = true;
+    if (e.deltaY > 0) goNext(); else goPrev();
+    setTimeout(() => { wheelLockRef.current = false; }, 250);
+  }
+
+  if (!item) return null;
+  const imgSrc = item.Image ? mediaUrl(item.Image) : null;
+  const det    = detectionLabel(item.incidentType || item.displayName);
+  const cam    = item.channelData?.name || item.cameraId || '';
+  const site   = item.nvrData?.nvrName  || item.location  || '';
+
+  return (
+    <div
+      onClick={onClose}
+      onWheel={onWheel}
+      style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(4,6,12,.93)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}
+    >
+      <div onClick={e => e.stopPropagation()} style={{ position: 'relative', maxWidth: '86vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        {hasPrev && (
+          <button
+            onClick={(e) => { e.stopPropagation(); goPrev(); }}
+            style={navBtnStyle('left')}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(15,23,42,.8)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(15,23,42,.55)'}
+            onMouseDown={e => e.currentTarget.style.transform = 'translateY(-50%) scale(0.92)'}
+            onMouseUp={e => e.currentTarget.style.transform = 'translateY(-50%) scale(1)'}
+            title="Previous incident"
+          >
+            <ChevronLeft size={22} />
+          </button>
+        )}
+
+        {imgSrc && (
+          <img key={item._id || item.id} src={imgSrc} alt={det} style={{ maxWidth: '86vw', maxHeight: '78vh', objectFit: 'contain', borderRadius: 10, display: 'block' }} />
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#fff', fontSize: 12.5 }}>
+          <span style={{ fontWeight: 600 }}>{item.incidentName || det}</span>
+          {cam && <span style={{ color: 'rgba(255,255,255,.6)' }}>· {[cam, site].filter(Boolean).join(' · ')}</span>}
+          <span style={{ fontFamily: 'monospace', color: 'rgba(255,255,255,.6)' }}>{shortDateTime(item.timeOfIncident)}</span>
+          <span style={{ color: 'rgba(255,255,255,.4)' }}>{index + 1} / {items.length}</span>
+        </div>
+
+        <button
+          onClick={onClose}
+          style={{ position: 'absolute', top: -14, right: -14, width: 32, height: 32, borderRadius: 8, background: 'rgba(6,8,13,.8)', border: '1px solid rgba(255,255,255,.2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}
+        >
+          <X size={15} />
+        </button>
+
+        {hasNext && (
+          <button
+            onClick={(e) => { e.stopPropagation(); goNext(); }}
+            style={navBtnStyle('right')}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(15,23,42,.8)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(15,23,42,.55)'}
+            onMouseDown={e => e.currentTarget.style.transform = 'translateY(-50%) scale(0.92)'}
+            onMouseUp={e => e.currentTarget.style.transform = 'translateY(-50%) scale(1)'}
+            title="Next incident"
+          >
+            <ChevronRight size={22} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── Main page ─────────────────────────────────────────────────────────────── */
 export default function IncidentCenter() {
   const ctx    = useOutletContext() || {};
@@ -656,8 +799,8 @@ export default function IncidentCenter() {
   const [view,       setView]       = useState('grid');
   const [page,       setPage]       = useState(0);
   const [search,     setSearch]     = useState('');
+  const [lightboxIndex, setLightboxIndex] = useState(null);
   const [detTypes,   setDetTypes]   = useState(() => new Set());
-  const [location,   setLocation]   = useState('');
   const [sevSet,     setSevSet]     = useState(() => new Set());
   const [statusSet,  setStatusSet]  = useState(() => new Set());
   const [dateFrom,   setDateFrom]   = useState('');
@@ -669,8 +812,7 @@ export default function IncidentCenter() {
 
   const serverFilter = useMemo(() => {
     const f = {};
-    const loc = location || ctxLoc;
-    if (loc)               f.location           = loc;
+    if (ctxLoc)            f.location           = ctxLoc;
     if (detTypes.size)     f.incidentTypeFilter = [...detTypes];
     if (dateFrom && dateTo) { f.startDate = dateFrom; f.endDate = dateTo; }
     if (nvrIds.length)     f.nvrId              = nvrIds;
@@ -678,11 +820,10 @@ export default function IncidentCenter() {
     if (deptIds.length)    f.department         = deptIds;
     if (locIds.length)     f.location           = locIds;
     return f;
-  }, [location, ctxLoc, detTypes, dateFrom, dateTo, nvrIds, channelIds, deptIds, locIds]);
+  }, [ctxLoc, detTypes, dateFrom, dateTo, nvrIds, channelIds, deptIds, locIds]);
 
   const stats = useApi(() => fetchIncidentStats(serverFilter), [JSON.stringify(serverFilter)], { pollMs: 60000 });
   const types = useApi(() => fetchDetectionTypes(), []);
-  const locs  = useApi(() => getLocations(), []);
   const grid  = useApi(
     () => fetchIncidents({ skip: page * PAGE, limit: PAGE }, serverFilter),
     [page, JSON.stringify(serverFilter)]
@@ -708,10 +849,10 @@ export default function IncidentCenter() {
   const toggleSet = (setter) => (key) =>
     setter((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
-  const hasFilters = !!(search || detTypes.size || location || sevSet.size || statusSet.size || dateFrom || dateTo || nvrIds.length || channelIds.length || deptIds.length || locIds.length);
+  const hasFilters = !!(search || detTypes.size || sevSet.size || statusSet.size || dateFrom || dateTo || nvrIds.length || channelIds.length || deptIds.length || locIds.length);
 
   const clearAll = useCallback(() => {
-    setSearch(''); setDetTypes(new Set()); setLocation('');
+    setSearch(''); setDetTypes(new Set());
     setSevSet(new Set()); setStatusSet(new Set());
     setDateFrom(''); setDateTo('');
     setNvrIds([]); setChannelIds([]); setDeptIds([]); setLocIds([]);
@@ -725,8 +866,6 @@ export default function IncidentCenter() {
     { label: 'Unresolved (New)',      value: num(s.totalAlerts      ?? 0), color: 'var(--warn)' },
     { label: 'Resolved',             value: num(s.incidentsResolved ?? 0), color: 'var(--ok)'   },
   ];
-
-  const locationList = Array.isArray(locs.data) ? locs.data : [];
 
   const typeOptions = useMemo(() => {
     const raw = Array.isArray(types.data) ? types.data : [];
@@ -796,16 +935,6 @@ export default function IncidentCenter() {
             onChange={(next) => { setDetTypes(next); setPage(0); }}
             placeholder="Select Incident"
           />
-
-          {/* Location */}
-          <FilterSelect value={location} onChange={(e) => { setLocation(e.target.value); setPage(0); }}>
-            <option value="">All Locations</option>
-            {locationList.map((l, i) => (
-              <option key={i} value={l.locationName || l.name || l}>
-                {l.locationName || l.name || l}
-              </option>
-            ))}
-          </FilterSelect>
 
           {/* Date range */}
           <DateRangePicker
@@ -921,8 +1050,13 @@ export default function IncidentCenter() {
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
-              {items.map((item) => (
-                <IncidentCard key={item._id || item.id} item={item} onRefresh={() => grid.refetch()} />
+              {items.map((item, i) => (
+                <IncidentCard
+                  key={item._id || item.id}
+                  item={item}
+                  onRefresh={() => grid.refetch()}
+                  onOpenLightbox={() => setLightboxIndex(i)}
+                />
               ))}
             </div>
           )}
@@ -955,6 +1089,15 @@ export default function IncidentCenter() {
             Next
           </button>
         </div>
+      )}
+
+      {lightboxIndex != null && (
+        <IncidentLightbox
+          items={items}
+          index={Math.min(lightboxIndex, items.length - 1)}
+          onIndexChange={setLightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
       )}
     </div>
   );

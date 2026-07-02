@@ -5,7 +5,6 @@ import KpiRow from './KpiRow';
 import LiveCamera from './LiveCamera';
 import LiveAttendance from './LiveAttendance';
 import LatestIncident from './LatestIncident';
-import SystemControls from './SystemControls';
 import MultiSiteNetwork from './MultiSiteNetwork';
 import LiveThreatFeed from './LiveThreatFeed';
 import EngineActivity from './EngineActivity';
@@ -13,6 +12,7 @@ import { useApi } from '../../../hooks/useApi';
 import { getHeaderStats, getDetectionChart, getCriticalityStats, getRecentIncidents } from '../../../helpers/dashboard';
 import { getChannels, getAttendance } from '../../../helpers/monitoring';
 import { fetchIncidents } from '../../../helpers/incidents';
+import { useAttendanceSocket } from '../../../context/AttendanceSocketContext';
 
 const DETECTION_SAMPLE_LIMIT = 1000;
 
@@ -133,6 +133,7 @@ export default function CommandCenter() {
     { pollMs: 60000 }
   );
   const people = Array.isArray(attendance.data) ? attendance.data : attendance.data?.data || [];
+  const { attendanceLogs } = useAttendanceSocket() || {};
 
   // Engine activity · Today — aggregate today's incidents by detection type.
   const todayFilter = location ? { location, startDate: today, endDate: today } : { startDate: today, endDate: today };
@@ -179,9 +180,10 @@ export default function CommandCenter() {
           <LiveCamera channels={channels.data || []} loading={channels.loading} latestByChannel={latestByChannel} />
           <LiveAttendance
             people={people}
+            socketLogs={attendanceLogs}
             loading={attendance.loading}
             error={attendance.error}
-            isEmpty={!attendance.loading && !attendance.error && people.length === 0}
+            isEmpty={!attendance.loading && !attendance.error && people.length === 0 && !(attendanceLogs || []).length}
             onRetry={attendance.refetch}
           />
         </div>
@@ -194,21 +196,18 @@ export default function CommandCenter() {
             onRetry={latestApi.refetch}
             onChanged={refetchHeader}
           />
-          <SystemControls />
+          <LiveThreatFeed
+            alerts={alerts}
+            loading={crit.loading}
+            error={crit.error}
+            isEmpty={!crit.loading && !crit.error && alerts.length === 0}
+            onRetry={crit.refetch}
+          />
         </div>
       </div>
 
-      {/* Map | threat feed */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 18 }} className="vq-cc-grid">
-        <MultiSiteNetwork sites={sitesEnriched} />
-        <LiveThreatFeed
-          alerts={alerts}
-          loading={crit.loading}
-          error={crit.error}
-          isEmpty={!crit.loading && !crit.error && alerts.length === 0}
-          onRetry={crit.refetch}
-        />
-      </div>
+      {/* Map */}
+      <MultiSiteNetwork sites={sitesEnriched} />
 
       {/* Engine activity + 24h detection events */}
       <EngineActivity

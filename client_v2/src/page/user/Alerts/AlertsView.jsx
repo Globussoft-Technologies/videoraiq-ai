@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
+import { X } from 'lucide-react';
 import { Panel, Badge } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
@@ -33,12 +34,115 @@ function statusOf(item) {
   return { label: 'New', color: 'var(--warn)' };
 }
 
+function btnStyle(variant) {
+  const base = { fontSize: 13, fontWeight: 600, borderRadius: 8, padding: '7px 18px', cursor: 'pointer', border: '1px solid transparent', transition: 'all .15s' };
+  if (variant === 'primary') return { ...base, background: 'var(--blue)', color: '#fff', border: '1px solid var(--blue)' };
+  return { ...base, background: 'var(--bg2)', color: 'var(--tx2)', border: '1px solid var(--bd)' };
+}
+
+/* ── Report modal — same update-report-status flow used in Incident Center ── */
+function ReportModal({ item, onClose, onSuccess }) {
+  const existing = item.report?.status && item.report?.description ? item.report : null;
+  const [desc, setDesc]       = useState(existing?.description || '');
+  const [editing, setEditing] = useState(!existing);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr]         = useState('');
+
+  async function submit() {
+    if (!desc.trim()) { setErr('Please enter a description'); return; }
+    setLoading(true); setErr('');
+    try {
+      await updateReportStatus({ incidentId: item._id || item.id, status: true, description: desc.trim() });
+      toast.success('Reported');
+      onSuccess?.();
+      onClose();
+    } catch (e) {
+      setErr(e?.response?.data?.body?.message || 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 420, background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, padding: '24px', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--tx)' }}>Report Incident</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {existing && !editing && (
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ok)', background: 'rgba(34,197,94,.1)', border: '1px solid rgba(34,197,94,.25)', borderRadius: 20, padding: '3px 10px' }}>
+                ✓ Reported
+              </span>
+            )}
+            <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid var(--bd)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--tx3)' }}>
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+
+        {existing && !editing ? (
+          <>
+            <div style={{ background: 'rgba(34,197,94,.07)', border: '1px solid rgba(34,197,94,.2)', borderRadius: 10, padding: '14px', marginBottom: 14 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ok)', marginBottom: 8 }}>Report Status: Completed</div>
+              <div style={{ fontSize: 13, color: 'var(--tx2)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{existing.description}</div>
+              {existing.reportedAt && (
+                <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 10 }}>
+                  Submitted on {new Date(existing.reportedAt).toLocaleString()}
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={onClose} style={btnStyle('secondary')}>Close</button>
+              <button onClick={() => setEditing(true)} style={btnStyle('primary')}>Edit Report</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)', display: 'block', marginBottom: 7 }}>Description</label>
+            <textarea
+              value={desc}
+              onChange={e => setDesc(e.target.value)}
+              placeholder="Describe the incident and actions taken..."
+              rows={4}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                borderRadius: 10, border: '1px solid var(--bd2)',
+                background: 'var(--bg2)', color: 'var(--tx)',
+                fontSize: 13, padding: '10px 12px',
+                resize: 'vertical', outline: 'none',
+                fontFamily: 'inherit', lineHeight: 1.55,
+              }}
+            />
+            <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 5, marginBottom: 14 }}>
+              Provide details about the incident and any actions taken.
+            </div>
+            {err && <div style={{ fontSize: 12, color: 'var(--crit)', marginBottom: 10 }}>{err}</div>}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { if (editing && existing) { setEditing(false); setDesc(existing.description); } else onClose(); }}
+                style={btnStyle('secondary')}
+                disabled={loading}
+              >
+                {editing && existing ? 'Cancel' : 'Close'}
+              </button>
+              <button onClick={submit} style={btnStyle('primary')} disabled={loading || !desc.trim()}>
+                {loading ? 'Reporting…' : 'Report'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AlertsView() {
   const ctx = useOutletContext() || {};
   const location = ctx.location || '';
   const [sev, setSev] = useState('all');
   const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const filter = useMemo(() => (location ? { location } : {}), [location]);
   const feed = useApi(() => fetchIncidents({ skip: 0, limit: 50 }, filter), [filter], { pollMs: 30000 });
@@ -134,7 +238,9 @@ export default function AlertsView() {
                   <div onClick={busy ? undefined : acknowledge} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg,var(--blue),var(--violet))', borderRadius: 8, padding: 9, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
                     {busy ? '…' : 'Acknowledge'}
                   </div>
-                  <div style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: 'var(--crit)', border: '1px solid rgba(255,77,77,.4)', borderRadius: 8, padding: 9, cursor: 'pointer' }}>Dispatch</div>
+                  <div onClick={() => setReportOpen(true)} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: 'var(--crit)', border: '1px solid rgba(255,77,77,.4)', borderRadius: 8, padding: 9, cursor: 'pointer' }}>
+                    {active.report?.status ? 'Reported' : 'Report'}
+                  </div>
                 </div>
                 {active.videoLink && (
                   <a href={active.videoLink} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: 'var(--blue)', textAlign: 'center', textDecoration: 'none' }}>
@@ -146,6 +252,14 @@ export default function AlertsView() {
           )}
         </Panel>
       </div>
+
+      {reportOpen && active && (
+        <ReportModal
+          item={active}
+          onClose={() => setReportOpen(false)}
+          onSuccess={feed.refetch}
+        />
+      )}
     </div>
   );
 }
