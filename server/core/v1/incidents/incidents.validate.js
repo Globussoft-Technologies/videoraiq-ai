@@ -49,7 +49,6 @@ class IncidentsValidator {
       timeOfIncident: Joi.date().optional(),
       detectionStatus: Joi.number().optional().valid(0, 1, 2),
       incidentName: Joi.string().optional(),
-      reportStatus: Joi.string().optional(),
     }).unknown(true); // Allow additional fields not explicitly defined
 
     return schema.validate(body);
