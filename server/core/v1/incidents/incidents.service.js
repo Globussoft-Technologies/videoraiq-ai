@@ -1022,7 +1022,7 @@ class IncidentsService {
 
       const updatedIncident = await Incident.findByIdAndUpdate(
         incidentId,
-        updates,
+        { $set: updates },
         {
           new: true,
           runValidators: true,
