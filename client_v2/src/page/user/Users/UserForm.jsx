@@ -8,7 +8,10 @@ import { useAuth } from "@/context/AuthContext";
 import { userLoginSchema } from "./Schema/UserLoginSchema";
 import { userLoginByPass } from "./api/post/Index";
 import logo from "@/assets/logo.svg";
+import AuthLoader from "./AuthLoader";
 import "./login.css";
+
+const AUTH_LOADER_MS = 2200;
 
 const url = import.meta.env.VITE_ENV;
 
@@ -116,9 +119,10 @@ const LoginForm = () => {
   const [showPw, setShowPw] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [savedCredentials, setSavedCredentials] = useState({ usernameOrEmail: "", password: "" });
+  const [authenticating, setAuthenticating] = useState(false);
 
   const isLogin = mode === "login";
-  const redirectTo = location.state?.from?.pathname || "/v2";
+  const redirectTo = location.state?.from?.pathname || "/dashboard";
 
   // Prefill from the saved "remember-me" cookie (identical scheme to V1).
   useEffect(() => {
@@ -168,39 +172,21 @@ const LoginForm = () => {
 
           setUser?.(result.user); // hydrate user context
           toast.success(result.msg || "Signed in");
-          navigate(redirectTo, { replace: true });
+          setAuthenticating(true);
+          setTimeout(() => navigate(redirectTo, { replace: true }), AUTH_LOADER_MS);
         } else {
           toast.error(result?.msg || "Failed to Login!");
+          setSubmitting(false);
         }
       } catch (error) {
         console.log("Login failed:", error.response?.data || error.message);
         toast.error(error?.response?.data?.msg || "Invalid email/username or password");
-      } finally {
         setSubmitting(false);
       }
     },
   });
 
-  const loading = formik.isSubmitting;
-
-  const tabBase = {
-    flex: 1,
-    textAlign: "center",
-    padding: "9px 0",
-    borderRadius: 9,
-    fontFamily: "'Space Grotesk',sans-serif",
-    fontWeight: 600,
-    fontSize: 13.5,
-    cursor: "pointer",
-    transition: "all .18s",
-  };
-  const tabOn = {
-    ...tabBase,
-    color: "#fff",
-    background: "linear-gradient(135deg,rgba(59,130,246,.9),rgba(168,85,247,.9))",
-    boxShadow: "0 6px 16px rgba(74,108,247,.3)",
-  };
-  const tabOff = { ...tabBase, color: "#8e99b6", background: "transparent" };
+  const loading = formik.isSubmitting || authenticating;
 
   const colA = useMemo(() => [1, 4, 7, 10, 13, 16, 19, 22], []);
   const colB = useMemo(() => [2, 5, 8, 11, 14, 17, 20, 23], []);
@@ -210,6 +196,8 @@ const LoginForm = () => {
     e.preventDefault();
     toast.message("Account creation is managed by your administrator.");
   };
+
+  if (authenticating) return <AuthLoader />;
 
   return (
     <div
@@ -561,26 +549,6 @@ const LoginForm = () => {
             </p>
           </div>
 
-          {/* tab toggle */}
-          <div
-            style={{
-              display: "flex",
-              gap: 4,
-              padding: 4,
-              background: "#11151f",
-              border: "1px solid rgba(255,255,255,.07)",
-              borderRadius: 12,
-              marginBottom: 22,
-            }}
-          >
-            <div onClick={() => !loading && setMode("login")} style={isLogin ? tabOn : tabOff}>
-              Sign In
-            </div>
-            <div onClick={() => !loading && setMode("register")} style={!isLogin ? tabOn : tabOff}>
-              Create Account
-            </div>
-          </div>
-
           {/* form */}
           <form
             onSubmit={isLogin ? formik.handleSubmit : onRegister}
@@ -769,18 +737,6 @@ const LoginForm = () => {
               {!loading && <ArrowRight size={17} style={{ position: "relative" }} />}
             </button>
           </form>
-
-          {/* switch */}
-          <div style={{ textAlign: "center", marginTop: 24, fontSize: 13, color: "#98a2bd" }}>
-            {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-            <span
-              className="vqlogin-link"
-              onClick={() => !loading && setMode(isLogin ? "register" : "login")}
-              style={{ color: "#6ea0ff", fontWeight: 600, cursor: "pointer" }}
-            >
-              {isLogin ? "Create one" : "Sign in"}
-            </span>
-          </div>
         </div>
 
         {/* loading overlay */}

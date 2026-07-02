@@ -11,13 +11,17 @@ import { timeAgo } from '../lib/format';
 
 const SEV_COLOR = { high: 'var(--crit)', critical: 'var(--crit)', moderate: 'var(--warn)', medium: 'var(--warn)', low: 'var(--tx3)' };
 
+// Maps a route path segment to its nav/VIEW_META key, for the handful of
+// routes whose URL segment (nav.config.js `path`) differs from its `key`.
+const PATH_TO_KEY = { dashboard: 'overview', live: 'wall' };
+
 function currentViewKey(pathname) {
-  // /v2 or /v2/  -> overview ; /v2/<key> -> key ; /v2/logs/<key> -> key
-  const m = pathname.replace(/^\/v2\/?/, '');
+  // /dashboard -> overview ; /live -> wall ; /<key> -> key ; /logs/<key> -> key
+  const m = pathname.replace(/^\//, '');
   const segs = m.split('/');
   let seg = segs[0] || 'overview';
   if (seg === 'logs') seg = segs[1] || 'overview';
-  return seg;
+  return PATH_TO_KEY[seg] || seg;
 }
 
 function Shell() {

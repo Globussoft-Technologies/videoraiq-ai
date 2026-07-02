@@ -7,9 +7,8 @@ import Logout from '@/components/Auth/Logout';
 /**
  * Standalone V2 app router.
  * - /user-login is public (the new-design login, ported from the prototype).
- * - The V2 route subtree stays mounted at /v2 (so relative NavLinks and the
- *   V2Layout path logic keep working) and is gated behind IsAuth.
- * - Root and unknown paths redirect to /v2, which bounces to /user-login when
+ * - The V2 route subtree is mounted at the root and gated behind IsAuth.
+ * - Root and unknown paths redirect to /, which bounces to /user-login when
  *   there's no session.
  */
 export const router = createBrowserRouter(
@@ -17,7 +16,6 @@ export const router = createBrowserRouter(
     <Route>
       <Route path="/user-login" element={<LoginForm />} />
       <Route path="/logout" element={<Logout />} />
-      <Route index element={<Navigate to="/v2" replace />} />
       <Route
         element={
           <IsAuth>
@@ -27,7 +25,7 @@ export const router = createBrowserRouter(
       >
         {v2Routes}
       </Route>
-      <Route path="*" element={<Navigate to="/v2" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Route>
   )
 );

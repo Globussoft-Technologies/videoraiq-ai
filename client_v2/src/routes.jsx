@@ -1,4 +1,4 @@
-import { Route } from 'react-router-dom';
+import { Route, Navigate } from 'react-router-dom';
 import V2Layout from './layout/V2Layout';
 import CommandCenter from './page/user/CommandCenter/CommandCenter';
 import IncidentCenter from './page/user/Incidents/IncidentCenter';
@@ -27,16 +27,17 @@ const STUBS = [
 ];
 
 export const v2Routes = (
-  <Route path="v2" element={<V2Layout />}>
-    <Route index element={<CommandCenter />} />
-    <Route path="wall" element={<LiveWall />} />
+  <Route element={<V2Layout />}>
+    <Route index element={<Navigate to="dashboard" replace />} />
+    <Route path="dashboard" element={<CommandCenter />} />
+    <Route path="live" element={<LiveWall />} />
     <Route path="camera" element={<CameraView />} />
     <Route path="alerts" element={<AlertsView />} />
     <Route path="incidents" element={<IncidentCenter />} />
     <Route path="locations" element={<Locations />} />
     <Route path="departments" element={<Departments />} />
     <Route path="register-users" element={<AddProfile />} />
-    {/* Logs & Records (nested under /v2/logs/*) */}
+    {/* Logs & Records (nested under /logs/*) */}
     <Route path="logs/attendance" element={<AttendanceLogs />} />
     {/* <Route path="logs/access" element={<AccessLogs />} />
     <Route path="logs/tagged-users" element={<TaggedUsers />} />

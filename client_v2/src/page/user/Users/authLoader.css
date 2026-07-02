@@ -1,0 +1,178 @@
+/* Full-screen "authenticating" loader shown after a successful sign-in,
+   before the dashboard mounts. Light theme, matches the login prototype. */
+
+.vqauth-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 42px;
+  overflow: hidden;
+  background:
+    radial-gradient(1100px 600px at 82% -10%, rgba(168, 85, 247, 0.16), transparent 60%),
+    radial-gradient(900px 520px at -8% 112%, rgba(59, 130, 246, 0.16), transparent 55%),
+    #e6eaf2;
+  font-family: "IBM Plex Sans", sans-serif;
+  animation: vqauth-fadein 0.35s ease both;
+}
+
+.vqauth-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(15, 23, 42, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
+  background-size: 46px 46px;
+  animation: vqauth-gridpan 8s linear infinite;
+}
+
+.vqauth-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(420px 420px at 50% 42%, rgba(124, 92, 255, 0.14), transparent 70%);
+}
+
+.vqauth-radar {
+  position: relative;
+  width: 300px;
+  height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vqauth-corner {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border: 1.6px solid;
+  opacity: 0.75;
+}
+.vqauth-corner--tl { top: -14px; left: -14px; border-right: 0; border-bottom: 0; border-color: #3b82f6; }
+.vqauth-corner--tr { top: -14px; right: -14px; border-left: 0; border-bottom: 0; border-color: #a855f7; }
+.vqauth-corner--bl { bottom: -14px; left: -14px; border-right: 0; border-top: 0; border-color: #3b82f6; }
+.vqauth-corner--br { bottom: -14px; right: -14px; border-left: 0; border-top: 0; border-color: #a855f7; }
+
+.vqauth-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px dashed rgba(15, 23, 42, 0.16);
+}
+.vqauth-ring--outer { width: 300px; height: 300px; animation: vqauth-spin 34s linear infinite; }
+.vqauth-ring--mid { width: 226px; height: 226px; border-style: solid; border-color: rgba(15, 23, 42, 0.1); animation: vqauth-spin-rev 22s linear infinite; }
+.vqauth-ring--inner { width: 156px; height: 156px; border-color: rgba(15, 23, 42, 0.14); }
+
+.vqauth-sweep {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(168, 85, 247, 0.32), transparent 26%);
+  animation: vqauth-spin 3.2s linear infinite;
+  mask-image: radial-gradient(circle, transparent 54%, #000 55%);
+  -webkit-mask-image: radial-gradient(circle, transparent 54%, #000 55%);
+}
+
+.vqauth-dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 10px currentColor;
+}
+.vqauth-dot--cyan { top: 30%; left: 8%; color: #22d3ee; background: #22d3ee; animation: vqauth-blip 2.4s ease-in-out infinite; }
+.vqauth-dot--blue { top: 22%; right: 14%; color: #3b82f6; background: #3b82f6; animation: vqauth-blip 2.4s ease-in-out infinite .5s; }
+.vqauth-dot--magenta { bottom: 26%; right: 26%; color: #d946ef; background: #d946ef; animation: vqauth-blip 2.4s ease-in-out infinite 1s; }
+
+.vqauth-core {
+  position: relative;
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08), 0 18px 46px rgba(99, 102, 241, 0.28);
+  animation: vqauth-corepulse 2.2s ease-in-out infinite;
+}
+.vqauth-core img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  opacity: 0.82;
+}
+
+.vqauth-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: vqauth-fadeup 0.6s ease both 0.15s;
+}
+.vqauth-brand-mark { width: 26px; height: 26px; object-fit: contain; }
+.vqauth-brand-name {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+  background: linear-gradient(135deg, #3b82f6, #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.vqauth-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 320px;
+  animation: vqauth-fadeup 0.6s ease both 0.25s;
+}
+
+.vqauth-bar {
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+.vqauth-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #3b82f6, #a855f7, #d946ef);
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.vqauth-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: #52607c;
+}
+.vqauth-label-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px #22c55e;
+  animation: vqauth-blink 1.1s infinite;
+  flex: 0 0 auto;
+}
+.vqauth-label-text { flex: 1; text-align: left; }
+.vqauth-label-pct { color: #3b82f6; font-weight: 600; }
+
+@keyframes vqauth-fadein { from { opacity: 0; } to { opacity: 1; } }
+@keyframes vqauth-fadeup { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes vqauth-gridpan { 0% { background-position: 0 0; } 100% { background-position: 46px 46px; } }
+@keyframes vqauth-spin { to { transform: rotate(360deg); } }
+@keyframes vqauth-spin-rev { to { transform: rotate(-360deg); } }
+@keyframes vqauth-corepulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@keyframes vqauth-blip { 0%, 100% { opacity: 0.5; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.15); } }
+@keyframes vqauth-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }

@@ -24,14 +24,14 @@ import {
 /**
  * V2 navigation grouped exactly as the prototype sidebar
  * (MONITOR / INTELLIGENCE / LOGS & RECORDS / CONFIGURE / ADMINISTER).
- * `path` is relative to the /v2 mount; `key` matches the prototype view id.
+ * `path` is relative to the app root; `key` matches the prototype view id.
  */
 export const NAV_GROUPS = [
   {
     label: 'MONITOR',
     items: [
-      { key: 'overview', label: 'Command Center', path: '', icon: LayoutDashboard, end: true },
-      { key: 'wall', label: 'Live Wall', path: 'wall', icon: Grid2x2 },
+      { key: 'overview', label: 'Command Center', path: 'dashboard', icon: LayoutDashboard, end: true },
+      { key: 'wall', label: 'Live Wall', path: 'live', icon: Grid2x2 },
       { key: 'camera', label: 'Camera View', path: 'camera', icon: Video },
       { key: 'alerts', label: 'Alerts', path: 'alerts', icon: TriangleAlert, badgeKey: 'alerts' },
       { key: 'incidents', label: 'Incident Center', path: 'incidents', icon: ShieldAlert },
