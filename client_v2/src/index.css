@@ -1,0 +1,23 @@
+/* Global base + V2 design tokens. The theme variables themselves live in
+   theme/tokens.css (also imported by ThemeContext). */
+@import './theme/tokens.css';
+
+/* Tailwind CSS Directives */
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--ui, 'Poppins', system-ui, sans-serif);
+}

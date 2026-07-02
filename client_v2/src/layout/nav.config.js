@@ -1,0 +1,104 @@
+import {
+  LayoutDashboard,
+  Grid2x2,
+  Video,
+  TriangleAlert,
+  ShieldAlert,
+  BarChart3,
+  ScanFace,
+  CalendarCheck,
+  DoorOpen,
+  Car,
+  UserMinus,
+  Cctv,
+  SlidersHorizontal,
+  Users,
+  Settings,
+  MapPin,
+  Building2,
+  UserPlus,
+} from 'lucide-react';
+
+/**
+ * V2 navigation grouped exactly as the prototype sidebar
+ * (MONITOR / INTELLIGENCE / LOGS & RECORDS / CONFIGURE / ADMINISTER).
+ * `path` is relative to the /v2 mount; `key` matches the prototype view id.
+ */
+export const NAV_GROUPS = [
+  {
+    label: 'MONITOR',
+    items: [
+      { key: 'overview', label: 'Command Center', path: '', icon: LayoutDashboard, end: true },
+      { key: 'wall', label: 'Live Wall', path: 'wall', icon: Grid2x2 },
+      { key: 'camera', label: 'Camera View', path: 'camera', icon: Video },
+      { key: 'alerts', label: 'Alerts', path: 'alerts', icon: TriangleAlert, badgeKey: 'alerts' },
+      { key: 'incidents', label: 'Incident Center', path: 'incidents', icon: ShieldAlert },
+    ],
+  },
+  {
+    label: 'INTELLIGENCE',
+    hidden: true,
+    items: [
+      { key: 'analytics', label: 'Analytics', path: 'analytics', icon: BarChart3 },
+      { key: 'faces', label: 'Face & Watchlist', path: 'faces', icon: ScanFace },
+    ],
+  },
+  {
+    label: 'LOGS & RECORDS',
+    items: [
+      { key: 'attendance', label: 'Attendance Logs', path: 'attendance', icon: CalendarCheck },
+      { key: 'access', label: 'Access Logs', path: 'access', icon: DoorOpen },
+      { key: 'anpr', label: 'ANPR Logs', path: 'anpr', icon: Car },
+      { key: 'absence', label: 'Absence Logs', path: 'absence', icon: UserMinus },
+    ],
+  },
+  {
+    label: 'CONFIGURE',
+    hidden: true,
+    items: [
+      { key: 'cameras', label: 'Cameras & NVRs', path: 'cameras', icon: Cctv },
+      { key: 'engines', label: 'Detections', path: 'engines', icon: SlidersHorizontal },
+    ],
+  },
+   {
+    label: 'USER DETAILS',
+    items: [
+      { key: 'locations', label: 'Locations', path: 'locations', icon:MapPin  },
+      { key: 'departments', label: 'Departments', path: 'departments', icon: Building2 },
+      { key: 'register', label: 'Register your User', path: 'register-users', icon: UserPlus },
+    ],
+  },
+  {
+    label: 'ADMINISTER',
+    hidden: true,
+    items: [
+      { key: 'users', label: 'User Management', path: 'users', icon: Users },
+      { key: 'settings', label: 'Settings', path: 'settings', icon: Settings },
+    ],
+  },
+];
+
+/** Title + subtitle shown in the header per view (ported from the prototype). */
+export const VIEW_META = {
+  overview: { title: 'Command Center', sub: 'Real-time intelligence across all sites' },
+  wall: { title: 'Live Video Wall', sub: 'Multi-camera monitoring grid' },
+  camera: { title: 'Camera View', sub: 'AI detection overlays · live stream' },
+  alerts: { title: 'Alerts & Events', sub: 'Investigate and respond to detections' },
+  incidents: { title: 'Incident Center', sub: 'Visual evidence grid across all detections' },
+  analytics: { title: 'Analytics', sub: 'Trends, heatmaps & engine performance' },
+  faces: { title: 'Face Recognition & Watchlist', sub: 'Identity verification & attendance' },
+  cameras: { title: 'Cameras & NVRs', sub: 'Device inventory & recorder health' },
+  engines: { title: 'Detections', sub: 'AI detections · configure & investigate incidents' },
+  attendance: { title: 'Attendance Logs', sub: 'Face-recognition check-in & working hours' },
+  access: { title: 'Access Logs', sub: 'Door & zone entry audit trail' },
+  anpr: { title: 'ANPR / Vehicle Logs', sub: 'Vehicle entry / exit & plate matches' },
+  absence: { title: 'Absence Logs', sub: 'Post & seat absence detections' },
+  users: { title: 'User Management', sub: 'Roles, permissions & face enrollment' },
+  settings: { title: 'Settings', sub: 'Platform, alerts, privacy & integrations' },
+  profile: { title: 'My Profile', sub: 'Your account, activity & preferences' },
+  locations:{title :'Locations', sub:'Locations'},
+  departments:{title :'Departments', sub:'Departments '},
+  locations: { title: 'Locations',sub: 'Manage organization locations'},
+  departments: {title: 'Departments', sub: 'Manage departments and teams'},
+  'register-users': { title: 'Register your User', sub: 'Create a new employee profile and capture enrollment images' },
+};
