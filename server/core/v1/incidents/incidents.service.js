@@ -2397,6 +2397,10 @@ console.log(result,'result');
     incidentType,
     extraMatch = {},
     searchFields = ["incidentName", "description", "zone"],
+    // Opt-in: run the free-text search AFTER the nvr/channel $lookups so it can
+    // also match joined fields (NVR name, camera name) and a stringified
+    // timeOfIncident. Off by default so all other callers are unaffected.
+    postLookupSearch = false,
   }) {
     const data = req?.verified?.userData;
     if (!data?.user_id) {
@@ -2465,10 +2469,17 @@ console.log(result,'result');
     if (reportStatus !== undefined)
       matchStage["report.status"] = reportStatus === "true";
 
+    // Escape the free-text term once; reused for every $or branch below.
+    let escapedSearch = null;
     if (search && typeof search === "string" && search.trim()) {
-      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    // Default path (all callers except the opt-in one): search the incident-doc
+    // fields inside matchStage, before the $lookups — unchanged behavior.
+    if (escapedSearch && !postLookupSearch) {
       matchStage.$or = searchFields.map((field) => ({
-        [field]: { $regex: escaped, $options: "i" },
+        [field]: { $regex: escapedSearch, $options: "i" },
       }));
     }
 
@@ -2496,8 +2507,48 @@ console.log(result,'result');
         },
       },
       { $unwind: { path: "$channelData", preserveNullAndEmptyArrays: true } },
-      { $sort: { timeOfIncident: -1 } },
     ];
+
+    // Opt-in path: search across incident-doc fields, joined NVR/camera names,
+    // and a stringified timeOfIncident. Must run after the $lookups (those
+    // joined fields don't exist before). Runs inside basePipeline so the $count
+    // and $skip/$limit aggregations filter identically (totalCount stays exact).
+    if (escapedSearch && postLookupSearch) {
+      const rx = { $regex: escapedSearch, $options: "i" };
+      basePipeline.push(
+        {
+          $addFields: {
+            // timeOfIncident is a BSON Date — regex can't hit it directly, so
+            // render it to a string first (Asia/Kolkata, matching the date
+            // filter above and the UI). Nulls yield null and safely don't match.
+            _searchTime: {
+              $dateToString: {
+                date: "$timeOfIncident",
+                format: "%Y-%m-%d %H:%M",
+                timezone: "Asia/Kolkata",
+              },
+            },
+          },
+        },
+        {
+          $match: {
+            $or: [
+              { _searchTime: rx }, // Time of Incident
+              { severity: rx }, // Severity
+              { vehicleNumber: rx }, // Vehicle Number
+              { incidentName: rx }, // Incident Name
+              { "nvrData.nvrName": rx }, // NVR Name (joined)
+              { "channelData.name": rx }, // Camera Name (joined)
+              { "channelData.customName": rx }, // Camera custom name (joined)
+            ],
+          },
+        },
+        { $project: { _searchTime: 0 } }, // strip helper — response shape unchanged
+      );
+    }
+
+    // $sort must remain the last stage of basePipeline.
+    basePipeline.push({ $sort: { timeOfIncident: -1 } });
 
     const [countResult, logs] = await Promise.all([
       Incident.aggregate([...basePipeline, { $count: "totalCount" }]),
@@ -2529,12 +2580,9 @@ console.log(result,'result');
         res,
         incidentType: "vehicleDetection",
         extraMatch,
-        searchFields: [
-          "incidentName",
-          "description",
-          "zone",
-          "vehicleNumber",
-        ],
+        // Free-text `search` matches Time of Incident, Severity, Vehicle Number,
+        // Incident Name, NVR Name, and Camera Name (see _fetchIncidentLogs).
+        postLookupSearch: true,
       });
     } catch (error) {
       logger.error(error);
