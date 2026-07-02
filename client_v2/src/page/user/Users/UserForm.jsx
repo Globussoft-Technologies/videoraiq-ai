@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { userLoginSchema } from "./Schema/UserLoginSchema";
-import { userLoginByPass } from "./Api/post";
+import { userLoginByPass } from "./api/post";
 import logo from "@/assets/logo.svg";
 import "./login.css";
 
