@@ -341,7 +341,12 @@ const BagDetectionIncident = Incident.discriminator('bagDetection', BagAccessSch
 const VehicleDetectionSchema = new Schema({
   count: {type:Number,default:0},
   triggerNotification: { type: Boolean, default: true },
-  vehicleNumber:{type:String,default:null}
+  vehicleNumber:{type:String,default:null},
+  vehicleType: {type:String,default:null},
+  licensePlate: {type:String,default:null},
+  vehicleColor: {type:String,default:null},
+  confidence: {type:Number,default:null},
+  detectTime: {type:Date,default:null}
 });
 const VehicleDetectionIncident = Incident.discriminator('vehicleDetection', VehicleDetectionSchema);
 
