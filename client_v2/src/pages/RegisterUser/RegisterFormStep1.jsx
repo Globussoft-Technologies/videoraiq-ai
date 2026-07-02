@@ -19,7 +19,7 @@ const RegisterFormStep1 = ({ departments = [], locations = [] }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <FieldLabel>First Name*</FieldLabel>
+        <FieldLabel>Testing working fine*</FieldLabel>
         <Field
           as={Input}
           name="firstName"
