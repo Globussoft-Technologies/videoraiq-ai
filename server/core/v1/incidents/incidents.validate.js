@@ -28,6 +28,32 @@ class IncidentsValidator {
 
     return schema.validate(body);
   }
+
+  editIncidentDetails(body) {
+    const schema = Joi.object().keys({
+      incidentType: Joi.string().optional(),
+      nvrId: Joi.string().optional(),
+      channelId: Joi.string().optional(),
+      count: Joi.number().optional().min(0),
+      objectsDetected: Joi.array().optional(),
+      atoB: Joi.number().optional(),
+      btoA: Joi.number().optional(),
+      croudCount: Joi.number().optional().min(0),
+      helmetCount: Joi.number().optional().min(0),
+      currentStatus: Joi.string().optional(),
+      personPresent: Joi.boolean().optional(),
+      personCount: Joi.number().optional().min(0),
+      zoneName: Joi.string().optional(),
+      vehicleType: Joi.string().optional(),
+      ppe: Joi.object().optional(),
+      timeOfIncident: Joi.date().optional(),
+      detectionStatus: Joi.number().optional().valid(0, 1, 2),
+      incidentName: Joi.string().optional(),
+      reportStatus: Joi.string().optional(),
+    }).unknown(true); // Allow additional fields not explicitly defined
+
+    return schema.validate(body);
+  }
 }
 
 export default new IncidentsValidator();

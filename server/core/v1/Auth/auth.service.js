@@ -524,6 +524,23 @@ return bypassUsers.find(
           let attendanceServiceRevokeSecretKey = config.get(
             "attendanceServiceRevokeSecretKey"
           );
+
+          // Register admin license for bypass users only (non-blocking)
+          if (bypassUser) {
+            let adminData = await adminModel.findOne({
+              email: userData?.email,
+              user_id: userData?.user_id,
+            });
+            if (!adminData) {
+              adminData = await this.registerAdminIfNotExists(userData);
+            }
+            if (adminData?._id) {
+              this.registerAdminLicense(adminData, userData).catch((err) => {
+                logger.warn(`[BYPASS_USER_LICENSE] Registration failed for ${userData?.email}:`, err?.message);
+              });
+            }
+          }
+
           try {
             await this.revokeDetectionService(detectionServiceRevokeSecretKey);
           } catch (error) {
@@ -542,17 +559,14 @@ return bypassUsers.find(
           msg: "Your Plan expired",
         });
       }
+      // Fetch or create adminData (for non-bypass users or if not already created)
       let adminData = await adminModel.findOne({
         email: userData?.email,
         user_id: userData?.user_id,
       });
       if (!adminData) {
-        const adminData = await this.registerAdminIfNotExists(userData);
+        adminData = await this.registerAdminIfNotExists(userData);
       }
-      adminData = await adminModel.findOne({
-        email: userData?.email,
-        user_id: userData?.user_id,
-      });
 
       // ✅ Backfill newly added logsSound field for old users
       if (adminData?._id) {
@@ -847,7 +861,7 @@ return bypassUsers.find(
           return res.status(200).json({
             success: true,
             type: "service-token",
-            data: { ...decoded, status: true },
+            data: { ...decoded, user_id: decoded.user_id ? parseInt(decoded.user_id) : decoded.user_id, status: true },
           });
         }
       } catch (err) {}
@@ -857,7 +871,11 @@ return bypassUsers.find(
 
       return res
         .status(200)
-        .json({ success: true, type: "user-token", data: decoded });
+        .json({
+          success: true,
+          type: "user-token",
+          data: { ...decoded, user_id: decoded.user_id ? parseInt(decoded.user_id) : decoded.user_id }
+        });
     } catch (error) {
       return res.status(401).json({
         success: false,

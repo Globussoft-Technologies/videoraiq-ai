@@ -129,6 +129,38 @@ class IncidentsController {
     return await incidentsService.updateIncident(req, res, next);
   }
 
+  async editIncidentDetails(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Edit incident details except image'
+    #swagger.parameters['id'] = {
+        in: 'path',
+        description: 'Incident ID',
+        required: true,
+        type: 'string'
+    }
+    #swagger.parameters['data'] = {
+        in: 'body',
+        description: 'Fields to update (Image will be ignored)',
+        required: true,
+        schema: { $ref: "#/definitions/editIncidentDetails" }
+    }
+    #swagger.responses[200] = {
+        description: 'Incident details updated successfully'
+    }
+    #swagger.responses[400] = {
+        description: 'Invalid input or missing data'
+    }
+    #swagger.responses[500] = {
+        description: 'Internal server error'
+    }
+    #swagger.security = [{
+        "EncryptedAuthToken": []
+    }]
+    */
+
+    return await incidentsService.editIncidentDetails(req, res, next);
+  }
+
   async deleteIncident(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Delete a Incident'

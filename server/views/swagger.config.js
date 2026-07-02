@@ -1069,6 +1069,7 @@ const doc = {
       locationName: "Banglore",
       empLocationId: "BLR001",
     },
+
     allOrgEmployee:{
             skip:0,
             limit:10,
@@ -1076,6 +1077,23 @@ const doc = {
             location_id: "378",
             orgIdFilter: "385"
         },
+    editIncidentDetails:{
+        "incidentType": "vehicleDetection",
+        "nvrId": "nvr_id_123",
+        "channelId": "channel_id_456",
+        "count": 1,
+        "vehicleType": "sedan",
+        "licensePlate": "KA01AB1234",
+        "vehicleColor": "white",
+        "vehicleModel": "Honda Civic",
+        "confidence": 0.95,
+        "detectTime": "2026-07-02T10:30:00Z",
+        "personCount": 4,
+        "timeOfIncident": "2026-07-02T10:30:00Z",
+        "incidentName": "Vehicle Detection - ANPR",
+        "reportStatus": "pending",
+        "detectionStatus": 1
+    },
     importEmpUsers:{
         "usersData": [
             {

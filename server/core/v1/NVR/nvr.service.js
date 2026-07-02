@@ -96,6 +96,7 @@ class NVRService {
       const cameraDocs = cameras.map((cam) => ({
         userId,
         nvrId: savedNvr._id,
+        isAdded: true,
         ...cam,
       }));
 
@@ -1673,6 +1674,21 @@ class NVRService {
 
       const addedCameras = await Camera.find({ nvrId }).setOptions({ includeInactive: true });
       const addedMap = new Map(addedCameras.map((c) => [c.channelId, { _id: c._id, isAdded: c.isAdded }]));
+
+      // Auto-add new cameras found on NVR but not in database
+      const newCameras = camerasData.cameras.filter((cam) => !addedMap.has(cam.channelId));
+      if (newCameras.length > 0) {
+        const cameraDocs = newCameras.map((cam) => ({
+          userId: user_id,
+          nvrId: nvr._id,
+          isAdded: true,
+          ...cam,
+        }));
+        await Camera.insertMany(cameraDocs);
+        newCameras.forEach((cam) => {
+          addedMap.set(cam.channelId, { _id: new mongoose.Types.ObjectId(), isAdded: true });
+        });
+      }
 
       const availableCameras = camerasData.cameras.map((cam) => ({
         ...cam,

@@ -19,6 +19,11 @@ router.get(
   incidentsController.getAllIncidentsById,
 );
 router.put("/:id", editAccessCheck, incidentsController.updateIncident);
+router.patch(
+  "/:id/details",
+  editAccessCheck,
+  incidentsController.editIncidentDetails,
+);
 router.delete(
   "/delete-by-incidentIds",
   upload.single("file"),

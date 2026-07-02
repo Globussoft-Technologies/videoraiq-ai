@@ -122,7 +122,6 @@ class IncidentsService {
 
       const userId = isAdminExist.user_id?.toString();   
       let channel = await Channel.findOne({ _id: channelId })
-        .setOptions({ includeInactive: true })
         .populate("profile")
         .lean();
         // return res.status(200).json({ channel });
@@ -163,7 +162,6 @@ class IncidentsService {
 
         const channelData = await channelsModel
           .findOne({ _id: channelId })
-          .setOptions({ includeInactive: true })
           .populate("profile")
           .lean();
         let detectionType = channelData.detections[`${incidentType}Settings`];
@@ -286,7 +284,6 @@ class IncidentsService {
           // ) {
             if (req.body.incidentName !== "Guard Present" && req.body.incidentType !== "countPersons" && req.body.incidentType !== "countVehicles") {
               await triggerAlertOnIncident({
-                res,
                 detectionType: incidentType,
                 nvrId,
                 channelId,
@@ -436,7 +433,6 @@ class IncidentsService {
 
       const channelData = await channelsModel
         .findOne({ _id: channelId })
-        .setOptions({ includeInactive: true })
         .populate("profile")
         .lean();
 
@@ -478,7 +474,6 @@ class IncidentsService {
       // ) {
         if (req.body.incidentName !== "Guard Present" && req.body.incidentType !== "countPersons" && req.body.incidentType !== "countVehicles") {
           await triggerAlertOnIncident({
-            res,
             detectionType: incidentType,
             nvrId,
             channelId,
@@ -497,7 +492,15 @@ class IncidentsService {
           }),
         );
     } catch (error) {
-      console.log(error);
+      logger.error(`[INCIDENT_CREATE_ERROR] Failed to create incident`, {
+        incidentType: req.body?.incidentType,
+        channelId: req.body?.channelId,
+        nvrId: req.body?.nvrId,
+        adminId: req.body?.adminId,
+        errorMessage: error.message,
+        errorStack: error.stack,
+        timestamp: new Date().toISOString(),
+      });
       next(new AppError("Failed to create Incident", 500));
     }
   }
@@ -969,6 +972,81 @@ class IncidentsService {
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to update Incident", 500));
+    }
+  }
+
+  async editIncidentDetails(req, res, next) {
+    try {
+
+    const { error, value } = incidentsValidate.editIncidentDetails(req.body);
+    if (error) {
+      return res.status(400).json({
+        error: error.details.map((d) => d.message).join(", "),
+      });
+    }
+
+
+      const incidentId = req.params.id;
+      const userId = req?.verified?.userData?.user_id;
+      const updates = req.body;
+
+      // Exclude Image field from updates
+      delete updates.Image;
+
+      // Validate NVR and Channel if being updated
+      if (updates.nvrId || updates.channelId) {
+        if (updates.nvrId) {
+          const nvr = await nvrModel.findOne({
+            _id: updates.nvrId,
+            userId,
+          });
+          if (!nvr) {
+            return res.status(400).json({
+              error: "Invalid NVR ID or NVR does not belong to this user",
+            });
+          }
+        }
+
+        if (updates.channelId) {
+          const channel = await Channel.findOne({
+            _id: updates.channelId,
+            userId,
+          });
+          if (!channel) {
+            return res.status(400).json({
+              error: "Invalid Channel ID or Channel does not belong to this user",
+            });
+          }
+        }
+      }
+
+      const updatedIncident = await Incident.findByIdAndUpdate(
+        incidentId,
+        updates,
+        {
+          new: true,
+          runValidators: true,
+        },
+      );
+
+      if (!updatedIncident) {
+        return res
+          .status(404)
+          .json(Response.notFoundResp("Incident not found"));
+      }
+
+      return res.status(200).json(
+        Response.userSuccessResp("Incident details updated successfully", {
+          Incident: updatedIncident,
+        }),
+      );
+    } catch (error) {
+      logger.error(`[EDIT_INCIDENT_DETAILS_ERROR] Failed to edit incident ${req.params.id}:`, {
+        errorMessage: error.message,
+        errorStack: error.stack,
+        userId: req?.verified?.userData?.user_id,
+      });
+      next(new AppError("Failed to edit Incident details", 500));
     }
   }
 

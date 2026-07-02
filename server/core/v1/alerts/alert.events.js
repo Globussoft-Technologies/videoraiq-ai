@@ -5,9 +5,10 @@ import nvrModel from '../NVR/nvr.model.js';
 import channelsModel from '../channels/channels.model.js';
 import RecipientModel from '../verifyRecipients/recipients.model.js';
 import { Incident } from '../incidents/incidents.model.js';
+import logger from '../../../utils/logger.js';
 
 
-export const triggerAlertOnIncident = async ({res, detectionType, nvrId, channelId ,saved,adminId}) => {
+export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,saved,adminId}) => {
   try {
     let channelData = await channelsModel.findOne({_id:channelId}).populate("profile").lean();
     let nvrData = await nvrModel.findOne({_id:nvrId});
@@ -18,24 +19,26 @@ export const triggerAlertOnIncident = async ({res, detectionType, nvrId, channel
     .filter(([_, value]) => value) // Only include non-null ObjectId refs
     .map(([key]) => ({ path: `detections.${key}.id` }));
 
-    
+
     const channel = await channelsModel
     .findOne({ _id: channelId })
     .populate(populatePaths).lean();
 
-   
+
 
     if (!channel || !channel.detections) {
-      return res.status(404).json({ message: 'Channel or detections not found' });
+      console.warn('Channel or detections not found for alert trigger', { channelId });
+      return;
     }
     // Step 3: Find matching detection config based on detectionType
     const matchedDetection = Object.entries(channel.detections).find(
       ([key]) => key === `${detectionType}Settings`
     )?.[1];
-    
+
 
     if (!matchedDetection) {
-      return res.status(404).json({ message: `No detection config found for type: ${detectionType}` });
+      console.warn(`No detection config found for type: ${detectionType}`, { detectionType, channelId });
+      return;
     }
       // Step 4: Group alerts by recipientModel
       const groupedAlerts = matchedDetection?.id?.alerts
@@ -121,7 +124,14 @@ export const triggerAlertOnIncident = async ({res, detectionType, nvrId, channel
         let incidentSMS = await sendIncidentSMS(saved, phoneNumbers);
     }
   } catch (err) {
-    console.log(err);
-    console.error('Alert trigger failed:', err.message);
+    logger.error(`[ALERT_TRIGGER_ERROR] Failed to trigger alert`, {
+      detectionType,
+      channelId,
+      nvrId,
+      adminId,
+      errorMessage: err.message,
+      errorStack: err.stack,
+      timestamp: new Date().toISOString(),
+    });
   }
 };
