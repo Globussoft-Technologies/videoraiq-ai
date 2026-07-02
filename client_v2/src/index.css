@@ -6,6 +6,11 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
+/* Bind Tailwind's `dark:` variant to the app's own theme toggle
+   ([data-vq-theme='dark'] is set on <body> by ThemeContext) instead of the
+   OS `prefers-color-scheme`, so `dark:` utilities follow the in-app theme. */
+@custom-variant dark (&:where([data-vq-theme=dark], [data-vq-theme=dark] *));
+
 * {
   box-sizing: border-box;
 }

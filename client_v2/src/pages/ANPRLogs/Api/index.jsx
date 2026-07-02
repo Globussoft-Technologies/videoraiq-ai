@@ -1,0 +1,80 @@
+import axios from 'axios';
+import getAccessToken from '@/utils/getAccessToken';
+
+const HOST = import.meta.env.VITE_BACKEND;
+
+const jsonHeaders = () => ({
+  Accept: 'application/json',
+  'Content-Type': 'application/json',
+  'x-access-token': getAccessToken(),
+});
+
+const getHeaders = () => ({
+  Accept: 'application/json',
+  'x-access-token': getAccessToken(),
+});
+
+/** Authorized NVRs for the filter dropdown. */
+export const getNVRs = async () => {
+  return axios.post(
+    `${HOST}/api/v1/authorizedChannels/getNVRS`,
+    {},
+    { headers: jsonHeaders() }
+  );
+};
+
+/** Channels/cameras for the selected NVRs. */
+export const getchannels = async (data) => {
+  return axios.post(`${HOST}/api/v1/authorizedChannels/getChannels`, data, {
+    headers: jsonHeaders(),
+  });
+};
+
+/**
+ * Paginated vehicle / obstruction (ANPR) detection logs.
+ * Filters live in the query string. Mirrors the V1 contract exactly.
+ */
+export const fetchVehicleObstructionLogs = async ({
+  skip,
+  limit,
+  startDate,
+  endDate,
+  sortField,
+  sortOrder,
+  nvrIds,
+  channelIds,
+  severity,
+  resolved,
+  reportStatus,
+  vehicleNumber,
+  search,
+}) => {
+  return axios.get(`${HOST}/api/v1/incidents/logs/vehicle-detection`, {
+    params: {
+      skip,
+      limit,
+      ...(startDate && { startDate }),
+      ...(endDate && { endDate }),
+      ...(sortField && { sortField }),
+      ...(sortOrder && { sortOrder }),
+      ...(nvrIds?.length && { nvrIds: nvrIds.join(',') }),
+      ...(channelIds?.length && { channelIds: channelIds.join(',') }),
+      ...(severity && { severity }),
+      ...(resolved !== '' && resolved !== undefined && { resolved }),
+      ...(reportStatus !== '' && reportStatus !== undefined && { reportStatus }),
+      ...(vehicleNumber && { vehicleNumber }),
+      ...(search && { search }),
+    },
+    headers: getHeaders(),
+  });
+};
+
+/** Distinct vehicle numbers for the vehicle-number filter dropdown. */
+export const getVehicleNumbers = async (search) => {
+  return axios.get(`${HOST}/api/v1/incidents/logs/vehicle-detection/numbers`, {
+    params: {
+      ...(search && { search }),
+    },
+    headers: getHeaders(),
+  });
+};

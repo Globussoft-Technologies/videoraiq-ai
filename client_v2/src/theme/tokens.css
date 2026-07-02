@@ -39,6 +39,9 @@
   --grid: rgba(255, 255, 255, 0.04);
   --toggleoff: rgba(255, 255, 255, 0.12);
   --scroll: rgba(255, 255, 255, 0.13);
+  /* Log-pages brand accent: brighter in dark so it stays legible. */
+  --brand: #0094e2;
+  --brand-hover: #33abed;
 }
 
 [data-vq-theme='light'] {
@@ -61,6 +64,9 @@
   --grid: rgba(15, 23, 42, 0.05);
   --toggleoff: rgba(15, 23, 42, 0.14);
   --scroll: rgba(15, 23, 42, 0.2);
+  /* Log-pages brand accent: the original navy in light mode. */
+  --brand: #07486A;
+  --brand-hover: #063a55;
 }
 
 /* ---- Base element styling scoped to the V2 root ---- */
@@ -89,6 +95,19 @@
 .vq-root select option {
   background: var(--bg1solid);
   color: var(--tx);
+}
+
+/* Native date/time controls follow the active theme so the picker indicator
+   (calendar icon) stays visible in dark mode. data-vq-theme is set on <body>. */
+[data-vq-theme='dark'] input[type='date'],
+[data-vq-theme='dark'] input[type='time'],
+[data-vq-theme='dark'] input[type='datetime-local'] {
+  color-scheme: dark;
+}
+[data-vq-theme='light'] input[type='date'],
+[data-vq-theme='light'] input[type='time'],
+[data-vq-theme='light'] input[type='datetime-local'] {
+  color-scheme: light;
 }
 
 /* ---- Scrollbars ---- */

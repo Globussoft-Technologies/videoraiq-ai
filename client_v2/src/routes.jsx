@@ -13,14 +13,16 @@ import Placeholder from './page/user/Administer/Placeholder';
 import Departments from './page/user/Departments/Departments';
 import Locations from './page/user/Locations/Locations';
 import AddProfile from './pages/RegisterUser/AddProfile';
+import AttendanceLogs from './pages/AttendanceLogs/AttendanceLogs';
+import AccessLogs from './pages/AccessLogs/AccessLogs';
+import TaggedUsers from './pages/TaggedUsers/TaggedUsers';
+import PersonCountLogs from './pages/PersonCountLogs/PersonCountLogs';
+import DeskAbsenceLogs from './pages/DeskAbsenceLogs/DeskAbsenceLogs';
+import ANPRLogs from './pages/ANPRLogs/ANPRLogs';
 
 const STUBS = [
   ['analytics', 'analytics', '/dashboard'],
   ['faces', 'faces', '/logs/tagged-users'],
-  ['attendance', 'attendance', '/logs/attendance'],
-  ['access', 'access', '/logs/access'],
-  ['anpr', 'anpr', '/logs/ANPR'],
-  ['absence', 'absence', '/logs/desk-absence'],
   ['profile', 'profile', '/profile'],
 ];
 
@@ -34,6 +36,13 @@ export const v2Routes = (
     <Route path="locations" element={<Locations />} />
     <Route path="departments" element={<Departments />} />
     <Route path="register-users" element={<AddProfile />} />
+    {/* Logs & Records (nested under /v2/logs/*) */}
+    <Route path="logs/attendance" element={<AttendanceLogs />} />
+    {/* <Route path="logs/access" element={<AccessLogs />} />
+    <Route path="logs/tagged-users" element={<TaggedUsers />} />
+    <Route path="logs/person-count" element={<PersonCountLogs />} />
+    <Route path="logs/absence" element={<DeskAbsenceLogs />} />
+    <Route path="logs/anpr" element={<ANPRLogs />} /> */}
 
     {/* Configure */}
     <Route path="cameras" element={<NVRCameras />} />

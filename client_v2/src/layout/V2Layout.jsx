@@ -12,10 +12,12 @@ import { timeAgo } from '../lib/format';
 const SEV_COLOR = { high: 'var(--crit)', critical: 'var(--crit)', moderate: 'var(--warn)', medium: 'var(--warn)', low: 'var(--tx3)' };
 
 function currentViewKey(pathname) {
-  // /v2 or /v2/  -> overview ; /v2/<key> -> key
+  // /v2 or /v2/  -> overview ; /v2/<key> -> key ; /v2/logs/<key> -> key
   const m = pathname.replace(/^\/v2\/?/, '');
-  const seg = m.split('/')[0];
-  return seg || 'overview';
+  const segs = m.split('/');
+  let seg = segs[0] || 'overview';
+  if (seg === 'logs') seg = segs[1] || 'overview';
+  return seg;
 }
 
 function Shell() {
