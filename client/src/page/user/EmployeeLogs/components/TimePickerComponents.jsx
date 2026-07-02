@@ -272,7 +272,13 @@ export const UnifiedTimePicker = ({
 
         <div className="flex h-[240px] divide-x divide-gray-100">
           {/* Hour Column */}
-          <div className="flex flex-col overflow-y-auto w-[70px] py-1 custom-scrollbar">
+          <div
+            className="flex flex-col overflow-y-auto w-[70px] py-1 custom-scrollbar"
+            onWheel={(e) => {
+              e.currentTarget.scrollTop += e.deltaY;
+              e.stopPropagation();
+            }}
+          >
             {hourOptions.map((h) => (
               <button
                 key={h}
@@ -289,7 +295,13 @@ export const UnifiedTimePicker = ({
           </div>
 
           {/* Minute Column */}
-          <div className="flex flex-col overflow-y-auto w-[70px] py-1 custom-scrollbar">
+          <div
+            className="flex flex-col overflow-y-auto w-[70px] py-1 custom-scrollbar"
+            onWheel={(e) => {
+              e.currentTarget.scrollTop += e.deltaY;
+              e.stopPropagation();
+            }}
+          >
             {minuteOptions.map((m) => (
               <button
                 key={m}

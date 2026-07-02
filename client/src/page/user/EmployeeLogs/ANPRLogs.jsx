@@ -6,7 +6,7 @@ import React, {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
-import { ArrowDownUp, ArrowUp, ArrowDown, X, Image, LayoutGrid, List, Filter, RotateCcw, Search, ChevronDown } from 'lucide-react';
+import { ArrowDownUp, ArrowUp, ArrowDown, X, Image, LayoutGrid, List, Filter, RotateCcw, Search, ChevronDown, Pencil } from 'lucide-react';
 import AccessDenied from '@/components/AccessDenied';
 import { Input } from '@/components/ui/input';
 import { DateRangePickerComponent } from '@/components/ui/calendar';
@@ -14,6 +14,7 @@ import { formatDateRange } from '@/utils/formatDateRange';
 import Month from '@/assets/Calendar.svg';
 import ReusableTablePage from './ReusableTablePage';
 import AutoRefreshComponent from './components/AutoRefreshComponent';
+import EditANPRLogDialog from './components/EditANPRLogDialog';
 import {
   Popover,
   PopoverTrigger,
@@ -132,6 +133,8 @@ const ANPRLogs = () => {
   const [previewImage, setPreviewImage] = useState(null);
   const [previewImageLoading, setPreviewImageLoading] = useState(false);
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
+  const [editRow, setEditRow] = useState(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
     const { permissions, loading: permissionsLoading } = usePermissions();
       const canEdit = permissions?.logs?.ANPRLogs?.edit;
   const navigate = useNavigate();
@@ -197,8 +200,8 @@ const ANPRLogs = () => {
       nvrName: item.nvrData?.nvrName || '--',
       channelName: item.channelData?.name || '--',
       vehicleNumber: item.vehicleNumber || '--',
-      createdAt: item.createdAt
-        ? moment.utc(item.createdAt).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A')
+      createdAt: item.timeOfIncident || item.createdAt
+        ? moment.utc(item.timeOfIncident || item.createdAt).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A')
         : '--',
       severity: item.severity || '--',
       incidentImageUrl: item.Image ? `${INCIDENT_URL}${item.Image}` : '',
@@ -388,9 +391,11 @@ const ANPRLogs = () => {
       const mapped = list.map((item) => ({
         _id: item._id,
         incidentName: item.incidentName || '--',
+        nvrId: item.nvrId || item.nvrData?._id || '',
         nvrName: item.nvrData?.nvrName || '--',
+        channelId: item.channelId || item.channelData?._id || '',
         channelName: item.channelData?.name || '--',
-        timeOfIncident: item.timeOfIncident || "--",
+        timeOfIncident: item.timeOfIncident || null,
         createdAt: item.createdAt,
         imageUrl: item.Image ? `${HOST}${item.Image}` : null,
         incidentImageUrl: item.Image ? `${INCIDENT_URL}${item.Image}` : null,
@@ -444,6 +449,11 @@ const ANPRLogs = () => {
     setNvrIds([]);
     setChannelIds([]);
     setSeverity('');
+  };
+
+  const openEditDialog = (row) => {
+    setEditRow(row);
+    setEditDialogOpen(true);
   };
 
   const VehicleNumberSelect = (
@@ -679,7 +689,7 @@ const ANPRLogs = () => {
           </button>
         ),
         cell: ({ row }) => {
-          const t = row.original.createdAt;
+          const t = row.original.timeOfIncident || row.original.createdAt;
           return (
             <span className={styles.text}>
               {t
@@ -711,8 +721,25 @@ const ANPRLogs = () => {
           );
         },
       },
+      ...(canEdit
+        ? [
+            {
+              accessorKey: 'edit',
+              header: 'Actions',
+              cell: ({ row }) => (
+                <button
+                  onClick={() => openEditDialog(row.original)}
+                  className="p-2 rounded-full bg-transparent cursor-pointer hover:bg-gray-100"
+                  title="Edit incident details"
+                >
+                  <Pencil className="w-4 h-4 text-[#07486A]" />
+                </button>
+              ),
+            },
+          ]
+        : []),
     ],
-    [sortField, sortOrder]
+    [sortField, sortOrder, canEdit]
   );
 
   // Wait for permissions to finish loading before deciding access. Without
@@ -725,6 +752,13 @@ const ANPRLogs = () => {
 
   return (
     <>
+      <EditANPRLogDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        row={editRow}
+        onSaved={() => setManualTrigger((prev) => prev + 1)}
+      />
+
       {previewImage && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
@@ -941,6 +975,15 @@ const ANPRLogs = () => {
                         ) : (
                           <Image className="w-10 h-10 text-[#C7C7C7]" />
                         )}
+                        {canEdit && (
+                          <button
+                            onClick={() => openEditDialog(row)}
+                            className="absolute top-2 right-2 p-1.5 rounded-full bg-white/90 hover:bg-white cursor-pointer shadow-sm"
+                            title="Edit incident details"
+                          >
+                            <Pencil className="w-4 h-4 text-[#07486A]" />
+                          </button>
+                        )}
                       </div>
 
                       {/* Details */}
@@ -984,8 +1027,8 @@ const ANPRLogs = () => {
                         <div>
                           <p className="text-[10px] font-medium text-[#888] uppercase tracking-wide">Time of Incident</p>
                           <p className="text-xs text-[#333333]">
-                            {row.createdAt
-                              ? moment.utc(row.createdAt).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A')
+                            {row.timeOfIncident || row.createdAt
+                              ? moment.utc(row.timeOfIncident || row.createdAt).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A')
                               : '--'}
                           </p>
                         </div>
