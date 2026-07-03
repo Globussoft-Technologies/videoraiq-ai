@@ -347,22 +347,6 @@ export default function Sidebar({ badges = {} }) {
                     </div>
                   </div>
                 </div>
-                {[
-                  { label: 'My Profile', hint: 'Account & activity', to: 'profile' },
-                  { label: 'Settings', hint: 'Platform configuration', to: 'settings' },
-                ].map((m) => (
-                  <div
-                    key={m.to}
-                    onClick={() => {
-                      setAccountOpen(false);
-                      navigate(m.to);
-                    }}
-                    style={{ display: 'flex', flexDirection: 'column', padding: '8px 9px', borderRadius: 9, cursor: 'pointer' }}
-                  >
-                    <span style={{ fontSize: 12.5, fontWeight: 500 }}>{m.label}</span>
-                    <span style={{ fontSize: 10, color: 'var(--tx3)' }}>{m.hint}</span>
-                  </div>
-                ))}
                 <div
                   onClick={() => navigate('/logout')}
                   style={{

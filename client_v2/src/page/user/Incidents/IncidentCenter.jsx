@@ -12,7 +12,7 @@ import { getNvrs } from '../../../helpers/configure';
 import axios from 'axios';
 import getAccessToken from '../../../utils/getAccessToken';
 
-const PAGE = 48;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 const SEVERITIES = [
   { key: 'high',     label: 'Critical' },
@@ -791,14 +791,44 @@ function IncidentLightbox({ items, index, onIndexChange, onClose }) {
   );
 }
 
+function GoToPage({ pages, page, onGo }) {
+  const [value, setValue] = useState('');
+
+  const commit = () => {
+    const n = parseInt(value, 10);
+    if (Number.isFinite(n) && n >= 1 && n <= pages) onGo(n - 1);
+    setValue('');
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 8, fontSize: 12.5, color: 'var(--tx3)' }}>
+      <span>Go to</span>
+      <input
+        type="number"
+        min={1}
+        max={pages}
+        value={value}
+        placeholder={String(page + 1)}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') commit(); }}
+        onBlur={commit}
+        style={{
+          width: 48, height: 34, borderRadius: 8, border: '1px solid var(--bd)',
+          background: 'var(--bg1solid)', color: 'var(--tx)', fontSize: 12.5,
+          textAlign: 'center', outline: 'none',
+        }}
+      />
+    </div>
+  );
+}
+
 /* ── Main page ─────────────────────────────────────────────────────────────── */
 export default function IncidentCenter() {
   const ctx    = useOutletContext() || {};
   const ctxLoc = ctx.location || '';
 
-  const [view,       setView]       = useState('grid');
   const [page,       setPage]       = useState(0);
-  const [search,     setSearch]     = useState('');
+  const [pageSize,   setPageSize]   = useState(10);
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [detTypes,   setDetTypes]   = useState(() => new Set());
   const [sevSet,     setSevSet]     = useState(() => new Set());
@@ -825,34 +855,27 @@ export default function IncidentCenter() {
   const stats = useApi(() => fetchIncidentStats(serverFilter), [JSON.stringify(serverFilter)], { pollMs: 60000 });
   const types = useApi(() => fetchDetectionTypes(), []);
   const grid  = useApi(
-    () => fetchIncidents({ skip: page * PAGE, limit: PAGE }, serverFilter),
-    [page, JSON.stringify(serverFilter)]
+    () => fetchIncidents({ skip: page * pageSize, limit: pageSize }, serverFilter),
+    [page, pageSize, JSON.stringify(serverFilter)]
   );
 
   const items = useMemo(() => {
     let list = grid.data?.items || [];
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((i) =>
-        [i.incidentName, i.incidentType, i.channelData?.name, i.nvrData?.nvrName]
-          .filter(Boolean).join(' ').toLowerCase().includes(q)
-      );
-    }
     if (sevSet.size)    list = list.filter((i) => sevSet.has((i.severity || '').toLowerCase()));
     if (statusSet.size) list = list.filter((i) => statusSet.has(statusKey(i)));
     return list;
-  }, [grid.data, search, sevSet, statusSet]);
+  }, [grid.data, sevSet, statusSet]);
 
   const totalCount = grid.data?.totalCount ?? 0;
-  const pages      = Math.max(1, Math.ceil(totalCount / PAGE));
+  const pages      = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const toggleSet = (setter) => (key) =>
     setter((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
-  const hasFilters = !!(search || detTypes.size || sevSet.size || statusSet.size || dateFrom || dateTo || nvrIds.length || channelIds.length || deptIds.length || locIds.length);
+  const hasFilters = !!(detTypes.size || sevSet.size || statusSet.size || dateFrom || dateTo || nvrIds.length || channelIds.length || deptIds.length || locIds.length);
 
   const clearAll = useCallback(() => {
-    setSearch(''); setDetTypes(new Set());
+    setDetTypes(new Set());
     setSevSet(new Set()); setStatusSet(new Set());
     setDateFrom(''); setDateTo('');
     setNvrIds([]); setChannelIds([]); setDeptIds([]); setLocIds([]);
@@ -905,29 +928,6 @@ export default function IncidentCenter() {
       }}>
         {/* Row 1 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          {/* View toggle */}
-          <div style={{ display: 'flex', background: 'var(--bg2)', borderRadius: 8, padding: 3, gap: 2 }}>
-            {[['grid', 'Grid - All'], ['type', 'By Detection']].map(([k, lbl]) => (
-              <button key={k} onClick={() => setView(k)} style={{
-                padding: '5px 14px', borderRadius: 6, border: 'none',
-                background: view === k ? 'var(--blue)' : 'transparent',
-                color: view === k ? '#fff' : 'var(--tx2)',
-                fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
-              }}>{lbl}</button>
-            ))}
-          </div>
-
-          {/* Search */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, ...filterInput, flex: '1 1 180px', maxWidth: 240 }}>
-            <Search size={14} style={{ color: 'var(--tx3)', flexShrink: 0 }} />
-            <input
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-              placeholder="Search incidents"
-              style={{ flex: 1, border: 0, outline: 'none', background: 'transparent', fontSize: 12.5, color: 'var(--tx)' }}
-            />
-          </div>
-
           {/* Detection multi-select */}
           <MultiSelect
             options={typeOptions}
@@ -954,7 +954,7 @@ export default function IncidentCenter() {
           />
 
           {hasFilters && (
-            <button onClick={clearAll} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--tx3)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px' }}>
+            <button onClick={clearAll} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: '#fff', background: 'var(--crit)', border: '1px solid var(--crit)', borderRadius: 7, cursor: 'pointer', padding: '5px 10px' }}>
               <X size={13} /> Clear
             </button>
           )}
@@ -1000,8 +1000,22 @@ export default function IncidentCenter() {
             ))}
           </div>
 
-          <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--tx3)' }}>
-            {grid.loading ? 'Loading…' : `Showing ${items.length} of ${totalCount}`}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--tx3)' }}>
+              {grid.loading ? 'Loading…' : `Showing ${items.length} of ${totalCount}`}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--tx3)' }}>
+              <span>Show</span>
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
+                style={{ padding: '5px 8px', borderRadius: 7, border: '1px solid var(--bd)', background: 'var(--bg1solid)', color: 'var(--tx2)', fontSize: 12.5, cursor: 'pointer' }}
+              >
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -1017,7 +1031,7 @@ export default function IncidentCenter() {
           </span>
         </div>
 
-        <AsyncBoundary loading={grid.loading} error={grid.error} onRetry={() => grid.refetch()}>
+        <AsyncBoundary loading={grid.loading} error={grid.error} onRetry={() => grid.refetch()} minH={720}>
           {items.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '56px 24px', gap: 12 }}>
               <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1064,7 +1078,7 @@ export default function IncidentCenter() {
       </div>
 
       {/* ── Pagination ──────────────────────────────────────────────────────── */}
-      {pages > 1 && (
+      {items.length > 0 && pages > 1 && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, paddingBottom: 8 }}>
           <button
             onClick={() => setPage((p) => Math.max(0, p - 1))}
@@ -1088,6 +1102,7 @@ export default function IncidentCenter() {
           >
             Next
           </button>
+          <GoToPage pages={pages} page={page} onGo={setPage} />
         </div>
       )}
 
