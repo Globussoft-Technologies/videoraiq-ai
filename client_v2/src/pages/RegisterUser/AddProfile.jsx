@@ -4,36 +4,30 @@ import {
   CirclePlus,
   Trash,
   Trash2,
-  Mail,
   User,
-  Briefcase,
-  MapPin,
-  PencilLine,
-  ChevronLeft,
-  ChevronRight,
   FilePlus,
   LayoutGrid,
   List,
-  Check,
-  CircleAlert,
 } from 'lucide-react';
-import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
-import 'react-loading-skeleton/dist/skeleton.css';
-import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 import { Input } from '@/components/ui/input';
-import Pagination from '@/components/Pagination';
 import ConfirmationModal from '@/components/DeleteConfirmation';
 import getAccessToken from '@/utils/getAccessToken';
 import { useTheme } from '@/theme/ThemeContext';
 import RegisterForm from './RegisterForm';
+import RegisterUserCard from './RegisterUserCard';
 import VerifyUserDialog from './VerifyUserDialog';
 import ImportEmpUsersModal from './ImportEmpUsers';
 import { UserDetailModal } from './UserDetailModal';
 import MultiSelect from './MultiSelect';
+import UsersListView from './UsersListView';
+import BulkUploadModal from './BulkUploadModal';
+import UsersPagination from './UsersPagination';
 import {
   authorizedUsers,
   getFilterDepartments,
+  fetchDepartments,
   getEmployeeLocations,
   delete_user,
   delete_all_users,
@@ -51,260 +45,6 @@ const decodeJwt = (token) => {
   }
 };
 
-const getInitialsPlaceholder = (firstName, lastName, size = 128) => {
-  const initials = `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase() || '?';
-  const colors = ['#3b82f6', '#22d3ee', '#a855f7'];
-  const index = initials.charCodeAt(0) % colors.length;
-  const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><rect width="${size}" height="${size}" fill="${colors[index]}"/><text x="50%" y="50%" font-family="Arial, sans-serif" font-size="${size * 0.38}" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="central">${initials}</text></svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-};
-
-const StatusBadge = ({ verified }) =>
-  verified ? (
-    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/20 text-white backdrop-blur-sm">
-      <Check className="w-3 h-3" strokeWidth={3} />
-      Verified
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/15 text-white/90 backdrop-blur-sm">
-      <CircleAlert className="w-3 h-3" strokeWidth={2.5} />
-      Not Verified
-    </span>
-  );
-
-/* ─────────────── Card ─────────────── */
-const UserCard = ({ user, handleEdit, handleDelete, setSelectedUser, setIsUserModalOpen, selectedUserIds, toggleUserSelection }) => {
-  const [imgIdx, setImgIdx] = useState(0);
-  const pics = user.profilePics || [];
-  const many = pics.length > 1;
-  const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
-  const handle = (user.userName || fullName || '').toLowerCase().replace(/\s+/g, '');
-
-  const infoRows = [
-    { icon: Mail, label: 'Email', value: user.email || 'N/A' },
-    { icon: Briefcase, label: 'Department', value: user.departmentId?.departmentName || 'Default' },
-    { icon: MapPin, label: 'Location', value: user.location || 'Default' },
-  ];
-
-  return (
-    <div
-      onClick={() => {
-        setSelectedUser(user);
-        setIsUserModalOpen(true);
-      }}
-      className="bg-[var(--bg1solid)] rounded-2xl border border-[var(--bd)] flex flex-col relative shadow-[0_4px_16px_rgba(15,23,42,0.08)] hover:shadow-[0_10px_28px_rgba(15,23,42,0.14)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer h-full overflow-hidden"
-    >
-      {/* Header */}
-      <div
-        className={`relative h-20 shrink-0 ${
-          user.verified
-            ? 'bg-gradient-to-r from-[var(--blue)] to-[var(--violet)]'
-            : 'bg-gradient-to-r from-[var(--tx3)] to-[var(--tx2)]'
-        }`}
-      >
-        <div className="absolute top-3 left-3 z-20">
-          <StatusBadge verified={!!user.verified} />
-        </div>
-
-        <div className="absolute top-3 right-3 flex items-center gap-1 z-30">
-          <input
-            type="checkbox"
-            checked={selectedUserIds.includes(user._id)}
-            onChange={(e) => {
-              e.stopPropagation();
-              toggleUserSelection(user._id);
-            }}
-            onClick={(e) => e.stopPropagation()}
-            className="h-4 w-4 rounded accent-[var(--blue)]"
-          />
-          <button
-            title="Edit User"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleEdit(user);
-            }}
-            className="text-white bg-white/15 hover:bg-white/25 p-1.5 rounded-full transition-colors cursor-pointer"
-          >
-            <PencilLine className="w-4 h-4" />
-          </button>
-          <button
-            title="Delete User"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDelete(user._id);
-            }}
-            className="text-white bg-white/15 hover:bg-[var(--crit)] p-1.5 rounded-full transition-colors cursor-pointer"
-          >
-            <Trash className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Avatar — overlaps header/body boundary */}
-      <div className="relative -mt-10 flex items-center justify-center gap-2 px-2">
-        {many && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setImgIdx((p) => (p - 1 + pics.length) % pics.length);
-            }}
-            className="relative top-4 p-1 cursor-pointer rounded-full bg-[var(--bg1solid)] shadow-sm text-[var(--tx3)] hover:text-[var(--tx)] z-30"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-        )}
-        <div className="w-20 h-20 rounded-full overflow-hidden shrink-0 ring-4 ring-[var(--bg1solid)] shadow-md">
-          <img
-            src={pics.length > 0 ? `${nasUrl}/api/v1/uploads/${pics[imgIdx]}` : getInitialsPlaceholder(user.firstName, user.lastName)}
-            alt={fullName}
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = getInitialsPlaceholder(user.firstName, user.lastName);
-            }}
-          />
-        </div>
-        {many && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setImgIdx((p) => (p + 1) % pics.length);
-            }}
-            className="relative top-4 p-1 cursor-pointer rounded-full bg-[var(--bg1solid)] shadow-sm text-[var(--tx3)] hover:text-[var(--tx)] z-30"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        )}
-      </div>
-
-      {/* Name / handle */}
-      <div className="text-center px-4 mt-2">
-        <h3 className="text-[15px] font-semibold text-[var(--tx)] truncate" title={fullName}>
-          {fullName || 'Unnamed User'}
-        </h3>
-        <p className="text-xs text-[var(--tx3)] truncate mt-0.5">
-          {handle && <span>@{handle}</span>}
-          {handle && ' · '}
-          <span className="text-[var(--blue)] font-medium">
-            {user.departmentId?.departmentName || 'Default'}
-          </span>
-        </p>
-      </div>
-
-      {/* Info section */}
-      <div className="w-full px-4 pb-4 pt-4 mt-2 space-y-2.5">
-        {infoRows.map(({ icon: Icon, label, value }) => (
-          <div key={label} className="flex items-center gap-3 text-sm">
-            <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--blue)]/10 text-[var(--blue)] shrink-0">
-              <Icon className="w-4 h-4" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[10px] font-semibold uppercase tracking-wider text-[var(--tx3)]">
-                {label}
-              </span>
-              <span className="block text-[13px] font-medium text-[var(--tx)] truncate" title={value}>
-                {value}
-              </span>
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-/* ─────────────── Table row ─────────────── */
-const UserTableRow = ({ user, index, currentPage, limit, handleEdit, handleDelete, setSelectedUser, setIsUserModalOpen, selectedUserIds, toggleUserSelection }) => {
-  const pics = user.profilePics || [];
-  const avatar = pics.length > 0 ? `${nasUrl}/api/v1/uploads/${pics[0]}` : getInitialsPlaceholder(user.firstName, user.lastName, 40);
-
-  return (
-    <tr
-      onClick={() => {
-        setSelectedUser(user);
-        setIsUserModalOpen(true);
-      }}
-      className="border-b border-[var(--bd)] hover:bg-[var(--bg2)] transition-colors cursor-pointer text-[var(--tx)]"
-    >
-      <td className="px-3 py-3 text-center">
-        <input
-          type="checkbox"
-          checked={selectedUserIds.includes(user._id)}
-          onChange={(e) => {
-            e.stopPropagation();
-            toggleUserSelection(user._id);
-          }}
-          onClick={(e) => e.stopPropagation()}
-          className="h-4 w-4 rounded accent-[var(--blue)]"
-        />
-      </td>
-      <td className="px-3 py-3 text-xs text-[var(--tx3)] text-center">
-        {(currentPage - 1) * limit + index + 1}
-      </td>
-      <td className="px-3 py-3 max-w-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <img
-            src={avatar}
-            alt={`${user.firstName} ${user.lastName}`}
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = getInitialsPlaceholder(user.firstName, user.lastName, 40);
-            }}
-            className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-[var(--bd)]"
-          />
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-[var(--tx)] truncate">
-              {user.firstName} {user.lastName}
-            </p>
-            <p className="text-[10px] text-[var(--tx3)] truncate">{user.userName || '—'}</p>
-          </div>
-        </div>
-      </td>
-      <td className="px-3 py-3 max-w-0">
-        <span className="block text-xs text-[var(--tx2)] truncate" title={user.email}>
-          {user.email}
-        </span>
-      </td>
-      <td className="px-3 py-3 max-w-0">
-        <span className="block text-xs text-[var(--tx2)] truncate">
-          {user.departmentId?.departmentName || 'N/A'}
-        </span>
-      </td>
-      <td className="px-3 py-3 max-w-0">
-        <span className="block text-xs text-[var(--tx2)] truncate">{user.location || '-'}</span>
-      </td>
-      <td className="px-3 py-3 text-center">
-        <StatusBadge verified={!!user.verified} />
-      </td>
-      <td className="px-3 py-3 text-center">
-        <div className="flex items-center justify-center gap-2">
-          <button
-            title="Edit User"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleEdit(user);
-            }}
-            className="text-[var(--blue)] hover:bg-[var(--blue)]/10 p-1.5 rounded-full transition-colors cursor-pointer"
-          >
-            <PencilLine className="w-4 h-4" />
-          </button>
-          <button
-            title="Delete User"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDelete(user._id);
-            }}
-            className="text-[var(--crit)] hover:bg-[var(--crit)]/10 p-1.5 rounded-full transition-colors cursor-pointer"
-          >
-            <Trash className="w-4 h-4" />
-          </button>
-        </div>
-      </td>
-    </tr>
-  );
-};
-
-/* ─────────────── Main page ─────────────── */
 const AddProfile = () => {
   const { theme } = useTheme();
   const token = getAccessToken();
@@ -323,6 +63,7 @@ const AddProfile = () => {
 
   const [locations, setLocations] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [formDepartments, setFormDepartments] = useState([]);
   const [selectedLocations, setSelectedLocations] = useState([]);
   const [selectedDepartments, setSelectedDepartments] = useState([]);
 
@@ -375,6 +116,18 @@ const AddProfile = () => {
     }
   };
 
+  // Raw departments ({ _id, departmentName }) for the inline Register New User form dropdown.
+  const loadFormDepartments = async () => {
+    try {
+      const res = await fetchDepartments(0, 100, '');
+      if (res?.data?.body?.status === 'success') {
+        setFormDepartments(res.data.body.data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+    }
+  };
+
   const fetchUsers = async () => {
     setLoading(true);
     try {
@@ -399,6 +152,7 @@ const AddProfile = () => {
 
   useEffect(() => {
     loadLocations();
+    loadFormDepartments();
   }, []);
 
   useEffect(() => {
@@ -530,6 +284,13 @@ const AddProfile = () => {
 
   return (
     <div className="p-[22px] flex flex-col gap-[18px] min-h-full">
+      {/* Register New User (inline, two-step) */}
+      <RegisterUserCard
+        departments={formDepartments}
+        locations={locations.map((loc) => loc.label)}
+        onCreated={fetchUsers}
+      />
+
       <div className="w-full flex-1 flex flex-col p-6 bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px]">
         {/* Top bar */}
         <div className="flex flex-wrap items-center gap-3 justify-between">
@@ -612,17 +373,13 @@ const AddProfile = () => {
               <span>Register Bulk Employee</span>
             </button>
 
+            {/* Edit uses the existing modal register form (opens when editUser is set). */}
             <RegisterForm
               fetchUsers={fetchUsers}
               editUser={editUser}
               setEditUser={setEditUser}
               locations={locations.map((loc) => loc.label)}
-              trigger={
-                <button className={actionBtn}>
-                  <CirclePlus className="w-4 h-4" />
-                  <span>Register New Employee</span>
-                </button>
-              }
+              trigger={<span className="hidden" />}
             />
 
             {selectedUserIds.length > 0 && (
@@ -648,180 +405,31 @@ const AddProfile = () => {
         </div>
 
         {/* Content */}
-        <SkeletonTheme
-          baseColor={theme === 'dark' ? '#171c28' : '#e8edf5'}
-          highlightColor={theme === 'dark' ? '#22283a' : '#f3f6fb'}
-        >
-          <div className="mt-5 flex-1">
-            {viewMode === 'grid' ? (
-              <div className="max-h-[65vh] overflow-y-auto vq-scroll pr-1">
-                {loading ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
-                    {[...Array(8)].map((_, i) => (
-                      <div key={i} className="bg-[var(--bg1solid)] rounded-2xl p-5 border border-[var(--bd)]">
-                        <Skeleton circle width={96} height={96} className="mx-auto" />
-                        <div className="mt-4">
-                          <Skeleton count={4} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : users.length === 0 ? (
-                  <div className="text-center py-12 text-[var(--tx3)]">No users found.</div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
-                    {users.map((user) => (
-                      <UserCard
-                        key={user._id}
-                        user={user}
-                        handleEdit={handleEdit}
-                        handleDelete={handleDelete}
-                        selectedUserIds={selectedUserIds}
-                        toggleUserSelection={toggleUserSelection}
-                        setSelectedUser={setSelectedUser}
-                        setIsUserModalOpen={setIsUserModalOpen}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="w-full overflow-x-auto overflow-y-auto max-h-[65vh] vq-scroll rounded-xl border border-[var(--bd)]">
-                <table className="w-full min-w-[700px] text-left border-collapse table-fixed">
-                  <colgroup>
-                    <col style={{ width: '36px' }} />
-                    <col style={{ width: '48px' }} />
-                    <col style={{ width: '20%' }} />
-                    <col style={{ width: '22%' }} />
-                    <col style={{ width: '16%' }} />
-                    <col style={{ width: '13%' }} />
-                    <col style={{ width: '13%' }} />
-                    <col style={{ width: '13%' }} />
-                  </colgroup>
-                  <thead className="sticky top-0 z-10">
-                    <tr className="bg-[var(--bg2)] text-[var(--tx2)]">
-                      <th className="px-3 py-3 text-[11px] font-semibold text-center">
-                        <input
-                          type="checkbox"
-                          checked={allUsersSelected}
-                          onChange={handleSelectAll}
-                          className="accent-[var(--blue)]"
-                        />
-                      </th>
-                      <th className="px-3 py-3 text-[11px] font-semibold text-center">#</th>
-                      <th className="px-3 py-3 text-[11px] font-semibold">Name</th>
-                      <th className="px-3 py-3 text-[11px] font-semibold">Email</th>
-                      <th className="px-3 py-3 text-[11px] font-semibold">Department</th>
-                      <th className="px-3 py-3 text-[11px] font-semibold">Location</th>
-                      <th className="px-3 py-3 text-[11px] font-semibold text-center">Status</th>
-                      <th className="px-3 py-3 text-[11px] font-semibold text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loading ? (
-                      [...Array(8)].map((_, i) => (
-                        <tr key={i} className="border-b border-[var(--bd)]">
-                          {[...Array(8)].map((__, j) => (
-                            <td key={j} className="px-4 py-3">
-                              <Skeleton height={16} />
-                            </td>
-                          ))}
-                        </tr>
-                      ))
-                    ) : users.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="text-center py-12 text-[var(--tx3)] text-sm">
-                          No users found.
-                        </td>
-                      </tr>
-                    ) : (
-                      users.map((user, index) => (
-                        <UserTableRow
-                          key={user._id}
-                          user={user}
-                          index={index}
-                          currentPage={currentPage}
-                          limit={limit}
-                          handleEdit={handleEdit}
-                          handleDelete={handleDelete}
-                          selectedUserIds={selectedUserIds}
-                          toggleUserSelection={toggleUserSelection}
-                          setSelectedUser={setSelectedUser}
-                          setIsUserModalOpen={setIsUserModalOpen}
-                        />
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </SkeletonTheme>
+        <UsersListView
+          viewMode={viewMode}
+          loading={loading}
+          users={users}
+          theme={theme}
+          currentPage={currentPage}
+          limit={limit}
+          selectedUserIds={selectedUserIds}
+          allUsersSelected={allUsersSelected}
+          handleSelectAll={handleSelectAll}
+          toggleUserSelection={toggleUserSelection}
+          handleEdit={handleEdit}
+          handleDelete={handleDelete}
+          setSelectedUser={setSelectedUser}
+          setIsUserModalOpen={setIsUserModalOpen}
+        />
 
-        {/* Bulk upload modal */}
-        {showBulkModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]">
-            <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-xl w-[90%] max-w-md p-6 relative shadow-xl">
-              <button
-                onClick={() => setShowBulkModal(false)}
-                className="absolute top-4 right-4 text-[var(--tx3)] hover:text-[var(--tx)] cursor-pointer text-lg"
-              >
-                ✕
-              </button>
-              <h2 className="text-lg font-semibold text-center mb-4 text-[var(--tx)]">
-                Register Bulk Employees
-              </h2>
-              {selectedFileName && (
-                <p className="text-sm text-[var(--tx2)] mb-3 text-center">
-                  Selected File : <span className="font-medium ml-1">{selectedFileName}</span>
-                </p>
-              )}
-              <label className="w-full flex flex-col items-center justify-center border-2 border-dashed border-[var(--bd2)] rounded-lg py-8 cursor-pointer hover:border-[var(--blue)] transition">
-                <span className="text-sm text-[var(--tx2)] mb-1">Click to upload Excel file</span>
-                <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleBulkUpload} />
-              </label>
-              {bulkLoading && (
-                <p className="text-sm text-[var(--tx3)] mt-3 text-center">Uploading...</p>
-              )}
-              <a
-                href="/Sample_Bulk_Employees.xlsx"
-                download
-                className="block text-center text-sm text-[var(--blue)] mt-3 font-medium hover:underline"
-              >
-                Download Sample Excel Sheet
-              </a>
-              {uploadErrors.length > 0 && (
-                <div className="mt-4 border border-[var(--bd)] rounded-lg overflow-hidden">
-                  <p className="text-[var(--crit)] text-sm font-semibold p-2 bg-[var(--crit)]/10 border-b border-[var(--bd)]">
-                    {uploadErrors.length} Errors Found
-                  </p>
-                  <div className="max-h-56 overflow-y-auto vq-scroll">
-                    <table className="w-full text-sm border-collapse text-[var(--tx)]">
-                      <thead className="bg-[var(--bg2)] sticky top-0">
-                        <tr>
-                          <th className="border border-[var(--bd)] p-2 text-left">SL No</th>
-                          <th className="border border-[var(--bd)] p-2 text-left">Row No</th>
-                          <th className="border border-[var(--bd)] p-2 text-left">Error</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {uploadErrors.map((item, index) => (
-                          <tr key={index}>
-                            <td className="border border-[var(--bd)] p-2">{item.slNo}</td>
-                            <td className="border border-[var(--bd)] p-2">{item.rowNo}</td>
-                            <td className="border border-[var(--bd)] p-2 text-[var(--crit)] break-words">
-                              {item.error}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        <BulkUploadModal
+          open={showBulkModal}
+          onClose={() => setShowBulkModal(false)}
+          selectedFileName={selectedFileName}
+          bulkLoading={bulkLoading}
+          uploadErrors={uploadErrors}
+          onUpload={handleBulkUpload}
+        />
 
         <ImportEmpUsersModal
           open={showImportModal}
@@ -832,34 +440,18 @@ const AddProfile = () => {
         />
 
         {/* Pagination */}
-        {users.length > 0 && (
-          <div className="mt-6 pt-4 border-t border-[var(--bd)] grid items-center gap-4" style={{ gridTemplateColumns: 'auto 1fr auto' }}>
-            <div className="text-sm text-[var(--tx2)] bg-[var(--bg2)] px-2.5 py-1.5 rounded-md inline-flex items-center gap-2 w-fit">
-              Total users -
-              <span className="text-[var(--blue)] font-medium bg-[var(--blue)]/10 px-2.5 py-1 rounded-md">
-                {totalCount}
-              </span>
-            </div>
-            <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} className="flex justify-center" />
-            <div className="flex items-center justify-end gap-1.5">
-              <span className="text-xs text-[var(--tx3)] whitespace-nowrap">Rows:</span>
-              <select
-                value={limit}
-                onChange={(e) => {
-                  setLimit(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="h-9 border border-[var(--bd)] rounded-lg text-xs text-[var(--tx)] bg-[var(--bg2)] px-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[var(--blue)]"
-              >
-                {[10, 20, 30, 50, 100].map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
+        <UsersPagination
+          show={users.length > 0}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          limit={limit}
+          onPageChange={setCurrentPage}
+          onLimitChange={(val) => {
+            setLimit(val);
+            setCurrentPage(1);
+          }}
+        />
       </div>
 
       <ConfirmationModal
