@@ -5061,3 +5061,193 @@ export let tableOccupancyDetectionTemplate = (incidentData, nvrData, channelData
 </html>
 `;
 };
+
+// ponytail: cloned from tableOccupancyDetectionTemplate; labels + count meaning differ
+export let mobilePhoneDetectionTemplate = (incidentData, nvrData, channelData) => {
+  const {
+    incidentName,
+    timeOfIncident,
+    zone,
+    severity,
+    description,
+    Image,
+    count,
+    _id,
+  } = incidentData;
+
+  const getSeverityStyles = (level = "low") => {
+    switch (level) {
+      case "high":
+        return { bg: "#FDECEA", text: "#B42318", label: "High" };
+      case "moderate":
+        return { bg: "#FFF4E5", text: "#B54708", label: "Moderate" };
+      case "low":
+      default:
+        return { bg: "#E8F1FF", text: "#1D4ED8", label: "Low" };
+    }
+  };
+
+  const severityStyle = getSeverityStyles(severity);
+
+  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    hour12: true,
+  });
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Mobile Phone Detection Alert</title>
+</head>
+
+<body style="margin:0;padding:0;background-color:#F4F6F8;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center" style="padding:24px;">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;">
+
+          <!-- Logo -->
+          <tr>
+            <td align="center" style="padding:20px 0;">
+              <img src="https://videoraiq.com/wp-content/uploads/2025/06/videoraIQ-dark-blue.webp"
+                   alt="VideoraIQ"
+                   style="max-width:200px;display:block;">
+            </td>
+          </tr>
+
+          <!-- Header -->
+          <tr>
+            <td style="padding:20px 24px;background:#0F172A;color:#ffffff;">
+              <h2 style="margin:0;font-size:20px;">Mobile Phone Detection Alert</h2>
+              <p style="margin:4px 0 0;font-size:13px;opacity:0.9;">
+                Automated Incident Notification
+              </p>
+            </td>
+          </tr>
+
+          <!-- Incident Summary -->
+          <tr>
+            <td style="padding:20px 24px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Incident Type:</strong> ${incidentName || "Mobile Phone Detection"}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Zone:</strong> ${zone || "N/A"}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Time of Incident:</strong> ${formattedTime}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding-top:10px;">
+                    <span style="
+                      display:inline-block;
+                      padding:6px 12px;
+                      font-size:12px;
+                      border-radius:20px;
+                      background:${severityStyle.bg};
+                      color:${severityStyle.text};
+                      font-weight:bold;">
+                      Severity: ${severityStyle.label}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Mobile Phone Details -->
+          <tr>
+            <td style="padding:0 24px 20px;">
+              <h3 style="font-size:16px;margin-bottom:10px;color:#0F172A;">
+                Mobile Phone Detection Summary
+              </h3>
+
+              <table width="100%" cellpadding="0" cellspacing="0"
+                     style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;">
+                <tr>
+                  <td style="padding:12px 16px;font-size:14px;color:#0F172A;">
+                    <strong>Phones Detected:</strong>
+                    <span style="
+                      font-size:16px;
+                      font-weight:bold;
+                      color:#1D4ED8;
+                      margin-left:6px;">
+                      ${count != null ? count : "N/A"}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Incident Image -->
+          <tr>
+            <td style="padding:0 24px 20px;">
+              <h3 style="font-size:16px;margin-bottom:10px;color:#0F172A;">
+                Incident Snapshot
+              </h3>
+
+              ${
+                Image
+                  ? `
+                <img
+                  src="${config.get("ImageView") + Image}"
+                  alt="Mobile Phone Detection Image"
+                  width="100%"
+                  style="
+                    max-width:552px;
+                    border-radius:8px;
+                    border:1px solid #E2E8F0;
+                    display:block;
+                  "
+                />`
+                  : `
+                <div style="
+                  padding:20px;
+                  text-align:center;
+                  font-size:14px;
+                  color:#64748B;
+                  border:1px dashed #CBD5E1;
+                  border-radius:6px;
+                ">
+                  No incident image available
+                </div>`
+              }
+            </td>
+          </tr>
+
+          <!-- Description -->
+          <tr>
+            <td style="padding:0 24px 24px;">
+              <strong>Description:</strong>
+              <p style="margin:6px 0 0;font-size:14px;color:#334155;">
+                ${description || "No additional description provided."}
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 24px;background:#F8FAFC;font-size:12px;color:#64748B;">
+              This is an automated system-generated alert.
+              Please do not reply to this email.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;
+};

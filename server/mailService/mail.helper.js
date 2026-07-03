@@ -29,6 +29,7 @@ import {
     vehicleObstructionTemplate,
     tableOccupancyDetectionTemplate,
     foodServicePPEDetectionTemplate,
+    mobilePhoneDetectionTemplate
 } from './IncidentsMailTemplates/mail.incidentsTemplate.js';
 import {
     forgotPasswordTemplate
@@ -532,6 +533,22 @@ class MailHelper {
         return sendStatus;
     }
 
+
+    
+    async mobilePhoneDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+        sendGridMail.setApiKey(config.get('sendgrid.key'));
+        const email = {
+            from: {
+                name: config.get('sendgrid.name'),
+                email: config.get('sendgrid.email'),
+            },
+            to: emailAddresses,
+            subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
+            html: mobilePhoneDetectionTemplate(data, nvrData, channelData),
+        };
+        let sendStatus = await sendGridMail.send(email);
+        return sendStatus;
+    }
 }
 
 export default new MailHelper();
