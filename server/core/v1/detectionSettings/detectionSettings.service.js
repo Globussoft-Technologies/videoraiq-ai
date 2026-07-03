@@ -26,7 +26,8 @@ import {
   vehicleObstructionSettings,
   loiteringDetectionSettings,
   tableOccupancyDetectionSettings,
-  foodServicePPEDetectionSettings
+  foodServicePPEDetectionSettings,
+  mobilePhoneDetectionSettings
 } from "../../../constants/detectionTypes.js";
 import pythonService from "../../../services/python.service.js";
 import logger from "../../../utils/logger.js";
@@ -59,7 +60,8 @@ import {
   LoiteringDetectionSetting,
   VehicleObstructionDetectionSetting,
   TableOccupancyDetectionSetting,
-  FoodServicePPEDetectionSetting
+  FoodServicePPEDetectionSetting,
+  MobilePhoneDetectionSetting
 } from "./detectionSettings.model.js";
 import Channel from "../channels/channels.model.js";
 import mongoose, { Types } from "mongoose";
@@ -90,6 +92,7 @@ const modelMap = {
   loiteringDetectionSettings: LoiteringDetectionSetting,
   vehicleObstructionSettings: VehicleObstructionDetectionSetting,
   tableOccupancyDetectionSettings: TableOccupancyDetectionSetting,
+  mobilePhoneDetectionSettings: MobilePhoneDetectionSetting,
   foodServicePPEDetectionSettings: FoodServicePPEDetectionSetting
 };
 

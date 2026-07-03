@@ -38,6 +38,7 @@ import {
   LoiteringDetectionIncident,
   TableOccupancyDetectionIncident,
   FoodServicePPEDetectionIncident,
+  MobilePhoneDetectionIncident
 } from "./incidents.model.js";
 const modelMap = {
   countPersons: CountPersonIncident,
@@ -63,7 +64,8 @@ const modelMap = {
   vehicleTypeDetection: VehicleTypeDetectionIncident,
   loiteringDetection: LoiteringDetectionIncident,
   tableOccupancyDetection: TableOccupancyDetectionIncident,
-  foodServicePPEDetection: FoodServicePPEDetectionIncident
+  foodServicePPEDetection: FoodServicePPEDetectionIncident,
+  mobilePhoneDetection: MobilePhoneDetectionIncident
 };
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
@@ -397,6 +399,9 @@ class IncidentsService {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.Image = req?.body?.Image;
       } else if (incidentType === "tableOccupancyDetection") {
+        newIncident.timeOfIncident = req?.body?.timeOfIncident;
+        newIncident.Image = req?.body?.Image;
+      } else if (incidentType === "mobilePhoneDetection") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.Image = req?.body?.Image;
       } else if (incidentType === "foodServicePPEDetection") {

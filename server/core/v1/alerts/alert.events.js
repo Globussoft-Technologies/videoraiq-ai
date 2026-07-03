@@ -112,6 +112,8 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
           let mailResponse = await MailResponse.tableOccupancyDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
         } else if(detectionType==="foodServicePPEDetection"){
           let mailResponse = await MailResponse.foodServicePPEDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
+        } else if(detectionType==="mobilePhoneDetection"){
+          let mailResponse = await MailResponse.mobilePhoneDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
         }
     }
     const smsRecipients = await RecipientModel.find({ _id: { $in: groupedAlerts} ,type:'phone'})

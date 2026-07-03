@@ -47,6 +47,7 @@ const detectionFields = {
   tableOccupancyDetectionSettings: detectionSettingSchema,
   foodServicePPEDetectionSettings: detectionSettingSchema,
   vehicleObstructionSettings: detectionSettingSchema,
+  mobilePhoneDetectionSettings: detectionSettingSchema,
 };
 
 // ! old

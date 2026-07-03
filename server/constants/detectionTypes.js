@@ -39,6 +39,7 @@ export const DETECTION_TYPES = {
   loiteringDetectionSettings: "Loitering Detection",
   tableOccupancyDetectionSettings: "Table Occupancy Detection",
   foodServicePPEDetectionSettings: "Food Service PPE Detection",
+  mobilePhoneDetectionSettings: "Mobile Phone Detection",
 }
 
 export const TYPE_MAP = {
@@ -68,6 +69,7 @@ export const TYPE_MAP = {
   vehicleObstructionSettings: "vehicleObstruction",
   tableOccupancyDetectionSettings: "tableOccupancySettings",
   foodServicePPEDetectionSettings: "foodServicePPEDetection",
+  mobilePhoneDetectionSettings: "mobilePhoneDetection",
 };
 
 export const DETECTION_MODES_MAP = {
@@ -91,6 +93,7 @@ export const DETECTION_MODES_MAP = {
   tableOccupancyDetectionSettings: ["tableOccupancySettings"],
   foodServicePPEDetectionSettings: ["foodServicePPEDetection"],
   countPersonsSettings: ["countPersons"],
+  mobilePhoneDetectionSettings: ["mobilePhoneDetection"],
 };
 
 export const DETECTION_OBJECTS_TYPES_MAP = {
@@ -127,6 +130,7 @@ export const toPopulateDetections = [
   { path: "detections.vehicleObstructionSettings.id" },
   { path: "detections.tableOccupancyDetectionSettings.id" },
   { path: "detections.foodServicePPEDetectionSettings.id" },
+  { path: "detections.mobilePhoneDetectionSettings.id" },
 ];
 
 // sample payloads
@@ -157,6 +161,7 @@ export const countPersonsSettings = {
     metricType: "gauge",
   },
 };
+
 
 export const motionDetectionSettings = {
   channelId: ["684a9cec2f7a93276ca673fa"],
@@ -883,5 +888,34 @@ export const foodServicePPEDetectionSettings = {
     },
     metricType: "gauge",
     ppeList: ["gloves", "mask", "hairnet", "apron", "vest"],
+  },
+};
+
+export const mobilePhoneDetectionSettings = {
+  channelId: ["664f89e8a9d345001ee326b1"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "mobilePhoneDetectionSettings",
+  name: "Mobile Phone Detector - Zone A",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    imageRequired: true,
+    videoLinkRequirement: false,
+    videoMinLength: 10,
+    videoMaxLength: 120,
+    videoDuration: 10,
+    levelOfImportance: "high",
+    videoResolution: [1920, 1080],
+    detectionTimeGap: 30,
+    referencePoints: {
+      1: [
+        [100, 100],
+        [200, 100],
+        [200, 200],
+        [100, 200],
+      ],
+    },
+    metricType: "gauge",
+    zone_name: "Cashier Counter",
   },
 };

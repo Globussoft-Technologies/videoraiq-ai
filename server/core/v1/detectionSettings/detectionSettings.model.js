@@ -955,7 +955,38 @@ const FoodServicePPEDetectionSetting = DetectionSetting.discriminator(
 );
 
 
+const MobilePhoneDetectionSchema = new mongoose.Schema({
+  imageRequired: {
+    type: Boolean,
+    default: false,
+  },
+  videoLinkRequirement: {
+    type: Boolean,
+    default: false,
+  },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "moderate",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  videoResolution: [Number],
+  referencePoints: Object,
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+  zone_name: { type: String, default: "default" },
+});
 
+const MobilePhoneDetectionSetting = DetectionSetting.discriminator(
+  "mobilePhoneDetectionSettings",
+  new mongoose.Schema({ settings: MobilePhoneDetectionSchema }),
+);
 
 export {
   DetectionSetting,
@@ -984,5 +1015,6 @@ export {
   LoiteringDetectionSetting,
   VehicleObstructionDetectionSetting,
   TableOccupancyDetectionSetting,
-  FoodServicePPEDetectionSetting
+  FoodServicePPEDetectionSetting,
+  MobilePhoneDetectionSetting
 };

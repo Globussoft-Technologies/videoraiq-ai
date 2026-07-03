@@ -327,6 +327,7 @@ class PythonService {
         zone_configs,
         obstruction_threshold_sec,
         severity,
+        zone_name,
       } = payload;
 
       // 🔹 Convert detection_modes → detectors
@@ -442,7 +443,15 @@ class PythonService {
           zone_configs,
         });
       }
-
+      
+      if( detection_modes?.includes("mobilePhoneDetection")) {
+        detectors.push({
+          name: "mobilePhoneDetectionSettings",
+          zones: zones || [],
+          zone_name,
+          zone_configs,
+        });
+      }
 
       // ❗️ Validation
       if (!detectors.length) {
@@ -587,6 +596,9 @@ class PythonService {
 
       if( detectionModes?.includes("desk_absence")) {
         detectors.push("deskAbsenceSettings");
+      }
+      if( detectionModes?.includes("mobilePhoneDetection")) {
+        detectors.push("mobilePhoneDetectionSettings");
       }
       // 🔹 Build payload
       const payload = {

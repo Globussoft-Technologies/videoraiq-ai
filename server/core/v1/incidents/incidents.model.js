@@ -514,6 +514,15 @@ const FoodServicePPESchema = new Schema({
 });
 const FoodServicePPEDetectionIncident = Incident.discriminator('foodServicePPEDetection', FoodServicePPESchema);
 
+// Cylinder Stack Height Detection
+const mobilePhoneDetectionSchema = new Schema({
+  count: {type:Number,default:0},
+  triggerNotification: { type: Boolean, default: true },
+});
+const MobilePhoneDetectionIncident = Incident.discriminator('mobilePhoneDetection', mobilePhoneDetectionSchema);
+
+
+
 export  {
   Incident,
   CountPersonIncident,
@@ -539,5 +548,6 @@ export  {
   WaterSpillageDetectionIncident,
   LoiteringDetectionIncident,
   TableOccupancyDetectionIncident,
-  FoodServicePPEDetectionIncident
+  FoodServicePPEDetectionIncident,
+  MobilePhoneDetectionIncident
 };
