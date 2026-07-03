@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Maximize2, VideoOff } from 'lucide-react';
+import { Maximize2, Minimize2, VideoOff } from 'lucide-react';
 import useHlsPlayer from '../hooks/useHlsPlayer';
 import { streamUrl } from '../lib/stream';
 
@@ -50,6 +50,7 @@ export default function CameraStream({
   camLabel,          // e.g. "CAM-001" — injected by CameraGrid
   showOverlay = true,
   onMaximize,
+  isFullscreen = false, // swaps the maximize icon to a "restore" icon when already fullscreen
   onLiveChange,      // (isLive: boolean) => void — reports live status up to grid
   rounded = true,
   minH = 200,
@@ -154,13 +155,14 @@ export default function CameraStream({
             )}
           </div>
 
-          {/* Bottom-right: expand button */}
+          {/* Bottom-right: expand / restore button */}
           {onMaximize && (
             <div
               onClick={(e) => { e.stopPropagation(); onMaximize(); }}
+              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
               style={{ position: 'absolute', bottom: 8, right: 10, width: 26, height: 26, borderRadius: 5, background: 'rgba(6,8,13,.6)', border: '1px solid rgba(255,255,255,.15)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             >
-              <Maximize2 size={12} color="#fff" />
+              {isFullscreen ? <Minimize2 size={12} color="#fff" /> : <Maximize2 size={12} color="#fff" />}
             </div>
           )}
         </>

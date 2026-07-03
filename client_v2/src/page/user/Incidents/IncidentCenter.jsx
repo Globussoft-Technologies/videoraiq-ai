@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Search, Calendar, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { AsyncBoundary } from '../../../components/States';
+import SharedMultiSelect from '../../../components/MultiSelect';
 import IncidentCard from './IncidentCard';
 import RefreshControl from '../../../components/RefreshControl';
 import { useApi } from '../../../hooks/useApi';
@@ -425,147 +426,6 @@ async function fetchDepartments() {
   return Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
 }
 
-/* Collapsible section used inside FiltersPopover */
-function AccordionSection({ title, count, children }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div style={{ borderBottom: '1px solid var(--bd)' }}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer',
-        }}
-      >
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)' }}>{title}</span>
-          {count > 0 && (
-            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--blue)', background: 'rgba(59,130,246,.13)', borderRadius: 10, padding: '1px 7px' }}>
-              {count}
-            </span>
-          )}
-        </span>
-        {open
-          ? <ChevronUp size={14} style={{ color: 'var(--tx3)' }} />
-          : <ChevronDown size={14} style={{ color: 'var(--tx3)' }} />}
-      </button>
-      {open && (
-        <div style={{ padding: '0 12px 12px' }}>
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* Inline searchable checkbox list inside accordion */
-function CheckList({ options, selected, onChange, getLabel, getId, placeholder }) {
-  const [search, setSearch] = useState('');
-  const filtered = options.filter(o => getLabel(o).toLowerCase().includes(search.toLowerCase()));
-
-  const toggle = (id) => {
-    const next = selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id];
-    onChange(next);
-  };
-
-  const filteredIds = filtered.map(getId);
-  const allSelected = filteredIds.length > 0 && filteredIds.every(id => selected.includes(id));
-
-  const toggleAll = () => {
-    if (allSelected) {
-      onChange(selected.filter(id => !filteredIds.includes(id)));
-    } else {
-      onChange([...new Set([...selected, ...filteredIds])]);
-    }
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ position: 'relative' }}>
-        <Search size={12} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx3)', pointerEvents: 'none' }} />
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder={placeholder || 'Search...'}
-          style={{
-            width: '100%', boxSizing: 'border-box',
-            paddingLeft: 28, paddingRight: 10, height: 30,
-            border: '1px solid var(--bd)', borderRadius: 7,
-            fontSize: 12, outline: 'none',
-            color: 'var(--tx)', background: 'var(--bg2)',
-          }}
-        />
-      </div>
-      {filtered.length > 0 && (
-        <div
-          onClick={toggleAll}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8, padding: '5px 6px',
-            borderRadius: 6, cursor: 'pointer',
-            borderBottom: '1px solid var(--bd)', marginBottom: 2, paddingBottom: 8,
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg2)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-        >
-          <div style={{
-            width: 15, height: 15, borderRadius: 4, flexShrink: 0,
-            border: `1.5px solid ${allSelected ? 'var(--blue)' : 'var(--bd2)'}`,
-            background: allSelected ? 'var(--blue)' : 'var(--bg1solid)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            {allSelected && (
-              <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
-                <path d="M1 3L3 5L7 1" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            )}
-          </div>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx2)', lineHeight: 1.4 }}>
-            {allSelected ? 'Deselect all' : 'Select all'}
-          </span>
-        </div>
-      )}
-      <div style={{ maxHeight: 140, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {filtered.length === 0 ? (
-          <div style={{ fontSize: 11, color: 'var(--tx3)', padding: '6px 4px' }}>No results</div>
-        ) : (
-          filtered.map(o => {
-            const id      = getId(o);
-            const checked = selected.includes(id);
-            return (
-              <div
-                key={id}
-                onClick={() => toggle(id)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8, padding: '5px 6px',
-                  borderRadius: 6, cursor: 'pointer',
-                  background: checked ? 'rgba(59,130,246,.08)' : 'transparent',
-                  transition: 'background .1s',
-                }}
-                onMouseEnter={e => { if (!checked) e.currentTarget.style.background = 'var(--bg2)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = checked ? 'rgba(59,130,246,.08)' : 'transparent'; }}
-              >
-                <div style={{
-                  width: 15, height: 15, borderRadius: 4, flexShrink: 0,
-                  border: `1.5px solid ${checked ? 'var(--blue)' : 'var(--bd2)'}`,
-                  background: checked ? 'var(--blue)' : 'var(--bg1solid)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  {checked && (
-                    <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
-                      <path d="M1 3L3 5L7 1" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  )}
-                </div>
-                <span style={{ fontSize: 12, color: 'var(--tx2)', lineHeight: 1.4 }}>{getLabel(o)}</span>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
-}
-
 function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds, setDeptIds, locIds, setLocIds }) {
   const [open, setOpen] = useState(false);
   const ref             = useRef(null);
@@ -622,10 +482,11 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
           width: 280, background: 'var(--bg1solid)',
           border: '1px solid var(--bd)', borderRadius: 12,
           boxShadow: '0 10px 32px rgba(0,0,0,.22)',
-          overflow: 'hidden',
+          padding: 16,
+          display: 'flex', flexDirection: 'column', gap: 12,
         }}>
           {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--bd)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--bd)', paddingBottom: 10 }}>
             <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--tx)' }}>Additional Filters</span>
             {activeCount > 0 && (
               <button
@@ -637,50 +498,43 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
             )}
           </div>
 
-          {/* Accordion sections */}
-          <AccordionSection title="NVR" count={nvrIds.length}>
-            <CheckList
-              options={nvrs}
-              selected={nvrIds}
-              onChange={v => { setNvrIds(v); setChannelIds([]); }}
-              getLabel={o => o.nvrName || o.name || ''}
-              getId={o => o._id || o.id}
-              placeholder="Search NVR..."
-            />
-          </AccordionSection>
-
-          <AccordionSection title="Camera" count={channelIds.length}>
-            <CheckList
-              options={cameras}
-              selected={channelIds}
-              onChange={setChannelIds}
-              getLabel={o => o.customName || o.name || ''}
-              getId={o => o._id || o.id}
-              placeholder="Search camera..."
-            />
-          </AccordionSection>
-
-          <AccordionSection title="Department" count={deptIds.length}>
-            <CheckList
-              options={depts}
-              selected={deptIds}
-              onChange={setDeptIds}
-              getLabel={o => o.departmentName || o.name || ''}
-              getId={o => o._id || o.id}
-              placeholder="Search department..."
-            />
-          </AccordionSection>
-
-          <AccordionSection title="Location" count={locIds.length}>
-            <CheckList
-              options={locs}
-              selected={locIds}
-              onChange={setLocIds}
-              getLabel={o => o.locationName || o.name || String(o)}
-              getId={o => o._id || o.locationName || o.name || String(o)}
-              placeholder="Search location..."
-            />
-          </AccordionSection>
+          {/* All filters shown at once — no accordion, matching LogsFilterPopover */}
+          <SharedMultiSelect
+            options={nvrs.map(o => ({ id: o._id || o.id, label: o.nvrName || o.name || '' }))}
+            value={nvrIds}
+            onChange={v => { setNvrIds(v); setChannelIds([]); }}
+            placeholder="Select NVR"
+            searchPlaceholder="Search NVR..."
+            maxHeight="max-h-40"
+            msg="No NVR Found"
+          />
+          <SharedMultiSelect
+            options={cameras.map(o => ({ id: o._id || o.id, label: o.customName || o.name || '' }))}
+            value={channelIds}
+            onChange={setChannelIds}
+            placeholder="Select Camera"
+            searchPlaceholder="Search camera..."
+            maxHeight="max-h-40"
+            msg="No Camera Found"
+          />
+          <SharedMultiSelect
+            options={depts.map(o => ({ id: o._id || o.id, label: o.departmentName || o.name || '' }))}
+            value={deptIds}
+            onChange={setDeptIds}
+            placeholder="Select Department"
+            searchPlaceholder="Search department..."
+            maxHeight="max-h-40"
+            msg="No Department Found"
+          />
+          <SharedMultiSelect
+            options={locs.map(o => ({ id: o._id || o.locationName || o.name || String(o), label: o.locationName || o.name || String(o) }))}
+            value={locIds}
+            onChange={setLocIds}
+            placeholder="Select Location"
+            searchPlaceholder="Search location..."
+            maxHeight="max-h-40"
+            msg="No Location Found"
+          />
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
-import CameraGrid from '../../../components/CameraGrid';
+import LiveWallGrid from '../../../components/LiveWallGrid';
 
 /** Live Wall — full multi-camera monitoring grid (HLS), 3×3 default. */
 export default function LiveWall() {
-  return <CameraGrid defaultCols={3} />;
+  return <LiveWallGrid />;
 }

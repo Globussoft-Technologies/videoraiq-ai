@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Grid2x2,
+  Video,
   TriangleAlert,
   ShieldAlert,
   BarChart3,
@@ -22,7 +23,7 @@ import {
 /**
  * V2 navigation grouped exactly as the prototype sidebar
  * (MONITOR / INTELLIGENCE / LOGS & RECORDS / CONFIGURE / ADMINISTER).
- * `path` is relative to the app root; `key` matches the prototype view id.
+ * `path` is relative to the /v2 mount; `key` matches the prototype view id.
  */
 export const NAV_GROUPS = [
   {
@@ -30,6 +31,7 @@ export const NAV_GROUPS = [
     items: [
       { key: 'overview', label: 'Command Center', path: 'dashboard', icon: LayoutDashboard, end: true },
       { key: 'wall', label: 'Live Wall', path: 'live', icon: Grid2x2 },
+      { key: 'camera', label: 'Playback', path: 'camera', icon: Video },
       { key: 'alerts', label: 'Alerts', path: 'alerts', icon: TriangleAlert, badgeKey: 'alerts' },
       { key: 'incidents', label: 'Incident Center', path: 'incidents', icon: ShieldAlert },
     ],
@@ -59,10 +61,10 @@ export const NAV_GROUPS = [
       { key: 'cameras', label: 'Cameras & NVRs', path: 'cameras', icon: Cctv },
     ],
   },
-   {
+  {
     label: 'USER DETAILS',
     items: [
-      { key: 'locations', label: 'Locations', path: 'locations', icon:MapPin  },
+      { key: 'locations', label: 'Locations', path: 'locations', icon: MapPin },
       { key: 'departments', label: 'Departments', path: 'departments', icon: Building2 },
       { key: 'register', label: 'Register your User', path: 'register-users', icon: UserPlus },
     ],
@@ -81,7 +83,7 @@ export const NAV_GROUPS = [
 export const VIEW_META = {
   overview: { title: 'Command Center', sub: 'Real-time intelligence across all sites' },
   wall: { title: 'Live Video Wall', sub: 'Multi-camera monitoring grid' },
-  camera: { title: 'Camera View', sub: 'AI detection overlays · live stream' },
+  camera: { title: 'Playback', sub: 'Recorded footage · scrub, seek & review events' },
   alerts: { title: 'Alerts & Events', sub: 'Investigate and respond to detections' },
   incidents: { title: 'Incident Center', sub: 'Visual evidence grid across all detections' },
   analytics: { title: 'Analytics', sub: 'Trends, heatmaps & engine performance' },
@@ -97,9 +99,9 @@ export const VIEW_META = {
   users: { title: 'User Management', sub: 'Roles, permissions & face enrollment' },
   settings: { title: 'Settings', sub: 'Platform, alerts, privacy & integrations' },
   profile: { title: 'My Profile', sub: 'Your account, activity & preferences' },
-  locations:{title :'Locations', sub:'Locations'},
-  departments:{title :'Departments', sub:'Departments '},
-  locations: { title: 'Locations',sub: 'Manage organization locations'},
-  departments: {title: 'Departments', sub: 'Manage departments and teams'},
+  locations: { title: 'Locations', sub: 'Locations' },
+  departments: { title: 'Departments', sub: 'Departments ' },
+  locations: { title: 'Locations', sub: 'Manage organization locations' },
+  departments: { title: 'Departments', sub: 'Manage departments and teams' },
   'register-users': { title: 'Register your User', sub: 'Create a new employee profile and capture enrollment images' },
 };

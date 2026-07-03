@@ -186,3 +186,25 @@
 @media (max-width: 640px) {
   .vq-kpi-row { grid-template-columns: repeat(2, 1fr) !important; }
 }
+
+/* ---- Responsive layout for Live Wall / Camera grid ---- */
+@media (max-width: 900px) {
+  .vq-wall-grid[data-cols="3"],
+  .vq-wall-grid[data-cols="4"] { grid-template-columns: repeat(2, 1fr) !important; }
+}
+@media (max-width: 560px) {
+  .vq-wall-grid[data-cols="2"],
+  .vq-wall-grid[data-cols="3"],
+  .vq-wall-grid[data-cols="4"] { grid-template-columns: 1fr !important; }
+  .vq-wall-toolbar { align-items: stretch !important; }
+  .vq-wall-sizetoggle { width: 100%; justify-content: space-between; }
+  .vq-wall-sizetoggle > div { flex: 1; justify-content: center; }
+  .vq-wall-search { width: 100%; }
+
+  .vq-fs-modal { width: 100vw !important; height: 100vh !important; border-radius: 0 !important; }
+  .vq-fs-label { font-size: 10.5px !important; padding: 5px 9px !important; top: 8px !important; left: 8px !important; }
+  .vq-fs-close { width: 30px !important; height: 30px !important; top: 8px !important; right: 8px !important; }
+  .vq-fs-nav { width: 32px !important; height: 32px !important; }
+  .vq-fs-nav-prev { left: 6px !important; }
+  .vq-fs-nav-next { right: 6px !important; }
+}

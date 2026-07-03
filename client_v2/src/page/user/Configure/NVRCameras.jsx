@@ -1020,7 +1020,6 @@ export default function NVRCameras() {
 
   const nvrsApi     = useApi(() => getNvrs(0, 100), []);
   const channelsApi = useApi(() => getChannels({ limit: 200 }), []);
-  const locationsApi = useApi(() => getLocations(0, 100), []);
 
   /* Only show the NVR skeleton once loading has actually taken a moment,
      so a fast response never flashes placeholder cards. */
@@ -1033,7 +1032,6 @@ export default function NVRCameras() {
 
   const nvrs      = nvrsApi.data?.nvrs ?? (Array.isArray(nvrsApi.data) ? nvrsApi.data : []);
   const channels  = channelsApi.data ?? [];
-  const locations = locationsApi.data ?? [];
 
   /* Channels don't carry their own location — it lives on the parent NVR.
      Only one NVR is registered on most installs, so also fall back to it
@@ -1064,7 +1062,7 @@ export default function NVRCameras() {
 
   const camFiltered = channels.filter(c => {
     const nameMatch = !camSearch || (c.name || c.channelName || '').toLowerCase().includes(camSearch.toLowerCase());
-    const siteMatch = !siteFilter || siteOf(c).toLowerCase().includes(siteFilter.toLowerCase());
+    const siteMatch = !siteFilter || siteOf(c).trim().toLowerCase() === siteFilter.trim().toLowerCase();
     return nameMatch && siteMatch;
   });
 
@@ -1089,9 +1087,14 @@ export default function NVRCameras() {
     }
   };
 
+  /* Built from the NVRs' own `location` field — the same source siteOf()
+     reads for the filter — so every option here is guaranteed matchable.
+     (The standalone Location collection is a separate free-text list that
+     doesn't necessarily agree in spelling/casing with what's on each NVR.) */
+  const nvrSites = [...new Set(nvrs.map(n => (n.location || n.locationName || n.site || '').trim()).filter(Boolean))].sort();
   const siteOpts = [
     { v: '', l: 'All Sites' },
-    ...locations.map(l => ({ v: l.locationName || l.name, l: l.locationName || l.name })),
+    ...nvrSites.map(s => ({ v: s, l: s })),
   ];
 
   function handleManageCamerasClick() {
