@@ -77,12 +77,12 @@ const LogsFilterPopover = ({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex h-10 px-4 rounded-lg bg-[linear-gradient(94.16deg,#FFFFFF_0.77%,#AAE2FF_99.4%)] text-[#333333] text-sm font-medium cursor-pointer items-center gap-2 relative"
+          className="flex h-10 px-4 rounded-lg bg-[var(--violet)]/10 border border-[var(--violet)]/30 text-[var(--violet)] text-sm font-semibold cursor-pointer items-center gap-2 relative hover:bg-[var(--violet)]/15 transition-colors"
         >
           <Filter className="w-4 h-4" />
           Filters
           {activeFiltersCount > 0 && (
-            <span className="bg-[var(--brand)] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] h-5 flex items-center justify-center">
+            <span className="bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] h-5 flex items-center justify-center">
               {activeFiltersCount}
             </span>
           )}

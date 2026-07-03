@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, memo } from 'react';
 import {
   Search,
+  SearchX,
   ChevronLeft,
   ChevronRight,
   LayoutGrid,
@@ -8,10 +9,9 @@ import {
   Loader2,
 } from 'lucide-react';
 import moment from 'moment';
-import { Input } from '@/components/ui/input';
 import ProfilesTable from './ProfilesTable';
 import DateRangePicker from './DateRangePicker';
-import notfound from '@/assets/notfound.svg';
+import StatCards from './StatCards';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
@@ -45,6 +45,7 @@ const ReusableTablePage = ({
   onViewModeChange,
   limit: limitProp,
   onLimitChange,
+  stats,
 }) => {
   const [internalSearchInput, setInternalSearchInput] = useState('');
   const [internalViewMode, setInternalViewMode] = useState('table');
@@ -133,18 +134,23 @@ const ReusableTablePage = ({
 
   return (
     <div className="w-full">
+      {Array.isArray(stats) && stats.length > 0 && (
+        <div className="mb-[18px]">
+          <StatCards stats={stats} />
+        </div>
+      )}
       <div className="w-full bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] p-4 sm:p-5 space-y-4">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative w-full md:w-[220px]">
-            <Input
+          <div className="relative w-full md:w-[240px] flex items-center h-10 rounded-[10px] bg-[var(--bg2)] border border-[var(--bd)] focus-within:border-[var(--violet)] focus-within:ring-2 focus-within:ring-[var(--violet)]/15 transition-colors">
+            <Search className="absolute left-3 w-4 h-4 text-[var(--tx3)] pointer-events-none" />
+            <input
               type="text"
               placeholder="Search"
-              className="pl-4 pr-10 h-10"
+              className="w-full h-full bg-transparent border-0 outline-none pl-9 pr-3 text-sm text-[var(--tx)] placeholder:text-[var(--tx3)]"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
             />
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--tx3)]" />
           </div>
 
           {from !== 'visibility' && (
@@ -158,38 +164,39 @@ const ReusableTablePage = ({
           )}
 
           <div className="w-full md:flex md:items-center md:ml-auto md:w-auto gap-3 flex flex-wrap">
-            {children}
             {typeof gridCard === 'function' && (
-              <div className="flex items-center rounded-[8px] border border-[var(--bd)] overflow-hidden h-10">
+              <div className="flex items-center gap-[3px] bg-[var(--bg2)] border border-[var(--bd)] rounded-[8px] p-[3px] h-10">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('table')}
+                  className={`flex items-center gap-1.5 h-full px-3 rounded-[6px] text-xs font-semibold transition-colors cursor-pointer ${
+                    currentViewMode === 'table'
+                      ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white shadow-sm'
+                      : 'text-[var(--tx2)] hover:text-[var(--tx)]'
+                  }`}
+                  title="List view"
+                  aria-label="List view"
+                >
+                  <ListIcon className="w-3.5 h-3.5" />
+                  List
+                </button>
                 <button
                   type="button"
                   onClick={() => setViewMode('grid')}
-                  className={`flex items-center justify-center w-9 h-full transition-colors cursor-pointer ${
+                  className={`flex items-center gap-1.5 h-full px-3 rounded-[6px] text-xs font-semibold transition-colors cursor-pointer ${
                     currentViewMode === 'grid'
-                      ? 'bg-[var(--brand)] text-white'
-                      : 'bg-[var(--bg2)] text-[var(--tx2)] hover:bg-[var(--bg3)]'
+                      ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white shadow-sm'
+                      : 'text-[var(--tx2)] hover:text-[var(--tx)]'
                   }`}
                   title="Grid view"
                   aria-label="Grid view"
                 >
                   <LayoutGrid className="w-3.5 h-3.5" />
-                </button>
-                <div className="w-px h-full bg-[var(--bd)]" />
-                <button
-                  type="button"
-                  onClick={() => setViewMode('table')}
-                  className={`flex items-center justify-center w-9 h-full transition-colors cursor-pointer ${
-                    currentViewMode === 'table'
-                      ? 'bg-[var(--brand)] text-white'
-                      : 'bg-[var(--bg2)] text-[var(--tx2)] hover:bg-[var(--bg3)]'
-                  }`}
-                  title="Table view"
-                  aria-label="Table view"
-                >
-                  <ListIcon className="w-3.5 h-3.5" />
+                  Grid
                 </button>
               </div>
             )}
+            {children}
           </div>
         </div>
 
@@ -216,8 +223,20 @@ const ReusableTablePage = ({
               </div>
             )}
             {isEmpty && (
-              <div className="flex flex-col items-center justify-center min-h-[68vh] py-10">
-                <img src={notfound} alt="No logs found" className="w-64 h-64 mb-4" />
+              <div className="flex flex-col items-center justify-center min-h-[58vh] py-16">
+                <div className="w-16 h-16 rounded-full bg-[var(--bg2)] border border-[var(--bd)] flex items-center justify-center mb-4">
+                  <SearchX className="w-7 h-7 text-[var(--tx3)]" />
+                </div>
+                <p
+                  className="text-[18px] font-semibold text-[var(--tx)]"
+                  style={{ fontFamily: 'var(--disp)' }}
+                >
+                  No logs found
+                </p>
+                <p className="text-sm text-[var(--tx3)] mt-1.5 max-w-[320px] text-center">
+                  There are no records for the selected date range or filters. Try widening the range
+                  or clearing filters.
+                </p>
               </div>
             )}
           </>
@@ -233,7 +252,7 @@ const ReusableTablePage = ({
             }`}
           >
             Total logs -{' '}
-            <span className="text-[var(--brand)] font-medium bg-[var(--brand)]/10 px-2.5 py-1 rounded-md">
+            <span className="text-[var(--violet)] font-semibold bg-[var(--violet)]/10 px-2.5 py-1 rounded-md">
               {useServerPagination ? attendanceLogsCount ?? 0 : (filtered || []).length}
             </span>
           </div>
@@ -283,7 +302,7 @@ const ReusableTablePage = ({
                     onClick={() => handlePageChange(page)}
                     className={`flex items-center justify-center w-8 h-8 rounded text-sm font-medium cursor-pointer ${
                       currentPage === page
-                        ? 'bg-[var(--brand)] text-white'
+                        ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white'
                         : 'text-[var(--tx2)] hover:bg-[var(--bg2)]'
                     }`}
                   >
@@ -323,7 +342,7 @@ const ReusableTablePage = ({
                 type="button"
                 onClick={handleGoToPage}
                 disabled={pageInput === ''}
-                className="h-9 px-3 rounded-lg text-xs font-medium bg-[var(--brand)] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-95 transition-opacity"
+                className="h-9 px-3 rounded-lg text-xs font-medium bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-95 transition-opacity"
               >
                 Go
               </button>

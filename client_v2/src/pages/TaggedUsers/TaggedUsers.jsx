@@ -5,9 +5,9 @@ import { toast } from 'sonner';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
 import unknownimg from '@/assets/unknownimg.jpg';
-import { Button } from '@/components/ui/button';
 
 import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePage';
+import ExportButton from '@/pages/AttendanceLogs/components/ExportButton';
 import LogsFilterPopover from '@/pages/AttendanceLogs/components/LogsFilterPopover';
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
 import LogEmployeeProfileDialog from '@/pages/AttendanceLogs/components/LogEmployeeProfileDialog';
@@ -56,8 +56,9 @@ const TaggedUsers = () => {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
   });
   const [manualTrigger, setManualTrigger] = useState(0);
+  // Default to grid; a saved 'table' choice is still remembered.
   const [viewMode, setViewMode] = useState(() =>
-    localStorage.getItem(ACCESS_VIEW_MODE_KEY) === 'grid' ? 'grid' : 'table'
+    localStorage.getItem(ACCESS_VIEW_MODE_KEY) === 'table' ? 'table' : 'grid'
   );
 
   useEffect(() => localStorage.setItem(ACCESS_REFRESH_KEY, autoRefresh), [autoRefresh]);
@@ -311,6 +312,22 @@ const TaggedUsers = () => {
     [region, untaggingId, handleUntag]
   );
 
+  // KPI tiles — derived from the loaded page + server total (no placeholder data).
+  const stats = useMemo(() => {
+    const list = rows || [];
+    const uniqueUsers = new Set(list.map((r) => r.userId || r.name).filter(Boolean)).size;
+    const departments = new Set(
+      list.map((r) => r.department).filter((d) => d && d !== '--')
+    ).size;
+    const withExit = list.filter((r) => r.exitTiming).length;
+    return [
+      { label: 'Tagged Records', value: totalCount ?? 0, color: 'var(--blue)' },
+      { label: 'Unique Users (page)', value: uniqueUsers, color: 'var(--ok)' },
+      { label: 'Departments (page)', value: departments, color: 'var(--violet)' },
+      { label: 'Completed Exit (page)', value: withExit, color: 'var(--cyan)' },
+    ];
+  }, [rows, totalCount]);
+
   const handleExport = (format) =>
     handleTaggedExport(format, {
       startDate,
@@ -350,6 +367,7 @@ const TaggedUsers = () => {
       />
 
       <ReusableTablePage
+        stats={stats}
         data={rows}
         columns={columns}
         loading={loading}
@@ -380,18 +398,8 @@ const TaggedUsers = () => {
         <div className="flex gap-2">
           {canEdit && (
             <>
-              <Button
-                className="bg-[var(--brand)] text-white rounded-[8px] px-3 py-2 text-sm cursor-pointer hover:bg-[var(--brand-hover)]"
-                onClick={() => handleExport('excel')}
-              >
-                Export Excel
-              </Button>
-              <Button
-                className="bg-[var(--brand)] text-white rounded-[8px] px-3 py-2 text-sm cursor-pointer hover:bg-[var(--brand-hover)]"
-                onClick={() => handleExport('pdf')}
-              >
-                Export PDF
-              </Button>
+              <ExportButton onClick={() => handleExport('excel')}>Excel</ExportButton>
+              <ExportButton onClick={() => handleExport('pdf')}>PDF</ExportButton>
             </>
           )}
         </div>

@@ -13,6 +13,7 @@ import AutoRefreshComponent from './components/AutoRefreshComponent';
 import LogEmployeeProfileDialog from './components/LogEmployeeProfileDialog';
 import BreakLogsDialog from './components/BreakLogsDialog';
 import ActionCameraPreview from './components/ActionCameraPreview';
+import ExportButton from './components/ExportButton';
 import {
   getAttendanceLogs,
   filterByDepartment,
@@ -53,8 +54,9 @@ const AttendanceLogs = () => {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
   });
   const [manualTrigger, setManualTrigger] = useState(0);
+  // Default to grid; a saved 'table' choice is still remembered.
   const [viewMode, setViewMode] = useState(() =>
-    localStorage.getItem(ATTENDANCE_VIEW_MODE_KEY) === 'grid' ? 'grid' : 'table'
+    localStorage.getItem(ATTENDANCE_VIEW_MODE_KEY) === 'table' ? 'table' : 'grid'
   );
 
   useEffect(() => localStorage.setItem(ATTENDANCE_REFRESH_KEY, autoRefresh), [autoRefresh]);
@@ -288,6 +290,27 @@ const AttendanceLogs = () => {
     [region]
   );
 
+  // KPI tiles — derived from the loaded page + server total (no placeholder data).
+  const stats = useMemo(() => {
+    const rows = mappedLogs || [];
+    const checkedIn = rows.filter((r) => r.login).length;
+    const checkedOut = rows.filter((r) => r.logout && r.logout !== '--').length;
+    const durations = rows
+      .filter((r) => r.login && r.logout && r.logout !== '--')
+      .map((r) => Math.max(0, moment(r.logout).diff(moment(r.login), 'minutes')));
+    let avg = '--';
+    if (durations.length) {
+      const m = Math.round(durations.reduce((a, b) => a + b, 0) / durations.length);
+      avg = `${Math.floor(m / 60)}h ${m % 60}m`;
+    }
+    return [
+      { label: 'Total Records', value: attendanceLogsCount ?? 0, color: 'var(--blue)' },
+      { label: 'Checked In (page)', value: checkedIn, color: 'var(--ok)' },
+      { label: 'Checked Out (page)', value: checkedOut, color: 'var(--cyan)' },
+      { label: 'Avg Working Hours (page)', value: avg, color: 'var(--violet)' },
+    ];
+  }, [mappedLogs, attendanceLogsCount]);
+
   const handleExport = (format) =>
     handleAttendanceExport(format, {
       searchInput,
@@ -333,6 +356,7 @@ const AttendanceLogs = () => {
 
       {/* TABLE / GRID */}
       <ReusableTablePage
+        stats={stats}
         loading={state.loading}
         attendanceLogsCount={attendanceLogsCount}
         currentPage={currentPage}
@@ -373,18 +397,8 @@ const AttendanceLogs = () => {
       >
         {canEdit && (
           <div className="flex gap-2">
-            <button
-              className="h-10 bg-[var(--brand)] text-white rounded-[8px] px-3 text-sm cursor-pointer hover:bg-[var(--brand-hover)] transition-colors"
-              onClick={() => handleExport('excel')}
-            >
-              Export Excel
-            </button>
-            <button
-              className="h-10 bg-[var(--brand)] text-white rounded-[8px] px-3 text-sm cursor-pointer hover:bg-[var(--brand-hover)] transition-colors"
-              onClick={() => handleExport('pdf')}
-            >
-              Export PDF
-            </button>
+            <ExportButton onClick={() => handleExport('excel')}>Excel</ExportButton>
+            <ExportButton onClick={() => handleExport('pdf')}>PDF</ExportButton>
           </div>
         )}
 

@@ -48,11 +48,11 @@ export const NAV_GROUPS = [
     label: 'LOGS & RECORDS',
     items: [
       { key: 'attendance', label: 'Attendance Logs', path: 'logs/attendance', icon: CalendarCheck },
-      // { key: 'access', label: 'Access Logs', path: 'logs/access', icon: DoorOpen },
-      // { key: 'tagged-users', label: 'Tagged Users', path: 'logs/tagged-users', icon: Tags },
+      { key: 'access', label: 'Access Logs', path: 'logs/access', icon: DoorOpen },
+      { key: 'tagged-users', label: 'Tagged Users', path: 'logs/tagged-users', icon: Tags },
       // { key: 'person-count', label: 'Person Count Logs', path: 'logs/person-count', icon: UserCheck },
       // { key: 'absence', label: 'Desk Absence Logs', path: 'logs/absence', icon: UserMinus },
-      // { key: 'anpr', label: 'ANPR Logs', path: 'logs/anpr', icon: Car },
+      { key: 'anpr', label: 'ANPR Logs', path: 'logs/anpr', icon: Car },
     ],
   },
   {

@@ -95,7 +95,7 @@ const DateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeChange }
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="h-9 2xl:h-10 flex items-center justify-between gap-2 px-3 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] text-xs 2xl:text-sm font-medium cursor-pointer hover:border-[var(--blue)] transition-colors min-w-[180px] max-w-[280px]"
+        className="h-10 flex items-center justify-between gap-2 px-3 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] text-xs 2xl:text-sm font-medium cursor-pointer hover:border-[var(--violet)] transition-colors min-w-[180px] max-w-[280px]"
       >
         <span className="flex items-center gap-2 overflow-hidden">
           <CalendarIcon className="w-4 h-4 shrink-0 text-[var(--tx3)]" />

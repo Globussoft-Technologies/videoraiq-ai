@@ -23,7 +23,8 @@ function ProfilesTable({ data, columns, loading }) {
             {table.getAllColumns().map((column) => (
               <th
                 key={column.id}
-                className="px-6 py-4 text-left text-sm font-[500] text-[var(--tx)] tracking-wider"
+                className="px-5 py-3 text-left text-[10px] uppercase tracking-[0.06em] text-[var(--tx3)] font-medium"
+              style={{ fontFamily: 'var(--mono)' }}
               >
                 <Skeleton width={80} height={18} baseColor="var(--bg3)" highlightColor="var(--bg2)" />
               </th>
@@ -54,7 +55,8 @@ function ProfilesTable({ data, columns, loading }) {
           {table.getAllColumns().map((column) => (
             <th
               key={column.id}
-              className="px-6 py-4 text-left text-sm font-[500] text-[var(--tx)] tracking-wider"
+              className="px-5 py-3 text-left text-[10px] uppercase tracking-[0.06em] text-[var(--tx3)] font-medium"
+              style={{ fontFamily: 'var(--mono)' }}
             >
               {typeof column.columnDef.header === 'function'
                 ? column.columnDef.header()
@@ -67,7 +69,7 @@ function ProfilesTable({ data, columns, loading }) {
         {table.getRowModel().rows.map((row) => (
           <tr key={row.id} className="hover:bg-[var(--bg2)]/60 transition-colors">
             {row.getVisibleCells().map((cell) => (
-              <td key={cell.id} className="px-6 py-3 whitespace-nowrap text-sm text-[var(--tx2)]">
+              <td key={cell.id} className="px-5 py-3.5 whitespace-nowrap text-sm text-[var(--tx2)]">
                 {typeof cell.column.columnDef.cell === 'function'
                   ? cell.column.columnDef.cell(cell)
                   : cell.renderValue()}

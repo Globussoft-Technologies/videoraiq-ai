@@ -40,11 +40,11 @@ export const v2Routes = (
     <Route path="register-users" element={<AddProfile />} />
     {/* Logs & Records (nested under /logs/*) */}
     <Route path="logs/attendance" element={<AttendanceLogs />} />
-    {/* <Route path="logs/access" element={<AccessLogs />} />
+    <Route path="logs/access" element={<AccessLogs />} />
     <Route path="logs/tagged-users" element={<TaggedUsers />} />
     <Route path="logs/anpr" element={<ANPRLogs />} />
 
-    <Route path="logs/person-count" element={<PersonCountLogs />} />
+    {/* <Route path="logs/person-count" element={<PersonCountLogs />} />
     <Route path="logs/absence" element={<DeskAbsenceLogs />} /> */}
 
     {/* Configure */}

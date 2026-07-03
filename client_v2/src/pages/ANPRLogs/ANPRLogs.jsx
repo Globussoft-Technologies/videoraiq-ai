@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
-import { Button } from '@/components/ui/button';
 
 import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePage';
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
+import ExportButton from '@/pages/AttendanceLogs/components/ExportButton';
 
 import { initialState, reducer, REFRESH_KEY, INTERVAL_KEY } from './anprState';
 import { buildColumns, renderANPRCard } from './anprColumns';
@@ -60,7 +60,7 @@ const ANPRLogs = () => {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
   });
   const [manualTrigger, setManualTrigger] = useState(0);
-  const [viewMode, setViewMode] = useState('table'); // 'table' | 'grid'
+  const [viewMode, setViewMode] = useState('grid'); // 'table' | 'grid' — default grid
   const [previewImage, setPreviewImage] = useState(null);
   const [previewImageLoading, setPreviewImageLoading] = useState(false);
 
@@ -263,6 +263,22 @@ const ANPRLogs = () => {
     [openPreview]
   );
 
+  // KPI tiles — derived from the loaded page + server total (no placeholder data).
+  const stats = useMemo(() => {
+    const list = rows || [];
+    const high = list.filter((r) => (r.severity || '').toLowerCase() === 'high').length;
+    const resolvedCount = list.filter((r) => r.resolved).length;
+    const uniquePlates = new Set(
+      list.map((r) => r.vehicleNumber).filter((v) => v && v !== '--')
+    ).size;
+    return [
+      { label: 'Incidents', value: totalCount ?? 0, color: 'var(--blue)' },
+      { label: 'High Severity (page)', value: high, color: 'var(--crit)' },
+      { label: 'Resolved (page)', value: resolvedCount, color: 'var(--ok)' },
+      { label: 'Unique Plates (page)', value: uniquePlates, color: 'var(--cyan)' },
+    ];
+  }, [rows, totalCount]);
+
   const handleExport = (format) =>
     handleANPRExport(format, {
       startDate,
@@ -299,6 +315,7 @@ const ANPRLogs = () => {
       />
 
       <ReusableTablePage
+        stats={stats}
         loading={loading}
         error={error}
         data={rows}
@@ -348,22 +365,8 @@ const ANPRLogs = () => {
           setVehicleNumberSearch={(v) => dispatch({ type: 'SET_VEHICLE_NUMBER_SEARCH', value: v })}
         />
 
-        {canEdit && (
-          <Button
-            className="bg-[var(--brand)] text-white rounded-[8px] px-3 py-2 text-sm cursor-pointer hover:bg-[var(--brand-hover)]"
-            onClick={() => handleExport('excel')}
-          >
-            Export Excel
-          </Button>
-        )}
-        {canEdit && (
-          <Button
-            className="bg-[var(--brand)] text-white rounded-[8px] px-3 py-2 text-sm cursor-pointer hover:bg-[var(--brand-hover)]"
-            onClick={() => handleExport('pdf')}
-          >
-            Export PDF
-          </Button>
-        )}
+        {canEdit && <ExportButton onClick={() => handleExport('excel')}>Excel</ExportButton>}
+        {canEdit && <ExportButton onClick={() => handleExport('pdf')}>PDF</ExportButton>}
 
         <ANPRFilterPopover
           nvrOptions={nvrOptions}

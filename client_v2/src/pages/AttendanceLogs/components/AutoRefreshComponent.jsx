@@ -96,8 +96,8 @@ const AutoRefreshComponent = ({
                       className={cn(
                         'text-[10px] font-medium py-1 rounded border transition-all cursor-pointer',
                         refreshInterval === val
-                          ? 'bg-[var(--brand)] text-white border-[var(--brand)]'
-                          : 'bg-[var(--bg2)] text-[var(--tx2)] border-[var(--bd)] hover:border-[var(--brand)]'
+                          ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white border-transparent'
+                          : 'bg-[var(--bg2)] text-[var(--tx2)] border-[var(--bd)] hover:border-[var(--violet)]'
                       )}
                     >
                       {val < 60 ? `${val}s` : `${val / 60}m`}

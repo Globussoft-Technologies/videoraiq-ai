@@ -22,6 +22,7 @@ import LogsFilterPopover from '@/pages/AttendanceLogs/components/LogsFilterPopov
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
 import LogEmployeeProfileDialog from '@/pages/AttendanceLogs/components/LogEmployeeProfileDialog';
 import ActionCameraPreview from '@/pages/AttendanceLogs/components/ActionCameraPreview';
+import ExportButton from '@/pages/AttendanceLogs/components/ExportButton';
 
 const ACCESS_REFRESH_KEY = 'access_auto_refresh_enabled';
 const ACCESS_INTERVAL_KEY = 'access_auto_refresh_interval';
@@ -53,8 +54,9 @@ const AccessLogs = () => {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
   });
   const [manualTrigger, setManualTrigger] = useState(0);
+  // Default to grid; a saved 'table' choice is still remembered.
   const [viewMode, setViewMode] = useState(() =>
-    localStorage.getItem(ACCESS_VIEW_MODE_KEY) === 'grid' ? 'grid' : 'table'
+    localStorage.getItem(ACCESS_VIEW_MODE_KEY) === 'table' ? 'table' : 'grid'
   );
 
   useEffect(() => localStorage.setItem(ACCESS_REFRESH_KEY, autoRefresh), [autoRefresh]);
@@ -331,6 +333,20 @@ const AccessLogs = () => {
     [region, taggingId, tagOverrides, pickedNames]
   );
 
+  // KPI tiles — derived from the loaded page + server total (no placeholder data).
+  const stats = useMemo(() => {
+    const list = rows || [];
+    const uniqueUsers = new Set(list.map((r) => r.userId || r.name).filter(Boolean)).size;
+    const tagged = list.filter((r) => r.tag).length;
+    const stillInside = list.filter((r) => r.enteredIn && !r.exitTiming).length;
+    return [
+      { label: 'Access Events', value: totalCount ?? 0, color: 'var(--blue)' },
+      { label: 'Unique Users (page)', value: uniqueUsers, color: 'var(--violet)' },
+      { label: 'Tagged (page)', value: tagged, color: 'var(--ok)' },
+      { label: 'Still Inside (page)', value: stillInside, color: 'var(--cyan)' },
+    ];
+  }, [rows, totalCount]);
+
   const handleExport = (format) =>
     handleAccessExport(format, {
       startDate,
@@ -386,6 +402,7 @@ const AccessLogs = () => {
 
       {/* TABLE / GRID */}
       <ReusableTablePage
+        stats={stats}
         title="Access Logs"
         data={rows}
         columns={columns}
@@ -417,18 +434,8 @@ const AccessLogs = () => {
       >
         {canEdit && (
           <div className="flex gap-2">
-            <button
-              className="h-10 bg-[var(--brand)] text-white rounded-[8px] px-3 text-sm cursor-pointer hover:bg-[var(--brand-hover)] transition-colors"
-              onClick={() => handleExport('excel')}
-            >
-              Export Excel
-            </button>
-            <button
-              className="h-10 bg-[var(--brand)] text-white rounded-[8px] px-3 text-sm cursor-pointer hover:bg-[var(--brand-hover)] transition-colors"
-              onClick={() => handleExport('pdf')}
-            >
-              Export PDF
-            </button>
+            <ExportButton onClick={() => handleExport('excel')}>Excel</ExportButton>
+            <ExportButton onClick={() => handleExport('pdf')}>PDF</ExportButton>
           </div>
         )}
 

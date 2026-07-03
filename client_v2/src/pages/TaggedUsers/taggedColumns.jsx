@@ -15,10 +15,14 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { Switch } from '@/pages/AttendanceLogs/components/Switch';
+import { avatarColor, initials } from '@/pages/AttendanceLogs/components/avatarUtils';
+import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 
 const styles = {
   text: 'text-[var(--tx)] text-xs font-normal',
 };
+
+const mono = { fontFamily: 'var(--mono)' };
 
 /** Format an access time range as "in - out (duration)". */
 export const formatAccessTime = (enteredIn, exitTiming, region) => {
@@ -46,24 +50,25 @@ export const formatAccessTime = (enteredIn, exitTiming, region) => {
     : inMoment.format('hh:mm A');
 };
 
-/** Sortable column header button. */
-const SortHeader = ({ label, field, sortField, sortOrder, dispatch, className = '' }) => (
+/** Sortable column header button — mono / uppercase / muted to match the header row. */
+const SortHeader = ({ label, field, sortField, sortOrder, dispatch }) => (
   <button
     onClick={() => {
       dispatch({ type: 'SET_SORT_FIELD', value: field });
       dispatch({ type: 'SET_SORT_ORDER', value: sortOrder === 'asc' ? 'desc' : 'asc' });
     }}
-    className={`flex items-center gap-1 cursor-pointer ${className}`}
+    className="flex items-center gap-1 cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)]"
+    style={mono}
   >
     {label}
     {sortField === field ? (
       sortOrder === 'asc' ? (
-        <ArrowUp className="w-4 h-4" />
+        <ArrowUp className="w-3 h-3" />
       ) : (
-        <ArrowDown className="w-4 h-4" />
+        <ArrowDown className="w-3 h-3" />
       )
     ) : (
-      <ArrowDownUp className="w-4 h-4 text-[var(--tx3)]" />
+      <ArrowDownUp className="w-3 h-3 text-[var(--tx3)]" />
     )}
   </button>
 );
@@ -83,10 +88,11 @@ export const SessionImageCarousel = ({ images = [], fallback, alt }) => {
 
   return (
     <div className="relative w-full h-40 sm:h-44 md:h-48 lg:h-52 overflow-hidden">
-      <img
+      <ImageWithLoader
         src={list[safeIndex] || fallback}
         alt={alt}
-        className="w-full h-full object-cover object-top"
+        className="w-full h-full"
+        imgClassName="w-full h-full object-cover object-top"
       />
 
       {hasMultiple && (
@@ -120,30 +126,55 @@ export const SessionImageCarousel = ({ images = [], fallback, alt }) => {
  * Build TanStack column definitions for the tagged-users table.
  * `ctx` = { dispatch, sortField, sortOrder, region, untaggingId, handleUntag }.
  */
-export const buildColumns = ({ dispatch, sortField, sortOrder, region, untaggingId, handleUntag }) => {
+export const buildColumns = ({
+  dispatch,
+  sortField,
+  sortOrder,
+  region,
+  untaggingId,
+  handleUntag,
+}) => {
   const sortProps = { sortField, sortOrder, dispatch };
+  const openProfile = (row) => {
+    dispatch({ type: 'SET_SELECTED_LOG', value: row });
+    dispatch({ type: 'SET_SHOW_PROFILE', value: true });
+  };
   return [
     {
       accessorKey: 'Profile',
       header: 'Profile',
       cell: ({ row }) => (
-        <div
-          className="w-8 h-8 rounded-full overflow-hidden bg-[var(--bg1solid)] border border-[var(--bd)] cursor-pointer"
-          onClick={() => {
-            dispatch({ type: 'SET_SELECTED_LOG', value: row.original });
-            dispatch({ type: 'SET_SHOW_PROFILE', value: true });
-          }}
+        <button
+          className="w-9 h-9 rounded-full overflow-hidden bg-[var(--bg2)] border border-[var(--bd)] flex items-center justify-center cursor-pointer hover:border-[var(--bd2)] transition-colors"
+          onClick={() => openProfile(row.original)}
+          aria-label={`Open profile ${row.original.name}`}
+          title="View profile"
         >
-          <img src={row.original.image} alt={row.original.name} className="w-8 h-8 object-cover" />
-        </div>
+          <ImageWithLoader
+            src={row.original.image}
+            alt={row.original.name}
+            className="w-full h-full rounded-full"
+            imgClassName="w-full h-full object-cover"
+          />
+        </button>
       ),
     },
     {
       accessorKey: 'name',
-      header: () => (
-        <SortHeader label="Name" field="userInfo.userName" {...sortProps} className="ml-4" />
+      header: () => <SortHeader label="Name" field="userInfo.userName" {...sortProps} />,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span
+            className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-[10px] font-semibold text-white"
+            style={{ background: avatarColor(row.original.name), ...mono }}
+          >
+            {initials(row.original.name)}
+          </span>
+          <span className="text-[13px] font-medium text-[var(--tx)] truncate">
+            {row.original.name}
+          </span>
+        </div>
       ),
-      cell: ({ row }) => <span className={styles.text}>{row.original.name}</span>,
     },
     {
       accessorKey: 'department',
@@ -263,12 +294,17 @@ export const buildColumns = ({ dispatch, sortField, sortOrder, region, untagging
   ];
 };
 
-/** Grid-view card renderer. `ctx` = { dispatch, region, untaggingId, handleUntag }. */
+/**
+ * Grid-view card renderer — image-forward overlay layout. Single-click opens
+ * the profile dialog; double-click opens the "big mode" image lightbox.
+ * `ctx` = { dispatch, region, untaggingId, handleUntag }.
+ */
 export const renderAccessCard = (item, { dispatch, region, untaggingId, handleUntag }) => {
   const dateStr = item.date
     ? moment.utc(item.date).tz(region).format('DD/MM/YYYY')
     : '--/--/----';
   const accessTimeStr = formatAccessTime(item.enteredIn, item.exitTiming, region);
+  const inTimeStr = item.enteredIn ? moment.utc(item.enteredIn).tz(region).format('hh:mm A') : '--';
 
   return (
     <div
@@ -276,43 +312,72 @@ export const renderAccessCard = (item, { dispatch, region, untaggingId, handleUn
         dispatch({ type: 'SET_SELECTED_LOG', value: item });
         dispatch({ type: 'SET_SHOW_PROFILE', value: true });
       }}
-      className="bg-[var(--bg1solid)] rounded-2xl overflow-hidden shadow-sm border border-[var(--bd)] flex flex-col relative group hover:shadow-md transition-shadow cursor-pointer h-full w-full min-w-0"
+      className="bg-[var(--bg2)] rounded-[13px] overflow-hidden border border-[var(--bd)] flex flex-col relative group hover:border-[var(--bd2)] transition-colors cursor-pointer h-full w-full min-w-0"
+      title="View profile"
     >
-      {/* Department badge top-left (hidden when no department) */}
-      {item.department && item.department !== '--' && (
-        <div className="absolute top-2 left-2 md:top-3 md:left-3 z-20 max-w-[55%]">
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] md:text-[10px] font-semibold bg-[var(--brand)]/10 text-[var(--brand)] border border-[var(--brand)]/20 shadow-sm truncate max-w-full">
-            {item.department}
-          </span>
-        </div>
-      )}
-
-      {/* Action button top-right */}
-      <div className="absolute top-2 right-2 flex flex-row flex-nowrap items-center gap-0.5 sm:gap-1 z-30">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            dispatch({ type: 'SET_SELECTED_LOG', value: item });
-            dispatch({ type: 'SET_SHOW_PREVIEW', value: true });
+      {/* Snapshot — full-bleed carousel with overlay chips */}
+      <div className="relative">
+        <SessionImageCarousel images={item.personImages} fallback={item.image} alt={item.name} />
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              'repeating-linear-gradient(135deg,rgba(255,255,255,.012) 0 12px,transparent 12px 24px)',
           }}
-          className="text-[var(--brand)] hover:bg-[var(--brand)]/10 p-1 md:p-1.5 rounded-full transition-colors cursor-pointer"
-          aria-label={`Play ${item.name}`}
-          title="Play preview"
-        >
-          <Play className="w-4 h-4 md:w-5 md:h-5" />
-        </button>
-      </div>
+        />
 
-      {/* Avatar — full-bleed across the top, with arrows for multiple session images */}
-      <SessionImageCarousel images={item.personImages} fallback={item.image} alt={item.name} />
+        {/* Department badge top-left (hidden when no department) */}
+        {item.department && item.department !== '--' && (
+          <div
+            className="absolute top-2 left-2 z-30 max-w-[55%] text-[9px] font-semibold text-white px-2 py-[2px] rounded-[5px] truncate"
+            style={{ background: 'rgba(6,8,13,.6)', backdropFilter: 'blur(4px)' }}
+          >
+            {item.department}
+          </div>
+        )}
+
+        {/* Play action top-right */}
+        <div className="absolute top-2 right-2 z-30">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              dispatch({ type: 'SET_SELECTED_LOG', value: item });
+              dispatch({ type: 'SET_SHOW_PREVIEW', value: true });
+            }}
+            className="text-white hover:text-[var(--brand)] p-1 rounded-[5px] transition-colors cursor-pointer"
+            style={{ background: 'rgba(6,8,13,.6)', backdropFilter: 'blur(4px)' }}
+            aria-label={`Play ${item.name}`}
+            title="Play preview"
+          >
+            <Play className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Entry time bottom-left */}
+        <div
+          className="absolute bottom-2 left-2 z-30 text-[9px] px-[7px] py-[2px] rounded-[5px]"
+          style={{
+            fontFamily: 'var(--mono)',
+            color: '#fff',
+            background: 'rgba(6,8,13,.6)',
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          {inTimeStr}
+        </div>
+      </div>
 
       {/* Content below the image */}
       <div className="flex flex-col p-3 sm:p-4 md:p-5">
-        {/* Name */}
-        <div className="w-full text-center mb-2 md:mb-3 px-2">
-          <div className="text-[var(--brand)] text-sm md:text-base font-semibold truncate">
-            {item.name}
-          </div>
+        {/* Identity — avatar + name */}
+        <div className="flex items-center gap-2.5 mb-3 min-w-0">
+          <span
+            className="w-[30px] h-[30px] shrink-0 rounded-full flex items-center justify-center text-[11px] font-semibold text-white"
+            style={{ background: avatarColor(item.name), fontFamily: 'var(--mono)' }}
+          >
+            {initials(item.name)}
+          </span>
+          <span className="text-[var(--tx)] text-sm font-semibold truncate">{item.name}</span>
         </div>
 
         {/* Divider */}
