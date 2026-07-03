@@ -29,7 +29,6 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
-  const [mobile, setMobile] = useState('');
   const [designation, setDesignation] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [location, setLocation] = useState('');
@@ -101,7 +100,6 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     setFirstName('');
     setLastName('');
     setEmail('');
-    setMobile('');
     setDesignation('');
     setDepartmentId('');
     setLocation('');
@@ -119,8 +117,6 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     if (!email.trim()) errs.email = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.(com|net|org|in|co|io|edu|gov)$/.test(email.trim()))
       errs.email = 'Invalid email format';
-    if (mobile.trim() && !/^[+\d][\d\s-]{6,}$/.test(mobile.trim()))
-      errs.mobile = 'Invalid mobile number';
     if (!designation.trim()) errs.designation = 'Designation is required';
     if (!departmentId) errs.department = 'Department is required';
     setErrors(errs);
@@ -129,11 +125,11 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
 
   const handleNext = async () => {
     if (!validateStep1()) {
-      toast.error('Please fix the highlighted fields');
+      toast.error('Please fill all required fields');
       return;
     }
     setCheckingEmail(true);
-    try {
+    try { 
       const res = await isEmailExist(email.trim());
       if (res?.data?.body?.data?.exists === true) {
         setErrors((e) => ({ ...e, email: 'Email already exists' }));
@@ -162,7 +158,6 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     formData.append('designation', designation.trim());
     if (departmentId) formData.append('departmentId', departmentId);
     if (location) formData.append('location', location);
-    if (mobile.trim()) formData.append('phoneNumber', mobile.trim());
     imagePaths.forEach((item) => {
       if (item instanceof File) formData.append('file', item);
     });
@@ -232,16 +227,6 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
                 onChange={(e) => setEmail(e.target.value)}
               />
               {errors.email && <p className="text-xs text-[var(--crit)] mt-1">{errors.email}</p>}
-            </div>
-            <div>
-              <label className={fieldLabel}>Mobile Number</label>
-              <input
-                className={fieldInput}
-                placeholder="+91 ....."
-                value={mobile}
-                onChange={(e) => setMobile(e.target.value)}
-              />
-              {errors.mobile && <p className="text-xs text-[var(--crit)] mt-1">{errors.mobile}</p>}
             </div>
           </div>
 

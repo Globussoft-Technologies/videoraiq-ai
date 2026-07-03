@@ -1,8 +1,22 @@
-import { useState } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Bell, Sun, Moon, ChevronDown, Volume2, VolumeX } from 'lucide-react';
 import { useTheme } from '../theme/ThemeContext';
 import { useClock } from '../hooks/useClock';
 import { useAttendanceSocket } from '../context/AttendanceSocketContext';
+import { NAV_GROUPS } from './nav.config';
+import { getChannels } from '../helpers/monitoring';
+
+// Static index of navigable pages, built once from the sidebar config.
+const PAGE_INDEX = NAV_GROUPS.filter((g) => !g.hidden).flatMap((g) =>
+  g.items.map((it) => ({
+    kind: 'Page',
+    kindColor: 'var(--blue)',
+    label: it.label,
+    sub: g.label,
+    to: `/${it.path}`,
+  }))
+);
 
 const iconBtn = {
   width: 36,
@@ -20,10 +34,80 @@ const iconBtn = {
 export default function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange, notifications = [], onSearch }) {
   const { theme, setTheme } = useTheme();
   const clock = useClock();
+  const navigate = useNavigate();
   const [siteOpen, setSiteOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [cameras, setCameras] = useState([]);
+  const camLoaded = useRef(false);
+  const inputRef = useRef(null);
   const { isMuted, toggleMute } = useAttendanceSocket() || {};
+
+  // Lazily load the camera list the first time the search is focused.
+  const loadCameras = () => {
+    if (camLoaded.current) return;
+    camLoaded.current = true;
+    getChannels({ limit: 200 })
+      .then((chs) => setCameras(Array.isArray(chs) ? chs : []))
+      .catch(() => {});
+  };
+
+  const onSearchFocus = () => {
+    setSearchOpen(true);
+    loadCameras();
+  };
+
+  // ⌘K / Ctrl+K focuses the search box (matches the badge hint).
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+      if (e.key === 'Escape') setSearchOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Build ranked results across pages, sites and cameras for the current query.
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const out = [];
+    for (const p of PAGE_INDEX) {
+      if (p.label.toLowerCase().includes(q) || p.sub.toLowerCase().includes(q)) out.push(p);
+    }
+    cameras.forEach((c, idx) => {
+      // Positional CAM-00x label — same scheme the Live Wall grid uses (CameraGrid.jsx).
+      const camLabel = `CAM-${String(idx + 1).padStart(3, '0')}`;
+      const name = c.customName || c.name || c.channelName || c.aliasName || (c.channelId != null ? String(c.channelId) : '');
+      // Match on either the CAM code or the camera name so both work.
+      if (!`${camLabel} ${name}`.toLowerCase().includes(q)) return;
+      const camId = c._id || c.channelId;
+      out.push({
+        kind: 'Camera',
+        kindColor: 'var(--ok)',
+        label: name || camLabel,
+        sub: camLabel,
+        // Live Wall opens a camera fullscreen via the ?cam=<id> deep-link param.
+        to: `/live?cam=${encodeURIComponent(camId)}`,
+      });
+    });
+    return out.slice(0, 12);
+  }, [query, cameras]);
+
+  const goResult = (r) => {
+    navigate(r.to, r.state ? { state: r.state } : undefined);
+    setSearchOpen(false);
+    setQuery('');
+    inputRef.current?.blur();
+  };
+
+  const trimmed = query.trim();
+  const showResults = searchOpen && trimmed && results.length > 0;
+  const showNoResults = searchOpen && trimmed && results.length === 0;
 
   const themeBtn = (active) => ({
     width: 30,
@@ -72,18 +156,21 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
             padding: '0 13px',
             borderRadius: 9,
             background: 'var(--bg2)',
-            border: '1px solid var(--bd)',
+            border: `1px solid ${searchOpen ? 'var(--blue)' : 'var(--bd)'}`,
             color: 'var(--tx3)',
             overflow: 'hidden',
           }}
         >
           <Search size={15} strokeWidth={1.8} style={{ flex: '0 0 auto' }} />
           <input
+            ref={inputRef}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
+              setSearchOpen(true);
               onSearch?.(e.target.value);
             }}
+            onFocus={onSearchFocus}
             placeholder="Search cameras, events, plates…"
             style={{ fontSize: 12.5, flex: 1, minWidth: 0, background: 'transparent', border: 0, outline: 'none', color: 'var(--tx)' }}
           />
@@ -91,6 +178,58 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
             ⌘K
           </span>
         </div>
+
+        {searchOpen && trimmed && (
+          <div onMouseDown={() => setSearchOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 55 }} />
+        )}
+        {searchOpen && trimmed && (
+          <div
+            className="vq-fadeup"
+            style={{
+              position: 'absolute',
+              top: 44,
+              left: 0,
+              width: 344,
+              maxWidth: '86vw',
+              background: 'var(--bg1solid)',
+              border: '1px solid var(--bd2)',
+              borderRadius: 12,
+              boxShadow: '0 18px 50px rgba(0,0,0,.6)',
+              zIndex: 60,
+              overflow: 'hidden',
+            }}
+          >
+            {showResults && (
+              <div className="vq-scroll" style={{ maxHeight: 340, overflowY: 'auto', padding: 6 }}>
+                {results.map((r, i) => (
+                  <div
+                    key={`${r.kind}-${r.label}-${i}`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      goResult(r);
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '9px 10px', borderRadius: 9, cursor: 'pointer' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: r.kindColor, flex: '0 0 auto' }} />
+                    <span style={{ minWidth: 0, flex: 1 }}>
+                      <span style={{ fontSize: 13, fontWeight: 500, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</span>
+                      <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{r.sub}</span>
+                    </span>
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--tx3)', border: '1px solid var(--bd)', borderRadius: 5, padding: '2px 6px', flex: '0 0 auto' }}>{r.kind}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {showNoResults && (
+              <div style={{ padding: '22px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--tx3)' }}>
+                No matches for “{trimmed}”
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Site switcher */}

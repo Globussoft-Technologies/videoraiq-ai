@@ -161,45 +161,6 @@ function GridIcon4x4() {
 
 const GRID_ICONS = { '1×1': GridIcon1x1, '2×2': GridIcon2x2, '3×3': GridIcon3x3, '4×4': GridIcon4x4 };
 
-/** Shared live-camera grid used by Camera View and Live Wall. */
-function matchDetection(channel, filter) {
-  if (!filter) return true;
-  const engines = Array.isArray(channel?.detectionSettings) 
-    ? channel.detectionSettings 
-    : (Array.isArray(channel?.detections) ? channel.detections : []);
-  return engines.some(e => {
-    const name = String(e.name || e.type || e || '').toLowerCase();
-    if (filter === 'face') {
-      return name.includes('face');
-    }
-    if (filter === 'intrusion') {
-      return name.includes('intrusion') || name.includes('motion') || name.includes('weapon');
-    }
-    if (filter === 'fire') {
-      return name.includes('fire') || name.includes('smoke');
-    }
-    if (filter === 'object') {
-      return name.includes('object');
-    }
-    if (filter === 'anpr') {
-      return name.includes('anpr') || name.includes('numberplate') || name.includes('vehicle');
-    }
-    if (filter === 'line') {
-      return name.includes('line') || name.includes('cross');
-    }
-    if (filter === 'access') {
-      return name.includes('access') || name.includes('door') || name.includes('violation') || name.includes('unauthorized');
-    }
-    if (filter === 'baggage') {
-      return name.includes('baggage') || name.includes('unattended');
-    }
-    if (filter === 'cashier') {
-      return name.includes('cashier') || name.includes('absence') || name.includes('loitering');
-    }
-    return false;
-  });
-}
-
 function DetailedCameraView({ channel, onPrev, onNext, onClose }) {
   /* ── Derive engines from channel.detections field ─────────── */
   const engines = useMemo(() => getEnabledEngines(channel), [channel]);
@@ -523,8 +484,6 @@ export default function CameraGrid({ defaultCols = 3, hideSingleUp = false }) {
   const [sizeIdx,    setSizeIdx]    = useState(defaultIdx < 0 ? 2 : defaultIdx);
   const [page,       setPage]       = useState(0);
   const [search,     setSearch]     = useState('');
-  const [statusFilter, setStatusFilter] = useState(''); // '' | 'live' | 'offline'
-  const [detFilter,    setDetFilter]    = useState('');
   const [fullscreen, setFullscreen] = useState(null);
   const [isPageFS,   setIsPageFS]   = useState(false); // browser fullscreen
   const pageRef = useRef(null);
@@ -578,10 +537,10 @@ export default function CameraGrid({ defaultCols = 3, hideSingleUp = false }) {
   /* Clear-all: reset every filter (and search) in one click */
   const hasActiveFilters =
     selLoc.length || selNvr.length || selCam.length || selDept.length || selType.length ||
-    statusFilter || detFilter || search.trim();
+    search.trim();
   const clearFilters = () => {
     setSelLoc([]); setSelNvr([]); setSelCam([]); setSelDept([]); setSelType([]);
-    setStatusFilter(''); setDetFilter(''); setSearch(''); setPage(0);
+    setSearch(''); setPage(0);
   };
 
   /* track which channels are live (updated by CameraStream via onLiveChange) */
@@ -603,11 +562,8 @@ export default function CameraGrid({ defaultCols = 3, hideSingleUp = false }) {
       arr = arr.filter(c => `${c.customName || ''} ${c.name || ''} ${c.location || ''}`.toLowerCase().includes(q));
     }
     if (selCam.length)              arr = arr.filter(c => selCam.includes(c._id || c.channelId));
-    if (statusFilter === 'live')    arr = arr.filter(c => liveSet.has(c._id || c.channelId));
-    if (statusFilter === 'offline') arr = arr.filter(c => !liveSet.has(c._id || c.channelId));
-    if (detFilter)                  arr = arr.filter(c => matchDetection(c, detFilter));
     return arr;
-  }, [channels.data, search, selCam, statusFilter, liveSet, detFilter]);
+  }, [channels.data, search, selCam]);
 
   const pages    = Math.max(1, Math.ceil(list.length / size.perPage));
   const safePage = Math.min(page, pages - 1);
@@ -794,41 +750,6 @@ export default function CameraGrid({ defaultCols = 3, hideSingleUp = false }) {
           maxHeight="max-h-48"
           msg="No Type Found"
         />
-
-        {/* Status filter */}
-        <div style={{ position: 'relative' }}>
-          <select
-            value={statusFilter}
-            onChange={e => { setStatusFilter(e.target.value); setPage(0); }}
-            style={{ ...pill(!!statusFilter), paddingRight: 28, appearance: 'none', cursor: 'pointer' }}
-          >
-            <option value="">All Status</option>
-            <option value="live">Live</option>
-            <option value="offline">Offline</option>
-          </select>
-          <svg style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
-        </div>
-
-        {/* Detections filter */}
-        <div style={{ position: 'relative' }}>
-          <select
-            value={detFilter}
-            onChange={e => { setDetFilter(e.target.value); setPage(0); }}
-            style={{ ...pill(!!detFilter), paddingRight: 28, appearance: 'none', cursor: 'pointer' }}
-          >
-            <option value="">All Detections</option>
-            <option value="face">Face Recognition</option>
-            <option value="intrusion">Intrusion Detection</option>
-            <option value="fire">Fire & Smoke</option>
-            <option value="object">Object Detection</option>
-            <option value="anpr">Number Plate (ANPR)</option>
-            <option value="line">Line-Cross</option>
-            <option value="access">Unauthorized Access</option>
-            <option value="baggage">Unattended Baggage</option>
-            <option value="cashier">Cashier Absence</option>
-          </select>
-          <svg style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
-        </div>
 
         {/* Clear-all filters — only when a filter is active */}
         {hasActiveFilters && (
