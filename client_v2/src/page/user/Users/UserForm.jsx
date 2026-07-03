@@ -10,6 +10,29 @@ import { userLoginByPass } from "./api/post/Index";
 import logo from "@/assets/logo.svg";
 import AuthLoader from "./AuthLoader";
 import "./login.css";
+import camShot1 from "@/assets/1.jpg";
+import camShot3 from "@/assets/3.jpg";
+import camShot7 from "@/assets/7.jpg";
+import camShot16 from "@/assets/16.jpg";
+import camShot21 from "@/assets/21.jpg";
+import camShot22 from "@/assets/22.jpg";
+import camShot24 from "@/assets/24.jpg";
+import camShot25 from "@/assets/25.jpg";
+import camShot26 from "@/assets/26.jpg";
+import camShot28 from "@/assets/28.jpg";
+
+const CAM_SHOTS = [
+  camShot1,
+  camShot3,
+  camShot7,
+  camShot16,
+  camShot21,
+  camShot22,
+  camShot24,
+  camShot25,
+  camShot26,
+  camShot28,
+];
 
 const AUTH_LOADER_MS = 2200;
 
@@ -41,6 +64,9 @@ function CctvColumn({ nums, anim, dotColor }) {
               overflow: "hidden",
               border: "1px solid rgba(120,160,230,.16)",
               background: CAM_TINTS[n % CAM_TINTS.length],
+              backgroundImage: `url(${CAM_SHOTS[n % CAM_SHOTS.length]})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
             }}
           >
             <span
@@ -620,7 +646,7 @@ const LoginForm = () => {
             </div>
 
             {isLogin && (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2 }}>
+              <div style={{ display: "flex", alignItems: "center", marginTop: 2 }}>
                 <label
                   style={{
                     display: "flex",
@@ -654,13 +680,6 @@ const LoginForm = () => {
                   </span>
                   Remember me
                 </label>
-                <span
-                  className="vqlogin-link"
-                  onClick={() => toast.message("Use the forgot-password flow on the main app.")}
-                  style={{ fontSize: 12.5, fontWeight: 500, color: "#6ea0ff", cursor: "pointer" }}
-                >
-                  Forgot password?
-                </span>
               </div>
             )}
 

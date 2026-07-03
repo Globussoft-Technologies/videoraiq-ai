@@ -3,8 +3,11 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { LogOut, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { NAV_GROUPS } from './nav.config';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/theme/ThemeContext';
 import { getSidebarConfig } from '../helpers/dashboard';
 import { useApi } from '../hooks/useApi';
+import videoraiqLogoColor from '@/assets/videoraiq-logo-color.png';
+import videoraiqLogoWhite from '@/assets/videoraiq-logo-white.png';
 
 const navItemStyle = (active, collapsed) => ({
   display: 'flex',
@@ -42,6 +45,7 @@ const STORAGE_KEY = 'vq-sidebar-collapsed';
 
 export default function Sidebar({ badges = {} }) {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const [accountOpen, setAccountOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
@@ -110,20 +114,16 @@ export default function Sidebar({ badges = {} }) {
         }}
       >
         {!collapsed && (
-          <div
+          <img
+            src={theme === 'dark' ? videoraiqLogoWhite : videoraiqLogoColor}
+            alt="VideoraIQ"
             style={{
-              fontFamily: 'var(--disp)',
-              fontWeight: 700,
-              fontSize: 19,
-              letterSpacing: '-.01em',
-              background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
+              maxWidth: '100%',
+              height: 34,
+              objectFit: 'contain',
+              objectPosition: 'left center',
             }}
-          >
-            VideoraIQ
-          </div>
+          />
         )}
         <button
           type="button"
