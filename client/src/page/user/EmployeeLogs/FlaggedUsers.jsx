@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Loader2,
   Trash2,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getGroupedFaceImages, deleteFaceImages } from './Api/faceImages';
@@ -119,6 +120,8 @@ const FlaggedUsers = () => {
   const [deleting, setDeleting] = useState(false);
   // Controls the "delete selected folders" confirmation modal.
   const [confirmDeleteFolders, setConfirmDeleteFolders] = useState(false);
+  // Controls the inside-folder "delete selected images" confirmation modal.
+  const [confirmDeleteImages, setConfirmDeleteImages] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(30);
   const [totalCount, setTotalCount] = useState(0);
@@ -263,6 +266,7 @@ const FlaggedUsers = () => {
     setSelectedImageIds(allImagesSelected ? [] : [...activeFolder.imageIds]);
   };
 
+  // Delete the selected images. Called from the confirmation modal's Confirm.
   const handleDeleteSelected = async () => {
     if (deleting || selectedImageIds.length === 0) return;
     setDeleting(true);
@@ -272,6 +276,7 @@ const FlaggedUsers = () => {
         `${selectedImageIds.length} image${selectedImageIds.length > 1 ? 's' : ''} deleted`
       );
       setSelectedImageIds([]);
+      setConfirmDeleteImages(false);
       await fetchFolders();
     } catch (err) {
       console.error('Failed to delete images', err);
@@ -393,7 +398,7 @@ const FlaggedUsers = () => {
             {selectedImageIds.length > 0 && (
               <button
                 type="button"
-                onClick={handleDeleteSelected}
+                onClick={() => setConfirmDeleteImages(true)}
                 disabled={deleting}
                 className="flex items-center gap-1.5 bg-red-600 text-white rounded-lg px-3 py-2 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -451,9 +456,21 @@ const FlaggedUsers = () => {
                     </div>
                   </button>
 
-                  {/* Selection checkbox (top-left), above the fullscreen trigger */}
+                  {/* Image icon (top-left) by default; hidden once the card is
+                      hovered or the image is selected so the checkbox can show. */}
+                  <div
+                    className={`absolute top-2 left-2 z-10 bg-black/45 text-white rounded-full p-1 transition-opacity ${
+                      isSelected ? 'opacity-0' : 'opacity-100 group-hover:opacity-0'
+                    }`}
+                  >
+                    <ImageIcon className="w-3.5 h-3.5" />
+                  </div>
+
+                  {/* Selection checkbox (top-left), shown on hover or when selected. */}
                   <label
-                    className="absolute top-2 left-2 z-10 flex items-center justify-center cursor-pointer"
+                    className={`absolute top-2 left-2 z-20 flex items-center justify-center cursor-pointer transition-opacity ${
+                      isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                    }`}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <input
@@ -540,6 +557,28 @@ const FlaggedUsers = () => {
           onClose={() => setTagModalFolder(null)}
           onTagged={handleTagged}
         />
+
+        {/* Confirm deleting the selected images inside this folder. */}
+        <ConfirmationModal
+          open={confirmDeleteImages}
+          title="Delete Images"
+          icon={<Trash2 className="w-6 h-6 text-red-600" />}
+          message={
+            <>
+              Delete{' '}
+              <span className="font-semibold text-gray-800">
+                {selectedImageIds.length} image
+                {selectedImageIds.length > 1 ? 's' : ''}
+              </span>{' '}
+              from this folder?
+            </>
+          }
+          confirmLabel="Delete"
+          confirmClass="bg-red-600 text-white hover:bg-red-700"
+          loading={deleting}
+          onClose={() => !deleting && setConfirmDeleteImages(false)}
+          onConfirm={handleDeleteSelected}
+        />
       </div>
     );
   }
@@ -599,7 +638,7 @@ const FlaggedUsers = () => {
         </div>
       ) : folders.length === 0 ? (
         <div className="text-center py-20 text-gray-400 text-sm">
-          No flagged users found.
+          No Detected users found.
         </div>
       ) : (
         <div className="flex flex-wrap gap-4 sm:gap-5">
