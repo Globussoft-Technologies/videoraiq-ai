@@ -2,6 +2,7 @@ import React from 'react';
 import { useFormikContext } from 'formik';
 import { Upload, Camera, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { resolveUploadUrl } from '@/utils/resolveUploadUrl';
 
 const RegisterFormStep2 = ({ 
   uploadedImagePaths, 
@@ -11,7 +12,6 @@ const RegisterFormStep2 = ({
   onOpenCamera,
 }) => {
   const { values } = useFormikContext();
-  const uploadDomain = import.meta.env.VITE_BACKEND + '/api/v1/uploads';
 
       const org_id=import.meta.env.VITE_ORGANISATION_ID;
 
@@ -28,7 +28,7 @@ const RegisterFormStep2 = ({
               {uploadedImagePaths[index] ? (
                 <>
                   <img 
-                    src={uploadedImageUrls[index] || `${uploadDomain}${uploadedImagePaths[index]}`} 
+                    src={uploadedImageUrls[index] || resolveUploadUrl(uploadedImagePaths[index])}
                     alt={angle} 
                     className="w-full h-full object-contain rounded-xl"
                   />

@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { getGroupedFaceImages, deleteFaceImages } from './Api/faceImages';
 import TagFlaggedUserModal from './components/TagFlaggedUserModal';
 import AutoRefreshComponent from './components/AutoRefreshComponent';
+import ConfirmationModal from '@/page/user/Detection/components/DeleteConfirmation';
 import Pagination from '@/components/Pagination';
 import { usePermissions } from '@/context/Permission/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
@@ -112,7 +113,12 @@ const FlaggedUsers = () => {
   const [tagModalFolder, setTagModalFolder] = useState(null);
   const [fullscreenIndex, setFullscreenIndex] = useState(null);
   const [selectedImageIds, setSelectedImageIds] = useState([]);
+  // Folder-grid selection (whole folders, by dsId) — separate from the
+  // inside-folder per-image selection above.
+  const [selectedFolderIds, setSelectedFolderIds] = useState([]);
   const [deleting, setDeleting] = useState(false);
+  // Controls the "delete selected folders" confirmation modal.
+  const [confirmDeleteFolders, setConfirmDeleteFolders] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(30);
   const [totalCount, setTotalCount] = useState(0);
@@ -194,12 +200,12 @@ const FlaggedUsers = () => {
   // can't disrupt an in-progress delete.
   useEffect(() => {
     if (!canView || !autoRefresh || refreshInterval <= 0) return;
-    if (selectedImageIds.length > 0) return;
+    if (selectedImageIds.length > 0 || selectedFolderIds.length > 0) return;
     const id = setInterval(() => {
       fetchFolders({ silent: true });
     }, refreshInterval * 1000);
     return () => clearInterval(id);
-  }, [canView, autoRefresh, refreshInterval, selectedImageIds.length, fetchFolders]);
+  }, [canView, autoRefresh, refreshInterval, selectedImageIds.length, selectedFolderIds.length, fetchFolders]);
 
   const activeFolder = folders.find((f) => f.dsId === activeDsId) || null;
 
@@ -207,6 +213,7 @@ const FlaggedUsers = () => {
     setActiveDsId(folder.dsId);
     setFullscreenIndex(null);
     setSelectedImageIds([]);
+    setSelectedFolderIds([]);
     setFolderPage(1);
     setFolderPageInput('');
   };
@@ -245,6 +252,17 @@ const FlaggedUsers = () => {
     );
   };
 
+  // Inside-folder select-all: every image in the open folder is selected/cleared.
+  const allImagesSelected =
+    !!activeFolder &&
+    activeFolder.imageIds.length > 0 &&
+    selectedImageIds.length === activeFolder.imageIds.length;
+
+  const toggleSelectAllImages = () => {
+    if (!activeFolder) return;
+    setSelectedImageIds(allImagesSelected ? [] : [...activeFolder.imageIds]);
+  };
+
   const handleDeleteSelected = async () => {
     if (deleting || selectedImageIds.length === 0) return;
     setDeleting(true);
@@ -261,6 +279,59 @@ const FlaggedUsers = () => {
         err?.response?.data?.body?.message ||
           err?.response?.data?.message ||
           'Failed to delete images'
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // ---- Folder-grid selection (whole folders) ----
+  const toggleFolderSelected = (dsId) => {
+    setSelectedFolderIds((prev) =>
+      prev.includes(dsId) ? prev.filter((id) => id !== dsId) : [...prev, dsId]
+    );
+  };
+
+  const allFoldersSelected =
+    folders.length > 0 && selectedFolderIds.length === folders.length;
+
+  const toggleSelectAllFolders = () => {
+    setSelectedFolderIds(allFoldersSelected ? [] : folders.map((f) => f.dsId));
+  };
+
+  // Image count across the currently selected folders (for the confirm message).
+  const selectedFoldersImageCount = folders
+    .filter((f) => selectedFolderIds.includes(f.dsId))
+    .reduce((sum, f) => sum + f.imageIds.length, 0);
+
+  // Delete every image across the selected folders. Once a folder has no images
+  // left it drops out of /grouped, so the folders themselves disappear.
+  // Called from the confirmation modal's Confirm action.
+  const confirmDeleteSelectedFolders = async () => {
+    if (deleting || selectedFolderIds.length === 0) return;
+    const imageIds = folders
+      .filter((f) => selectedFolderIds.includes(f.dsId))
+      .flatMap((f) => f.imageIds);
+    if (imageIds.length === 0) {
+      setConfirmDeleteFolders(false);
+      return;
+    }
+    const folderCount = selectedFolderIds.length;
+    setDeleting(true);
+    try {
+      await deleteFaceImages(imageIds);
+      toast.success(
+        `${folderCount} folder${folderCount > 1 ? 's' : ''} deleted`
+      );
+      setSelectedFolderIds([]);
+      setConfirmDeleteFolders(false);
+      await fetchFolders();
+    } catch (err) {
+      console.error('Failed to delete folders', err);
+      toast.error(
+        err?.response?.data?.body?.message ||
+          err?.response?.data?.message ||
+          'Failed to delete folders'
       );
     } finally {
       setDeleting(false);
@@ -305,6 +376,20 @@ const FlaggedUsers = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            {folderImageCount > 0 && (
+              <button
+                type="button"
+                onClick={toggleSelectAllImages}
+                className="flex items-center gap-1.5 bg-white text-[#07486A] border border-[#07486A] rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-[#07486A]/5"
+              >
+                {allImagesSelected ? (
+                  <X className="w-4 h-4" />
+                ) : (
+                  <Check className="w-4 h-4" />
+                )}
+                {allImagesSelected ? 'Unselect All' : 'Select All'}
+              </button>
+            )}
             {selectedImageIds.length > 0 && (
               <button
                 type="button"
@@ -463,13 +548,44 @@ const FlaggedUsers = () => {
     <div className="py-4 sm:py-6 px-6 sm:px-10 lg:px-14 min-h-[calc(100vh-140px)] flex flex-col">
       <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
         <h1 className="text-lg sm:text-xl font-semibold text-[#07486A]">Detected Users</h1>
-        <AutoRefreshComponent
-          isActive={autoRefresh}
-          onActiveChange={setAutoRefresh}
-          refreshInterval={refreshInterval}
-          onIntervalChange={setRefreshInterval}
-          onManualRefresh={() => fetchFolders()}
-        />
+        <div className="flex items-center gap-3">
+          {!loading && !error && folders.length > 0 && (
+            <button
+              type="button"
+              onClick={toggleSelectAllFolders}
+              className="flex items-center gap-1.5 bg-white text-[#07486A] border border-[#07486A] rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-[#07486A]/5"
+            >
+              {allFoldersSelected ? (
+                <X className="w-4 h-4" />
+              ) : (
+                <Check className="w-4 h-4" />
+              )}
+              {allFoldersSelected ? 'Unselect All' : 'Select All'}
+            </button>
+          )}
+          {selectedFolderIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setConfirmDeleteFolders(true)}
+              disabled={deleting}
+              className="flex items-center gap-1.5 bg-red-600 text-white rounded-lg px-3 py-2 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {deleting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+              Delete ({selectedFolderIds.length})
+            </button>
+          )}
+          <AutoRefreshComponent
+            isActive={autoRefresh}
+            onActiveChange={setAutoRefresh}
+            refreshInterval={refreshInterval}
+            onIntervalChange={setRefreshInterval}
+            onManualRefresh={() => fetchFolders()}
+          />
+        </div>
       </div>
 
       <div className="flex-1">
@@ -487,31 +603,62 @@ const FlaggedUsers = () => {
         </div>
       ) : (
         <div className="flex flex-wrap gap-4 sm:gap-5">
-          {folders.map((folder) => (
+          {folders.map((folder) => {
+            const isFolderSelected = selectedFolderIds.includes(folder.dsId);
+            return (
             <div key={folder.dsId} className="group flex flex-col items-center w-32 sm:w-36">
-              <button
-                type="button"
-                onClick={() => openFolder(folder)}
-                className="relative w-full aspect-square rounded-2xl overflow-hidden bg-[#F3F3F3] border border-gray-100 shadow-sm group-hover:shadow-md transition-shadow cursor-pointer"
+              <div
+                className={`relative w-full aspect-square rounded-2xl overflow-hidden bg-[#F3F3F3] border shadow-sm group-hover:shadow-md transition-shadow ${
+                  isFolderSelected ? 'border-red-500 ring-2 ring-red-400' : 'border-gray-100'
+                }`}
               >
-                <img
-                  src={folder.images[0]}
-                  alt="Folders"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute top-2 left-2 bg-black/45 text-white rounded-full p-1">
+                <button
+                  type="button"
+                  onClick={() => openFolder(folder)}
+                  className="absolute inset-0 w-full h-full cursor-pointer"
+                >
+                  <img
+                    src={folder.images[0]}
+                    alt="Folders"
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+
+                {/* Folder icon (top-left) by default; hidden once the card is
+                    hovered or the folder is selected so the checkbox can show. */}
+                <div
+                  className={`absolute top-2 left-2 z-10 bg-black/45 text-white rounded-full p-1 transition-opacity ${
+                    isFolderSelected ? 'opacity-0' : 'opacity-100 group-hover:opacity-0'
+                  }`}
+                >
                   <Folder className="w-3.5 h-3.5" />
                 </div>
+
+                {/* Selection checkbox (top-left), shown on hover or when selected. */}
+                <label
+                  className={`absolute top-2 left-2 z-20 flex items-center justify-center cursor-pointer transition-opacity ${
+                    isFolderSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                  }`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isFolderSelected}
+                    onChange={() => toggleFolderSelected(folder.dsId)}
+                    className="w-5 h-5 rounded accent-red-600 cursor-pointer"
+                  />
+                </label>
+
                 {folder.authorizedUser && (
-                  <div className="absolute top-2 right-2 bg-[#1F6B3A] text-white rounded-full p-1">
+                  <div className="absolute top-2 right-2 z-10 bg-[#1F6B3A] text-white rounded-full p-1">
                     <Check className="w-3.5 h-3.5" />
                   </div>
                 )}
                 {/* Image count, bottom-right */}
-                <span className="absolute bottom-1.5 right-1.5 bg-black/60 text-white text-[10px] font-medium leading-none px-1.5 py-1 rounded-full">
+                <span className="absolute bottom-1.5 right-1.5 z-10 bg-black/60 text-white text-[10px] font-medium leading-none px-1.5 py-1 rounded-full">
                   {folder.images.length}
                 </span>
-              </button>
+              </div>
               {folder.authorizedUser?.name && (
                 <p
                   className="mt-1.5 w-full text-center text-xs font-medium text-gray-700 truncate"
@@ -521,7 +668,8 @@ const FlaggedUsers = () => {
                 </p>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
       </div>
@@ -541,6 +689,29 @@ const FlaggedUsers = () => {
           />
         </div>
       )}
+
+      {/* Confirm deleting the selected folders (all their images). */}
+      <ConfirmationModal
+        open={confirmDeleteFolders}
+        title="Delete Folders"
+        icon={<Trash2 className="w-6 h-6 text-red-600" />}
+        message={
+          <>
+            Delete{' '}
+            <span className="font-semibold text-gray-800">
+              {selectedFolderIds.length} folder
+              {selectedFolderIds.length > 1 ? 's' : ''}
+            </span>{' '}
+            ({selectedFoldersImageCount} image
+            {selectedFoldersImageCount > 1 ? 's' : ''})?
+          </>
+        }
+        confirmLabel="Delete"
+        confirmClass="bg-red-600 text-white hover:bg-red-700"
+        loading={deleting}
+        onClose={() => !deleting && setConfirmDeleteFolders(false)}
+        onConfirm={confirmDeleteSelectedFolders}
+      />
     </div>
   );
 };

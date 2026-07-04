@@ -45,6 +45,7 @@ import { useAuth } from '@/context/AuthContext';
 import MultiSelect from '@/components/ui/multiselect';
 import { UserDetailModal } from './UserDetailModal';
 import { displayEmail } from '@/utils/displayEmail';
+import { resolveUploadUrl } from '@/utils/resolveUploadUrl';
 
 const UserCardSkeleton = () => {
   return (
@@ -195,7 +196,7 @@ const UserCard = ({ user, handleEdit, handleDelete, nasUrl, setSelectedUser, set
             <img
               src={
                 user.profilePics && user.profilePics.length > 0
-                  ? `${nasUrl}/api/v1/uploads/${user.profilePics[currentImageIndex]}`
+                  ? resolveUploadUrl(user.profilePics[currentImageIndex], nasUrl)
                   : getInitialsPlaceholder(user.firstName, user.lastName)
               }
               alt={`${user.firstName} ${user.lastName}`}
@@ -269,7 +270,7 @@ const UserTableRow = ({ user, handleEdit, handleDelete, nasUrl, index, currentPa
 
   const avatarSrc =
     user.profilePics && user.profilePics.length > 0
-      ? `${nasUrl}/api/v1/uploads/${user.profilePics[0]}`
+      ? resolveUploadUrl(user.profilePics[0], nasUrl)
       : getInitialsPlaceholder(user.firstName, user.lastName);
 
   const serialNo = (currentPage - 1) * limit + index + 1;

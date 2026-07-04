@@ -13,12 +13,13 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select';
-import { Search, Loader2, UserPlus, UserCheck } from 'lucide-react';
+import { Search, Loader2, UserPlus, UserCheck, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { authorizedUsers } from '@/page/user/Dashboard/Api/get';
 import { getEmployeeLocations } from '@/page/user/UserDetails/Api/Post';
 import { quickCreateFaceUser, tagFaceImages } from '../Api/faceImages';
 import useDebounce from '@/hooks/useDebounce';
+import getAccessToken from '@/utils/getAccessToken';
 
 const departmentAPI = `${import.meta.env.VITE_BACKEND}/api/v1/departments/get`;
 
@@ -84,7 +85,10 @@ const TagFlaggedUserModal = ({ open, folder, onClose, onTagged }) => {
       try {
         const res = await fetch(departmentAPI, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-access-token': getAccessToken(),
+          },
           body: JSON.stringify({ skip: 0, limit: 100 }),
         });
         const data = await res.json();
@@ -214,16 +218,21 @@ const TagFlaggedUserModal = ({ open, folder, onClose, onTagged }) => {
     if (newDesignation.trim()) payload.designation = newDesignation.trim();
     if (newDepartmentId) payload.departmentId = newDepartmentId;
 
-    // Location select stores the location _id; send both the id and the name.
+    // Location select stores the location _id; send the name plus the numeric
+    // EMP location id (empLocationId) that the backend expects as a Number.
     if (newLocationId) {
       const loc = locations.find((l) => l._id === newLocationId);
       if (loc) {
         payload.location = loc.locationName;
-        payload.locationId = loc._id;
+        const numericLocationId = Number(loc.empLocationId);
+        if (Number.isFinite(numericLocationId)) {
+          payload.locationId = numericLocationId;
+        }
       }
     }
 
-    // First 3 folder images become the new user's profile pics.
+    // First 3 folder images become the new user's profile pics. folder.images
+    // are already full absolute URLs, which is exactly what profilePics stores.
     const profilePics = (folder.images || []).slice(0, 3);
     if (profilePics.length > 0) payload.profilePics = profilePics;
 
@@ -432,6 +441,16 @@ const TagFlaggedUserModal = ({ open, folder, onClose, onTagged }) => {
                     <SelectValue placeholder="Select location" />
                   </SelectTrigger>
                   <SelectContent>
+                    {newLocationId && (
+                      <button
+                        type="button"
+                        onClick={() => setNewLocationId('')}
+                        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-red-500 hover:bg-gray-50 cursor-pointer"
+                      >
+                        <X className="w-3 h-3" />
+                        Clear selection
+                      </button>
+                    )}
                     {locations.length === 0 ? (
                       <div className="px-2 py-1.5 text-xs text-gray-400">No options available</div>
                     ) : (
@@ -452,6 +471,16 @@ const TagFlaggedUserModal = ({ open, folder, onClose, onTagged }) => {
                     <SelectValue placeholder="Select department" />
                   </SelectTrigger>
                   <SelectContent>
+                    {newDepartmentId && (
+                      <button
+                        type="button"
+                        onClick={() => setNewDepartmentId('')}
+                        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-red-500 hover:bg-gray-50 cursor-pointer"
+                      >
+                        <X className="w-3 h-3" />
+                        Clear selection
+                      </button>
+                    )}
                     {departments.length === 0 ? (
                       <div className="px-2 py-1.5 text-xs text-gray-400">No options available</div>
                     ) : (
