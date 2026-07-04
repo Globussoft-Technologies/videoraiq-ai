@@ -52,7 +52,7 @@ class DSUserSyncService {
       if (!dsId || !images?.length) return;
 
       const payload = {
-        admin_id: adminId ? adminId.toString() : null,
+        admin_id: adminId?.toString(),
         dsId,
         images,
       };

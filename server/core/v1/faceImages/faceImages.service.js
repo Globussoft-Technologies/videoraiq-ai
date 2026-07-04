@@ -257,6 +257,11 @@ class FaceImagesService {
 
   async deleteImages(req, res, _next) {
     try {
+      const adminId = req?.verified?.userData?.adminId;
+      if (!adminId) {
+        return res.status(400).json(Response.userFailResp("Missing adminId in user data", "Validation Failed!"));
+      }
+
       const { error } = FaceImagesValidator.deleteImages(req.body);
       if (error) {
         return res.send(Response.validationFailResp(error.message, "Validation Failed!"));
@@ -293,7 +298,7 @@ class FaceImagesService {
       }
       for (const [dsId, dsDocs] of docsByDsId) {
         const imageUrls = dsDocs.map((doc) => `${imageBaseUrl}${doc.image}`);
-        dsUserSyncService.syncDeletedImages(dsDocs[0].adminId, dsId, imageUrls);
+        dsUserSyncService.syncDeletedImages(adminId, dsId, imageUrls);
       }
 
       return res.status(200).json(Response.userSuccessResp("Images deleted successfully", {
