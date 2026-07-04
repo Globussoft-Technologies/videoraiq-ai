@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { UserCheck, MapPinCheck, Activity, Hammer, GitBranch, Car, OctagonAlert, Ban, Tags, Armchair } from 'lucide-react';
+import { UserCheck, MapPinCheck, Activity, Hammer, GitBranch, Car, OctagonAlert, Ban, Tags, Armchair, Users } from 'lucide-react';
 import { GiRoad, GiWaterSplash } from 'react-icons/gi';
 import ANPRIcon from '../../assets/ANPR.png';
 import { usePermissions } from '@/context/Permission/PermissionContext';
@@ -22,6 +22,7 @@ const vehicleClientItems = [
   { label: 'Attendance Logs', icon: UserCheck, route: '/logs/attendance', permissionKey: 'attendanceLogs' },
   { label: 'Access Logs', icon: MapPinCheck, route: '/logs/access', permissionKey: 'accessLogs' },
   { label: 'Tagged Users', icon: Tags, route: '/logs/tagged-users', permissionKey: 'accessLogs' },
+  { label: 'Detected Users', icon: Users, route: '/logs/flagged-users', permissionKey: 'accessLogs' },
   { label: 'ANPR Logs', icon: null, img: ANPRIcon, route: '/logs/ANPR', permissionKey: 'ANPRLogs' },
   { label: 'Desk Absence Logs', icon: Armchair, route: '/logs/desk-absence', permissionKey: 'accessLogs' },
   // { label: 'Track Logs', icon: Activity, route: '/logs/track', permissionKey: 'trackLogs' },
@@ -35,6 +36,7 @@ const defaultClientItems = [
   { label: 'Attendance Logs', icon: UserCheck, route: '/logs/attendance', permissionKey: 'attendanceLogs' },
   { label: 'Access Logs', icon: MapPinCheck, route: '/logs/access', permissionKey: 'accessLogs' },
   { label: 'Tagged Users', icon: Tags, route: '/logs/tagged-users', permissionKey: 'accessLogs' },
+  { label: 'Detected Users', icon: Users, route: '/logs/flagged-users', permissionKey: 'accessLogs' },
   { label: 'Person Count Logs', icon: UserCheck, route: '/logs/person-count', permissionKey: 'accessLogs' },
   { label: 'Desk Absence Logs', icon: Armchair, route: '/logs/desk-absence', permissionKey: 'accessLogs' },
   { label: 'ANPR Logs', icon: null, img: ANPRIcon, route: '/logs/ANPR', permissionKey: 'ANPRLogs' },

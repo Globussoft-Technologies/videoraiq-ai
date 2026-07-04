@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Loader, ArrowLeft, Camera, Upload, X } from 'lucide-react';
+import { Loader, ArrowLeft, Camera, Upload, X, ChevronDown, ChevronUp } from 'lucide-react';
 import Webcam from 'react-webcam';
 import { toast } from 'sonner';
 import { createAuthorizedUser, isEmailExist } from './Api';
@@ -25,6 +25,7 @@ const stepFieldset = 'space-y-5 border-0 p-0 m-0 min-w-0';
  */
 const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
   const [step, setStep] = useState(1);
+  const [collapsed, setCollapsed] = useState(false);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -187,14 +188,25 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
 
   return (
     <div className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] p-6">
-      <div className="mb-5">
-        <h2 className="text-lg font-semibold text-[var(--tx)]">Register New User</h2>
-        <p className="text-sm text-[var(--tx3)] mt-0.5">
-          Invite a team member and capture face enrollment.
-        </p>
+      <div className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-[var(--tx)]">Register New User</h2>
+          <p className="text-sm text-[var(--tx3)] mt-0.5">
+            Invite a team member and capture face enrollment.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-label={collapsed ? 'Expand' : 'Collapse'}
+          title={collapsed ? 'Expand' : 'Collapse'}
+          className="flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] hover:text-[var(--tx)] transition-colors cursor-pointer flex-shrink-0"
+        >
+          {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+        </button>
       </div>
 
-      {step === 1 ? (
+      {!collapsed && (step === 1 ? (
         <fieldset disabled={checkingEmail} className={`${stepFieldset} ${checkingEmail ? 'opacity-70' : ''}`}>
           {/* identity */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -415,7 +427,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
             </button>
           </div>
         </div>
-      )}
+      ))}
     </div>
   );
 };

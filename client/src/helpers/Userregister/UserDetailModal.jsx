@@ -5,6 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { displayEmail } from '@/utils/displayEmail';
 import {
   ChevronLeft,
   ChevronRight,
@@ -143,7 +144,7 @@ const UserDetailModalContent = ({ user, nasUrl, onClose }) => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <DetailItem icon={User} label="First Name" value={user.firstName} />
               <DetailItem icon={User} label="Last Name" value={user.lastName} />
-              <DetailItem icon={Mail} label="Email" value={user.email} />
+              <DetailItem icon={Mail} label="Email" value={displayEmail(user.email)} />
               <DetailItem icon={Briefcase} label="Designation" value={user.designation} />
               <DetailItem icon={MapPin} label="Location" value={user.location} />
               <DetailItem icon={Briefcase} label="Department" value={user.departmentId?.departmentName} />

@@ -44,6 +44,7 @@ import ImportEmpUsersModal from './ImortEmpUsers';
 import { useAuth } from '@/context/AuthContext';
 import MultiSelect from '@/components/ui/multiselect';
 import { UserDetailModal } from './UserDetailModal';
+import { displayEmail } from '@/utils/displayEmail';
 
 const UserCardSkeleton = () => {
   return (
@@ -224,7 +225,7 @@ const UserCard = ({ user, handleEdit, handleDelete, nasUrl, setSelectedUser, set
           <div className="flex items-center gap-3 text-sm">
             <Mail className="w-5 h-5 text-gray-700 shrink-0" />
             <span className="font-semibold text-gray-900 w-24 shrink-0 text-[11px] uppercase tracking-wider">Email</span>
-            <span className="text-gray-600 truncate flex-1 text-right" title={user.email}>{user.email}</span>
+            <span className="text-gray-600 truncate flex-1 text-right" title={displayEmail(user.email)}>{displayEmail(user.email)}</span>
           </div>
           <div className="flex items-center gap-3 text-sm">
             <User className="w-5 h-5 text-gray-700 shrink-0" />
@@ -311,8 +312,8 @@ const UserTableRow = ({ user, handleEdit, handleDelete, nasUrl, index, currentPa
           </div>
         </td>
         <td className="px-3 py-3 max-w-0">
-          <span className="block text-xs text-gray-600 truncate" title={user.email}>
-            {user.email}
+          <span className="block text-xs text-gray-600 truncate" title={displayEmail(user.email)}>
+            {displayEmail(user.email)}
           </span>
         </td>
         <td className="px-3 py-3 max-w-0">

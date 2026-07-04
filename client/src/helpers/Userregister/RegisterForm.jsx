@@ -18,6 +18,7 @@ import RegisterFormStep2 from './RegisterFormStep2';
 // import { remove_image, remove_image_edit } from './Api/delete';
 import { updateUserDetails } from './Api/put';
 import { isEmailExist } from './Api/get';
+import { displayEmail } from '@/utils/displayEmail';
 import { getEmployeeLocations } from '@/page/user/UserDetails/Api/Post';
 const RegisterForm = ({ trigger, fetchUsers,editUser,setEditUser, locations: parentLocations = [] }) => {
   const org_id=import.meta.env.VITE_ORGANISATION_ID;
@@ -222,7 +223,7 @@ const [uploadedImageUrls, setUploadedImageUrls] = useState(["", "", ""]); // New
     ? {
         firstName: editUser.firstName || '',
         lastName: editUser.lastName || '',
-        email: editUser.email || '',
+        email: displayEmail(editUser.email),
         designation: editUser.designation || '',
         location: editUser.location || '',
         departmentId: editUser?.departmentId?._id || '',
