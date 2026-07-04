@@ -1094,6 +1094,41 @@ const doc = {
         "reportStatus": "pending",
         "detectionStatus": 1
     },
+    uploadFaceImages: {
+      dsId: "DS_101",
+      images: [
+        "/uploads/images/DS_101/photo1.jpg",
+        "/uploads/images/DS_101/photo2.jpg",
+      ],
+    },
+    tagFolder: {
+      dsId: "DS_101",
+      authorizedUserId: "665f2b1c8e4a9d0012ab34cd",
+    },
+    quickCreateUser: {
+      firstName: "John",
+      lastName: "Doe",
+      dsId: "DS_101",
+      email: "john.doe@example.com",
+      departmentId: "665f2b1c8e4a9d0012ab3411",
+      designation: "Security Guard",
+      branch: "Bangalore",
+      shiftId: "665f2b1c8e4a9d0012ab3422",
+      numberPlate: "KA01AB1234",
+      orgId: 434,
+      emp_id: 32631,
+      empRoleId: 1613,
+      permission: "Read",
+      location: "Bangalore Office",
+      locationId: 1295,
+      phoneNumber: "919067589666",
+      address1: "123 MG Road",
+      timezone: "Asia/Kolkata",
+      profilePics: [],
+    },
+    deleteFaceImages: {
+      imageIds: ["665a1234567890abcd123456", "665a1234567890abcd123457"],
+    },
     importEmpUsers:{
         "usersData": [
             {

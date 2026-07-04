@@ -9,6 +9,7 @@ import recipientsRoutes from "../../core/v1/verifyRecipients/recipients.routes.j
 import adminRoutes from "../../core/v1/admin/admin.routes.js";
 import dashboardRoutes from "../../core/v1/dashboard/dashboard.routes.js";
 import authorizedUsersRoutes from "../../core/v1/authorizedUsers/authorizedUsers.routes.js";
+import faceImagesRoutes from "../../core/v1/faceImages/faceImages.routes.js";
 import detectionSettingsRoutes from "../../core/v1/detectionSettings/detectionSettings.routes.js";
 import uploadRoutes from "../../core/v1/Uploads/uploads.routes.js";
 import storageRoutes from "../../core/v1/storage/storage.routes.js";
@@ -36,6 +37,7 @@ router.use("/auth", authRoutes);
 router.use("/uploads", uploadRoutes);
 router.use("/admin", adminRoutes);
 router.use("/authorizedUsers", authorizedUsersRoutes);
+router.use("/faceImages", faceImagesRoutes);
 router.use("/authorizedChannels", authorizedChannels);
 router.use("/users", usersRoutes);
 router.use("/nvr", verifyToken, nvrRoutes);

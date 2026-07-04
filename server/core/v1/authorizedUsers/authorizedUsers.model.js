@@ -3,9 +3,9 @@ import { encrypt, decrypt } from "../../../utils/cryptoUtils.js";
 import authorizedChannelsModel from "../cameraRestrictions/authorizedChannels.model.js";
 
 const authorizedUsersSchema = new mongoose.Schema({
-  orgId:{type:Number,default:null},
-  emp_id:{type:Number,default:null},
-  shiftId:{type:mongoose.Schema.Types.ObjectId,ref:'shift',default:null},
+  orgId: { type: Number, default: null },
+  emp_id: { type: Number, default: null },
+  shiftId: { type: mongoose.Schema.Types.ObjectId, ref: 'shift', default: null },
   adminId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin',
@@ -19,23 +19,23 @@ const authorizedUsersSchema = new mongoose.Schema({
   },
   userName: {
     type: String,
-    default:null
+    default: null
   },
   email: {
     type: String,
-    default:null
+    default: null
   },
   designation: {
     type: String,
-    default:null
+    default: null
   },
-  empRoleId:{
-    type:Number,
-    default:null
+  empRoleId: {
+    type: Number,
+    default: null
   },
-  branch:{
-    type:String,
-    default:null
+  branch: {
+    type: String,
+    default: null
   },
   // roleIds: 
   //   {
@@ -44,35 +44,35 @@ const authorizedUsersSchema = new mongoose.Schema({
   //     required: true,
   //   }
   // ,
-  permission: { type: String, default: 'Read' ,ref: 'permissionSchema'},
-  departmentId:{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Department', // make sure this matches your roles collection
-      required: false,
-    },
-  location:{
-    type:String,
-    default:'default'
+  permission: { type: String, default: 'Read', ref: 'permissionSchema' },
+  departmentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Department', // make sure this matches your roles collection
+    required: false,
   },
-  locationId:{
-    type:Number,
-    default:null
+  location: {
+    type: String,
+    default: 'default'
   },
-  phoneNumber:{
-    type:String,
-    default:null
+  locationId: {
+    type: Number,
+    default: null
   },
-  address1:{
-    type:String,
-    default:null
+  phoneNumber: {
+    type: String,
+    default: null
   },
-  timezone:{
-    type:String,
-    default:null
+  address1: {
+    type: String,
+    default: null
   },
-  password:{
-    type:String,
-    default:null
+  timezone: {
+    type: String,
+    default: null
+  },
+  password: {
+    type: String,
+    default: null
   },
   verified: {
     type: Boolean,
@@ -89,13 +89,13 @@ const authorizedUsersSchema = new mongoose.Schema({
       message: "profilePics must be an array of URL strings.",
     },
   },
-  numberPlate:{
-    type:String,
-    default:null
+  numberPlate: {
+    type: String,
+    default: null
   },
-  tag:{
-    type:Boolean,
-    default:false
+  tag: {
+    type: Boolean,
+    default: false
   }
   // password: {type: String, required: true},  
 }, {
@@ -122,7 +122,7 @@ authorizedUsersSchema.methods.getDecryptedPassword = function () {
 
 authorizedUsersSchema.pre(/^find|countDocuments/, async function () {
   const memberId = this.options?.memberId;
-  
+
   // No member → allow full access
   if (!memberId) return;
 
@@ -130,12 +130,12 @@ authorizedUsersSchema.pre(/^find|countDocuments/, async function () {
   const authorized = await authorizedChannelsModel.findOne({
     userId: memberId,
   });
-  
+
   if (!authorized) return;
 
   const allowedLocations = authorized.employeeLocations; // ensure correct field
-  
-  
+
+
   // If allowed list empty → block all results
   if (!Array.isArray(allowedLocations) || allowedLocations.length === 0) {
     this.where({ _id: { $in: [] } });
@@ -143,9 +143,9 @@ authorizedUsersSchema.pre(/^find|countDocuments/, async function () {
   }
 
   const existingQuery = this.getQuery();
-  
+
   // --- MERGE EXISTING QUERY WITH AUTHORIZATION FILTER ---
-    this.where({
+  this.where({
     $and: [existingQuery, { location: { $in: allowedLocations } }],
   });
 });
