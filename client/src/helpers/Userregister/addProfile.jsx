@@ -200,7 +200,7 @@ const UserCard = ({ user, handleEdit, handleDelete, nasUrl, setSelectedUser, set
                   : getInitialsPlaceholder(user.firstName, user.lastName)
               }
               alt={`${user.firstName} ${user.lastName}`}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover object-top"
               onError={(e) => {
                 e.target.onerror = null;
                 e.target.src = getInitialsPlaceholder(user.firstName, user.lastName);
@@ -302,7 +302,7 @@ const UserTableRow = ({ user, handleEdit, handleDelete, nasUrl, index, currentPa
                 e.target.onerror = null;
                 e.target.src = getInitialsPlaceholder(user.firstName, user.lastName);
               }}
-              className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-gray-200"
+              className="w-8 h-8 rounded-full object-cover object-top shrink-0 ring-1 ring-gray-200"
             />
             <div className="min-w-0">
               <p className="text-xs font-semibold text-gray-800 truncate">

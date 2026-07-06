@@ -78,7 +78,7 @@ const UserDetailModalContent = ({ user, nasUrl, onClose }) => {
                     : getInitialsPlaceholder(user.firstName, user.lastName)
                 }
                 alt={`${user.firstName} ${user.lastName}`}
-                className="w-full h-full object-cover transition-transform duration-700 hover:scale-110"
+                className="w-full h-full object-cover object-top transition-transform duration-700 hover:scale-110"
                 onError={(e) => {
                   e.target.onerror = null;
                   e.target.src = getInitialsPlaceholder(user.firstName, user.lastName);
