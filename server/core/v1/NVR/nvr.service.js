@@ -424,7 +424,7 @@ class NVRService {
               try {
                 const rtspUrl = buildRTSPUrl(updatedNvr, cam, "main");
                 const uid = `${updatedNvr._id}-${cam._id}`;
-                await updateCameraStream(uid, rtspUrl);
+                await updateCameraStream(uid, rtspUrl, undefined, updatedNvr?.userId);
               } catch (innerErr) {
                 logger.error(
                   `Failed to propagate RTSP update for camera ${cam._id}`,
@@ -992,7 +992,7 @@ class NVRService {
 
         const uid = `${savedNvr._id}-${savedCam._id}`;
         const rtspUrl = buildRTSPUrl(savedNvr, savedCam, "main");
-        registerCameraStream(uid, rtspUrl);
+        registerCameraStream(uid, rtspUrl, savedNvr?.userId);
         savedCameras.push(savedCam);
       }
 

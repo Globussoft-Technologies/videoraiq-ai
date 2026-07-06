@@ -2,12 +2,12 @@ import logger from "../utils/logger.js";
 import getStreamingUrl, {
   buildRTSPUrl,
   buildStreamingUrl,
+  resolveHost,
 } from "../utils/rtspStream.js";
 import config from "config";
 import NVR from "../core/v1/NVR/nvr.model.js";
 import axios from "axios";
 import { DETECTION_MODES_MAP } from "../constants/detectionTypes.js";
-const streamHost = config.get("RTSPStream.host");
 const attendanceHost = config.get("PythonService.attendanceUrl");
 const detectionHost = config.get("PythonService.detectionUrl");
 const APP_ENV = config.get("APP_ENV");
@@ -25,7 +25,7 @@ class PythonService {
         const streamingPath = await buildStreamingUrl(nvr, channel);
         const streamingUrl =
           APP_ENV === "cloud"
-            ? `${streamHost}/${streamingPath}`
+            ? `${await resolveHost(nvr?.userId)}/${streamingPath}`
             : streamingPath;
 
         // ! new
@@ -76,7 +76,7 @@ class PythonService {
       // const streamingPath = await getStreamingUrl(uid, rtspUrl);
       const streamingPath = await buildStreamingUrl(nvr, channel);
       const streamingUrl =
-        APP_ENV === "cloud" ? `${streamHost}/${streamingPath}` : streamingPath;
+        APP_ENV === "cloud" ? `${await resolveHost(nvr?.userId)}/${streamingPath}` : streamingPath;
 
       // ! new
       // const streamingUrl = `${nvr?.domain}${channel?.streamingPath}`;
@@ -508,7 +508,7 @@ class PythonService {
 
     const streamingPath = await buildStreamingUrl(nvr, channel);
     const streamingUrl =
-      APP_ENV === "cloud" ? `${streamHost}/${streamingPath}` : streamingPath;
+      APP_ENV === "cloud" ? `${await resolveHost(nvr?.userId)}/${streamingPath}` : streamingPath;
 
     const payload = {
       camera_id: channel?._id?.toString(),

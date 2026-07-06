@@ -735,6 +735,11 @@ const doc = {
     updateLogsSound: {
       logsSound: true,
     },
+    updateStreamHost: {
+      userId: "22",
+      streamHost: "https://custom-stream.example.com",
+      streamToken: "custom-stream-token",
+    },
     bulkExportProfiles: {
       ids: ["684954f488ba3228238e466d", "684954f488ba3228238e466d"],
     },

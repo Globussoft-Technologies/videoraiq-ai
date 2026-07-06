@@ -3,19 +3,44 @@ import axios from "axios";
 import config from "config";
 import logger from "./logger.js";
 import { decrypt } from "./cryptoUtils.js";
+import adminModel from "../core/v1/admin/admin.model.js";
 const api_host = config.get("RTSPStream.host");
-const token = config.get("RTSPStream.token");
+const api_token = config.get("RTSPStream.token");
 const terminateHost = config.get("RTSPStream.terminateHost");
 const APP_ENV = config.get("APP_ENV");
 
-export const getStreamingUrl = async (id, rtspUrl) => {
+// Resolve the RTSP stream host + token for a given resource owner. A specific
+// admin can override both via admin.streamHost / admin.streamToken; everyone
+// else uses the global config defaults. Single lookup returns both.
+export const resolveStream = async (userId) => {
+  if (!userId) return { host: api_host, token: api_token };
+  try {
+    const admin = await adminModel
+      .findOne({ user_id: String(userId) })
+      .select("streamHost streamToken")
+      .lean();
+    return {
+      host: admin?.streamHost || api_host,
+      token: admin?.streamToken || api_token,
+    };
+  } catch (err) {
+    logger.error(`Failed to resolve stream config for ${userId}`, err.message);
+    return { host: api_host, token: api_token };
+  }
+};
+
+// Convenience wrapper for callers that only need the host (e.g. display URLs).
+export const resolveHost = async (userId) => (await resolveStream(userId)).host;
+
+export const getStreamingUrl = async (id, rtspUrl, userId) => {
   const redisKey = `stream_url:${id}`;
   let streamUrl = await redis.get(redisKey);
 
   if (!streamUrl) {
     try {
+      const { host, token } = await resolveStream(userId);
       const response = await axios.post(
-        `${api_host}/api/add-camera`,
+        `${host}/api/add-camera`,
         {
           id: id,
           rtsp_url: rtspUrl,
@@ -42,10 +67,11 @@ export const getStreamingUrl = async (id, rtspUrl) => {
   return streamUrl || null;
 };
 
-export const killCurrentPlayBack = async (camera_id) => {
+export const killCurrentPlayBack = async (camera_id, userId) => {
   try {
+    const { host, token } = await resolveStream(userId);
     const response = await axios.post(
-      `${api_host}/api/playback/start`,
+      `${host}/api/playback/start`,
       {
         camera_id,
         generate: false,
@@ -66,10 +92,12 @@ export const generatePlayBackUrl = async (
   camera_id,
   startTime,
   endTime,
+  userId,
 ) => {
   try {
+    const { host, token } = await resolveStream(userId);
     const response = await axios.post(
-      `${api_host}/api/playback/start`,
+      `${host}/api/playback/start`,
       {
         session_id,
         camera_id,
@@ -136,11 +164,12 @@ export const buildRTSPUrl = (nvr, channel, streamType = "main") => {
   }
 };
 
-export const registerCameraStream = async (id, rtspUrl) => {
+export const registerCameraStream = async (id, rtspUrl, userId) => {
   const redisKey = `stream_url:${id}`;
   try {
+    const { host, token } = await resolveStream(userId);
     const response = await axios.post(
-      `${api_host}/api/add-camera`,
+      `${host}/api/add-camera`,
       {
         id: id,
         rtsp_url: rtspUrl,
@@ -162,13 +191,14 @@ export const registerCameraStream = async (id, rtspUrl) => {
   }
 };
 
-export const updateCameraStream = async (id, rtspUrl, bitrate) => {
+export const updateCameraStream = async (id, rtspUrl, bitrate, userId) => {
   try {
+    const { host, token } = await resolveStream(userId);
     const payload = { rtsp_url: rtspUrl };
     if (bitrate) payload.bitrate = bitrate;
 
     const response = await axios.put(
-      `${api_host}/api/camera/${id}`,
+      `${host}/api/camera/${id}`,
       payload,
       {
         headers: {
@@ -205,7 +235,7 @@ export const buildStreamingUrl = async (nvr, channel) => {
     const uid = `${nvr?._id}-${channel?._id}`;
     if (APP_ENV === "cloud") {
       const rtspUrl = buildRTSPUrl(nvr, channel, "main");
-      streamingUrl = await getStreamingUrl(uid, rtspUrl);
+      streamingUrl = await getStreamingUrl(uid, rtspUrl, nvr?.userId);
     } else {
       streamingUrl = `${nvr?.domain}/${channel?.streamingPath}`;
     }

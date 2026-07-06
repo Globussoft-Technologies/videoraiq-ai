@@ -149,7 +149,7 @@ async function handleHikvisionRegistration(req, res) {
       const rtspUrl = buildRTSPUrl(savedNVR, savedCam, "main");
 
       // Register camera stream
-      registerCameraStream(uid, rtspUrl);
+      registerCameraStream(uid, rtspUrl, savedNVR?.userId);
 
       cameraResults.push(savedCam);
     }
@@ -475,7 +475,7 @@ async function handleCPPlusRegistration(req, res) {
       const rtspUrl = buildRTSPUrl(savedNVR, savedCam, "main");
 
       // Register camera stream
-      await registerCameraStream(uid, rtspUrl);
+      await registerCameraStream(uid, rtspUrl, savedNVR?.userId);
 
       cameraResults.push(savedCam);
     }
@@ -574,7 +574,7 @@ async function handleSingleCameraRegistration(req, res) {
     const uid = `${savedNVR._id}-${savedCam._id}`;
     const rtspUrl = buildRTSPUrl(savedNVR, savedCam, "main");
 
-    registerCameraStream(uid, rtspUrl);
+    registerCameraStream(uid, rtspUrl, savedNVR?.userId);
 
     await NVR.findByIdAndUpdate(savedNVR._id, {
       cameraCount: 1,
@@ -755,7 +755,7 @@ async function handleTiandyRegistration(req, res) {
 
       const uid = `${savedNVR._id}-${savedCam._id}`;
       const rtspUrl = buildRTSPUrl(savedNVR, savedCam, "main");
-      registerCameraStream(uid, rtspUrl);
+      registerCameraStream(uid, rtspUrl, savedNVR?.userId);
       cameraResults.push(savedCam);
     }
 
@@ -905,7 +905,7 @@ async function updateHikvisionChannels(nvr, plainPassword, res) {
 
         const uid = `${nvrId}-${savedCam._id}`;
         const rtspUrl = buildRTSPUrl(nvr, savedCam, "main");
-        registerCameraStream(uid, rtspUrl);
+        registerCameraStream(uid, rtspUrl, nvr?.userId);
         cameraResults.push(savedCam);
       }
     }
@@ -1081,7 +1081,7 @@ async function updateCPPlusChannels(nvr, plainPassword, res) {
 
         const uid = `${nvrId}-${savedCam._id}`;
         const rtspUrl = buildRTSPUrl(nvr, savedCam, "main");
-        await registerCameraStream(uid, rtspUrl);
+        await registerCameraStream(uid, rtspUrl, nvr?.userId);
         cameraResults.push(savedCam);
       }
     }
@@ -1167,7 +1167,7 @@ async function updateTiandyChannels(nvr, plainPassword, res) {
 
         const uid = `${nvrId}-${savedCam._id}`;
         const rtspUrl = buildRTSPUrl(nvr, savedCam, "main");
-        await registerCameraStream(uid, rtspUrl);
+        await registerCameraStream(uid, rtspUrl, nvr?.userId);
         cameraResults.push(savedCam);
       }
     }
@@ -1344,7 +1344,7 @@ async function handleSecurusRegistration(req, res) {
 
       const uid = `${savedNVR._id}-${savedCam._id}`;
       const rtspUrl = buildRTSPUrl(savedNVR, savedCam, "main");
-      registerCameraStream(uid, rtspUrl);
+      registerCameraStream(uid, rtspUrl, savedNVR?.userId);
       cameraResults.push(savedCam);
     }
 

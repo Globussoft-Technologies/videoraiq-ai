@@ -858,7 +858,7 @@ class UsersService {
               .status(400)
               .json(Response.userFailResp("Password is incorrect"));
           }
-          const admin = await adminModel.findById(user.adminId?._id).select("user_id");
+          const admin = await adminModel.findById(user.adminId?._id).select("user_id streamHost");
 
           const allsubscriptions = await AuthService.getAmemberAccessByUserId(parseInt(admin?.user_id))
           const formattedSubscriptions = AuthService.extractSubscriptions(allsubscriptions)
@@ -887,7 +887,10 @@ class UsersService {
             created_from: 'EMP',
             enablePhoneRecipients:config.get('enablePhoneRecipients'),
             memberId:user?._id,
-            userSubscriptionType: formattedSubscriptions
+            userSubscriptionType: formattedSubscriptions,
+            // Resolved RTSP stream host (parent admin's override or global default),
+            // normalised to always end with a single trailing slash.
+            streamHost: `${(admin?.streamHost || config.get('RTSPStream.host')).replace(/\/+$/, "")}/`,
           };
 
           let jwtToken = generateToken(tokenPayload, this.secretKey, this.tokenExpiryTime);

@@ -838,7 +838,8 @@ class ChannelService {
         sessionId,
         camera_id,
         startTime,
-        endTime
+        endTime,
+        channel?.userId
       );
 
       return res.status(200).json(

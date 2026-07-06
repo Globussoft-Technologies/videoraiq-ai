@@ -1065,6 +1065,7 @@ async updateAuthUser(req, res, _next) {
               .status(400)
               .json(Response.userFailResp("Password is incorrect"));
           }
+          const admin = await adminModel.findById(user.adminId).select("streamHost");
           let tokenPayload = {
             userId: user._id,
             user_email: user.email,
@@ -1076,8 +1077,10 @@ async updateAuthUser(req, res, _next) {
             profilePics: user.profilePics,
             adminId:user.adminId,
             emp_id:user.emp_id,
-            orgId:user.orgId
-
+            orgId:user.orgId,
+            // Resolved RTSP stream host (parent admin's override or global default),
+            // normalised to always end with a single trailing slash.
+            streamHost: `${(admin?.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
           };
 
           let jwtToken = generateToken(tokenPayload, this.secretKey, this.tokenExpiryTime);

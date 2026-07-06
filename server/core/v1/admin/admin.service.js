@@ -733,6 +733,55 @@ class AdminService {
     }
   }
 
+  // Operator action: set (or clear) a target admin's RTSP stream overrides
+  // (host and/or token). A field set to null/"" reverts to the global config
+  // (RTSPStream.host / RTSPStream.token). Only fields present in the body are
+  // updated. Kept named updateStreamHost for route compatibility.
+  async updateStreamHost(req, res, next) {
+    try {
+      const { userId, streamHost, streamToken } = req.body;
+
+      if (!userId) {
+        return res.send(Response.userFailResp("userId is required.", "Validation Failed!"));
+      }
+      if (streamHost === undefined && streamToken === undefined) {
+        return res.send(Response.userFailResp("Provide streamHost and/or streamToken.", "Validation Failed!"));
+      }
+
+      const isValid = (v) => v === null || v === "" || typeof v === "string";
+      if (streamHost !== undefined && !isValid(streamHost)) {
+        return res.send(Response.userFailResp("streamHost must be a string, empty string, or null.", "Validation Failed!"));
+      }
+      if (streamToken !== undefined && !isValid(streamToken)) {
+        return res.send(Response.userFailResp("streamToken must be a string, empty string, or null.", "Validation Failed!"));
+      }
+
+      // Only set provided fields; normalise empty string to null (falls back to global).
+      const update = {};
+      if (streamHost !== undefined) update.streamHost = streamHost ? String(streamHost).trim() : null;
+      if (streamToken !== undefined) update.streamToken = streamToken ? String(streamToken).trim() : null;
+
+      const updatedAdmin = await adminModel.findOneAndUpdate(
+        { user_id: String(userId) },
+        { $set: update },
+        { new: true }
+      );
+      if (!updatedAdmin) {
+        return res.send(Response.userFailResp("Admin not found!", "Validation Failed!"));
+      }
+
+      return res.send(
+        Response.userSuccessResp("Stream config updated successfully.", {
+          user_id: updatedAdmin.user_id,
+          streamHost: updatedAdmin.streamHost,
+          streamToken: updatedAdmin.streamToken,
+        })
+      );
+    } catch (error) {
+      next(new AppError(error, 500));
+    }
+  }
+
 }
 
 export default new AdminService();

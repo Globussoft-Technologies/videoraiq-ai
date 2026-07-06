@@ -6,10 +6,9 @@ import { Incident } from "../core/v1/incidents/incidents.model.js";
 import logger from "../utils/logger.js";
 import config from "config";
 import { redis } from "../utils/database.js";
-const api_host = config.get("RTSPStream.host");
-const token = config.get("RTSPStream.token");
 import authorizedChannelsModel from "../core/v1/cameraRestrictions/authorizedChannels.model.js";
 import usersModel from "../core/v1/users/users.model.js";
+import { resolveStream } from "../utils/rtspStream.js";
 const APP_ENV = config.get("APP_ENV");
 
 class DeleteService {
@@ -25,7 +24,7 @@ class DeleteService {
         if (APP_ENV === "cloud") {
           const uid = `${nvrId.toString()}-${channel._id.toString()}`;
           const redisKey = `stream_url:${uid}`;
-          await this.deleteStreamingCamera(uid);
+          await this.deleteStreamingCamera(uid, channel.userId);
           await redis.del(redisKey);
         }
 
@@ -71,10 +70,11 @@ class DeleteService {
     }
   }
 
-  static async deleteStreamingCamera(cameraId) {
+  static async deleteStreamingCamera(cameraId, userId) {
     try {
+      const { host, token } = await resolveStream(userId);
       const response = await axios.delete(
-        `${api_host}/api/camera/${cameraId}`,
+        `${host}/api/camera/${cameraId}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,

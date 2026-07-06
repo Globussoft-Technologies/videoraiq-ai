@@ -267,6 +267,21 @@ class AdminController {
     return await adminService.fetchLogsSound(req, res, next);
   }
 
+  async updateStreamHost(req, res, next) {
+    /* #swagger.tags = ['Admin']
+    #swagger.description = 'Set or clear a target admin RTSP stream host override. Pass streamHost null or empty to revert to the global host.'
+    #swagger.parameters['data'] = {
+        in: 'body',
+        description: 'Target admin user_id and streamHost',
+        required: true,
+        schema: { $ref: "#/definitions/updateStreamHost" }
+    }
+    #swagger.responses[200] = { description: 'streamHost updated successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return await adminService.updateStreamHost(req, res, next);
+  }
+
 }
 
 export default new AdminController();

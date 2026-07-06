@@ -18,5 +18,6 @@ router.get("/allowed-detections",verifyToken,adminController.getAllowedDetection
 router.put("/allowed-detections",verifyToken,adminController.updateAllowedDetections);
 router.put("/update-logs-sound",verifyToken,adminController.updateLogsSound);
 router.get("/fetch-logs-sound",verifyToken,adminController.fetchLogsSound);
+router.put("/update-stream-host",verifyToken,adminController.updateStreamHost);
 
 export default router;

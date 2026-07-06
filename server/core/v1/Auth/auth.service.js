@@ -621,6 +621,9 @@ return bypassUsers.find(
         userSubscriptionType: userData?.subscriptions,
         created_from: "EMP",
         enablePhoneRecipients: config.get("enablePhoneRecipients"),
+        // Resolved RTSP stream host (per-admin override or global default),
+        // normalised to always end with a single trailing slash.
+        streamHost: `${(adminData?.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
       };
 
       // Preset configs for each role
@@ -932,6 +935,9 @@ return bypassUsers.find(
         created_from: "EMP",
         createdAt: isUserExist?.createdAt,
         enablePhoneRecipients: config.get("enablePhoneRecipients"),
+        // Resolved RTSP stream host (per-admin override or global default),
+        // normalised to always end with a single trailing slash.
+        streamHost: `${(isUserExist?.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
       };
       let jwtToken = "";
       jwtToken = generateToken(
