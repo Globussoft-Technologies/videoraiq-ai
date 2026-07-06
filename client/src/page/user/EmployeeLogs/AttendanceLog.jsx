@@ -52,7 +52,6 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toast } from 'sonner';
-import { resolveUploadUrl } from '@/utils/resolveUploadUrl';
 
 
 const styles = {
@@ -576,7 +575,7 @@ const Logs = () => {
       ? attendanceLogs.map((item) => ({
           id: item.employee?._id || item.id,
           image: item.employee?.profilePics?.[0]
-            ? resolveUploadUrl(item.employee.profilePics[0])
+            ? BASE_URL + item.employee?.profilePics?.[0]
             : USER_AVTAR_INITIALS +
               (item.employee ? item.employee.firstName.charAt(0) : 'U') +
               (item.employee ? item.employee.lastName.charAt(0) : 'P'),

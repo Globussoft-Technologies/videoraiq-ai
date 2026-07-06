@@ -6,7 +6,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { displayEmail } from '@/utils/displayEmail';
-import { resolveUploadUrl } from '@/utils/resolveUploadUrl';
 import {
   ChevronLeft,
   ChevronRight,
@@ -74,7 +73,7 @@ const UserDetailModalContent = ({ user, nasUrl, onClose }) => {
               <img
                 src={
                   hasImages
-                    ? resolveUploadUrl(profilePics[currentImageIndex], nasUrl)
+                    ? `${nasUrl}/api/v1/uploads/${profilePics[currentImageIndex]}`
                     : getInitialsPlaceholder(user.firstName, user.lastName)
                 }
                 alt={`${user.firstName} ${user.lastName}`}

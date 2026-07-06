@@ -94,15 +94,19 @@ const PaginationBar = ({
   </div>
 );
 
+// The /grouped API returns image fields as relative paths, so build the full
+// upload URL from VITE_BACKEND here.
+const uploadDomain = import.meta.env.VITE_BACKEND + '/api/v1/uploads';
+
 // Map a raw /grouped API group into the folder shape the UI renders.
-// Keep `images` (full URLs, already absolute) and `imageIds` index-aligned so a
-// selected image's id is available for the delete endpoint.
+// Prepend `uploadDomain` to each image and keep `images` / `imageIds`
+// index-aligned so a selected image's id is available for the delete endpoint.
 const mapGroup = (group) => {
   const valid = (group.images || []).filter((i) => i && i.image);
   return {
     dsId: group.dsId,
     authorizedUser: group.authorizedUser || null,
-    images: valid.map((i) => i.image),
+    images: valid.map((i) => `${uploadDomain}/${i.image.replace(/^\/+/, '')}`),
     imageIds: valid.map((i) => i._id),
   };
 };
