@@ -11,6 +11,7 @@ import {
   Loader2,
   Trash2,
   Image as ImageIcon,
+  Search,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getGroupedFaceImages, deleteFaceImages } from './Api/faceImages';
@@ -18,10 +19,11 @@ import TagFlaggedUserModal from './components/TagFlaggedUserModal';
 import AutoRefreshComponent from './components/AutoRefreshComponent';
 import ConfirmationModal from '@/page/user/Detection/components/DeleteConfirmation';
 import Pagination from '@/components/Pagination';
+import useDebounce from '@/hooks/useDebounce';
 import { usePermissions } from '@/context/Permission/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
 
-const ROWS_OPTIONS = [30, 60, 100];
+const ROWS_OPTIONS = [35, 60, 100];
 
 const REFRESH_KEY = 'flagged_users_auto_refresh_enabled';
 const INTERVAL_KEY = 'flagged_users_auto_refresh_interval';
@@ -123,12 +125,15 @@ const FlaggedUsers = () => {
   // Controls the inside-folder "delete selected images" confirmation modal.
   const [confirmDeleteImages, setConfirmDeleteImages] = useState(false);
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(30);
+  const [limit, setLimit] = useState(35);
   const [totalCount, setTotalCount] = useState(0);
   const [pageInput, setPageInput] = useState('');
+  // Folder-grid search (by dsId or tagged user name); debounced before fetching.
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 400);
   // Inside-folder image pagination (client-side over the loaded images).
   const [folderPage, setFolderPage] = useState(1);
-  const [folderLimit, setFolderLimit] = useState(30);
+  const [folderLimit, setFolderLimit] = useState(35);
   const [folderPageInput, setFolderPageInput] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(() => {
     const saved = localStorage.getItem(REFRESH_KEY);
@@ -179,7 +184,7 @@ const FlaggedUsers = () => {
     setError(null);
     try {
       const skip = (page - 1) * limit;
-      const res = await getGroupedFaceImages(skip, limit);
+      const res = await getGroupedFaceImages(skip, limit, debouncedSearch);
       const data = res?.data?.body?.data || {};
       const groups = Array.isArray(data.groups) ? data.groups : [];
       setFolders(groups.map(mapGroup));
@@ -190,7 +195,13 @@ const FlaggedUsers = () => {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [page, limit]);
+  }, [page, limit, debouncedSearch]);
+
+  // Reset to the first page whenever the search term changes so results start
+  // from the top of the filtered set.
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     if (canView) fetchFolders();
@@ -377,7 +388,14 @@ const FlaggedUsers = () => {
             >
               <ChevronLeft className="w-6 h-6 text-[#333333]" strokeWidth={1.2} />
             </button>
-            <Users className="w-6 h-6 text-[#333333]" strokeWidth={1.2} />Detected Users
+            <Users className="w-6 h-6 text-[#333333] shrink-0" strokeWidth={1.2} />
+            {/* Heading = tagged/registered user's name, else the dsId. */}
+            <span
+              className="text-base sm:text-lg font-semibold text-[#333333] truncate max-w-[50vw]"
+              title={activeFolder.authorizedUser?.name || activeFolder.dsId}
+            >
+              {activeFolder.authorizedUser?.name || activeFolder.dsId}
+            </span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -437,7 +455,7 @@ const FlaggedUsers = () => {
               return (
                 <div
                   key={imageId || i}
-                  className={`group relative w-32 sm:w-36 aspect-square rounded-2xl overflow-hidden bg-[#F3F3F3] border shadow-sm ${
+                  className={`group relative w-48 sm:w-52 aspect-square rounded-2xl overflow-hidden bg-[#F3F3F3] border shadow-sm ${
                     isSelected ? 'border-red-500 ring-2 ring-red-400' : 'border-gray-100'
                   }`}
                 >
@@ -449,7 +467,7 @@ const FlaggedUsers = () => {
                     <img
                       src={img}
                       alt={`Detected user face ${i + 1}`}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover object-top"
                     />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
                       <Maximize2 className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -584,10 +602,31 @@ const FlaggedUsers = () => {
   }
 
   return (
-    <div className="py-4 sm:py-6 px-6 sm:px-10 lg:px-14 min-h-[calc(100vh-140px)] flex flex-col">
+    <div className="py-4 sm:py-6 px-4 sm:px-6 lg:px-8 min-h-[calc(100vh-140px)] flex flex-col">
       <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
         <h1 className="text-lg sm:text-xl font-semibold text-[#07486A]">Detected Users</h1>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by ID or name"
+              className="w-56 sm:w-64 pl-3 pr-9 h-9 text-sm border border-[#C7C7C7] rounded-lg text-[#595959] focus:outline-none focus:ring-1 focus:ring-[#07486A]"
+            />
+            {search ? (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#595959] hover:text-[#333] cursor-pointer"
+                title="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            ) : (
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#595959] pointer-events-none" />
+            )}
+          </div>
           {!loading && !error && folders.length > 0 && (
             <button
               type="button"
@@ -638,14 +677,16 @@ const FlaggedUsers = () => {
         </div>
       ) : folders.length === 0 ? (
         <div className="text-center py-20 text-gray-400 text-sm">
-          No Detected users found.
+          {debouncedSearch
+            ? `No Detected users found for "${debouncedSearch}".`
+            : 'No Detected users found.'}
         </div>
       ) : (
-        <div className="flex flex-wrap gap-4 sm:gap-5">
+        <div className="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-7 gap-4 sm:gap-5">
           {folders.map((folder) => {
             const isFolderSelected = selectedFolderIds.includes(folder.dsId);
             return (
-            <div key={folder.dsId} className="group flex flex-col items-center w-32 sm:w-36">
+            <div key={folder.dsId} className="group flex flex-col items-center">
               <div
                 className={`relative w-full aspect-square rounded-2xl overflow-hidden bg-[#F3F3F3] border shadow-sm group-hover:shadow-md transition-shadow ${
                   isFolderSelected ? 'border-red-500 ring-2 ring-red-400' : 'border-gray-100'
@@ -659,7 +700,7 @@ const FlaggedUsers = () => {
                   <img
                     src={folder.images[0]}
                     alt="Folders"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover object-top"
                   />
                 </button>
 
@@ -698,14 +739,15 @@ const FlaggedUsers = () => {
                   {folder.images.length}
                 </span>
               </div>
-              {folder.authorizedUser?.name && (
-                <p
-                  className="mt-1.5 w-full text-center text-xs font-medium text-gray-700 truncate"
-                  title={folder.authorizedUser.name}
-                >
-                  {folder.authorizedUser.name}
-                </p>
-              )}
+              {/* Show the tagged/registered user's name; fall back to the dsId.
+                  Small font + break-all so the full UUID dsId fits without
+                  truncating. */}
+              <p
+                className="mt-1.5 w-full text-center text-[10px] leading-tight font-medium text-gray-700 break-all"
+                title={folder.authorizedUser?.name || folder.dsId}
+              >
+                {folder.authorizedUser?.name || folder.dsId}
+              </p>
             </div>
             );
           })}
