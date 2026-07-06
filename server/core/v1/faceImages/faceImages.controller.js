@@ -57,7 +57,7 @@ class FaceImagesController {
   async getGroupedImages(req, res, next) {
     /*
     #swagger.tags = ['FaceImages']
-    #swagger.description = 'Fetch face images grouped by dsId, with authorized user details populated when tagged. Each image path is returned as a full viewable URL (config ImageView base + stored relative NAS path). Paginated by dsId group.'
+    #swagger.description = 'Fetch face images grouped by dsId, with authorized user details populated when tagged. Each image path is returned as a full viewable URL (config ImageView base + stored relative NAS path). Paginated by dsId group. Supports searching by dsId or the tagged users first/last/full name.'
     #swagger.parameters['skip'] = {
               in: 'query',
               description: 'Number of dsId groups to skip',
@@ -69,6 +69,12 @@ class FaceImagesController {
               description: 'Number of dsId groups to return (default 40)',
               required: false,
               type: 'Number',
+    }
+    #swagger.parameters['search'] = {
+              in: 'query',
+              description: 'Search by dsId, or by the tagged authorized users first name, last name, or full name (case-insensitive, partial match)',
+              required: false,
+              type: 'String',
     }
     #swagger.responses[200] = {
       description: 'Grouped images fetched successfully',

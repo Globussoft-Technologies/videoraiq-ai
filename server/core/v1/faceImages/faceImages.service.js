@@ -10,6 +10,10 @@ import FaceImagesValidator from "./faceImages.validate.js";
 import { deleteMedia, mediaExists } from "../../../utils/mediaStorage.js";
 import dsUserSyncService from "../../../services/dsUserSync.service.js";
 
+function escapeRegex(input = "") {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 class FaceImagesService {
   // Links every FaceImages doc for a dsId to an authorizedUser and notifies DS.
   // Shared by tagFolder and quickCreateUser, which both perform the same link.
@@ -53,6 +57,7 @@ class FaceImagesService {
 
       const skip = parseInt(req.query.skip) || 0;
       const limit = parseInt(req.query.limit) || 40;
+      const search = req.query.search?.trim();
 
       const pipeline = [
         { $sort: { createdAt: 1 } },
@@ -99,6 +104,14 @@ class FaceImagesService {
             images: 1,
           }
         },
+        ...(search ? [{
+          $match: {
+            $or: [
+              { dsId: { $regex: escapeRegex(search), $options: "i" } },
+              { "authorizedUser.name": { $regex: escapeRegex(search), $options: "i" } },
+            ]
+          }
+        }] : []),
         { $sort: { dsId: 1 } },
         {
           $facet: {

@@ -392,7 +392,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
             {isSubmitting ? 'Registering...' : 'Register '}
           </button>
         </fieldset>
-      )}
+      ))}
 
       {/* camera modal */}
       {isCameraOpen && (
@@ -427,7 +427,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
             </button>
           </div>
         </div>
-      ))}
+      )}
     </div>
   );
 };
