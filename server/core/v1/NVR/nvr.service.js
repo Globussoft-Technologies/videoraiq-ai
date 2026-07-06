@@ -1041,33 +1041,44 @@ class NVRService {
         const deviceInfoData = await parseXml(deviceInfoXml);
         const deviceInfo = deviceInfoData?.DeviceInfo;
 
-        const channelsRes = await client.fetch(
-          `http://${ip}:${port}/ISAPI/ContentMgmt/InputProxy/channels`
-        );
-        const channelsXml = await channelsRes.text();
-        const channelsData = await parseXml(channelsXml);
-        const channelList = channelsData?.InputProxyChannelList?.InputProxyChannel;
-        const channels = Array.isArray(channelList) ? channelList : (channelList ? [channelList] : []);
+        // Hikvision list endpoints page at ~50 results; without paging, cameras
+        // on higher channels (e.g. a 64ch NVR) are silently dropped. Loop with
+        // searchResultPosition/maxResults until a short page comes back.
+        // ponytail: page size 50 (Hikvision's common cap); it clamps larger values itself.
+        const fetchAllPaged = async (path, listKey, itemKey) => {
+          const pageSize = 1000;
+          const all = [];
+          for (let pos = 0; ; pos += pageSize) {
+            const res = await client.fetch(
+              `http://${ip}:${port}${path}?searchResultPosition=${pos}&maxResults=${pageSize}`
+            );
+            if (!res.ok) break;
+            const data = await parseXml(await res.text());
+            const raw = data?.[listKey]?.[itemKey];
+            const page = Array.isArray(raw) ? raw : raw ? [raw] : [];
+            all.push(...page);
+            if (page.length < pageSize) break;
+          }
+          return all;
+        };
 
-        const statusRes = await client.fetch(
-          `http://${ip}:${port}/ISAPI/ContentMgmt/InputProxy/channels/status`
+        const channels = await fetchAllPaged(
+          "/ISAPI/ContentMgmt/InputProxy/channels",
+          "InputProxyChannelList",
+          "InputProxyChannel"
         );
-        const statusXml = await statusRes.text();
-        const statusData = await parseXml(statusXml);
-        const statusList =
-          statusData?.InputProxyChannelStatusList?.InputProxyChannelStatus;
-        const statuses = Array.isArray(statusList) ? statusList : [statusList];
 
-        const streamInfoRes = await client.fetch(
-          `http://${ip}:${port}/ISAPI/Streaming/channels/`
+        const statuses = await fetchAllPaged(
+          "/ISAPI/ContentMgmt/InputProxy/channels/status",
+          "InputProxyChannelStatusList",
+          "InputProxyChannelStatus"
         );
-        const streamInfoXml = await streamInfoRes.text();
-        const streamInfoData = await parseXml(streamInfoXml);
-        const streamingChannelList =
-          streamInfoData?.StreamingChannelList?.StreamingChannel;
-        const streamingChannels = Array.isArray(streamingChannelList)
-          ? streamingChannelList
-          : [streamingChannelList];
+
+        const streamingChannels = await fetchAllPaged(
+          "/ISAPI/Streaming/channels",
+          "StreamingChannelList",
+          "StreamingChannel"
+        );
 
         const streamResolutionMap = {};
         for (const stream of streamingChannels) {
@@ -1674,6 +1685,17 @@ class NVRService {
 
       const addedCameras = await Camera.find({ nvrId }).setOptions({ includeInactive: true });
       const addedMap = new Map(addedCameras.map((c) => [c.channelId, { _id: c._id, isAdded: c.isAdded }]));
+      const dbNameByChannel = new Map(addedCameras.map((c) => [c.channelId, c.name]));
+
+      // Sync DB name -> NVR's current name when a camera was renamed on the device.
+      const renames = camerasData.cameras
+        .filter((cam) => dbNameByChannel.has(cam.channelId) && cam.name && cam.name !== dbNameByChannel.get(cam.channelId))
+        .map((cam) => ({
+          updateOne: { filter: { nvrId, channelId: cam.channelId }, update: { $set: { name: cam.name } } },
+        }));
+      if (renames.length) {
+        await Camera.bulkWrite(renames);
+      }
 
       // Auto-add new cameras found on NVR but not in database
       const newCameras = camerasData.cameras.filter((cam) => !addedMap.has(cam.channelId));
