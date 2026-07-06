@@ -6,12 +6,21 @@ const HOST = import.meta.env.VITE_BACKEND;
 // Fetch face images grouped by dsId (paginated). Each group has the dsId, the
 // linked authorizedUser (populated when tagged, else null), and an images array
 // whose `image` field is a full URL. `search` filters by dsId or the tagged
-// user's first/last/full name (case-insensitive, partial). Response data is
+// user's first/last/full name (case-insensitive, partial). `startDate`/`endDate`
+// (YYYY-MM-DD) filter groups by their latestCreatedAt date. Response data is
 // { totalCount, skip, limit, groups: [...] }.
-export const getGroupedFaceImages = async function (skip = 0, limit = 40, search = '') {
+export const getGroupedFaceImages = async function (
+  skip = 0,
+  limit = 40,
+  search = '',
+  startDate = '',
+  endDate = ''
+) {
   const token = getAccessToken();
   const params = { skip, limit };
   if (search) params.search = search;
+  if (startDate) params.startDate = startDate;
+  if (endDate) params.endDate = endDate;
   return axios.get(`${HOST}/api/v1/faceImages/grouped`, {
     params,
     headers: {

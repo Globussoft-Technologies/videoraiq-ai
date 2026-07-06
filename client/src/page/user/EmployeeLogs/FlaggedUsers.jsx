@@ -22,6 +22,10 @@ import Pagination from '@/components/Pagination';
 import useDebounce from '@/hooks/useDebounce';
 import { usePermissions } from '@/context/Permission/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
+import { DateRangePickerComponent } from '@/components/ui/calendar';
+import { formatDateRange } from '@/utils/formatDateRange';
+import Month from '@/assets/Calendar.svg';
+import moment from 'moment-timezone';
 
 const ROWS_OPTIONS = [35, 60, 100];
 
@@ -131,6 +135,17 @@ const FlaggedUsers = () => {
   // Folder-grid search (by dsId or tagged user name); debounced before fetching.
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 400);
+  // Date-range filter (by group latestCreatedAt). Defaults to the current date.
+  const [dateRange, setDateRange] = useState(() => {
+    const today = new Date();
+    return { start: today, end: today };
+  });
+  const startDate = dateRange.start
+    ? moment(dateRange.start).format('YYYY-MM-DD')
+    : '';
+  const endDate = dateRange.end
+    ? moment(dateRange.end).format('YYYY-MM-DD')
+    : '';
   // Inside-folder image pagination (client-side over the loaded images).
   const [folderPage, setFolderPage] = useState(1);
   const [folderLimit, setFolderLimit] = useState(35);
@@ -184,7 +199,7 @@ const FlaggedUsers = () => {
     setError(null);
     try {
       const skip = (page - 1) * limit;
-      const res = await getGroupedFaceImages(skip, limit, debouncedSearch);
+      const res = await getGroupedFaceImages(skip, limit, debouncedSearch, startDate, endDate);
       const data = res?.data?.body?.data || {};
       const groups = Array.isArray(data.groups) ? data.groups : [];
       setFolders(groups.map(mapGroup));
@@ -195,13 +210,13 @@ const FlaggedUsers = () => {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [page, limit, debouncedSearch]);
+  }, [page, limit, debouncedSearch, startDate, endDate]);
 
-  // Reset to the first page whenever the search term changes so results start
-  // from the top of the filtered set.
+  // Reset to the first page whenever the search term or date range changes so
+  // results start from the top of the filtered set.
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch]);
+  }, [debouncedSearch, startDate, endDate]);
 
   useEffect(() => {
     if (canView) fetchFolders();
@@ -627,6 +642,31 @@ const FlaggedUsers = () => {
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#595959] pointer-events-none" />
             )}
           </div>
+
+          {/* Date-range filter (by group latestCreatedAt), defaults to today */}
+          <DateRangePickerComponent
+            startDate={dateRange.start}
+            endDate={dateRange.end}
+            maxDate={new Date()}
+            onRangeChange={(range) => setDateRange(range)}
+            buttonClassName="h-9 text-[#5D5D5D] font-medium cursor-pointer py-1.5 px-2 bg-white rounded-lg text-xs border border-[#C7C7C7] flex items-center justify-between min-w-[160px] hover:shadow-sm transition-shadow"
+            buttonContent={
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center overflow-hidden whitespace-nowrap">
+                  <img src={Month} className="w-3.5 h-3.5 mr-1.5 shrink-0" alt="Calendar" />
+                  <span className="truncate text-left">
+                    {dateRange.start && dateRange.end
+                      ? formatDateRange(dateRange.start, dateRange.end)
+                      : 'Select Date'}
+                  </span>
+                </div>
+                <ChevronRight className="w-3 h-3 rotate-90 text-[#5D5D5D] ml-1.5 shrink-0" />
+              </div>
+            }
+            popoverClassName="mt-1 z-50"
+            calendarClassName="p-3 bg-white shadow-lg border border-[#D8D8D8]"
+          />
+
           {!loading && !error && folders.length > 0 && (
             <button
               type="button"
