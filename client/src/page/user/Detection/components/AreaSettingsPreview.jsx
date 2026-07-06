@@ -12,6 +12,7 @@ import { updateDetectionSettings } from '../Api/put';
 import Skeleton from 'react-loading-skeleton';
 import DetectionPreviewModal from './DetectionPreviewModal';
 import { callMarkPointsApi } from '@/utils/callMarkPointsApi';
+import { getStreamBaseUrl } from '@/utils/resolveStreamUrl';
 import Maximum from '@/assets/Maximum.svg';
 import Minimum from '@/assets/Minimum.svg';
 import AreaMarkingControls from './zonemarking/AreaMarkingControls';
@@ -208,7 +209,7 @@ const AreaSettingsPreview = forwardRef(({setIsEditing, selectedType, activeCamer
   // Get camera config with correct NVR details
   const getConfig = (channel) => {
     if (!selectedNvrDetails) return null;
-    const streamBaseUrl = import.meta.env.VITE_STREAM_URL;
+    const streamBaseUrl = getStreamBaseUrl();
     const local_status = import.meta.env.VITE_LOCAL_SETUP;
 
     // Build streaming URL with base URL if not in local setup

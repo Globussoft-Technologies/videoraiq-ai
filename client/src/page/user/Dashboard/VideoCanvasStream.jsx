@@ -6,6 +6,7 @@ import StreamModal from '../Streams/CameraStreamsModal/StreamModal';
 import CameraStreamWithDetection from '../Streams/CameraStreamsModal/CameraStreamWithDetection';
 import useHlsPlayer from '@/hooks/useHlsPlayer';
 import { useDetection } from '@/context/Sockets/DetectionContext';
+import { getStreamBaseUrl } from '@/utils/resolveStreamUrl';
 
 const VideoCanvasStream = ({
   config,
@@ -30,7 +31,7 @@ const VideoCanvasStream = ({
   const videoRef = useRef(null);
   const containerRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const baseUrl = import.meta.env.VITE_STREAM_URL;
+  const baseUrl = getStreamBaseUrl();
   const status = import.meta.env.VITE_LOCAL_SETUP;
   const [isLoading, setIsLoading] = useState(true);
   const [isWaiting, setIsWaiting] = useState(streamIndex > 0);

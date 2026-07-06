@@ -6,9 +6,9 @@ import { addSelectedCameras } from './Api/post';
 import getAccessToken from '@/utils/getAccessToken';
 import axios from 'axios';
 import useHlsPlayer from '@/hooks/useHlsPlayer';
+import { getStreamBaseUrl } from '@/utils/resolveStreamUrl';
 
 const HOST = import.meta.env.VITE_BACKEND;
-const STREAM_BASE = import.meta.env.VITE_STREAM_URL;
 const LOCAL_SETUP = import.meta.env.VITE_LOCAL_SETUP;
 
 const CameraPreviewModal = ({ cam, onClose }) => {
@@ -22,7 +22,7 @@ const CameraPreviewModal = ({ cam, onClose }) => {
   const streamUrl = useMemo(() => {
     if (!cam?.streamingUrl) return null;
     if (LOCAL_SETUP === 'true') return cam.streamingUrl;
-    return STREAM_BASE + cam.streamingUrl;
+    return getStreamBaseUrl() + cam.streamingUrl;
   }, [cam?.streamingUrl]);
 
   useHlsPlayer(videoRef, streamUrl, {

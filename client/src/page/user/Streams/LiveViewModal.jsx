@@ -18,6 +18,7 @@ import { createCameraAliasName } from '../Dashboard/Api/put';
 import { getDepartmentList } from './Api/post';
 import { usePermissions } from '@/context/Permission/PermissionContext';
 import EditCameraInfo from './components/EditCameraInfo';
+import { getStreamBaseUrl } from '@/utils/resolveStreamUrl';
 
 const LiveViewModal = ({
   isOpen,
@@ -52,7 +53,7 @@ const LiveViewModal = ({
     return cameraList.findIndex((c) => c.id === activeCamera.id);
   }, [cameraList, activeCamera]);
 
-  const baseUrl = import.meta.env.VITE_STREAM_URL;
+  const baseUrl = getStreamBaseUrl();
   const status = import.meta.env.VITE_LOCAL_SETUP;
 
   const memoizedUrl = useMemo(() => {

@@ -10,6 +10,7 @@ import {
 } from 'react-icons/fa';
 // import { useDetection } from '@/context/Sockets/DetectionContext';
 import { useAllDetections } from '@/context/Sockets/AllDetectionContext';
+import { getStreamBaseUrl } from '@/utils/resolveStreamUrl';
 // Import icons from react-icons
 import {
   ChevronRight,
@@ -201,7 +202,7 @@ const StreamModal = ({
       return streamPath;
     }
 
-    return import.meta.env.VITE_STREAM_URL + streamPath;
+    return getStreamBaseUrl() + streamPath;
   }, [currentCamera, status]);
 
   //  Filter detections for current camera

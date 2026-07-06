@@ -11,6 +11,7 @@ import React, {
 import { Maximize, Minimize } from "lucide-react";
 import UserContext from "@/context/UserContext/Context";
 import useHlsPlayer from "@/hooks/useHlsPlayer";
+import { getStreamBaseUrl } from "@/utils/resolveStreamUrl";
 
 // Convert a single point ([x,y] or {x,y}) to {x,y}
 const toPointObj = (p) => (Array.isArray(p) ? { x: p[0], y: p[1] } : p);
@@ -100,7 +101,7 @@ const CameraStreamWithArea = forwardRef(
     // const [hasError, setHasError] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
 
-    const streamBaseUrl = import.meta.env.VITE_STREAM_URL;
+    const streamBaseUrl = getStreamBaseUrl();
     const local_status = import.meta.env.VITE_LOCAL_SETUP;
 
     const rafRef = useRef(null);

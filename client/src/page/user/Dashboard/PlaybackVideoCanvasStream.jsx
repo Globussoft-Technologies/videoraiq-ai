@@ -6,6 +6,7 @@ import UserContext from '@/context/UserContext/Context';
 import StreamModal from '../Streams/CameraStreamsModal/StreamModal';
 import MediaControls from '../Playback/components/MediaControls';
 import CameraLogo from '@/assets/cameralogo.svg';
+import { getStreamBaseUrl } from '@/utils/resolveStreamUrl';
 // 
 const toValidDate = (input) => {
   const date = new Date(input);
@@ -35,7 +36,7 @@ const PlaybackVideoCanvasStream = ({
    const hlsRef = useRef(null);
   const containerRef = useRef(null);
   const { streamModalShow, setStreamModalShow } = useContext(UserContext);
-  const baseUrl = import.meta.env.VITE_STREAM_URL;
+  const baseUrl = getStreamBaseUrl();
   // const [playbackRate, setPlaybackRate] = useState(1);
   const [isBuffering, setIsBuffering] = useState(false);
   const [isVideoLoading, setIsVideoLoading] = useState(false);
