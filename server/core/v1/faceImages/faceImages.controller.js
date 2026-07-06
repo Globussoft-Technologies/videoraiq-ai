@@ -57,7 +57,7 @@ class FaceImagesController {
   async getGroupedImages(req, res, next) {
     /*
     #swagger.tags = ['FaceImages']
-    #swagger.description = 'Fetch face images grouped by dsId, with authorized user details populated when tagged. Each image path is returned as a full viewable URL (config ImageView base + stored relative NAS path). Paginated by dsId group. Supports searching by dsId or the tagged users first/last/full name.'
+    #swagger.description = 'Fetch face images grouped by dsId, with authorized user details populated when tagged. Each image path is returned as a full viewable URL (config ImageView base + stored relative NAS path). Groups are sorted by their most recently uploaded image first (newest first). Paginated by dsId group. Supports searching by dsId or the tagged users first/last/full name, and filtering by an upload date range.'
     #swagger.parameters['skip'] = {
               in: 'query',
               description: 'Number of dsId groups to skip',
@@ -76,6 +76,20 @@ class FaceImagesController {
               required: false,
               type: 'String',
     }
+    #swagger.parameters['startDate'] = {
+              in: 'query',
+              description: 'Only include images uploaded on or after this date (YYYY-MM-DD, inclusive, UTC start of day)',
+              required: false,
+              type: 'String',
+              example: '2026-07-01',
+    }
+    #swagger.parameters['endDate'] = {
+              in: 'query',
+              description: 'Only include images uploaded on or before this date (YYYY-MM-DD, inclusive, UTC end of day)',
+              required: false,
+              type: 'String',
+              example: '2026-07-06',
+    }
     #swagger.responses[200] = {
       description: 'Grouped images fetched successfully',
       schema: {
@@ -90,6 +104,7 @@ class FaceImagesController {
             groups: [
               {
                 dsId: 'DS_101',
+                latestCreatedAt: '2026-07-06T09:12:00.000Z',
                 authorizedUser: { _id: '665f2b1c8e4a9d0012ab34cd', name: 'John Doe' },
                 images: [
                   { _id: '665a1234567890abcd123456', image: 'https://dev-api.videoraiq.com/api/v1/uploads/emp-cctv-dev-media/uploads/images/DS_101/photo1.jpg' },
@@ -98,6 +113,7 @@ class FaceImagesController {
               },
               {
                 dsId: 'DS_102',
+                latestCreatedAt: '2026-07-03T14:40:00.000Z',
                 authorizedUser: null,
                 images: [
                   { _id: '665a1234567890abcd123458', image: 'https://dev-api.videoraiq.com/api/v1/uploads/emp-cctv-dev-media/uploads/images/DS_102/photo3.jpg' }

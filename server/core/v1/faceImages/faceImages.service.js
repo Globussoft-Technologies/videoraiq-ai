@@ -58,13 +58,20 @@ class FaceImagesService {
       const skip = parseInt(req.query.skip) || 0;
       const limit = parseInt(req.query.limit) || 40;
       const search = req.query.search?.trim();
+      const { startDate, endDate } = req.query;
+
+      const dateMatch = {};
+      if (startDate) dateMatch.$gte = new Date(`${startDate}T00:00:00.000Z`);
+      if (endDate) dateMatch.$lte = new Date(`${endDate}T23:59:59.999Z`);
 
       const pipeline = [
+        ...(startDate || endDate ? [{ $match: { createdAt: dateMatch } }] : []),
         { $sort: { createdAt: 1 } },
         {
           $group: {
             _id: "$dsId",
             authorizedUserId: { $first: "$authorizedUserId" },
+            latestCreatedAt: { $max: "$createdAt" },
             images: { $push: { _id: "$_id", image: "$image" } },
           }
         },
@@ -81,6 +88,7 @@ class FaceImagesService {
           $project: {
             _id: 0,
             dsId: "$_id",
+            latestCreatedAt: 1,
             authorizedUser: {
               $cond: [
                 { $ifNull: ["$authorizedUser._id", false] },
@@ -112,7 +120,7 @@ class FaceImagesService {
             ]
           }
         }] : []),
-        { $sort: { dsId: 1 } },
+        { $sort: { latestCreatedAt: -1 } },
         {
           $facet: {
             metadata: [{ $count: "total" }],
