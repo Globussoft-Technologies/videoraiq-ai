@@ -31,6 +31,16 @@ const severityBg = (severity) => {
 const formatTime = (t) =>
   t ? moment.utc(t).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A') : '--';
 
+// Formats a raw plate value into the standard "SS DD LL NNNN" display style
+// (e.g. "ka02mp9657" -> "KA02 MP9657"). Falls back to a plain uppercase of
+// the raw value when it doesn't match the plate pattern (e.g. test data).
+const formatPlate = (value) => {
+  if (!value) return '--';
+  const clean = value.trim().toUpperCase().replace(/\s+/g, '');
+  const match = clean.match(/^([A-Z]{2}\d{1,2})([A-Z]{1,3}\d{1,4})$/);
+  return match ? `${match[1]} ${match[2]}` : clean;
+};
+
 /**
  * Build the ANPR log table columns. `onSort(field)` toggles sort for the
  * sortable headers, `onPreview(url)` opens the incident image modal.
@@ -63,6 +73,18 @@ export const buildColumns = ({ onSort, onPreview }) => [
     },
   },
   {
+    accessorKey: 'vehicleNumber',
+    header: 'Vehicle Number',
+    cell: ({ row }) => (
+      <span
+        className="inline-block text-[11px] font-bold tracking-[0.06em] text-[var(--tx)] bg-[var(--bg2)] border border-[var(--bd)] px-2.5 py-1 rounded-[6px]"
+        style={{ fontFamily: 'var(--mono)' }}
+      >
+        {formatPlate(row.original.vehicleNumber)}
+      </span>
+    ),
+  },
+  {
     accessorKey: 'incidentName',
     header: () => (
       <button
@@ -90,11 +112,6 @@ export const buildColumns = ({ onSort, onPreview }) => [
     accessorKey: 'channelName',
     header: 'Camera Name',
     cell: ({ row }) => <span className={styles.text}>{row.original.channelName}</span>,
-  },
-  {
-    accessorKey: 'vehicleNumber',
-    header: 'Vehicle Number',
-    cell: ({ row }) => <span className={styles.text}>{row.original.vehicleNumber}</span>,
   },
   {
     accessorKey: 'severity',
@@ -165,7 +182,7 @@ export const renderANPRCard = (row, { onPreview }) => (
           background: 'rgba(6,8,13,.82)',
         }}
       >
-        {row.vehicleNumber}
+        {formatPlate(row.vehicleNumber)}
       </div>
     </div>
 

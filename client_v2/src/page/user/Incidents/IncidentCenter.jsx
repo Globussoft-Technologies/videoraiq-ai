@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Search, Calendar, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
+import { Search, Calendar, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal } from 'lucide-react';
 import { AsyncBoundary } from '../../../components/States';
 import SharedMultiSelect from '../../../components/MultiSelect';
 import IncidentCard from './IncidentCard';
@@ -935,6 +935,14 @@ export default function IncidentCenter() {
       {items.length > 0 && pages > 1 && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, paddingBottom: 8 }}>
           <button
+            onClick={() => setPage(0)}
+            disabled={page === 0}
+            title="First page"
+            style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid var(--bd)', background: page === 0 ? 'var(--bg2)' : 'var(--bg1solid)', color: page === 0 ? 'var(--tx3)' : 'var(--tx2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: page === 0 ? 'default' : 'pointer' }}
+          >
+            <ChevronsLeft size={15} />
+          </button>
+          <button
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}
             style={{ padding: '6px 16px', borderRadius: 8, border: '1px solid var(--bd)', background: page === 0 ? 'var(--bg2)' : 'var(--bg1solid)', color: page === 0 ? 'var(--tx3)' : 'var(--tx2)', fontSize: 12.5, cursor: page === 0 ? 'default' : 'pointer' }}
@@ -956,7 +964,18 @@ export default function IncidentCenter() {
           >
             Next
           </button>
+          <button
+            onClick={() => setPage(pages - 1)}
+            disabled={page >= pages - 1}
+            title="Last page"
+            style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid var(--bd)', background: page >= pages - 1 ? 'var(--bg2)' : 'var(--bg1solid)', color: page >= pages - 1 ? 'var(--tx3)' : 'var(--tx2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: page >= pages - 1 ? 'default' : 'pointer' }}
+          >
+            <ChevronsRight size={15} />
+          </button>
           <GoToPage pages={pages} page={page} onGo={setPage} />
+          <span style={{ fontSize: 12, color: 'var(--tx3)', marginLeft: 4, whiteSpace: 'nowrap' }}>
+            of {pages}
+          </span>
         </div>
       )}
 

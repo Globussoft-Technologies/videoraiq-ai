@@ -1,9 +1,9 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import getAccessToken from '@/utils/getAccessToken';
+import getStreamHost from '@/utils/getStreamHost';
 
 const Api_url = import.meta.env.VITE_BACKEND;
-const StreamUrl = import.meta.env.VITE_STREAM_URL;
 
 const unwrap = (res) => {
   const body = res?.data?.body;
@@ -24,13 +24,15 @@ const unwrap = (res) => {
  * Backend returns a relative path (e.g. "playback/pb-<id>/playlist.m3u8") in
  * non-local environments, expecting the client to prefix it with the stream
  * media-server host — same pattern as V1 (PlaybackVideoCanvasStream.jsx) and
- * as this app's own live streamUrl() (lib/stream.js). rtsp:// URLs (Tiandy /
- * local-Tiandy branches) are returned as-is; a browser can't play those.
+ * as this app's own live streamUrl() (lib/stream.js). The host is decoded
+ * from the JWT's `streamHost` claim (dynamic per deployment), not an env var.
+ * rtsp:// URLs (Tiandy / local-Tiandy branches) are returned as-is; a browser
+ * can't play those.
  */
 function resolveStreamUrl(playbackUrl) {
   if (!playbackUrl) return '';
   if (/^(https?:|rtsp:)\/\//i.test(playbackUrl)) return playbackUrl;
-  return `${StreamUrl || ''}${playbackUrl}`;
+  return `${getStreamHost()}${playbackUrl}`;
 }
 
 /**

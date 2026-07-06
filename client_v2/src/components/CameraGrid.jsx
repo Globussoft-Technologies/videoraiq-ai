@@ -52,45 +52,6 @@ export function getEnabledEngines(channel) {
     .map(([key]) => ENGINE_LABEL_MAP[key] || key.replace('Settings', '').replace(/([A-Z])/g, ' $1').trim());
 }
 
-/** Camera View grid helpers — independent from Live Wall; single-camera focus only. */
-function matchDetection(channel, filter) {
-  if (!filter) return true;
-  const engines = Array.isArray(channel?.detectionSettings)
-    ? channel.detectionSettings
-    : (Array.isArray(channel?.detections) ? channel.detections : []);
-  return engines.some(e => {
-    const name = String(e.name || e.type || e || '').toLowerCase();
-    if (filter === 'face') {
-      return name.includes('face');
-    }
-    if (filter === 'intrusion') {
-      return name.includes('intrusion') || name.includes('motion') || name.includes('weapon');
-    }
-    if (filter === 'fire') {
-      return name.includes('fire') || name.includes('smoke');
-    }
-    if (filter === 'object') {
-      return name.includes('object');
-    }
-    if (filter === 'anpr') {
-      return name.includes('anpr') || name.includes('numberplate') || name.includes('vehicle');
-    }
-    if (filter === 'line') {
-      return name.includes('line') || name.includes('cross');
-    }
-    if (filter === 'access') {
-      return name.includes('access') || name.includes('door') || name.includes('violation') || name.includes('unauthorized');
-    }
-    if (filter === 'baggage') {
-      return name.includes('baggage') || name.includes('unattended');
-    }
-    if (filter === 'cashier') {
-      return name.includes('cashier') || name.includes('absence') || name.includes('loitering');
-    }
-    return false;
-  });
-}
-
 /* Camera View pages one camera at a time — no grid layout. */
 const PER_PAGE = 1;
 
@@ -107,7 +68,6 @@ export default function CameraGrid() {
 
   const [page,       setPage]       = useState(0);
   const [search,     setSearch]     = useState('');
-  const [detFilter,    setDetFilter]    = useState('');
   const [isPageFS,   setIsPageFS]   = useState(false); // browser fullscreen
   const [dateStr,    setDateStr]    = useState(() => toDateInputValue(new Date())); // playback date, YYYY-MM-DD
   const pageRef = useRef(null);
@@ -165,10 +125,10 @@ export default function CameraGrid() {
   /* Clear-all: reset every filter (and search) in one click */
   const hasActiveFilters =
     selLoc.length || selNvr.length || selCam.length || selDept.length || selType.length ||
-    detFilter || search.trim() || dateStr !== todayStr;
+    search.trim() || dateStr !== todayStr;
   const clearFilters = () => {
     setSelLoc([]); setSelNvr([]); setSelCam([]); setSelDept([]); setSelType([]);
-    setDetFilter(''); setSearch(''); setPage(0); setDateStr(todayStr);
+    setSearch(''); setPage(0); setDateStr(todayStr);
   };
 
   const list = useMemo(() => {
@@ -178,9 +138,8 @@ export default function CameraGrid() {
       arr = arr.filter(c => `${c.customName || ''} ${c.name || ''} ${c.location || ''}`.toLowerCase().includes(q));
     }
     if (selCam.length) arr = arr.filter(c => selCam.includes(c._id || c.channelId));
-    if (detFilter)     arr = arr.filter(c => matchDetection(c, detFilter));
     return arr;
-  }, [channels.data, search, selCam, detFilter]);
+  }, [channels.data, search, selCam]);
 
   const pages    = Math.max(1, Math.ceil(list.length / PER_PAGE));
   const safePage = Math.min(page, pages - 1);
@@ -299,27 +258,6 @@ export default function CameraGrid() {
           maxHeight="max-h-48"
           msg="No Type Found"
         />
-
-        {/* Detections filter */}
-        <div style={{ position: 'relative' }}>
-          <select
-            value={detFilter}
-            onChange={e => { setDetFilter(e.target.value); setPage(0); }}
-            style={{ ...pill(!!detFilter), paddingRight: 28, appearance: 'none', cursor: 'pointer' }}
-          >
-            <option value="">All Detections</option>
-            <option value="face">Face Recognition</option>
-            <option value="intrusion">Intrusion Detection</option>
-            <option value="fire">Fire & Smoke</option>
-            <option value="object">Object Detection</option>
-            <option value="anpr">Number Plate (ANPR)</option>
-            <option value="line">Line-Cross</option>
-            <option value="access">Unauthorized Access</option>
-            <option value="baggage">Unattended Baggage</option>
-            <option value="cashier">Cashier Absence</option>
-          </select>
-          <svg style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
-        </div>
 
         {/* Playback date filter */}
         <div style={{ position: 'relative' }}>

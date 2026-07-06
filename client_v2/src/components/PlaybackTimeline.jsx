@@ -14,6 +14,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const ZOOM_LEVELS = [1, 4, 16];
 const SCRUB_DEBOUNCE_MS = 350;
 const SKIP_MS = 30 * 1000;
+/* Chrome/Firefox/Safari accept HTMLMediaElement.playbackRate values up to 16,
+   but the actual decode pipeline stalls well before that on HLS video — the
+   rate "sets" successfully yet playback doesn't speed up past roughly this
+   point. Above it we simulate the extra speed with periodic currentTime jumps. */
+const MAX_NATIVE_RATE = 4;
+const FAST_FORWARD_TICK_MS = 500;
 /* Media server generates the HLS manifest asynchronously after playback-url is
    requested — same fixed-delay retry V1 uses (PlaybackVideoCanvasStream.jsx),
    capped at 20s total instead of retrying forever. */
@@ -254,10 +260,32 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     else video.pause();
   }, [playing, videoUrl]);
 
-  /* ── The 1x/4x/16x selector sets the actual video playback rate ── */
+  /* ── The 1x/4x/16x selector sets the video playback rate.
+     Browsers silently clamp/degrade HTMLMediaElement.playbackRate well below
+     16 in practice (the decode pipeline can't keep up), so a `playbackRate =
+     16` assignment "succeeds" but visibly plays at native speed. Above
+     MAX_NATIVE_RATE we instead drive a synthetic fast-forward: play at the
+     capped native rate and periodically jump currentTime ahead so the extra
+     speed is real, not just requested. ── */
+  const fastForwardRef = useRef(null);
   useEffect(() => {
     const video = videoRef.current;
-    if (video) video.playbackRate = ZOOM_LEVELS[zoomIdx];
+    if (!video) return;
+    const target = ZOOM_LEVELS[zoomIdx];
+    const nativeRate = Math.min(target, MAX_NATIVE_RATE);
+    video.playbackRate = nativeRate;
+
+    if (fastForwardRef.current) { clearInterval(fastForwardRef.current); fastForwardRef.current = null; }
+    if (target > MAX_NATIVE_RATE) {
+      const extraPerTick = ((target - nativeRate) * FAST_FORWARD_TICK_MS) / 1000;
+      fastForwardRef.current = setInterval(() => {
+        if (video.paused) return;
+        video.currentTime = Math.min(video.currentTime + extraPerTick, video.duration || Infinity);
+      }, FAST_FORWARD_TICK_MS);
+    }
+    return () => {
+      if (fastForwardRef.current) { clearInterval(fastForwardRef.current); fastForwardRef.current = null; }
+    };
   }, [zoomIdx, videoUrl]);
 
   /* ── Advance the on-screen cursor while playing (from the video's own clock) ── */

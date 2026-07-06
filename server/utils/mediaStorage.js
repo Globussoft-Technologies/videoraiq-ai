@@ -282,3 +282,27 @@ export async function deleteMedia(mediaPath) {
   }
   await withSFTPConnection((sftp) => sftp.delete(mediaPath));
 }
+
+/**
+ * Stored media paths (e.g. authorizedUsers.profilePics) must always be
+ * relative — the ImageView base is only ever prepended by a client at
+ * display time. Some older records were saved with an already-absolute
+ * ImageView URL (a display URL passed straight through as if it were a
+ * storage path), which then gets double-prefixed by the client. Strip it
+ * back to relative here so every API response is safe regardless of how a
+ * given record was originally written.
+ */
+export function toRelativeMediaPath(value) {
+  if (typeof value !== "string") return value;
+  try {
+    const imageBaseUrl = config.get("ImageView");
+    return imageBaseUrl && value.startsWith(imageBaseUrl) ? value.slice(imageBaseUrl.length) : value;
+  } catch {
+    return value;
+  }
+}
+
+/** Apply toRelativeMediaPath() across an array (e.g. profilePics), tolerating null/undefined. */
+export function toRelativeMediaPaths(values) {
+  return Array.isArray(values) ? values.map(toRelativeMediaPath) : values;
+}

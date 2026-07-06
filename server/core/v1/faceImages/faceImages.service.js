@@ -7,7 +7,7 @@ import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
 import departmentsModel from "../departments/departments.model.js";
 import shiftModel from "../shifts/shifts.model.js";
 import FaceImagesValidator from "./faceImages.validate.js";
-import { deleteMedia, mediaExists } from "../../../utils/mediaStorage.js";
+import { deleteMedia, mediaExists, toRelativeMediaPaths } from "../../../utils/mediaStorage.js";
 import dsUserSyncService from "../../../services/dsUserSync.service.js";
 
 function escapeRegex(input = "") {
@@ -53,8 +53,6 @@ class FaceImagesService {
 
   async getGroupedImages(req, res, _next) {
     try {
-      const imageBaseUrl = config.get("ImageView");
-
       const skip = parseInt(req.query.skip) || 0;
       const limit = parseInt(req.query.limit) || 40;
       const search = req.query.search?.trim();
@@ -134,16 +132,11 @@ class FaceImagesService {
       const totalCount = results[0]?.metadata[0]?.total || 0;
       const groups = results[0]?.data || [];
 
-      const groupsWithFullImageUrls = groups.map((group) => ({
-        ...group,
-        images: group.images.map((img) => ({ ...img, image: `${imageBaseUrl}${img.image}` })),
-      }));
-
       return res.status(200).json(Response.userSuccessResp("Grouped images fetched successfully", {
         totalCount,
         skip,
         limit,
-        groups: groupsWithFullImageUrls,
+        groups,
       }));
     } catch (error) {
       logger.error(error);
@@ -261,7 +254,7 @@ class FaceImagesService {
         phoneNumber: phoneNumber || null,
         address1: address1 || null,
         timezone: timezone || null,
-        profilePics: profilePics || [],
+        profilePics: toRelativeMediaPaths(profilePics) || [],
       });
 
       await this._tagFaceImages(dsId, newUser, adminId);
