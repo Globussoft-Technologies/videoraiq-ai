@@ -32,6 +32,35 @@ const SortHeader = ({ label, field, sortField, sortOrder, dispatch }) => (
 const mono = { fontFamily: 'var(--mono)' };
 
 /**
+ * Derive check-in/out strings, working-hours and status from a mapped
+ * attendance row. Shared by the table columns and the grid card so both
+ * views stay consistent.
+ */
+const attendanceMeta = (item, region, convertToRegionTime) => {
+  const inM = moment(item.login);
+  const outM = item.logout && item.logout !== '--' ? moment(item.logout) : null;
+  const checkInStr = inM.isValid() ? convertToRegionTime(item.login, region) : '--';
+  const checkOutStr = outM && outM.isValid() ? convertToRegionTime(item.logout, region) : '--';
+
+  let hoursStr = '--';
+  if (inM.isValid() && outM && outM.isValid()) {
+    const mins = Math.max(0, outM.diff(inM, 'minutes'));
+    hoursStr = `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  } else if (inM.isValid()) {
+    hoursStr = 'active';
+  }
+
+  const checkedOut = !!(outM && outM.isValid());
+  // Present only when the person BOTH checked in and checked out. A check-in
+  // with no check-out (forgotten / still open) counts as Absent.
+  const present = inM.isValid() && checkedOut;
+  const statusLabel = present ? 'Present' : 'Absent';
+  const statusColor = present ? '#22c55e' : '#ef4444';
+
+  return { checkInStr, checkOutStr, hoursStr, checkedOut, statusLabel, statusColor };
+};
+
+/**
  * Build TanStack column definitions for the attendance table.
  * Clicking the profile snapshot opens the profile details dialog.
  * `ctx` = { dispatch, sortField, sortOrder, region, convertToRegionTime }.
@@ -126,6 +155,33 @@ export const buildColumns = ({ dispatch, sortField, sortOrder, region, convertTo
       ),
     },
     {
+      accessorKey: 'hours',
+      header: 'Hours',
+      cell: ({ row }) => {
+        const { hoursStr } = attendanceMeta(row.original, region, convertToRegionTime);
+        return (
+          <span className="text-[var(--tx2)] text-xs" style={mono}>
+            {hoursStr}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      cell: ({ row }) => {
+        const { statusLabel, statusColor } = attendanceMeta(row.original, region, convertToRegionTime);
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-[6px] h-[6px] rounded-full" style={{ background: statusColor }} />
+            <span className="text-xs font-semibold" style={{ color: statusColor }}>
+              {statusLabel}
+            </span>
+          </span>
+        );
+      },
+    },
+    {
       accessorKey: 'Camera',
       header: 'Camera',
       cell: ({ row }) => (
@@ -177,18 +233,11 @@ export const buildColumns = ({ dispatch, sortField, sortOrder, region, convertTo
  * `ctx` = { dispatch, region, convertToRegionTime }.
  */
 export const renderAttendanceCard = (item, { dispatch, region, convertToRegionTime }) => {
-  const inM = moment(item.login);
-  const outM = item.logout && item.logout !== '--' ? moment(item.logout) : null;
-  const checkInStr = item.login ? convertToRegionTime(item.login, region) : '--';
-
-  let hoursStr = '--';
-  if (inM.isValid() && outM && outM.isValid()) {
-    const mins = Math.max(0, outM.diff(inM, 'minutes'));
-    hoursStr = `${Math.floor(mins / 60)}h ${mins % 60}m`;
-  }
-  const checkedOut = !!(outM && outM.isValid());
-  const statusLabel = checkedOut ? 'Checked Out' : inM.isValid() ? 'Present' : '—';
-  const statusColor = checkedOut ? '#64748b' : '#22c55e';
+  const { checkInStr, checkOutStr, hoursStr, statusLabel, statusColor } = attendanceMeta(
+    item,
+    region,
+    convertToRegionTime
+  );
 
   return (
     <div
@@ -199,12 +248,12 @@ export const renderAttendanceCard = (item, { dispatch, region, convertToRegionTi
       className="bg-[var(--bg2)] border border-[var(--bd)] rounded-[13px] overflow-hidden cursor-pointer group hover:border-[var(--bd2)] transition-colors h-full w-full min-w-0"
       title="View profile"
     >
-      {/* Snapshot */}
-      <div className="relative bg-[#0a0e15]" style={{ aspectRatio: '4 / 3' }}>
+      {/* Snapshot — fixed 4:3 ratio so every photo is the same size */}
+      <div className="relative w-full bg-[#0a0e15] aspect-[4/3]" style={{ aspectRatio: '4 / 3' }}>
         <ImageWithLoader
           src={item.image}
           alt={item.name}
-          className="absolute inset-0"
+          className="!absolute inset-0 w-full h-full"
           imgClassName="w-full h-full object-cover"
         />
         <div
@@ -263,36 +312,64 @@ export const renderAttendanceCard = (item, { dispatch, region, convertToRegionTi
           {statusLabel}
         </div>
 
-        {/* Check-in time */}
+        {/* Check-in / Check-out times */}
         <div
-          className="absolute bottom-2 left-2 text-[9px] px-[7px] py-[2px] rounded-[5px]"
+          className="absolute bottom-2 left-2 flex flex-col gap-[1px] text-[9px] px-[7px] py-[3px] rounded-[5px]"
           style={{
             fontFamily: 'var(--mono)',
-            color: 'var(--ok)',
             background: 'rgba(6,8,13,.6)',
             backdropFilter: 'blur(4px)',
           }}
         >
-          IN {checkInStr}
+          <span style={{ color: 'var(--ok)' }}>IN {checkInStr}</span>
+          <span style={{ color: 'rgba(255,255,255,.75)' }}>OUT {checkOutStr}</span>
         </div>
       </div>
 
       {/* Footer */}
-      <div className="p-[11px] flex items-center gap-[9px]">
-        <span
-          className="w-[30px] h-[30px] shrink-0 rounded-full flex items-center justify-center text-[11px] font-semibold text-white"
-          style={{ background: avatarColor(item.name), fontFamily: 'var(--mono)' }}
-        >
-          {initials(item.name)}
-        </span>
-        <span className="min-w-0">
-          <span className="block text-[12.5px] font-semibold text-[var(--tx)] truncate">
-            {item.name}
+      <div className="p-[11px] flex flex-col gap-[9px]">
+        <div className="flex items-center gap-[9px]">
+          <span
+            className="w-[30px] h-[30px] shrink-0 rounded-full flex items-center justify-center text-[11px] font-semibold text-white"
+            style={{ background: avatarColor(item.name), fontFamily: 'var(--mono)' }}
+          >
+            {initials(item.name)}
           </span>
-          <span className="block text-[10px] text-[var(--tx3)] truncate">
-            {item.department} · {hoursStr}
+          <span className="min-w-0">
+            <span className="block text-[12.5px] font-semibold text-[var(--tx)] truncate">
+              {item.name}
+            </span>
+            <span className="block text-[10px] text-[var(--tx3)] truncate">
+              {item.department || '—'}
+            </span>
           </span>
-        </span>
+        </div>
+
+        {/* Time + Status fields */}
+        <div className="flex items-stretch gap-2 pt-[9px] border-t border-[var(--bd)]">
+          <div className="flex-1 min-w-0">
+            <span className="block text-[8.5px] uppercase tracking-[0.06em] text-[var(--tx3)]" style={{ fontFamily: 'var(--mono)' }}>
+              Time
+            </span>
+            <span className="block text-[11px] font-semibold text-[var(--tx)] truncate" style={{ fontFamily: 'var(--mono)' }}>
+              {checkInStr} – {checkOutStr}
+            </span>
+            <span className="block text-[9.5px] text-[var(--tx3)] truncate" style={{ fontFamily: 'var(--mono)' }}>
+              {hoursStr}
+            </span>
+          </div>
+          <div className="shrink-0 text-right">
+            <span className="block text-[8.5px] uppercase tracking-[0.06em] text-[var(--tx3)]" style={{ fontFamily: 'var(--mono)' }}>
+              Status
+            </span>
+            <span className="inline-flex items-center gap-1 mt-[2px]">
+              <span className="w-[6px] h-[6px] rounded-full" style={{ background: statusColor }} />
+              <span className="text-[11px] font-semibold" style={{ color: statusColor }}>
+                {statusLabel}
+              </span>
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );

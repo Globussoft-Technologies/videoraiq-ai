@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import moment from 'moment';
 import KpiRow from './KpiRow';
@@ -8,13 +8,19 @@ import LatestIncident from './LatestIncident';
 import MultiSiteNetwork from './MultiSiteNetwork';
 import LiveThreatFeed from './LiveThreatFeed';
 import EngineActivity from './EngineActivity';
+import SharedMultiSelect from '../../../components/MultiSelect';
 import { useApi } from '../../../hooks/useApi';
 import { getHeaderStats, getDetectionChart, getCriticalityStats, getRecentIncidents } from '../../../helpers/dashboard';
-import { getChannels, getAttendance } from '../../../helpers/monitoring';
+import { getChannels, getAttendance, getLocations, getNVRs, getDepartments } from '../../../helpers/monitoring';
 import { fetchIncidents } from '../../../helpers/incidents';
 import { useAttendanceSocket } from '../../../context/AttendanceSocketContext';
 
 const DETECTION_SAMPLE_LIMIT = 1000;
+
+const CAMERA_TYPE_OPTIONS = [
+  { id: 'checkin', label: 'Check In' },
+  { id: 'checkout', label: 'Check Out' },
+];
 
 function dateFilter(daysAgo = 0) {
   return moment().subtract(daysAgo, 'days').format('YYYY-MM-DD');
@@ -48,12 +54,52 @@ export default function CommandCenter() {
   const location = ctx.location || '';
   const sites = ctx.sites || [];
 
+  // ── Filters (Location · NVR · Department · Camera Type) ──────────────────────
+  const [selectedLocations, setSelectedLocations] = useState([]);
+  const [selectedNvrs, setSelectedNvrs] = useState([]);
+  const [selectedDepts, setSelectedDepts] = useState([]);
+  const [selectedCamTypes, setSelectedCamTypes] = useState([]);
+
+  // Options for the filter dropdowns.
+  const locationsApi = useApi(() => getLocations(0, 200), []);
+  const nvrsApi = useApi(() => getNVRs(), []);
+  const deptsApi = useApi(() => getDepartments({ limit: 200 }), []);
+
+  const locationOptions = useMemo(
+    () => (locationsApi.data || []).map((l) => {
+      const label = l.locationName || l.name || String(l);
+      return { id: l._id || label, label };
+    }),
+    [locationsApi.data]
+  );
+  const nvrOptions = useMemo(
+    () => (nvrsApi.data || []).map((n) => ({ id: n._id || n.id, label: n.nvrName || n.name || '' })),
+    [nvrsApi.data]
+  );
+  const deptOptions = useMemo(
+    () => (deptsApi.data || []).map((d) => ({ id: d._id || d.id, label: d.departmentName || d.name || '' })),
+    [deptsApi.data]
+  );
+
+  // Shared server-side filter body. Falls back to the outlet-context location
+  // (site picked in the top bar) when no location is explicitly selected here.
+  const filters = useMemo(() => {
+    const f = {};
+    const locs = selectedLocations.length ? selectedLocations : (location ? [location] : []);
+    if (locs.length) f.location = locs;
+    if (selectedNvrs.length) f.nvrId = selectedNvrs;
+    if (selectedDepts.length) f.department = selectedDepts;
+    return f;
+  }, [selectedLocations, selectedNvrs, selectedDepts, location]);
+  const filterKey = JSON.stringify(filters);
+
   // KPI header stats — overall counts (NOT date-restricted; headerStats returns
-  // 0 alerts when filtered to a single day, which zeroed the tiles).
-  const header = useApi(() => getHeaderStats({}), [], { pollMs: 60000 });
+  // 0 alerts when filtered to a single day, which zeroed the t
+  //  iles).
+  const header = useApi(() => getHeaderStats(filters), [filterKey], { pollMs: 60000 });
 
   // Detection chart (engine activity + KPI sparklines)
-  const detChart = useApi(() => getDetectionChart({ location }), [location], { pollMs: 120000 });
+  const detChart = useApi(() => getDetectionChart(filters), [filterKey], { pollMs: 120000 });
   const dailyTotals = useMemo(() => {
     const t = [0, 0, 0, 0, 0, 0, 0];
     Object.values(detChart.data || {}).forEach((arr) => {
@@ -63,20 +109,29 @@ export default function CommandCenter() {
   }, [detChart.data]);
 
   // Threat feed (also feeds per-site alert tally for the map)
-  const crit = useApi(() => getCriticalityStats({ location }, { skip: 0, limit: 50 }), [location], { pollMs: 30000 });
+  const crit = useApi(() => getCriticalityStats(filters, { skip: 0, limit: 50 }), [filterKey], { pollMs: 30000 });
   const alerts = crit.data?.recentAlerts || [];
 
   // Recent incidents — TWO separate fetches:
   //   1. fetchIncidents (same API as Incident Center) → truly most-recent single incident
   //   2. getRecentIncidents (dashboard) → latest-per-type, used only for camera overlays
   const latestApi = useApi(
-    () => fetchIncidents({ skip: 0, limit: 1 }, location ? { location } : {}),
-    [location],
+    () => fetchIncidents({ skip: 0, limit: 1 }, filters),
+    [filterKey],
     { pollMs: 30000 }
   );
   const latestIncident = latestApi.data?.items?.[0] || null;
 
-  const recentByType = useApi(() => getRecentIncidents(location ? { location } : {}), [location], { pollMs: 30000 });
+  // getRecentIncidents is a GET — pass comma-joined values so query params match
+  // the endpoint's scalar expectation (identical to the old single-site string).
+  const recentParams = useMemo(() => {
+    const p = {};
+    Object.entries(filters).forEach(([k, v]) => {
+      p[k] = Array.isArray(v) ? v.join(',') : v;
+    });
+    return p;
+  }, [filterKey]);
+  const recentByType = useApi(() => getRecentIncidents(recentParams), [filterKey], { pollMs: 30000 });
   const recentValues = useMemo(
     () => Object.values(recentByType.data || {}).filter((v) => v && v._id),
     [recentByType.data]
@@ -91,7 +146,16 @@ export default function CommandCenter() {
   }, [recentValues]);
 
   // Live camera tabs
-  const channels = useApi(() => getChannels({ location, limit: 12 }), [location]);
+  const channels = useApi(
+    () => getChannels({
+      location: filters.location || location,
+      nvrId: selectedNvrs,
+      department: selectedDepts,
+      camType: selectedCamTypes,
+      limit: 12,
+    }),
+    [filterKey, selectedCamTypes.join(',')]
+  );
 
   // All channels (with their location) — used to map alerts -> site for the map.
   const allChannels = useApi(() => getChannels({ limit: 500 }), []);
@@ -136,20 +200,20 @@ export default function CommandCenter() {
   const { attendanceLogs } = useAttendanceSocket() || {};
 
   // Engine activity · Today — aggregate today's incidents by detection type.
-  const todayFilter = location ? { location, startDate: today, endDate: today } : { startDate: today, endDate: today };
+  const todayFilter = { ...filters, startDate: today, endDate: today };
   const todayApi = useApi(
     () => fetchIncidents({ skip: 0, limit: DETECTION_SAMPLE_LIMIT }, todayFilter),
-    [location, today],
+    [filterKey, today],
     { pollMs: 120000 }
   );
   const todayEngines = useMemo(() => aggregateTodayEngines(todayApi.data?.items), [todayApi.data]);
 
   // Detection events · 24h — bucket the last 24 hours of incidents by hour.
   const yesterday = dateFilter(1);
-  const dayFilter = location ? { location, startDate: yesterday, endDate: today } : { startDate: yesterday, endDate: today };
+  const dayFilter = { ...filters, startDate: yesterday, endDate: today };
   const dayApi = useApi(
     () => fetchIncidents({ skip: 0, limit: DETECTION_SAMPLE_LIMIT }, dayFilter),
-    [location, yesterday, today],
+    [filterKey, yesterday, today],
     { pollMs: 120000 }
   );
   const events24h = useMemo(() => aggregate24hEvents(dayApi.data?.items), [dayApi.data]);
@@ -167,6 +231,60 @@ export default function CommandCenter() {
 
   return (
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {/* ── Filter bar ────────────────────────────────────────────────────────── */}
+      <div
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          justifyContent: 'flex-end',
+        }}
+        className="vq-cc-filters"
+      >
+        <div style={{ minWidth: 190, flex: '1 1 190px', maxWidth: 240 }}>
+          <SharedMultiSelect
+            options={locationOptions}
+            value={selectedLocations}
+            onChange={setSelectedLocations}
+            placeholder="Select Location"
+            searchPlaceholder="Search locations..."
+            maxHeight="max-h-48"
+            msg="No Location Found"
+          />
+        </div>
+        <div style={{ minWidth: 190, flex: '1 1 190px', maxWidth: 240 }}>
+          <SharedMultiSelect
+            options={nvrOptions}
+            value={selectedNvrs}
+            onChange={setSelectedNvrs}
+            placeholder="Select NVR"
+            searchPlaceholder="Search NVR..."
+            maxHeight="max-h-48"
+            msg="No NVR Found"
+          />
+        </div>
+        <div style={{ minWidth: 190, flex: '1 1 190px', maxWidth: 240 }}>
+          <SharedMultiSelect
+            options={deptOptions}
+            value={selectedDepts}
+            onChange={setSelectedDepts}
+            placeholder="Select Department"
+            searchPlaceholder="Search departments..."
+            maxHeight="max-h-48"
+            msg="No Department Found"
+          />
+        </div>
+        <div style={{ minWidth: 190, flex: '1 1 190px', maxWidth: 240 }}>
+          <SharedMultiSelect
+            options={CAMERA_TYPE_OPTIONS}
+            value={selectedCamTypes}
+            onChange={setSelectedCamTypes}
+            placeholder="Select Camera Type"
+            searchPlaceholder="Search camera type..."
+            maxHeight="max-h-48"
+            msg="No Camera Type Found"
+          />
+        </div>
+      </div>
+
       <KpiRow
         stats={header.data || {}}
         dailyTotals={dailyTotals}

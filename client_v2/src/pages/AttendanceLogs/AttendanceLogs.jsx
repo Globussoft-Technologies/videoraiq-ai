@@ -295,21 +295,16 @@ const AttendanceLogs = () => {
     const rows = mappedLogs || [];
     const checkedIn = rows.filter((r) => r.login).length;
     const checkedOut = rows.filter((r) => r.logout && r.logout !== '--').length;
-    const durations = rows
-      .filter((r) => r.login && r.logout && r.logout !== '--')
-      .map((r) => Math.max(0, moment(r.logout).diff(moment(r.login), 'minutes')));
-    let avg = '--';
-    if (durations.length) {
-      const m = Math.round(durations.reduce((a, b) => a + b, 0) / durations.length);
-      avg = `${Math.floor(m / 60)}h ${m % 60}m`;
-    }
+    // Present = both checked in AND checked out; everyone else on the page is Absent.
+    const present = rows.filter((r) => r.login && r.logout && r.logout !== '--').length;
+    const absent = rows.length - present;
     return [
-      { label: 'Total Records', value: attendanceLogsCount ?? 0, color: 'var(--blue)' },
-      { label: 'Checked In (page)', value: checkedIn, color: 'var(--ok)' },
-      { label: 'Checked Out (page)', value: checkedOut, color: 'var(--cyan)' },
-      { label: 'Avg Working Hours (page)', value: avg, color: 'var(--violet)' },
+      { label: 'Checked In', value: checkedIn, color: 'var(--blue)' },
+      { label: 'Check Out', value: checkedOut, color: 'var(--cyan)' },
+      { label: 'Present', value: present, color: 'var(--ok)' },
+      { label: 'Absent', value: absent, color: 'var(--crit)' },
     ];
-  }, [mappedLogs, attendanceLogsCount]);
+  }, [mappedLogs]);
 
   const handleExport = (format) =>
     handleAttendanceExport(format, {
