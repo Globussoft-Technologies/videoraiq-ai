@@ -407,10 +407,10 @@ class AuthUsersService {
           return res.status(400).json(Response.userFailResp("Missing required fields or profilePics is empty"));
         }
 
-        //Minimum 3 profile pic should be added
-        if (!req.files || req.files.length < 3) {
+        //At least 1 profile pic should be added
+        if (!req.files || req.files.length < 1) {
           return res.status(400).json(
-            Response.errorResp('Validation Failed!', 'Minimum 3 profile pic should be added')
+            Response.errorResp('Validation Failed!', 'At least 1 profile pic should be added')
           );
         }
 
@@ -421,11 +421,11 @@ class AuthUsersService {
           sftp:sftp,
         });
 
-        
 
-        if(uploadedFiles?.length<3){
+
+        if(!uploadedFiles?.length){
           return res.status(400).json(
-            Response.errorResp('Validation Failed!', 'Minimum 3 profile pic should be added')
+            Response.errorResp('Validation Failed!', 'At least 1 profile pic should be added')
           );
         }
     
@@ -732,12 +732,12 @@ async updateAuthUser(req, res, _next) {
 
     // Always maximum 3 images
     newProfilePics = newProfilePics.slice(0, 3);
-    
-    // Optional: enforce exactly 3 images
-    if (newProfilePics.length !== 3) {
+
+    // Require at least 1 profile image
+    if (newProfilePics.length < 1) {
       return res.send(
         Response.validationFailResp(
-          "Exactly 3 profile images are required",
+          "At least 1 profile image is required",
           "Validation Failed!"
         )
       );
