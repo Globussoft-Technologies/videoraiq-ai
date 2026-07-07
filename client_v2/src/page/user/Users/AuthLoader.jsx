@@ -13,6 +13,9 @@ const STEP_MS = 700;
 export default function AuthLoader() {
   const [step, setStep] = useState(0);
 
+  const theme =
+    (typeof window !== "undefined" && localStorage.getItem("vq-theme")) || "dark";
+
   useEffect(() => {
     if (step >= STEPS.length - 1) return;
     const t = setTimeout(() => setStep((s) => s + 1), STEP_MS);
@@ -22,7 +25,7 @@ export default function AuthLoader() {
   const pct = Math.round(((step + 1) / STEPS.length) * 100);
 
   return (
-    <div className="vqauth-loader">
+    <div className="vqauth-loader" data-theme={theme}>
       <div className="vqauth-grid" />
       <div className="vqauth-glow" />
 

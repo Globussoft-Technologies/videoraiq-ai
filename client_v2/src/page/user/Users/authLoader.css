@@ -1,5 +1,30 @@
 /* Full-screen "authenticating" loader shown after a successful sign-in,
-   before the dashboard mounts. Light theme, matches the login prototype. */
+   before the dashboard mounts. Theme-aware: the base rules are DARK (the app
+   default) and are overridden for light via [data-theme='light']. The theme is
+   stamped on .vqauth-loader by AuthLoader.jsx (read from localStorage), because
+   this renders before V2ThemeProvider sets data-vq-theme on <body>. */
+
+/* Dark = default base */
+.vqauth-loader {
+  --a-bg: #07090c;
+  --a-grid: rgba(255, 255, 255, 0.05);
+  --a-ring: rgba(255, 255, 255, 0.16);
+  --a-ring2: rgba(255, 255, 255, 0.1);
+  --a-ring3: rgba(255, 255, 255, 0.14);
+  --a-bar-track: rgba(255, 255, 255, 0.1);
+  --a-label: #98a2bd;
+}
+
+/* Light override */
+.vqauth-loader[data-theme="light"] {
+  --a-bg: #e6eaf2;
+  --a-grid: rgba(15, 23, 42, 0.05);
+  --a-ring: rgba(15, 23, 42, 0.16);
+  --a-ring2: rgba(15, 23, 42, 0.1);
+  --a-ring3: rgba(15, 23, 42, 0.14);
+  --a-bar-track: rgba(15, 23, 42, 0.08);
+  --a-label: #52607c;
+}
 
 .vqauth-loader {
   position: fixed;
@@ -14,7 +39,7 @@
   background:
     radial-gradient(1100px 600px at 82% -10%, rgba(168, 85, 247, 0.16), transparent 60%),
     radial-gradient(900px 520px at -8% 112%, rgba(59, 130, 246, 0.16), transparent 55%),
-    #e6eaf2;
+    var(--a-bg);
   font-family: "IBM Plex Sans", sans-serif;
   animation: vqauth-fadein 0.35s ease both;
 }
@@ -23,8 +48,8 @@
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(15, 23, 42, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
+    linear-gradient(var(--a-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--a-grid) 1px, transparent 1px);
   background-size: 46px 46px;
   animation: vqauth-gridpan 8s linear infinite;
 }
@@ -59,11 +84,11 @@
 .vqauth-ring {
   position: absolute;
   border-radius: 50%;
-  border: 1px dashed rgba(15, 23, 42, 0.16);
+  border: 1px dashed var(--a-ring);
 }
 .vqauth-ring--outer { width: 300px; height: 300px; animation: vqauth-spin 34s linear infinite; }
-.vqauth-ring--mid { width: 226px; height: 226px; border-style: solid; border-color: rgba(15, 23, 42, 0.1); animation: vqauth-spin-rev 22s linear infinite; }
-.vqauth-ring--inner { width: 156px; height: 156px; border-color: rgba(15, 23, 42, 0.14); }
+.vqauth-ring--mid { width: 226px; height: 226px; border-style: solid; border-color: var(--a-ring2); animation: vqauth-spin-rev 22s linear infinite; }
+.vqauth-ring--inner { width: 156px; height: 156px; border-color: var(--a-ring3); }
 
 .vqauth-sweep {
   position: absolute;
@@ -137,7 +162,7 @@
   width: 100%;
   height: 4px;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.08);
+  background: var(--a-bar-track);
   overflow: hidden;
 }
 .vqauth-bar-fill {
@@ -154,7 +179,7 @@
   font-family: "JetBrains Mono", monospace;
   font-size: 10.5px;
   letter-spacing: 0.08em;
-  color: #52607c;
+  color: var(--a-label);
 }
 .vqauth-label-dot {
   width: 6px;

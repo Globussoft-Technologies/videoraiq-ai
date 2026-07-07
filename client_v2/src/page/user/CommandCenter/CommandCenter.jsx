@@ -68,10 +68,26 @@ export default function CommandCenter() {
   const locationOptions = useMemo(
     () => (locationsApi.data || []).map((l) => {
       const label = l.locationName || l.name || String(l);
-      return { id: l._id || label, label };
+      // Value MUST be the location NAME, not the _id: the dashboard endpoints
+      // filter via NVR.find({ location: { $in: [...] } }) where NVR.location is
+      // the name string. Sending _id here matched nothing (the filter no-op'd).
+      return { id: label, label };
     }),
     [locationsApi.data]
   );
+
+  // Resolve any selected value (location _id OR name) to the NAME the backend
+  // expects. This self-heals stale _id selections that lingered in state, so
+  // the payload always sends names regardless of what's in selectedLocations.
+  const locNameByKey = useMemo(() => {
+    const m = {};
+    (locationsApi.data || []).forEach((l) => {
+      const name = l.locationName || l.name || String(l);
+      if (l._id) m[l._id] = name;
+      if (name) m[name] = name;
+    });
+    return m;
+  }, [locationsApi.data]);
   const nvrOptions = useMemo(
     () => (nvrsApi.data || []).map((n) => ({ id: n._id || n.id, label: n.nvrName || n.name || '' })),
     [nvrsApi.data]
@@ -85,12 +101,16 @@ export default function CommandCenter() {
   // (site picked in the top bar) when no location is explicitly selected here.
   const filters = useMemo(() => {
     const f = {};
-    const locs = selectedLocations.length ? selectedLocations : (location ? [location] : []);
+    const rawLocs = selectedLocations.length ? selectedLocations : (location ? [location] : []);
+    // Resolve each value (id OR name) to a known location NAME and DROP anything
+    // that doesn't resolve — never fall back to the raw value, so a stale/unknown
+    // _id can never leak into the payload (the backend matches NVR.location by name).
+    const locs = rawLocs.map((v) => locNameByKey[v]).filter(Boolean);
     if (locs.length) f.location = locs;
     if (selectedNvrs.length) f.nvrId = selectedNvrs;
     if (selectedDepts.length) f.department = selectedDepts;
     return f;
-  }, [selectedLocations, selectedNvrs, selectedDepts, location]);
+  }, [selectedLocations, selectedNvrs, selectedDepts, location, locNameByKey]);
   const filterKey = JSON.stringify(filters);
 
   // KPI header stats — overall counts (NOT date-restricted; headerStats returns
