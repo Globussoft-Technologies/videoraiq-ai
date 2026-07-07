@@ -1,5 +1,6 @@
 import { generateToken } from "../../../middlewares/decodeToken.js";
 import logger from "../../../utils/logger.js";
+import { resolveAdminEndpoints } from "../../../utils/adminEndpoints.js";
 import config from "config";
 import jwt from "jsonwebtoken";
 import axios from "axios";
@@ -200,9 +201,10 @@ class AUTHService {
         expiry: latest.expiry,
       };
 
+      const { detectionUrl } = await resolveAdminEndpoints(adminId);
       const endpoints = [
-        `${detectionHost}/admins/register`,
-        `${detectionHost}/face-auth/api/v1/admins/register`,
+        `${detectionUrl}/admins/register`,
+        `${detectionUrl}/face-auth/api/v1/admins/register`,
       ];
 
       // Both run independently; one failing never affects the other.
@@ -577,10 +579,11 @@ return bypassUsers.find(
       }
 
       if (adminData?._id) {
+        const { dsAuthUsersAPI } = await resolveAdminEndpoints(adminData._id);
         let maxRetries = 5;
         while (maxRetries > 0) {
           try {
-            const createCollRes = await fetch(`${config.get("DSAuthUsersAPI")}/create_collection`, {
+            const createCollRes = await fetch(`${dsAuthUsersAPI}/create_collection`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json'

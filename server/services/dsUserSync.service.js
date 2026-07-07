@@ -1,8 +1,6 @@
-import config from "config";
 import axios from "axios";
 import logger from "../utils/logger.js";
-
-const dsUserSyncAPI = config.get("DSAuthUsersAPI");
+import { resolveAdminEndpoints } from "../utils/adminEndpoints.js";
 
 class DSUserSyncService {
   getDbName(adminId) {
@@ -31,8 +29,9 @@ class DSUserSyncService {
         db: this.getDbName(authorizedUser.adminId),
       };
 
+      const { dsAuthUsersAPI } = await resolveAdminEndpoints(authorizedUser.adminId);
       const response = await axios.post(
-        `${dsUserSyncAPI}/onfly_registration`,
+        `${dsAuthUsersAPI}/onfly_registration`,
         payload,
         { headers: { "Content-Type": "application/json" } }
       );
@@ -57,8 +56,9 @@ class DSUserSyncService {
         images,
       };
 
+      const { dsAuthUsersAPI } = await resolveAdminEndpoints(adminId);
       const response = await axios.post(
-        `${dsUserSyncAPI}/delete_onfly`,
+        `${dsAuthUsersAPI}/delete_onfly`,
         payload,
         { headers: { "Content-Type": "application/json" } }
       );

@@ -38,10 +38,17 @@ const adminSchema = new mongoose.Schema({
     }
   },
   logsSound: { type: Boolean, default: false },
-  // Optional per-admin RTSP stream overrides. null = use the global
-  // RTSPStream.host / RTSPStream.token from config (default for all admins).
+  // Optional per-admin service endpoint overrides. null = use the global
+  // value from config (default for all admins).
+  // - streamHost / streamToken  -> RTSPStream.host / RTSPStream.token
+  // - dsAuthUsersAPI            -> DSAuthUsersAPI
+  // - attendanceUrl             -> PythonService.attendanceUrl
+  // - detectionUrl             -> PythonService.detectionUrl
   streamHost: { type: String, default: null },
   streamToken: { type: String, default: null },
+  dsAuthUsersAPI: { type: String, default: null },
+  attendanceUrl: { type: String, default: null },
+  detectionUrl: { type: String, default: null },
   // Per-admin detection config. Key = settingType, value = custom display name.
   // If a key is present, that detection is allowed for this admin.
   // Empty object = all detections allowed with default names.

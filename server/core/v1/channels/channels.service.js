@@ -144,7 +144,7 @@ class ChannelService {
         }
 
         if (updates.checkType === "none") {
-          await pythonService.stopDetection(cameraId);
+          await pythonService.stopDetection(cameraId, req?.verified?.userData?.adminId);
         }
 
         delete updates.checkType;

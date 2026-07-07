@@ -739,6 +739,9 @@ const doc = {
       userId: "22",
       streamHost: "https://custom-stream.example.com",
       streamToken: "custom-stream-token",
+      dsAuthUsersAPI: "https://custom-facereg.example.com",
+      attendanceUrl: "https://custom-faceauth.example.com/face-auth",
+      detectionUrl: "https://custom-objdet.example.com",
     },
     bulkExportProfiles: {
       ids: ["684954f488ba3228238e466d", "684954f488ba3228238e466d"],

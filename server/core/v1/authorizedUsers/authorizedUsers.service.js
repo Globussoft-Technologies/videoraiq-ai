@@ -16,6 +16,7 @@ import stream from 'stream';
 import { RolesMessageNew } from "../../../language/language.translator.js";
 import { decrypt } from "../../../utils/cryptoUtils.js";
 import { generateToken } from "../../../middlewares/decodeToken.js";
+import { resolveAdminEndpoints } from "../../../utils/adminEndpoints.js";
 import config from "config";
 import mongoose from "mongoose";
 import shiftModel from "./../shifts/shifts.model.js"
@@ -54,6 +55,12 @@ class AuthUsersService {
 
   getDbName(adminId) {
     return `${adminId.toString()}_faces`;
+  }
+
+  // Per-admin DS auth-users API host (falls back to config default).
+  async getDSAuthUsersAPI(adminId) {
+    const { dsAuthUsersAPI } = await resolveAdminEndpoints(adminId);
+    return dsAuthUsersAPI;
   }
   /**
    * Delete all authorized users for the current admin.
@@ -167,7 +174,7 @@ class AuthUsersService {
             }
             // Delete AI user data
             try {
-              const url = `${this.DSAuthUsersAPI}/delete?uid=${user._id.toString()}&db=${this.getDbName(user.adminId)}`;
+              const url = `${await this.getDSAuthUsersAPI(user.adminId)}/delete?uid=${user._id.toString()}&db=${this.getDbName(user.adminId)}`;
               await axios.delete(url, { headers: { accept: "application/json" } });
             } catch (err) {
               // Ignore AI errors, log if needed
@@ -482,7 +489,7 @@ class AuthUsersService {
           try {
             
             const response = await axios.post(
-              `${this.DSAuthUsersAPI}/register`,
+              `${await this.getDSAuthUsersAPI(newUser.adminId)}/register`,
               payload,
               { headers: { "Content-Type": "application/json" } }
             );
@@ -563,7 +570,7 @@ class AuthUsersService {
         formData.append('db', this.getDbName(data?.adminId));
 
         const faceAuthResponse = await axios.post(
-          `${this.DSAuthUsersAPI}/recognise_bulk`,
+          `${await this.getDSAuthUsersAPI(data?.adminId)}/recognise_bulk`,
           formData,
           {
             headers: {
@@ -785,7 +792,7 @@ async updateAuthUser(req, res, _next) {
     // 🔹 Update AI Service
     try {
       const response = await axios.put(
-        `${this.DSAuthUsersAPI}/update_user_info`,
+        `${await this.getDSAuthUsersAPI(updatedUser.adminId)}/update_user_info`,
         payload,
         { headers: { "Content-Type": "application/json" } }
       );
@@ -837,7 +844,7 @@ async updateAuthUser(req, res, _next) {
           try {
             
             const response = await axios.post(
-              `${this.DSAuthUsersAPI}/register`,
+              `${await this.getDSAuthUsersAPI(newUser.adminId)}/register`,
               payload,
               { headers: { "Content-Type": "application/json" } }
             );
@@ -1011,7 +1018,7 @@ async updateAuthUser(req, res, _next) {
 
         //Deleting User data from AI service
         try {
-          const url = `${this.DSAuthUsersAPI}/delete?uid=${deletedUser?._id.toString()}&db=${this.getDbName(deletedUser?.adminId)}`;
+          const url = `${await this.getDSAuthUsersAPI(deletedUser?.adminId)}/delete?uid=${deletedUser?._id.toString()}&db=${this.getDbName(deletedUser?.adminId)}`;
         
           const response = await axios.delete(url, {
             headers: { accept: "application/json" }
@@ -1336,7 +1343,7 @@ async bulkImportAuthUser(req, res, next) {
       try {
         if (tag) {
           dsResponse = await axios.post(
-            `${this.DSAuthUsersAPI}/tag`,
+            `${await this.getDSAuthUsersAPI(isAdminExist._id)}/tag`,
             {
               uid: isUserExist._id.toString(),
               firstName: isUserExist.firstName,
@@ -1349,7 +1356,7 @@ async bulkImportAuthUser(req, res, next) {
           );
         } else {
           dsResponse = await axios.post(
-            `${this.DSAuthUsersAPI}/untag`,
+            `${await this.getDSAuthUsersAPI(isAdminExist._id)}/untag`,
             {
               uid: isUserExist._id.toString(),
               firstName: isUserExist.firstName,

@@ -8,7 +8,7 @@ import config from "config";
 import NVR from "../core/v1/NVR/nvr.model.js";
 import axios from "axios";
 import { DETECTION_MODES_MAP } from "../constants/detectionTypes.js";
-const attendanceHost = config.get("PythonService.attendanceUrl");
+import { resolveAdminEndpoints } from "../utils/adminEndpoints.js";
 const detectionHost = config.get("PythonService.detectionUrl");
 const APP_ENV = config.get("APP_ENV");
 
@@ -42,7 +42,7 @@ class PythonService {
           detection_modes: ["face"],
         };
 
-        const response = await this.startDetection(payload);
+        const response = await this.startDetection(payload, admin_id);
 
         console.log("Channel registered successfully:", response);
         return response;
@@ -299,7 +299,8 @@ class PythonService {
         newPayload.stream_url = stream_url;
       }
 
-      const response = await axios.post(`${detectionHost}/stream`, newPayload, {
+      const { detectionUrl } = await resolveAdminEndpoints(admin_id);
+      const response = await axios.post(`${detectionUrl}/stream`, newPayload, {
         headers: {
           "Content-Type": "application/json",
         },
@@ -471,8 +472,9 @@ class PythonService {
         newPayload.stream_url = stream_url;
       }
       console.log(JSON.stringify(newPayload));
+      const { detectionUrl } = await resolveAdminEndpoints(admin_id);
       const response = await axios.post(
-        `${detectionHost}/detectors/update`,
+        `${detectionUrl}/detectors/update`,
         newPayload,
         {
           headers: {
@@ -631,10 +633,11 @@ class PythonService {
   }
 
   // to start detections
-  async startDetection(payload) {
+  async startDetection(payload, adminId) {
     try {
+      const { attendanceUrl } = await resolveAdminEndpoints(adminId);
       const response = await axios.post(
-        `${attendanceHost}/api/v1/cameras/start`,
+        `${attendanceUrl}/api/v1/cameras/start`,
         payload,
         {
           headers: {
@@ -648,14 +651,15 @@ class PythonService {
       throw error;
     }
   }
-  async stopDetection(camera_id) {
+  async stopDetection(camera_id, adminId) {
     try {
       const payload = {
         camera_id,
         force: true,
       };
+      const { attendanceUrl } = await resolveAdminEndpoints(adminId);
       const response = await axios.post(
-        `${attendanceHost}/api/v1/cameras/stop`,
+        `${attendanceUrl}/api/v1/cameras/stop`,
         payload,
         {
           headers: {

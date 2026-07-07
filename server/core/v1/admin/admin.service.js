@@ -733,33 +733,43 @@ class AdminService {
     }
   }
 
-  // Operator action: set (or clear) a target admin's RTSP stream overrides
-  // (host and/or token). A field set to null/"" reverts to the global config
-  // (RTSPStream.host / RTSPStream.token). Only fields present in the body are
-  // updated. Kept named updateStreamHost for route compatibility.
+  // Operator action: set (or clear) a target admin's service endpoint overrides.
+  // A field set to null/"" reverts to the global config default. Only fields
+  // present in the body are updated. Kept named updateStreamHost for route
+  // compatibility. Overridable fields:
+  //   streamHost, streamToken, dsAuthUsersAPI, attendanceUrl, detectionUrl
   async updateStreamHost(req, res, next) {
     try {
-      const { userId, streamHost, streamToken } = req.body;
+      const { userId } = req.body;
+      const overridable = [
+        "streamHost",
+        "streamToken",
+        "dsAuthUsersAPI",
+        "attendanceUrl",
+        "detectionUrl",
+      ];
 
       if (!userId) {
         return res.send(Response.userFailResp("userId is required.", "Validation Failed!"));
       }
-      if (streamHost === undefined && streamToken === undefined) {
-        return res.send(Response.userFailResp("Provide streamHost and/or streamToken.", "Validation Failed!"));
+
+      const provided = overridable.filter((f) => req.body[f] !== undefined);
+      if (provided.length === 0) {
+        return res.send(Response.userFailResp(`Provide one of: ${overridable.join(", ")}.`, "Validation Failed!"));
       }
 
       const isValid = (v) => v === null || v === "" || typeof v === "string";
-      if (streamHost !== undefined && !isValid(streamHost)) {
-        return res.send(Response.userFailResp("streamHost must be a string, empty string, or null.", "Validation Failed!"));
-      }
-      if (streamToken !== undefined && !isValid(streamToken)) {
-        return res.send(Response.userFailResp("streamToken must be a string, empty string, or null.", "Validation Failed!"));
+      for (const f of provided) {
+        if (!isValid(req.body[f])) {
+          return res.send(Response.userFailResp(`${f} must be a string, empty string, or null.`, "Validation Failed!"));
+        }
       }
 
       // Only set provided fields; normalise empty string to null (falls back to global).
       const update = {};
-      if (streamHost !== undefined) update.streamHost = streamHost ? String(streamHost).trim() : null;
-      if (streamToken !== undefined) update.streamToken = streamToken ? String(streamToken).trim() : null;
+      for (const f of provided) {
+        update[f] = req.body[f] ? String(req.body[f]).trim() : null;
+      }
 
       const updatedAdmin = await adminModel.findOneAndUpdate(
         { user_id: String(userId) },
@@ -775,6 +785,9 @@ class AdminService {
           user_id: updatedAdmin.user_id,
           streamHost: updatedAdmin.streamHost,
           streamToken: updatedAdmin.streamToken,
+          dsAuthUsersAPI: updatedAdmin.dsAuthUsersAPI,
+          attendanceUrl: updatedAdmin.attendanceUrl,
+          detectionUrl: updatedAdmin.detectionUrl,
         })
       );
     } catch (error) {

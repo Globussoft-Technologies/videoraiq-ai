@@ -1,5 +1,6 @@
 import logger from "../../../utils/logger.js";
 import { autoSyncLocations } from "../../../utils/helperFunctions.js";
+import { resolveAdminEndpoints } from "../../../utils/adminEndpoints.js";
 import Response from "../../../utils/response.js";
 import adminModel from "../admin/admin.model.js";
 import AuthUsersValidator from "./users.validate.js"
@@ -1969,7 +1970,8 @@ export const deleteAuthorizedUserById = async (userId, userDataPrefetch = null) 
     // 4️⃣ Delete from AI service (only if user was verified)
     if (userToDelete?.verified === true) {
       try {
-        const url = `${config.get("DSAuthUsersAPI")}/delete/${userId}`;
+        const { dsAuthUsersAPI } = await resolveAdminEndpoints(userToDelete?.adminId);
+        const url = `${dsAuthUsersAPI}/delete/${userId}`;
         await axios.delete(url, {
           headers: { accept: "application/json" },
         });
