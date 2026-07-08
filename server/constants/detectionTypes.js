@@ -142,6 +142,10 @@ export const countPersonsSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: true,
     videoLinkRequirement: false,
     videoMinLength: 10,
@@ -171,6 +175,10 @@ export const motionDetectionSettings = {
   enabled: false,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: true,
     videoLinkRequirement: true,
     videoMinLength: 8,
@@ -200,6 +208,10 @@ export const genericObjectDetectionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -230,6 +242,10 @@ export const countVehiclesSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -259,6 +275,10 @@ export const loiteringWithoutAuthSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -289,6 +309,10 @@ export const loiteringWithAuthSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -320,6 +344,10 @@ export const unauthorizedAccessSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -349,6 +377,10 @@ export const lineCrossingSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -379,6 +411,10 @@ export const fireSmokeDetectionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -407,6 +443,10 @@ export const weaponDetectionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -436,6 +476,10 @@ export const unattendedBaggageDetectionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -465,6 +509,10 @@ export const personalProtectiveEquipmentSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -494,6 +542,10 @@ export const crowdDetectionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -522,6 +574,10 @@ export const doorDetectionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -550,6 +606,10 @@ export const lightDetectionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -578,6 +638,10 @@ export const vehicleDetectionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -606,6 +670,10 @@ export const deskAbsenceSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -638,6 +706,10 @@ export const guardAbsenceSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -666,6 +738,10 @@ export const conveyorDetectionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -695,6 +771,10 @@ export const crusherDetectionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -724,6 +804,10 @@ export const waterSpillageDetectionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -754,6 +838,10 @@ export const vehicleObstructionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -783,6 +871,10 @@ export const vehicleTypeDetectionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -812,6 +904,10 @@ export const loiteringDetectionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -841,6 +937,10 @@ export const tableOccupancyDetectionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -870,6 +970,10 @@ export const foodServicePPEDetectionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: false,
     videoLinkRequirement: true,
     videoMinLength: 5,
@@ -899,6 +1003,10 @@ export const mobilePhoneDetectionSettings = {
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     imageRequired: true,
     videoLinkRequirement: false,
     videoMinLength: 10,

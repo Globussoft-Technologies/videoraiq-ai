@@ -5,6 +5,17 @@ import {
 } from "../../../constants/detectionTypes.js";
 const baseOptions = { discriminatorKey: "settingType", timestamps: true };
 
+// Shared per-zone config, available on every detection's `settings`.
+const zoneConfigsField = {
+  zone_configs: [
+    {
+      name: { type: String },
+      capacity: { type: Number },
+      threshold_sec: { type: Number },
+    },
+  ],
+};
+
 const DetectionSettingBaseSchema = new mongoose.Schema(
   {
     userId: {
@@ -51,6 +62,7 @@ const DetectionSetting = mongoose.model(
 );
 
 const CountPersonsDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -84,6 +96,7 @@ const CountPersonsDetectionSetting = DetectionSetting.discriminator(
 );
 
 const GenericObjectDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -122,6 +135,7 @@ const GenericObjectDetectionSetting = DetectionSetting.discriminator(
 );
 
 const MotionDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -156,6 +170,7 @@ const MotionDetectionSetting = DetectionSetting.discriminator(
 );
 
 const CountVehiclesSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -192,6 +207,7 @@ const CountVehiclesSetting = DetectionSetting.discriminator(
 );
 
 const LoiteringWithoutAuthSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -227,6 +243,7 @@ const LoiteringWithoutAuthSetting = DetectionSetting.discriminator(
 );
 
 const LoiteringWithAuthSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -268,6 +285,7 @@ const LoiteringWithAuthSetting = DetectionSetting.discriminator(
 );
 
 const UnAuthorisedAccessSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -307,6 +325,7 @@ const UnAuthorisedAccessSetting = DetectionSetting.discriminator(
 );
 
 const LineCrossingSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -353,6 +372,7 @@ const LineCrossingSetting = DetectionSetting.discriminator(
 );
 
 const FireSmokeDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -386,6 +406,7 @@ const FireSmokeDetectionSetting = DetectionSetting.discriminator(
 );
 
 const WeaponDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -420,6 +441,7 @@ const WeaponDetectionSetting = DetectionSetting.discriminator(
 );
 
 const UnattendedBaggageDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -454,6 +476,7 @@ const UnattendedBaggageDetectionSetting = DetectionSetting.discriminator(
 );
 
 const CrowdDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -486,6 +509,7 @@ const CrowdDetectionSetting = DetectionSetting.discriminator(
 );
 
 const PersonalProtectiveEquipmentSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -518,6 +542,7 @@ const PersonalProtectiveEquipmentSetting = DetectionSetting.discriminator(
 );
 
 const DoorDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -550,6 +575,7 @@ const DoorDetectionSetting = DetectionSetting.discriminator(
 );
 
 const LightDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -582,6 +608,7 @@ const LightDetectionSetting = DetectionSetting.discriminator(
 );
 
 const VehicleDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -615,6 +642,7 @@ const VehiclDetectionSetting = DetectionSetting.discriminator(
 );
 
 const DeskAbsenceDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -635,13 +663,6 @@ const DeskAbsenceDetectionSchema = new mongoose.Schema({
   videoResolution: [Number],
   detectionTimeGap: { type: Number, default: 30 },
   referencePoints: Object,
-  zone_configs: [
-    {
-      name: { type: String },
-      capacity: { type: Number },
-      threshold_sec: { type: Number },
-    },
-  ],
   metricType: {
     type: String,
     enum: ["gauge", "counter", "binary"],
@@ -654,6 +675,7 @@ const DeskAbsenceDetectionSetting = DetectionSetting.discriminator(
 );
 
 const GuardAbsenceDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -689,6 +711,7 @@ const GuardAbsenceDetectionSetting = DetectionSetting.discriminator(
 );
 
 const ConveyorDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -722,6 +745,7 @@ const ConveyorDetectionSetting = DetectionSetting.discriminator(
 );
 
 const CrusherDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -755,6 +779,7 @@ const CrusherDetectionSetting = DetectionSetting.discriminator(
 );
 
 const WaterSpillageDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -790,6 +815,7 @@ const WaterSpillageDetectionSetting = DetectionSetting.discriminator(
 
 
 const VehicleTypeDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -823,6 +849,7 @@ const VehicleTypeDetectionSetting = DetectionSetting.discriminator(
 );
 
 const LoiteringDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -857,6 +884,7 @@ const LoiteringDetectionSetting = DetectionSetting.discriminator(
 
 
 const TableOccupancyDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -890,6 +918,7 @@ const TableOccupancyDetectionSetting = DetectionSetting.discriminator(
 );
 
 const VehicleObstructionDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -923,6 +952,7 @@ const VehicleObstructionDetectionSetting = DetectionSetting.discriminator(
 );
 
 const FoodServicePPEDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -956,6 +986,7 @@ const FoodServicePPEDetectionSetting = DetectionSetting.discriminator(
 
 
 const MobilePhoneDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
   imageRequired: {
     type: Boolean,
     default: false,

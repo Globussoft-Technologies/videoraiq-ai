@@ -139,6 +139,7 @@ class PythonService {
       if (["helmet", "vest"].some((mode) => detection_modes?.includes(mode))) {
         detectors.push({
           name: "personalProtectiveEquipmentSettings",
+          zone_configs,
           zones: zones || [],
           severity,
         });
@@ -147,6 +148,7 @@ class PythonService {
       if (detection_modes?.includes("crowd")) {
         detectors.push({
           name: "crowdDetectionSettings",
+          zone_configs,
           zones: zones || [],
           severity,
         });
@@ -155,6 +157,7 @@ class PythonService {
       if (detection_modes?.includes("line_crossing")) {
         detectors.push({
           name: "lineCrossingSettings",
+          zone_configs,
           line_coordinates: zones || [],
           severity,
         });
@@ -163,6 +166,7 @@ class PythonService {
       if (detection_modes?.includes("vehicles")) {
         detectors.push({
           name: "countVehiclesSettings",
+          zone_configs,
           zones: zones || [],
           severity,
         });
@@ -171,6 +175,7 @@ class PythonService {
       if (detection_modes?.includes("countPersons")) {
         detectors.push({
           name: "countPersonsSettings",
+          zone_configs,
           zones: zones || [],
           severity,
         });
@@ -181,6 +186,7 @@ class PythonService {
       if (detection_modes?.includes("ANPR")) {
         detectors.push({
           name: "numberPlateDetectionSettings",
+          zone_configs,
           // obstruction_threshold_sec: obstruction_threshold_sec,
           zones: zones || [],
           severity,
@@ -190,6 +196,7 @@ class PythonService {
       if (detection_modes?.includes("vehicleType")) {
         detectors.push({
           name: "vehicleTypeDetectionSettings",
+          zone_configs,
           obstruction_threshold_sec: obstruction_threshold_sec,
           zones: zones || [],
         });
@@ -198,6 +205,7 @@ class PythonService {
       if (detection_modes?.includes("intrusion")) {
         detectors.push({
           name: "zoneIntrusionSettings",
+          zone_configs,
           zones: zones || [],
           severity,
         });
@@ -206,6 +214,7 @@ class PythonService {
       if (detection_modes?.includes("conveyor")) {
         detectors.push({
           name: "conveyorDetectionSettings",
+          zone_configs,
           zones: zones || [],
           severity,
         });
@@ -214,6 +223,7 @@ class PythonService {
       if (detection_modes?.includes("crusher")) {
         detectors.push({
           name: "crusherDetectionSettings",
+          zone_configs,
           zones: zones || [],
           severity,
         });
@@ -222,6 +232,7 @@ class PythonService {
       if (detection_modes?.includes("water_spillage")) {
         detectors.push({
           name: "waterSpillageDetectionSettings",
+          zone_configs,
           zones: zones || [],
           severity,
         });
@@ -231,6 +242,7 @@ class PythonService {
       if (detection_modes?.includes("intrusion")) {
         detectors.push({
           name: "zoneIntrusionSettings",
+          zone_configs,
           zones: zones || [],
         });
       }
@@ -238,6 +250,7 @@ class PythonService {
       if (detection_modes?.includes("vehicleType")) {
         detectors.push({
           name: "vehicleTypeDetectionSettings",
+          zone_configs,
           obstruction_threshold_sec: obstruction_threshold_sec,
           zones: zones || [],
         });
@@ -246,6 +259,7 @@ class PythonService {
       if( detection_modes?.includes("loitering")) {
         detectors.push({
           name: "loiteringDetectionSettings",
+          zone_configs,
           obstruction_threshold_sec: obstruction_threshold_sec,
           zones: zones || [],
         });
@@ -254,6 +268,7 @@ class PythonService {
       if (detection_modes?.includes("vehicleObstruction")) {
         detectors.push({
           name: "vehicleObstructionSettings",
+          zone_configs,
           obstruction_threshold_sec: obstruction_threshold_sec,
           zones: zones || [],
         });
@@ -262,6 +277,7 @@ class PythonService {
         
         detectors.push({
           name: "tableOccupancySettings",
+          zone_configs,
           obstruction_threshold_sec: obstruction_threshold_sec,
           zones: zones || [],
         });
@@ -270,6 +286,7 @@ class PythonService {
       if( detection_modes?.includes("foodServicePPEDetection")) {
         detectors.push({
           name: "foodServicePPEDetection",
+          zone_configs,
           zones: zones || [],
         });
       }
@@ -294,6 +311,8 @@ class PythonService {
         admin_id,
         detectors,
       };      
+      console.log('newPayload', JSON.stringify(newPayload, null, 2));
+
       // include stream_url only if present
       if (stream_url) {
         newPayload.stream_url = stream_url;
@@ -337,6 +356,7 @@ class PythonService {
       if (["helmet", "vest"].some((mode) => detection_modes?.includes(mode))) {
         detectors.push({
           name: "personalProtectiveEquipmentSettings",
+          zone_configs,
           zones: zones || [],
         });
       }
@@ -344,6 +364,7 @@ class PythonService {
       if (detection_modes?.includes("crowd")) {
         detectors.push({
           name: "crowdDetectionSettings",
+          zone_configs,
           zones: zones || [],
         });
       }
@@ -351,6 +372,7 @@ class PythonService {
       if (detection_modes?.includes("line_crossing")) {
         detectors.push({
           name: "lineCrossingSettings",
+          zone_configs,
           line_coordinates: zones || [],
         });
       }
@@ -358,6 +380,7 @@ class PythonService {
       if (detection_modes?.includes("vehicles")) {
         detectors.push({
           name: "countVehiclesSettings",
+          zone_configs,
           zones: zones || [],
         });
       }
@@ -365,6 +388,7 @@ class PythonService {
       if (detection_modes?.includes("countPersons")) {
         detectors.push({
           name: "countPersonsSettings",
+          zone_configs,
           zones: zones || [],
         });
       }
@@ -372,6 +396,7 @@ class PythonService {
       if (detection_modes?.includes("vehicle_obstruction")) {
         detectors.push({
           name: "vehicleObstructionSettings",
+          zone_configs,
           obstruction_threshold_sec: obstruction_threshold_sec,
           zones: zones || [],
         });
@@ -380,6 +405,7 @@ class PythonService {
       if (detection_modes?.includes("intrusion")) {
         detectors.push({
           name: "zoneIntrusionSettings",
+          zone_configs,
           zones: zones || [],
         });
       }
@@ -387,6 +413,7 @@ class PythonService {
       if (detection_modes?.includes("conveyor")) {
         detectors.push({
           name: "conveyorDetectionSettings",
+          zone_configs,
           zones: zones || [],
         });
       }
@@ -394,6 +421,7 @@ class PythonService {
       if (detection_modes?.includes("crusher")) {
         detectors.push({
           name: "crusherDetectionSettings",
+          zone_configs,
           zones: zones || [],
           severity,
         });
@@ -402,6 +430,7 @@ class PythonService {
       if (detection_modes?.includes("water_spillage")) {
         detectors.push({
           name: "waterSpillageDetectionSettings",
+          zone_configs,
           zones: zones || [],
           severity,
         });
@@ -410,6 +439,7 @@ class PythonService {
       if (detection_modes?.includes("vehicleType")) {
         detectors.push({
           name: "vehicleTypeDetectionSettings",
+          zone_configs,
           obstruction_threshold_sec: obstruction_threshold_sec,
           zones: zones || [],
         });
@@ -418,6 +448,7 @@ class PythonService {
       if( detection_modes?.includes("loitering")) {
         detectors.push({
           name: "loiteringDetectionSettings",
+          zone_configs,
           obstruction_threshold_sec: obstruction_threshold_sec,
           zones: zones || [],
         });
@@ -425,6 +456,7 @@ class PythonService {
       if (detection_modes?.includes("vehicleObstruction")) {
         detectors.push({
           name: "vehicleObstructionSettings",
+          zone_configs,
           obstruction_threshold_sec: obstruction_threshold_sec,
           zones: zones || [],
         });
@@ -432,6 +464,7 @@ class PythonService {
       if( detection_modes?.includes("tableOccupancySettings")) {
         detectors.push({
           name: "tableOccupancySettings",
+          zone_configs,
           obstruction_threshold_sec: obstruction_threshold_sec,
           zones: zones || [],
         });
@@ -466,7 +499,7 @@ class PythonService {
         admin_id,
         detectors,
       };
-
+      
       // include stream_url only if present
       if (stream_url) {
         newPayload.stream_url = stream_url;
