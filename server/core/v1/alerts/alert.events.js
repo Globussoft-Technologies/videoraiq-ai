@@ -1,6 +1,7 @@
 import AlertsConfig from '../alerts/alerts.model.js';
 import MailResponse from '../../../mailService/mail.helper.js'
-import { sendIncidentSMS } from "../../../messagingService/IncidentsSMSFunction/sms.incidentsFunction.js";
+import { sendIncidentWhatsApp } from "../../../messagingService/IncidentsWhatsAppFunction/whatsapp.incidentsFunction.js";
+import TelegramService from "../../../services/telegram.service.js";
 import nvrModel from '../NVR/nvr.model.js';
 import channelsModel from '../channels/channels.model.js';
 import RecipientModel from '../verifyRecipients/recipients.model.js';
@@ -119,12 +120,16 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
     const smsRecipients = await RecipientModel.find({ _id: { $in: groupedAlerts} ,type:'phone'})
           .select('value -_id')
           .lean();
-    
+
     const phoneNumbers = smsRecipients.map(recipient => recipient.value);
-      // Send SMS
+      // Send WhatsApp alert (replaces SMS) to the same phone recipients.
     if (phoneNumbers?.length) {
-        let incidentSMS = await sendIncidentSMS(saved, phoneNumbers);
+        await sendIncidentWhatsApp(incidentData || saved, phoneNumbers, nvrData, channelData);
     }
+
+    // Send the incident to the admin's own Telegram channel — only if that
+    // admin has telegramBotToken + telegramChatId configured (no fallback).
+    await TelegramService.sendIncident(incidentData || saved, nvrData, channelData, adminId);
   } catch (err) {
     logger.error(`[ALERT_TRIGGER_ERROR] Failed to trigger alert`, {
       detectionType,

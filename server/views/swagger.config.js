@@ -742,6 +742,8 @@ const doc = {
       dsAuthUsersAPI: "https://custom-facereg.example.com",
       attendanceUrl: "https://custom-faceauth.example.com/face-auth",
       detectionUrl: "https://custom-objdet.example.com",
+      telegramBotToken: "1234567890:AA...",
+      telegramChatId: "-1001234567890",
     },
     bulkExportProfiles: {
       ids: ["684954f488ba3228238e466d", "684954f488ba3228238e466d"],

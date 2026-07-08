@@ -747,6 +747,8 @@ class AdminService {
         "dsAuthUsersAPI",
         "attendanceUrl",
         "detectionUrl",
+        "telegramBotToken",
+        "telegramChatId",
       ];
 
       if (!userId) {
@@ -788,6 +790,8 @@ class AdminService {
           dsAuthUsersAPI: updatedAdmin.dsAuthUsersAPI,
           attendanceUrl: updatedAdmin.attendanceUrl,
           detectionUrl: updatedAdmin.detectionUrl,
+          telegramBotToken: updatedAdmin.telegramBotToken,
+          telegramChatId: updatedAdmin.telegramChatId,
         })
       );
     } catch (error) {
