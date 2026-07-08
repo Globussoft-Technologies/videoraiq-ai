@@ -445,6 +445,11 @@ class DetectionSettingService {
           const videoResolution =
             detectionSetting?.settings?.videoResolution || [];
           const severity = detectionSetting?.settings?.levelOfImportance;
+          const zone_configs =
+            detectionSetting?.settings?.zone_configs || [];
+          const zoneName = detectionSetting?.settings?.zoneName || [];
+
+
 
           await pythonService.handleDetectionUpdate(
             channel,
@@ -452,8 +457,10 @@ class DetectionSettingService {
             settingType,
             zones,
             videoResolution,
+            zone_configs,
             obstruction_threshold_sec,
             severity,
+            zoneName
           );
         } catch (error) {
           logger.error(

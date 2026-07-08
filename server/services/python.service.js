@@ -342,9 +342,13 @@ class PythonService {
         nvr_id,
         admin_id,
         stream_url,
+        camera_type,
+        camera_name,
+        pipeline_mode,
         detection_modes,
         zones,
         zone_configs,
+        videoResolution,
         obstruction_threshold_sec,
         severity,
         zone_name,
@@ -531,10 +535,11 @@ class PythonService {
     admin_id,
     type,
     zones,
-    zone_configs,
     videoResolution,
+    zone_configs,
     obstruction_threshold_sec,
     severity,
+    zoneName
   ) {
     const nvr = await NVR.findById(channel?.nvrId?._id);
     if (!nvr) throw new Error("NVR not found");
@@ -559,6 +564,7 @@ class PythonService {
       videoResolution,
       obstruction_threshold_sec,
       severity,
+      zoneName
     };
     return await this.updateNewDetection(payload);
   }
