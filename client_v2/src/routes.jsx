@@ -2,6 +2,7 @@ import { Route, Navigate } from 'react-router-dom';
 import V2Layout from './layout/V2Layout';
 import CommandCenter from './page/user/CommandCenter/CommandCenter';
 import IncidentCenter from './page/user/Incidents/IncidentCenter';
+import Analytics from './page/user/Analytics/Analytics';
 import AlertsView from './page/user/Alerts/AlertsView';
 import CameraView from './page/user/CameraView/CameraView';
 import LiveWall from './page/user/LiveWall/LiveWall';
@@ -22,7 +23,6 @@ import DeskAbsenceLogs from './pages/DeskAbsenceLogs/DeskAbsenceLogs';
 import ANPRLogs from './pages/ANPRLogs/ANPRLogs';
 
 const STUBS = [
-  ['analytics', 'analytics', '/dashboard'],
   ['faces', 'faces', '/logs/tagged-users'],
   ['profile', 'profile', '/profile'],
 ];
@@ -35,6 +35,7 @@ export const v2Routes = (
     <Route path="camera" element={<CameraView />} />
     <Route path="alerts" element={<AlertsView />} />
     <Route path="incidents" element={<IncidentCenter />} />
+    <Route path="analytics" element={<Analytics />} />
     <Route path="locations" element={<Locations />} />
     <Route path="departments" element={<Departments />} />
     <Route path="register-users" element={<AddProfile />} />

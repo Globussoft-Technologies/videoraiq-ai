@@ -38,9 +38,14 @@ export const NAV_GROUPS = [
   },
   {
     label: 'INTELLIGENCE',
-    hidden: true,
     items: [
       { key: 'analytics', label: 'Analytics', path: 'analytics', icon: BarChart3 },
+    ],
+  },
+  {
+    label: 'INTELLIGENCE',
+    hidden: true,
+    items: [
       { key: 'faces', label: 'Face & Watchlist', path: 'faces', icon: ScanFace },
     ],
   },
