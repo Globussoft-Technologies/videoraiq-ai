@@ -24,9 +24,9 @@ export const authorizedUsers = async (skip = 0, limit = 10, search = '', data = 
  * Create an authorized user with profile images. `payload` is FormData;
  * Content-Type is intentionally omitted so the browser sets the multipart boundary.
  */
-export const createAuthorizedUser = async (payload) => {
+export const createAuthorizedUser = async (payload, token) => {
   const response = await axios.post(`${Api_url}/api/v1/authorizedUsers/create`, payload, {
-    headers: authHeaders(),
+    headers: { 'x-access-token': token || getAccessToken() },
   });
   return response.data;
 };
@@ -74,21 +74,25 @@ export const bulkUploadUsers = async (data) => {
 
 /* ─────────────── Register form metadata ─────────────── */
 
-/** Departments for the register form dropdown. */
-export const fetchDepartments = async (skip = 0, limit = 100, search = '') => {
+/**
+ * Departments for the register form dropdown.
+ * `token` overrides the session token — used by the public employee portal,
+ * which has no login cookie and must pass an explicit onboarding token.
+ */
+export const fetchDepartments = async (skip = 0, limit = 100, search = '', token) => {
   return axios.post(
     `${Api_url}/api/v1/departments/get`,
     { skip, limit, search },
-    { headers: authHeaders({ 'Content-Type': 'application/json' }) }
+    { headers: { 'Content-Type': 'application/json', 'x-access-token': token || getAccessToken() } }
   );
 };
 
-/** Employee locations (raw axios response). */
-export const getEmployeeLocations = async () => {
+/** Employee locations (raw axios response). `token` overrides the session token (see fetchDepartments). */
+export const getEmployeeLocations = async (token) => {
   return axios.post(
     `${Api_url}/api/v1/locations/employee-location`,
     {},
-    { headers: authHeaders({ 'Content-Type': 'application/json' }) }
+    { headers: { 'Content-Type': 'application/json', 'x-access-token': token || getAccessToken() } }
   );
 };
 
@@ -100,11 +104,11 @@ export const getFilterDepartments = async (data = {}) => {
   return response?.data?.body;
 };
 
-/** Check whether an email is already registered. */
-export const isEmailExist = async (email) => {
+/** Check whether an email is already registered. `token` overrides the session token (public portal). */
+export const isEmailExist = async (email, token) => {
   return axios.get(`${Api_url}/api/v1/users/isEmailExist/`, {
     params: { email },
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json', 'x-access-token': token || getAccessToken() },
   });
 };
 

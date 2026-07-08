@@ -1,0 +1,104 @@
+/* VideoraIQ — Employee / User Portal (login + registration).
+   A light-themed portal, visually separate from the dark admin login. Inline
+   styles cover layout; this file holds what inline styles can't: keyframes,
+   focus rings, placeholder colour, autofill override and hover states.
+   All rules are scoped under .vqp so they never leak into the admin login. */
+
+.vqp,
+.vqp *,
+.vqp *::before,
+.vqp *::after {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+}
+
+.vqp input::placeholder {
+  color: #9aa4b8;
+}
+
+.vqp input:-webkit-autofill {
+  -webkit-text-fill-color: #0f1729;
+  -webkit-box-shadow: 0 0 0 40px #f6f8fc inset;
+  caret-color: #0f1729;
+}
+
+/* focus ring for inputs / selects */
+.vqp-input:focus,
+.vqp-select:focus {
+  border-color: #3b82f6 !important;
+  background: #fff !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* dropdown option list colours (native <option>s) */
+.vqp-select {
+  accent-color: #2a6fdb;
+}
+.vqp-select option {
+  background: #ffffff;
+  color: #0f1729;
+  padding: 8px 12px;
+}
+.vqp-select option:checked,
+.vqp-select option:hover,
+.vqp-select option:focus {
+  background: #eef5ff;
+  color: #2a6fdb;
+}
+
+/* CTA — shared lift, per-variant colour on hover */
+.vqp-cta:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.vqp-cta-primary:hover:not(:disabled) {
+  background: #2461c6;
+  box-shadow: 0 9px 22px rgba(43, 111, 219, 0.32);
+}
+.vqp-cta-success:hover:not(:disabled) {
+  box-shadow: 0 12px 28px rgba(22, 163, 74, 0.42);
+}
+.vqp-cta:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* ghost / secondary button */
+.vqp-ghost:hover {
+  background: #eaf1fd;
+  border-color: #3b82f6;
+}
+
+/* face-capture slot hover */
+.vqp-slot:hover {
+  border-color: #3b82f6 !important;
+  background: #eaf1fd !important;
+}
+
+/* text links + eye toggle */
+.vqp-link:hover {
+  text-decoration: underline;
+}
+.vqp-eye:hover {
+  background: rgba(15, 23, 41, 0.05);
+  color: #475569;
+}
+
+/* remember-me checkbox tick */
+.vqp-check[data-checked='true'] {
+  background: linear-gradient(135deg, #3b82f6, #2a6fdb) !important;
+  border-color: transparent !important;
+}
+
+@keyframes vqpfade { 0% { opacity: 0; transform: translateY(14px) } 100% { opacity: 1; transform: none } }
+@keyframes vqpglow { 0%, 100% { opacity: .5; transform: scale(1) } 50% { opacity: .9; transform: scale(1.06) } }
+@keyframes vqfloatY { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
+@keyframes vqpscan { 0% { transform: translateY(-10%) } 100% { transform: translateY(760%) } }
+@keyframes vqpbox { 0%, 100% { opacity: .35; transform: scale(.97) } 50% { opacity: .9; transform: scale(1) } }
+@keyframes vqpblip { 0% { transform: scale(.4); opacity: .9 } 100% { transform: scale(3); opacity: 0 } }
+@keyframes vqpgrid { 0% { background-position: 0 0 } 100% { background-position: 44px 44px } }
+
+/* On narrow screens, drop the decorative hero and let the form panel fill. */
+@media (max-width: 900px) {
+  .vqp-hero { display: none !important; }
+  .vqp-panel { flex: 1 1 auto !important; width: 100% !important; }
+}

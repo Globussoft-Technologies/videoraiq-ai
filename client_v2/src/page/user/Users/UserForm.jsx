@@ -188,7 +188,7 @@ const LoginForm = () => {
                 color: "#f4f8ff",
               }}
             >
-              {/* {isLogin ? "Welcome back" : "Create your account"} */}
+          {/* {isLogin ? "Welcome back" : "Create your unt"} */}
               Welcome back 
             </h2>
             <p style={{ fontSize: 13, color: "#98a2bd", margin: "6px 0 0" }}>
@@ -197,7 +197,7 @@ const LoginForm = () => {
           </div>
 
           {/* Sign In / Create Account tab toggle */}
-          {/* <div
+       {/* <div
             style={{
               display: "flex",
               gap: 5,
@@ -239,7 +239,7 @@ const LoginForm = () => {
                 </button>
               );
             })}
-          </div> */}
+        /div> */}
 
           {/* form */}
           {isLogin ? (
@@ -326,8 +326,20 @@ const LoginForm = () => {
             <RegisterForm />
           )}
 
+          {/* cross-portal: jump to the employee / user portal login */}
+          <div style={{ textAlign: "center", marginTop: 18, fontSize: 12.5, color: "#98a2bd" }}>
+            Not an admin?{" "}
+            <span
+              className="vqlogin-link"
+              onClick={() => navigate("/employee-login")}
+              style={{ color: "#6ea0ff", cursor: "pointer", fontWeight: 600 }}
+            >
+              Login as user
+            </span>
+          </div>
+
           {/* switch-mode footer */}
-          {/* <div style={{ textAlign: "center", marginTop: 18, fontSize: 12.5, color: "#98a2bd" }}>
+      {/* <div style={{ textAlign: "center", marginTop: 18, fontSize: 12.5, color: "#98a2bd" }}>
             {isLogin ? (
               <>
                 Don&apos;t have an account?{" "}
@@ -351,7 +363,7 @@ const LoginForm = () => {
                 </span>
               </>
             )}
-          </div> */}
+       /div> */}
         </div>
 
         {/* loading overlay */}
