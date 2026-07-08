@@ -66,6 +66,12 @@ const AreaSettingsPreview = forwardRef(({setIsEditing, selectedType, activeCamer
   // active detection used throughout the component: prefer prop `ds` but fall back to last known localDetection
   const activeDs = ds ;
 
+  // Per-zone config (named zones with capacity/threshold) applies to every
+  // detection type EXCEPT Line Crossing, which places a single line instead.
+  const isLineCrossing =
+    selectedsettingType === 'lineCrossingSettings' ||
+    selectedsettingType === 'lineCrossing';
+
   // Flag to indicate whether we're editing an existing detection (used for UI/logic)
   const [isEditMode, setIsEditMode] = useState(!!(activeDs && (activeDs._id || activeDs.id)));
 
@@ -505,8 +511,8 @@ useEffect(() => {
         }
 
       }
-      // Desk Absence only: attach per-zone config inside settings.
-      if (selectedsettingType === 'deskAbsenceSettings' && Array.isArray(zone_configs)) {
+      // Attach per-zone config inside settings for all non-line-crossing types.
+      if (!isLineCrossing && Array.isArray(zone_configs)) {
         pay.settings.zone_configs = zone_configs;
       }
       // Build an edited detection object for logging / editing flows
@@ -738,9 +744,9 @@ useEffect(() => {
                // CameraStreamWithArea normalizes it into zones internally.
                return pointsArr;
            })()}
-              // Desk Absence: label each polygon with its saved zone name.
+              // Label each polygon with its saved zone name (all non-line-crossing types).
               zoneNames={
-                selectedsettingType === 'deskAbsenceSettings'
+                !isLineCrossing
                   ? (appliedDetection?.settings?.zone_configs || []).map(
                       (z) => z?.name || ''
                     )
@@ -795,10 +801,10 @@ useEffect(() => {
             setInitialPointsLoaded(true);
           }}
           onClearAllPersist={() => {
-            // Desk Absence with a saved detection: persist the cleared (empty)
-            // state so re-selecting the detection doesn't restore the zones.
+            // Any non-line-crossing type with a saved detection: persist the
+            // cleared (empty) state so re-selecting doesn't restore the zones.
             const detectionId = localDetection?._id || localDetection?.id;
-            if (selectedsettingType === 'deskAbsenceSettings' && detectionId) {
+            if (!isLineCrossing && detectionId) {
               return handleSaveAreaWithDetection({
                 zoneName: '',
                 detectionName: appliedDetection?.name || detectionSettingName || '',

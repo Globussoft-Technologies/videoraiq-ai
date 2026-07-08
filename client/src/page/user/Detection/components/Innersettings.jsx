@@ -133,10 +133,14 @@ const handleResetConfirm = async () => {
             <div className="space-y-4">
               <DeviceDetail channelData={channelData} />
               <SettingsCard fetchAppliedProfile={fetchAppliedProfile} appliedProfile={appliedProfileData} channelData={channelData} onOpenProfileDialog={() => setShowProfileDialog(true)} />
-              {selectedsettingType === 'deskAbsenceSettings' && appliedDetection?._id && (
+              {selectedsettingType &&
+                selectedsettingType !== 'lineCrossingSettings' &&
+                selectedsettingType !== 'lineCrossing' &&
+                appliedDetection?._id && (
                 <ZoneSettingsPanel
                   appliedDetection={appliedDetection}
                   previewRef={previewRef}
+                  settingType={selectedsettingType}
                 />
               )}
             </div>

@@ -3,12 +3,28 @@ import { ChevronDown, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import ConfirmationModal from '../DeleteConfirmation';
 
-// Right-side panel (Desk Absence only) that pre-fills from the saved
+// Right-side panel (all non-line-crossing types) that pre-fills from the saved
 // `zone_configs` and lets the user edit / delete each zone. Saving and
 // deleting both go through the SAME save-area flow exposed on `previewRef`
 // (previewRef.current.saveZoneConfigs / deleteZone) — same API, same payload.
-const ZoneSettingsPanel = ({ appliedDetection, previewRef, canEdit = true }) => {
+const ZoneSettingsPanel = ({ appliedDetection, previewRef, canEdit = true, settingType }) => {
   const savedConfigs = appliedDetection?.settings?.zone_configs;
+
+  // Per-zone field visibility (Zone Name always shows). Keyed by setting key.
+  //   - Threshold: Vehicle&Obstruction, Guard Absence, Loitering, Table Occupancy, Desk Absence.
+  //   - Capacity:  Desk Absence, Crowd.
+  // Fall back to the saved detection's own settingType if not passed in.
+  const type = settingType || appliedDetection?.settingType;
+  const THRESHOLD_TYPES = [
+    'vehicleObstructionSettings',
+    'guardAbsenceSettings',
+    'loiteringDetectionSettings',
+    'tableOccupancyDetectionSettings',
+    'deskAbsenceSettings',
+  ];
+  const CAPACITY_TYPES = ['deskAbsenceSettings', 'crowdDetectionSettings'];
+  const showThreshold = THRESHOLD_TYPES.includes(type);
+  const showCapacity = CAPACITY_TYPES.includes(type);
 
   const [zones, setZones] = useState([]);
   const [expandedIndex, setExpandedIndex] = useState(0);
@@ -49,23 +65,26 @@ const ZoneSettingsPanel = ({ appliedDetection, previewRef, canEdit = true }) => 
     setExpandedIndex((prev) => (prev === index ? -1 : index));
 
   // Build the full zone_configs array (all zones) in the API shape.
+  // Include capacity/threshold only for the types that use those fields.
   const buildConfigs = () =>
-    zones.map((z) => ({
-      name: z.name.trim(),
-      capacity: Number(z.capacity),
-      threshold_sec: Number(z.threshold),
-    }));
+    zones.map((z) => {
+      const cfg = { name: z.name.trim() };
+      if (showCapacity) cfg.capacity = Number(z.capacity);
+      if (showThreshold) cfg.threshold_sec = Number(z.threshold);
+      return cfg;
+    });
 
   const isZoneValid = (z) =>
     z.name.trim() &&
-    z.capacity &&
-    Number(z.capacity) > 0 &&
-    z.threshold &&
-    Number(z.threshold) > 0;
+    (!showCapacity || (z.capacity && Number(z.capacity) > 0)) &&
+    (!showThreshold || (z.threshold && Number(z.threshold) > 0));
 
   const handleSave = async (index) => {
     if (!isZoneValid(zones[index])) {
-      toast.error('Please fill name, capacity and threshold (positive numbers).');
+      const fields = ['name'];
+      if (showCapacity) fields.push('capacity');
+      if (showThreshold) fields.push('threshold');
+      toast.error(`Please fill ${fields.join(', ')} (positive numbers).`);
       return;
     }
     if (!previewRef?.current?.saveZoneConfigs) {
@@ -160,7 +179,9 @@ const ZoneSettingsPanel = ({ appliedDetection, previewRef, canEdit = true }) => 
                       placeholder={`Zone ${index + 1} name`}
                     />
                   </div>
+                  {(showCapacity || showThreshold) && (
                   <div className="grid grid-cols-2 gap-3">
+                    {showCapacity && (
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">
                         Capacity
@@ -179,6 +200,8 @@ const ZoneSettingsPanel = ({ appliedDetection, previewRef, canEdit = true }) => 
                         placeholder="Enter capacity"
                       />
                     </div>
+                    )}
+                    {showThreshold && (
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">
                         Threshold (sec)
@@ -197,7 +220,9 @@ const ZoneSettingsPanel = ({ appliedDetection, previewRef, canEdit = true }) => 
                         placeholder="Enter threshold"
                       />
                     </div>
+                    )}
                   </div>
+                  )}
                   {canEdit && (
                     <div className="flex justify-end">
                       <button

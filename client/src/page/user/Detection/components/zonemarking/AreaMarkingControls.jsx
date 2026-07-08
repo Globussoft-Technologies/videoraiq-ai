@@ -132,18 +132,39 @@ const AreaMarkingControls = ({
   return true;
 };
 const [obstructionThreshold, setObstructionThreshold] = useState(10);
-  const showObstructionThreshold =
-    selectedsettingType === 'vehicleDetectionSettings' ||
-    selectedType === 'vehicleDetectionSettings' ||
-    appliedDetection?.settings?.obstruction_threshold_sec !== undefined;
+  // Removed: the standalone "Obstruction Threshold (sec)" block (only ANPR
+  // triggered it). ANPR now uses the per-zone Threshold inside zone_configs.
+  const showObstructionThreshold = false;
 
-  // Per-zone capacity/threshold config is only for Desk Absence Detection.
+  // Per-zone capacity/threshold config is available for every detection type
+  // EXCEPT Line Crossing (which places a single line, not zones with capacity).
   // `selectedsettingType` is the setting key (e.g. 'deskAbsenceSettings');
-  // `selectedType` may arrive as the human label ('Desk Absence Detection').
-  const showZoneConfigs =
-    selectedsettingType === 'deskAbsenceSettings' ||
-    selectedType === 'deskAbsenceSettings' ||
-    selectedType === 'Desk Absence Detection';
+  // `selectedType` may arrive as the setting key OR the human label.
+  const isLineCrossing =
+    selectedsettingType === 'lineCrossingSettings' ||
+    selectedsettingType === 'lineCrossing' ||
+    selectedType === 'lineCrossingSettings' ||
+    selectedType === 'lineCrossing' ||
+    selectedType === 'Line Crossing Detection';
+  const showZoneConfigs = !!(selectedsettingType || selectedType) && !isLineCrossing;
+
+  // Per-zone field visibility (Zone Name always shows when showZoneConfigs).
+  // Keyed by setting key. `selectedType` may arrive as the setting key OR the
+  // human label, so match against both.
+  //   - Threshold: Vehicle&Obstruction, Guard Absence, Loitering, Table Occupancy, Desk Absence.
+  //   - Capacity:  Desk Absence, Crowd.
+  const THRESHOLD_TYPES = [
+    'vehicleObstructionSettings',
+    'guardAbsenceSettings',
+    'loiteringDetectionSettings',
+    'tableOccupancyDetectionSettings',
+    'deskAbsenceSettings',
+  ];
+  const CAPACITY_TYPES = ['deskAbsenceSettings', 'crowdDetectionSettings'];
+  const matchesType = (keys) =>
+    keys.includes(selectedsettingType) || keys.includes(selectedType);
+  const showZoneThreshold = showZoneConfigs && matchesType(THRESHOLD_TYPES);
+  const showZoneCapacity = showZoneConfigs && matchesType(CAPACITY_TYPES);
 
   const   handleToggleDrawing = (selectedType) => {
     console.log("selectedType", selectedType);
@@ -337,7 +358,7 @@ console.log('appliedDetection', appliedDetection);
       // array of polygons: [[ [x,y], ... ], ...] => zones.length === zone count.
       // Pre-fill each block from the saved zone_configs (index-aligned with the
       // polygons), so edits/deletes made in the side panel are reflected here.
-      // Only for Desk Absence Detection; other types keep the original modal.
+      // For all non-line-crossing types; line crossing keeps the original modal.
       if (showZoneConfigs) {
         const drawnZones = cameraStreamRef?.current?.getZones?.() || [];
         const savedConfigs = appliedDetection?.settings?.zone_configs || [];
@@ -492,18 +513,21 @@ const handleMinArea = () => {
 
     if (hasErrorLocal) return;
 
-    // For Desk Absence: every zone needs a name, a positive capacity and threshold.
+    // Every zone needs a name; capacity/threshold are required only for the
+    // types that show them (Capacity: Desk Absence; Threshold: Desk Absence +
+    // Vehicle Obstruction).
     if (showZoneConfigs) {
       const invalid = zoneConfigs.some(
         (z) =>
           !z.name.trim() ||
-          !z.capacity ||
-          Number(z.capacity) <= 0 ||
-          !z.threshold ||
-          Number(z.threshold) <= 0
+          (showZoneCapacity && (!z.capacity || Number(z.capacity) <= 0)) ||
+          (showZoneThreshold && (!z.threshold || Number(z.threshold) <= 0))
       );
       if (invalid) {
-        toast.error('Please fill name, capacity and threshold for every zone.');
+        const fields = ['name'];
+        if (showZoneCapacity) fields.push('capacity');
+        if (showZoneThreshold) fields.push('threshold');
+        toast.error(`Please fill ${fields.join(', ')} for every zone.`);
         return;
       }
     }
@@ -518,13 +542,15 @@ const handleMinArea = () => {
     if (showObstructionThreshold) {
       saveData.obstruction_threshold_sec = obstructionThreshold;
     }
-    // Desk Absence only: per-zone config sent inside settings.zone_configs.
+    // Non-line-crossing types: per-zone config sent inside settings.zone_configs.
+    // Include capacity/threshold only for the types that show those fields.
     if (showZoneConfigs) {
-      saveData.zone_configs = zoneConfigs.map((z) => ({
-        name: z.name.trim(),
-        capacity: Number(z.capacity),
-        threshold_sec: Number(z.threshold),
-      }));
+      saveData.zone_configs = zoneConfigs.map((z) => {
+        const cfg = { name: z.name.trim() };
+        if (showZoneCapacity) cfg.capacity = Number(z.capacity);
+        if (showZoneThreshold) cfg.threshold_sec = Number(z.threshold);
+        return cfg;
+      });
     }
     handleSaveAreaWithDetection(saveData);
 
@@ -741,7 +767,7 @@ const handleMinArea = () => {
                   </Select>
                 </div>
 
-                {/* Per-zone config (Desk Absence only): one collapsible section per drawn zone */}
+                {/* Per-zone config (all non-line-crossing types): one collapsible section per drawn zone */}
                 {showZoneConfigs && zoneConfigs.length > 0 && (
                   <div className="mb-4 space-y-2 max-h-[220px] overflow-y-auto pr-1">
                     {zoneConfigs.map((zone, index) => {
@@ -770,7 +796,7 @@ const handleMinArea = () => {
                             />
                           </button>
 
-                          {/* Body: Zone name + Capacity + Threshold (all collapse together) */}
+                          {/* Body: Zone name (always) + Capacity/Threshold (per type) */}
                           {isOpen && (
                             <div className="px-3 py-3 space-y-3">
                               <div>
@@ -787,7 +813,9 @@ const handleMinArea = () => {
                                   placeholder={`Zone ${index + 1} name`}
                                 />
                               </div>
+                              {(showZoneCapacity || showZoneThreshold) && (
                               <div className="grid grid-cols-2 gap-3">
+                              {showZoneCapacity && (
                               <div>
                                 <label className="block text-xs font-medium text-gray-700 mb-1">
                                   Capacity
@@ -805,6 +833,8 @@ const handleMinArea = () => {
                                   placeholder="Enter capacity"
                                 />
                               </div>
+                              )}
+                              {showZoneThreshold && (
                               <div>
                                 <label className="block text-xs font-medium text-gray-700 mb-1">
                                   Threshold (sec)
@@ -822,7 +852,9 @@ const handleMinArea = () => {
                                   placeholder="Enter threshold"
                                 />
                               </div>
+                              )}
                               </div>
+                              )}
                             </div>
                           )}
                         </div>
