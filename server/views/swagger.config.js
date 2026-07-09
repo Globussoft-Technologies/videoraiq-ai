@@ -412,6 +412,18 @@ const doc = {
             [10, 110],
           ],
         },
+        // Per-zone config. startTime/endTime are 12-hour clock strings in the
+        // admin's timezone; when set, a zone's Telegram alert is sent only if
+        // the incident's local time falls inside the window.
+        zone_configs: [
+          {
+            name: "Reception",
+            capacity: 2,
+            threshold_sec: 20,
+            startTime: "09:00 AM",
+            endTime: "06:00 PM",
+          },
+        ],
         metricType: "gauge",
       },
     },
@@ -437,6 +449,17 @@ const doc = {
             [10, 110],
           ],
         },
+        // Sending zone_configs replaces the whole array; include every zone with
+        // its startTime/endTime (12-hour, admin's timezone) to set alert windows.
+        zone_configs: [
+          {
+            name: "Reception",
+            capacity: 2,
+            threshold_sec: 20,
+            startTime: "09:00 AM",
+            endTime: "06:00 PM",
+          },
+        ],
         metricType: "gauge",
       },
     },
@@ -734,6 +757,9 @@ const doc = {
     },
     updateLogsSound: {
       logsSound: true,
+    },
+    updateTimezone: {
+      timezone: "Asia/Kolkata",
     },
     updateStreamHost: {
       userId: "22",

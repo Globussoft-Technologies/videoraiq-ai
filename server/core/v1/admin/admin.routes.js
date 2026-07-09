@@ -19,5 +19,8 @@ router.put("/allowed-detections",verifyToken,adminController.updateAllowedDetect
 router.put("/update-logs-sound",verifyToken,adminController.updateLogsSound);
 router.get("/fetch-logs-sound",verifyToken,adminController.fetchLogsSound);
 router.put("/update-stream-host",verifyToken,adminController.updateStreamHost);
+router.get("/timezones",verifyToken,adminController.getTimezones);
+router.get("/timezone",verifyToken,adminController.fetchTimezone);
+router.put("/timezone",verifyToken,adminController.updateTimezone);
 
 export default router;

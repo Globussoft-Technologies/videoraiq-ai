@@ -6,6 +6,8 @@ import nvrModel from '../NVR/nvr.model.js';
 import channelsModel from '../channels/channels.model.js';
 import RecipientModel from '../verifyRecipients/recipients.model.js';
 import { Incident } from '../incidents/incidents.model.js';
+import adminModel from '../admin/admin.model.js';
+import { isTelegramWindowOpen } from '../../../utils/telegramWindow.js';
 import logger from '../../../utils/logger.js';
 
 
@@ -127,9 +129,21 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
         await sendIncidentWhatsApp(incidentData || saved, phoneNumbers, nvrData, channelData);
     }
 
-    // Send the incident to the admin's own Telegram channel — only if that
-    // admin has telegramBotToken + telegramChatId configured (no fallback).
-    await TelegramService.sendIncident(incidentData || saved, nvrData, channelData, adminId);
+    // Telegram: send to the admin's channel ONLY if the incident's zone has a
+    // per-zone time window on this detection setting AND the incident's local
+    // time (UTC -> admin's timezone) falls inside it. No matching window -> skip.
+    const telegramIncident = incidentData || saved;
+    const adminTz = (await adminModel.findById(adminId).select("timezone").lean())?.timezone;
+    const zoneConfigs = matchedDetection?.id?.settings?.zone_configs || [];
+    const windowOpen = isTelegramWindowOpen({
+      incidentZone: telegramIncident?.zone,
+      timeOfIncidentUTC: telegramIncident?.timeOfIncident,
+      zoneConfigs,
+      adminTimezone: adminTz,
+    });
+    if (windowOpen) {
+      await TelegramService.sendIncident(telegramIncident, nvrData, channelData, adminId);
+    }
   } catch (err) {
     logger.error(`[ALERT_TRIGGER_ERROR] Failed to trigger alert`, {
       detectionType,

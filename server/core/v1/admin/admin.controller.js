@@ -267,6 +267,40 @@ class AdminController {
     return await adminService.fetchLogsSound(req, res, next);
   }
 
+  async getTimezones(req, res, next) {
+    /* #swagger.tags = ['Admin']
+    #swagger.description = 'Get all IANA timezones for the timezone dropdown. Optional ?search filters by case-insensitive substring.'
+    #swagger.parameters['search'] = { in: 'query', type: 'string', description: 'Case-insensitive substring filter, e.g. asia' }
+    #swagger.responses[200] = { description: 'Timezones fetched successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return await adminService.getTimezones(req, res, next);
+  }
+
+  async updateTimezone(req, res, next) {
+    /* #swagger.tags = ['Admin']
+    #swagger.description = 'Save the admin selected IANA timezone'
+    #swagger.parameters['data'] = {
+        in: 'body',
+        description: 'Selected IANA timezone',
+        required: true,
+        schema: { $ref: "#/definitions/updateTimezone" }
+    }
+    #swagger.responses[200] = { description: 'Timezone updated successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return await adminService.updateTimezone(req, res, next);
+  }
+
+  async fetchTimezone(req, res, next) {
+    /* #swagger.tags = ['Admin']
+    #swagger.description = 'Fetch the admin currently saved timezone'
+    #swagger.responses[200] = { description: 'Timezone fetched successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return await adminService.fetchTimezone(req, res, next);
+  }
+
   async updateStreamHost(req, res, next) {
     /* #swagger.tags = ['Admin']
     #swagger.description = 'Set or clear a target admin RTSP stream host override. Pass streamHost null or empty to revert to the global host.'

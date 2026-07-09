@@ -38,6 +38,8 @@ const adminSchema = new mongoose.Schema({
     }
   },
   logsSound: { type: Boolean, default: false },
+  // Per-admin IANA timezone (e.g. "Asia/Kolkata"). null = not set.
+  timezone: { type: String, default: null },
   // Optional per-admin service endpoint overrides. null = use the global
   // value from config (default for all admins).
   // - streamHost / streamToken  -> RTSPStream.host / RTSPStream.token

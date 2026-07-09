@@ -12,6 +12,12 @@ const zoneConfigsField = {
       name: { type: String },
       capacity: { type: Number },
       threshold_sec: { type: Number },
+      // Daily Telegram-alert window for this zone, in the admin's timezone.
+      // 12-hour clock strings, e.g. "09:00 AM" / "06:30 PM". null = no window;
+      // Telegram is only sent when both are set AND the incident's local time
+      // (UTC converted to the admin's timezone) falls inside the window.
+      startTime: { type: String, default: null },
+      endTime: { type: String, default: null },
     },
   ],
 };

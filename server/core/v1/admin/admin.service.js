@@ -733,6 +733,96 @@ class AdminService {
     }
   }
 
+  // All IANA timezones for the frontend dropdown (built-in, no dependency).
+  // Optional ?search= filters by case-insensitive substring on the zone name.
+  async getTimezones(req, res, next) {
+    try {
+      let timezones =
+        typeof Intl.supportedValuesOf === "function"
+          ? Intl.supportedValuesOf("timeZone")
+          : [];
+
+      // Some Node/ICU builds list legacy names (e.g. "Asia/Calcutta"); present
+      // the modern IANA name instead. Validation accepts both.
+      const rename = { "Asia/Calcutta": "Asia/Kolkata" };
+      timezones = timezones.map((tz) => rename[tz] || tz);
+
+      const search = req.query?.search;
+      if (search && typeof search === "string" && search.trim()) {
+        const q = search.trim().toLowerCase();
+        timezones = timezones.filter((tz) => tz.toLowerCase().includes(q));
+      }
+
+      return res.send(
+        Response.userSuccessResp("Timezones fetched successfully", {
+          totalCount: timezones.length,
+          timezones,
+        }),
+      );
+    } catch (error) {
+      next(new AppError(error, 500));
+    }
+  }
+
+  // Save the admin's selected IANA timezone (validated against the built-in list).
+  async updateTimezone(req, res, next) {
+    try {
+      const { adminId } = req?.verified?.userData || {};
+      const { timezone } = req.body;
+
+      if (!adminId) {
+        return res.send(Response.userFailResp("Invalid Token!", "Validation Failed!"));
+      }
+      if (!timezone || typeof timezone !== "string") {
+        return res.send(Response.userFailResp("timezone is required.", "Validation Failed!"));
+      }
+      // Validate by whether the runtime accepts it (covers canonical names AND
+      // aliases like Asia/Kolkata that may not appear in supportedValuesOf).
+      try {
+        Intl.DateTimeFormat(undefined, { timeZone: timezone });
+      } catch {
+        return res.send(Response.userFailResp("Invalid IANA timezone.", "Validation Failed!"));
+      }
+
+      const updatedAdmin = await adminModel.findByIdAndUpdate(
+        adminId,
+        { $set: { timezone } },
+        { new: true },
+      );
+      if (!updatedAdmin) {
+        return res.send(Response.userFailResp("Admin not found!", "Validation Failed!"));
+      }
+      return res.send(
+        Response.userSuccessResp("Timezone updated successfully.", {
+          timezone: updatedAdmin.timezone,
+        }),
+      );
+    } catch (error) {
+      next(new AppError(error, 500));
+    }
+  }
+
+  // Fetch the admin's currently saved timezone (null if not set).
+  async fetchTimezone(req, res, next) {
+    try {
+      const { adminId } = req?.verified?.userData || {};
+      if (!adminId) {
+        return res.send(Response.userFailResp("Invalid Token!", "Validation Failed!"));
+      }
+      const admin = await adminModel.findById(adminId).select("timezone");
+      if (!admin) {
+        return res.send(Response.userFailResp("Admin not found!", "Validation Failed!"));
+      }
+      return res.send(
+        Response.userSuccessResp("Timezone fetched successfully.", {
+          timezone: admin.timezone || null,
+        }),
+      );
+    } catch (error) {
+      next(new AppError(error, 500));
+    }
+  }
+
   // Operator action: set (or clear) a target admin's service endpoint overrides.
   // A field set to null/"" reverts to the global config default. Only fields
   // present in the body are updated. Kept named updateStreamHost for route
