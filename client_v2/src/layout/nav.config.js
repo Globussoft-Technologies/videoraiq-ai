@@ -27,15 +27,21 @@ import {
  * (MONITOR / INTELLIGENCE / LOGS & RECORDS / CONFIGURE / ADMINISTER).
  * `path` is relative to the /v2 mount; `key` matches the prototype view id.
  */
+// `permissionKey` maps each item to its module in the permission matrix
+// returned by GET /permissions/user-permissions (same module keys V1 uses —
+// see server/core/v1/permission/permissions.config.js). An item with no
+// permissionKey is always shown (nothing in V1 gates it either, e.g. Command
+// Center/Analytics). Sidebar.jsx hides (not disables) any item whose module
+// resolves to view:false, matching V1's Header.jsx nav filtering exactly.
 export const NAV_GROUPS = [
   {
     label: 'MONITOR',
     items: [
-      { key: 'overview', label: 'Command Center', path: 'dashboard', icon: LayoutDashboard, end: true },
-      { key: 'wall', label: 'Live Wall', path: 'live', icon: Grid2x2 },
-      { key: 'camera', label: 'Playback', path: 'camera', icon: Video },
+      { key: 'overview', label: 'Command Center', path: 'dashboard', icon: LayoutDashboard, end: true, permissionKey: 'dashboard' },
+      { key: 'wall', label: 'Live Wall', path: 'live', icon: Grid2x2, permissionKey: 'LIVE' },
+      { key: 'camera', label: 'Playback', path: 'camera', icon: Video, permissionKey: 'playbacks' },
       { key: 'alerts', label: 'Alerts', path: 'alerts', icon: TriangleAlert, badgeKey: 'alerts' },
-      { key: 'incidents', label: 'Incident Center', path: 'incidents', icon: ShieldAlert },
+      { key: 'incidents', label: 'Incident Center', path: 'incidents', icon: ShieldAlert, permissionKey: 'incidents' },
     ],
   },
   {
@@ -65,24 +71,24 @@ export const NAV_GROUPS = [
   {
     label: 'CONFIGURE',
     items: [
-      { key: 'cameras', label: 'Cameras & NVRs', path: 'cameras', icon: Cctv },
+      { key: 'cameras', label: 'Cameras & NVRs', path: 'cameras', icon: Cctv, permissionKey: 'NVR' },
     ],
   },
   {
     label: 'USER DETAILS',
     items: [
-      { key: 'users', label: 'User Role Detail', path: 'users', icon: Users },
-      { key: 'roles', label: 'Roles & Permission', path: 'roles', icon: ShieldCheck },
-      { key: 'locations', label: 'Locations', path: 'locations', icon: MapPin },
-      { key: 'departments', label: 'Departments', path: 'departments', icon: Building2 },
-      { key: 'register', label: 'Register your User', path: 'register-users', icon: UserPlus },
+      { key: 'users', label: 'User Role Detail', path: 'users', icon: Users, permissionKey: 'Users' },
+      { key: 'roles', label: 'Roles & Permission', path: 'roles', icon: ShieldCheck, permissionKey: 'roles' },
+      { key: 'locations', label: 'Locations', path: 'locations', icon: MapPin, permissionKey: 'locations' },
+      { key: 'departments', label: 'Departments', path: 'departments', icon: Building2, permissionKey: 'departments' },
+      { key: 'register', label: 'Register your User', path: 'register-users', icon: UserPlus, permissionKey: 'Users' },
     ],
   },
   {
     label: 'SETTINGS',
     items: [
-      { key: 'engines', label: 'Detection Settings', path: 'engines', icon: Settings },
-      { key: 'recipients', label: 'Alert Recipients', path: 'recipients', icon: Bell },
+      { key: 'engines', label: 'Detection Settings', path: 'engines', icon: Settings, permissionKey: 'detectionSettings' },
+      { key: 'recipients', label: 'Alert Recipients', path: 'recipients', icon: Bell, permissionKey: 'recipients' },
     ],
   },
 ];

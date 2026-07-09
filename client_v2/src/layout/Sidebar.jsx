@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { LogOut, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { NAV_GROUPS } from './nav.config';
 import { useAuth } from '@/context/AuthContext';
+import { usePermissions } from '@/context/PermissionContext';
 import { useTheme } from '@/theme/ThemeContext';
 import { getSidebarConfig } from '../helpers/dashboard';
 import { useApi } from '../hooks/useApi';
@@ -43,8 +44,19 @@ function groupLabelStyle() {
 
 const STORAGE_KEY = 'vq-sidebar-collapsed';
 
+// Same rule as V1's Header.jsx navLinks.filter(): while permissions haven't
+// loaded yet (empty object) show everything, so the sidebar doesn't flash
+// empty on first render; once loaded, an item with a permissionKey needs
+// permissions[key]?.view === true to appear at all — hidden, not disabled.
+function isItemVisible(item, permissions) {
+  if (!item.permissionKey) return true;
+  if (!permissions || Object.keys(permissions).length === 0) return true;
+  return permissions?.[item.permissionKey]?.view === true;
+}
+
 export default function Sidebar({ badges = {} }) {
   const { user } = useAuth();
+  const { permissions } = usePermissions();
   const { theme } = useTheme();
   const navigate = useNavigate();
   const [accountOpen, setAccountOpen] = useState(false);
@@ -163,7 +175,11 @@ export default function Sidebar({ badges = {} }) {
           padding: '0 4px 6px',
         }}
       >
-        {NAV_GROUPS.filter((g) => !g.hidden).map((group, gi) => (
+        {NAV_GROUPS
+          .filter((g) => !g.hidden)
+          .map((group) => ({ ...group, items: group.items.filter((item) => isItemVisible(item, permissions)) }))
+          .filter((group) => group.items.length > 0)
+          .map((group, gi) => (
           <div key={group.label} style={{ display: 'contents' }}>
             {collapsed ? (
               gi !== 0 && (

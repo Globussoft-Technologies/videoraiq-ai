@@ -15,6 +15,7 @@ import AlertRecipients from './page/user/Administer/AlertRecipients';
 import Placeholder from './page/user/Administer/Placeholder';
 import Departments from './page/user/Departments/Departments';
 import Locations from './page/user/Locations/Locations';
+import RolesPermission from './page/user/RolesPermission/RolesPermission';
 import AddProfile from './pages/RegisterUser/AddProfile';
 import AttendanceLogs from './pages/AttendanceLogs/AttendanceLogs';
 import AccessLogs from './pages/AccessLogs/AccessLogs';
@@ -26,7 +27,6 @@ import ANPRLogs from './pages/ANPRLogs/ANPRLogs';
 const STUBS = [
   ['faces', 'faces', '/logs/tagged-users'],
   ['profile', 'profile', '/profile'],
-  ['roles', 'roles'],
 ];
 
 export const v2Routes = (
@@ -38,6 +38,7 @@ export const v2Routes = (
     <Route path="alerts" element={<AlertsView />} />
     <Route path="incidents" element={<IncidentCenter />} />
     <Route path="analytics" element={<Analytics />} />
+    <Route path="roles" element={<RolesPermission />} />
     <Route path="locations" element={<Locations />} />
     <Route path="departments" element={<Departments />} />
     <Route path="register-users" element={<AddProfile />} />
