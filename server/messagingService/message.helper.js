@@ -81,7 +81,12 @@ export const buildIncidentTelegramMessage = (incident = {}, nvrData = {}, channe
     description,
   } = incident;
 
-  const up = (v) => String(v ?? "N/A").toUpperCase();
+  // MarkdownV2 requires escaping these chars in any text/value so that user
+  // data (names, descriptions) can't break Telegram's parser.
+  const escapeMdV2 = (v) =>
+    String(v ?? "N/A").replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, "\\$&");
+  // Uppercase, then escape — used for the dynamic values.
+  const up = (v) => escapeMdV2(String(v ?? "N/A").toUpperCase());
   const cameraName = channelData?.customName || channelData?.name || incident?.cameraId || "N/A";
   const nvrName = nvrData?.nvrName || "N/A";
 
