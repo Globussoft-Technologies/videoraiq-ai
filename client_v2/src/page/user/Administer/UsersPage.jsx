@@ -3,7 +3,7 @@ import { Search, RefreshCw, MoreHorizontal, X, Eye, EyeOff, Shuffle } from 'luci
 import moment from 'moment';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
-import { getUsers, createUser, deleteUser, getRoles } from '../../../helpers/administer';
+import { getUsers, createUser, updateUser, deleteUser, getRoles } from '../../../api/administer';
 import { getLocations } from '../../../helpers/monitoring';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -94,7 +94,7 @@ function ColHeaders() {
   );
 }
 
-function UserRow({ u, onDelete }) {
+function UserRow({ u, onEdit, onDelete }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -188,6 +188,16 @@ function UserRow({ u, onDelete }) {
             boxShadow: '0 4px 16px rgba(0,0,0,.4)',
           }}>
             <button
+              onClick={() => { setMenuOpen(false); onEdit(u); }}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left',
+                padding: '7px 12px', borderRadius: 5, fontSize: 12,
+                color: 'var(--tx2)', background: 'none', border: 'none', cursor: 'pointer',
+              }}
+            >
+              Edit user
+            </button>
+            <button
               onClick={() => { setMenuOpen(false); onDelete(u); }}
               style={{
                 display: 'block', width: '100%', textAlign: 'left',
@@ -200,6 +210,116 @@ function UserRow({ u, onDelete }) {
           </div>
         )}
       </span>
+    </div>
+  );
+}
+
+// ── Edit user modal ──────────────────────────────────────────────────────────
+function EditUserModal({ user, roles, rolesLoading, onClose, onSave }) {
+  const [fullName, setFullName] = useState(userName(user));
+  const [mobile, setMobile]     = useState(user.mobileNumber || user.mobile || '');
+  const [roleId, setRoleId]     = useState(user.roleIds?._id || (Array.isArray(user.roleIds) ? user.roleIds[0] : '') || '');
+  const [saving, setSaving]     = useState(false);
+
+  const handleSave = async () => {
+    if (!fullName.trim()) return;
+    const parts     = fullName.trim().split(/\s+/);
+    const firstName = parts[0] || '';
+    const lastName  = parts.slice(1).join(' ') || '';
+    setSaving(true);
+    try {
+      await onSave({
+        firstName,
+        lastName,
+        mobileNumber: mobile.trim() || undefined,
+        roleIds: roleId ? [roleId] : [],
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
+    }}>
+      <div style={{
+        background: 'var(--bg1)', border: '1px solid var(--bd)',
+        borderRadius: 14, padding: 24, width: 380,
+        boxShadow: '0 8px 40px rgba(0,0,0,.5)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Edit User</span>
+          <button onClick={onClose}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx3)', padding: 4 }}>
+            <X size={14} />
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <FieldLabel>Full Name</FieldLabel>
+            <TextInput value={fullName} onChange={e => setFullName(e.target.value)} />
+          </div>
+          <div>
+            <FieldLabel>Work Email</FieldLabel>
+            <TextInput value={userEmail(user)} disabled style={{ opacity: 0.6, cursor: 'not-allowed' }} />
+          </div>
+          <div>
+            <FieldLabel>Mobile Number</FieldLabel>
+            <TextInput value={mobile} onChange={e => setMobile(e.target.value)} placeholder="+91 ·····" />
+          </div>
+          <div>
+            <FieldLabel>Role</FieldLabel>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {rolesLoading
+                ? <span style={{ fontSize: 11, color: 'var(--tx3)' }}>Loading roles…</span>
+                : roles.map(r => {
+                  const active = roleId === r._id;
+                  return (
+                    <button
+                      key={r._id}
+                      onClick={() => setRoleId(r._id)}
+                      style={{
+                        padding: '7px 12px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
+                        color: active ? '#fff' : 'var(--tx2)',
+                        background: active ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg2)',
+                        border: `1px solid ${active ? 'transparent' : 'var(--bd)'}`,
+                      }}
+                    >
+                      {r.roleName}
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+          <button
+            onClick={onClose}
+            style={{
+              flex: 1, height: 38, borderRadius: 9, fontSize: 12.5, fontWeight: 600,
+              background: 'var(--bg2)', border: '1px solid var(--bd)',
+              cursor: 'pointer', color: 'var(--tx2)',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            style={{
+              flex: 1, height: 38, borderRadius: 9, fontSize: 12.5, fontWeight: 600,
+              color: '#fff', background: 'linear-gradient(135deg,var(--blue),var(--violet))',
+              border: 'none', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1,
+            }}
+          >
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -218,6 +338,7 @@ export default function UsersPage() {
   const [page, setPage]           = useState(0);
   const [toast, setToast]         = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [editUser, setEditUser]   = useState(null);
   const LIMIT = 10;
 
   const rolesApi     = useApi(() => getRoles({ limit: 100 }), []);
@@ -281,6 +402,17 @@ export default function UsersPage() {
       showToast('Failed to remove user', 'err');
     } finally {
       setConfirmDelete(null);
+    }
+  };
+
+  const handleSaveEdit = async (patch) => {
+    try {
+      await updateUser(editUser._id, patch);
+      showToast(`${userName(editUser)} updated`);
+      setEditUser(null);
+      usersApi.refetch();
+    } catch (err) {
+      showToast(err?.response?.data?.message || 'Failed to update user', 'err');
     }
   };
 
@@ -502,7 +634,7 @@ export default function UsersPage() {
           {() => (
             <>
               {users.map(u => (
-                <UserRow key={u._id} u={u} onDelete={setConfirmDelete} />
+                <UserRow key={u._id} u={u} onEdit={setEditUser} onDelete={setConfirmDelete} />
               ))}
               {pages > 1 && (
                 <div style={{
@@ -581,6 +713,17 @@ export default function UsersPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Edit User modal ─────────────────────────────────────────────── */}
+      {editUser && (
+        <EditUserModal
+          user={editUser}
+          roles={roles}
+          rolesLoading={rolesApi.loading}
+          onClose={() => setEditUser(null)}
+          onSave={handleSaveEdit}
+        />
       )}
 
       {/* ── Toast ────────────────────────────────────────────────────────── */}

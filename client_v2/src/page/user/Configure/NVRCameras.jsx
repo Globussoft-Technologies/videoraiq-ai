@@ -249,7 +249,7 @@ function DiscoveredCameraRow({ cam, checked, onToggle, onPreview }) {
           Added
         </span>
       )}
-      {cam.isAdded && cam.dbId && onPreview && (
+      {cam.dbId && onPreview && (
         <button
           onClick={e => { e.stopPropagation(); onPreview(cam); }}
           title="Preview stream"
@@ -316,15 +316,15 @@ function CameraPreviewModal({ cam, onClose }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span className="vq-blink" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--crit)', display: 'inline-block' }} />
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>{cam.name || `Camera ${cam.channelId}`}</span>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)', border: '1px solid var(--bd)', borderRadius: 6, padding: '1px 7px' }}>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, fontWeight: 600, color: 'var(--tx)', background: 'var(--bg2)', border: '1px solid var(--bd2)', borderRadius: 6, padding: '2px 8px' }}>
               Channel {cam.channelId}
             </span>
           </div>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button onClick={toggleFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} style={{ width: 28, height: 28, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: 'var(--tx3)', cursor: 'pointer' }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={toggleFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} style={{ width: 28, height: 28, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg2)', border: '1px solid var(--bd2)', color: 'var(--tx)', cursor: 'pointer' }}>
               {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
             </button>
-            <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: 'var(--tx3)', cursor: 'pointer' }}>
+            <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg2)', border: '1px solid var(--bd2)', color: 'var(--tx)', cursor: 'pointer' }}>
               <X size={14} />
             </button>
           </div>
@@ -404,6 +404,9 @@ function ManageCamerasModal({ nvr, onClose, onSaved }) {
     });
   };
 
+  const selectAll = () => setSelected(new Set(cameras.map(c => c.channelId)));
+  const clearAll = () => setSelected(new Set());
+
   async function handleSave() {
     setSaving(true);
     try {
@@ -416,7 +419,14 @@ function ManageCamerasModal({ nvr, onClose, onSaved }) {
         return;
       }
 
-      const resp = await addSelectedCameras({ nvrId: nvr._id, cameraIds: Array.from(selected) });
+      // The backend's add-cameras endpoint syncs every camera's isAdded flag
+      // to "is it present in cameraIds" — the same bulk sync handles single
+      // removals already. It only special-cases a literally EMPTY array as a
+      // validation error, so a fully-cleared selection sends a sentinel that
+      // matches no real channelId, keeping the request in the same "sync to
+      // this set" shape instead of a separate unlink-all call.
+      const idsToSend = selected.size > 0 ? Array.from(selected) : ['__none__'];
+      const resp = await addSelectedCameras({ nvrId: nvr._id, cameraIds: idsToSend });
       const body = resp?.data?.body;
       if (body?.status !== 'success') {
         toast.error(friendlyErrorMessage(body, 'Failed to update cameras. Please try again.'));
@@ -465,6 +475,22 @@ function ManageCamerasModal({ nvr, onClose, onSaved }) {
             <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 16 }}>Manage Cameras</div>
             <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 1 }}>Check to add · Uncheck to remove</div>
           </div>
+          {cameras.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <button onClick={selectAll} style={{
+                fontSize: 11.5, fontWeight: 600, color: 'var(--blue)',
+                border: '1px solid var(--bd)', borderRadius: 8, padding: '6px 11px', cursor: 'pointer', background: 'none',
+              }}>
+                Add all
+              </button>
+              <button onClick={clearAll} style={{
+                fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)',
+                border: '1px solid var(--bd)', borderRadius: 8, padding: '6px 11px', cursor: 'pointer', background: 'none',
+              }}>
+                Clear all
+              </button>
+            </div>
+          )}
           <button onClick={onClose} style={{
             width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', color: 'var(--tx3)', border: '1px solid var(--bd)', background: 'none', flexShrink: 0,
@@ -513,8 +539,9 @@ function ManageCamerasModal({ nvr, onClose, onSaved }) {
               display: 'flex', alignItems: 'center', gap: 7,
               fontSize: 12.5, fontWeight: 600, color: '#fff',
               background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-              borderRadius: 9, padding: '9px 18px', cursor: saving || loading ? 'wait' : 'pointer', border: 'none',
-              opacity: saving || loading ? 0.7 : 1,
+              borderRadius: 9, padding: '9px 18px', border: 'none',
+              cursor: (saving || loading) ? 'wait' : 'pointer',
+              opacity: (saving || loading) ? 0.6 : 1,
             }}
           >
             {saving && <Loader2 size={13} className="animate-spin" />}
@@ -598,6 +625,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   const [saving, setSaving] = useState(false);
   const [newLocation, setNewLocation] = useState('');
   const [creatingLocation, setCreatingLocation] = useState(false);
+  const [previewCam, setPreviewCam] = useState(null);
 
   useEffect(() => {
     getLocations(0, 100).then(data => setLocations(Array.isArray(data) ? data : [])).catch(() => {});
@@ -606,15 +634,19 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
 
   const applyFetchedCameras = (available) => {
+    // registerAndFetchCameras (brand-new NVR) returns raw saved Camera docs
+    // (dbId lives at `_id`); editNvrCameras (existing NVR) already normalizes
+    // to `dbId`. Normalize here so Preview works the same for both.
+    const normalized = (available || []).map((cam) => ({ ...cam, dbId: cam.dbId ?? cam._id ?? null }));
     const addedMap = new Map();
     const selectedSet = new Set();
-    (available || []).forEach((cam) => {
+    normalized.forEach((cam) => {
       if (cam.isAdded && cam.dbId) {
         addedMap.set(cam.channelId, cam.dbId);
         selectedSet.add(cam.channelId);
       }
     });
-    setFetchedCameras(available || []);
+    setFetchedCameras(normalized);
     setInitialAdded(addedMap);
     setSelectedCameras(selectedSet);
   };
@@ -934,6 +966,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                       cam={cam}
                       checked={selectedCameras.has(cam.channelId)}
                       onToggle={() => toggleCamera(cam.channelId)}
+                      onPreview={(c) => setPreviewCam({ ...c, streamingUrl: `stream/${savedNvrId}-${c.dbId}/playlist.m3u8` })}
                     />
                   ))}
                 </div>
@@ -994,6 +1027,8 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
           </span>
         </div>
       </div>
+
+      {previewCam && <CameraPreviewModal cam={previewCam} onClose={() => setPreviewCam(null)} />}
     </div>
   );
 }

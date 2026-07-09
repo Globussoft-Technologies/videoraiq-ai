@@ -18,6 +18,8 @@ import {
   MapPin,
   Building2,
   UserPlus,
+  ShieldCheck,
+  Bell,
 } from 'lucide-react';
 
 /**
@@ -69,17 +71,18 @@ export const NAV_GROUPS = [
   {
     label: 'USER DETAILS',
     items: [
+      { key: 'users', label: 'User Role Detail', path: 'users', icon: Users },
+      { key: 'roles', label: 'Roles & Permission', path: 'roles', icon: ShieldCheck },
       { key: 'locations', label: 'Locations', path: 'locations', icon: MapPin },
       { key: 'departments', label: 'Departments', path: 'departments', icon: Building2 },
       { key: 'register', label: 'Register your User', path: 'register-users', icon: UserPlus },
     ],
   },
   {
-    label: 'ADMINISTER',
-    hidden: true,
+    label: 'SETTINGS',
     items: [
-      { key: 'users', label: 'User Management', path: 'users', icon: Users },
-      { key: 'settings', label: 'Settings', path: 'settings', icon: Settings },
+      { key: 'engines', label: 'Detection Settings', path: 'engines', icon: Settings },
+      { key: 'recipients', label: 'Alert Recipients', path: 'recipients', icon: Bell },
     ],
   },
 ];
@@ -94,14 +97,16 @@ export const VIEW_META = {
   analytics: { title: 'Analytics', sub: 'Trends, heatmaps & engine performance' },
   faces: { title: 'Face Recognition & Watchlist', sub: 'Identity verification & attendance' },
   cameras: { title: 'Cameras & NVRs', sub: 'Device inventory & recorder health' },
-  engines: { title: 'Detections', sub: 'AI detections · configure & investigate incidents' },
+  engines: { title: 'Detection Settings', sub: 'Configure detection types per camera' },
   attendance: { title: 'Attendance Logs', sub: 'Face-recognition check-in & working hours' },
   access: { title: 'Access Logs', sub: 'Door & zone entry audit trail' },
   'tagged-users': { title: 'Tagged Users', sub: 'Manually tagged identity matches' },
   'person-count': { title: 'Person Count Logs', sub: 'Zone occupancy & headcount over time' },
   anpr: { title: 'ANPR / Vehicle Logs', sub: 'Vehicle entry / exit & plate matches' },
   absence: { title: 'Desk Absence Logs', sub: 'Post & seat absence detections' },
-  users: { title: 'User Management', sub: 'Roles, permissions & face enrollment' },
+  users: { title: 'User Role Detail', sub: 'Manage users and their assigned roles' },
+  roles: { title: 'Roles & Permission', sub: 'Define roles and per-module access' },
+  recipients: { title: 'Alert Recipients', sub: 'Who gets notified for each detection type' },
   settings: { title: 'Settings', sub: 'Platform, alerts, privacy & integrations' },
   profile: { title: 'My Profile', sub: 'Your account, activity & preferences' },
   locations: { title: 'Locations', sub: 'Locations' },

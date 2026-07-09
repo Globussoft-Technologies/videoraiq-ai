@@ -60,6 +60,11 @@ export default function CommandCenter() {
   const [selectedDepts, setSelectedDepts] = useState([]);
   const [selectedCamTypes, setSelectedCamTypes] = useState([]);
 
+  // Whether the camera currently selected in the Live Camera panel is actually
+  // streaming — reported up by CameraStream's onLiveChange, same mechanism
+  // Live Wall uses for its LIVE/OFFLINE badges (no backend "is streaming" query exists).
+  const [selectedCameraLive, setSelectedCameraLive] = useState(false);
+
   // Options for the filter dropdowns.
   const locationsApi = useApi(() => getLocations(0, 200), []);
   const nvrsApi = useApi(() => getNVRs(), []);
@@ -309,13 +314,14 @@ export default function CommandCenter() {
         stats={header.data || {}}
         dailyTotals={dailyTotals}
         sitesCount={sites.length}
+        selectedCameraLive={selectedCameraLive}
         loading={header.loading}
       />
 
       {/* Live camera + attendance | latest incident + controls */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 18 }} className="vq-cc-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
-          <LiveCamera channels={channels.data || []} loading={channels.loading} latestByChannel={latestByChannel} />
+          <LiveCamera channels={channels.data || []} loading={channels.loading} latestByChannel={latestByChannel} onLiveChange={setSelectedCameraLive} />
           <LiveAttendance
             people={people}
             socketLogs={attendanceLogs}

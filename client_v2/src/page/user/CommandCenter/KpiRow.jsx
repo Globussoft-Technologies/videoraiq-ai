@@ -5,13 +5,19 @@ import { num } from '../../../lib/format';
  * Six KPI tiles. Backed metrics come from dashboard/headerStats, the detection
  * chart (events) and the locations master (sites). Metrics with no backend
  * source yet (avg latency, accuracy) render as "unavailable" rather than mock.
+ *
+ * "Cameras Online" does NOT use stats.activeCameras — that backend field
+ * actually counts cameras with an AI detection engine enabled, not cameras
+ * that are live/streaming (there's no org-wide "is this stream up" query).
+ * Instead it shows whether the camera currently selected in the Live Camera
+ * panel is actually streaming right now, out of the total camera count.
  */
-export default function KpiRow({ stats = {}, dailyTotals = [], sitesCount = 0, loading }) {
+export default function KpiRow({ stats = {}, dailyTotals = [], sitesCount = 0, selectedCameraLive = false, loading }) {
   const eventsToday = dailyTotals.length ? dailyTotals[dailyTotals.length - 1] : 0;
-  const cameras = `${num(stats.activeCameras ?? 0)}/${num(stats.overAllCameraCount ?? 0)}`;
+  const cameras = `${selectedCameraLive ? 1 : 0}/${num(stats.overAllCameraCount ?? 0)}`;
 
   const cards = [
-    { label: 'Cameras Online', value: cameras, sub: 'active feeds', color: 'var(--blue)' },
+    { label: 'Cameras Online', value: cameras, sub: 'selected camera live', color: 'var(--blue)' },
     { label: 'Active Alerts', value: num(stats.totalAlerts ?? 0), sub: 'unresolved', color: 'var(--warn)', spark: dailyTotals },
     { label: 'Critical', value: num(stats.criticalAlerts ?? 0), sub: 'high severity', color: 'var(--crit)' },
     { label: 'Events Today', value: num(eventsToday), sub: 'detections', color: 'var(--violet)', spark: dailyTotals },

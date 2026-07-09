@@ -478,11 +478,11 @@ export default function LiveWallGrid() {
 
         <div style={{ flex: 1 }} />
 
-        {/* Active detections badge */}
+        {/* Active (live-streaming) cameras badge */}
         {activeCount > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: 'var(--crit)' }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--crit)', display: 'inline-block', boxShadow: '0 0 6px var(--crit)' }} className="vq-blink" />
-            {activeCount} active detection{activeCount !== 1 ? 's' : ''}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: 'var(--ok)' }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--ok)', display: 'inline-block', boxShadow: '0 0 6px var(--ok)' }} className="vq-blink" />
+            {activeCount} active camera{activeCount !== 1 ? 's' : ''}
           </div>
         )}
 

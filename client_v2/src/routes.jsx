@@ -11,6 +11,7 @@ import CameraSettings from './page/user/Configure/CameraSettings';
 import DetectionSettings from './page/user/Configure/DetectionSettings';
 import UsersPage from './page/user/Administer/UsersPage';
 import SystemSettings from './page/user/Administer/SystemSettings';
+import AlertRecipients from './page/user/Administer/AlertRecipients';
 import Placeholder from './page/user/Administer/Placeholder';
 import Departments from './page/user/Departments/Departments';
 import Locations from './page/user/Locations/Locations';
@@ -25,6 +26,7 @@ import ANPRLogs from './pages/ANPRLogs/ANPRLogs';
 const STUBS = [
   ['faces', 'faces', '/logs/tagged-users'],
   ['profile', 'profile', '/profile'],
+  ['roles', 'roles'],
 ];
 
 export const v2Routes = (
@@ -52,6 +54,7 @@ export const v2Routes = (
     <Route path="cameras" element={<NVRCameras />} />
     <Route path="camera-settings" element={<CameraSettings />} />
     <Route path="engines" element={<DetectionSettings />} />
+    <Route path="recipients" element={<AlertRecipients />} />
     {/* Administer */}
     <Route path="users" element={<UsersPage />} />
     <Route path="settings" element={<SystemSettings />} />

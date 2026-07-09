@@ -1,10 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check, X, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
  * Multi-select dropdown with Select All / Clear All and a search box.
  * Themed via CSS vars so it works in both light and dark mode.
+ *
+ * The open panel is rendered via a portal with fixed positioning (computed
+ * from the trigger button's bounding rect, flipping upward when there isn't
+ * room below) so it isn't clipped by an ancestor's `overflow: hidden` — e.g.
+ * table rows near the bottom of a scrollable card.
  *
  * Props:
  * - options: [{ id, label }]
@@ -29,15 +35,48 @@ const MultiSelect = ({
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const ref = useRef(null);
+  const [pos, setPos] = useState(null);
+  const wrapperRef = useRef(null);
+  const triggerRef = useRef(null);
+  const panelRef = useRef(null);
 
   useEffect(() => {
     const onClick = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+      if (
+        wrapperRef.current && !wrapperRef.current.contains(e.target) &&
+        panelRef.current && !panelRef.current.contains(e.target)
+      ) {
+        setOpen(false);
+      }
     };
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const panelHeight = panelRef.current?.offsetHeight || 320;
+      const openUpward = rect.bottom + panelHeight > window.innerHeight && rect.top - panelHeight >= 0;
+      setPos({
+        position: 'fixed',
+        top: openUpward ? Math.max(8, rect.top - panelHeight - 4) : rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+        minWidth: 220,
+      });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [open]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -63,8 +102,9 @@ const MultiSelect = ({
   const selectedLabels = options.filter((o) => value.includes(o.id)).map((o) => o.label);
 
   return (
-    <div className={`relative ${className}`} ref={ref}>
+    <div className={`relative ${className}`} ref={wrapperRef}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="flex items-center justify-between gap-2 w-full h-10 px-3 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx)] text-sm cursor-pointer hover:border-[var(--brand)] transition-colors"
@@ -90,8 +130,12 @@ const MultiSelect = ({
         </div>
       </button>
 
-      {open && (
-        <div className="absolute z-[95] mt-1 w-full min-w-[220px] rounded-[10px] border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg overflow-hidden">
+      {open && pos && createPortal(
+        <div
+          ref={panelRef}
+          style={pos}
+          className="z-[200] rounded-[10px] border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg overflow-hidden"
+        >
           <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--bd)]">
             <button
               type="button"
@@ -150,7 +194,8 @@ const MultiSelect = ({
               })
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

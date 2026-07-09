@@ -11,7 +11,7 @@ import CameraStream from '../../../components/CameraStream';
  * this camera; the tile's maximize icon puts just the video into real
  * browser fullscreen in place.
  */
-export default function LiveCamera({ channels = [], loading, latestByChannel = {} }) {
+export default function LiveCamera({ channels = [], loading, latestByChannel = {}, onLiveChange }) {
   const navigate = useNavigate();
   const cams = useMemo(() => (Array.isArray(channels) ? channels.slice(0, 8) : []), [channels]);
   const [activeId, setActiveId] = useState(null);
@@ -97,7 +97,7 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
         ) : !active ? (
           <Empty icon={VideoOff} label="No cameras configured" minH={220} />
         ) : (
-          <CameraStream key={activeKey} channel={active} onMaximize={toggleTileFullscreen} isFullscreen={isFullscreen} minH={220} />
+          <CameraStream key={activeKey} channel={active} onMaximize={toggleTileFullscreen} isFullscreen={isFullscreen} onLiveChange={onLiveChange} minH={220} />
         )}
       </div>
     </Panel>

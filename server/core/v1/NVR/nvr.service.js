@@ -1697,7 +1697,9 @@ class NVRService {
         await Camera.bulkWrite(renames);
       }
 
-      // Auto-add new cameras found on NVR but not in database
+      // Auto-add new cameras found on NVR but not in database. Each one's
+      // stream is registered immediately (same as the Add-NVR flow) so it can
+      // be previewed right away, regardless of isAdded/selection state.
       const newCameras = camerasData.cameras.filter((cam) => !addedMap.has(cam.channelId));
       if (newCameras.length > 0) {
         const cameraDocs = newCameras.map((cam) => ({
@@ -1706,9 +1708,16 @@ class NVRService {
           isAdded: true,
           ...cam,
         }));
-        await Camera.insertMany(cameraDocs);
-        newCameras.forEach((cam) => {
-          addedMap.set(cam.channelId, { _id: new mongoose.Types.ObjectId(), isAdded: true });
+        const insertedCameras = await Camera.insertMany(cameraDocs);
+        insertedCameras.forEach((savedCam) => {
+          addedMap.set(savedCam.channelId, { _id: savedCam._id, isAdded: savedCam.isAdded });
+          try {
+            const uid = `${nvr._id}-${savedCam._id}`;
+            const rtspUrl = buildRTSPUrl(nvr, savedCam, "main");
+            registerCameraStream(uid, rtspUrl, nvr.userId);
+          } catch (streamError) {
+            logger.error(`Failed to register preview stream for camera ${savedCam._id}:`, streamError);
+          }
         });
       }
 

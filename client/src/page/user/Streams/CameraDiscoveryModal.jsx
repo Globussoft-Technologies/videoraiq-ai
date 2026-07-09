@@ -243,7 +243,7 @@ const CameraDiscoveryModal = ({ nvrId, onClose, onSaved }) => {
                 {cam.isAdded && (
                   <span className="text-[10px] bg-[#E5F6FF] text-[#07486a] px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">Added</span>
                 )}
-                {cam.isAdded && cam.dbId && (
+                {cam.dbId && (
                   <button
                     type="button"
                     onClick={() => setPreviewCam({ ...cam, streamingUrl: `stream/${nvrId}-${cam.dbId}/playlist.m3u8` })}

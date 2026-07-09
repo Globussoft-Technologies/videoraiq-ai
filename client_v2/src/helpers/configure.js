@@ -72,6 +72,29 @@ export const updateDetectionSetting = async (id, data) => {
   return unwrap(res);
 };
 
+/** Create a brand-new DetectionSetting for a camera that has never had this
+ * type configured — same POST /api/v1/detection-settings V1 uses on first save. */
+export const createDetectionSetting = async (data) => {
+  const token = getAccessToken();
+  const res = await axios.post(`${Api_url}/api/v1/detection-settings`, data, {
+    headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+  });
+  return unwrap(res);
+};
+
+/**
+ * Fully delete a DetectionSetting — same DELETE /api/v1/detection-settings/:id
+ * V1 uses (exposed there as "Reset Detection UI"). Removes the whole document
+ * and unsets detections.<settingType> on every channel referencing it.
+ */
+export const deleteDetectionSetting = async (id) => {
+  const token = getAccessToken();
+  const res = await axios.delete(`${Api_url}/api/v1/detection-settings/${id}`, {
+    headers: { 'x-access-token': token },
+  });
+  return unwrap(res);
+};
+
 export const getNvrsWithChannels = async (settingType = '') => {
   const token = getAccessToken();
   const res = await axios.get(`${Api_url}/api/v1/nvr/with-channels?settingType=${settingType}`, {
@@ -143,6 +166,18 @@ export const getNvrChannelDetails = async (nvrId) => {
 export const updateChannel = async (channelId, data) => {
   const token = getAccessToken();
   return axios.put(`${Api_url}/api/v1/channel/${channelId}`, data, {
+    headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+  });
+};
+
+/**
+ * Enable/disable one detection type on one camera — the same single endpoint
+ * V1's "Applied Types" popover uses for both directions. Returns a 404 if the
+ * type has never been linked to this camera (no auto-create, matching V1).
+ */
+export const toggleChannelDetection = async ({ channelId, detectionType, enable }) => {
+  const token = getAccessToken();
+  return axios.put(`${Api_url}/api/v1/channel/detection/toggle`, { channelId, detectionType, enable }, {
     headers: { 'Content-Type': 'application/json', 'x-access-token': token },
   });
 };
