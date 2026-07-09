@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Video, Pencil, Undo2, Trash2, Save, Maximize, Minimize, X, Wifi, Minus, Plus, CheckCircle2, ChevronDown, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Video, Pencil, Undo2, Trash2, Save, Maximize, Minimize, X, Wifi, Minus, Plus, CheckCircle2, ChevronDown, AlertTriangle, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import useHlsPlayer from '../../../hooks/useHlsPlayer';
 import { streamUrl } from '../../../lib/stream';
@@ -515,15 +515,6 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     setDrawing(false);
   };
 
-  // Commit the in-progress polygon as a new named zone, then clear the canvas
-  // so the user can immediately start drawing the next one — a camera+type
-  // can hold several independent zones (e.g. two separate counting areas).
-  const handleAddZone = () => {
-    if (points.length < MIN_POINTS_TO_CLOSE) return;
-    setZones(prev => [...prev, { name: `Zone ${prev.length + 1}`, capacity: '', threshold: '', points }]);
-    setPoints([]);
-  };
-
   const handleUpdateZoneField = (index, field, value) => {
     setZones(prev => prev.map((z, i) => (i === index ? { ...z, [field]: value } : z)));
   };
@@ -572,17 +563,17 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
 
   // V1 always collects Detection Name / Priority in a modal before saving,
   // for both create and update — never a silent save. The zone(s) about to be
-  // saved (including any in-progress polygon not yet added via "Add Zone")
-  // are captured here too, so the modal can collect Capacity/Threshold for
-  // types that need them right away, instead of requiring a second trip
-  // through the Zone Settings panel after the zone already exists.
+  // saved (including the in-progress polygon currently on the canvas) are
+  // captured here too, so the modal can collect Capacity/Threshold for types
+  // that need them right away, instead of requiring a second trip through the
+  // Zone Settings panel after the zone already exists.
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [pendingZones, setPendingZones] = useState([]);
 
   const handleOpenSaveModal = () => {
     if (!activeType) return;
-    // An in-progress polygon that hasn't been added as a zone yet still counts, so
-    // users who draw once and hit Save (without pressing "Add Zone") aren't blocked.
+    // The in-progress polygon on the canvas is folded straight into the save,
+    // so drawing once and hitting Save works without a separate commit step.
     if (zones.length === 0 && points.length < MIN_POINTS_TO_CLOSE) return;
     const nextZones = points.length >= MIN_POINTS_TO_CLOSE
       ? [...zones, { name: `Zone ${zones.length + 1}`, capacity: '', threshold: '', points }]
@@ -646,10 +637,10 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     }
   };
 
-  // Fully delete the configured detection area for this type — same
-  // DELETE /api/v1/detection-settings/:id V1 uses (there, under "Reset
-  // Detection UI"). Removes the whole DetectionSetting doc and unlinks it
-  // from every camera referencing it, not just this one.
+  // "Reset Detection UI" — same DELETE /api/v1/detection-settings/:id V1 uses
+  // under that label (Innersettings.jsx → ResetConfirmationDialog). Removes the
+  // whole DetectionSetting doc and unlinks it from every camera referencing it,
+  // not just this one.
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -658,13 +649,13 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     setDeleting(true);
     try {
       await deleteDetectionSetting(activeType.settingId);
-      toast.success('Detection area deleted.');
+      toast.success('Detection settings reset successfully.');
       setZones([]);
       setPoints([]);
       setShowDeleteConfirm(false);
       onSaved?.();
     } catch (err) {
-      toast.error(err?.response?.data?.body?.message || 'Failed to delete detection area.');
+      toast.error(err?.response?.data?.body?.message || 'Failed to reset detection settings.');
     } finally {
       setDeleting(false);
     }
@@ -728,7 +719,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
         <button
           onClick={() => setShowDeleteConfirm(true)}
           disabled={!activeType?.settingId}
-          title={activeType?.settingId ? 'Delete this detection area' : 'Nothing saved yet for this detection type'}
+          title={activeType?.settingId ? 'Reset all detection settings for this detection type' : 'Nothing saved yet for this detection type'}
           style={{
             marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7,
             height: 36, padding: '0 14px', borderRadius: 9,
@@ -737,7 +728,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
             cursor: activeType?.settingId ? 'pointer' : 'not-allowed', opacity: activeType?.settingId ? 1 : 0.5,
           }}
         >
-          <Trash2 size={15} /> Delete Detection Area
+          <RotateCcw size={15} /> Reset Detection UI
         </button>
       </div>
 
@@ -979,19 +970,6 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               <Trash2 size={14} /> Clear All
             </button>
             <button
-              onClick={handleAddZone}
-              disabled={!activeType || points.length < MIN_POINTS_TO_CLOSE}
-              title="Add this polygon as a zone, then start drawing the next one"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
-                background: 'var(--bg2)', border: '1px solid #f59e0b', fontSize: 12, color: '#f59e0b',
-                cursor: (activeType && points.length >= MIN_POINTS_TO_CLOSE) ? 'pointer' : 'not-allowed',
-                opacity: (activeType && points.length >= MIN_POINTS_TO_CLOSE) ? 1 : 0.5,
-              }}
-            >
-              <Plus size={14} /> Add Zone
-            </button>
-            <button
               onClick={handleOpenSaveModal}
               disabled={!activeType || saving || (zones.length === 0 && points.length < MIN_POINTS_TO_CLOSE)}
               style={{
@@ -1136,11 +1114,10 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               }}>
                 <AlertTriangle size={18} />
               </span>
-              <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Delete Detection Area?</span>
+              <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Reset Detection UI?</span>
             </div>
             <div style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.5, marginBottom: 20 }}>
-              This permanently deletes "{activeType.setting?.name || activeType.label}" — all {zones.length} saved zone{zones.length === 1 ? '' : 's'},
-              the priority, and assigned recipients for this detection type will be removed. This can't be undone.
+              <strong>Warning:</strong> This will reset all detection settings to their default values. This action cannot be undone.
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button
@@ -1162,7 +1139,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
                   opacity: deleting ? 0.7 : 1,
                 }}
               >
-                {deleting ? 'Deleting…' : 'Delete'}
+                {deleting ? 'Resetting…' : 'Reset Anyway'}
               </button>
             </div>
           </div>
