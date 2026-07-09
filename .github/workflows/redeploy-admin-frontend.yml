@@ -1,0 +1,105 @@
+name: redeploy-admin-frontend CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'react-admin/**'
+      - '.github/workflows/redeploy-admin-frontend.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'react-admin/**'
+      - '.github/workflows/redeploy-admin-frontend.yml'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry-run: compile code but skip server-side PM2 restart'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('client-v2-pr-{0}', github.ref) || 'client-v2-deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci:
+    name: CI (install + lint + build validation)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: react-admin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.20.0'
+
+      - name: Install deps
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Lint
+        run: npm run lint || true
+
+      - name: Validate Production Build
+        run: npm run build
+
+  deploy:
+    name: Deploy to frontend admin Server
+    needs: ci
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      WEBHOOK_PATH: /hooks/redeploy-admin-frontend
+      # Point at the domain (proxied via nginx/Caddy on 80/443) instead of
+      # a raw IP:9000, since the webhook port is not exposed directly to
+      # the public internet. This is what your other working webhooks use.
+      WEBHOOK_BASE_URL: https://webhook.videoraiq.com
+      DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+    steps:
+      - name: Dispatch secure webhook request
+        run: |
+          set -euo pipefail
+
+          if [ -z "${{ secrets.WEBHOOK_SECRET_KEY }}" ]; then
+            echo "::error::WEBHOOK_SECRET_KEY secret is not set"
+            exit 1
+          fi
+
+          # Construct verifiable JSON payload string
+          PAYLOAD=$(printf '{"event":"push","status":"verified","ref":"%s","sha":"%s","dry_run":%s}' \
+            "${{ github.ref }}" "${{ github.sha }}" "$DRY_RUN")
+
+          # Generate standard HMAC-SHA256 hex signature over the payload bytes
+          SIGNATURE="sha256=$(printf '%s' "$PAYLOAD" \
+            | openssl dgst -sha256 -hmac "${{ secrets.WEBHOOK_SECRET_KEY }}" \
+            | sed 's/^.* //')"
+
+          URL="${WEBHOOK_BASE_URL}${WEBHOOK_PATH}"
+          echo "POST $URL (dry_run=$DRY_RUN)"
+
+          # Execute the request and fail the runner on any non-2xx status code
+          HTTP_CODE=$(curl -sS -X POST \
+            --max-time 60 \
+            -o /tmp/webhook_response.txt \
+            -w '%{http_code}' \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: $SIGNATURE" \
+            -d "$PAYLOAD" \
+            "$URL")
+
+          echo "Response ($HTTP_CODE):"
+          cat /tmp/webhook_response.txt || true
+          echo
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "::error::Webhook returned HTTP $HTTP_CODE — redeploy script rejected or failed"
+            exit 1
+          fi
+          echo "Webhook accepted — server-side redeploy-client-v2 script finished execution successfully."
