@@ -1,7 +1,7 @@
 import moment from 'moment-timezone';
 
-export const REFRESH_KEY = 'vehicle_obstruction_auto_refresh_enabled';
-export const INTERVAL_KEY = 'vehicle_obstruction_auto_refresh_interval';
+export const REFRESH_KEY = 'anpr_auto_refresh_enabled';
+export const INTERVAL_KEY = 'anpr_auto_refresh_interval';
 
 export const IST_ZONE = 'Asia/Kolkata';
 

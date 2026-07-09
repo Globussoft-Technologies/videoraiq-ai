@@ -1,34 +1,19 @@
 import { Eye, EyeOff, ChevronDown, ArrowRight } from "lucide-react";
 
 /* Shared light-theme building blocks for the employee/user portal pages.
-   Kept separate from the admin login's AuthFields so the two never collide. */
-
-export const fieldWrap = { display: "flex", flexDirection: "column", gap: 7 };
-export const labelStyle = { fontSize: 12.5, fontWeight: 600, color: "#334155" };
-export const errStyle = { fontSize: 11.5, color: "#dc2626", marginTop: 1 };
+   Kept separate from the admin login's AuthFields so the two never collide.
+   Styling is Tailwind; the `vqp-*` classes hook into portal.css (focus rings,
+   hover states, disabled) so those must stay. */
 
 /* text input with optional leading icon + trailing slot (e.g. eye toggle) */
 export function PInput({ icon: Icon, rightSlot, ...props }) {
   return (
-    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-      {Icon && (
-        <Icon size={16} style={{ position: "absolute", left: 13, color: "#94a3b8", pointerEvents: "none" }} />
-      )}
+    <div className="relative flex items-center">
+      {Icon && <Icon size={16} className="absolute left-[13px] text-[#94a3b8] pointer-events-none" />}
       <input
-        className="vqp-input"
-        style={{
-          width: "100%",
-          height: 46,
-          padding: `0 ${rightSlot ? 42 : 14}px 0 ${Icon ? 38 : 14}px`,
-          borderRadius: 12,
-          background: "#f6f8fc",
-          border: "1px solid #e3e8f0",
-          color: "#0f1729",
-          fontSize: 14,
-          fontFamily: "inherit",
-          outline: "none",
-          transition: "border-color .15s,box-shadow .15s,background .15s",
-        }}
+        className={`vqp-input w-full h-[46px] rounded-[12px] bg-[#f6f8fc] border border-[#e3e8f0] text-[#0f1729] text-[14px] font-[inherit] outline-none transition-[border-color,box-shadow,background] duration-150 ${
+          Icon ? "pl-[38px]" : "pl-[14px]"
+        } ${rightSlot ? "pr-[42px]" : "pr-[14px]"}`}
         {...props}
       />
       {rightSlot}
@@ -39,30 +24,16 @@ export function PInput({ icon: Icon, rightSlot, ...props }) {
 /* native select styled to match PInput */
 export function PSelect({ children, ...props }) {
   return (
-    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+    <div className="relative flex items-center">
       <select
-        className="vqp-select"
-        style={{
-          width: "100%",
-          height: 46,
-          padding: "0 38px 0 14px",
-          borderRadius: 12,
-          background: "#f6f8fc",
-          border: "1px solid #e3e8f0",
-          color: props.value ? "#0f1729" : "#9aa4b8",
-          fontSize: 14,
-          fontFamily: "inherit",
-          outline: "none",
-          appearance: "none",
-          WebkitAppearance: "none",
-          cursor: "pointer",
-          transition: "border-color .15s,box-shadow .15s,background .15s",
-        }}
+        className={`vqp-select w-full h-[46px] pl-[14px] pr-[38px] rounded-[12px] bg-[#f6f8fc] border border-[#e3e8f0] text-[14px] font-[inherit] outline-none appearance-none cursor-pointer transition-[border-color,box-shadow,background] duration-150 ${
+          props.value ? "text-[#0f1729]" : "text-[#9aa4b8]"
+        }`}
         {...props}
       >
         {children}
       </select>
-      <ChevronDown size={16} style={{ position: "absolute", right: 13, color: "#94a3b8", pointerEvents: "none" }} />
+      <ChevronDown size={16} className="absolute right-[13px] text-[#94a3b8] pointer-events-none" />
     </div>
   );
 }
@@ -70,20 +41,8 @@ export function PSelect({ children, ...props }) {
 export function PEye({ shown, onToggle }) {
   return (
     <div
-      className="vqp-eye"
+      className="vqp-eye absolute right-2 w-[30px] h-[30px] flex items-center justify-center cursor-pointer rounded-[7px] text-[#94a3b8]"
       onClick={onToggle}
-      style={{
-        position: "absolute",
-        right: 8,
-        width: 30,
-        height: 30,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        cursor: "pointer",
-        borderRadius: 7,
-        color: "#94a3b8",
-      }}
     >
       {shown ? <Eye size={17} /> : <EyeOff size={17} />}
     </div>
@@ -93,8 +52,8 @@ export function PEye({ shown, onToggle }) {
 /* submit button — `variant` picks the tone: "primary" (blue) or "success" (green).
    `iconLeft` renders the glyph before the label (e.g. ✓ Complete Registration). */
 const CTA_TONES = {
-  primary: { background: "#2a6fdb", boxShadow: "0 6px 16px rgba(43,111,219,.26)" },
-  success: { background: "linear-gradient(135deg,#22c55e,#16a34a)", boxShadow: "0 8px 22px rgba(22,163,74,.34)" },
+  primary: "bg-[#2a6fdb] shadow-[0_6px_16px_rgba(43,111,219,0.26)]",
+  success: "bg-[linear-gradient(135deg,#22c55e,#16a34a)] shadow-[0_8px_22px_rgba(22,163,74,0.34)]",
 };
 
 export function PButton({ label, loading = false, disabled = false, icon: Icon = ArrowRight, type = "submit", variant = "primary", iconLeft = false, onClick }) {
@@ -105,25 +64,7 @@ export function PButton({ label, loading = false, disabled = false, icon: Icon =
       type={type}
       disabled={disabled}
       onClick={onClick}
-      className={`vqp-cta vqp-cta-${variant}`}
-      style={{
-        width: "100%",
-        height: 48,
-        border: 0,
-        borderRadius: 12,
-        cursor: "pointer",
-        fontFamily: "'Space Grotesk',sans-serif",
-        fontWeight: 600,
-        fontSize: 14.5,
-        color: "#fff",
-        background: tone.background,
-        boxShadow: tone.boxShadow,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 9,
-        transition: "box-shadow .18s,transform .18s,background .18s",
-      }}
+      className={`vqp-cta vqp-cta-${variant} w-full h-12 border-0 rounded-[12px] cursor-pointer font-['Space_Grotesk',sans-serif] font-semibold text-[14.5px] text-white flex items-center justify-center gap-[9px] transition-[box-shadow,transform,background] duration-[180ms] ${tone}`}
     >
       {iconLeft && glyph}
       {label}

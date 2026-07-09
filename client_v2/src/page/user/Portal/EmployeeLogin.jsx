@@ -5,7 +5,7 @@ import Cookies from "js-cookie";
 import { Mail, Lock, ShieldCheck, ArrowUpRight, ArrowLeft, CheckCircle2 } from "lucide-react";
 import logo from "@/assets/logo.svg";
 import heroShot from "@/assets/21.jpg";
-import { PInput, PEye, PButton, fieldWrap, labelStyle, errStyle } from "./PortalFields";
+import { PInput, PEye, PButton } from "./PortalFields";
 import { userLogin, forgotPassword } from "@/page/user/Users/api/post/Index";
 import "./portal.css";
 
@@ -41,7 +41,7 @@ export default function EmployeeLogin() {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Forgot-password modal state (mirrors the client folder's ForgotPassword flow).
+  // Forgot-password state (mirrors the client folder's ForgotPassword flow).
   const [fpOpen, setFpOpen] = useState(false);
   const [fpEmail, setFpEmail] = useState("");
   const [fpError, setFpError] = useState("");
@@ -142,143 +142,53 @@ export default function EmployeeLogin() {
   };
 
   return (
-    <div
-      className="vqp"
-      style={{
-        display: "flex",
-        minHeight: "100vh",
-        width: "100%",
-        background: "#ffffff",
-        fontFamily: "'IBM Plex Sans',sans-serif",
-        color: "#0f1729",
-        overflow: "hidden",
-      }}
-    >
+    <div className="vqp flex min-h-screen w-full bg-white font-['IBM_Plex_Sans',sans-serif] text-[#0f1729] overflow-hidden">
       {/* ============ LEFT HERO ============ */}
-      <div
-        className="vqp-hero"
-        style={{
-          flex: 1.25,
-          position: "relative",
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          padding: "44px 54px",
-          minWidth: 0,
-          color: "#f4f8ff",
-        }}
-      >
+      <div className="vqp-hero flex-[1.25] relative overflow-hidden flex flex-col justify-between py-[44px] px-[54px] min-w-0 text-[#f4f8ff]">
         {/* photo + tint */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            backgroundImage: `url(${heroShot})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(115deg,rgba(9,13,24,.93) 26%,rgba(12,18,36,.6) 58%,rgba(18,24,46,.52))",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            backgroundImage:
-              "linear-gradient(rgba(120,150,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(120,150,255,.05) 1px,transparent 1px)",
-            backgroundSize: "44px 44px",
-            animation: "vqpgrid 7s linear infinite",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: 0,
-            height: 150,
-            background: "linear-gradient(180deg,rgba(43,111,219,.18),transparent)",
-            animation: "vqpscan 6.5s ease-in-out infinite",
-            pointerEvents: "none",
-          }}
-        />
+        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${heroShot})` }} />
+        <div className="absolute inset-0 bg-[linear-gradient(115deg,rgba(9,13,24,0.93)_26%,rgba(12,18,36,0.6)_58%,rgba(18,24,46,0.52))]" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(120,150,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(120,150,255,0.05)_1px,transparent_1px)] bg-[length:44px_44px] animate-[vqpgrid_7s_linear_infinite]" />
+        <div className="absolute left-0 right-0 top-0 h-[150px] bg-[linear-gradient(180deg,rgba(43,111,219,0.18),transparent)] animate-[vqpscan_6.5s_ease-in-out_infinite] pointer-events-none" />
 
         {/* top bar */}
-        <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <img src={logo} alt="VideoraIQ" style={{ height: 38, width: "auto", display: "block" }} />
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "6px 12px",
-              border: "1px solid rgba(120,160,230,.24)",
-              borderRadius: 999,
-              background: "rgba(9,13,24,.5)",
-              backdropFilter: "blur(6px)",
-            }}
-          >
-            <span style={{ position: "relative", width: 7, height: 7 }}>
-              <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#22c55e" }} />
-              <span style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "1.5px solid #22c55e", animation: "vqpblip 2.4s ease-out infinite" }} />
+        <div className="relative z-[2] flex items-center justify-between">
+          <img src={logo} alt="VideoraIQ" className="h-[38px] w-auto block" />
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 border border-[rgba(120,160,230,0.24)] rounded-full bg-[rgba(9,13,24,0.5)] backdrop-blur-[6px]">
+            <span className="relative w-[7px] h-[7px]">
+              <span className="absolute inset-0 rounded-full bg-[#22c55e]" />
+              <span className="absolute inset-0 rounded-full border-[1.5px] border-solid border-[#22c55e] animate-[vqpblip_2.4s_ease-out_infinite]" />
             </span>
-            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, letterSpacing: ".12em", color: "#cdd7ef" }}>
+            <span className="font-['JetBrains_Mono',monospace] text-[10.5px] tracking-[0.12em] text-[#cdd7ef]">
               SYSTEM ONLINE
             </span>
           </div>
         </div>
 
         {/* headline */}
-        <div style={{ position: "relative", zIndex: 2, maxWidth: 540, animation: "vqpfade .8s ease both .1s" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-            <span style={{ width: 26, height: 2, background: "#3b82f6", borderRadius: 2 }} />
-            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, letterSpacing: ".18em", color: "#9db2f0" }}>
+        <div className="relative z-[2] max-w-[540px] animate-[vqpfade_0.8s_ease_both_0.1s]">
+          <div className="flex items-center gap-2.5 mb-5">
+            <span className="w-[26px] h-0.5 bg-[#3b82f6] rounded-[2px]" />
+            <span className="font-['JetBrains_Mono',monospace] text-[11px] tracking-[0.18em] text-[#9db2f0]">
               TRUSTED PLATFORM
             </span>
           </div>
-          <h1
-            style={{
-              fontFamily: "'Space Grotesk',sans-serif",
-              fontWeight: 700,
-              fontSize: 44,
-              lineHeight: 1.08,
-              letterSpacing: "-.02em",
-              margin: 0,
-            }}
-          >
+          <h1 className="font-['Space_Grotesk',sans-serif] font-bold text-[44px] leading-[1.08] tracking-[-0.02em] m-0">
             Enterprise-Grade
             <br />
             Surveillance Platform
           </h1>
-          <p style={{ fontSize: 15, lineHeight: 1.6, color: "#c3ccdf", margin: "18px 0 26px", maxWidth: 460 }}>
+          <p className="text-[15px] leading-[1.6] text-[#c3ccdf] mt-[18px] mb-[26px] max-w-[460px]">
             Your secure gateway to live camera feeds, AI-powered detections, and real-time alerts — everything you need
             in one intelligent workspace.
           </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+          <div className="flex flex-wrap gap-2.5">
             {FEATURES.map((f) => (
               <span
                 key={f.label}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontSize: 12.5,
-                  fontWeight: 500,
-                  color: "#dbe2f2",
-                  border: "1px solid rgba(120,160,230,.2)",
-                  background: "rgba(12,16,26,.42)",
-                  borderRadius: 999,
-                  padding: "7px 14px",
-                }}
+                className="inline-flex items-center gap-2 text-[12.5px] font-medium text-[#dbe2f2] border border-[rgba(120,160,230,0.2)] bg-[rgba(12,16,26,0.42)] rounded-full px-[14px] py-[7px]"
               >
-                <span style={{ width: 7, height: 7, borderRadius: "50%", background: f.c }} />
+                <span className="w-[7px] h-[7px] rounded-full" style={{ background: f.c }} />
                 {f.label}
               </span>
             ))}
@@ -286,13 +196,16 @@ export default function EmployeeLogin() {
         </div>
 
         {/* stats */}
-        <div style={{ position: "relative", zIndex: 2, display: "flex", gap: 44, animation: "vqpfade .9s ease both .22s" }}>
+        <div className="relative z-[2] flex gap-11 animate-[vqpfade_0.9s_ease_both_0.22s]">
           {STATS.map((s) => (
             <div key={s.l}>
-              <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 26, color: s.c === "#0f1729" ? "#f4f8ff" : s.c }}>
+              <div
+                className="font-['Space_Grotesk',sans-serif] font-bold text-[26px]"
+                style={{ color: s.c === "#0f1729" ? "#f4f8ff" : s.c }}
+              >
                 {s.v}
               </div>
-              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, letterSpacing: ".08em", color: "#8e99b6", marginTop: 3 }}>
+              <div className="font-['JetBrains_Mono',monospace] text-[10px] tracking-[0.08em] text-[#8e99b6] mt-[3px]">
                 {s.l}
               </div>
             </div>
@@ -301,39 +214,15 @@ export default function EmployeeLogin() {
       </div>
 
       {/* ============ RIGHT PANEL (white) ============ */}
-      <div
-        className="vqp-panel"
-        style={{
-          width: 480,
-          flex: "0 0 480px",
-          position: "relative",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 40,
-          background: "#ffffff",
-        }}
-      >
-        <div style={{ width: "100%", maxWidth: 360, animation: "vqpfade .7s ease both .12s" }}>
+      <div className="vqp-panel w-[480px] flex-[0_0_480px] relative flex items-center justify-center p-10 bg-white">
+        <div className="w-full max-w-[360px] animate-[vqpfade_0.7s_ease_both_0.12s]">
           {fpOpen ? (
             <div>
               {/* back to login */}
               <button
                 type="button"
                 onClick={closeForgot}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: 0,
-                  marginBottom: 30,
-                  background: "transparent",
-                  border: 0,
-                  cursor: "pointer",
-                  fontSize: 13.5,
-                  fontWeight: 600,
-                  color: "#475569",
-                }}
+                className="inline-flex items-center gap-2 p-0 mb-[30px] bg-transparent border-0 cursor-pointer text-[13.5px] font-semibold text-[#475569]"
               >
                 <ArrowLeft size={16} />
                 Back to login
@@ -341,18 +230,18 @@ export default function EmployeeLogin() {
 
               {!fpSent ? (
                 <>
-                  <div style={{ textAlign: "center", marginBottom: 26 }}>
-                    <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 30, letterSpacing: "-.02em", margin: 0, color: "#0f1729" }}>
+                  <div className="text-center mb-[26px]">
+                    <h2 className="font-['Space_Grotesk',sans-serif] font-bold text-[30px] tracking-[-0.02em] m-0 text-[#0f1729]">
                       Forgot Password?
                     </h2>
-                    <p style={{ fontSize: 13.5, color: "#64748b", margin: "8px 0 0" }}>
+                    <p className="text-[13.5px] text-[#64748b] mt-2 mb-0">
                       No worries, we&apos;ll send you reset instructions
                     </p>
                   </div>
 
-                  <form onSubmit={submitForgot} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                    <div style={fieldWrap}>
-                      <label style={labelStyle}>Email Address</label>
+                  <form onSubmit={submitForgot} className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-[7px]">
+                      <label className="text-[12.5px] font-semibold text-[#334155]">Email Address</label>
                       <PInput
                         icon={Mail}
                         name="fpEmail"
@@ -361,7 +250,7 @@ export default function EmployeeLogin() {
                         value={fpEmail}
                         onChange={(e) => setFpEmail(e.target.value)}
                       />
-                      {fpError && <div style={errStyle}>{fpError}</div>}
+                      {fpError && <div className="text-[11.5px] text-[#dc2626] mt-px">{fpError}</div>}
                     </div>
                     <PButton
                       label={fpSubmitting ? "Sending..." : "Send Reset Instructions"}
@@ -371,26 +260,26 @@ export default function EmployeeLogin() {
                   </form>
                 </>
               ) : (
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ width: 62, height: 62, margin: "4px auto 18px", borderRadius: "50%", background: "#dcfce7", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div className="text-center">
+                  <div className="w-[62px] h-[62px] mx-auto mt-1 mb-[18px] rounded-full bg-[#dcfce7] flex items-center justify-center">
                     <CheckCircle2 size={32} color="#16a34a" />
                   </div>
-                  <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 28, letterSpacing: "-.02em", margin: 0, color: "#0f1729" }}>
+                  <h2 className="font-['Space_Grotesk',sans-serif] font-bold text-[28px] tracking-[-0.02em] m-0 text-[#0f1729]">
                     Check Your Email
                   </h2>
-                  <p style={{ fontSize: 13.5, color: "#64748b", margin: "8px 0 20px" }}>
-                    We&apos;ve sent password reset instructions to <strong style={{ color: "#0f1729" }}>{fpEmail}</strong>.
+                  <p className="text-[13.5px] text-[#64748b] mt-2 mb-5">
+                    We&apos;ve sent password reset instructions to <strong className="text-[#0f1729]">{fpEmail}</strong>.
                   </p>
-                  <div style={{ background: "#f6f8fc", border: "1px solid #e3e8f0", borderRadius: 12, padding: "12px 14px", fontSize: 12.5, color: "#64748b", textAlign: "left", marginBottom: 18 }}>
-                    <p style={{ margin: "0 0 3px", fontWeight: 600, color: "#334155" }}>Didn&apos;t receive the email?</p>
-                    <p style={{ margin: 0 }}>Check your spam folder or try resending it.</p>
+                  <div className="bg-[#f6f8fc] border border-[#e3e8f0] rounded-[12px] px-[14px] py-3 text-[12.5px] text-[#64748b] text-left mb-[18px]">
+                    <p className="mt-0 mb-[3px] font-semibold text-[#334155]">Didn&apos;t receive the email?</p>
+                    <p className="m-0">Check your spam folder or try resending it.</p>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div className="flex flex-col gap-2.5">
                     <PButton label="Resend Email" type="button" onClick={() => setFpSent(false)} />
                     <button
                       type="button"
                       onClick={closeForgot}
-                      style={{ height: 46, width: "100%", borderRadius: 12, cursor: "pointer", fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14, color: "#475569", background: "#fff", border: "1.5px solid #e3e8f0" }}
+                      className="h-[46px] w-full rounded-[12px] cursor-pointer font-['Space_Grotesk',sans-serif] font-semibold text-[14px] text-[#475569] bg-white border-[1.5px] border-solid border-[#e3e8f0]"
                     >
                       Back to Login
                     </button>
@@ -399,143 +288,87 @@ export default function EmployeeLogin() {
               )}
             </div>
           ) : (
-          <>
-          {/* logo + heading */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginBottom: 24 }}>
-            <div
-              style={{
-                position: "relative",
-                width: 66,
-                height: 66,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: 16,
-                borderRadius: "50%",
-
-              }}
-            >
-              <div style={{ position: "absolute", inset: -6, borderRadius: "50%", background: "radial-gradient(circle,rgba(43,111,219,.24),transparent 72%)", animation: "vqpglow 2.4s ease-in-out infinite" }} />
-              <img
-                src={logo}
-                alt="VideoraIQ"
-                style={{ position: "relative", width: 66, height: 66, objectFit: "contain", animation: "vqfloatY 3.4s ease-in-out infinite" }}
-              />
-            </div>
-            <span
-              style={{
-                fontFamily: "'JetBrains Mono',monospace",
-                fontSize: 10.5,
-                letterSpacing: ".14em",
-                color: "#2a6fdb",
-                border: "1px solid #cfe0fb",
-                background: "#eef5ff",
-                borderRadius: 999,
-                padding: "4px 12px",
-                marginBottom: 14,
-              }}
-            >
-              USER PORTAL
-            </span>
-            <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 25, letterSpacing: "-.01em", margin: 0, color: "#0f1729" }}>
-              Welcome Back
-            </h2>
-            <p style={{ fontSize: 13, color: "#64748b", margin: "7px 0 0" }}>Sign in to access your user dashboard</p>
-          </div>
-
-          {/* form */}
-          <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 15 }}>
-            <div style={fieldWrap}>
-              <label style={labelStyle}>Username or Email</label>
-              <PInput icon={Mail} name="login" placeholder="you@company.com" value={form.login} onChange={set("login")} />
-              {errors.login && <div style={errStyle}>{errors.login}</div>}
-            </div>
-
-            <div style={fieldWrap}>
-              <label style={labelStyle}>Password</label>
-              <PInput
-                icon={Lock}
-                name="password"
-                type={showPw ? "text" : "password"}
-                placeholder="Enter your password"
-                value={form.password}
-                onChange={set("password")}
-                rightSlot={<PEye shown={showPw} onToggle={() => setShowPw((s) => !s)} />}
-              />
-              {errors.password && <div style={errStyle}>{errors.password}</div>}
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <label
-                style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#475569", cursor: "pointer", userSelect: "none" }}
-                onClick={() => setRememberMe((v) => !v)}
-              >
-                <span
-                  className="vqp-check"
-                  data-checked={rememberMe}
-                  style={{
-                    width: 17,
-                    height: 17,
-                    borderRadius: 5,
-                    border: "1px solid #cbd5e1",
-                    background: "#f6f8fc",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#fff",
-                    fontSize: 11,
-                    lineHeight: 1,
-                  }}
-                >
-                  {rememberMe ? "✓" : ""}
+            <>
+              {/* logo + heading */}
+              <div className="flex flex-col items-center text-center mb-6">
+                <div className="relative w-[66px] h-[66px] flex items-center justify-center mb-4 rounded-full">
+                  <div className="absolute -inset-1.5 rounded-full bg-[radial-gradient(circle,rgba(43,111,219,0.24),transparent_72%)] animate-[vqpglow_2.4s_ease-in-out_infinite]" />
+                  <img
+                    src={logo}
+                    alt="VideoraIQ"
+                    className="relative w-[66px] h-[66px] object-contain animate-[vqfloatY_3.4s_ease-in-out_infinite]"
+                  />
+                </div>
+                <span className="font-['JetBrains_Mono',monospace] text-[10.5px] tracking-[0.14em] text-[#2a6fdb] border border-[#cfe0fb] bg-[#eef5ff] rounded-full px-3 py-1 mb-[14px]">
+                  USER PORTAL
                 </span>
-                Remember me
-              </label>
-              <span
-                className="vqp-link"
-                onClick={openForgot}
-                style={{ fontSize: 12.5, fontWeight: 600, color: "#3b82f6", cursor: "pointer" }}
+                <h2 className="font-['Space_Grotesk',sans-serif] font-bold text-[25px] tracking-[-0.01em] m-0 text-[#0f1729]">
+                  Welcome Back
+                </h2>
+                <p className="text-[13px] text-[#64748b] mt-[7px] mb-0">Sign in to access your user dashboard</p>
+              </div>
+
+              {/* form */}
+              <form onSubmit={onSubmit} className="flex flex-col gap-[15px]">
+                <div className="flex flex-col gap-[7px]">
+                  <label className="text-[12.5px] font-semibold text-[#334155]">Username or Email</label>
+                  <PInput icon={Mail} name="login" placeholder="you@company.com" value={form.login} onChange={set("login")} />
+                  {errors.login && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.login}</div>}
+                </div>
+
+                <div className="flex flex-col gap-[7px]">
+                  <label className="text-[12.5px] font-semibold text-[#334155]">Password</label>
+                  <PInput
+                    icon={Lock}
+                    name="password"
+                    type={showPw ? "text" : "password"}
+                    placeholder="Enter your password"
+                    value={form.password}
+                    onChange={set("password")}
+                    rightSlot={<PEye shown={showPw} onToggle={() => setShowPw((s) => !s)} />}
+                  />
+                  {errors.password && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.password}</div>}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <label
+                    className="flex items-center gap-2 text-[12.5px] text-[#475569] cursor-pointer select-none"
+                    onClick={() => setRememberMe((v) => !v)}
+                  >
+                    <span
+                      className="vqp-check w-[17px] h-[17px] rounded-[5px] border border-[#cbd5e1] bg-[#f6f8fc] inline-flex items-center justify-center text-white text-[11px] leading-none"
+                      data-checked={rememberMe}
+                    >
+                      {rememberMe ? "✓" : ""}
+                    </span>
+                    Remember me
+                  </label>
+                  <span
+                    className="vqp-link text-[12.5px] font-semibold text-[#3b82f6] cursor-pointer"
+                    onClick={openForgot}
+                  >
+                    Forgot password?
+                  </span>
+                </div>
+
+                <PButton label={isSubmitting ? "Signing in..." : "Sign In"} loading={isSubmitting} disabled={isSubmitting} />
+              </form>
+
+              {/* login as admin */}
+              <button
+                type="button"
+                className="vqp-ghost w-full h-11 mt-[14px] rounded-[12px] cursor-pointer font-['Space_Grotesk',sans-serif] font-semibold text-[13.5px] text-[#2a6fdb] bg-[#eaf1fd] border-[1.5px] border-solid border-[#cfe0fb] flex items-center justify-center gap-2 transition-[background,border-color] duration-150"
+                onClick={() => navigate("/user-login")}
               >
-                Forgot password?
-              </span>
-            </div>
+                <ShieldCheck size={16} />
+                Login as admin
+                <ArrowUpRight size={15} />
+              </button>
 
-            <PButton label={isSubmitting ? "Signing in..." : "Sign In"} loading={isSubmitting} disabled={isSubmitting} />
-          </form>
-
-          {/* login as admin */}
-          <button
-            type="button"
-            className="vqp-ghost"
-            onClick={() => navigate("/user-login")}
-            style={{
-              width: "100%",
-              height: 44,
-              marginTop: 14,
-              borderRadius: 12,
-              cursor: "pointer",
-              fontFamily: "'Space Grotesk',sans-serif",
-              fontWeight: 600,
-              fontSize: 13.5,
-              color: "#2a6fdb",
-              background: "#eaf1fd",
-              border: "1.5px solid #cfe0fb",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              transition: "background .15s,border-color .15s",
-            }}
-          >
-            <ShieldCheck size={16} />
-            Login as admin
-            <ArrowUpRight size={15} />
-          </button>
-
-          <p style={{ textAlign: "center", marginTop: 14, fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, letterSpacing: ".08em", color: "#9aa4b8" }}>
-            © 2026 VIDEORAIQ · SECURE SESSION
-          </p>
-          </>
+              <p className="text-center mt-[14px] font-['JetBrains_Mono',monospace] text-[10.5px] tracking-[0.08em] text-[#9aa4b8]">
+                © 2026 VIDEORAIQ · SECURE SESSION
+              </p>
+            </>
           )}
         </div>
       </div>

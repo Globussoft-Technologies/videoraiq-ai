@@ -7,6 +7,7 @@ import { useApi } from '../../../hooks/useApi';
 import { getDetectionTypes, updateDetectionSetting, createDetectionSetting, deleteDetectionSetting } from '../../../helpers/configure';
 import { getRecipients } from '../../../api/administer';
 import { Popover, PopoverTrigger, PopoverContent } from '../../../pages/AttendanceLogs/components/Popover';
+import ZoneScheduleFields, { TimezoneField, emptySchedule, scheduleFromConfig, buildScheduleFields, scheduleError } from './ZoneScheduleFields';
 
 const DETECTION_FIELD_KEYS = [
   'countPersonsSettings', 'motionDetectionSettings', 'genericObjectDetectionSettings',
@@ -87,6 +88,8 @@ function zonesFor(setting, cameraId) {
     name: configs[i]?.name || `Zone ${i + 1}`,
     capacity: configs[i]?.capacity ?? '',
     threshold: configs[i]?.threshold_sec ?? '',
+    // Restore the saved startTime/endTime into the schedule picker.
+    schedule: scheduleFromConfig(configs[i]),
     points: (poly || []).map(p => (Array.isArray(p) ? { x: p[0], y: p[1] } : p)),
   }));
 }
@@ -123,6 +126,11 @@ function SaveDetectionAreaModal({ initialName, initialPriority, zones, extraFiel
       if (!String(z.name || '').trim()) nextErrors[`zone-${i}-name`] = true;
     });
     if (Object.keys(nextErrors).length) { setErrors(nextErrors); return; }
+    // Schedule window must be valid (end after start) for every zone.
+    for (let i = 0; i < zoneDrafts.length; i++) {
+      const err = scheduleError(zoneDrafts[i].schedule);
+      if (err) { toast.error(`Zone ${i + 1}: ${err}`); return; }
+    }
     onSubmit({ detectionName: detectionName.trim(), priority, zones: zoneDrafts });
   };
 
@@ -174,6 +182,9 @@ function SaveDetectionAreaModal({ initialName, initialPriority, zones, extraFiel
             </select>
           </div>
 
+          {/* Global time zone — one setting for all zones' schedules. */}
+          <TimezoneField />
+
           {zoneDrafts.map((z, i) => (
             <div key={i} style={{ border: '1px solid var(--bd)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)' }}>Zone {i + 1}</div>
@@ -223,6 +234,11 @@ function SaveDetectionAreaModal({ initialName, initialPriority, zones, extraFiel
                   />
                 </div>
               )}
+              {/* Per-zone schedule (Time Range). Timezone is global (below Priority). */}
+              <ZoneScheduleFields
+                value={z.schedule}
+                onChange={schedule => updateZoneField(i, 'schedule', schedule)}
+              />
             </div>
           ))}
         </div>
@@ -336,6 +352,10 @@ function ZoneSettingsPanel({ zones, extraFields, activeIndex, onSetActive, onUpd
       <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 12 }}>
         {zones.length} zone{zones.length === 1 ? '' : 's'} drawn on this camera for this detection type.
       </div>
+      {/* Global time zone — schedules for every zone are interpreted against it. */}
+      <div style={{ marginBottom: 12 }}>
+        <TimezoneField />
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {zones.map((z, i) => {
           const isOpen = expanded === i;
@@ -409,6 +429,11 @@ function ZoneSettingsPanel({ zones, extraFields, activeIndex, onSetActive, onUpd
                       />
                     </div>
                   )}
+                  {/* Per-zone schedule (Time Range). */}
+                  <ZoneScheduleFields
+                    value={z.schedule}
+                    onChange={schedule => onUpdateField(i, 'schedule', schedule)}
+                  />
                   <button
                     onClick={() => onSave(i)}
                     disabled={savingIndex === i}
@@ -526,6 +551,8 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
       name: z.name,
       ...(fields.includes('capacity') ? { capacity: z.capacity === '' ? undefined : Number(z.capacity) } : {}),
       ...(fields.includes('threshold') ? { threshold_sec: z.threshold === '' ? undefined : Number(z.threshold) } : {}),
+      // startTime/endTime added only when fully selected in the schedule picker.
+      ...buildScheduleFields(z.schedule),
     }));
     if (activeType.settingId) {
       const setting = activeType.setting;
@@ -576,7 +603,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     // so drawing once and hitting Save works without a separate commit step.
     if (zones.length === 0 && points.length < MIN_POINTS_TO_CLOSE) return;
     const nextZones = points.length >= MIN_POINTS_TO_CLOSE
-      ? [...zones, { name: `Zone ${zones.length + 1}`, capacity: '', threshold: '', points }]
+      ? [...zones, { name: `Zone ${zones.length + 1}`, capacity: '', threshold: '', schedule: emptySchedule(), points }]
       : zones;
     setPendingZones(nextZones);
     setShowSaveModal(true);
@@ -606,6 +633,8 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
 
   const handleSaveZoneName = async (index) => {
     if (!activeType?.settingId) return;
+    const err = scheduleError(zones[index]?.schedule);
+    if (err) { toast.error(err); return; }
     setSavingZoneIndex(index);
     try {
       await persistZones({ nextZones: zones });

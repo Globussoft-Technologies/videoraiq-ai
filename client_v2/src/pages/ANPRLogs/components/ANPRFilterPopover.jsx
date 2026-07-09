@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Filter, RotateCcw, ChevronDown, Check } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/pages/AttendanceLogs/components/Popover';
 import MultiSelect from '@/pages/AttendanceLogs/components/MultiSelect';
@@ -93,47 +93,76 @@ const ANPRFilterPopover = ({
   );
 };
 
-/** Single-select severity dropdown built on the shared Popover (no ui/select in v2). */
+/**
+ * Single-select severity dropdown.
+ *
+ * Rendered as an INLINE (absolute-positioned) dropdown — NOT the shared
+ * Popover — on purpose. The shared PopoverContent portals to <body>, so nesting
+ * one inside the filter popover put the option list outside the filter's
+ * contentRef. Clicking an option then registered as a click-outside on the
+ * filter popover, which closed (and unmounted) this control on `mousedown`
+ * before the option's `onClick` could fire — so severity never updated and the
+ * logs request never refetched. Keeping the list inline (same approach as the
+ * NVR/Camera MultiSelect) keeps it within the filter's contentRef so selecting
+ * a severity actually dispatches. */
 const SeveritySelect = ({ severity, setSeverity }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
   const selected = SEVERITY_OPTIONS.find((o) => o.value === severity);
+
+  useEffect(() => {
+    const onClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+
+  const choose = (value) => {
+    setSeverity(value);
+    setOpen(false);
+  };
+
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="w-full h-9 px-3 border border-[var(--bd)] rounded-lg text-sm bg-[var(--bg1solid)] text-[var(--tx2)] cursor-pointer flex items-center justify-between gap-2"
-        >
-          <span className={selected ? 'text-[var(--tx)] capitalize' : 'text-[var(--tx3)]'}>
-            {selected ? selected.label : 'Severity'}
-          </span>
-          <ChevronDown className="w-4 h-4 text-[var(--tx3)] shrink-0" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[240px] p-1 rounded-lg" align="start">
-        <button
-          type="button"
-          onClick={() => setSeverity('')}
-          className={`w-full text-left px-3 py-1.5 text-xs cursor-pointer hover:bg-[var(--bg2)] rounded ${
-            !severity ? 'bg-[var(--bg2)] font-medium text-[var(--brand)]' : 'text-[var(--tx)]'
-          }`}
-        >
-          All Severities
-        </button>
-        {SEVERITY_OPTIONS.map((opt) => (
+    <div className="relative w-full" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full h-9 px-3 border border-[var(--bd)] rounded-lg text-sm bg-[var(--bg1solid)] text-[var(--tx2)] cursor-pointer flex items-center justify-between gap-2"
+      >
+        <span className={selected ? 'text-[var(--tx)] capitalize' : 'text-[var(--tx3)]'}>
+          {selected ? selected.label : 'Severity'}
+        </span>
+        <ChevronDown className={`w-4 h-4 text-[var(--tx3)] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute z-[95] mt-1 w-full rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg p-1">
           <button
-            key={opt.value}
             type="button"
-            onClick={() => setSeverity(opt.value)}
-            className={`w-full text-left px-3 py-1.5 text-xs cursor-pointer hover:bg-[var(--bg2)] rounded flex items-center justify-between ${
-              severity === opt.value ? 'bg-[var(--bg2)] font-medium text-[var(--brand)]' : 'text-[var(--tx)]'
+            onClick={() => choose('')}
+            className={`w-full text-left px-3 py-1.5 text-xs cursor-pointer hover:bg-[var(--bg2)] rounded ${
+              !severity ? 'bg-[var(--bg2)] font-medium text-[var(--brand)]' : 'text-[var(--tx)]'
             }`}
           >
-            {opt.label}
-            {severity === opt.value && <Check className="w-3.5 h-3.5 text-[var(--brand)]" />}
+            All Severities
           </button>
-        ))}
-      </PopoverContent>
-    </Popover>
+          {SEVERITY_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => choose(opt.value)}
+              className={`w-full text-left px-3 py-1.5 text-xs cursor-pointer hover:bg-[var(--bg2)] rounded flex items-center justify-between ${
+                severity === opt.value ? 'bg-[var(--bg2)] font-medium text-[var(--brand)]' : 'text-[var(--tx)]'
+              }`}
+            >
+              {opt.label}
+              {severity === opt.value && <Check className="w-3.5 h-3.5 text-[var(--brand)]" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 };
 

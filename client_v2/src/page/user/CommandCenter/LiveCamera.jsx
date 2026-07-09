@@ -32,7 +32,8 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
 
   function openFullView() {
     if (!active) return;
-    navigate(`/v2/wall${activeKey ? `?cam=${activeKey}` : ''}`);
+    // Live Wall is mounted at `/live` (see routes.jsx) — not `/v2/wall`.
+    navigate(`/live${activeKey ? `?cam=${activeKey}` : ''}`);
   }
 
   function toggleTileFullscreen() {

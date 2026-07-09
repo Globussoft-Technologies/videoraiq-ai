@@ -95,6 +95,35 @@ export const deleteDetectionSetting = async (id) => {
   return unwrap(res);
 };
 
+/* ── Global time zone (Detection zone scheduling) ─────────────────────────
+ * Same endpoints V1 uses: the admin has ONE saved timezone, and zone schedules
+ * (startTime/endTime per zone_config) are interpreted against it. */
+export const getTimezones = async () => {
+  const token = getAccessToken();
+  const res = await axios.get(`${Api_url}/api/v1/admin/timezones`, {
+    headers: { 'x-access-token': token },
+  });
+  const data = unwrap(res);
+  return data?.timezones ?? (Array.isArray(data) ? data : []);
+};
+
+export const getSavedTimezone = async () => {
+  const token = getAccessToken();
+  const res = await axios.get(`${Api_url}/api/v1/admin/timezone`, {
+    headers: { 'x-access-token': token },
+  });
+  const data = unwrap(res);
+  return data?.timezone ?? '';
+};
+
+export const updateSavedTimezone = async (timezone) => {
+  const token = getAccessToken();
+  const res = await axios.put(`${Api_url}/api/v1/admin/timezone`, { timezone }, {
+    headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+  });
+  return unwrap(res);
+};
+
 export const getNvrsWithChannels = async (settingType = '') => {
   const token = getAccessToken();
   const res = await axios.get(`${Api_url}/api/v1/nvr/with-channels?settingType=${settingType}`, {

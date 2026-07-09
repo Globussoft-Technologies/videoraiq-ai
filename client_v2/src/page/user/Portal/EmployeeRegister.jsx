@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Check, X, Image as ImageIcon, Info } from "lucide-react";
 import logo from "@/assets/logo.svg";
 import heroShot from "@/assets/7.jpg";
-import { PInput, PSelect, PButton, fieldWrap, labelStyle, errStyle } from "./PortalFields";
+import { PInput, PSelect, PButton } from "./PortalFields";
 import { fetchDepartments, getEmployeeLocations, isEmailExist, createAuthorizedUser } from "@/pages/RegisterUser/Api";
 import "./portal.css";
 
@@ -24,8 +24,8 @@ const PHOTO_SLOTS = [
 /* Onboarding token for the public portal. This page runs without a login
    session/cookie, so the department & location lookups are authenticated with
    an explicit long-lived token (same approach as the `client` EmployeeRegister). */
- const AUTH_TOKEN =
-    'eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdGF0dXMiOnRydWUsInVzZXJfaWQiOjM3LCJsb2dpbiI6ImR1YmFpZ29sZiIsImFkbWluSWQiOiI2YTA0NDJiMmFkOGQzYjNkZjFhZDljZTciLCJvcmdJZCI6bnVsbCwidXNlcl9uYW1lIjoiRHViYWkgR29sZiIsInVzZXJfZW1haWwiOiJkdWJhaWdvbGZAZ21haWwuY29tIiwibmFtZV9mIjoiRHViYWkiLCJuYW1lX2wiOiJHb2xmIiwidXNlclN1YnNjcmlwdGlvblR5cGUiOnsiMyI6IjIwMzYtMDUtMzAifSwiY3JlYXRlZF9mcm9tIjoiRU1QIiwiY3JlYXRlZEF0IjoiMjAyNi0wNS0xM1QwOToyMTo1NC4wMjZaIiwiZW5hYmxlUGhvbmVSZWNpcGllbnRzIjpmYWxzZSwiaWF0IjoxNzc4ODI5MjQwLCJleHAiOjE4NzM0MzcyNDB9.7rjNka_6iuYd028HDdHO7mC-AN82L28hCAYdH11ZU0qWW4wunK2k6-Sn3NorzYdXaz8WM3vuYp8LaOwMDfD6-Q';
+const AUTH_TOKEN =
+  'eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdGF0dXMiOnRydWUsInVzZXJfaWQiOjM3LCJsb2dpbiI6ImR1YmFpZ29sZiIsImFkbWluSWQiOiI2YTA0NDJiMmFkOGQzYjNkZjFhZDljZTciLCJvcmdJZCI6bnVsbCwidXNlcl9uYW1lIjoiRHViYWkgR29sZiIsInVzZXJfZW1haWwiOiJkdWJhaWdvbGZAZ21haWwuY29tIiwibmFtZV9mIjoiRHViYWkiLCJuYW1lX2wiOiJHb2xmIiwidXNlclN1YnNjcmlwdGlvblR5cGUiOnsiMyI6IjIwMzYtMDUtMzAifSwiY3JlYXRlZF9mcm9tIjoiRU1QIiwiY3JlYXRlZEF0IjoiMjAyNi0wNS0xM1QwOToyMTo1NC4wMjZaIiwiZW5hYmxlUGhvbmVSZWNpcGllbnRzIjpmYWxzZSwiaWF0IjoxNzc4ODI5MjQwLCJleHAiOjE4NzM0MzcyNDB9.7rjNka_6iuYd028HDdHO7mC-AN82L28hCAYdH11ZU0qWW4wunK2k6-Sn3NorzYdXaz8WM3vuYp8LaOwMDfD6-Q';
 
 export default function EmployeeRegister() {
   const navigate = useNavigate();
@@ -179,67 +179,21 @@ export default function EmployeeRegister() {
 
   if (registered) {
     return (
-      <div
-        className="vqp"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
-          width: "100%",
-          padding: 24,
-          background: "linear-gradient(180deg,#fbfcff,#f5f7fc)",
-          fontFamily: "'IBM Plex Sans',sans-serif",
-        }}
-      >
-        <div
-          style={{
-            background: "#fff",
-            border: "1px solid #eceff5",
-            borderRadius: 18,
-            padding: "40px 32px",
-            maxWidth: 420,
-            width: "100%",
-            textAlign: "center",
-            boxShadow: "0 18px 46px rgba(24,39,75,.08)",
-          }}
-        >
-          <div
-            style={{
-              width: 64,
-              height: 64,
-              margin: "0 auto 20px",
-              borderRadius: "50%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "linear-gradient(135deg,#2a6fdb,#0891b2)",
-              boxShadow: "0 10px 24px rgba(43,111,219,.32)",
-            }}
-          >
+      <div className="vqp flex items-center justify-center min-h-screen w-full p-6 bg-[linear-gradient(180deg,#fbfcff,#f5f7fc)] font-['IBM_Plex_Sans',sans-serif]">
+        <div className="bg-white border border-[#eceff5] rounded-[18px] px-8 py-10 max-w-[420px] w-full text-center shadow-[0_18px_46px_rgba(24,39,75,0.08)]">
+          <div className="w-16 h-16 mx-auto mb-5 rounded-full flex items-center justify-center bg-[linear-gradient(135deg,#2a6fdb,#0891b2)] shadow-[0_10px_24px_rgba(43,111,219,0.32)]">
             <Check size={30} color="#fff" strokeWidth={2.5} />
           </div>
-          <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 30, letterSpacing: "-.02em", margin: "0 0 8px", color: "#0f1729" }}>
+          <h2 className="font-['Space_Grotesk',sans-serif] font-bold text-[30px] tracking-[-0.02em] mt-0 mb-2 text-[#0f1729]">
             Thank you!
           </h2>
-          <p style={{ fontSize: 14, color: "#64748b", margin: "0 0 24px" }}>
+          <p className="text-[14px] text-[#64748b] mt-0 mb-6">
             Your registration was submitted successfully.
           </p>
           <button
             type="button"
             onClick={() => setRegistered(false)}
-            style={{
-              height: 46,
-              padding: "0 26px",
-              border: 0,
-              borderRadius: 12,
-              cursor: "pointer",
-              fontFamily: "'Space Grotesk',sans-serif",
-              fontWeight: 600,
-              fontSize: 14,
-              color: "#fff",
-              background: "#0f2744",
-            }}
+            className="h-[46px] px-[26px] border-0 rounded-[12px] cursor-pointer font-['Space_Grotesk',sans-serif] font-semibold text-[14px] text-white bg-[#0f2744]"
           >
             Register another
           </button>
@@ -249,157 +203,90 @@ export default function EmployeeRegister() {
   }
 
   return (
-    <div
-      className="vqp"
-      style={{
-        display: "flex",
-        minHeight: "100vh",
-        width: "100%",
-        background: "#ffffff",
-        fontFamily: "'IBM Plex Sans',sans-serif",
-        color: "#0f1729",
-        overflow: "hidden",
-      }}
-    >
+    <div className="vqp flex min-h-screen w-full bg-white font-['IBM_Plex_Sans',sans-serif] text-[#0f1729] overflow-hidden">
       {/* ============ LEFT: FORM ============ */}
-      <div
-        style={{
-          flex: 1.35,
-          minWidth: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "48px 40px",
-          background: "linear-gradient(180deg,#fbfcff,#f5f7fc)",
-        }}
-      >
-        <div style={{ width: "100%", maxWidth: 470, animation: "vqpfade .7s ease both .1s" }}>
+      <div className="flex-[1.35] min-w-0 flex flex-col items-center justify-center px-10 py-12 bg-[linear-gradient(180deg,#fbfcff,#f5f7fc)]">
+        <div className="w-full max-w-[470px] animate-[vqpfade_0.7s_ease_both_0.1s]">
           {/* heading */}
-          <div style={{ textAlign: "center", marginBottom: 24 }}>
-            <div
-              style={{
-                position: "relative",
-                width: 66,
-                height: 66,
-                margin: "0 auto 16px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: "50%",
-             
-                
-               
-              }}
-            >
-              {/* <div style={{ position: "absolute", inset: -6, borderRadius: "50%", background: "radial-gradient(circle,rgba(43,111,219,.24),transparent 72%)", animation: "vqpglow 2.4s ease-in-out infinite" }} />
-               <img
-                             src={logo}
-                             alt="VideoraIQ"
-                             style={{ position: "relative", width: 66, height: 66, objectFit: "contain", animation: "vqfloatY 3.4s ease-in-out infinite" }}
-                           /> */}
+          <div className="text-center mb-6">
+            <div className="relative w-[66px] h-[66px] mx-auto mb-4 flex items-center justify-center rounded-full">
+              {/* <div className="absolute -inset-1.5 rounded-full bg-[radial-gradient(circle,rgba(43,111,219,0.24),transparent_72%)] animate-[vqpglow_2.4s_ease-in-out_infinite]" />
+              <img src={logo} alt="VideoraIQ" className="relative w-[66px] h-[66px] object-contain animate-[vqfloatY_3.4s_ease-in-out_infinite]" /> */}
             </div>
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                fontFamily: "'JetBrains Mono',monospace",
-                fontSize: 10.5,
-                letterSpacing: ".14em",
-                color: "#3b82f6",
-                border: "1px solid #cfe0fb",
-                background: "#eef5ff",
-                borderRadius: 999,
-                padding: "5px 13px",
-                marginBottom: 16,
-              }}
-            >
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#3b82f6" }} />
+            <span className="inline-flex items-center gap-2 font-['JetBrains_Mono',monospace] text-[10.5px] tracking-[0.14em] text-[#3b82f6] border border-[#cfe0fb] bg-[#eef5ff] rounded-full px-[13px] py-[5px] mb-4">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#3b82f6]" />
               EMPLOYEE ONBOARDING
             </span>
-            <h1 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 30, letterSpacing: "-.02em", margin: 0, color: "#0f1729" }}>
+            <h1 className="font-['Space_Grotesk',sans-serif] font-bold text-[30px] tracking-[-0.02em] m-0 text-[#0f1729]">
               Employee Registration
             </h1>
-            <p style={{ fontSize: 13.5, color: "#64748b", margin: "8px 0 0" }}>
+            <p className="text-[13.5px] text-[#64748b] mt-2 mb-0">
               {step === 1 ? "Fill in your details to get registered" : "Add face photos to enable recognition"}
             </p>
           </div>
 
           {/* step indicator */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0, marginBottom: 26 }}>
+          <div className="flex items-center justify-center gap-0 mb-[26px]">
             {STEPS.map((s, i) => {
               const active = step === s.n;
               const done = step > s.n;
               return (
-                <div key={s.n} style={{ display: "flex", alignItems: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div key={s.n} className="flex items-center">
+                  <div className="flex items-center gap-2.5">
                     <span
-                      style={{
-                        width: 30,
-                        height: 30,
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: active || done ? "#fff" : "#94a3b8",
-                        background: active || done ? "linear-gradient(135deg,#3b82f6,#2a6fdb)" : "#e9edf5",
-                        boxShadow: active ? "0 6px 16px rgba(43,111,219,.3)" : "none",
-                      }}
+                      className={`w-[30px] h-[30px] rounded-full flex items-center justify-center text-[13px] font-bold ${
+                        active || done
+                          ? "text-white bg-[linear-gradient(135deg,#3b82f6,#2a6fdb)]"
+                          : "text-[#94a3b8] bg-[#e9edf5]"
+                      } ${active ? "shadow-[0_6px_16px_rgba(43,111,219,0.3)]" : ""}`}
                     >
                       {done ? <Check size={15} /> : s.n}
                     </span>
-                    <span style={{ fontSize: 13.5, fontWeight: 600, color: active || done ? "#0f1729" : "#94a3b8" }}>{s.label}</span>
+                    <span className={`text-[13.5px] font-semibold ${active || done ? "text-[#0f1729]" : "text-[#94a3b8]"}`}>
+                      {s.label}
+                    </span>
                   </div>
-                  {i < STEPS.length - 1 && <span style={{ width: 74, height: 2, margin: "0 16px", background: step > s.n ? "#2a6fdb" : "#e3e8f2", borderRadius: 2 }} />}
+                  {i < STEPS.length - 1 && (
+                    <span className={`w-[74px] h-0.5 mx-4 rounded-[2px] ${step > s.n ? "bg-[#2a6fdb]" : "bg-[#e3e8f2]"}`} />
+                  )}
                 </div>
               );
             })}
           </div>
 
           {/* card */}
-          <div
-            style={{
-              background: "#fff",
-              border: "1px solid #eceff5",
-              borderRadius: 18,
-              padding: 26,
-              boxShadow: "0 18px 46px rgba(24,39,75,.08)",
-            }}
-          >
+          <div className="bg-white border border-[#eceff5] rounded-[18px] p-[26px] shadow-[0_18px_46px_rgba(24,39,75,0.08)]">
             {step === 1 ? (
-              <form onSubmit={onContinue} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                  <div style={fieldWrap}>
-                    <label style={labelStyle}>First Name <span style={{ color: "#ef4444" }}>*</span></label>
+              <form onSubmit={onContinue} className="flex flex-col gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-[7px]">
+                    <label className="text-[12.5px] font-semibold text-[#334155]">First Name <span className="text-[#ef4444]">*</span></label>
                     <PInput name="firstName" placeholder="Enter first name" value={form.firstName} onChange={set("firstName")} />
-                    {errors.firstName && <div style={errStyle}>{errors.firstName}</div>}
+                    {errors.firstName && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.firstName}</div>}
                   </div>
-                  <div style={fieldWrap}>
-                    <label style={labelStyle}>Last Name <span style={{ color: "#ef4444" }}>*</span></label>
+                  <div className="flex flex-col gap-[7px]">
+                    <label className="text-[12.5px] font-semibold text-[#334155]">Last Name <span className="text-[#ef4444]">*</span></label>
                     <PInput name="lastName" placeholder="Enter last name" value={form.lastName} onChange={set("lastName")} />
-                    {errors.lastName && <div style={errStyle}>{errors.lastName}</div>}
+                    {errors.lastName && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.lastName}</div>}
                   </div>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                  <div style={fieldWrap}>
-                    <label style={labelStyle}>Email <span style={{ color: "#ef4444" }}>*</span></label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-[7px]">
+                    <label className="text-[12.5px] font-semibold text-[#334155]">Email <span className="text-[#ef4444]">*</span></label>
                     <PInput name="email" type="email" placeholder="name@company.com" value={form.email} onChange={set("email")} />
-                    {errors.email && <div style={errStyle}>{errors.email}</div>}
+                    {errors.email && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.email}</div>}
                   </div>
-                  <div style={fieldWrap}>
-                    <label style={labelStyle}>Designation <span style={{ color: "#ef4444" }}>*</span></label>
+                  <div className="flex flex-col gap-[7px]">
+                    <label className="text-[12.5px] font-semibold text-[#334155]">Designation <span className="text-[#ef4444]">*</span></label>
                     <PInput name="designation" placeholder="e.g. Security Officer" value={form.designation} onChange={set("designation")} />
-                    {errors.designation && <div style={errStyle}>{errors.designation}</div>}
+                    {errors.designation && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.designation}</div>}
                   </div>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                  <div style={fieldWrap}>
-                    <label style={labelStyle}>Location</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-[7px]">
+                    <label className="text-[12.5px] font-semibold text-[#334155]">Location</label>
                     <PSelect name="location" value={form.location} onChange={set("location")}>
                       <option value="">Select location</option>
                       {locations.map((l) => (
@@ -407,86 +294,59 @@ export default function EmployeeRegister() {
                       ))}
                     </PSelect>
                   </div>
-                  <div style={fieldWrap}>
-                    <label style={labelStyle}>Department <span style={{ color: "#ef4444" }}>*</span></label>
+                  <div className="flex flex-col gap-[7px]">
+                    <label className="text-[12.5px] font-semibold text-[#334155]">Department <span className="text-[#ef4444]">*</span></label>
                     <PSelect name="department" value={form.department} onChange={set("department")}>
                       <option value="">Select department</option>
                       {departments.map((d) => (
                         <option key={d._id} value={d._id}>{d.departmentName}</option>
                       ))}
                     </PSelect>
-                    {errors.department && <div style={errStyle}>{errors.department}</div>}
+                    {errors.department && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.department}</div>}
                   </div>
                 </div>
 
-                <div style={{ marginTop: 6, display: "flex", flexDirection: "column" }}>
+                <div className="mt-1.5 flex flex-col">
                   <PButton label="Continue" />
                 </div>
               </form>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              <div className="flex flex-col gap-[18px]">
                 {/* guidance banner */}
-                <div style={{ display: "flex", gap: 10, padding: "12px 14px", borderRadius: 12, background: "#eef5ff", border: "1px solid #d6e4fb" }}>
-                  <Info size={16} style={{ color: "#2a6fdb", marginTop: 1, flexShrink: 0 }} />
-                  <p style={{ fontSize: 12.5, lineHeight: 1.5, color: "#475569", margin: 0 }}>
-                    Capture <strong style={{ color: "#0f1729" }}>3 clear photos</strong> — front, left, and right profile. Good lighting, no
+                <div className="flex gap-2.5 px-[14px] py-3 rounded-[12px] bg-[#eef5ff] border border-[#d6e4fb]">
+                  <Info size={16} className="text-[#2a6fdb] mt-px shrink-0" />
+                  <p className="text-[12.5px] leading-[1.5] text-[#475569] m-0">
+                    Capture <strong className="text-[#0f1729]">3 clear photos</strong> — front, left, and right profile. Good lighting, no
                     mask or sunglasses. Used only for secure face recognition.
                   </p>
                 </div>
 
                 {/* per-pose capture slots */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+                <div className="grid grid-cols-3 gap-3">
                   {PHOTO_SLOTS.map((s) => {
                     const pic = photos[s.key];
                     return (
-                      <div key={s.key} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div key={s.key} className="flex flex-col gap-2">
                         <label
                           htmlFor={`vqp-photo-${s.key}`}
-                          className="vqp-slot"
-                          style={{
-                            position: "relative",
-                            height: 172,
-                            borderRadius: 12,
-                            border: pic ? "1.5px solid #cfe0fb" : "1.5px dashed #bcd4f7",
-                            background: "#f2f8ff",
-                            cursor: isSubmitting ? "not-allowed" : "pointer",
-                            pointerEvents: isSubmitting ? "none" : "auto",
-                            opacity: isSubmitting && !pic ? 0.6 : 1,
-                            overflow: "hidden",
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: 8,
-                            color: "#94a3b8",
-                          }}
+                          className={`vqp-slot relative h-[172px] rounded-[12px] bg-[#f2f8ff] overflow-hidden flex flex-col items-center justify-center gap-2 text-[#94a3b8] ${
+                            pic ? "border-[1.5px] border-solid border-[#cfe0fb]" : "border-[1.5px] border-dashed border-[#bcd4f7]"
+                          } ${isSubmitting ? "cursor-not-allowed pointer-events-none" : "cursor-pointer"} ${
+                            isSubmitting && !pic ? "opacity-60" : "opacity-100"
+                          }`}
                         >
                           {pic ? (
                             <>
-                              <img src={pic.url} alt={s.label} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                              <img src={pic.url} alt={s.label} className="absolute inset-0 w-full h-full object-cover" />
                               <span
                                 role="button"
                                 onClick={(e) => {
                                   e.preventDefault();
                                   removePhoto(s.key);
                                 }}
-                                style={{
-                                  position: "absolute",
-                                  top: 6,
-                                  right: 6,
-                                  width: 22,
-                                  height: 22,
-                                  borderRadius: "50%",
-                                  background: "rgba(15,23,41,.72)",
-                                  color: "#fff",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  zIndex: 2,
-                                  cursor: isSubmitting ? "not-allowed" : "pointer",
-                                  opacity: isSubmitting ? 0.5 : 1,
-                                  pointerEvents: isSubmitting ? "none" : "auto",
-                                }}
+                                className={`absolute top-1.5 right-1.5 w-[22px] h-[22px] rounded-full bg-[rgba(15,23,41,0.72)] text-white flex items-center justify-center z-[2] ${
+                                  isSubmitting ? "cursor-not-allowed opacity-50 pointer-events-none" : "cursor-pointer opacity-100"
+                                }`}
                               >
                                 <X size={12} />
                               </span>
@@ -494,46 +354,30 @@ export default function EmployeeRegister() {
                           ) : (
                             <>
                               <ImageIcon size={26} strokeWidth={1.6} />
-                              <span style={{ fontSize: 12.5, fontWeight: 600, color: "#64748b" }}>{s.hint}</span>
+                              <span className="text-[12.5px] font-semibold text-[#64748b]">{s.hint}</span>
                             </>
                           )}
                         </label>
-                        <input id={`vqp-photo-${s.key}`} type="file" accept="image/*" disabled={isSubmitting} onChange={onPickPhoto(s.key)} style={{ display: "none" }} />
-                        <span style={{ fontSize: 12, fontWeight: 600, color: "#334155", textAlign: "center" }}>{s.label}</span>
+                        <input id={`vqp-photo-${s.key}`} type="file" accept="image/*" disabled={isSubmitting} onChange={onPickPhoto(s.key)} className="hidden" />
+                        <span className="text-[12px] font-semibold text-[#334155] text-center">{s.label}</span>
                       </div>
                     );
                   })}
                 </div>
 
-                <div style={{ display: "flex", alignItems: "stretch", gap: 12, marginTop: 4 }}>
+                <div className="flex items-stretch gap-3 mt-1">
                   <button
                     type="button"
-                    className="vqp-ghost"
+                    className={`vqp-ghost flex-[0_0_120px] h-12 rounded-[12px] font-['Space_Grotesk',sans-serif] font-semibold text-[14px] text-[#3b82f6] bg-white border-[1.5px] border-solid border-[#cfe0fb] flex items-center justify-center gap-2 ${
+                      isSubmitting ? "cursor-not-allowed opacity-50 pointer-events-none" : "cursor-pointer opacity-100"
+                    }`}
                     onClick={() => setStep(1)}
                     disabled={isSubmitting}
-                    style={{
-                      flex: "0 0 120px",
-                      height: 48,
-                      borderRadius: 12,
-                      cursor: isSubmitting ? "not-allowed" : "pointer",
-                      opacity: isSubmitting ? 0.5 : 1,
-                      pointerEvents: isSubmitting ? "none" : "auto",
-                      fontFamily: "'Space Grotesk',sans-serif",
-                      fontWeight: 600,
-                      fontSize: 14,
-                      color: "#3b82f6",
-                      background: "#fff",
-                      border: "1.5px solid #cfe0fb",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 8,
-                    }}
                   >
                     <ArrowLeft size={16} />
                     Back
                   </button>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="flex-1 min-w-0">
                     <PButton
                       label={isSubmitting ? "Registering..." : "Complete Registration"}
                       icon={Check}
@@ -553,100 +397,54 @@ export default function EmployeeRegister() {
       </div>
 
       {/* ============ RIGHT: HERO ============ */}
-      <div
-        className="vqp-hero"
-        style={{
-          width: 500,
-          flex: "0 0 500px",
-          position: "relative",
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          padding: "44px 46px",
-          color: "#f4f8ff",
-        }}
-      >
-        <div style={{ position: "absolute", inset: 0, backgroundImage: `url(${heroShot})`, backgroundSize: "cover", backgroundPosition: "center" }} />
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(160deg,rgba(10,15,26,.82) 18%,rgba(15,22,42,.58) 62%,rgba(21,27,52,.6))" }} />
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            backgroundImage:
-              "linear-gradient(rgba(120,150,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(120,150,255,.05) 1px,transparent 1px)",
-            backgroundSize: "44px 44px",
-            animation: "vqpgrid 7s linear infinite",
-          }}
-        />
+      <div className="vqp-hero w-[500px] flex-[0_0_500px] relative overflow-hidden flex flex-col justify-between px-[46px] py-[44px] text-[#f4f8ff]">
+        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${heroShot})` }} />
+        <div className="absolute inset-0 bg-[linear-gradient(160deg,rgba(10,15,26,0.82)_18%,rgba(15,22,42,0.58)_62%,rgba(21,27,52,0.6))]" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(120,150,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(120,150,255,0.05)_1px,transparent_1px)] bg-[length:44px_44px] animate-[vqpgrid_7s_linear_infinite]" />
 
         {/* detection box */}
-        <div
-          style={{
-            position: "absolute",
-            right: 60,
-            top: "30%",
-            width: 116,
-            height: 92,
-            border: "1.6px solid rgba(34,197,94,.85)",
-            borderRadius: 6,
-            animation: "vqpbox 3.4s ease-in-out infinite",
-            boxShadow: "0 0 18px rgba(34,197,94,.25)",
-            zIndex: 1,
-          }}
-        >
-          <span style={{ position: "absolute", top: -17, left: -1, fontFamily: "'JetBrains Mono',monospace", fontSize: 8.5, color: "#0a1410", background: "#22c55e", padding: "1px 5px", borderRadius: 3 }}>
+        <div className="absolute right-[60px] top-[30%] w-[116px] h-[92px] border-[1.6px] border-solid border-[rgba(34,197,94,0.85)] rounded-md animate-[vqpbox_3.4s_ease-in-out_infinite] shadow-[0_0_18px_rgba(34,197,94,0.25)] z-[1]">
+          <span className="absolute -top-[17px] -left-px font-['JetBrains_Mono',monospace] text-[8.5px] text-[#0a1410] bg-[#22c55e] px-[5px] py-px rounded-[3px]">
             FACE MATCH 99%
           </span>
         </div>
 
         {/* top brand */}
-        <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: 11 }}>
-          <img src={logo} alt="VideoraIQ" style={{ height: 34, width: "auto", display: "block" }} />
-          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, letterSpacing: ".16em", color: "#cdd7ef" }}>EMPLOYEE PORTAL</span>
+        <div className="relative z-[2] flex items-center gap-[11px]">
+          <img src={logo} alt="VideoraIQ" className="h-[34px] w-auto block" />
+          <span className="font-['JetBrains_Mono',monospace] text-[11px] tracking-[0.16em] text-[#cdd7ef]">EMPLOYEE PORTAL</span>
         </div>
 
         {/* headline */}
-        <div style={{ position: "relative", zIndex: 2, maxWidth: 420, animation: "vqpfade .8s ease both .12s" }}>
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "6px 13px",
-              border: "1px solid rgba(120,160,230,.22)",
-              borderRadius: 999,
-              background: "rgba(12,16,26,.5)",
-              marginBottom: 20,
-            }}
-          >
-            <span style={{ position: "relative", width: 7, height: 7 }}>
-              <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#22c55e" }} />
-              <span style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "1.5px solid #22c55e", animation: "vqpblip 2.4s ease-out infinite" }} />
+        <div className="relative z-[2] max-w-[420px] animate-[vqpfade_0.8s_ease_both_0.12s]">
+          <div className="inline-flex items-center gap-2 px-[13px] py-1.5 border border-[rgba(120,160,230,0.22)] rounded-full bg-[rgba(12,16,26,0.5)] mb-5">
+            <span className="relative w-[7px] h-[7px]">
+              <span className="absolute inset-0 rounded-full bg-[#22c55e]" />
+              <span className="absolute inset-0 rounded-full border-[1.5px] border-solid border-[#22c55e] animate-[vqpblip_2.4s_ease-out_infinite]" />
             </span>
-            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, letterSpacing: ".12em", color: "#aeb9d4" }}>TRUSTED PLATFORM</span>
+            <span className="font-['JetBrains_Mono',monospace] text-[10.5px] tracking-[0.12em] text-[#aeb9d4]">TRUSTED PLATFORM</span>
           </div>
-          <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 38, lineHeight: 1.08, letterSpacing: "-.02em", margin: 0 }}>
+          <h2 className="font-['Space_Grotesk',sans-serif] font-bold text-[38px] leading-[1.08] tracking-[-0.02em] m-0">
             AI Surveillance
             <br />
             Onboarding
           </h2>
-          <p style={{ fontSize: 14.5, lineHeight: 1.6, color: "#c3ccdf", margin: "16px 0 0" }}>
+          <p className="text-[14.5px] leading-[1.6] text-[#c3ccdf] mt-4 mb-0">
             Register securely with our intelligent face-recognition workflow. Your details and photos are encrypted
             end-to-end.
           </p>
         </div>
 
         {/* stat cards */}
-        <div style={{ position: "relative", zIndex: 2, display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, animation: "vqpfade .9s ease both .24s" }}>
+        <div className="relative z-[2] grid grid-cols-3 gap-3 animate-[vqpfade_0.9s_ease_both_0.24s]">
           {[
             { l: "SECURE", v: "End-to-end" },
             { l: "FAST", v: "< 2 minutes" },
             { l: "ACCURATE", v: "99.9% match" },
           ].map((s) => (
-            <div key={s.l} style={{ padding: "13px 14px", borderRadius: 12, border: "1px solid rgba(120,160,230,.16)", background: "rgba(12,16,26,.42)" }}>
-              <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9.5, letterSpacing: ".1em", color: "#8e99b6" }}>{s.l}</div>
-              <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5, color: "#f4f8ff", marginTop: 4 }}>{s.v}</div>
+            <div key={s.l} className="px-[14px] py-[13px] rounded-[12px] border border-[rgba(120,160,230,0.16)] bg-[rgba(12,16,26,0.42)]">
+              <div className="font-['JetBrains_Mono',monospace] text-[9.5px] tracking-[0.1em] text-[#8e99b6]">{s.l}</div>
+              <div className="font-['Space_Grotesk',sans-serif] font-semibold text-[14.5px] text-[#f4f8ff] mt-1">{s.v}</div>
             </div>
           ))}
         </div>

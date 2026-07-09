@@ -177,7 +177,7 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 15px 11px', borderBottom: '1px solid var(--bd)' }}>
         <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 13.5 }}>Latest Incident</span>
-        <ActionLink style={{ marginLeft: 'auto', fontSize: 11 }} onClick={() => navigate('incidents')}>
+        <ActionLink style={{ marginLeft: 'auto', fontSize: 11 }} onClick={() => navigate('/incidents')}>
           All incidents →
         </ActionLink>
       </div>

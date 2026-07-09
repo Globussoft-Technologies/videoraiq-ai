@@ -176,23 +176,17 @@ export default function LiveAttendance({ people = [], socketLogs = [], loading, 
   const present = items.length;
 
   return (
-    <Panel style={{ overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column' }}>
+    <Panel className="overflow-hidden flex-1 flex flex-col">
       {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '13px 16px 11px', borderBottom: '1px solid var(--bd)',
-      }}>
-        <span className="vq-glowpulse" style={{
-          width: 7, height: 7, borderRadius: '50%',
-          background: 'var(--ok)', boxShadow: '0 0 8px var(--ok)',
-        }} />
-        <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Live Attendance</span>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>face check-in</span>
-        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx2)' }}>
-            <span style={{ color: 'var(--ok)', fontWeight: 600 }}>{present}</span> present
+      <div className="flex items-center gap-2 px-4 pt-[13px] pb-[11px] border-b border-[var(--bd)]">
+        <span className="vq-glowpulse w-[7px] h-[7px] rounded-full bg-[var(--ok)] shadow-[0_0_8px_var(--ok)]" />
+        <span className="font-[family-name:var(--disp)] font-semibold text-sm">Live Attendance</span>
+        <span className="font-[family-name:var(--mono)] text-[10px] text-[var(--tx3)]">face check-in</span>
+        <span className="ml-auto flex items-center gap-3">
+          <span className="font-[family-name:var(--mono)] text-[10.5px] text-[var(--tx2)]">
+            <span className="text-[var(--ok)] font-semibold">{present}</span> present
           </span>
-          <ActionLink onClick={() => navigate('attendance')}>Logs →</ActionLink>
+          <ActionLink onClick={() => navigate('/logs/attendance')}>Logs →</ActionLink>
         </span>
       </div>
 
@@ -206,37 +200,30 @@ export default function LiveAttendance({ people = [], socketLogs = [], loading, 
         emptyLabel="No check-ins yet today"
       >
         {() => (
-          <div
-            className="vq-scroll"
-            style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '13px 16px' }}
-          >
+          <div className="vq-scroll flex gap-2.5 overflow-x-auto px-2.5 py-[13px]">
             {items.map((p) => (
-              <div key={p.key} style={{
-                flex: '0 0 auto', width: 104,
-                background: 'var(--bg2)', border: '1px solid var(--bd)',
-                borderRadius: 12, padding: '12px 8px', textAlign: 'center',
-              }}>
+              <div
+                key={p.key}
+                className="flex-none w-[104px] bg-[var(--bg2)] border border-[var(--bd)] rounded-xl px-2 py-3 text-center"
+              >
                 {/* Avatar wrapper */}
-                <div style={{ position: 'relative', width: 46, height: 46, margin: '0 auto 8px' }}>
+                <div className="relative w-[46px] h-[46px] mx-auto mb-2">
                   {/* status dot */}
-                  <span style={{
-                    position: 'absolute', top: -1, right: -1, zIndex: 2,
-                    width: 8, height: 8, borderRadius: '50%',
-                    background: p.hasOut ? 'var(--warn)' : 'var(--ok)',
-                    boxShadow: `0 0 6px ${p.hasOut ? 'var(--warn)' : 'var(--ok)'}`,
-                    border: '1.5px solid var(--bg2)',
-                  }} />
+                  <span
+                    className="absolute -top-px -right-px z-[2] w-2 h-2 rounded-full border-[1.5px] border-[var(--bg2)]"
+                    style={{
+                      background: p.hasOut ? 'var(--warn)' : 'var(--ok)',
+                      boxShadow: `0 0 6px ${p.hasOut ? 'var(--warn)' : 'var(--ok)'}`,
+                    }}
+                  />
 
                   {/* Avatar — prefer profile photo, then captured image, then initials */}
                   {(p.profilePic || p.capturedImage) ? (
                     <img
                       src={p.profilePic || p.capturedImage}
                       alt={p.name}
-                      style={{
-                        width: 46, height: 46,
-                        borderRadius: '50%', objectFit: 'cover',
-                        boxShadow: `0 0 0 2px ${getAvatarBorderColor(p.name)}`,
-                      }}
+                      className="w-[46px] h-[46px] rounded-full object-cover"
+                      style={{ boxShadow: `0 0 0 2px ${getAvatarBorderColor(p.name)}` }}
                       onError={(e) => {
                         // fall through to initials if image fails
                         e.currentTarget.style.display = 'none';
@@ -245,39 +232,27 @@ export default function LiveAttendance({ people = [], socketLogs = [], loading, 
                     />
                   ) : null}
                   {/* Initials fallback (always rendered, hidden when photo is visible) */}
-                  <div style={{
-                    width: 46, height: 46, borderRadius: '50%',
-                    background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-                    color: '#fff', display: (p.profilePic || p.capturedImage) ? 'none' : 'flex',
-                    alignItems: 'center', justifyContent: 'center',
-                    fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 600,
-                    boxShadow: `0 0 0 2px ${getAvatarBorderColor(p.name)}`,
-                  }}>
+                  <div
+                    className="w-[46px] h-[46px] rounded-full bg-[linear-gradient(135deg,var(--blue),var(--violet))] text-white items-center justify-center font-[family-name:var(--mono)] text-[13px] font-semibold"
+                    style={{
+                      display: (p.profilePic || p.capturedImage) ? 'none' : 'flex',
+                      boxShadow: `0 0 0 2px ${getAvatarBorderColor(p.name)}`,
+                    }}
+                  >
                     {(p.name || '?')[0].toUpperCase()}
                   </div>
                 </div>
 
-                <div style={{
-                  fontSize: 11.5, fontWeight: 600,
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                  color: 'var(--tx)',
-                }}>
+                <div className="text-[11.5px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis text-[var(--tx)]">
                   {p.name}
                 </div>
                 {p.dept && (
-                  <div style={{
-                    fontSize: 9.5, color: 'var(--tx3)', marginTop: 2,
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    textTransform: 'capitalize',
-                  }}>
+                  <div className="text-[9.5px] text-[var(--tx3)] mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis capitalize">
                     {p.dept}
                   </div>
                 )}
                 {p.timeStr && (
-                  <div style={{
-                    fontFamily: 'var(--mono)', fontSize: 9.5,
-                    color: 'var(--ok)', marginTop: 5,
-                  }}>
+                  <div className="font-[family-name:var(--mono)] text-[9.5px] text-[var(--ok)] mt-[5px]">
                     {p.timeStr}
                   </div>
                 )}
