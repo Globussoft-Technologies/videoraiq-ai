@@ -28,7 +28,7 @@ const App = () => {
         <Route path="/clients/:adminId" element={<ClientConfig />} />
         <Route path="/detection-catalog" element={<DetectionCatalog />} />
         <Route path="/subscription-plans" element={<SubscriptionPlans />} />
-        <Route path="/fleet" element={<ComingSoon title="testing CICD" />} />
+        <Route path="/fleet" element={<ComingSoon title="Working Fine " />} />
         <Route path="/feature-roadmap" element={<ComingSoon title="Feature Roadmap" />} />
       </Route>
 
