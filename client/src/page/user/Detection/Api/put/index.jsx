@@ -23,3 +23,15 @@ export const enableDetectionSettings = async function (data) {
     },
   });
 };
+
+// Save the admin's global timezone. Body: { timezone: "Asia/Kolkata" }.
+export const updateSavedTimezone = async function (timezone) {
+  const token = getAccessToken();
+  return axios.put(`${HOST}/api/v1/admin/timezone`, { timezone }, {
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+  });
+};

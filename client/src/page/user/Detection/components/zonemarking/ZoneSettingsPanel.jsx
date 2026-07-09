@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ChevronDown, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import ConfirmationModal from '../DeleteConfirmation';
+import ZoneScheduleFields, { buildScheduleFields, scheduleFromConfig, TimezoneField } from './ZoneScheduleFields';
 
 // Right-side panel (all non-line-crossing types) that pre-fills from the saved
 // `zone_configs` and lets the user edit / delete each zone. Saving and
@@ -38,6 +39,8 @@ const ZoneSettingsPanel = ({ appliedDetection, previewRef, canEdit = true, setti
           name: z?.name ?? '',
           capacity: z?.capacity != null ? String(z.capacity) : '',
           threshold: z?.threshold_sec != null ? String(z.threshold_sec) : '',
+          // Restore saved startTime/endTime into the schedule picker.
+          schedule: scheduleFromConfig(z),
         }))
       : [];
     setZones(next);
@@ -71,6 +74,8 @@ const ZoneSettingsPanel = ({ appliedDetection, previewRef, canEdit = true, setti
       const cfg = { name: z.name.trim() };
       if (showCapacity) cfg.capacity = Number(z.capacity);
       if (showThreshold) cfg.threshold_sec = Number(z.threshold);
+      // startTime/endTime added only when fully selected in the UI.
+      Object.assign(cfg, buildScheduleFields(z.schedule));
       return cfg;
     });
 
@@ -122,6 +127,13 @@ const ZoneSettingsPanel = ({ appliedDetection, previewRef, canEdit = true, setti
       <h3 className="text-sm font-bold text-[#334155] uppercase tracking-wider mb-3">
         Zone Settings
       </h3>
+
+      {/* Global Time Zone (GET pre-fills, PUT saves) — editable from here too. */}
+      {canEdit && (
+        <div className="mb-4">
+          <TimezoneField />
+        </div>
+      )}
 
       <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
         {zones.map((zone, index) => {
@@ -223,6 +235,12 @@ const ZoneSettingsPanel = ({ appliedDetection, previewRef, canEdit = true, setti
                     )}
                   </div>
                   )}
+                  {/* Per-zone schedule: time range (start/end). Timezone is global. */}
+                  <ZoneScheduleFields
+                    value={zone.schedule}
+                    disabled={!canEdit}
+                    onChange={(schedule) => updateField(index, 'schedule', schedule)}
+                  />
                   {canEdit && (
                     <div className="flex justify-end">
                       <button

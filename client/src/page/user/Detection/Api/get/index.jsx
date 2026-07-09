@@ -12,6 +12,28 @@ export const getAllDetectionTypes = async function () {
   });
 };
 
+// List of IANA timezone strings for the Time Zone picker.
+export const getTimezones = async function () {
+  const token = getAccessToken();
+  return axios.get(`${HOST}/api/v1/admin/timezones`, {
+    headers: {
+      Accept: 'application/json',
+      'x-access-token': token,
+    },
+  });
+};
+
+// The admin's currently-saved (global) timezone. Returns body.data.timezone.
+export const getSavedTimezone = async function () {
+  const token = getAccessToken();
+  return axios.get(`${HOST}/api/v1/admin/timezone`, {
+    headers: {
+      Accept: 'application/json',
+      'x-access-token': token,
+    },
+  });
+};
+
 export const getNvrWithChannels = async function (settingType) {
   const token = getAccessToken();
   return axios.get(

@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import ZoneScheduleFields, { emptySchedule, buildScheduleFields, scheduleFromConfig, TimezoneField } from './ZoneScheduleFields';
 
 
 // SVG constants for action buttons
@@ -319,10 +320,13 @@ return;
   const [priority, setPriority] = useState("moderate");
   const [showSaveModal, setShowSaveModal] = useState(false);
   // Per-zone UI config: one entry per zone the user drew on the stream.
-  // Shape: { name, capacity, threshold }. UI-only for now (not persisted).
+  // Shape: { name, capacity, threshold, schedule }. UI-only for now (not persisted).
   const [zoneConfigs, setZoneConfigs] = useState([]);
   // Index of the currently expanded zone section (first one open by default).
   const [expandedZoneIndex, setExpandedZoneIndex] = useState(0);
+  // Line Crossing has no per-zone blocks, so its timezone + time range live at
+  // modal level (single entry). UI-only for now.
+  const [lineSchedule, setLineSchedule] = useState(emptySchedule());
   const [zoneName, setZoneName] = useState(
     appliedDetection?.settings?.referencePoints?.zone_name || ''
   );
@@ -370,6 +374,8 @@ console.log('appliedDetection', appliedDetection);
               capacity: saved.capacity != null ? String(saved.capacity) : '',
               threshold:
                 saved.threshold_sec != null ? String(saved.threshold_sec) : '',
+              // Restore saved startTime/endTime into the schedule picker.
+              schedule: scheduleFromConfig(saved),
             };
           })
         );
@@ -549,6 +555,8 @@ const handleMinArea = () => {
         const cfg = { name: z.name.trim() };
         if (showZoneCapacity) cfg.capacity = Number(z.capacity);
         if (showZoneThreshold) cfg.threshold_sec = Number(z.threshold);
+        // startTime/endTime added only when fully selected in the UI.
+        Object.assign(cfg, buildScheduleFields(z.schedule));
         return cfg;
       });
     }
@@ -767,6 +775,11 @@ const handleMinArea = () => {
                   </Select>
                 </div>
 
+                {/* Global Time Zone (below Priority): GET pre-fills, PUT saves. */}
+                <div className="mb-4">
+                  <TimezoneField />
+                </div>
+
                 {/* Per-zone config (all non-line-crossing types): one collapsible section per drawn zone */}
                 {showZoneConfigs && zoneConfigs.length > 0 && (
                   <div className="mb-4 space-y-2 max-h-[220px] overflow-y-auto pr-1">
@@ -855,11 +868,32 @@ const handleMinArea = () => {
                               )}
                               </div>
                               )}
+                              {/* Per-zone schedule: timezone + time range (UI-only) */}
+                              <ZoneScheduleFields
+                                value={zone.schedule}
+                                onChange={(schedule) =>
+                                  handleZoneConfigChange(index, 'schedule', schedule)
+                                }
+                              />
                             </div>
                           )}
                         </div>
                       );
                     })}
+                  </div>
+                )}
+
+                {/* Line Crossing has no zones — show one modal-level schedule
+                    (timezone + time range) applying to the whole line. UI-only. */}
+                {isLineCrossing && (
+                  <div className="mb-4 border border-gray-200 rounded-md px-3 py-3">
+                    <span className="block text-sm font-medium text-gray-700 mb-2">
+                      Schedule
+                    </span>
+                    <ZoneScheduleFields
+                      value={lineSchedule}
+                      onChange={setLineSchedule}
+                    />
                   </div>
                 )}
 
