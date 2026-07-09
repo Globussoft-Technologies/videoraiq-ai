@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Search, Plus } from 'lucide-react'
+import { Search } from 'lucide-react'
 import CameraRow from './CameraRow'
 
 const CamerasPanel = ({ cameras, detectionTypes = [] }) => {
