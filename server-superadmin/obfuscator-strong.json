@@ -1,0 +1,20 @@
+{
+  "compact": true,
+  "controlFlowFlattening": true,
+  "controlFlowFlatteningThreshold": 1,
+  "deadCodeInjection": true,
+  "deadCodeInjectionThreshold": 1,
+  "numbersToExpressions": true,
+  "simplify": false,
+  "stringArray": true,
+  "stringArrayThreshold": 1,
+  "stringArrayEncoding": ["base64", "rc4"],
+  "stringArrayRotate": true,
+  "stringArrayShuffle": true,
+  "splitStrings": true,
+  "splitStringsChunkLength": 5,
+  "selfDefending": true,
+  "disableConsoleOutput": true,
+  "renameGlobals": true,
+  "identifierNamesGenerator": "mangled-shuffled"
+}

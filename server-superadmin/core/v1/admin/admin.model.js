@@ -1,0 +1,69 @@
+// models/User.js
+
+import mongoose from 'mongoose';
+
+const adminSchema = new mongoose.Schema({
+  emp_id : {type:String, default: null},
+  orgId: { type: String, default: null },
+  user_id: {         
+    type: String,         
+    required: true,
+    unique: true,
+  },
+  login: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  name_f: {
+    type: String,
+    default: '',
+  },
+  name_l: {
+    type: String,
+    default: '',
+  },
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  //add emp emails and their orgId in an array of object
+  empData: {
+    type: Array,
+    default: [],
+    of: {
+      email: String,
+      orgId: String
+    }
+  },
+  logsSound: { type: Boolean, default: false },
+  // Total cameras this client has purchased — the "Total Purchased Cameras"
+  // field on the Client Configuration screen; also the "/N" limit in the
+  // Clients table's cameras-used/purchased column.
+  purchasedCameras: { type: Number, default: 0 },
+  // Optional per-admin service endpoint overrides. null = use the global
+  // value from config (default for all admins).
+  // - streamHost / streamToken  -> RTSPStream.host / RTSPStream.token
+  // - dsAuthUsersAPI            -> DSAuthUsersAPI
+  // - attendanceUrl             -> PythonService.attendanceUrl
+  // - detectionUrl             -> PythonService.detectionUrl
+  streamHost: { type: String, default: null },
+  streamToken: { type: String, default: null },
+  dsAuthUsersAPI: { type: String, default: null },
+  attendanceUrl: { type: String, default: null },
+  detectionUrl: { type: String, default: null },
+  // Per-admin detection config. Key = settingType, value = custom display name.
+  // If a key is present, that detection is allowed for this admin.
+  // Empty object = all detections allowed with default names.
+  detectionConfig: {
+    type: Map,
+    of: String,
+    default: {},
+  }
+}, {
+  timestamps: true,
+});
+
+export default mongoose.model('Admin', adminSchema);
+
