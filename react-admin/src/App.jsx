@@ -13,7 +13,7 @@ import ComingSoon from './pages/placeholder/ComingSoon'
 const App = () => {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
+      <Route path="/admin-login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
 
@@ -28,7 +28,7 @@ const App = () => {
         <Route path="/clients/:adminId" element={<ClientConfig />} />
         <Route path="/detection-catalog" element={<DetectionCatalog />} />
         <Route path="/subscription-plans" element={<SubscriptionPlans />} />
-        <Route path="/fleet" element={<ComingSoon title="Working Fine " />} />
+        <Route path="/fleet" element={<ComingSoon title="Fleet Overview" />} />
         <Route path="/feature-roadmap" element={<ComingSoon title="Feature Roadmap" />} />
       </Route>
 

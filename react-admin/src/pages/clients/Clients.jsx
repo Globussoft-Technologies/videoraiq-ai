@@ -7,7 +7,7 @@ import LoadingState from '../../components/UI/LoadingState'
 import { getClients } from './apis/get'
 import { notifyApiError } from '../../utils/apiError'
 
-const PAGE_SIZE = 10
+const DEFAULT_PAGE_SIZE = 10
 
 // Rotating avatar gradients so rows are visually distinct.
 const AVATAR_COLORS = [
@@ -40,6 +40,7 @@ const Clients = () => {
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
 
   // Debounce the search input, and reset to the first page on a new search.
   useEffect(() => {
@@ -58,7 +59,7 @@ const Clients = () => {
       setLoading(true)
       setError('')
       try {
-        const res = await getClients(page * PAGE_SIZE, PAGE_SIZE, debouncedQuery)
+        const res = await getClients(page * pageSize, pageSize, debouncedQuery)
         if (cancelled) return
         const data = res?.body?.data ?? res?.data ?? {}
         const admins = Array.isArray(data.admins) ? data.admins : []
@@ -78,7 +79,7 @@ const Clients = () => {
     return () => {
       cancelled = true
     }
-  }, [page, debouncedQuery])
+  }, [page, pageSize, debouncedQuery])
 
   return (
     <>
@@ -127,9 +128,13 @@ const Clients = () => {
             {total > 0 && (
               <Pagination
                 page={page}
-                pageSize={PAGE_SIZE}
+                pageSize={pageSize}
                 total={total}
                 onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size)
+                  setPage(0)
+                }}
               />
             )}
           </>

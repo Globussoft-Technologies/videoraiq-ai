@@ -47,6 +47,28 @@ body {
   margin: 0;
 }
 
+/* Interactive elements get a pointer cursor app-wide, so individual
+   components don't each need cursor-pointer. Disabled controls fall back
+   to not-allowed. */
+button,
+a,
+select,
+summary,
+label[for],
+[role='button'],
+[role='menuitem'],
+[role='switch'],
+[role='tab'] {
+  cursor: pointer;
+}
+
+button:disabled,
+button[disabled],
+select:disabled,
+[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
 #root {
   width: 100%;
   min-height: 100svh;

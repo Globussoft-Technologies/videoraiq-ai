@@ -49,13 +49,26 @@ const ShieldIcon = () => (
   </svg>
 )
 
+// Read saved credentials once (from a prior "Remember me"), for initial state.
+const readSavedCredentials = () => {
+  const saved = Cookies.get('admin-remember-me')
+  if (!saved) return null
+  try {
+    const parsed = JSON.parse(saved)
+    return { email: parsed.email || '', password: parsed.password || '' }
+  } catch {
+    return null
+  }
+}
+
 const LoginPage = () => {
   const navigate = useNavigate()
-  const [form, setForm] = useState({ email: '', password: '' })
+  const saved = readSavedCredentials()
+  const [form, setForm] = useState(saved || { email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [rememberMe, setRememberMe] = useState(false)
+  const [rememberMe, setRememberMe] = useState(Boolean(saved))
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -76,6 +89,12 @@ const LoginPage = () => {
       const cookieOpts = { path: '/' }
       if (rememberMe) cookieOpts.expires = 30
       Cookies.set('access-token', token, cookieOpts)
+      // Remember me → save credentials to prefill next time; otherwise clear them.
+      if (rememberMe) {
+        Cookies.set('admin-remember-me', JSON.stringify(form), { expires: 7 })
+      } else {
+        Cookies.remove('admin-remember-me')
+      }
       setAuthUser(data.user)
       notifyApiSuccess(res, 'Signed in successfully')
       navigate('/')
