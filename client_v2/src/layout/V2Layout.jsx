@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { V2ThemeProvider, useTheme } from '../theme/ThemeContext';
 import Sidebar from './Sidebar';
@@ -32,6 +32,20 @@ function Shell() {
 
   const [siteFilter, setSiteFilter] = useState('All Sites');
   const [siteRaw, setSiteRaw] = useState(null);
+
+  // Below md the sidebar becomes an off-canvas drawer so it doesn't eat the
+  // (already narrow) content width. A hamburger in the header opens it.
+  const [isMobile, setIsMobile] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const onChange = () => setIsMobile(mq.matches);
+    onChange();
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  // Close the drawer on navigation.
+  useEffect(() => setNavOpen(false), [location.pathname]);
 
   // Sites for the switcher (locations master data).
   const { data: locations } = useApi(() => getLocations({ limit: 100 }), []);
@@ -78,7 +92,19 @@ function Shell() {
         transition: 'background .3s ease,color .3s ease',
       }}
     >
-      <Sidebar badges={{ alerts: alertsBadge }} />
+      <Sidebar
+        badges={{ alerts: alertsBadge }}
+        isMobile={isMobile}
+        mobileOpen={navOpen}
+        onMobileClose={() => setNavOpen(false)}
+      />
+      {/* Drawer backdrop (mobile only) */}
+      {isMobile && navOpen && (
+        <div
+          onClick={() => setNavOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 75 }}
+        />
+      )}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <Header
           title={meta.title}
@@ -87,6 +113,7 @@ function Shell() {
           siteFilter={siteFilter}
           onSiteChange={onSiteChange}
           notifications={notifications}
+          onMenuClick={isMobile ? () => setNavOpen(true) : undefined}
         />
         <div className="vq-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
           <Outlet context={outletCtx} />

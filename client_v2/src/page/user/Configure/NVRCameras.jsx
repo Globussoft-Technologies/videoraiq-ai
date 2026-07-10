@@ -19,8 +19,25 @@ import { createLocation } from '../Locations/Api';
 import { encrypt, decrypt } from '../../../helpers/decryptNvr';
 import useHlsPlayer from '../../../hooks/useHlsPlayer';
 import { streamUrl } from '../../../lib/stream';
+import HScrollHint from '../../../components/HScrollHint';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+// Track a narrow (phone) viewport so inline-styled layouts can adapt.
+function useIsMobile(maxWidth = 640) {
+  const query = `(max-width:${maxWidth}px)`;
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.matchMedia(query).matches : false,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = () => setIsMobile(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [query]);
+  return isMobile;
+}
+
 function statusColor(status) {
   const s = (status || '').toLowerCase();
   if (s === 'online' || s === 'active') return '#22c55e';
@@ -96,54 +113,67 @@ function NvrCardSkeleton() {
 function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
   const cameraCount = nvr.cameraCount ?? nvr.usedChannels ?? nvr.used ?? 0;
   const sc          = statusColor(nvr.status);
+  const isMobile    = useIsMobile();
+
+  // On phones the three actions can't fit beside the title, so they drop to a
+  // full-width row below the fields instead of an absolute top-right cluster.
+  const actions = (
+    <div style={{
+      display: 'flex', gap: 8,
+      ...(isMobile
+        ? { marginTop: 14 }
+        : { position: 'absolute', top: 14, right: 14 }),
+    }}>
+      <button
+        onClick={() => onCameraSettings(nvr)}
+        title="Camera Settings"
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 34, padding: '0 14px',
+          borderRadius: 8, fontSize: 12.5, fontWeight: 600,
+          background: 'var(--bg2)', border: '1px solid var(--bd)',
+          color: 'var(--tx2)', cursor: 'pointer', whiteSpace: 'nowrap',
+          flex: isMobile ? 1 : undefined, minWidth: 0,
+        }}
+      >
+        <Cctv size={15} /> Camera Settings
+      </button>
+      <button
+        onClick={() => onEdit(nvr)}
+        title="Edit NVR"
+        style={{
+          width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'var(--bg2)', border: '1px solid var(--bd)',
+          color: 'var(--tx3)', cursor: 'pointer',
+        }}
+      >
+        <Pencil size={15} />
+      </button>
+      <button
+        onClick={() => onDelete(nvr)}
+        title="Delete NVR"
+        style={{
+          width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'var(--bg2)', border: '1px solid var(--bd)',
+          color: 'var(--crit)', cursor: 'pointer',
+        }}
+      >
+        <Trash2 size={15} />
+      </button>
+    </div>
+  );
 
   return (
     <div style={{
       background: 'var(--bg1)', border: '1px solid var(--bd)',
       borderRadius: 14, padding: 16, position: 'relative',
     }}>
-      {/* Actions */}
-      <div style={{ position: 'absolute', top: 14, right: 14, display: 'flex', gap: 8 }}>
-        <button
-          onClick={() => onCameraSettings(nvr)}
-          title="Camera Settings"
-          style={{
-            display: 'flex', alignItems: 'center', gap: 7, height: 34, padding: '0 14px',
-            borderRadius: 8, fontSize: 12.5, fontWeight: 600,
-            background: 'var(--bg2)', border: '1px solid var(--bd)',
-            color: 'var(--tx2)', cursor: 'pointer', whiteSpace: 'nowrap',
-          }}
-        >
-          <Cctv size={15} /> Camera Settings
-        </button>
-        <button
-          onClick={() => onEdit(nvr)}
-          title="Edit NVR"
-          style={{
-            width: 34, height: 34, borderRadius: 8, flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'var(--bg2)', border: '1px solid var(--bd)',
-            color: 'var(--tx3)', cursor: 'pointer',
-          }}
-        >
-          <Pencil size={15} />
-        </button>
-        <button
-          onClick={() => onDelete(nvr)}
-          title="Delete NVR"
-          style={{
-            width: 34, height: 34, borderRadius: 8, flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'var(--bg2)', border: '1px solid var(--bd)',
-            color: 'var(--crit)', cursor: 'pointer',
-          }}
-        >
-          <Trash2 size={15} />
-        </button>
-      </div>
+      {/* Actions (absolute top-right on desktop) */}
+      {!isMobile && actions}
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 13, paddingRight: 175 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 13, paddingRight: isMobile ? 20 : 175 }}>
         <span style={{
           width: 32, height: 32, borderRadius: 8, background: 'var(--bg2)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
@@ -190,6 +220,9 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
           </div>
         ))}
       </div>
+
+      {/* Actions (full-width row below fields on phones) */}
+      {isMobile && actions}
     </div>
   );
 }
@@ -276,6 +309,7 @@ function CameraPreviewModal({ cam, onClose }) {
   const [errorMsg, setErrorMsg] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  const isMobile = useIsMobile();
   const url = streamUrl(cam);
 
   useHlsPlayer(videoRef, url, {
@@ -300,7 +334,7 @@ function CameraPreviewModal({ cam, onClose }) {
       style={{
         position: 'fixed', inset: 0, zIndex: 300,
         background: 'rgba(4,6,12,.85)', backdropFilter: 'blur(6px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? 12 : 24,
       }}
     >
       <div
@@ -366,6 +400,7 @@ function ManageCamerasModal({ nvr, onClose, onSaved }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [previewCam, setPreviewCam] = useState(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     let cancelled = false;
@@ -451,20 +486,20 @@ function ManageCamerasModal({ nvr, onClose, onSaved }) {
       style={{
         position: 'fixed', inset: 0, zIndex: 200,
         background: 'rgba(6,8,13,.62)', backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? 12 : 24,
       }}
     >
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          width: 520, maxWidth: '100%', maxHeight: '85vh',
+          width: 520, maxWidth: '100%', maxHeight: isMobile ? '88vh' : '85vh',
           display: 'flex', flexDirection: 'column',
           background: 'var(--bg1)', border: '1px solid var(--bd)',
           borderRadius: 16, boxShadow: '0 30px 80px rgba(0,0,0,.55)', overflow: 'hidden',
         }}
       >
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '18px 20px', borderBottom: '1px solid var(--bd)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: isMobile ? '14px 16px' : '18px 20px', borderBottom: '1px solid var(--bd)', flexShrink: 0, flexWrap: 'wrap' }}>
           <span style={{
             width: 38, height: 38, borderRadius: 10, background: 'var(--bg2)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
@@ -600,6 +635,7 @@ function friendlyErrorMessage(body, fallback) {
 // ── Add / Edit NVR wizard ───────────────────────────────────────────────────
 function AddNvrModal({ onClose, onSaved, editingNvr }) {
   const isEdit = !!editingNvr;
+  const isMobile = useIsMobile();
 
   const [step, setStep] = useState(1);
   const [locations, setLocations] = useState([]);
@@ -794,13 +830,13 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
       style={{
         position: 'fixed', inset: 0, zIndex: 200,
         background: 'rgba(6,8,13,.62)', backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? 12 : 24,
       }}
     >
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          width: 600, maxWidth: '100%', maxHeight: '90vh',
+          width: 600, maxWidth: '100%', maxHeight: isMobile ? '92vh' : '90vh',
           display: 'flex', flexDirection: 'column',
           background: 'var(--bg1)', border: '1px solid var(--bd)',
           borderRadius: 16, boxShadow: '0 30px 80px rgba(0,0,0,.55)', overflow: 'hidden',
@@ -859,7 +895,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
         {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           {step === 1 && (
-            <div style={{ padding: '14px 20px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '13px 14px' }}>
+            <div style={{ padding: isMobile ? '14px 16px 18px' : '14px 20px 20px', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '13px 14px' }}>
               <div style={{ gridColumn: '1 / -1' }}>
                 <FieldLabel>NVR Brand</FieldLabel>
                 <select
@@ -1036,6 +1072,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
 // ── main page ─────────────────────────────────────────────────────────────────
 export default function NVRCameras() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [nvrModal, setNvrModal] = useState(false);
   const [editingNvr, setEditingNvr] = useState(null);
   const [manageCamerasNvr, setManageCamerasNvr] = useState(null);
@@ -1145,7 +1182,7 @@ export default function NVRCameras() {
   }
 
   return (
-    <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div style={{ padding: isMobile ? 14 : 22, display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 18 }}>
 
       {/* ── Title + filters ───────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -1283,30 +1320,34 @@ export default function NVRCameras() {
           )}
         </div>
 
-        {/* Column headers */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: CAM_COL,
-          padding: '10px 16px', borderBottom: '1px solid var(--bd)',
-          fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)',
-        }}>
-          {['ID', 'NAME', 'SITE', ''].map((h, i) => <span key={i}>{h}</span>)}
-        </div>
+        {/* Column headers + rows share one horizontal scroller so the grid
+            columns stay aligned and are swipeable on narrow screens. */}
+        <HScrollHint minWidth={480}>
+          {/* Column headers */}
+          <div style={{
+            display: 'grid', gridTemplateColumns: CAM_COL,
+            padding: '10px 16px', borderBottom: '1px solid var(--bd)',
+            fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)',
+          }}>
+            {['ID', 'NAME', 'SITE', ''].map((h, i) => <span key={i}>{h}</span>)}
+          </div>
 
-        {/* Rows */}
-        <div style={{ maxHeight: 430, overflowY: 'auto' }}>
-          <AsyncBoundary
-            loading={channelsApi.loading}
-            error={channelsApi.error}
-            isEmpty={!channelsApi.loading && !channelsApi.error && camFiltered.length === 0}
-            onRetry={channelsApi.refetch}
-            minH={100}
-            emptyLabel="No cameras found"
-          >
-            {() => camFiltered.map(c => (
-              <CamRow key={c._id || c.id} c={c} site={siteOf(c)} onView={handleViewCamera} />
-            ))}
-          </AsyncBoundary>
-        </div>
+          {/* Rows */}
+          <div style={{ maxHeight: 430, overflowY: 'auto' }}>
+            <AsyncBoundary
+              loading={channelsApi.loading}
+              error={channelsApi.error}
+              isEmpty={!channelsApi.loading && !channelsApi.error && camFiltered.length === 0}
+              onRetry={channelsApi.refetch}
+              minH={100}
+              emptyLabel="No cameras found"
+            >
+              {() => camFiltered.map(c => (
+                <CamRow key={c._id || c.id} c={c} site={siteOf(c)} onView={handleViewCamera} />
+              ))}
+            </AsyncBoundary>
+          </div>
+        </HScrollHint>
       </div>
 
       {/* Add / Edit NVR wizard */}

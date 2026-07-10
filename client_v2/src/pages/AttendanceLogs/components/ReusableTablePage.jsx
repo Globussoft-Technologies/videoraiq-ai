@@ -55,7 +55,8 @@ const ReusableTablePage = ({
 
   const currentViewMode = typeof viewMode === 'string' ? viewMode : internalViewMode;
   const setViewMode = typeof onViewModeChange === 'function' ? onViewModeChange : setInternalViewMode;
-  const showGrid = currentViewMode === 'grid' && typeof gridCard === 'function';
+  const hasGrid = typeof gridCard === 'function';
+  const showGrid = hasGrid && currentViewMode === 'grid';
 
   const searchInput = typeof searchQuery === 'string' ? searchQuery : internalSearchInput;
   const setSearchInput = typeof onSearchChange === 'function' ? onSearchChange : setInternalSearchInput;
@@ -164,7 +165,7 @@ const ReusableTablePage = ({
           )}
 
           <div className="w-full md:flex md:items-center md:ml-auto md:w-auto gap-3 flex flex-wrap">
-            {typeof gridCard === 'function' && (
+            {hasGrid && (
               <div className="flex items-center gap-[3px] bg-[var(--bg2)] border border-[var(--bd)] rounded-[8px] p-[3px] h-10">
                 <button
                   type="button"
@@ -209,7 +210,7 @@ const ReusableTablePage = ({
           <>
             {showGrid ? (
               !isEmpty && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2.5 sm:gap-6">
                   {(paginated || []).map((item, idx) => (
                     <React.Fragment key={item?.id ?? item?.email ?? idx}>
                       {gridCard(item, idx)}

@@ -84,11 +84,11 @@ const DepartmentForm = ({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent
-        className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[18px] p-5 shadow-xl w-full max-w-[500px] overflow-y-auto overflow-x-hidden top-1/2 left-1/2 translate-x-[-50%] translate-y-[-50%] hide-scrollbar scrollbar-hide"
+        className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[18px] p-4 sm:p-5 shadow-xl w-[92vw] max-w-[420px] max-h-[90vh] overflow-y-auto overflow-x-hidden top-1/2 left-1/2 translate-x-[-50%] translate-y-[-50%] hide-scrollbar scrollbar-hide"
         closeBtn="text-[var(--tx2)] hover:text-[var(--tx)] transition-colors top-4 right-4"
       >
         <DialogHeader>
-          <DialogTitle className="text-lg font-semibold text-[var(--tx)] text-center">
+          <DialogTitle className="text-base sm:text-lg font-semibold text-[var(--tx)] text-center">
             {mode === "edit" ? "Edit Department" : "Add New Department"}
           </DialogTitle>
           <DialogDescription className="text-xs text-[var(--tx3)] text-center">
@@ -96,8 +96,8 @@ const DepartmentForm = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="bg-[var(--bg2)] p-4 rounded-lg border border-[var(--bd)] mt-4">
-          <form onSubmit={formik.handleSubmit} className="space-y-4">
+        <div className="bg-[var(--bg2)] p-3 sm:p-4 rounded-lg border border-[var(--bd)] mt-3 sm:mt-4">
+          <form onSubmit={formik.handleSubmit} className="space-y-3 sm:space-y-4">
             <div>
               <label className="text-xs text-[var(--tx2)] mb-1 ml-1 block">
                 Department Name <span className="text-[var(--crit)]">*</span>

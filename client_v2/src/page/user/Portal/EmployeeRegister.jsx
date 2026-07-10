@@ -23,9 +23,9 @@ const PHOTO_SLOTS = [
 
 /* Onboarding token for the public portal. This page runs without a login
    session/cookie, so the department & location lookups are authenticated with
-   an explicit long-lived token (same approach as the `client` EmployeeRegister). */
-const AUTH_TOKEN =
-  'eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdGF0dXMiOnRydWUsInVzZXJfaWQiOjM3LCJsb2dpbiI6ImR1YmFpZ29sZiIsImFkbWluSWQiOiI2YTA0NDJiMmFkOGQzYjNkZjFhZDljZTciLCJvcmdJZCI6bnVsbCwidXNlcl9uYW1lIjoiRHViYWkgR29sZiIsInVzZXJfZW1haWwiOiJkdWJhaWdvbGZAZ21haWwuY29tIiwibmFtZV9mIjoiRHViYWkiLCJuYW1lX2wiOiJHb2xmIiwidXNlclN1YnNjcmlwdGlvblR5cGUiOnsiMyI6IjIwMzYtMDUtMzAifSwiY3JlYXRlZF9mcm9tIjoiRU1QIiwiY3JlYXRlZEF0IjoiMjAyNi0wNS0xM1QwOToyMTo1NC4wMjZaIiwiZW5hYmxlUGhvbmVSZWNpcGllbnRzIjpmYWxzZSwiaWF0IjoxNzc4ODI5MjQwLCJleHAiOjE4NzM0MzcyNDB9.7rjNka_6iuYd028HDdHO7mC-AN82L28hCAYdH11ZU0qWW4wunK2k6-Sn3NorzYdXaz8WM3vuYp8LaOwMDfD6-Q';
+   an explicit long-lived token (same approach as the `client` EmployeeRegister).
+   Sourced from VITE_EMPLOYEE_REGISTER_TOKEN in the environment. */
+const AUTH_TOKEN = import.meta.env.VITE_EMPLOYEE_REGISTER_TOKEN;
 
 export default function EmployeeRegister() {
   const navigate = useNavigate();

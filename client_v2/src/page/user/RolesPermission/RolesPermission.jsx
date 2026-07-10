@@ -6,6 +6,7 @@ import { useApi } from '../../../hooks/useApi';
 import { usePermissions } from '../../../context/PermissionContext';
 import AccessDenied from '../../../components/AccessDenied';
 import PageLoader from '../../../components/PageLoader';
+import HScrollHint from '../../../components/HScrollHint';
 import { getRoles, createRole, renameRole, updateRolePermission, deleteRole, updatePermissionConfig } from '../../../api/administer';
 
 // Role names V1 treats as built-in/protected — Edit and Delete are hidden for
@@ -215,7 +216,7 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20,
     }}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, padding: 24, width: 520,
+        background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, padding: 24, width: '100%', maxWidth: 520, boxSizing: 'border-box',
         maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 8px 40px rgba(0,0,0,.5)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -230,39 +231,43 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
           Per-module access. Channels' Create/Delete are locked, matching V1.
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(4,60px)', fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.06em', color: 'var(--tx3)', padding: '0 4px 6px' }}>
-          <span>MODULE</span>
-          <span style={{ textAlign: 'center' }}>VIEW</span>
-          <span style={{ textAlign: 'center' }}>CREATE</span>
-          <span style={{ textAlign: 'center' }}>EDIT</span>
-          <span style={{ textAlign: 'center' }}>DELETE</span>
-        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <div style={{ minWidth: 420 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(4,60px)', fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.06em', color: 'var(--tx3)', padding: '0 4px 6px' }}>
+              <span>MODULE</span>
+              <span style={{ textAlign: 'center' }}>VIEW</span>
+              <span style={{ textAlign: 'center' }}>CREATE</span>
+              <span style={{ textAlign: 'center' }}>EDIT</span>
+              <span style={{ textAlign: 'center' }}>DELETE</span>
+            </div>
 
-        {PERMISSION_MODULES.map(mod => (
-          <Row
-            key={mod}
-            label={MODULE_LABELS[mod] || mod}
-            row={config[mod] || {}}
-            disableCreate={mod === 'channels'}
-            disableDelete={mod === 'channels'}
-            onToggleField={(field) => toggle(mod, field)}
-          />
-        ))}
+            {PERMISSION_MODULES.map(mod => (
+              <Row
+                key={mod}
+                label={MODULE_LABELS[mod] || mod}
+                row={config[mod] || {}}
+                disableCreate={mod === 'channels'}
+                disableDelete={mod === 'channels'}
+                onToggleField={(field) => toggle(mod, field)}
+              />
+            ))}
 
-        <div
-          onClick={() => setLogsOpen(v => !v)}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 4px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)' }}
-        >
-          {logsOpen ? '▾' : '▸'} Logs ({LOG_SUBMODULES.length} sub-modules)
+            <div
+              onClick={() => setLogsOpen(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 4px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)' }}
+            >
+              {logsOpen ? '▾' : '▸'} Logs ({LOG_SUBMODULES.length} sub-modules)
+            </div>
+            {logsOpen && LOG_SUBMODULES.map(sub => (
+              <Row
+                key={sub}
+                label={MODULE_LABELS[sub] || sub}
+                row={(config.logs || {})[sub] || {}}
+                onToggleField={(field) => toggle('logs', field, sub)}
+              />
+            ))}
+          </div>
         </div>
-        {logsOpen && LOG_SUBMODULES.map(sub => (
-          <Row
-            key={sub}
-            label={MODULE_LABELS[sub] || sub}
-            row={(config.logs || {})[sub] || {}}
-            onToggleField={(field) => toggle('logs', field, sub)}
-          />
-        ))}
 
         {!readOnly && (
           <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
@@ -483,44 +488,49 @@ export default function RolesPermission() {
       </div>
 
       <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, overflow: 'hidden' }}>
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'minmax(200px,1.7fr) repeat(4,90px) 110px',
-          gap: 0, padding: '12px 18px', borderBottom: '1px solid var(--bd)',
-          fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)', alignItems: 'center',
-        }}>
-          <span>ROLE NAME</span>
-          <span style={{ textAlign: 'center' }}>VIEW</span>
-          <span style={{ textAlign: 'center' }}>CREATE</span>
-          <span style={{ textAlign: 'center' }}>EDIT</span>
-          <span style={{ textAlign: 'center' }}>DELETE</span>
-          <span style={{ textAlign: 'right' }}>ACTION</span>
-        </div>
+        {/* Horizontal scroll on narrow screens, with edge fades hinting swipeability. */}
+        <HScrollHint minWidth={700} fadeColor="var(--bg1)">
+          <div>
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'minmax(200px,1.7fr) repeat(4,90px) 110px',
+              gap: 0, padding: '12px 18px', borderBottom: '1px solid var(--bd)',
+              fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)', alignItems: 'center',
+            }}>
+              <span>ROLE NAME</span>
+              <span style={{ textAlign: 'center' }}>VIEW</span>
+              <span style={{ textAlign: 'center' }}>CREATE</span>
+              <span style={{ textAlign: 'center' }}>EDIT</span>
+              <span style={{ textAlign: 'center' }}>DELETE</span>
+              <span style={{ textAlign: 'right' }}>ACTION</span>
+            </div>
 
-        <AsyncBoundary
-          loading={rolesApi.loading}
-          error={rolesApi.error}
-          isEmpty={!rolesApi.loading && !rolesApi.error && roles.length === 0}
-          onRetry={rolesApi.refetch}
-          minH={160}
-          emptyLabel={search ? `No roles match "${search}".` : 'No roles yet'}
-        >
-          {() => roles.map(role => (
-            <RoleRow
-              key={role._id}
-              role={role}
-              perms={{ canConfigure, canView, canEditRole, canDeleteRole }}
-              onToggleField={(field) => handleToggleField(role, field)}
-              onConfigure={() => setConfigureTarget({ role, readOnly: false })}
-              onView={() => setConfigureTarget({ role, readOnly: true })}
-              onEdit={() => setRenameTarget(role)}
-              onDelete={() => setDeleteTarget(role)}
-            />
-          ))}
-        </AsyncBoundary>
+            <AsyncBoundary
+              loading={rolesApi.loading}
+              error={rolesApi.error}
+              isEmpty={!rolesApi.loading && !rolesApi.error && roles.length === 0}
+              onRetry={rolesApi.refetch}
+              minH={160}
+              emptyLabel={search ? `No roles match "${search}".` : 'No roles yet'}
+            >
+              {() => roles.map(role => (
+                <RoleRow
+                  key={role._id}
+                  role={role}
+                  perms={{ canConfigure, canView, canEditRole, canDeleteRole }}
+                  onToggleField={(field) => handleToggleField(role, field)}
+                  onConfigure={() => setConfigureTarget({ role, readOnly: false })}
+                  onView={() => setConfigureTarget({ role, readOnly: true })}
+                  onEdit={() => setRenameTarget(role)}
+                  onDelete={() => setDeleteTarget(role)}
+                />
+              ))}
+            </AsyncBoundary>
+          </div>
+        </HScrollHint>
       </div>
 
       {pages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 4 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 4 }}>
           {Array.from({ length: pages }, (_, i) => (
             <button
               key={i}

@@ -19,14 +19,14 @@ function PermissionTable({ data, columns, loading }) {
   // ✅ 1. Loading Skeleton
   if (loading) {
     return (
-      <div className="overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)]">
+      <div className="overflow-x-auto rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)]">
         <table className={tableWrapperClass}>
           <thead className="bg-[var(--bg2)] text-[var(--tx2)] whitespace-nowrap">
             <tr className="border-b border-[var(--bd)]">
               {table.getAllColumns().map((column) => (
                 <th 
                   key={column.id}
-                  className="px-6 py-4 text-sm font-medium tracking-wider"
+                  className="px-3 sm:px-6 py-3 sm:py-4 text-sm font-medium tracking-wider"
                 >
                   <Skeleton 
                     width={80} 
@@ -46,7 +46,7 @@ function PermissionTable({ data, columns, loading }) {
                   {table.getAllColumns().map((col, colIdx) => (
                     <td
                       key={colIdx}
-                      className="px-6 py-4 whitespace-nowrap text-sm"
+                      className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm"
                     >
                       <Skeleton 
                         width={colIdx === 0 ? 30 : 120} 
@@ -67,14 +67,14 @@ function PermissionTable({ data, columns, loading }) {
   // ✅ 2. No Data Condition
   if (!data || data.length === 0) {
     return (
-      <div className="overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)]">
+      <div className="overflow-x-auto rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)]">
         <table className={tableWrapperClass}>
           <thead className="bg-[var(--bg2)] text-[var(--tx2)] whitespace-nowrap">
             <tr className="border-b border-[var(--bd)]">
               {columns.map((col) => (
                 <th
                   key={col.accessorKey || col.id}
-                  className="px-6 py-4 text-sm font-medium tracking-wider"
+                  className="px-3 sm:px-6 py-3 sm:py-4 text-sm font-medium tracking-wider"
                 >
                   {typeof col.header === "function" ? col.header() : col.header}
                 </th>
@@ -98,14 +98,14 @@ function PermissionTable({ data, columns, loading }) {
 
   // ✅ 3. Table With Data
   return (
-    <div className="overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)]">
+    <div className="overflow-x-auto rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)]">
       <table className={tableWrapperClass}>
         <thead className="bg-[var(--bg2)] text-[var(--tx2)] whitespace-nowrap">
           <tr className="border-b border-[var(--bd)]">
             {table.getAllColumns().map((column) => (
               <th
                 key={column.id}
-                className="px-6 py-4 text-sm font-medium tracking-wider text-[var(--tx)]"
+                className="px-3 sm:px-6 py-3 sm:py-4 text-sm font-medium tracking-wider text-[var(--tx)]"
               >
                 {typeof column.columnDef.header === "function"
                   ? column.columnDef.header()
@@ -120,7 +120,7 @@ function PermissionTable({ data, columns, loading }) {
               {row.getVisibleCells().map((cell) => (
                 <td
                   key={cell.id}
-                  className="px-6 py-3.5 whitespace-nowrap text-sm"
+                  className="px-3 sm:px-6 py-3 sm:py-3.5 whitespace-nowrap text-sm"
                 >
                   {typeof cell.column.columnDef.cell === "function"
                     ? cell.column.columnDef.cell(cell)

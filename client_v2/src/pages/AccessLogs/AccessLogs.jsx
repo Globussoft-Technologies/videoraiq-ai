@@ -378,7 +378,7 @@ const AccessLogs = () => {
   }
 
   return (
-    <div className="p-[22px] flex flex-col gap-[18px] min-h-full">
+    <div className="p-3 sm:p-4 lg:p-[22px] flex flex-col gap-3 sm:gap-[18px] min-h-full">
       {/* Authorized-user picker dropdown (opens beside the toggle) */}
       {dropdown?.rect && (
         <TagUserDropdown

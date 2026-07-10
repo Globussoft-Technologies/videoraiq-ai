@@ -59,10 +59,10 @@ const UserDetailModal = ({ user, isOpen, onClose, nasUrl }) => {
         </DialogHeader>
 
         {user ? (
-          <div className="flex flex-col md:flex-row h-full max-h-[90vh]">
+          <div className="flex flex-col md:flex-row max-h-[85vh] overflow-y-auto md:overflow-hidden md:h-full">
             {/* Left: image carousel */}
-            <div className="w-full md:w-1/2 bg-[var(--bg2)] flex flex-col items-center justify-center p-6 relative group/images">
-              <div className="relative w-full aspect-square max-w-sm rounded-2xl overflow-hidden shadow-xl bg-[var(--bg3)]">
+            <div className="w-full md:w-1/2 bg-[var(--bg2)] flex flex-col items-center justify-center p-4 sm:p-6 relative group/images">
+              <div className="relative w-full aspect-[4/3] sm:aspect-square max-h-[32vh] sm:max-h-none max-w-[260px] sm:max-w-sm rounded-2xl overflow-hidden shadow-xl bg-[var(--bg3)]">
                 <img
                   src={
                     hasImages
@@ -106,27 +106,27 @@ const UserDetailModal = ({ user, isOpen, onClose, nasUrl }) => {
                 )}
               </div>
 
-              <div className="mt-6 text-center">
-                <h2 className="text-2xl font-bold text-[var(--tx)]">
+              <div className="mt-3 sm:mt-6 text-center">
+                <h2 className="text-lg sm:text-2xl font-bold text-[var(--tx)] break-words">
                   {user.firstName} {user.lastName}
                 </h2>
-                <p className="text-sm text-[var(--tx3)] font-medium">@{user.userName || 'username'}</p>
-                <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-[var(--blue)]/15 text-[var(--blue)]">
+                <p className="text-xs sm:text-sm text-[var(--tx3)] font-medium">@{user.userName || 'username'}</p>
+                <div className="mt-2 sm:mt-3 inline-flex items-center px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold bg-[var(--blue)]/15 text-[var(--blue)]">
                   ID: {user.emp_id || 'N/A'}
                 </div>
               </div>
             </div>
 
             {/* Right: details */}
-            <div className="w-full md:w-1/2 p-6 md:p-8 overflow-y-auto vq-scroll">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-bold text-[var(--tx)] flex items-center gap-2">
+            <div className="w-full md:w-1/2 p-4 sm:p-6 md:p-8 md:overflow-y-auto vq-scroll">
+              <div className="flex justify-between items-center mb-4 sm:mb-6">
+                <h3 className="text-base sm:text-lg font-bold text-[var(--tx)] flex items-center gap-2">
                   <UserCircle className="w-5 h-5 text-[var(--blue)]" />
                   User Profiles &amp; Details
                 </h3>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                 <DetailItem icon={User} label="First Name" value={user.firstName} />
                 <DetailItem icon={User} label="Last Name" value={user.lastName} />
                 <DetailItem icon={Mail} label="Email" value={user.email} />

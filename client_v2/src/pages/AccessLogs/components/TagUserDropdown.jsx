@@ -106,7 +106,8 @@ const TagUserDropdown = ({ anchorRect, busy, onSelect, onClose }) => {
     };
   }, [onClose]);
 
-  const PANEL_W = 300;
+  // Cap the panel to the viewport so it never overflows on small screens.
+  const PANEL_W = Math.min(300, window.innerWidth - 16);
   const PANEL_H = 360;
   const top =
     anchorRect.bottom + PANEL_H > window.innerHeight

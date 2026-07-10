@@ -137,8 +137,8 @@ const Departments = () => {
   if (!canView) return <AccessDenied />;
 
   return (
-    <div className="p-[22px] flex flex-col gap-[18px] min-h-full">
-      <div className="w-full flex-1 flex flex-col justify-between p-6 bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] space-y-4">
+    <div className="p-3 sm:p-4 lg:p-[22px] flex flex-col gap-[18px] min-h-full">
+      <div className="w-full flex-1 flex flex-col justify-between p-3 sm:p-6 bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] space-y-4">
         <div className="space-y-4 flex-1">
           <div className="flex flex-wrap items-center gap-3 justify-between">
             <div className="relative w-full md:w-[30%]">

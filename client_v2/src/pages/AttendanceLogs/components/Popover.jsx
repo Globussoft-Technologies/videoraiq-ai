@@ -88,23 +88,37 @@ export const PopoverContent = ({ children, className, align = 'start', sideOffse
 
   useLayoutEffect(() => {
     if (!ctx.isOpen) return;
+    const GUTTER = 8; // keep the panel this far from the viewport edges
     const update = () => {
       const el = ctx.triggerRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
-      const style = { position: 'fixed', top: Math.round(r.bottom + sideOffset) };
-      if (align === 'end') style.right = Math.round(window.innerWidth - r.right);
-      else style.left = Math.round(r.left);
-      setPos(style);
+      const vw = window.innerWidth;
+      // Measured content width once rendered; fall back to a sane default so
+      // the very first pass is close, then the rAF pass below corrects it.
+      const w = Math.min(ctx.contentRef.current?.offsetWidth || 320, vw - GUTTER * 2);
+      // Anchor to the trigger's right (align end) or left, then clamp so the
+      // panel never spills off either edge on small (mobile/tablet) screens.
+      let left = align === 'end' ? Math.round(r.right - w) : Math.round(r.left);
+      left = Math.max(GUTTER, Math.min(left, vw - w - GUTTER));
+      setPos({
+        position: 'fixed',
+        top: Math.round(r.bottom + sideOffset),
+        left,
+        maxWidth: `calc(100vw - ${GUTTER * 2}px)`,
+      });
     };
     update();
+    // Re-measure after paint, when contentRef has a real width.
+    const raf = requestAnimationFrame(update);
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, true);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
     };
-  }, [ctx.isOpen, align, sideOffset, ctx.triggerRef]);
+  }, [ctx.isOpen, align, sideOffset, ctx.triggerRef, ctx.contentRef]);
 
   if (!ctx.isOpen || !pos) return null;
 

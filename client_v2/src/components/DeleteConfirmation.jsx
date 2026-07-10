@@ -32,24 +32,24 @@ const ConfirmationModal = ({
   if (!open) return null;
   return ReactDOM.createPortal(
     <div className="fixed inset-0 z-[9999] pointer-events-auto flex items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 animate-fade-in">
-      <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-2xl shadow-2xl p-6 w-[420px] flex flex-col transition-all duration-300 animate-fade-in-up">
+      <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-2xl shadow-2xl p-4 sm:p-6 w-[86vw] max-w-[380px] flex flex-col transition-all duration-300 animate-fade-in-up">
         {/* Header with icon and title */}
-        <div className="flex flex-col items-center mb-4">
+        <div className="flex flex-col items-center mb-3 sm:mb-4">
           {icon !== undefined ? (
-            <div className="mb-3 flex items-center bg-[var(--crit)]/10 rounded-full p-4 justify-center">
+            <div className="mb-2 sm:mb-3 flex items-center bg-[var(--crit)]/10 rounded-full p-3 sm:p-4 justify-center">
               {icon}
             </div>
           ) : null}
-          <h3 className="text-lg font-semibold text-[var(--tx)]">{title}</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-[var(--tx)]">{title}</h3>
         </div>
-        
+
         {/* Message */}
-        <div className="text-center text-sm text-[var(--tx2)] leading-relaxed mb-6 break-words px-2">
+        <div className="text-center text-sm text-[var(--tx2)] leading-relaxed mb-4 sm:mb-6 break-words px-2">
           {message}
         </div>
-        
+
         {/* Warning banner */}
-        <div className="bg-[var(--crit)]/5 border border-[var(--crit)]/20 rounded-lg p-3 mb-6">
+        <div className="bg-[var(--crit)]/5 border border-[var(--crit)]/20 rounded-lg p-2.5 sm:p-3 mb-4 sm:mb-6">
           <p className="text-xs text-[var(--crit)] text-center font-medium flex items-center justify-center gap-1.5">
             <TriangleAlert className="w-4 h-4" /> This action cannot be undone
           </p>

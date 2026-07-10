@@ -4,6 +4,7 @@ import { toast as sonnerToast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
 import MultiSelect from '../../../components/MultiSelect';
+import HScrollHint from '../../../components/HScrollHint';
 import {
   getUsers, createUser, updateUser, deleteUser, getRoles,
   getEmployeeLocations, getNvrsForUserAccess, getChannelsForUserAccess, getDepartmentsForUserAccess,
@@ -271,6 +272,18 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   const [locationOptions, setLocationOptions] = useState([]);
   const [optionsLoading, setOptionsLoading] = useState(true);
 
+  // Stack the paired fields into a single column on phones so the form never
+  // exceeds the viewport width (which was clipping the right-hand fields).
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const onChange = () => setIsMobile(mq.matches);
+    onChange();
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const gridCols = isMobile ? '1fr' : '1fr 1fr';
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -394,11 +407,11 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: isMobile ? 12 : 20,
     }}>
       <div style={{
         background: 'var(--bg1solid)', border: '1px solid var(--bd)',
-        borderRadius: 14, padding: 24, width: 640, maxHeight: '88vh', overflowY: 'auto',
+        borderRadius: 14, padding: isMobile ? 16 : 24, width: '100%', maxWidth: 640, maxHeight: '88vh', overflowY: 'auto',
         boxShadow: '0 8px 40px rgba(0,0,0,.5)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -413,7 +426,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 14 }}>
             <div>
               <FieldLabel>Admin User Name *</FieldLabel>
               <TextInput
@@ -434,7 +447,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 14 }}>
             <div>
               <FieldLabel>First name *</FieldLabel>
               <TextInput placeholder="Enter first name" value={firstName} onChange={e => setFirstName(e.target.value)} />
@@ -447,7 +460,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
 
           <div style={{ height: 1, background: 'var(--bd)' }} />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 14 }}>
             <div>
               <FieldLabel>Assign Role to the user *</FieldLabel>
               <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: -4, marginBottom: 6 }}>Assign the correct role permissions to this user.</div>
@@ -473,7 +486,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
               <div style={{ height: 1, background: 'var(--bd)' }} />
               <div style={{ fontSize: 13, fontWeight: 600 }}>Camera Access</div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 14 }}>
                 <div>
                   <FieldLabel>Location</FieldLabel>
                   <MultiSelect
@@ -496,7 +509,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 14 }}>
                 <div>
                   <FieldLabel>Channels</FieldLabel>
                   <MultiSelect
@@ -521,7 +534,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
 
               <div style={{ height: 1, background: 'var(--bd)' }} />
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 14 }}>
                 <div>
                   <FieldLabel>New password *</FieldLabel>
                   <div style={{ position: 'relative' }}>
@@ -731,31 +744,36 @@ export default function UsersPage() {
       )}
 
       <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, overflow: 'hidden' }}>
-        <ColHeaders allChecked={allChecked} onToggleAll={toggleAll} />
+        {/* Horizontal scroll on narrow screens, with edge fades hinting swipeability. */}
+        <HScrollHint minWidth={660} fadeColor="var(--bg1)">
+          <div>
+            <ColHeaders allChecked={allChecked} onToggleAll={toggleAll} />
 
-        <AsyncBoundary
-          loading={usersApi.loading}
-          error={usersApi.error}
-          isEmpty={!usersApi.loading && !usersApi.error && users.length === 0}
-          onRetry={usersApi.refetch}
-          minH={120}
-          emptyLabel={search ? `No users match "${search}".` : 'No users found'}
-        >
-          {() => users.map(u => (
-            <UserRow
-              key={u._id}
-              u={u}
-              checked={!!selected[u._id]}
-              onToggle={() => toggleOne(u._id)}
-              onEdit={setEditUser}
-              onDelete={setConfirmDelete}
-            />
-          ))}
-        </AsyncBoundary>
+            <AsyncBoundary
+              loading={usersApi.loading}
+              error={usersApi.error}
+              isEmpty={!usersApi.loading && !usersApi.error && users.length === 0}
+              onRetry={usersApi.refetch}
+              minH={120}
+              emptyLabel={search ? `No users match "${search}".` : 'No users found'}
+            >
+              {() => users.map(u => (
+                <UserRow
+                  key={u._id}
+                  u={u}
+                  checked={!!selected[u._id]}
+                  onToggle={() => toggleOne(u._id)}
+                  onEdit={setEditUser}
+                  onDelete={setConfirmDelete}
+                />
+              ))}
+            </AsyncBoundary>
+          </div>
+        </HScrollHint>
       </div>
 
       {pages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 4 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 4 }}>
           {Array.from({ length: pages }, (_, i) => (
             <button
               key={i}

@@ -15,7 +15,7 @@ const Row = ({ icon: Icon, label, value }) => (
     <span className="w-9 h-9 shrink-0 rounded-lg bg-[var(--bg2)] border border-[var(--bd)] flex items-center justify-center">
       <Icon className="w-[18px] h-[18px] text-[var(--tx3)]" />
     </span>
-    <span className="text-xs font-medium uppercase tracking-wide text-[var(--tx3)] w-28 shrink-0">
+    <span className="text-xs font-medium uppercase tracking-wide text-[var(--tx3)] w-20 sm:w-28 shrink-0">
       {label}
     </span>
     <span className="text-[15px] text-[var(--tx)] font-medium truncate flex-1 min-w-0" title={value}>
@@ -48,10 +48,10 @@ const LogEmployeeProfileDialog = ({ open = false, onOpenChange, onClose, profile
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-[560px] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full rounded-[18px] bg-[var(--bg1solid)] text-[var(--tx)] p-0 border border-[var(--bd)] shadow-2xl overflow-hidden">
+      <DialogContent className="w-full max-w-[95vw] sm:max-w-[560px] max-h-[90vh] overflow-y-auto top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[18px] bg-[var(--bg1solid)] text-[var(--tx)] p-0 border border-[var(--bd)] shadow-2xl">
         {/* Header */}
-        <div className="flex items-center gap-5 p-7 bg-[var(--bg2)] border-b border-[var(--bd)]">
-          <div className="w-[120px] h-[120px] rounded-full overflow-hidden border-2 border-[var(--bg1solid)] shadow-md shrink-0">
+        <div className="flex items-center gap-4 sm:gap-5 p-4 sm:p-7 bg-[var(--bg2)] border-b border-[var(--bd)]">
+          <div className="w-20 h-20 sm:w-[120px] sm:h-[120px] rounded-full overflow-hidden border-2 border-[var(--bg1solid)] shadow-md shrink-0">
             {profile?.image ? (
               <ImageWithLoader
                 src={profile.image}
@@ -75,7 +75,7 @@ const LogEmployeeProfileDialog = ({ open = false, onOpenChange, onClose, profile
         </div>
 
         {/* Details */}
-        <div className="px-7 py-4 divide-y divide-[var(--bd)]">
+        <div className="px-4 sm:px-7 py-4 divide-y divide-[var(--bd)]">
           <Row icon={User} label="Name" value={name} />
           {dept && <Row icon={Building2} label="Department" value={dept} />}
           {profile?.location && profile.location !== '--' && (

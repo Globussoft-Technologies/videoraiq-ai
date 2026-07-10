@@ -117,10 +117,10 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-col md:flex-row h-full max-h-[90vh]">
+        <div className="flex flex-col md:flex-row max-h-[85vh] overflow-y-auto md:overflow-hidden md:h-full">
           {/* Left: capture carousel */}
-          <div className="w-full md:w-1/2 min-w-0 bg-[var(--bg2)] flex flex-col items-center justify-center p-6 relative">
-            <div className="relative w-full aspect-square max-w-md rounded-2xl overflow-hidden shadow-xl bg-black flex items-center justify-center">
+          <div className="w-full md:w-1/2 min-w-0 bg-[var(--bg2)] flex flex-col items-center justify-center p-3 sm:p-6 relative">
+            <div className="relative w-full aspect-video sm:aspect-square max-h-[28vh] sm:max-h-none max-w-[260px] sm:max-w-md rounded-2xl overflow-hidden shadow-xl bg-black flex items-center justify-center">
               {fullImageUrls.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 text-[var(--tx3)]">
                   <Camera className="w-10 h-10" />
@@ -177,29 +177,29 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
               )}
             </div>
 
-            <div className="mt-6 text-center">
-              <h2 className="text-2xl font-bold text-[var(--tx)] break-words">
+            <div className="mt-2 sm:mt-6 text-center">
+              <h2 className="text-base sm:text-2xl font-bold text-[var(--tx)] break-words">
                 {selectedLog?.name || 'Employee Name'}
               </h2>
-              <p className="text-sm text-[var(--tx3)] font-medium mt-0.5">
+              <p className="text-xs sm:text-sm text-[var(--tx3)] font-medium mt-0.5">
                 {isAttendance ? 'Attendance capture' : 'Access-log capture'}
               </p>
-              <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-[var(--blue)]/15 text-[var(--blue)]">
+              <div className="mt-2 sm:mt-3 inline-flex items-center px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wide bg-[var(--blue)]/15 text-[var(--blue)]">
                 {isAttendance ? 'Attendance' : 'Access Log'}
               </div>
             </div>
           </div>
 
           {/* Right: capture details */}
-          <div className="w-full md:w-1/2 min-w-0 p-6 md:p-8 overflow-y-auto vq-scroll">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-bold text-[var(--tx)] flex items-center gap-2">
+          <div className="w-full md:w-1/2 min-w-0 p-4 sm:p-6 md:p-8 md:overflow-y-auto vq-scroll">
+            <div className="flex justify-between items-center mb-4 sm:mb-6">
+              <h3 className="text-base sm:text-lg font-bold text-[var(--tx)] flex items-center gap-2">
                 <ScanFace className="w-5 h-5 text-[var(--blue)]" />
                 {isAttendance ? 'Attendance Preview' : 'Access Log Preview'}
               </h3>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
               <DetailItem icon={Zap} label="Camera Type" value={cameraType} />
               {isAttendance && (
                 <DetailItem icon={Camera} label="Checkin Cam" value={selectedLog?.checkinCam} />

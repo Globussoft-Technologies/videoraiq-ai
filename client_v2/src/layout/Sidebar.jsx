@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LogOut, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { LogOut, ChevronsLeft, ChevronsRight, X } from 'lucide-react';
 import { NAV_GROUPS } from './nav.config';
+import { useOutsideClick } from '../hooks/useOutsideClick';
 import { useAuth } from '@/context/AuthContext';
 import { usePermissions } from '@/context/PermissionContext';
 import { useTheme } from '@/theme/ThemeContext';
@@ -54,22 +55,31 @@ function isItemVisible(item, permissions) {
   return permissions?.[item.permissionKey]?.view === true;
 }
 
-export default function Sidebar({ badges = {} }) {
+export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = false, onMobileClose }) {
   const { user } = useAuth();
   const { permissions } = usePermissions();
   const { theme } = useTheme();
   const navigate = useNavigate();
   const [accountOpen, setAccountOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(() => {
+  const accountRef = useRef(null);
+  // Close the account menu on an outside click / Escape (replaces the
+  // fixed-overlay backdrop, which is trapped inside the sidebar's
+  // backdrop-filter box and so never covers the rest of the page).
+  const closeAccount = useCallback(() => setAccountOpen(false), []);
+  useOutsideClick(accountRef, accountOpen, closeAccount);
+  const [desktopCollapsed, setDesktopCollapsed] = useState(() => {
     try {
       return localStorage.getItem(STORAGE_KEY) === '1';
     } catch {
       return false;
     }
   });
+  // In the mobile drawer the sidebar is always fully expanded (labels visible);
+  // the collapse feature only applies to the docked desktop sidebar.
+  const collapsed = isMobile ? false : desktopCollapsed;
 
   const toggleCollapsed = () => {
-    setCollapsed((c) => {
+    setDesktopCollapsed((c) => {
       const next = !c;
       try {
         localStorage.setItem(STORAGE_KEY, next ? '1' : '0');
@@ -100,20 +110,43 @@ export default function Sidebar({ badges = {} }) {
 
   return (
     <aside
-      style={{
-        width: collapsed ? 74 : 250,
-        flex: collapsed ? '0 0 74px' : '0 0 250px',
-        display: 'flex',
-        flexDirection: 'column',
-        background: 'var(--glass)',
-        backdropFilter: 'blur(14px)',
-        borderRight: '1px solid var(--bd)',
-        padding: collapsed ? '18px 10px' : '18px 14px',
-        gap: 6,
-        position: 'relative',
-        zIndex: 60,
-        transition: 'width .2s ease, padding .2s ease',
-      }}
+      style={
+        isMobile
+          ? {
+              width: 260,
+              maxWidth: '82vw',
+              flex: '0 0 auto',
+              display: 'flex',
+              flexDirection: 'column',
+              background: 'var(--bg1solid)',
+              borderRight: '1px solid var(--bd)',
+              padding: '18px 14px',
+              gap: 6,
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              bottom: 0,
+              height: '100vh',
+              zIndex: 80,
+              transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
+              transition: 'transform .25s ease',
+              boxShadow: mobileOpen ? '0 0 40px rgba(0,0,0,.4)' : 'none',
+            }
+          : {
+              width: collapsed ? 74 : 250,
+              flex: collapsed ? '0 0 74px' : '0 0 250px',
+              display: 'flex',
+              flexDirection: 'column',
+              background: 'var(--glass)',
+              backdropFilter: 'blur(14px)',
+              borderRight: '1px solid var(--bd)',
+              padding: collapsed ? '18px 10px' : '18px 14px',
+              gap: 6,
+              position: 'relative',
+              zIndex: 60,
+              transition: 'width .2s ease, padding .2s ease',
+            }
+      }
     >
       {/* Logo + collapse toggle */}
       <div
@@ -139,9 +172,9 @@ export default function Sidebar({ badges = {} }) {
         )}
         <button
           type="button"
-          onClick={toggleCollapsed}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          onClick={isMobile ? onMobileClose : toggleCollapsed}
+          title={isMobile ? 'Close menu' : collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={isMobile ? 'Close menu' : collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -156,7 +189,7 @@ export default function Sidebar({ badges = {} }) {
             flex: '0 0 auto',
           }}
         >
-          {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
+          {isMobile ? <X size={16} /> : collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
         </button>
       </div>
 
@@ -197,6 +230,7 @@ export default function Sidebar({ badges = {} }) {
                   to={item.path}
                   end={item.end}
                   title={collapsed ? item.label : undefined}
+                  onClick={() => isMobile && onMobileClose?.()}
                   style={({ isActive }) => navItemStyle(isActive, collapsed)}
                 >
                   <Icon size={18} strokeWidth={1.7} />
@@ -272,7 +306,7 @@ export default function Sidebar({ badges = {} }) {
           </div>
         )}
 
-        <div style={{ position: 'relative' }}>
+        <div ref={accountRef} style={{ position: 'relative' }}>
           <div
             onClick={() => setAccountOpen((o) => !o)}
             title={collapsed ? name : undefined}
@@ -320,10 +354,8 @@ export default function Sidebar({ badges = {} }) {
           </div>
 
           {accountOpen && (
-            <>
-              <div onClick={() => setAccountOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 65 }} />
-              <div
-                className="vq-fadeup"
+            <div
+              className="vq-fadeup"
                 style={{
                   position: 'absolute',
                   bottom: 52,
@@ -380,8 +412,7 @@ export default function Sidebar({ badges = {} }) {
                   <LogOut size={15} strokeWidth={1.8} />
                   <span style={{ fontSize: 12.5, fontWeight: 600 }}>Sign Out</span>
                 </div>
-              </div>
-            </>
+            </div>
           )}
         </div>
       </div>

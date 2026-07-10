@@ -1,8 +1,9 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Bell, Sun, Moon, ChevronDown, Volume2, VolumeX } from 'lucide-react';
+import { Search, MapPin, Bell, Sun, Moon, ChevronDown, Volume2, VolumeX, SunMoon, Menu } from 'lucide-react';
 import { useTheme } from '../theme/ThemeContext';
 import { useClock } from '../hooks/useClock';
+import { useOutsideClick } from '../hooks/useOutsideClick';
 import { useAttendanceSocket } from '../context/AttendanceSocketContext';
 import { NAV_GROUPS } from './nav.config';
 import { getChannels } from '../helpers/monitoring';
@@ -31,7 +32,7 @@ const iconBtn = {
   flex: '0 0 auto',
 };
 
-export default function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange, notifications = [], onSearch }) {
+export default function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange, notifications = [], onSearch, onMenuClick }) {
   const { theme, setTheme } = useTheme();
   const clock = useClock();
   const navigate = useNavigate();
@@ -42,7 +43,46 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
   const [cameras, setCameras] = useState([]);
   const camLoaded = useRef(false);
   const inputRef = useRef(null);
+  const searchRef = useRef(null);
+  const siteRef = useRef(null);
+  const notifRef = useRef(null);
+  const moreRef = useRef(null);
+  const [moreOpen, setMoreOpen] = useState(false);
   const { isMuted, toggleMute } = useAttendanceSocket() || {};
+
+  // The header drops widgets progressively as IT gets narrow — measured with a
+  // ResizeObserver on the header itself, not the window, because the sidebar
+  // (collapsed/expanded) changes how much room the header actually has. This
+  // guarantees the core controls (search, site, mute, notifications) never get
+  // clipped off the right edge.
+  const headerRef = useRef(null);
+  const [headerW, setHeaderW] = useState(9999);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect?.width;
+      if (w) setHeaderW(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const hideClock = headerW < 900; // clock is the widest widget — drop it first
+  const isNarrow = headerW < 620; // collapse search to an icon + compact the site switcher
+  // On the tightest widths, drop the theme toggle before the essential controls
+  // (site, mute, notifications) so the notification bell is never clipped.
+  const hideTheme = headerW < 540;
+
+  // Close each dropdown on an outside click / Escape (replaces the fixed-overlay
+  // backdrops, which are trapped inside the header's backdrop-filter box).
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
+  const closeSite = useCallback(() => setSiteOpen(false), []);
+  const closeNotif = useCallback(() => setNotifOpen(false), []);
+  const closeMore = useCallback(() => setMoreOpen(false), []);
+  useOutsideClick(searchRef, searchOpen, closeSearch);
+  useOutsideClick(siteRef, siteOpen, closeSite);
+  useOutsideClick(notifRef, notifOpen, closeNotif);
+  useOutsideClick(moreRef, moreOpen, closeMore);
 
   // Lazily load the camera list the first time the search is focused.
   const loadCameras = () => {
@@ -109,6 +149,40 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
   const showResults = searchOpen && trimmed && results.length > 0;
   const showNoResults = searchOpen && trimmed && results.length === 0;
 
+  // Search results list — shared by the desktop dropdown and the mobile overlay.
+  const resultsInner = (
+    <>
+      {showResults && (
+        <div className="vq-scroll" style={{ maxHeight: 340, overflowY: 'auto', padding: 6 }}>
+          {results.map((r, i) => (
+            <div
+              key={`${r.kind}-${r.label}-${i}`}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                goResult(r);
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '9px 10px', borderRadius: 9, cursor: 'pointer' }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: r.kindColor, flex: '0 0 auto' }} />
+              <span style={{ minWidth: 0, flex: 1 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</span>
+                <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{r.sub}</span>
+              </span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--tx3)', border: '1px solid var(--bd)', borderRadius: 5, padding: '2px 6px', flex: '0 0 auto' }}>{r.kind}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {showNoResults && (
+        <div style={{ padding: '22px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--tx3)' }}>
+          No matches for “{trimmed}”
+        </div>
+      )}
+    </>
+  );
+
   const themeBtn = (active) => ({
     width: 30,
     borderRadius: 7,
@@ -122,13 +196,14 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
 
   return (
     <header
+      ref={headerRef}
       style={{
         height: 60,
         flex: '0 0 60px',
         display: 'flex',
         alignItems: 'center',
-        gap: 16,
-        padding: '0 22px',
+        gap: isNarrow ? 8 : 16,
+        padding: isNarrow ? '0 12px' : '0 22px',
         borderBottom: '1px solid var(--bd)',
         background: 'var(--headerglass)',
         backdropFilter: 'blur(10px)',
@@ -136,120 +211,144 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
         zIndex: 60,
       }}
     >
-      <div style={{ flex: '0 0 auto' }}>
-        <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 17, letterSpacing: '-.01em', lineHeight: 1, whiteSpace: 'nowrap' }}>
+      {onMenuClick && (
+        <button type="button" onClick={onMenuClick} aria-label="Open menu" style={{ ...iconBtn, flex: '0 0 auto' }}>
+          <Menu size={18} strokeWidth={1.8} style={{ color: 'var(--tx2)' }} />
+        </button>
+      )}
+      <div style={{ flex: '0 1 auto', minWidth: 0 }}>
+        <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: isNarrow ? 15 : 17, letterSpacing: '-.01em', lineHeight: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {title}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 3, whiteSpace: 'nowrap' }}>{sub}</div>
+        {!isNarrow && (
+          <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
+        )}
       </div>
 
-      <div style={{ flex: 1, minWidth: 12 }} />
+      <div style={{ flex: 1, minWidth: 8 }} />
 
-      {/* Search */}
-      <div style={{ position: 'relative', flex: '1 1 auto', minWidth: 0, maxWidth: 280 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            height: 36,
-            padding: '0 13px',
-            borderRadius: 9,
-            background: 'var(--bg2)',
-            border: `1px solid ${searchOpen ? 'var(--blue)' : 'var(--bd)'}`,
-            color: 'var(--tx3)',
-            overflow: 'hidden',
-          }}
-        >
-          <Search size={15} strokeWidth={1.8} style={{ flex: '0 0 auto' }} />
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setSearchOpen(true);
-              onSearch?.(e.target.value);
+      {/* Search — full input on wide screens; on narrow it collapses to an icon
+          that opens a full-width search bar below the header. */}
+      {isNarrow ? (
+        <div ref={searchRef} style={{ flex: '0 0 auto', position: 'relative' }}>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !searchOpen;
+              setSearchOpen(next);
+              if (next) {
+                loadCameras();
+                setTimeout(() => inputRef.current?.focus(), 0);
+              }
             }}
-            onFocus={onSearchFocus}
-            placeholder="Search cameras, events, plates…"
-            style={{ fontSize: 12.5, flex: 1, minWidth: 0, background: 'transparent', border: 0, outline: 'none', color: 'var(--tx)' }}
-          />
-          <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', border: '1px solid var(--bd)', borderRadius: 4, padding: '1px 5px', flex: '0 0 auto' }}>
-            ⌘K
-          </span>
+            aria-label="Search"
+            style={iconBtn}
+          >
+            <Search size={17} strokeWidth={1.7} style={{ color: 'var(--tx2)' }} />
+          </button>
+          {searchOpen && (
+            <div
+              className="vq-fadeup"
+              style={{ position: 'fixed', top: 60, left: 0, right: 0, padding: 10, background: 'var(--bg1solid)', borderBottom: '1px solid var(--bd)', boxShadow: '0 18px 50px rgba(0,0,0,.35)', zIndex: 70 }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 12px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--blue)' }}>
+                <Search size={15} strokeWidth={1.8} style={{ flex: '0 0 auto', color: 'var(--tx3)' }} />
+                <input
+                  ref={inputRef}
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setSearchOpen(true);
+                    onSearch?.(e.target.value);
+                  }}
+                  onFocus={onSearchFocus}
+                  placeholder="Search cameras, events, plates…"
+                  style={{ fontSize: 13, flex: 1, minWidth: 0, background: 'transparent', border: 0, outline: 'none', color: 'var(--tx)' }}
+                />
+              </div>
+              {trimmed && (showResults || showNoResults) && (
+                <div style={{ marginTop: 8, background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, overflow: 'hidden' }}>
+                  {resultsInner}
+                </div>
+              )}
+            </div>
+          )}
         </div>
-
-        {searchOpen && trimmed && (
-          <div onMouseDown={() => setSearchOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 55 }} />
-        )}
-        {searchOpen && trimmed && (
+      ) : (
+        <div ref={searchRef} style={{ position: 'relative', flex: '1 1 auto', minWidth: 0, maxWidth: 280 }}>
           <div
-            className="vq-fadeup"
             style={{
-              position: 'absolute',
-              top: 44,
-              left: 0,
-              width: 344,
-              maxWidth: '86vw',
-              background: 'var(--bg1solid)',
-              border: '1px solid var(--bd2)',
-              borderRadius: 12,
-              boxShadow: '0 18px 50px rgba(0,0,0,.6)',
-              zIndex: 60,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              height: 36,
+              padding: '0 13px',
+              borderRadius: 9,
+              background: 'var(--bg2)',
+              border: `1px solid ${searchOpen ? 'var(--blue)' : 'var(--bd)'}`,
+              color: 'var(--tx3)',
               overflow: 'hidden',
             }}
           >
-            {showResults && (
-              <div className="vq-scroll" style={{ maxHeight: 340, overflowY: 'auto', padding: 6 }}>
-                {results.map((r, i) => (
-                  <div
-                    key={`${r.kind}-${r.label}-${i}`}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      goResult(r);
-                    }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '9px 10px', borderRadius: 9, cursor: 'pointer' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: r.kindColor, flex: '0 0 auto' }} />
-                    <span style={{ minWidth: 0, flex: 1 }}>
-                      <span style={{ fontSize: 13, fontWeight: 500, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</span>
-                      <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{r.sub}</span>
-                    </span>
-                    <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--tx3)', border: '1px solid var(--bd)', borderRadius: 5, padding: '2px 6px', flex: '0 0 auto' }}>{r.kind}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {showNoResults && (
-              <div style={{ padding: '22px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--tx3)' }}>
-                No matches for “{trimmed}”
-              </div>
-            )}
+            <Search size={15} strokeWidth={1.8} style={{ flex: '0 0 auto' }} />
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setSearchOpen(true);
+                onSearch?.(e.target.value);
+              }}
+              onFocus={onSearchFocus}
+              placeholder="Search cameras, events, plates…"
+              style={{ fontSize: 12.5, flex: 1, minWidth: 0, background: 'transparent', border: 0, outline: 'none', color: 'var(--tx)' }}
+            />
+            <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', border: '1px solid var(--bd)', borderRadius: 4, padding: '1px 5px', flex: '0 0 auto' }}>
+              ⌘K
+            </span>
           </div>
-        )}
-      </div>
+
+          {searchOpen && trimmed && (
+            <div
+              className="vq-fadeup"
+              style={{
+                position: 'absolute',
+                top: 44,
+                left: 0,
+                width: 344,
+                maxWidth: '86vw',
+                background: 'var(--bg1solid)',
+                border: '1px solid var(--bd2)',
+                borderRadius: 12,
+                boxShadow: '0 18px 50px rgba(0,0,0,.6)',
+                zIndex: 60,
+                overflow: 'hidden',
+              }}
+            >
+              {resultsInner}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Site switcher */}
-      <div style={{ position: 'relative', flex: '0 0 auto' }}>
+      <div ref={siteRef} style={{ position: 'relative', flex: '0 0 auto' }}>
         <div
           onClick={() => setSiteOpen((o) => !o)}
           style={{ display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 12px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer' }}
         >
           <MapPin size={14} strokeWidth={1.8} style={{ color: 'var(--blue)' }} />
-          <span style={{ fontSize: 12.5, color: 'var(--tx)', fontWeight: 500, whiteSpace: 'nowrap' }}>{siteFilter}</span>
+          {!isNarrow && (
+            <span style={{ fontSize: 12.5, color: 'var(--tx)', fontWeight: 500, whiteSpace: 'nowrap' }}>{siteFilter}</span>
+          )}
           {sites.length > 0 && <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>{sites.length}</span>}
           <ChevronDown size={14} strokeWidth={1.7} style={{ color: 'var(--tx3)' }} />
         </div>
         {siteOpen && (
-          <>
-            <div onClick={() => setSiteOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 55 }} />
-            <div
-              className="vq-fadeup"
-              style={{ position: 'absolute', top: 44, right: 0, width: 228, background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, boxShadow: '0 18px 50px rgba(0,0,0,.6)', zIndex: 60, padding: 6 }}
-            >
+          <div
+            className="vq-fadeup"
+            style={{ position: 'absolute', top: 44, right: 0, width: 228, background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, boxShadow: '0 18px 50px rgba(0,0,0,.6)', zIndex: 60, padding: 6 }}
+          >
               <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.08em', color: 'var(--tx3)', padding: '6px 9px 4px' }}>SWITCH SITE</div>
               {['All Sites', ...sites].map((s) => {
                 const label = typeof s === 'string' ? s : s.locationName || s.name;
@@ -268,23 +367,26 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
                   </div>
                 );
               })}
-            </div>
-          </>
+          </div>
         )}
       </div>
 
       {/* UTC clock */}
-      <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--tx2)', letterSpacing: '.02em' }}>{clock}</div>
+      {!hideClock && (
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--tx2)', letterSpacing: '.02em' }}>{clock}</div>
+      )}
 
       {/* Theme toggle */}
-      <div style={{ display: 'flex', gap: 3, height: 36, padding: 3, borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)' }} title="Theme">
-        <div onClick={() => setTheme('light')} style={themeBtn(theme === 'light')}>
-          <Sun size={15} strokeWidth={1.8} />
+      {!hideTheme && (
+        <div style={{ display: 'flex', gap: 3, height: 36, padding: 3, borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)', flex: '0 0 auto' }} title="Theme">
+          <div onClick={() => setTheme('light')} style={themeBtn(theme === 'light')}>
+            <Sun size={15} strokeWidth={1.8} />
+          </div>
+          <div onClick={() => setTheme('dark')} style={themeBtn(theme === 'dark')}>
+            <Moon size={15} strokeWidth={1.8} />
+          </div>
         </div>
-        <div onClick={() => setTheme('dark')} style={themeBtn(theme === 'dark')}>
-          <Moon size={15} strokeWidth={1.8} />
-        </div>
-      </div>
+      )}
 
       {/* Audio alarm mute toggle */}
       {toggleMute && (
@@ -303,8 +405,41 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
         </button>
       )}
 
+      {/* Overflow menu — holds whatever the header drops on narrow widths
+          (clock, theme toggle) so nothing becomes unreachable on mobile. */}
+      {(hideTheme || hideClock) && (
+        <div ref={moreRef} style={{ position: 'relative', flex: '0 0 auto' }}>
+          <button type="button" onClick={() => setMoreOpen((o) => !o)} aria-label="Theme and more" title="Theme" style={iconBtn}>
+            <SunMoon size={17} strokeWidth={1.7} style={{ color: 'var(--tx2)' }} />
+          </button>
+          {moreOpen && (
+            <div
+              className="vq-fadeup"
+              style={{ position: 'absolute', top: 44, right: 0, width: 200, background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, boxShadow: '0 18px 50px rgba(0,0,0,.5)', zIndex: 60, padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}
+            >
+              {hideClock && (
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--tx2)', textAlign: 'center', letterSpacing: '.02em' }}>{clock}</div>
+              )}
+              {hideTheme && (
+                <div>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.08em', color: 'var(--tx3)', marginBottom: 6 }}>THEME</div>
+                  <div style={{ display: 'flex', gap: 3, height: 36, padding: 3, borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
+                    <div onClick={() => setTheme('light')} style={{ ...themeBtn(theme === 'light'), width: 'auto', flex: 1 }}>
+                      <Sun size={15} strokeWidth={1.8} />
+                    </div>
+                    <div onClick={() => setTheme('dark')} style={{ ...themeBtn(theme === 'dark'), width: 'auto', flex: 1 }}>
+                      <Moon size={15} strokeWidth={1.8} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Notifications */}
-      <div style={{ position: 'relative', flex: '0 0 auto' }}>
+      <div ref={notifRef} style={{ position: 'relative', flex: '0 0 auto' }}>
         <div onClick={() => setNotifOpen((o) => !o)} style={{ ...iconBtn, position: 'relative' }}>
           <Bell size={17} strokeWidth={1.7} style={{ color: 'var(--tx2)' }} />
           {notifications.length > 0 && (
@@ -333,12 +468,10 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
           )}
         </div>
         {notifOpen && (
-          <>
-            <div onClick={() => setNotifOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 55 }} />
-            <div
-              className="vq-fadeup"
-              style={{ position: 'absolute', top: 44, right: 0, width: 332, maxWidth: '86vw', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, boxShadow: '0 18px 50px rgba(0,0,0,.6)', zIndex: 60, overflow: 'hidden' }}
-            >
+          <div
+            className="vq-fadeup"
+            style={{ position: 'absolute', top: 44, right: 0, width: 332, maxWidth: '86vw', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, boxShadow: '0 18px 50px rgba(0,0,0,.6)', zIndex: 60, overflow: 'hidden' }}
+          >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', borderBottom: '1px solid var(--bd)' }}>
                 <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 13.5 }}>Notifications</span>
                 {notifications.length > 0 && (
@@ -362,8 +495,7 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
                   ))
                 )}
               </div>
-            </div>
-          </>
+          </div>
         )}
       </div>
     </header>

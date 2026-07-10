@@ -4,15 +4,15 @@ import Pagination from '@/components/Pagination';
 const UsersPagination = ({ show, currentPage, totalPages, totalCount, limit, onPageChange, onLimitChange }) => {
   if (!show) return null;
   return (
-    <div className="mt-6 pt-4 border-t border-[var(--bd)] grid items-center gap-4" style={{ gridTemplateColumns: 'auto 1fr auto' }}>
-      <div className="text-sm text-[var(--tx2)] bg-[var(--bg2)] px-2.5 py-1.5 rounded-md inline-flex items-center gap-2 w-fit">
+    <div className="mt-6 pt-4 border-t border-[var(--bd)] grid grid-cols-1 lg:grid-cols-3 items-center gap-4">
+      <div className="text-sm text-[var(--tx2)] bg-[var(--bg2)] px-2.5 py-1.5 rounded-md inline-flex items-center gap-2 w-fit justify-self-center lg:justify-self-start">
         Total users -
         <span className="text-[var(--blue)] font-medium bg-[var(--blue)]/10 px-2.5 py-1 rounded-md">
           {totalCount}
         </span>
       </div>
       <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={onPageChange} className="flex justify-center" />
-      <div className="flex items-center justify-end gap-1.5">
+      <div className="flex items-center justify-center lg:justify-end gap-1.5">
         <span className="text-xs text-[var(--tx3)] whitespace-nowrap">Rows:</span>
         <select
           value={limit}

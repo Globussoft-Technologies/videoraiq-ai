@@ -18,7 +18,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange, className = "mt-6 f
 
   return (
     <div className={className}>
-      <div className="flex items-center gap-2 ">
+      <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
         {/* First Page Button */}
         <button
           onClick={() => goToPage(1)}

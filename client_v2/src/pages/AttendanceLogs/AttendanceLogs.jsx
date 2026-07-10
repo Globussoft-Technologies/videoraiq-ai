@@ -337,7 +337,7 @@ const AttendanceLogs = () => {
   }
 
   return (
-    <div className="p-[22px] flex flex-col gap-[18px] min-h-full">
+    <div className="p-3 sm:p-4 lg:p-[22px] flex flex-col gap-3 sm:gap-[18px] min-h-full">
       {/* CAMERA PREVIEW */}
       <ActionCameraPreview
         module="attendancelogs"

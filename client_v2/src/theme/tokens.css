@@ -175,6 +175,13 @@
 .vq-fadeup    { animation: vq-fadeup 0.3s ease both; }
 .vq-spin      { animation: vq-spin 0.6s linear; }
 
+/* Gentle sideways nudge for the "scroll for more" chevron on wide tables. */
+@keyframes vq-scrollnudge {
+  0%, 100% { transform: translateY(-50%) translateX(0); }
+  50%      { transform: translateY(-50%) translateX(3px); }
+}
+.vq-scrollnudge { animation: vq-scrollnudge 1.3s ease-in-out infinite; }
+
 /* ---- Responsive layout for Command Center grids ---- */
 @media (max-width: 1280px) {
   .vq-kpi-row { grid-template-columns: repeat(3, 1fr) !important; }
