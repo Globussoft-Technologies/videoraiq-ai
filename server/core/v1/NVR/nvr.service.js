@@ -86,6 +86,24 @@ class NVRService {
 
       const { nvr, cameras } = value;
 
+      // ponytail: hard cap of 2 channels, only for user_id "46"; generalize to a plan/config field when tiers exist
+      const MAX_CHANNELS_PER_USER = 2;
+      if (String(userId) === "46") {
+        const existingChannelCount = await Channel.countDocuments({
+          userId,
+          isAdded: true,
+        });
+        if (existingChannelCount + cameras.length > MAX_CHANNELS_PER_USER) {
+          return res
+            .status(400)
+            .json(
+              Response.userFailResp(
+                `Channel limit reached. A maximum of ${MAX_CHANNELS_PER_USER} channels are allowed for this user (${existingChannelCount} already added).`,
+              ),
+            );
+        }
+      }
+
       // Save NVR metadata
       const savedNvr = await NVR.create({
         userId,

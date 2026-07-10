@@ -1025,6 +1025,14 @@ async function updateCPPlusChannels(nvr, plainPassword, res) {
 
     const cameraResults = [];
 
+    // ponytail: hard cap of 2 channels, only for user_id "46"; generalize to a plan/config field when tiers exist.
+    // Counts all of the user's channels (incl. un-added) so refetch can't seed past the cap.
+    const MAX_CHANNELS_PER_USER = 2;
+    const isCappedUser = String(userId) === "46";
+    let cappedUserChannelCount = isCappedUser
+      ? await Camera.countDocuments({ userId }, { includeInactive: true })
+      : 0;
+
     for (const chGroup of channelGroups) {
       const chId = chGroup.channel;
 
@@ -1052,10 +1060,16 @@ async function updateCPPlusChannels(nvr, plainPassword, res) {
         (rd) => rd.Channel === chId || rd.channel === chId
       );
 
-      let existingCam = await Camera.findOne({
-        nvrId,
-        channelId: (parseInt(chId) + 1).toString(),
-      });
+      // includeInactive: bypass the isAdded:true pre-hook so we match un-added
+      // channels too — otherwise refetch never finds them and inserts duplicates.
+      let existingCam = await Camera.findOne(
+        {
+          nvrId,
+          channelId: (parseInt(chId) + 1).toString(),
+        },
+        null,
+        { includeInactive: true },
+      );
 
       if (existingCam) {
         existingCam.name = cameraName;
@@ -1065,6 +1079,11 @@ async function updateCPPlusChannels(nvr, plainPassword, res) {
         await existingCam.save();
         cameraResults.push(existingCam);
       } else {
+        // Capped user: stop creating new channels once at the limit.
+        if (isCappedUser && cappedUserChannelCount >= MAX_CHANNELS_PER_USER) {
+          continue;
+        }
+
         const savedCam = await Camera.create({
           nvrId,
           userId,
@@ -1078,6 +1097,7 @@ async function updateCPPlusChannels(nvr, plainPassword, res) {
             chGroup?.FirmwareVersion || remoteDevice?.FirmwareVersion || "",
           streamEndpoint: "/cam/realmonitor",
         });
+        cappedUserChannelCount++;
 
         const uid = `${nvrId}-${savedCam._id}`;
         const rtspUrl = buildRTSPUrl(nvr, savedCam, "main");

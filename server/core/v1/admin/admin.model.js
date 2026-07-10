@@ -38,6 +38,10 @@ const adminSchema = new mongoose.Schema({
     }
   },
   logsSound: { type: Boolean, default: false },
+  // True while this admin's detection/face-auth streams have been stopped due to
+  // plan expiry. Set when stop-all fires; cleared (and resume-all fired) when the
+  // admin logs in again with an active plan.
+  streamsStopped: { type: Boolean, default: false },
   // Per-admin IANA timezone (e.g. "Asia/Kolkata"). null = not set.
   timezone: { type: String, default: null },
   // Optional per-admin service endpoint overrides. null = use the global
