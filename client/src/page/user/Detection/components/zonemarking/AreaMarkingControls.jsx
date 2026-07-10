@@ -689,7 +689,7 @@ const handleMinArea = () => {
           </button>
           {showSaveModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-              <div className="bg-white rounded-lg w-[380px] p-6 shadow-lg">
+              <div className="bg-white rounded-lg w-[500px] max-w-[92vw] max-h-[90vh] overflow-y-auto p-6 shadow-lg">
                 <h3 className="text-base text-center font-semibold mb-6 border-b border-gray-200 text-gray-800">
                   Save Detection Area
                 </h3>

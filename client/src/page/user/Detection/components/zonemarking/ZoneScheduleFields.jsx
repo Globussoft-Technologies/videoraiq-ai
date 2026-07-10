@@ -397,8 +397,8 @@ const ZoneScheduleFields = ({ value = emptySchedule(), onChange, disabled }) => 
                 onChange={(from) => patch({ from })}
               />
             </div>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-2 mt-2">
-              <span className="inline-flex items-center justify-center text-[11px] font-semibold text-[#07486A] bg-[#07486A]/10 border border-[#07486A]/30 rounded-full px-2 py-0.5 w-12">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+              <span className="inline-flex items-center justify-center text-[11px] font-semibold text-white bg-[#07486A] rounded-full px-2 py-0.5 w-12">
                 To
               </span>
               <TimeSelect
