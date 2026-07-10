@@ -46,12 +46,12 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
 
   return (
     <Panel style={{ background: 'var(--bg1)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 16px 0' }}>
-        <span className="vq-blink" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--crit)' }} />
-        <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Live Camera</span>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>switch feeds ↓</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 16px 0', flexWrap: 'wrap', rowGap: 4 }}>
+        <span className="vq-blink" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--crit)', flex: '0 0 auto' }} />
+        <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, flex: '0 1 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Live Camera</span>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', flex: '0 0 auto', whiteSpace: 'nowrap' }}>switch feeds ↓</span>
         <ActionLink
-          style={{ marginLeft: 'auto', ...(active ? {} : { color: 'var(--tx3)', cursor: 'default' }) }}
+          style={{ marginLeft: 'auto', flex: '0 0 auto', whiteSpace: 'nowrap', ...(active ? {} : { color: 'var(--tx3)', cursor: 'default' }) }}
           onClick={openFullView}
         >
           Open full view →
@@ -59,7 +59,7 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
       </div>
 
       {/* Tabs */}
-      <div className="vq-scroll" style={{ display: 'flex', gap: 7, overflowX: 'auto', padding: '11px 16px' }}>
+      <div className="vq-scroll" style={{ display: 'flex', gap: 7, overflowX: 'auto', overflowY: 'hidden', padding: '11px 16px', WebkitOverflowScrolling: 'touch' }}>
         {cams.map((c) => {
           const id = c._id || c.id;
           const isActive = id === activeKey;

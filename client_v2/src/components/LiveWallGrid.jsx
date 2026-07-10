@@ -399,7 +399,7 @@ export default function LiveWallGrid() {
             onChange={onFilter(setSelLoc)}
             placeholder="Select Location"
             searchPlaceholder="Search Locations..."
-            className="w-full sm:w-36 md:w-40"
+            className="w-full sm:w-40 md:w-44"
             maxHeight="max-h-48"
             msg="No Location Found"
           />
@@ -410,7 +410,7 @@ export default function LiveWallGrid() {
           onChange={onFilter(setSelNvr)}
           placeholder="Select NVR"
           searchPlaceholder="Search NVRs..."
-          className="w-full sm:w-36 md:w-40"
+          className="w-full sm:w-40 md:w-44"
           maxHeight="max-h-48"
           msg="No NVR Found"
         />
@@ -420,7 +420,7 @@ export default function LiveWallGrid() {
           onChange={onFilter(setSelCam)}
           placeholder="Select Cameras"
           searchPlaceholder="Search Cameras..."
-          className="w-full sm:w-36 md:w-40"
+          className="w-full sm:w-40 md:w-44"
           maxHeight="max-h-48"
           msg="No Camera Found"
         />
@@ -430,7 +430,7 @@ export default function LiveWallGrid() {
           onChange={onFilter(setSelDept)}
           placeholder="Select Department"
           searchPlaceholder="Search Departments..."
-          className="w-full sm:w-36 md:w-40"
+          className="w-full sm:w-44 md:w-48"
           maxHeight="max-h-48"
           msg="No Department Found"
         />
@@ -440,13 +440,13 @@ export default function LiveWallGrid() {
           onChange={onFilter(setSelType)}
           placeholder="Select Camera Type"
           searchPlaceholder="Search Camera Type..."
-          className="w-full sm:w-36 md:w-40"
+          className="w-full sm:w-48 md:w-52"
           maxHeight="max-h-48"
           msg="No Type Found"
         />
 
         {/* Status filter */}
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative', flexShrink: 0 }}>
           <select
             value={statusFilter}
             onChange={e => { setStatusFilter(e.target.value); setPage(0); }}
@@ -464,7 +464,7 @@ export default function LiveWallGrid() {
           <button
             onClick={clearFilters}
             title="Clear all filters"
-            style={{ display: 'flex', alignItems: 'center', gap: 5, height: 40, padding: '0 14px', borderRadius: 8, background: 'var(--brand)', border: '1px solid var(--brand)', cursor: 'pointer', color: '#fff', fontSize: 12.5, fontWeight: 600 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, height: 40, padding: '0 14px', borderRadius: 8, background: 'var(--brand)', border: '1px solid var(--brand)', cursor: 'pointer', color: '#fff', fontSize: 12.5, fontWeight: 600, flexShrink: 0 }}
           >
             <X size={13} />
             Clear
@@ -472,7 +472,7 @@ export default function LiveWallGrid() {
         )}
 
         {/* Camera count */}
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, color: 'var(--ph)', marginLeft: 4 }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, color: 'var(--ph)', marginLeft: 4, whiteSpace: 'nowrap', flexShrink: 0 }}>
           Showing {visible.length} of {list.length} cameras
         </span>
 
@@ -480,8 +480,8 @@ export default function LiveWallGrid() {
 
         {/* Active (live-streaming) cameras badge */}
         {activeCount > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: 'var(--ok)' }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--ok)', display: 'inline-block', boxShadow: '0 0 6px var(--ok)' }} className="vq-blink" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: 'var(--ok)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--ok)', display: 'inline-block', boxShadow: '0 0 6px var(--ok)', flexShrink: 0 }} className="vq-blink" />
             {activeCount} active camera{activeCount !== 1 ? 's' : ''}
           </div>
         )}
@@ -490,7 +490,7 @@ export default function LiveWallGrid() {
         <button
           onClick={togglePageFullscreen}
           title={isPageFS ? 'Exit fullscreen' : 'Fullscreen'}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)', fontSize: 12, fontWeight: 500 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)', fontSize: 12, fontWeight: 500, flexShrink: 0, whiteSpace: 'nowrap' }}
         >
           {isPageFS ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
           {isPageFS ? 'Exit' : 'Fullscreen'}
@@ -542,21 +542,21 @@ export default function LiveWallGrid() {
 
               {/* Pagination */}
               {pages > 1 && size.cols !== 1 && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '14px 0 4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '14px 8px 4px', flexWrap: 'wrap' }}>
                   <button
                     disabled={safePage === 0}
                     onClick={() => setPage(p => Math.max(0, p - 1))}
-                    style={{ height: 32, padding: '0 16px', borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--bd)', color: safePage === 0 ? 'var(--tx3)' : 'var(--tx)', fontSize: 12, cursor: safePage === 0 ? 'default' : 'pointer' }}
+                    style={{ height: 32, padding: '0 16px', borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--bd)', color: safePage === 0 ? 'var(--tx3)' : 'var(--tx)', fontSize: 12, cursor: safePage === 0 ? 'default' : 'pointer', flexShrink: 0 }}
                   >
                     Prev
                   </button>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--tx3)' }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--tx3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
                     {safePage + 1} / {pages}
                   </span>
                   <button
                     disabled={safePage + 1 >= pages}
                     onClick={() => setPage(p => p + 1)}
-                    style={{ height: 32, padding: '0 16px', borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--bd)', color: safePage + 1 >= pages ? 'var(--tx3)' : 'var(--tx)', fontSize: 12, cursor: safePage + 1 >= pages ? 'default' : 'pointer' }}
+                    style={{ height: 32, padding: '0 16px', borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--bd)', color: safePage + 1 >= pages ? 'var(--tx3)' : 'var(--tx)', fontSize: 12, cursor: safePage + 1 >= pages ? 'default' : 'pointer', flexShrink: 0 }}
                   >
                     Next
                   </button>

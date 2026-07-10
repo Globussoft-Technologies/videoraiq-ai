@@ -260,7 +260,7 @@ export default function CameraGrid() {
         />
 
         {/* Playback date filter */}
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative', maxWidth: '100%', flexShrink: 0 }}>
           <Calendar size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: dateStr !== todayStr ? 'var(--blue)' : 'var(--tx3)' }} />
           <input
             type="date"
@@ -268,7 +268,7 @@ export default function CameraGrid() {
             max={todayStr}
             onChange={e => { if (e.target.value) setDateStr(e.target.value); }}
             title="Select playback date"
-            style={{ ...pill(dateStr !== todayStr), paddingLeft: 30 }}
+            style={{ ...pill(dateStr !== todayStr), paddingLeft: 30, maxWidth: '100%', boxSizing: 'border-box' }}
           />
         </div>
 
@@ -285,11 +285,11 @@ export default function CameraGrid() {
         )}
 
         {/* Camera count */}
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, color: 'var(--ph)', marginLeft: 4 }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, color: 'var(--ph)', marginLeft: 4, whiteSpace: 'nowrap' }}>
           Showing {visible.length} of {list.length} cameras
         </span>
 
-        <div style={{ flex: 1 }} />
+        <div style={{ flex: '1 1 0%', minWidth: 0 }} />
 
         {/* Fullscreen page toggle */}
         <button

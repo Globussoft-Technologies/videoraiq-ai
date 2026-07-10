@@ -61,16 +61,16 @@ function ReportModal({ item, onClose, onSuccess }) {
   return (
     <div
       onClick={onClose}
-      style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)', padding: 16, boxSizing: 'border-box' }}
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{ width: 420, background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, padding: '24px', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}
+        style={{ width: 'min(420px, 92vw)', maxHeight: '90vh', overflowY: 'auto', boxSizing: 'border-box', background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, padding: '24px', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}
       >
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 18 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--tx)' }}>Report Incident</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             {existing && !editing && (
               <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ok)', background: 'rgba(34,197,94,.1)', border: '1px solid rgba(34,197,94,.25)', borderRadius: 20, padding: '3px 10px' }}>
                 ✓ Reported
@@ -94,7 +94,7 @@ function ReportModal({ item, onClose, onSuccess }) {
                 </div>
               )}
             </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <button onClick={onClose} style={btnStyle('secondary')}>Close</button>
               <button onClick={() => setEditing(true)} style={btnStyle('outline-blue')}>Edit Report</button>
             </div>
@@ -121,7 +121,7 @@ function ReportModal({ item, onClose, onSuccess }) {
               Provide details about the incident and any actions taken.
             </div>
             {err && <div style={{ fontSize: 12, color: 'var(--crit)', marginBottom: 10 }}>{err}</div>}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <button
                 onClick={() => { if (editing && existing) { setEditing(false); setDesc(existing.description); } else onClose(); }}
                 style={btnStyle('secondary')}
@@ -216,7 +216,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox 
           )}
 
           {/* Top-left: detection badge + mark-as-resolved (shown on hover) */}
-          <div style={{ position: 'absolute', top: 9, left: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ position: 'absolute', top: 9, left: 9, right: 9, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             {/* Detection type badge */}
             <div style={{ background: sevColor, color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5, letterSpacing: '.3px', whiteSpace: 'nowrap' }}>
               {det}
@@ -235,6 +235,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox 
                   cursor: resolving ? 'wait' : 'pointer',
                   color: '#fff', fontSize: 11, fontWeight: 500,
                   transition: 'background .15s',
+                  maxWidth: '100%', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                 }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,.9)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,.72)'}
@@ -262,19 +263,19 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox 
           </div>
 
           {/* Bottom-left: timestamp + camera name */}
-          <div style={{ position: 'absolute', bottom: 9, left: 9, display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <span style={{ fontFamily: 'monospace', fontSize: 9.5, color: '#fff', background: 'rgba(0,0,0,.55)', padding: '2px 8px', borderRadius: 5, backdropFilter: 'blur(4px)' }}>
+          <div style={{ position: 'absolute', bottom: 9, left: 9, maxWidth: 'calc(50% - 14px)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
+            <span style={{ fontFamily: 'monospace', fontSize: 9.5, color: '#fff', background: 'rgba(0,0,0,.55)', padding: '2px 8px', borderRadius: 5, backdropFilter: 'blur(4px)', maxWidth: '100%', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', boxSizing: 'border-box' }}>
               {shortDateTime(item.timeOfIncident)}
             </span>
             {cam && (
-              <span style={{ fontFamily: 'monospace', fontSize: 9.5, color: 'rgba(255,255,255,.8)', background: 'rgba(0,0,0,.45)', padding: '2px 8px', borderRadius: 5, backdropFilter: 'blur(4px)' }}>
+              <span style={{ fontFamily: 'monospace', fontSize: 9.5, color: 'rgba(255,255,255,.8)', background: 'rgba(0,0,0,.45)', padding: '2px 8px', borderRadius: 5, backdropFilter: 'blur(4px)', maxWidth: '100%', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', boxSizing: 'border-box' }}>
                 {cam}
               </span>
             )}
           </div>
 
           {/* Bottom-right: confidence + Report button + expand */}
-          <div style={{ position: 'absolute', bottom: 9, right: 9, display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ position: 'absolute', bottom: 9, right: 9, maxWidth: 'calc(50% - 14px)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5, flexWrap: 'wrap' }}>
             {conf != null && (
               <span style={{ fontFamily: 'monospace', fontSize: 9.5, color: '#fff', background: 'rgba(0,0,0,.55)', padding: '2px 8px', borderRadius: 5, backdropFilter: 'blur(4px)' }}>
                 {Math.round(conf)}%
@@ -313,12 +314,12 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox 
         </div>
 
         {/* Info row */}
-        <div style={{ padding: '11px 13px 12px', display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ padding: '11px 13px 12px', display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
             {item.incidentName || det}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <span style={{ fontSize: 11, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
+            <span style={{ fontSize: 11, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: '1 1 auto' }}>
               {[cam, site].filter(Boolean).join(' · ')}
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: '0 0 auto', fontSize: 10.5, color: st.color, fontWeight: 600 }}>

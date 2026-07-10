@@ -43,6 +43,7 @@ export default function MultiSiteNetwork({ sites = [] }) {
   return (
     <Panel
       gradient
+      className="vq-msn"
       style={{
         padding: 0,
         position: 'relative',
@@ -51,6 +52,39 @@ export default function MultiSiteNetwork({ sites = [] }) {
         background: 'linear-gradient(180deg,var(--bg1),var(--bg0))',
       }}
     >
+      {/* Responsive breakpoints scoped to this component, following the
+          existing .vq-* media-query convention used in theme/tokens.css. */}
+      <style>{`
+        .vq-msn { min-height: 380px; }
+        .vq-msn .vq-msn-header {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 8px;
+        }
+        .vq-msn .vq-msn-legend { flex-wrap: wrap; justify-content: flex-end; }
+        .vq-msn .vq-msn-node-label {
+          max-width: 46vw;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        @media (max-width: 900px) {
+          .vq-msn { min-height: 420px; }
+        }
+        @media (max-width: 640px) {
+          .vq-msn { min-height: 460px; }
+          .vq-msn .vq-msn-node-label {
+            max-width: 34vw;
+            font-size: 10px !important;
+            padding: 3px 6px !important;
+          }
+        }
+        @media (max-width: 420px) {
+          .vq-msn { min-height: 520px; }
+          .vq-msn .vq-msn-node-label { max-width: 28vw; }
+        }
+      `}</style>
       {/* aerial site map - fills the entire card */}
       <img
         src={sitemap}
@@ -76,31 +110,33 @@ export default function MultiSiteNetwork({ sites = [] }) {
         }}
       />
 
-      <div style={{ position: 'absolute', top: 16, left: 18, zIndex: 3, textShadow: '0 1px 6px rgba(0,0,0,.85)' }}>
-        <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, color: '#f4f8ff' }}>Multi-Site Network</div>
-        <div style={{ fontSize: 11, color: '#c7d6ee', marginTop: 2 }}>
-          {n} site{n === 1 ? '' : 's'} · {totalCams.toLocaleString()} camera{totalCams === 1 ? '' : 's'} · live topology
-        </div>
-      </div>
       <div
-        style={{
-          position: 'absolute',
-          top: 16,
-          right: 18,
-          zIndex: 3,
-          display: 'flex',
-          gap: 6,
-          fontFamily: 'var(--mono)',
-          fontSize: 10,
-          textShadow: '0 1px 5px rgba(0,0,0,.8)',
-        }}
+        className="vq-msn-header"
+        style={{ position: 'absolute', top: 16, left: 18, right: 18, zIndex: 3, textShadow: '0 1px 6px rgba(0,0,0,.85)' }}
       >
-        {[['OK', 'var(--ok)'], ['WARN', 'var(--warn)'], ['ALERT', 'var(--crit)']].map(([l, c]) => (
-          <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#d4e0f2' }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: c }} />
-            {l}
-          </span>
-        ))}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, color: '#f4f8ff' }}>Multi-Site Network</div>
+          <div style={{ fontSize: 11, color: '#c7d6ee', marginTop: 2 }}>
+            {n} site{n === 1 ? '' : 's'} · {totalCams.toLocaleString()} camera{totalCams === 1 ? '' : 's'} · live topology
+          </div>
+        </div>
+        <div
+          className="vq-msn-legend"
+          style={{
+            display: 'flex',
+            gap: 6,
+            fontFamily: 'var(--mono)',
+            fontSize: 10,
+            textShadow: '0 1px 5px rgba(0,0,0,.8)',
+          }}
+        >
+          {[['OK', 'var(--ok)'], ['WARN', 'var(--warn)'], ['ALERT', 'var(--crit)']].map(([l, c]) => (
+            <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#d4e0f2' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: c }} />
+              {l}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* grid + glow */}
@@ -171,6 +207,7 @@ export default function MultiSiteNetwork({ sites = [] }) {
                 }}
               />
               <div
+                className="vq-msn-node-label"
                 style={{
                   position: 'absolute',
                   left: 18,
@@ -183,7 +220,7 @@ export default function MultiSiteNetwork({ sites = [] }) {
                   backdropFilter: 'blur(6px)',
                 }}
               >
-                <div style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.1 }}>{nd.name}</div>
+                <div style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{nd.name}</div>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--tx3)' }}>{nd.cams} cams</div>
               </div>
             </div>

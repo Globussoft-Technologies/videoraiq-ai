@@ -24,10 +24,10 @@ export default function LiveThreatFeed({ alerts = [], loading, error, isEmpty, o
                 <div key={a._id || i} style={{ display: 'flex', gap: 10, padding: '10px 11px', borderRadius: 11, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
                   <span style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, background: sev.color, flex: '0 0 auto' }} />
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
                       <Badge color={sev.color}>{sev.short}</Badge>
-                      <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--tx3)' }}>{det}</span>
-                      <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--tx3)' }}>{a.timeAgo || timeAgo(a.timeOfIncident)}</span>
+                      <span style={{ flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--tx3)' }}>{det}</span>
+                      <span style={{ marginLeft: 'auto', flex: '0 0 auto', fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--tx3)' }}>{a.timeAgo || timeAgo(a.timeOfIncident)}</span>
                     </div>
                     <div style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {a.incidentName || det}

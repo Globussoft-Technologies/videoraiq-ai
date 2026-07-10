@@ -62,101 +62,88 @@ export default function EngineActivity({ todayEngines = [], events24h = [], tota
   const yTicks = [1, 0.75, 0.5, 0.25, 0]; // fractions of peak, top → bottom
 
   return (
-    <Panel style={{ padding: 16 }}>
+    <Panel style={{ padding: 16, overflow: 'hidden' }}>
+      <style>{`
+        .vq-engine-activity { max-width: 100%; }
+        .vq-ea-row { min-width: 0; }
+        .vq-ea-name { min-width: 0; }
+        .vq-ea-bar { flex: 1 1 60px; min-width: 40px; max-width: 140px; }
+        .vq-ea-axis span { flex: 0 1 auto; }
+        @media (max-width: 640px) {
+          .vq-ea-label { width: 40px !important; font-size: 9px !important; }
+          .vq-ea-bar { max-width: 72px !important; }
+          .vq-ea-count { width: 44px !important; font-size: 10.5px !important; }
+          .vq-ea-axis { font-size: 8.5px !important; }
+        }
+        @media (max-width: 420px) {
+          .vq-ea-bar { max-width: 48px !important; }
+        }
+      `}</style>
       <AsyncBoundary loading={loading} error={error} isEmpty={isEmpty} onRetry={onRetry} minH={160} emptyLabel="No detections in range">
         {() => (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr', gap: 22 }} className="vq-engine-grid">
-            {/* Engine Activity · Today — donut (share of today's detections) + legend */}
+            {/* Engine Activity · Today */}
             <div>
-              <div className="font-[var(--disp)] font-semibold text-[14px] mb-[14px]">Engine Activity · Today</div>
-              <div className="flex items-center justify-center gap-[18px] mt-[38px]">
-                {/* Donut */}
-                <div className="relative w-[132px] h-[132px] flex-none">
-                  <svg viewBox="0 0 100 100" className="w-full h-full [transform:rotate(-90deg)]">
-                    {/* track ring */}
-                    <circle cx="50" cy="50" r={DONUT_R} fill="none" stroke="var(--track)" strokeWidth="13" />
-                    {segments.map((s) => (
-                      <circle
-                        key={s.type}
-                        cx="50"
-                        cy="50"
-                        r={DONUT_R}
-                        fill="none"
-                        stroke={s.color}
-                        strokeWidth="13"
-                        strokeDasharray={`${s.dash} ${DONUT_C - s.dash}`}
-                        strokeDashoffset={-s.offset}
-                      >
-                        <title>{`${engineMeta(s.type).name}: ${num(s.count)} (${s.pct.toFixed(0)}%)`}</title>
-                      </circle>
-                    ))}
-                  </svg>
-                  {/* center total */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="font-[var(--mono)] font-bold text-[20px] leading-none text-[var(--tx)]">{formatCount(todayTotal)}</span>
-                    <span className="font-[var(--mono)] text-[9px] tracking-[.08em] text-[var(--tx3)] mt-[3px]">TODAY</span>
-                  </div>
-                </div>
-
-                {/* Legend */}
-                <div className="vq-scroll flex-[0_1_auto] min-w-0 max-w-[320px] flex flex-col gap-[9px] max-h-[148px] overflow-y-auto">
-                  {segments.map((s) => {
-                    const meta = engineMeta(s.type);
-                    return (
-                      <div key={s.type} className="flex items-center gap-[10px]">
-                        <span className="w-[9px] h-[9px] rounded-full flex-none" style={{ background: s.color, boxShadow: `0 0 7px ${s.color}` }} />
-                        <span className="w-[52px] font-[var(--mono)] text-[10px] text-[var(--tx2)] flex-none">{meta.short}</span>
-                        <span className="flex-1 min-w-0 text-[12px] text-[var(--tx)]">{meta.name}</span>
-                        <span className="font-[var(--mono)] text-[11.5px] font-semibold text-[var(--tx)] flex-none">{formatCount(s.count)}</span>
-                        <span className="w-[38px] text-right font-[var(--mono)] text-[10px] text-[var(--tx3)] flex-none">{s.pct.toFixed(0)}%</span>
+              <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 14 }}>Engine Activity · Today</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+                {todayEngines.map((e, i) => {
+                  const meta = engineMeta(e.type);
+                  const color = PALETTE[i % PALETTE.length];
+                  return (
+                    <div key={e.type} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ width: 54, fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx2)', flex: '0 0 auto' }}>{meta.short}</span>
+                      <span style={{ flex: 1, fontSize: 12, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta.name}</span>
+                      <div style={{ width: 140, height: 6, borderRadius: 3, background: 'var(--track)', overflow: 'hidden', flex: '0 0 auto' }}>
+                        <div
+                          style={{
+                            width: `${(e.count / maxCount) * 100}%`,
+                            height: '100%',
+                            borderRadius: 3,
+                            background: color,
+                            boxShadow: `0 0 8px ${color}`,
+                            position: 'relative',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <span
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              bottom: 0,
+                              left: 0,
+                              width: '45%',
+                              background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent)',
+                              animation: 'vqshimmer 2.6s ease-in-out infinite',
+                            }}
+                          />
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
+                      <span style={{ width: 52, textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, fontWeight: 600, flex: '0 0 auto' }}>{formatCount(e.count)}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
             {/* Detection Events · 24h */}
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
                 <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Detection Events · 24h</div>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>{num(total24h)} total</span>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>{num(total24h)} total</span>
               </div>
-              <div style={{ flex: 1, display: 'flex', gap: 6 }}>
-                {/* Y-axis title — what the numbers mean */}
-                <div style={{ width: 14, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontFamily: 'var(--mono)', fontSize: 8.5, letterSpacing: '.12em', color: 'var(--tx3)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-                    Detections
-                  </span>
-                </div>
-                <div style={{ flex: 1, display: 'flex', gap: 8, minWidth: 0 }}>
-                  {/* Y-axis — detection count at each gridline (peak → 0) */}
-                  <div style={{ width: 30, flex: '0 0 auto', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', alignItems: 'flex-end', fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--tx3)', paddingBottom: 1 }}>
-                    {yTicks.map((f) => (
-                      <span key={f}>{num(Math.round(peak * f))}</span>
-                    ))}
-                  </div>
-                  {/* Plot area */}
-                  <div style={{ position: 'relative', flex: 1, minHeight: 170 }}>
-                    {/* horizontal gridlines aligned with the y-axis ticks */}
-                    {yTicks.map((f) => (
-                      <div key={f} style={{ position: 'absolute', left: 0, right: 0, top: `${(1 - f) * 100}%`, borderTop: '1px dashed var(--grid)' }} />
-                    ))}
-                    <svg viewBox={`0 0 ${chartW} ${chartH}`} preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-                      <defs>
-                        <linearGradient id="det-area" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0" stopColor="rgba(59,130,246,.5)" />
-                          <stop offset="1" stopColor="rgba(59,130,246,0)" />
-                        </linearGradient>
-                      </defs>
-                      <polygon points={area} fill="url(#det-area)" />
-                      <polyline points={line} fill="none" stroke="var(--blue)" strokeWidth="2.2" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                </div>
+              <div style={{ flex: 1, position: 'relative', minHeight: 170 }}>
+                <svg viewBox={`0 0 ${chartW} ${chartH}`} preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+                  <defs>
+                    <linearGradient id="det-area" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stopColor="rgba(59,130,246,.5)" />
+                      <stop offset="1" stopColor="rgba(59,130,246,0)" />
+                    </linearGradient>
+                  </defs>
+                  <polygon points={area} fill="url(#det-area)" />
+                  <polyline points={line} fill="none" stroke="var(--blue)" strokeWidth="2.2" strokeLinejoin="round" />
+                </svg>
               </div>
-              {/* X-axis tick labels — padded left (14 title + 6 gap + 30 y-nums + 8 gap) to sit under the plot */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--tx3)', marginTop: 8, paddingLeft: 58 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--tx3)', marginTop: 8 }}>
                 <span>00:00</span>
                 <span>06:00</span>
                 <span>12:00</span>

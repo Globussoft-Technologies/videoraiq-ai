@@ -64,8 +64,8 @@ function ReportModal({ item, onClose, onSuccess }) {
   }
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 420, background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, padding: '24px', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)', padding: 16, boxSizing: 'border-box' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 'min(420px, 100%)', maxHeight: '90vh', overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, padding: '24px', boxSizing: 'border-box', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--tx)' }}>Report Incident</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -171,16 +171,32 @@ export default function AlertsView() {
 
   return (
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <style>{`
+        @media (max-width: 1100px) {
+          .vq-alerts-grid { grid-template-columns: 1fr !important; }
+          .vq-alerts-detail { position: static !important; }
+        }
+        @media (max-width: 640px) {
+          .vq-alerts-row-head { grid-template-columns: 46px 1fr 72px !important; }
+          .vq-alerts-row-head .vq-alerts-col-status { display: none !important; }
+          .vq-alerts-row { grid-template-columns: 46px 1fr 72px !important; }
+          .vq-alerts-row .vq-alerts-col-status { display: none !important; }
+        }
+        @media (max-width: 420px) {
+          .vq-alerts-row-head { grid-template-columns: 40px 1fr 60px !important; }
+          .vq-alerts-row { grid-template-columns: 40px 1fr 60px !important; }
+        }
+      `}</style>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         {TABS.map((t) => <div key={t.key} onClick={() => setSev(t.key)} style={tab(sev === t.key)}>{t.label}</div>)}
         <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)' }}>{rows.length} events</span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16 }} className="vq-cc-grid">
+      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16, minWidth: 0 }} className="vq-cc-grid vq-alerts-grid">
         {/* Table */}
-        <Panel style={{ overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 110px 110px', gap: 8, padding: '11px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>
-            <span>SEVERITY</span><span>EVENT</span><span>TIME</span><span>STATUS</span>
+        <Panel style={{ overflow: 'hidden', minWidth: 0 }}>
+          <div className="vq-alerts-row-head" style={{ display: 'grid', gridTemplateColumns: '80px 1fr 110px 110px', gap: 8, padding: '11px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>
+            <span>SEVERITY</span><span>EVENT</span><span>TIME</span><span className="vq-alerts-col-status">STATUS</span>
           </div>
           <AsyncBoundary loading={feed.loading} error={feed.error} isEmpty={!feed.loading && !feed.error && rows.length === 0} onRetry={feed.refetch} minH={300} emptyLabel="No alerts">
             {() => (
@@ -193,6 +209,7 @@ export default function AlertsView() {
                     <div
                       key={it._id}
                       onClick={() => setSelected(it)}
+                      className="vq-alerts-row"
                       style={{ display: 'grid', gridTemplateColumns: '80px 1fr 110px 110px', gap: 8, alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid var(--bd)', cursor: 'pointer', background: isSel ? 'var(--bg2)' : 'transparent' }}
                     >
                       <Badge color={s.color}>{s.short}</Badge>
@@ -200,9 +217,9 @@ export default function AlertsView() {
                         <div style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.incidentName || detectionLabel(it.incidentType)}</div>
                         <div style={{ fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{[it.channelData?.name, it.nvrData?.nvrName].filter(Boolean).join(' · ')}</div>
                       </div>
-                      <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx2)' }}>{timeAgo(it.timeOfIncident)}</span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: st.color, fontWeight: 600 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: st.color }} />{st.label}
+                      <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{timeAgo(it.timeOfIncident)}</span>
+                      <span className="vq-alerts-col-status" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: st.color, fontWeight: 600, minWidth: 0, overflow: 'hidden' }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: st.color, flex: '0 0 auto' }} /><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st.label}</span>
                       </span>
                     </div>
                   );
@@ -213,7 +230,7 @@ export default function AlertsView() {
         </Panel>
 
         {/* Detail */}
-        <Panel style={{ overflow: 'hidden', alignSelf: 'flex-start', position: 'sticky', top: 0 }}>
+        <Panel className="vq-alerts-detail" style={{ overflow: 'hidden', alignSelf: 'flex-start', position: 'sticky', top: 0, minWidth: 0 }}>
           {!active ? (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--tx3)', fontSize: 12 }}>Select an alert to inspect</div>
           ) : (
@@ -225,16 +242,16 @@ export default function AlertsView() {
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--tx3)', fontSize: 11.5 }}>No snapshot</div>
                 )}
               </div>
-              <div style={{ padding: 15, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
+              <div style={{ padding: 15, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
+                <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' }}>
                   <Badge color={severity(active.severity).color} solid>{detectionLabel(active.incidentType)}</Badge>
                   <Badge color={severity(active.severity).color}>{severity(active.severity).short}</Badge>
-                  <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>{shortDateTime(active.timeOfIncident)}</span>
+                  <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>{shortDateTime(active.timeOfIncident)}</span>
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>{active.incidentName || detectionLabel(active.incidentType)}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>{[active.channelData?.name, active.nvrData?.nvrName, active.location].filter(Boolean).join(' · ')}</div>
-                {active.description && <div style={{ fontSize: 12, color: 'var(--tx2)', lineHeight: 1.4 }}>{active.description}</div>}
-                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, wordBreak: 'break-word' }}>{active.incidentName || detectionLabel(active.incidentType)}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--tx3)', wordBreak: 'break-word' }}>{[active.channelData?.name, active.nvrData?.nvrName, active.location].filter(Boolean).join(' · ')}</div>
+                {active.description && <div style={{ fontSize: 12, color: 'var(--tx2)', lineHeight: 1.4, wordBreak: 'break-word' }}>{active.description}</div>}
+                <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                   <div onClick={busy ? undefined : acknowledge} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg,var(--blue),var(--violet))', borderRadius: 8, padding: 9, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
                     {busy ? '…' : 'Acknowledge'}
                   </div>

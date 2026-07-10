@@ -37,11 +37,11 @@ function ReportModal({ item, onClose, onSuccess }) {
   }
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 420, background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, padding: '24px', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)', padding: 16, boxSizing: 'border-box' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 'min(420px, 100%)', maxHeight: '90vh', overflowY: 'auto', boxSizing: 'border-box', background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, padding: '24px', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 18 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--tx)' }}>Report Incident</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             {existing && !editing && (
               <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ok)', background: 'rgba(34,197,94,.1)', border: '1px solid rgba(34,197,94,.25)', borderRadius: 20, padding: '3px 10px' }}>
                 ✓ Reported
@@ -131,7 +131,7 @@ function Lightbox({ src, alt, onClose }) {
         <button
           onClick={onClose}
           style={{
-            position: 'absolute', top: -14, right: -14,
+            position: 'absolute', top: 8, right: 8,
             width: 32, height: 32, borderRadius: 8,
             background: 'rgba(6,8,13,.8)', border: '1px solid var(--bd)',
             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
@@ -175,9 +175,9 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
       {lightbox && imgSrc && (
         <Lightbox src={imgSrc} alt={det} onClose={() => setLightbox(false)} />
       )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 15px 11px', borderBottom: '1px solid var(--bd)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 15px 11px', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap' }}>
         <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 13.5 }}>Latest Incident</span>
-        <ActionLink style={{ marginLeft: 'auto', fontSize: 11 }} onClick={() => navigate('/incidents')}>
+        <ActionLink style={{ marginLeft: 'auto', fontSize: 11, whiteSpace: 'nowrap' }} onClick={() => navigate('/incidents')}>
           All incidents →
         </ActionLink>
       </div>
@@ -218,14 +218,14 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
                 </div>
               )}
             </div>
-            <div style={{ padding: '11px 14px' }}>
-              <div style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.3, marginBottom: 4 }}>
+            <div style={{ padding: '11px 14px', minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.3, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {incident?.incidentName || det}
               </div>
-              <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>
+              <div style={{ fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {[incident?.channelData?.name, incident?.nvrData?.nvrName, incident?.location].filter(Boolean).join(' · ')}
               </div>
-              <div style={{ display: 'flex', gap: 7, marginTop: 11 }}>
+              <div style={{ display: 'flex', gap: 7, marginTop: 11, flexWrap: 'wrap' }}>
                 <div
                   onClick={busy ? undefined : acknowledge}
                   style={{ flex: 1, textAlign: 'center', fontSize: 11.5, fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg,var(--blue),var(--violet))', borderRadius: 8, padding: 8, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}

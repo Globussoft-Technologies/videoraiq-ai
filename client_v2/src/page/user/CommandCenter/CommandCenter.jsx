@@ -331,7 +331,7 @@ export default function CommandCenter() {
             onRetry={attendance.refetch}
           />
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
           <LatestIncident
             incident={latestIncident}
             loading={latestApi.loading}

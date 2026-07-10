@@ -108,9 +108,9 @@ function MultiSelect({ options, selected, onChange, placeholder = 'Select' }) {
       </div>
 
       {open && (
-        <div style={{
+        <div className="vq-inc-multiselect" style={{
           position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200,
-          width: 240, background: 'var(--bg1solid)',
+          width: 240, maxWidth: 'min(240px, calc(100vw - 24px))', background: 'var(--bg1solid)',
           border: '1px solid var(--bd)',
           borderRadius: 10,
           boxShadow: '0 8px 24px rgba(0,0,0,.18)',
@@ -325,11 +325,11 @@ function DateRangePicker({ from, to, onFrom, onTo, onClear }) {
       </div>
 
       {open && (
-        <div style={{
+        <div className="vq-inc-datepicker" style={{
           position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 300,
           background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 12,
           boxShadow: '0 10px 32px rgba(0,0,0,.22)', padding: '16px 18px 14px',
-          width: 280,
+          width: 280, maxWidth: 'min(280px, calc(100vw - 24px))',
         }}>
           {/* Month nav */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -477,9 +477,9 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
       </button>
 
       {open && (
-        <div style={{
+        <div className="vq-inc-filterspopover" style={{
           position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 300,
-          width: 280, background: 'var(--bg1solid)',
+          width: 280, maxWidth: 'min(280px, calc(100vw - 24px))', background: 'var(--bg1solid)',
           border: '1px solid var(--bd)', borderRadius: 12,
           boxShadow: '0 10px 32px rgba(0,0,0,.22)',
           padding: 16,
@@ -546,7 +546,7 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
    move through the currently-filtered `items` list without closing the modal. */
 function navBtnStyle(side) {
   return {
-    position: 'absolute', top: '39vh', [side]: -22, transform: 'translateY(-50%)',
+    position: 'absolute', top: '39vh', [side]: 'clamp(-22px, -2vw, -6px)', transform: 'translateY(-50%)',
     width: 46, height: 46, borderRadius: '50%',
     background: 'rgba(15,23,42,.55)', border: '1px solid rgba(255,255,255,.15)',
     backdropFilter: 'blur(6px)', color: '#fff',
@@ -594,10 +594,11 @@ function IncidentLightbox({ items, index, onIndexChange, onClose }) {
       onWheel={onWheel}
       style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(4,6,12,.93)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}
     >
-      <div onClick={e => e.stopPropagation()} style={{ position: 'relative', maxWidth: '86vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+      <div onClick={e => e.stopPropagation()} className="vq-inc-lightbox" style={{ position: 'relative', maxWidth: '86vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
         {hasPrev && (
           <button
             onClick={(e) => { e.stopPropagation(); goPrev(); }}
+            className="vq-inc-navbtn"
             style={navBtnStyle('left')}
             onMouseEnter={e => e.currentTarget.style.background = 'rgba(15,23,42,.8)'}
             onMouseLeave={e => e.currentTarget.style.background = 'rgba(15,23,42,.55)'}
@@ -613,7 +614,7 @@ function IncidentLightbox({ items, index, onIndexChange, onClose }) {
           <img key={item._id || item.id} src={imgSrc} alt={det} style={{ maxWidth: '86vw', maxHeight: '78vh', objectFit: 'contain', borderRadius: 10, display: 'block' }} />
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#fff', fontSize: 12.5 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#fff', fontSize: 12.5, flexWrap: 'wrap', justifyContent: 'center', textAlign: 'center', maxWidth: '86vw' }}>
           <span style={{ fontWeight: 600 }}>{item.incidentName || det}</span>
           {cam && <span style={{ color: 'rgba(255,255,255,.6)' }}>· {[cam, site].filter(Boolean).join(' · ')}</span>}
           <span style={{ fontFamily: 'monospace', color: 'rgba(255,255,255,.6)' }}>{shortDateTime(item.timeOfIncident)}</span>
@@ -622,7 +623,7 @@ function IncidentLightbox({ items, index, onIndexChange, onClose }) {
 
         <button
           onClick={onClose}
-          style={{ position: 'absolute', top: -14, right: -14, width: 32, height: 32, borderRadius: 8, background: 'rgba(6,8,13,.8)', border: '1px solid rgba(255,255,255,.2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}
+          style={{ position: 'absolute', top: 'clamp(-14px, -2vw, -4px)', right: 'clamp(-14px, -2vw, -4px)', width: 32, height: 32, borderRadius: 8, background: 'rgba(6,8,13,.8)', border: '1px solid rgba(255,255,255,.2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}
         >
           <X size={15} />
         </button>
@@ -630,6 +631,7 @@ function IncidentLightbox({ items, index, onIndexChange, onClose }) {
         {hasNext && (
           <button
             onClick={(e) => { e.stopPropagation(); goNext(); }}
+            className="vq-inc-navbtn"
             style={navBtnStyle('right')}
             onMouseEnter={e => e.currentTarget.style.background = 'rgba(15,23,42,.8)'}
             onMouseLeave={e => e.currentTarget.style.background = 'rgba(15,23,42,.55)'}
@@ -753,15 +755,32 @@ export default function IncidentCenter() {
   }, [types.data]);
 
   return (
-    <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 20, background: 'var(--bg0)', minHeight: '100%' }}>
+    <div className="vq-inc-page" style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 20, background: 'var(--bg0)', minHeight: '100%' }}>
+      <style>{`
+        @media (max-width: 1024px) {
+          .vq-inc-kpis { grid-template-columns: repeat(2,1fr) !important; }
+          .vq-inc-cards { grid-template-columns: repeat(2,1fr) !important; }
+        }
+        @media (max-width: 640px) {
+          .vq-inc-page { padding: 14px 12px !important; }
+          .vq-inc-kpis { grid-template-columns: 1fr !important; }
+          .vq-inc-cards { grid-template-columns: 1fr !important; }
+          .vq-inc-datepicker, .vq-inc-multiselect, .vq-inc-filterspopover {
+            width: calc(100vw - 24px) !important; max-width: calc(100vw - 24px) !important;
+          }
+        }
+        @media (max-width: 480px) {
+          .vq-inc-navbtn { width: 36px !important; height: 36px !important; }
+        }
+      `}</style>
 
       {/* ── KPI row ─────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+      <div className="vq-inc-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
         {kpis.map((k) => (
           <div key={k.label} style={{
             background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 12,
             padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 6,
-            boxShadow: '0 1px 3px rgba(0,0,0,.07)',
+            boxShadow: '0 1px 3px rgba(0,0,0,.07)', minWidth: 0,
           }}>
             <div style={{ fontSize: 12, color: 'var(--tx2)', fontWeight: 500 }}>{k.label}</div>
             <div style={{ fontSize: 36, fontWeight: 700, color: k.color, lineHeight: 1 }}>
@@ -917,7 +936,7 @@ export default function IncidentCenter() {
               )}
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+            <div className="vq-inc-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
               {items.map((item, i) => (
                 <IncidentCard
                   key={item._id || item.id}
@@ -933,7 +952,7 @@ export default function IncidentCenter() {
 
       {/* ── Pagination ──────────────────────────────────────────────────────── */}
       {items.length > 0 && pages > 1 && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, paddingBottom: 8 }}>
+        <div className="vq-inc-pagination" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, paddingBottom: 8, flexWrap: 'wrap' }}>
           <button
             onClick={() => setPage(0)}
             disabled={page === 0}
