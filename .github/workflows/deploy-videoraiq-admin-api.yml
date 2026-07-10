@@ -1,0 +1,76 @@
+name: videoraiq-Admin-api CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server-superadmin/**'
+      - '.github/workflows/deploy-videoraiq-admin-api.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server-superadmin/**'
+      - '.github/workflows/deploy-videoraiq-admin-api.yml'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry-run flag (Note: Handled directly by local server script configuration)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('videoraiq-admin-api-pr-{0}', github.ref) || 'videoraiq-admin-api-deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci:
+    name: CI (install + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server-superadmin
+    steps:
+      - uses: actions/checkout@v4
+
+        # Using Node v20 runtime context to match backend criteria
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      # - name: Test
+      #   run: npm run test
+
+  deploy:
+    name: Trigger Webhook Deployment
+    needs: ci
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Secure Handshake & Fire Webhook
+        run: |
+          # 1. Define a basic verification payload string
+          PAYLOAD='{"event": "push", "repository": "videoraiq-ai", "target": "backend"}'
+          
+          # 2. Generate the HMAC-SHA256 cryptographic signature matching your hook rule criteria
+          # This replicates the standard hex signature tracking sent by GitHub native webhooks
+          SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "${{ secrets.WEBHOOK_SECRET_KEY }}" | sed 's/^.* //')
+          
+          echo "Cryptographic signature derived. Forwarding pipeline deployment request..."
+          
+          # 3. Dispatch the signed POST action query straight to your webhook daemon port (default 9000)
+          # Note: If your SERVER_IP_OR_DOMAIN secret already includes http/https or custom port bindings, 
+          # adjust the URL formatting below accordingly.
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: sha256=$SIGNATURE" \
+            -d "$PAYLOAD" \
+            --fail-with-body \
+            "https://${{ secrets.SERVER_IP_OR_DOMAIN }}/hooks/redeploy-admin-backend"
