@@ -51,11 +51,11 @@ class TelegramService {
   // otherwise silently skips (no global fallback). Fire-and-forget: the alert
   // flow is never blocked or crashed by Telegram — sends are queued per chat and
   // rate-limited to respect Telegram's ~1 msg/sec/chat limit (avoids 429 storms).
-  async sendIncident(incident, nvrData = {}, channelData = {}, adminId = null) {
+  async sendIncident(incident, nvrData = {}, channelData = {}, adminId = null, timezone = null) {
     try {
       const { token, chat } = await this._resolveIncidentTelegram(adminId);
       if (!token || !chat) return; // admin has no bot/channel configured
-      const message = buildIncidentTelegramMessage(incident, nvrData, channelData);
+      const message = buildIncidentTelegramMessage(incident, nvrData, channelData, timezone);
       const imageUrl = buildIncidentImageUrl(incident);
       this._enqueue(chat, { token, chat, message, imageUrl });
     } catch (err) {

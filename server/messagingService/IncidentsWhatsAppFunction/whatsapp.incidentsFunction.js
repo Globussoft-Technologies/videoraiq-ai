@@ -22,7 +22,7 @@ const toE164 = (raw) => {
 // Send an incident alert to one or more numbers via the WhatsApp Cloud API.
 // Non-blocking by design at the call site; here it resolves with per-number
 // results and never throws for a single failed send.
-export const sendIncidentWhatsApp = async (incident, recipientNumbers, nvrData = {}, channelData = {}) => {
+export const sendIncidentWhatsApp = async (incident, recipientNumbers, nvrData = {}, channelData = {}, timezone = null) => {
   const phoneNumberId = config.get("WhatsApp.phoneNumberId");
   const accessToken = config.get("WhatsApp.accessToken");
 
@@ -33,7 +33,7 @@ export const sendIncidentWhatsApp = async (incident, recipientNumbers, nvrData =
 
   if (!Array.isArray(recipientNumbers)) recipientNumbers = [recipientNumbers];
 
-  const body = buildIncidentWhatsAppMessage(incident, nvrData, channelData);
+  const body = buildIncidentWhatsAppMessage(incident, nvrData, channelData, timezone);
   const url = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
 
   const results = await Promise.allSettled(

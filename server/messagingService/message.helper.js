@@ -1,5 +1,20 @@
 import config from 'config';
-export const buildIncidentMessage = (incident) => {
+
+// Format an incident timestamp in the admin's timezone. Falls back to the
+// server's local zone when no valid IANA tz is given. Invalid tz strings are
+// caught so a bad DB value can never throw inside a message builder.
+export const formatIncidentTime = (timeOfIncident, timezone) => {
+  if (!timeOfIncident) return "N/A";
+  const d = new Date(timeOfIncident);
+  if (!timezone) return d.toLocaleString();
+  try {
+    return d.toLocaleString("en-US", { timeZone: timezone });
+  } catch {
+    return d.toLocaleString();
+  }
+};
+
+export const buildIncidentMessage = (incident, timezone) => {
   const {
     incidentName,
     incidentType,
@@ -17,7 +32,7 @@ export const buildIncidentMessage = (incident) => {
       .replace(/[^\x00-\x7F]/g, '');               // remove non-ASCII (optional)
 
   let details = `🚨 Type: ${normalize(incidentType.replace(/_/g, ' '))}\n`;
-  details += `Time: ${new Date(timeOfIncident).toLocaleString()}\n`;
+  details += `Time: ${formatIncidentTime(timeOfIncident, timezone)}\n`;
   if (videoLink) details += `📹 Video: ${normalize(videoLink)}\n`;
 
   return details;
@@ -25,7 +40,7 @@ export const buildIncidentMessage = (incident) => {
 
 // Full plain-text incident message for WhatsApp (WhatsApp text is plain text,
 // so the HTML email template can't be sent as-is — this carries the same fields).
-export const buildIncidentWhatsAppMessage = (incident = {}, nvrData = {}, channelData = {}) => {
+export const buildIncidentWhatsAppMessage = (incident = {}, nvrData = {}, channelData = {}, timezone = null) => {
   const {
     incidentName,
     incidentType,
@@ -46,7 +61,7 @@ export const buildIncidentWhatsAppMessage = (incident = {}, nvrData = {}, channe
     `🚨 *Incident Alert*`,
     `*Type:* ${(incidentType || "").replace(/_/g, " ") || "N/A"}`,
     incidentName ? `*Name:* ${incidentName}` : null,
-    `*Time:* ${timeOfIncident ? new Date(timeOfIncident).toLocaleString() : "N/A"}`,
+    `*Time:* ${formatIncidentTime(timeOfIncident, timezone)}`,
     severity ? `*Severity:* ${severity}` : null,
     `*Camera:* ${cameraName}`,
     `*NVR:* ${nvrName}`,
@@ -71,7 +86,7 @@ export const buildIncidentImageUrl = (incident = {}) => {
 
 // Full incident message for the Telegram channel (Markdown). Mirrors the
 // WhatsApp builder; Telegram *bold* uses single asterisks like WhatsApp.
-export const buildIncidentTelegramMessage = (incident = {}, nvrData = {}, channelData = {}) => {
+export const buildIncidentTelegramMessage = (incident = {}, nvrData = {}, channelData = {}, timezone = null) => {
   const {
     incidentName,
     incidentType,
@@ -95,7 +110,7 @@ export const buildIncidentTelegramMessage = (incident = {}, nvrData = {}, channe
     ``,
     `*Type:* ${up((incidentType || "").replace(/_/g, " "))}`,
     incidentName ? `*Name:* ${up(incidentName)}` : null,
-    `*Time:* ${timeOfIncident ? up(new Date(timeOfIncident).toLocaleString()) : "N/A"}`,
+    `*Time:* ${timeOfIncident ? up(formatIncidentTime(timeOfIncident, timezone)) : "N/A"}`,
     severity ? `*Severity:* ${up(severity)}` : null,
     `*Camera:* ${up(cameraName)}`,
     `*NVR:* ${up(nvrName)}`,

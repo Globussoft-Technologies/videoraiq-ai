@@ -124,16 +124,18 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
           .lean();
 
     const phoneNumbers = smsRecipients.map(recipient => recipient.value);
+    // Admin's timezone — used to render incident times in the admin's local zone
+    // across all alert channels (WhatsApp/Telegram) instead of the server's zone.
+    const adminTz = (await adminModel.findById(adminId).select("timezone").lean())?.timezone;
       // Send WhatsApp alert (replaces SMS) to the same phone recipients.
     if (phoneNumbers?.length) {
-        await sendIncidentWhatsApp(incidentData || saved, phoneNumbers, nvrData, channelData);
+        await sendIncidentWhatsApp(incidentData || saved, phoneNumbers, nvrData, channelData, adminTz);
     }
 
     // Telegram: send to the admin's channel ONLY if the incident's zone has a
     // per-zone time window on this detection setting AND the incident's local
     // time (UTC -> admin's timezone) falls inside it. No matching window -> skip.
     const telegramIncident = incidentData || saved;
-    const adminTz = (await adminModel.findById(adminId).select("timezone").lean())?.timezone;
     const zoneConfigs = matchedDetection?.id?.settings?.zone_configs || [];
     const windowOpen = isTelegramWindowOpen({
       incidentZone: telegramIncident?.zone,
@@ -142,7 +144,7 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
       adminTimezone: adminTz,
     });
     if (windowOpen) {
-      await TelegramService.sendIncident(telegramIncident, nvrData, channelData, adminId);
+      await TelegramService.sendIncident(telegramIncident, nvrData, channelData, adminId, adminTz);
     }
   } catch (err) {
     logger.error(`[ALERT_TRIGGER_ERROR] Failed to trigger alert`, {
