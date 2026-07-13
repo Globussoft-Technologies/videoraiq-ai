@@ -3,7 +3,7 @@ import Cookies from 'js-cookie'
 
 const RequireAuth = ({ children }) => {
   const token = Cookies.get('access-token')
-  if (!token) return <Navigate to="/login" replace />
+  if (!token) return <Navigate to="/admin-login" replace />
   return children
 }
 

@@ -8,6 +8,7 @@ import Webcam from 'react-webcam';
 import { toast } from 'sonner';
 import RegisterFormStep1 from '@/helpers/Userregister/RegisterFormStep1';
 import RegisterFormStep2 from '@/helpers/Userregister/RegisterFormStep2';
+import getAccessToken from '@/utils/getAccessToken';
 import adminbg from '@/assets/adminbg2.webp';
 import logo from '@/assets/logo2.svg';
 
@@ -29,8 +30,7 @@ const EmployeeRegister = () => {
   const departmentAPI = BACKEND + '/api/v1/departments/get';
   const isEmailExistAPI = BACKEND + '/api/v1/users/isEmailExist/';
   const employeeLocationsAPI = BACKEND + '/api/v1/locations/employee-location';
-  const AUTH_TOKEN =
-    'eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdGF0dXMiOnRydWUsInVzZXJfaWQiOjM3LCJsb2dpbiI6ImR1YmFpZ29sZiIsImFkbWluSWQiOiI2YTA0NDJiMmFkOGQzYjNkZjFhZDljZTciLCJvcmdJZCI6bnVsbCwidXNlcl9uYW1lIjoiRHViYWkgR29sZiIsInVzZXJfZW1haWwiOiJkdWJhaWdvbGZAZ21haWwuY29tIiwibmFtZV9mIjoiRHViYWkiLCJuYW1lX2wiOiJHb2xmIiwidXNlclN1YnNjcmlwdGlvblR5cGUiOnsiMyI6IjIwMzYtMDUtMzAifSwiY3JlYXRlZF9mcm9tIjoiRU1QIiwiY3JlYXRlZEF0IjoiMjAyNi0wNS0xM1QwOToyMTo1NC4wMjZaIiwiZW5hYmxlUGhvbmVSZWNpcGllbnRzIjpmYWxzZSwiaWF0IjoxNzc4ODI5MjQwLCJleHAiOjE4NzM0MzcyNDB9.7rjNka_6iuYd028HDdHO7mC-AN82L28hCAYdH11ZU0qWW4wunK2k6-Sn3NorzYdXaz8WM3vuYp8LaOwMDfD6-Q';
+  const AUTH_TOKEN = getAccessToken();
 
   const TAG = '[EmployeeRegister]';
   const log = (...args) => console.log(TAG, ...args);
@@ -170,14 +170,10 @@ const EmployeeRegister = () => {
       .min(1, 'Last Name must be at least 1 character'),
     email: Yup.string()
       .email('Invalid email')
-      .matches(
-        /^[^\s@]+@[^\s@]+\.(com|net|org|in|co|io|edu|gov)$/,
-        'Invalid email format'
-      )
       .required('Email is required'),
     designation: Yup.string().required('Designation is required'),
     location: Yup.string(),
-    departmentId: Yup.string().required('Department is required'),
+    departmentId: Yup.string(),
   });
 
   const initialValues = useMemo(
@@ -393,7 +389,7 @@ const EmployeeRegister = () => {
 
                     <div className="px-3 py-2 sm:p-6 md:p-8">
                       {step === 1 ? (
-                        <RegisterFormStep1 departments={departments} locations={fetchedLocations} />
+                        <RegisterFormStep1 departments={departments} locations={fetchedLocations} departmentRequired={false} />
                       ) : (
                         <RegisterFormStep2
                           uploadedImagePaths={uploadedImagePaths}

@@ -9,7 +9,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 
-const RegisterFormStep1 = ({ departments, locations = [] }) => {
+const RegisterFormStep1 = ({ departments, locations = [], departmentRequired = true }) => {
   const { values, errors, touched, setFieldValue } = useFormikContext();
 
   // Combine fetched locations with the current value to ensure it prepopulates
@@ -84,7 +84,7 @@ const RegisterFormStep1 = ({ departments, locations = [] }) => {
         <ErrorMessage name="location" component="div" className="text-xs text-red-500" />
       </div>
       <div className="space-y-1 sm:space-y-2">
-        <label className="text-sm font-medium text-gray-700">Department*</label>
+        <label className="text-sm font-medium text-gray-700">Department{departmentRequired ? '*' : ''}</label>
         <Select
           onValueChange={(value) => setFieldValue('departmentId', value)}
           value={values.departmentId}

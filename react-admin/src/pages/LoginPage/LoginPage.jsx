@@ -294,11 +294,11 @@ const LoginPage = () => {
                 </div>
               </form>
 
-              <div className="mt-5 flex items-center gap-2.5">
+              {/* <div className="mt-5 flex items-center gap-2.5">
                 <span className="h-px flex-1 bg-blue-400/12" />
                 <span className="font-mono text-[9px] text-slate-500">OR</span>
                 <span className="h-px flex-1 bg-blue-400/12" />
-              </div>
+              </div> */}
 
               {/* <Link
                 to="/forgot-password"
