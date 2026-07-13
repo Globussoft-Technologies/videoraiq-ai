@@ -14,7 +14,7 @@ export default function Logout() {
   useEffect(() => {
     logout();
     setUser(null);
-    navigate('/user-login', { replace: true });
+    navigate('/admin-login', { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
