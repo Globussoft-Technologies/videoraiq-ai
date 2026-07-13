@@ -255,16 +255,18 @@ export default function CommandCenter() {
   const engineEmpty = !engineLoading && !engineError && todayEngines.length === 0 && total24h === 0;
 
   return (
-    <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div className="vq-cc-page p-[22px] flex flex-col gap-[18px]">
+      <style>{`
+        @media (max-width: 640px) {
+          .vq-cc-page { padding: 14px !important; }
+          /* Filters stack full-width instead of being right-aligned + clipped. */
+          .vq-cc-filters { justify-content: stretch !important; }
+          .vq-cc-filters > div { flex: 1 1 100% !important; max-width: none !important; }
+        }
+      `}</style>
       {/* ── Filter bar ────────────────────────────────────────────────────────── */}
-      <div
-        style={{
-          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-          justifyContent: 'flex-end',
-        }}
-        className="vq-cc-filters"
-      >
-        <div style={{ minWidth: 190, flex: '1 1 190px', maxWidth: 240 }}>
+      <div className="vq-cc-filters flex items-center gap-[12px] flex-wrap justify-end">
+        <div className="min-w-[190px] flex-[1_1_190px] max-w-[240px]">
           <SharedMultiSelect
             options={locationOptions}
             value={selectedLocations}
@@ -275,7 +277,7 @@ export default function CommandCenter() {
             msg="No Location Found"
           />
         </div>
-        <div style={{ minWidth: 190, flex: '1 1 190px', maxWidth: 240 }}>
+        <div className="min-w-[190px] flex-[1_1_190px] max-w-[240px]">
           <SharedMultiSelect
             options={nvrOptions}
             value={selectedNvrs}
@@ -286,7 +288,7 @@ export default function CommandCenter() {
             msg="No NVR Found"
           />
         </div>
-        <div style={{ minWidth: 190, flex: '1 1 190px', maxWidth: 240 }}>
+        <div className="min-w-[190px] flex-[1_1_190px] max-w-[240px]">
           <SharedMultiSelect
             options={deptOptions}
             value={selectedDepts}
@@ -297,7 +299,7 @@ export default function CommandCenter() {
             msg="No Department Found"
           />
         </div>
-        <div style={{ minWidth: 190, flex: '1 1 190px', maxWidth: 240 }}>
+        <div className="min-w-[190px] flex-[1_1_190px] max-w-[240px]">
           <SharedMultiSelect
             options={CAMERA_TYPE_OPTIONS}
             value={selectedCamTypes}
@@ -319,8 +321,8 @@ export default function CommandCenter() {
       />
 
       {/* Live camera + attendance | latest incident + controls */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 18 }} className="vq-cc-grid">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
+      <div className="vq-cc-grid grid grid-cols-[1.55fr_1fr] gap-[18px]">
+        <div className="flex flex-col gap-[18px] min-w-0">
           <LiveCamera channels={channels.data || []} loading={channels.loading} latestByChannel={latestByChannel} onLiveChange={setSelectedCameraLive} />
           <LiveAttendance
             people={people}
@@ -331,7 +333,7 @@ export default function CommandCenter() {
             onRetry={attendance.refetch}
           />
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
+        <div className="flex flex-col gap-[18px] min-w-0">
           <LatestIncident
             incident={latestIncident}
             loading={latestApi.loading}

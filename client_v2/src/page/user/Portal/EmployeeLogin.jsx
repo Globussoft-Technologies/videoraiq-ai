@@ -30,7 +30,7 @@ const STATS = [
 
 /**
  * Employee / user portal login (route: /employee-login). A light-themed page,
- * deliberately separate from the dark admin login at /user-login. The
+ * deliberately separate from the dark admin login at /admin-login. The
  * "Login as admin" action bounces to that admin login.
  */
 export default function EmployeeLogin() {
@@ -358,7 +358,7 @@ export default function EmployeeLogin() {
               <button
                 type="button"
                 className="vqp-ghost w-full h-11 mt-[14px] rounded-[12px] cursor-pointer font-['Space_Grotesk',sans-serif] font-semibold text-[13.5px] text-[#2a6fdb] bg-[#eaf1fd] border-[1.5px] border-solid border-[#cfe0fb] flex items-center justify-center gap-2 transition-[background,border-color] duration-150"
-                onClick={() => navigate("/user-login")}
+                onClick={() => navigate("/admin-login")}
               >
                 <ShieldCheck size={16} />
                 Login as admin

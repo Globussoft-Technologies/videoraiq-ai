@@ -52,6 +52,9 @@ function areaChartPoints(values, width, height) {
  */
 export default function EngineActivity({ todayEngines = [], events24h = [], total24h = 0, loading, error, isEmpty, onRetry }) {
   const { total: todayTotal, segments } = donutSegments(todayEngines);
+  // Largest engine count sets the full-width bar; floor at 1 so an empty or
+  // all-zero set doesn't divide by zero (or Math.max() → -Infinity).
+  const maxCount = Math.max(...todayEngines.map((e) => e.count || 0), 1);
 
   const chartW = 720;
   const chartH = 200;

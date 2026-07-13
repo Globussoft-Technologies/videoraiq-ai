@@ -24,6 +24,22 @@ const DETECTION_FIELD_KEYS = [
 const DEFAULT_MAX_POINTS = 4; // V1 defaults to 3; bumped to 4 per product request. Floor stays 3 (min to close a polygon).
 const MIN_POINTS_TO_CLOSE = 3;
 
+// Track a narrow (phone) viewport so the fixed video + right-rail grid can stack.
+function useIsMobile(maxWidth = 860) {
+  const query = `(max-width:${maxWidth}px)`;
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.matchMedia(query).matches : false,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = () => setIsMobile(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [query]);
+  return isMobile;
+}
+
 /**
  * Per-zone extra fields, by detection type — product spec (V1's own schema/UI
  * is inconsistent across these types, so this is the authoritative source,
@@ -135,48 +151,34 @@ function SaveDetectionAreaModal({ initialName, initialPriority, zones, extraFiel
   };
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(6,9,15,.6)', zIndex: 50,
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-    }}>
-      <div style={{
-        width: '100%', maxWidth: 440, maxHeight: '85vh', overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
-        borderRadius: 16, padding: 22, boxShadow: '0 24px 64px rgba(0,0,0,.45)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15.5 }}>Save Detection Area</span>
-          <span onClick={onCancel} style={{ cursor: 'pointer', color: 'var(--tx3)', display: 'flex' }}>
+    <div className="fixed inset-0 bg-[rgba(6,9,15,.6)] z-[50] flex items-center justify-center p-[20px]">
+      <div className="w-full max-w-[440px] max-h-[85vh] overflow-y-auto bg-[var(--bg1solid)] border border-[var(--bd2)] rounded-[16px] p-[22px] shadow-[0_24px_64px_rgba(0,0,0,.45)]">
+        <div className="flex items-center justify-between mb-[16px]">
+          <span className="font-[family-name:var(--disp)] font-semibold text-[15.5px]">Save Detection Area</span>
+          <span onClick={onCancel} className="cursor-pointer text-[var(--tx3)] flex">
             <X size={17} />
           </span>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="flex flex-col gap-[14px]">
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Detection Name</label>
+            <label className="block text-[11px] font-semibold text-[var(--tx2)] mb-[6px]">Detection Name</label>
             <input
               autoFocus
               value={detectionName}
               onChange={e => { setDetectionName(e.target.value); setErrors(er => ({ ...er, detectionName: false })); }}
               maxLength={50}
               placeholder="Enter detection name"
-              style={{
-                width: '100%', height: 40, padding: '0 12px', borderRadius: 9, boxSizing: 'border-box',
-                background: 'var(--bg2)', border: `1px solid ${errors.detectionName ? 'var(--danger, #ef4444)' : 'var(--bd)'}`,
-                fontSize: 13, color: 'var(--tx)', outline: 'none',
-              }}
+              className={`w-full h-[40px] px-[12px] rounded-[9px] box-border bg-[var(--bg2)] border ${errors.detectionName ? 'border-[var(--danger,#ef4444)]' : 'border-[var(--bd)]'} text-[13px] text-[var(--tx)] outline-none`}
             />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Priority</label>
+            <label className="block text-[11px] font-semibold text-[var(--tx2)] mb-[6px]">Priority</label>
             <select
               value={priority}
               onChange={e => setPriority(e.target.value)}
-              style={{
-                width: '100%', height: 40, padding: '0 12px', borderRadius: 9, boxSizing: 'border-box',
-                background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13, color: 'var(--tx)',
-                outline: 'none', cursor: 'pointer',
-              }}
+              className="w-full h-[40px] px-[12px] rounded-[9px] box-border bg-[var(--bg2)] border border-[var(--bd)] text-[13px] text-[var(--tx)] outline-none cursor-pointer"
             >
               {PRIORITY_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
@@ -186,51 +188,41 @@ function SaveDetectionAreaModal({ initialName, initialPriority, zones, extraFiel
           <TimezoneField />
 
           {zoneDrafts.map((z, i) => (
-            <div key={i} style={{ border: '1px solid var(--bd)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)' }}>Zone {i + 1}</div>
+            <div key={i} className="border border-[var(--bd)] rounded-[10px] p-[12px] flex flex-col gap-[10px]">
+              <div className="text-[11.5px] font-semibold text-[var(--tx2)]">Zone {i + 1}</div>
               <div>
-                <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Zone Name</label>
+                <label className="block text-[10.5px] font-semibold text-[var(--tx3)] mb-[5px]">Zone Name</label>
                 <input
                   value={z.name}
                   onChange={e => updateZoneField(i, 'name', e.target.value)}
                   maxLength={50}
                   placeholder="Enter zone name"
-                  style={{
-                    width: '100%', height: 36, padding: '0 11px', borderRadius: 8, boxSizing: 'border-box',
-                    background: 'var(--bg2)', border: `1px solid ${errors[`zone-${i}-name`] ? 'var(--danger, #ef4444)' : 'var(--bd)'}`,
-                    fontSize: 12.5, color: 'var(--tx)', outline: 'none',
-                  }}
+                  className={`w-full h-[36px] px-[11px] rounded-[8px] box-border bg-[var(--bg2)] border ${errors[`zone-${i}-name`] ? 'border-[var(--danger,#ef4444)]' : 'border-[var(--bd)]'} text-[12.5px] text-[var(--tx)] outline-none`}
                 />
               </div>
               {extraFields.includes('capacity') && (
                 <div>
-                  <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Capacity</label>
+                  <label className="block text-[10.5px] font-semibold text-[var(--tx3)] mb-[5px]">Capacity</label>
                   <input
                     type="number"
                     min={0}
                     value={z.capacity}
                     onChange={e => updateZoneField(i, 'capacity', e.target.value)}
                     placeholder="e.g. 10"
-                    style={{
-                      width: '100%', height: 36, padding: '0 11px', borderRadius: 8, boxSizing: 'border-box',
-                      background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5, color: 'var(--tx)', outline: 'none',
-                    }}
+                    className="w-full h-[36px] px-[11px] rounded-[8px] box-border bg-[var(--bg2)] border border-[var(--bd)] text-[12.5px] text-[var(--tx)] outline-none"
                   />
                 </div>
               )}
               {extraFields.includes('threshold') && (
                 <div>
-                  <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Threshold (sec)</label>
+                  <label className="block text-[10.5px] font-semibold text-[var(--tx3)] mb-[5px]">Threshold (sec)</label>
                   <input
                     type="number"
                     min={0}
                     value={z.threshold}
                     onChange={e => updateZoneField(i, 'threshold', e.target.value)}
                     placeholder="e.g. 30"
-                    style={{
-                      width: '100%', height: 36, padding: '0 11px', borderRadius: 8, boxSizing: 'border-box',
-                      background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5, color: 'var(--tx)', outline: 'none',
-                    }}
+                    className="w-full h-[36px] px-[11px] rounded-[8px] box-border bg-[var(--bg2)] border border-[var(--bd)] text-[12.5px] text-[var(--tx)] outline-none"
                   />
                 </div>
               )}
@@ -243,25 +235,18 @@ function SaveDetectionAreaModal({ initialName, initialPriority, zones, extraFiel
           ))}
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+        <div className="flex justify-end gap-[10px] mt-[20px]">
           <button
             onClick={onCancel}
             disabled={saving}
-            style={{
-              height: 38, padding: '0 16px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)',
-              fontSize: 12.5, fontWeight: 500, color: 'var(--tx2)', cursor: 'pointer',
-            }}
+            className="h-[38px] px-[16px] rounded-[9px] bg-[var(--bg2)] border border-[var(--bd)] text-[12.5px] font-medium text-[var(--tx2)] cursor-pointer"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={saving}
-            style={{
-              height: 38, padding: '0 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-              border: 'none', fontSize: 12.5, fontWeight: 600, color: '#fff', cursor: saving ? 'not-allowed' : 'pointer',
-              opacity: saving ? 0.7 : 1,
-            }}
+            className={`h-[38px] px-[18px] rounded-[9px] bg-[linear-gradient(135deg,var(--blue),var(--violet))] border-none text-[12.5px] font-semibold text-white ${saving ? 'cursor-not-allowed opacity-70' : 'cursor-pointer opacity-100'}`}
           >
             {saving ? 'Saving…' : 'Submit'}
           </button>
@@ -297,35 +282,24 @@ function DetectionTypeDropdown({ types, value, onChange }) {
       <PopoverTrigger asChild>
         <button
           ref={triggerRef}
-          style={{
-            width: '100%', height: 42, padding: '0 34px 0 13px', borderRadius: 10,
-            background: 'var(--bg2)', border: '1px solid var(--blue)', fontSize: 13,
-            outline: 'none', cursor: 'pointer', color: 'var(--tx)',
-            boxShadow: '0 0 0 3px rgba(59,130,246,.14)',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', textAlign: 'left',
-          }}
+          className="w-full h-[42px] pr-[34px] pl-[13px] rounded-[10px] bg-[var(--bg2)] border border-[var(--blue)] text-[13px] outline-none cursor-pointer text-[var(--tx)] shadow-[0_0_0_3px_rgba(59,130,246,.14)] flex items-center justify-between text-left"
         >
           {activeLabel}
-          <ChevronDown size={15} style={{ color: 'var(--blue)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+          <ChevronDown size={15} className={`text-[var(--blue)] transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" sideOffset={6}>
-        <div style={{ width: triggerWidth || 320, maxHeight: 176, overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, boxShadow: '0 18px 50px rgba(0,0,0,.35)', padding: 5 }}>
+        <div style={{ width: triggerWidth || 320 }} className="max-h-[176px] overflow-y-auto bg-[var(--bg1solid)] border border-[var(--bd2)] rounded-[12px] shadow-[0_18px_50px_rgba(0,0,0,.35)] p-[5px]">
           {types.map(t => {
             const selected = t.settingType === value;
             return (
               <div
                 key={t.settingType}
                 onClick={() => { onChange(t.settingType); setOpen(false); }}
-                style={{
-                  padding: '8px 10px', borderRadius: 7, fontSize: 12.5, cursor: 'pointer',
-                  background: selected ? 'var(--blue)' : 'transparent',
-                  color: selected ? '#fff' : 'var(--tx)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-                }}
+                className={`py-[8px] px-[10px] rounded-[7px] text-[12.5px] cursor-pointer ${selected ? 'bg-[var(--blue)] text-white' : 'bg-transparent text-[var(--tx)]'} flex items-center justify-between gap-[8px]`}
               >
                 <span>{t.label}</span>
-                {t.configured && <CheckCircle2 size={13} style={{ color: selected ? '#fff' : 'var(--ok)', flexShrink: 0 }} />}
+                {t.configured && <CheckCircle2 size={13} className={`shrink-0 ${selected ? 'text-white' : 'text-[var(--ok)]'}`} />}
               </div>
             );
           })}
@@ -347,85 +321,73 @@ function ZoneSettingsPanel({ zones, extraFields, activeIndex, onSetActive, onUpd
   if (zones.length === 0) return null;
 
   return (
-    <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
-      <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 5 }}>Zone Settings</div>
-      <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 12 }}>
+    <div className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[15px] p-[16px]">
+      <div className="font-[family-name:var(--disp)] font-semibold text-[14px] mb-[5px]">Zone Settings</div>
+      <div className="text-[11px] text-[var(--tx3)] mb-[12px]">
         {zones.length} zone{zones.length === 1 ? '' : 's'} drawn on this camera for this detection type.
       </div>
       {/* Global time zone — schedules for every zone are interpreted against it. */}
-      <div style={{ marginBottom: 12 }}>
+      <div className="mb-[12px]">
         <TimezoneField />
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="flex flex-col gap-[8px]">
         {zones.map((z, i) => {
           const isOpen = expanded === i;
           return (
             <div
               key={i}
-              style={{ border: '1px solid var(--bd)', borderRadius: 10, overflow: 'hidden' }}
+              className="border border-[var(--bd)] rounded-[10px] overflow-hidden"
               onMouseEnter={() => onSetActive(i)}
               onMouseLeave={() => onSetActive(null)}
             >
               <div
                 onClick={() => setExpanded(isOpen ? null : i)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8, padding: '9px 11px', cursor: 'pointer',
-                  background: activeIndex === i ? 'rgba(245,158,11,.1)' : 'transparent',
-                }}
+                className={`flex items-center gap-[8px] py-[9px] px-[11px] cursor-pointer ${activeIndex === i ? 'bg-[rgba(245,158,11,.1)]' : 'bg-transparent'}`}
               >
-                <ChevronDown size={14} style={{ color: 'var(--tx3)', transform: isOpen ? 'none' : 'rotate(-90deg)', transition: 'transform .15s', flexShrink: 0 }} />
-                <span style={{ fontSize: 12.5, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{z.name}</span>
+                <ChevronDown size={14} className={`text-[var(--tx3)] transition-transform duration-150 shrink-0 ${isOpen ? '' : '-rotate-90'}`} />
+                <span className="text-[12.5px] font-medium flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{z.name}</span>
                 <span
                   onClick={(e) => { e.stopPropagation(); onDelete(i); }}
                   title="Delete this zone"
-                  style={{ display: 'flex', color: '#ef4444', cursor: 'pointer', opacity: savingIndex === i ? 0.5 : 1 }}
+                  className={`flex text-[#ef4444] cursor-pointer ${savingIndex === i ? 'opacity-50' : 'opacity-100'}`}
                 >
                   <Trash2 size={14} />
                 </span>
               </div>
               {isOpen && (
-                <div style={{ padding: '10px 11px', borderTop: '1px solid var(--bd)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="py-[10px] px-[11px] border-t border-[var(--bd)] flex flex-col gap-[8px]">
                   <div>
-                    <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Zone Name</label>
+                    <label className="block text-[10px] font-semibold text-[var(--tx3)] mb-[5px]">Zone Name</label>
                     <input
                       value={z.name}
                       onChange={e => onUpdateField(i, 'name', e.target.value)}
                       maxLength={50}
-                      style={{
-                        width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
-                        background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none',
-                      }}
+                      className="w-full h-[34px] px-[10px] rounded-[8px] box-border bg-[var(--bg2)] border border-[var(--bd)] text-[12px] text-[var(--tx)] outline-none"
                     />
                   </div>
                   {extraFields.includes('capacity') && (
                     <div>
-                      <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Capacity</label>
+                      <label className="block text-[10px] font-semibold text-[var(--tx3)] mb-[5px]">Capacity</label>
                       <input
                         type="number"
                         min={0}
                         value={z.capacity}
                         onChange={e => onUpdateField(i, 'capacity', e.target.value)}
                         placeholder="e.g. 10"
-                        style={{
-                          width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
-                          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none',
-                        }}
+                        className="w-full h-[34px] px-[10px] rounded-[8px] box-border bg-[var(--bg2)] border border-[var(--bd)] text-[12px] text-[var(--tx)] outline-none"
                       />
                     </div>
                   )}
                   {extraFields.includes('threshold') && (
                     <div>
-                      <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Threshold (sec)</label>
+                      <label className="block text-[10px] font-semibold text-[var(--tx3)] mb-[5px]">Threshold (sec)</label>
                       <input
                         type="number"
                         min={0}
                         value={z.threshold}
                         onChange={e => onUpdateField(i, 'threshold', e.target.value)}
                         placeholder="e.g. 30"
-                        style={{
-                          width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
-                          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none',
-                        }}
+                        className="w-full h-[34px] px-[10px] rounded-[8px] box-border bg-[var(--bg2)] border border-[var(--bd)] text-[12px] text-[var(--tx)] outline-none"
                       />
                     </div>
                   )}
@@ -437,11 +399,7 @@ function ZoneSettingsPanel({ zones, extraFields, activeIndex, onSetActive, onUpd
                   <button
                     onClick={() => onSave(i)}
                     disabled={savingIndex === i}
-                    style={{
-                      alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: 5, height: 30, padding: '0 12px',
-                      borderRadius: 7, background: 'var(--blue)', border: 'none', fontSize: 11.5, fontWeight: 600, color: '#fff',
-                      cursor: savingIndex === i ? 'not-allowed' : 'pointer', opacity: savingIndex === i ? 0.6 : 1,
-                    }}
+                    className={`self-end flex items-center gap-[5px] h-[30px] px-[12px] rounded-[7px] bg-[var(--blue)] border-none text-[11.5px] font-semibold text-white ${savingIndex === i ? 'cursor-not-allowed opacity-60' : 'cursor-pointer opacity-100'}`}
                   >
                     <Save size={12} /> {savingIndex === i ? 'Saving…' : 'Save'}
                   </button>
@@ -456,6 +414,7 @@ function ZoneSettingsPanel({ zones, extraFields, activeIndex, onSetActive, onUpd
 }
 
 export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
+  const isMobile = useIsMobile();
   const videoRef = useRef(null);
   const stageRef = useRef(null);
   // Single state machine (mirrors PlaybackTimeline.jsx) instead of two
@@ -719,29 +678,22 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   const removeRecipient = (id) => persistAlerts(alertIds.filter(x => x !== id));
 
   return (
-    <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className={`${isMobile ? 'p-[14px]' : 'p-[22px]'} flex flex-col gap-[16px]`}>
+      <div className="flex items-center gap-[12px] flex-wrap">
         <button
           onClick={onBack}
-          style={{
-            width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--bd)',
-            color: 'var(--tx2)', cursor: 'pointer',
-          }}
+          className="w-[36px] h-[36px] flex items-center justify-center rounded-[10px] bg-[var(--bg2)] border border-[var(--bd)] text-[var(--tx2)] cursor-pointer"
         >
           <ArrowLeft size={17} />
         </button>
-        <span style={{
-          width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(59,130,246,.13)', color: 'var(--blue)',
-        }}>
+        <span className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center bg-[rgba(59,130,246,.13)] text-[var(--blue)]">
           <Video size={20} strokeWidth={1.7} />
         </span>
         <div>
-          <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 16 }}>
+          <div className="font-[family-name:var(--disp)] font-semibold text-[16px]">
             {camera.customName || camera.name}
           </div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)' }}>
+          <div className="font-[family-name:var(--mono)] text-[10.5px] text-[var(--tx3)]">
             {camera.ipAddress || '—'} · Zone Marking
           </div>
         </div>
@@ -749,37 +701,27 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
           onClick={() => setShowDeleteConfirm(true)}
           disabled={!activeType?.settingId}
           title={activeType?.settingId ? 'Reset all detection settings for this detection type' : 'Nothing saved yet for this detection type'}
-          style={{
-            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7,
-            height: 36, padding: '0 14px', borderRadius: 9,
-            background: 'var(--bg2)', border: '1px solid var(--bd)',
-            fontSize: 12.5, fontWeight: 500, color: activeType?.settingId ? '#ef4444' : 'var(--tx3)',
-            cursor: activeType?.settingId ? 'pointer' : 'not-allowed', opacity: activeType?.settingId ? 1 : 0.5,
-          }}
+          className={`ml-auto flex items-center gap-[7px] h-[36px] px-[14px] rounded-[9px] bg-[var(--bg2)] border border-[var(--bd)] text-[12.5px] font-medium ${activeType?.settingId ? 'text-[#ef4444] cursor-pointer opacity-100' : 'text-[var(--tx3)] cursor-not-allowed opacity-50'}`}
         >
           <RotateCcw size={15} /> Reset Detection UI
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 18, alignItems: 'start' }}>
+      <div className={`grid ${isMobile ? 'grid-cols-[1fr]' : 'grid-cols-[1fr_320px]'} ${isMobile ? 'gap-[14px]' : 'gap-[18px]'} items-start`}>
         {/* Video + drawing tools */}
-        <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <div className={`bg-[var(--bg1)] border border-[var(--bd)] rounded-[15px] ${isMobile ? 'p-[12px]' : 'p-[16px]'} min-w-0`}>
+          <div className="flex items-center gap-[8px] mb-[12px]">
             <Pencil size={16} color="var(--blue)" strokeWidth={1.9} />
-            <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Zone Marking</span>
+            <span className="font-[family-name:var(--disp)] font-semibold text-[14px]">Zone Marking</span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: activeType?.configured ? '1fr 1fr' : '1fr', gap: 10, marginBottom: 14 }}>
+          <div className={`grid ${(activeType?.configured && !isMobile) ? 'grid-cols-[1fr_1fr]' : 'grid-cols-[1fr]'} gap-[10px] mb-[14px]`}>
             <div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.08em', color: 'var(--tx3)', marginBottom: 7 }}>
+              <div className="font-[family-name:var(--mono)] text-[9.5px] tracking-[.08em] text-[var(--tx3)] mb-[7px]">
                 DETECTION TYPE
               </div>
               {allTypes.length === 0 ? (
-                <div style={{
-                  height: 42, display: 'flex', alignItems: 'center', padding: '0 13px',
-                  borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--bd)',
-                  fontSize: 12.5, color: 'var(--tx3)',
-                }}>
+                <div className="h-[42px] flex items-center px-[13px] rounded-[10px] bg-[var(--bg2)] border border-[var(--bd)] text-[12.5px] text-[var(--tx3)]">
                   No detection types available.
                 </div>
               ) : (
@@ -790,14 +732,10 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
             {/* Detection Name — read-only, populated once a zone has been saved (V1 parity). Zone names now live per-zone in the Zone Settings panel. */}
             {activeType?.configured && (
               <div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.08em', color: 'var(--tx3)', marginBottom: 7 }}>
+                <div className="font-[family-name:var(--mono)] text-[9.5px] tracking-[.08em] text-[var(--tx3)] mb-[7px]">
                   DETECTION NAME
                 </div>
-                <div style={{
-                  height: 42, display: 'flex', alignItems: 'center', padding: '0 13px', borderRadius: 10,
-                  background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5, color: 'var(--tx2)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
+                <div className="h-[42px] flex items-center px-[13px] rounded-[10px] bg-[var(--bg2)] border border-[var(--bd)] text-[12.5px] text-[var(--tx2)] overflow-hidden text-ellipsis whitespace-nowrap">
                   {activeType.setting?.name || '—'}
                 </div>
               </div>
@@ -805,7 +743,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
           </div>
 
           {activeType && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: -6, marginBottom: 14, fontSize: 10.5, color: activeType.configured ? 'var(--ok)' : 'var(--tx3)' }}>
+            <div className={`flex items-center gap-[5px] mt-[-6px] mb-[14px] text-[10.5px] ${activeType.configured ? 'text-[var(--ok)]' : 'text-[var(--tx3)]'}`}>
               {activeType.configured
                 ? <><CheckCircle2 size={12} /> Already configured for this camera</>
                 : 'Not configured yet — saving a zone will create it'}
@@ -815,10 +753,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
           <div
             ref={stageRef}
             onClick={handleStageClick}
-            style={{
-              position: 'relative', borderRadius: 12, overflow: 'hidden', aspectRatio: '16/9',
-              background: '#0a0e15', cursor: drawing ? 'crosshair' : 'default', border: '1px solid var(--bd)',
-            }}
+            className={`relative rounded-[12px] overflow-hidden aspect-[16/9] bg-[#0a0e15] border border-[var(--bd)] ${drawing ? 'cursor-crosshair' : 'cursor-default'}`}
           >
             <video
               ref={videoRef}
@@ -826,43 +761,40 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               onLoadedMetadata={handleLoadedMetadata}
               onCanPlay={handleVideoReady}
               onPlaying={handleVideoReady}
-              style={{
-                position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
-                display: (url && videoState === 'ready') ? 'block' : 'none',
-              }}
+              className={`absolute inset-0 w-full h-full object-cover ${(url && videoState === 'ready') ? 'block' : 'hidden'}`}
             />
 
             {/* Buffering overlay — shown while the stream connects, instead of a blank box.
                 Same look as PlaybackTimeline.jsx's buffering state (Wifi icon + blink). */}
             {url && videoState === 'loading' && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'rgba(0,0,0,.75)', zIndex: 2, color: '#2563EB', fontSize: 13 }}>
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-[8px] bg-[rgba(0,0,0,.75)] z-[2] text-[#2563EB] text-[13px]">
                 <Wifi size={34} className="vq-blink" />
                 <span>Buffering…</span>
               </div>
             )}
 
             {(!url || videoState === 'error') && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,.35)', fontSize: 12, fontFamily: 'var(--mono)' }}>
+              <div className="absolute inset-0 flex items-center justify-center text-[rgba(255,255,255,.35)] text-[12px] font-[family-name:var(--mono)]">
                 {!url ? 'No stream configured' : 'Stream unavailable'}
               </div>
             )}
 
             {/* Points cap + fullscreen pill — top-right, matching V1 */}
-            <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', alignItems: 'center', gap: 6, zIndex: 3 }}>
+            <div className="absolute top-[10px] right-[10px] flex items-center gap-[6px] z-[3]">
               <button
                 onClick={() => setMaxPoints(p => Math.max(MIN_POINTS_TO_CLOSE, p - 1))}
                 title="Decrease max points"
-                style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,.6)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                className="w-[26px] h-[26px] rounded-full bg-[rgba(0,0,0,.6)] border-none text-white cursor-pointer flex items-center justify-center"
               >
                 <Minus size={13} />
               </button>
-              <span style={{ padding: '4px 9px', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 11, fontFamily: 'var(--mono)', borderRadius: 6 }}>
+              <span className="py-[4px] px-[9px] bg-[rgba(0,0,0,.6)] text-white text-[11px] font-[family-name:var(--mono)] rounded-[6px]">
                 {maxPoints}
               </span>
               <button
                 onClick={() => setMaxPoints(p => p + 1)}
                 title="Increase max points"
-                style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,.6)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                className="w-[26px] h-[26px] rounded-full bg-[rgba(0,0,0,.6)] border-none text-white cursor-pointer flex items-center justify-center"
               >
                 <Plus size={13} />
               </button>
@@ -874,7 +806,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
             <svg
               viewBox="0 0 1000 1000"
               preserveAspectRatio="none"
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+              className="absolute inset-0 w-full h-full pointer-events-none"
             >
               {videoSize.w > 0 && zones.map((z, zi) => (
                 <g key={zi} opacity={activeZoneIndex === null || activeZoneIndex === zi ? 1 : 0.35}>
@@ -913,13 +845,10 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
             {videoSize.w > 0 && zones.map((z, zi) => z.points[0] && (
               <span
                 key={zi}
+                className="absolute [transform:translate(-4px,-130%)] bg-[#ef4444] text-white text-[10.5px] font-semibold py-[3px] px-[8px] rounded-[5px] whitespace-nowrap pointer-events-none z-[3]"
                 style={{
-                  position: 'absolute',
                   left: `${(z.points[0].x / videoSize.w) * 100}%`,
                   top: `${(z.points[0].y / videoSize.h) * 100}%`,
-                  transform: 'translate(-4px, -130%)',
-                  background: '#ef4444', color: '#fff', fontSize: 10.5, fontWeight: 600,
-                  padding: '3px 8px', borderRadius: 5, whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 3,
                   opacity: activeZoneIndex === null || activeZoneIndex === zi ? 1 : 0.35,
                 }}
               >
@@ -928,61 +857,40 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
             ))}
 
             {zones.length === 0 && points.length === 0 && videoState !== 'loading' && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                <span style={{
-                  fontFamily: 'var(--mono)', fontSize: 11, color: 'rgba(220,232,255,.85)',
-                  background: 'rgba(8,11,17,.6)', border: '1px solid rgba(255,255,255,.15)',
-                  borderRadius: 20, padding: '6px 14px',
-                }}>
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="font-[family-name:var(--mono)] text-[11px] text-[rgba(220,232,255,.85)] bg-[rgba(8,11,17,.6)] border border-[rgba(255,255,255,.15)] rounded-[20px] py-[6px] px-[14px]">
                   ▶ Press "Start Drawing", then click to place zone points
                 </span>
               </div>
             )}
           </div>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 13 }}>
+          <div className="flex flex-wrap gap-[8px] mt-[13px]">
             <button
               onClick={handleMaxArea}
               disabled={!activeType || !videoSize.w}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
-                background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
-                cursor: (activeType && videoSize.w) ? 'pointer' : 'not-allowed', opacity: (activeType && videoSize.w) ? 1 : 0.5,
-              }}
+              className={`flex items-center gap-[6px] h-[34px] px-[12px] rounded-[8px] bg-[var(--bg2)] border border-[var(--bd)] text-[12px] text-[var(--tx2)] ${(activeType && videoSize.w) ? 'cursor-pointer opacity-100' : 'cursor-not-allowed opacity-50'}`}
             >
               <Maximize size={14} /> Max Area
             </button>
             <button
               onClick={handleMinArea}
               disabled={!activeType || !videoSize.w}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
-                background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
-                cursor: (activeType && videoSize.w) ? 'pointer' : 'not-allowed', opacity: (activeType && videoSize.w) ? 1 : 0.5,
-              }}
+              className={`flex items-center gap-[6px] h-[34px] px-[12px] rounded-[8px] bg-[var(--bg2)] border border-[var(--bd)] text-[12px] text-[var(--tx2)] ${(activeType && videoSize.w) ? 'cursor-pointer opacity-100' : 'cursor-not-allowed opacity-50'}`}
             >
               <Minimize size={14} /> Min Area
             </button>
             <button
               onClick={() => setDrawing(d => !d)}
               disabled={!activeType}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
-                fontSize: 12, cursor: activeType ? 'pointer' : 'not-allowed', border: '1px solid var(--bd)',
-                background: drawing ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg2)',
-                color: drawing ? '#fff' : 'var(--tx2)', opacity: activeType ? 1 : 0.5,
-              }}
+              className={`flex items-center gap-[6px] h-[34px] px-[12px] rounded-[8px] text-[12px] border border-[var(--bd)] ${activeType ? 'cursor-pointer opacity-100' : 'cursor-not-allowed opacity-50'} ${drawing ? 'bg-[linear-gradient(135deg,var(--blue),var(--violet))] text-white' : 'bg-[var(--bg2)] text-[var(--tx2)]'}`}
             >
               <Pencil size={14} /> {drawing ? 'Stop Drawing' : 'Start Drawing'}
             </button>
             <button
               onClick={handleUndo}
               disabled={points.length === 0}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
-                background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
-                cursor: points.length ? 'pointer' : 'not-allowed', opacity: points.length ? 1 : 0.5,
-              }}
+              className={`flex items-center gap-[6px] h-[34px] px-[12px] rounded-[8px] bg-[var(--bg2)] border border-[var(--bd)] text-[12px] text-[var(--tx2)] ${points.length ? 'cursor-pointer opacity-100' : 'cursor-not-allowed opacity-50'}`}
             >
               <Undo2 size={14} /> Undo
             </button>
@@ -990,25 +898,14 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               onClick={handleClear}
               disabled={points.length === 0}
               title="Clear the in-progress polygon (does not affect already-added zones)"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
-                background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
-                cursor: points.length ? 'pointer' : 'not-allowed', opacity: points.length ? 1 : 0.5,
-              }}
+              className={`flex items-center gap-[6px] h-[34px] px-[12px] rounded-[8px] bg-[var(--bg2)] border border-[var(--bd)] text-[12px] text-[var(--tx2)] ${points.length ? 'cursor-pointer opacity-100' : 'cursor-not-allowed opacity-50'}`}
             >
               <Trash2 size={14} /> Clear All
             </button>
             <button
               onClick={handleOpenSaveModal}
               disabled={!activeType || saving || (zones.length === 0 && points.length < MIN_POINTS_TO_CLOSE)}
-              style={{
-                marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 16px',
-                borderRadius: 8, fontSize: 12.5, fontWeight: 600, color: '#fff', border: 'none',
-                background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-                cursor: (!activeType || saving || (zones.length === 0 && points.length < MIN_POINTS_TO_CLOSE)) ? 'not-allowed' : 'pointer',
-                opacity: (!activeType || saving || (zones.length === 0 && points.length < MIN_POINTS_TO_CLOSE)) ? 0.6 : 1,
-                boxShadow: '0 3px 12px rgba(99,102,241,.3)',
-              }}
+              className={`ml-auto flex items-center gap-[6px] h-[34px] px-[16px] rounded-[8px] text-[12.5px] font-semibold text-white border-none bg-[linear-gradient(135deg,var(--blue),var(--violet))] shadow-[0_3px_12px_rgba(99,102,241,.3)] ${(!activeType || saving || (zones.length === 0 && points.length < MIN_POINTS_TO_CLOSE)) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer opacity-100'}`}
             >
               <Save size={14} /> {saving ? 'Saving…' : 'Save Area'}
             </button>
@@ -1016,23 +913,23 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
         </div>
 
         {/* Right rail */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
-            <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 14 }}>Device Detail</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>MODEL</span>
-                <span style={{ fontSize: 12.5, fontWeight: 500, textAlign: 'right' }}>{camera.model || '—'}</span>
+        <div className="flex flex-col gap-[16px]">
+          <div className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[15px] p-[16px]">
+            <div className="font-[family-name:var(--disp)] font-semibold text-[14px] mb-[14px]">Device Detail</div>
+            <div className="flex flex-col gap-[12px]">
+              <div className="flex items-center justify-between gap-[10px]">
+                <span className="font-[family-name:var(--mono)] text-[9.5px] tracking-[.06em] text-[var(--tx3)]">MODEL</span>
+                <span className="text-[12.5px] font-medium text-right">{camera.model || '—'}</span>
               </div>
-              <div style={{ height: 1, background: 'var(--bd)' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>NVR</span>
-                <span style={{ fontSize: 12.5, fontWeight: 500 }}>{camera.nvrId?.nvrName || '—'}</span>
+              <div className="h-px bg-[var(--bd)]" />
+              <div className="flex items-center justify-between gap-[10px]">
+                <span className="font-[family-name:var(--mono)] text-[9.5px] tracking-[.06em] text-[var(--tx3)]">NVR</span>
+                <span className="text-[12.5px] font-medium">{camera.nvrId?.nvrName || '—'}</span>
               </div>
-              <div style={{ height: 1, background: 'var(--bd)' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>IP ADDRESS</span>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 500, color: 'var(--cyan)' }}>{camera.ipAddress || '—'}</span>
+              <div className="h-px bg-[var(--bd)]" />
+              <div className="flex items-center justify-between gap-[10px]">
+                <span className="font-[family-name:var(--mono)] text-[9.5px] tracking-[.06em] text-[var(--tx3)]">IP ADDRESS</span>
+                <span className="font-[family-name:var(--mono)] text-[12px] font-medium text-[var(--cyan)]">{camera.ipAddress || '—'}</span>
               </div>
             </div>
           </div>
@@ -1051,64 +948,56 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
           )}
 
           {activeType && (
-            <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
-              <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 5 }}>Alert Recipients</div>
-              <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 12 }}>
+            <div className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[15px] p-[16px]">
+              <div className="font-[family-name:var(--disp)] font-semibold text-[14px] mb-[5px]">Alert Recipients</div>
+              <div className="text-[11px] text-[var(--tx3)] mb-[12px]">
                 Who gets notified on a {activeType.label} event.
               </div>
               {activeType.settingId ? (
                 <>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 11 }}>
+                  <div className="flex flex-wrap gap-[7px] mb-[11px]">
                     {selectedRecipients.map(r => (
                       <span
                         key={r._id}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 500,
-                          background: 'rgba(59,130,246,.13)', border: '1px solid rgba(59,130,246,.32)',
-                          color: 'var(--blue)', borderRadius: 20, padding: '4px 6px 4px 11px',
-                        }}
+                        className="flex items-center gap-[6px] text-[11.5px] font-medium bg-[rgba(59,130,246,.13)] border border-[rgba(59,130,246,.32)] text-[var(--blue)] rounded-[20px] pt-[4px] pr-[6px] pb-[4px] pl-[11px]"
                       >
                         {r.fullName}
-                        <span onClick={() => removeRecipient(String(r._id))} style={{ cursor: 'pointer', display: 'flex', opacity: 0.7 }}>
+                        <span onClick={() => removeRecipient(String(r._id))} className="cursor-pointer flex opacity-70">
                           <X size={12} />
                         </span>
                       </span>
                     ))}
                     {selectedRecipients.length === 0 && !recipientsApi.loading && (
-                      <span style={{ fontSize: 11.5, color: 'var(--tx3)' }}>No recipients assigned yet.</span>
+                      <span className="text-[11.5px] text-[var(--tx3)]">No recipients assigned yet.</span>
                     )}
                   </div>
                   {recipientsApi.loading ? (
-                    <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Loading recipients…</div>
+                    <div className="text-[11.5px] text-[var(--tx3)]">Loading recipients…</div>
                   ) : recipientsApi.error ? (
-                    <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Couldn't load recipients.</div>
+                    <div className="text-[11.5px] text-[var(--tx3)]">Couldn't load recipients.</div>
                   ) : addableRecipients.length === 0 && allRecipients.length === 0 ? (
-                    <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>No verified recipients yet — add one under Alert Recipients.</div>
+                    <div className="text-[11.5px] text-[var(--tx3)]">No verified recipients yet — add one under Alert Recipients.</div>
                   ) : addableRecipients.length === 0 ? (
-                    <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>All recipients already assigned.</div>
+                    <div className="text-[11.5px] text-[var(--tx3)]">All recipients already assigned.</div>
                   ) : (
-                    <div style={{ position: 'relative' }}>
+                    <div className="relative">
                       <select
                         value="__add"
                         onChange={e => addRecipient(e.target.value === '__add' ? null : e.target.value)}
                         disabled={savingAlerts}
-                        style={{
-                          width: '100%', height: 40, padding: '0 34px 0 13px', borderRadius: 10, boxSizing: 'border-box',
-                          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5,
-                          outline: 'none', cursor: 'pointer', color: 'var(--tx3)', appearance: 'none',
-                        }}
+                        className="w-full h-[40px] pr-[34px] pl-[13px] rounded-[10px] box-border bg-[var(--bg2)] border border-[var(--bd)] text-[12.5px] outline-none cursor-pointer text-[var(--tx3)] appearance-none"
                       >
                         <option value="__add">+ Add recipient…</option>
                         {addableRecipients.map(r => (
                           <option key={r._id} value={r._id}>{r.fullName} ({r.value})</option>
                         ))}
                       </select>
-                      <ChevronDown size={14} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx3)', pointerEvents: 'none' }} />
+                      <ChevronDown size={14} className="absolute right-[12px] top-1/2 -translate-y-1/2 text-[var(--tx3)] pointer-events-none" />
                     </div>
                   )}
                 </>
               ) : (
-                <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Save a zone first to assign recipients.</div>
+                <div className="text-[11.5px] text-[var(--tx3)]">Save a zone first to assign recipients.</div>
               )}
             </div>
           )}
@@ -1128,45 +1017,29 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
       )}
 
       {showDeleteConfirm && activeType && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(6,9,15,.6)', zIndex: 50,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-        }}>
-          <div style={{
-            width: '100%', maxWidth: 400, background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
-            borderRadius: 16, padding: 22, boxShadow: '0 24px 64px rgba(0,0,0,.45)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <span style={{
-                width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'rgba(239,68,68,.13)', color: '#ef4444', flexShrink: 0,
-              }}>
+        <div className="fixed inset-0 bg-[rgba(6,9,15,.6)] z-[50] flex items-center justify-center p-[20px]">
+          <div className="w-full max-w-[400px] bg-[var(--bg1solid)] border border-[var(--bd2)] rounded-[16px] p-[22px] shadow-[0_24px_64px_rgba(0,0,0,.45)]">
+            <div className="flex items-center gap-[10px] mb-[12px]">
+              <span className="w-[36px] h-[36px] rounded-[10px] flex items-center justify-center bg-[rgba(239,68,68,.13)] text-[#ef4444] shrink-0">
                 <AlertTriangle size={18} />
               </span>
-              <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Reset Detection UI?</span>
+              <span className="font-[family-name:var(--disp)] font-semibold text-[15px]">Reset Detection UI?</span>
             </div>
-            <div style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.5, marginBottom: 20 }}>
+            <div className="text-[12.5px] text-[var(--tx2)] leading-[1.5] mb-[20px]">
               <strong>Warning:</strong> This will reset all detection settings to their default values. This action cannot be undone.
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <div className="flex justify-end gap-[10px]">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={deleting}
-                style={{
-                  height: 38, padding: '0 16px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)',
-                  fontSize: 12.5, fontWeight: 500, color: 'var(--tx2)', cursor: 'pointer',
-                }}
+                className="h-[38px] px-[16px] rounded-[9px] bg-[var(--bg2)] border border-[var(--bd)] text-[12.5px] font-medium text-[var(--tx2)] cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDeleteArea}
                 disabled={deleting}
-                style={{
-                  height: 38, padding: '0 18px', borderRadius: 9, background: '#ef4444',
-                  border: 'none', fontSize: 12.5, fontWeight: 600, color: '#fff', cursor: deleting ? 'not-allowed' : 'pointer',
-                  opacity: deleting ? 0.7 : 1,
-                }}
+                className={`h-[38px] px-[18px] rounded-[9px] bg-[#ef4444] border-none text-[12.5px] font-semibold text-white ${deleting ? 'cursor-not-allowed opacity-70' : 'cursor-pointer opacity-100'}`}
               >
                 {deleting ? 'Resetting…' : 'Reset Anyway'}
               </button>

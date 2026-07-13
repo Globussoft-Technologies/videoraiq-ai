@@ -194,6 +194,19 @@
   .vq-kpi-row { grid-template-columns: repeat(2, 1fr) !important; }
 }
 
+/* ---- Responsive layout for Intelligence Analytics grids ---- */
+@media (max-width: 900px) {
+  /* The paired chart rows (1.5fr 1fr etc.) stack so charts keep usable width. */
+  .vq-analytics-row  { grid-template-columns: 1fr !important; }
+  .vq-analytics-kpis { grid-template-columns: repeat(2, 1fr) !important; }
+  .vq-analytics-page { padding: 16px !important; }
+}
+@media (max-width: 460px) {
+  /* Single-column KPI tiles on small phones so long values (e.g. site names) don't clip. */
+  .vq-analytics-kpis { grid-template-columns: 1fr !important; }
+  .vq-analytics-page { padding: 13px !important; }
+}
+
 /* ---- Responsive layout for Live Wall / Camera grid ---- */
 @media (max-width: 900px) {
   .vq-wall-grid[data-cols="3"],

@@ -27,31 +27,31 @@ export default function Analytics() {
   const params = rangeParams(range);
 
   return (
-    <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div className="vq-analytics-page p-[22px] flex flex-col gap-[18px]">
       <RangeFilter range={range} onChange={setRange} />
 
       <OverviewKpiRow params={params} />
 
       {/* Detection Volume | Share by Engine */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 18 }} className="vq-analytics-row">
+      <div className="vq-analytics-row grid grid-cols-[1.5fr_1fr] gap-[18px]">
         <DetectionVolumeCard params={params} />
         <EngineShareCard params={params} />
       </div>
 
       {/* Activity Heatmap | Top Cameras by Events */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 18 }} className="vq-analytics-row">
+      <div className="vq-analytics-row grid grid-cols-[1.3fr_1fr] gap-[18px]">
         <ActivityHeatmapCard params={params} />
         <TopCamerasCard params={params} limit={5} />
       </div>
 
       {/* Peak Activity | Detections by Hour */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 18 }} className="vq-analytics-row">
+      <div className="vq-analytics-row grid grid-cols-[1fr_1.4fr] gap-[18px]">
         <PeakActivityCard params={params} />
         <DetectionsByHourCard />
       </div>
 
       {/* Site Performance | Response Funnel */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18 }} className="vq-analytics-row">
+      <div className="vq-analytics-row grid grid-cols-[1.4fr_1fr] gap-[18px]">
         <SitePerformanceCard params={params} />
         <ResponseFunnelCard params={params} />
       </div>

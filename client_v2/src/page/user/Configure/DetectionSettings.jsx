@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Search, Video, ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
@@ -24,6 +24,28 @@ const CHECK_TYPES = [
   { value: 'checkin', label: 'Check-in' },
   { value: 'checkout', label: 'Check-out' },
 ];
+
+// Shared Tailwind classes for the field labels shown beside each value in the mobile card layout.
+const M_LABEL = 'font-[family-name:var(--mono)] text-[9.5px] tracking-[.06em] text-[var(--tx3)] shrink-0';
+
+// Shared column-template so the header and desktop rows stay in lockstep.
+const GRID_COLS = 'grid-cols-[minmax(200px,1.6fr)_120px_190px_150px_44px]';
+
+// Track a narrow (phone) viewport so the fixed-grid table can fall back to stacked cards.
+function useIsMobile(maxWidth = 640) {
+  const query = `(max-width:${maxWidth}px)`;
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.matchMedia(query).matches : false,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = () => setIsMobile(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [query]);
+  return isMobile;
+}
 
 function isTypeEnabled(camera, key) {
   return !!(camera?.detections?.[key]?.id && camera.detections[key].enabled);
@@ -52,45 +74,37 @@ function AppliedTypesPopover({ camera, typeLabels, onToggle }) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6, height: 30, padding: '0 10px 0 12px',
-            borderRadius: 20, background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.32)',
-            fontSize: 11.5, fontWeight: 500, color: 'var(--blue)', cursor: 'pointer',
-          }}
-        >
+        <button className="flex items-center gap-[6px] h-[30px] pl-[12px] pr-[10px] rounded-[20px] bg-[rgba(59,130,246,.1)] border border-[rgba(59,130,246,.32)] text-[11.5px] font-medium text-[var(--blue)] cursor-pointer">
           Applied Types
-          <ChevronDown size={13} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+          <ChevronDown size={13} className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" sideOffset={6}>
-        <div style={{ width: 260, padding: 10 }}>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.08em', color: 'var(--tx3)', padding: '2px 4px 8px' }}>
+        <div className="w-[260px] p-[10px]">
+          <div className="font-[family-name:var(--mono)] text-[9.5px] tracking-[.08em] text-[var(--tx3)] pt-[2px] px-[4px] pb-[8px]">
             DETECTION TYPES
           </div>
           {/* Capped to ~5 visible rows (34px each incl. gap) so a long type list scrolls instead of pushing the popover off-screen. */}
-          <div style={{ maxHeight: 170, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div className="max-h-[170px] overflow-y-auto flex flex-col gap-[2px]">
             {availableTypes.map(key => {
               const label = typeLabels[key];
               const enabled = isTypeEnabled(camera, key);
               const busy = pending === key;
               return (
-                <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '7px 6px' }}>
-                  <span style={{ fontSize: 12.5, color: 'var(--tx)' }}>{label}</span>
+                <div key={key} className="flex items-center justify-between gap-[10px] py-[7px] px-[6px]">
+                  <span className="text-[12.5px] text-[var(--tx)]">{label}</span>
                   <button
                     onClick={() => handleToggle(key, !enabled)}
                     disabled={busy}
-                    style={{
-                      width: 36, height: 20, borderRadius: 10, position: 'relative', flexShrink: 0,
-                      background: enabled ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg3, #2a2d3a)',
-                      border: '1px solid var(--bd)', cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.6 : 1,
-                    }}
+                    className={`w-[36px] h-[20px] rounded-[10px] relative shrink-0 border border-[var(--bd)] ${
+                      enabled ? 'bg-[linear-gradient(135deg,var(--blue),var(--violet))]' : 'bg-[var(--bg3,#2a2d3a)]'
+                    } ${busy ? 'cursor-wait opacity-60' : 'cursor-pointer opacity-100'}`}
                   >
-                    <span style={{
-                      position: 'absolute', top: 1.5, left: enabled ? 17 : 1.5, width: 15, height: 15,
-                      borderRadius: '50%', background: '#fff', transition: 'left .15s',
-                      boxShadow: '0 1px 3px rgba(0,0,0,.4)',
-                    }} />
+                    <span
+                      className={`absolute top-[1.5px] w-[15px] h-[15px] rounded-full bg-white transition-[left] duration-150 shadow-[0_1px_3px_rgba(0,0,0,.4)] ${
+                        enabled ? 'left-[17px]' : 'left-[1.5px]'
+                      }`}
+                    />
                   </button>
                 </div>
               );
@@ -102,66 +116,85 @@ function AppliedTypesPopover({ camera, typeLabels, onToggle }) {
   );
 }
 
-function CameraRow({ camera, typeLabels, onOpen, onToggleDetection, onCheckTypeChange }) {
+function CameraRow({ camera, typeLabels, onOpen, onToggleDetection, onCheckTypeChange, isMobile }) {
   const online = camera.control === 1;
+
+  const identity = (
+    <span className="flex items-center gap-[11px] min-w-0">
+      <span className="w-[34px] h-[34px] shrink-0 rounded-[9px] flex items-center justify-center bg-[rgba(59,130,246,.13)] text-[var(--blue)]">
+        <Video size={18} strokeWidth={1.7} />
+      </span>
+      <span className="min-w-0">
+        <span className="font-semibold block whitespace-nowrap overflow-hidden text-ellipsis">
+          {camera.customName || camera.name}
+        </span>
+        <span className="font-[family-name:var(--mono)] text-[10.5px] text-[var(--tx3)] block">
+          {camera.ipAddress || '—'}
+        </span>
+      </span>
+    </span>
+  );
+
+  const status = (
+    <span className={`flex items-center gap-[6px] text-[11px] font-semibold ${online ? 'text-[var(--ok)]' : 'text-[var(--tx3)]'}`}>
+      <span className={`w-[7px] h-[7px] rounded-full ${online ? 'bg-[var(--ok)] shadow-[0_0_6px_var(--ok)]' : 'bg-[var(--tx3)]'}`} />
+      {online ? 'Online' : 'Offline'}
+    </span>
+  );
+
+  const appliedTypes = <AppliedTypesPopover camera={camera} typeLabels={typeLabels} onToggle={onToggleDetection} />;
+
+  const cameraTypeSelect = (
+    <span className="relative">
+      <select
+        value={camera.checkType || 'none'}
+        onChange={e => onCheckTypeChange(camera, e.target.value)}
+        className="h-[32px] pl-[11px] pr-[26px] rounded-[8px] bg-[var(--bg2)] border border-[var(--bd)] text-[12px] outline-none cursor-pointer text-[var(--tx)] appearance-none"
+      >
+        {CHECK_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+      </select>
+      <ChevronDown size={12} className="absolute right-[9px] top-[10px] pointer-events-none text-[var(--tx3)]" />
+    </span>
+  );
+
+  // On phones the 5-column grid can't fit, so each camera becomes a stacked card
+  // with its columns turned into labelled rows.
+  if (isMobile) {
+    return (
+      <div
+        className="vq-row flex flex-col gap-[12px] py-[14px] px-[16px] border-b border-[var(--bd)] cursor-pointer"
+        onClick={onOpen}
+      >
+        <div className="flex items-center gap-[11px]">
+          {identity}
+          <span className="ml-auto text-[var(--tx3)] shrink-0"><ChevronRight size={16} /></span>
+        </div>
+        <div className="flex items-center justify-between gap-[10px]">
+          <span className={M_LABEL}>STATUS</span>
+          {status}
+        </div>
+        <div className="flex items-center justify-between gap-[10px]" onClick={e => e.stopPropagation()}>
+          <span className={M_LABEL}>DETECTION</span>
+          {appliedTypes}
+        </div>
+        <div className="flex items-center justify-between gap-[10px]" onClick={e => e.stopPropagation()}>
+          <span className={M_LABEL}>CAMERA TYPE</span>
+          {cameraTypeSelect}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
-      className="vq-row"
+      className={`vq-row grid ${GRID_COLS} gap-0 py-[13px] px-[18px] border-b border-[var(--bd)] items-center text-[13px] cursor-pointer transition-colors duration-[120ms]`}
       onClick={onOpen}
-      style={{
-        display: 'grid', gridTemplateColumns: 'minmax(200px,1.6fr) 120px 190px 150px 44px',
-        gap: 0, padding: '13px 18px', borderBottom: '1px solid var(--bd)',
-        alignItems: 'center', fontSize: 13, cursor: 'pointer', transition: 'background .12s',
-      }}
     >
-      <span style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
-        <span style={{
-          width: 34, height: 34, flexShrink: 0, borderRadius: 9,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(59,130,246,.13)', color: 'var(--blue)',
-        }}>
-          <Video size={18} strokeWidth={1.7} />
-        </span>
-        <span style={{ minWidth: 0 }}>
-          <span style={{ fontWeight: 600, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {camera.customName || camera.name}
-          </span>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)', display: 'block' }}>
-            {camera.ipAddress || '—'}
-          </span>
-        </span>
-      </span>
-
-      <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: online ? 'var(--ok)' : 'var(--tx3)' }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: online ? 'var(--ok)' : 'var(--tx3)', boxShadow: online ? '0 0 6px var(--ok)' : 'none' }} />
-          {online ? 'Online' : 'Offline'}
-        </span>
-      </span>
-
-      <span style={{ display: 'flex', justifyContent: 'center' }} onClick={e => e.stopPropagation()}>
-        <AppliedTypesPopover camera={camera} typeLabels={typeLabels} onToggle={onToggleDetection} />
-      </span>
-
-      <span style={{ display: 'flex', justifyContent: 'center' }} onClick={e => e.stopPropagation()}>
-        <span style={{ position: 'relative' }}>
-          <select
-            value={camera.checkType || 'none'}
-            onChange={e => onCheckTypeChange(camera, e.target.value)}
-            style={{
-              height: 32, padding: '0 26px 0 11px', borderRadius: 8,
-              background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12,
-              outline: 'none', cursor: 'pointer', color: 'var(--tx)', appearance: 'none',
-            }}
-          >
-            {CHECK_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </select>
-          <ChevronDown size={12} style={{ position: 'absolute', right: 9, top: 10, pointerEvents: 'none', color: 'var(--tx3)' }} />
-        </span>
-      </span>
-
-      <span style={{ display: 'flex', justifyContent: 'center', color: 'var(--tx3)' }}>
+      {identity}
+      <span className="flex justify-center">{status}</span>
+      <span className="flex justify-center" onClick={e => e.stopPropagation()}>{appliedTypes}</span>
+      <span className="flex justify-center" onClick={e => e.stopPropagation()}>{cameraTypeSelect}</span>
+      <span className="flex justify-center text-[var(--tx3)]">
         <ChevronRight size={16} />
       </span>
     </div>
@@ -171,6 +204,7 @@ function CameraRow({ camera, typeLabels, onOpen, onToggleDetection, onCheckTypeC
 const LIMIT = 12;
 
 export default function DetectionSettings() {
+  const isMobile = useIsMobile();
   const [search, setSearch] = useState('');
   const [nvrFilter, setNvrFilter] = useState('');
   const [page, setPage] = useState(0);
@@ -241,51 +275,40 @@ export default function DetectionSettings() {
   }
 
   return (
-    <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 320 }}>
-          <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx3)' }} />
+    <div className={`${isMobile ? 'p-[14px]' : 'p-[22px]'} flex flex-col gap-[16px]`}>
+      <div className="flex items-center gap-[12px] flex-wrap">
+        <div className={`relative flex-1 min-w-[200px] ${isMobile ? 'max-w-full' : 'max-w-[320px]'}`}>
+          <Search size={16} className="absolute left-[12px] top-1/2 -translate-y-1/2 text-[var(--tx3)]" />
           <input
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(0); }}
             placeholder="Filter cameras…"
-            style={{
-              width: '100%', height: 40, padding: '0 12px 0 36px', boxSizing: 'border-box',
-              borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--bd)',
-              fontSize: 13, color: 'var(--tx)', outline: 'none',
-            }}
+            className="w-full h-[40px] pl-[36px] pr-[12px] box-border rounded-[10px] bg-[var(--bg2)] border border-[var(--bd)] text-[13px] text-[var(--tx)] outline-none"
           />
         </div>
-        <div style={{ position: 'relative' }}>
+        <div className="relative">
           <select
             value={nvrFilter}
             onChange={e => { setNvrFilter(e.target.value); setPage(0); }}
-            style={{
-              height: 40, padding: '0 34px 0 13px', borderRadius: 10,
-              background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13,
-              outline: 'none', cursor: 'pointer', color: 'var(--tx)', appearance: 'none',
-            }}
+            className="h-[40px] pl-[13px] pr-[34px] rounded-[10px] bg-[var(--bg2)] border border-[var(--bd)] text-[13px] outline-none cursor-pointer text-[var(--tx)] appearance-none"
           >
             <option value="">All NVRs</option>
             {nvrs.map(n => <option key={n._id} value={n._id}>{n.nvrName}</option>)}
           </select>
-          <ChevronDown size={14} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} />
+          <ChevronDown size={14} className="absolute right-[12px] top-1/2 -translate-y-1/2 pointer-events-none text-[var(--tx3)]" />
         </div>
-        <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>
+        <span className="ml-auto font-[family-name:var(--mono)] text-[11px] text-[var(--tx3)]">
           {onlineCount} online · {total} total
         </span>
       </div>
 
-      <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, overflow: 'hidden' }}>
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'minmax(200px,1.6fr) 120px 190px 150px 44px', gap: 0,
-          padding: '12px 18px', borderBottom: '1px solid var(--bd)',
-          fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)', alignItems: 'center',
-        }}>
+      <div className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[15px] overflow-hidden">
+        {/* Column header — hidden on phones, where each row renders its own inline labels. */}
+        <div className={`${isMobile ? 'hidden' : 'grid'} ${GRID_COLS} gap-0 py-[12px] px-[18px] border-b border-[var(--bd)] font-[family-name:var(--mono)] text-[9.5px] tracking-[.06em] text-[var(--tx3)] items-center`}>
           <span>CAMERA NAME</span>
-          <span style={{ textAlign: 'center' }}>STATUS</span>
-          <span style={{ textAlign: 'center' }}>ENABLE DETECTION</span>
-          <span style={{ textAlign: 'center' }}>CAMERA TYPE</span>
+          <span className="text-center">STATUS</span>
+          <span className="text-center">ENABLE DETECTION</span>
+          <span className="text-center">CAMERA TYPE</span>
           <span />
         </div>
         <AsyncBoundary
@@ -304,24 +327,23 @@ export default function DetectionSettings() {
               onOpen={() => setOpenCamera(camera)}
               onToggleDetection={handleToggleDetection}
               onCheckTypeChange={handleCheckTypeChange}
+              isMobile={isMobile}
             />
           ))}
         </AsyncBoundary>
       </div>
 
       {pages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 4 }}>
+        <div className="flex justify-center gap-[4px]">
           {Array.from({ length: pages }, (_, i) => (
             <button
               key={i}
               onClick={() => setPage(i)}
-              style={{
-                width: 30, height: 30, borderRadius: 7, fontSize: 12,
-                background: page === i ? 'var(--blue)' : 'var(--bg2)',
-                color: page === i ? '#fff' : 'var(--tx3)',
-                border: `1px solid ${page === i ? 'var(--blue)' : 'var(--bd)'}`,
-                cursor: 'pointer',
-              }}
+              className={`w-[30px] h-[30px] rounded-[7px] text-[12px] cursor-pointer border ${
+                page === i
+                  ? 'bg-[var(--blue)] text-white border-[var(--blue)]'
+                  : 'bg-[var(--bg2)] text-[var(--tx3)] border-[var(--bd)]'
+              }`}
             >
               {i + 1}
             </button>
