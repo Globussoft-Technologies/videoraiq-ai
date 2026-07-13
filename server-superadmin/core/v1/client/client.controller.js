@@ -12,9 +12,19 @@ class ClientController {
 
     async getClientCameras(req, res, next) {
         /* #swagger.tags = ['Client'] */
-        /* #swagger.description = 'List a client\'s added cameras (isAdded: true) with their NVR and per-detection enabled state. Super-admin token required.' */
+        /* #swagger.description = 'List a client\'s added cameras with a uniform grid of the admin\'s enabled detections and each camera\'s saved on/off boolean (ClientCameraDetection). Rows are lazily created (false) so new cameras auto-sync. Super-admin token required.' */
         /* #swagger.parameters['adminId'] = { in: 'path', required: true, description: 'Client admin _id' } */
+        /* #swagger.parameters['search'] = { in: 'query', description: 'Filter cameras by name / customName' } */
         return await clientService.getClientCameras(req, res, next);
+    }
+
+    async updateCameraDetection(req, res, next) {
+        /* #swagger.tags = ['Client'] */
+        /* #swagger.description = 'Toggle one detection\'s enabled boolean for one camera (ClientCameraDetection). Super-admin token required.' */
+        /* #swagger.parameters['adminId'] = { in: 'path', required: true, description: 'Client admin _id' } */
+        /* #swagger.parameters['cameraId'] = { in: 'path', required: true, description: 'Camera (Channel) _id' } */
+        /* #swagger.parameters['body'] = { in: 'body', required: true, schema: { settingType: 'personalProtectiveEquipmentSettings', enabled: true } } */
+        return await clientService.updateCameraDetection(req, res, next);
     }
 }
 

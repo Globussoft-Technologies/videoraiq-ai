@@ -5,5 +5,6 @@ import verifySuperAdmin from '../../../middlewares/verifySuperAdmin.js';
 
 router.get('/admins', verifySuperAdmin, clientController.listAdmins);
 router.get('/:adminId/cameras', verifySuperAdmin, clientController.getClientCameras);
+router.patch('/:adminId/cameras/:cameraId/detections', verifySuperAdmin, clientController.updateCameraDetection);
 
 export default router;
