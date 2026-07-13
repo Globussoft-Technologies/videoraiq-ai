@@ -130,13 +130,17 @@ const startServer = async () => {
 // 🔥 GLOBAL ERROR EVENTS
 // ------------------------
 
+// A stray rejected promise from a single request (e.g. a Mongoose CastError on
+// a bad _id) must NOT take down the whole server — that 502s every other
+// in-flight request. Log it and keep serving. Fix the offending code separately.
 process.on("unhandledRejection", (err) => {
-  logger.error(`Unhandled Rejection: ${err.message}`);
-  process.exit(1);
+  logger.error(`Unhandled Rejection: ${err?.stack || err?.message || err}`);
 });
 
+// An uncaught exception can leave the process in a corrupt state, so we still
+// exit and let the process manager (PM2/nodemon) restart cleanly.
 process.on("uncaughtException", (err) => {
-  logger.error(`Uncaught Exception: ${err.message}`);
+  logger.error(`Uncaught Exception: ${err?.stack || err?.message || err}`);
   process.exit(1);
 });
 

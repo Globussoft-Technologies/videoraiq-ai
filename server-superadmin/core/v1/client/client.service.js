@@ -226,12 +226,34 @@ class ClientService {
       // The detection must be enabled for this admin at the allocation level.
       const allowed = await clientDetectionAllocationModel
         .findOne({ adminId, settingType, enabled: true })
-        .select("_id")
+        .select("cameraAllocation")
         .lean();
       if (!allowed) {
         return res
           .status(400)
           .send(Response.userFailResp("This detection is not enabled for this client"));
+      }
+
+      // Enforce the allocation cap: this detection may be enabled on at most
+      // `cameraAllocation` cameras for the admin. Only checked when enabling;
+      // exclude the current camera so re-enabling an already-on camera doesn't
+      // consume an extra slot.
+      if (enabled) {
+        const alreadyEnabled = await clientCameraDetectionModel.countDocuments({
+          adminId,
+          settingType,
+          enabled: true,
+          cameraId: { $ne: cameraId },
+        });
+        if (alreadyEnabled + 1 > (allowed.cameraAllocation || 0)) {
+          return res
+            .status(400)
+            .send(
+              Response.userFailResp(
+                `Camera allocation limit reached for this detection (${allowed.cameraAllocation || 0} allowed, ${alreadyEnabled} already enabled).`,
+              ),
+            );
+        }
       }
 
       const updated = await clientCameraDetectionModel.findOneAndUpdate(

@@ -47,10 +47,16 @@ async function verifyToken(req, res, next) {
         let authorizedChannel = null;
         // Determine the route access
         if (!decoded?.memberId) {
+          // Reject early if the token carries no valid adminId. Without this,
+          // new Object(undefined) => {} and findById({ _id: {} }) throws a
+          // CastError that (as an unhandled rejection) used to crash the server.
+          if (!ObjectId.isValid(decoded?.adminId)) {
+            return res
+              .status(401)
+              .send(Response.tokenFailResp("Invalid token: missing adminId"));
+          }
           // Fetch the Admin data from the database
-          const admin = await adminModel.findById({
-            _id: new Object(decoded?.adminId),
-          }); // Replace with your ID field
+          const admin = await adminModel.findById(decoded.adminId);
           if (!admin) {
             return res
               .status(401)
