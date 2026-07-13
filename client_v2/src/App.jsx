@@ -8,17 +8,17 @@ import Logout from '@/components/Auth/Logout';
 
 /**
  * Standalone V2 app router.
- * - /admin-login is the admin login (the app's auth gate).
+ * - /user-login is the admin login (the app's auth gate) — unchanged.
  * - /employee-login and /employee-register are the public, light-themed
  *   employee/user portal pages (visually separate from the admin login).
  * - The V2 route subtree is mounted at the root and gated behind IsAuth.
- * - Root and unknown paths redirect to /, which bounces to /admin-login when
+ * - Root and unknown paths redirect to /, which bounces to /user-login when
  *   there's no session.
  */
 export const router = createBrowserRouter(
   createRoutesFromElements(
     <Route>
-      <Route path="/admin-login" element={<LoginForm />} />
+      <Route path="/user-login" element={<LoginForm />} />
       <Route path="/employee-login" element={<EmployeeLogin />} />
       <Route path="/employee-register" element={<EmployeeRegister />} />
       <Route path="/logout" element={<Logout />} />

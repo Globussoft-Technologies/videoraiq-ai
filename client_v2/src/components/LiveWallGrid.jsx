@@ -52,23 +52,6 @@ export function getEnabledEngines(channel) {
     .map(([key]) => ENGINE_LABEL_MAP[key] || key.replace('Settings', '').replace(/([A-Z])/g, ' $1').trim());
 }
 
-// Track a narrow (phone) viewport so the locked full-height layout can relax
-// into a normally-scrolling page (the toolbar wraps very tall on phones).
-function useIsMobile(maxWidth = 640) {
-  const query = `(max-width:${maxWidth}px)`;
-  const [isMobile, setIsMobile] = useState(
-    typeof window !== 'undefined' ? window.matchMedia(query).matches : false,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia(query);
-    const on = () => setIsMobile(mq.matches);
-    on();
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, [query]);
-  return isMobile;
-}
-
 /* ── Grid size configs (skip 1×1 in the toggle bar per design) ─────────── */
 const SIZES = [
   { cols: 1, perPage: 1,  label: '1×1' },
@@ -121,11 +104,11 @@ function FullscreenCameraView({ channel, onPrev, onNext, onClose, onExpand, isEx
   const site    = channel?.location   || channel?.locationName || channel?.site || '';
 
   return (
-    <div className="relative w-full h-full bg-black">
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000' }}>
       <CameraStream channel={channel} minH={0} rounded={false} showOverlay={false} />
 
       {/* Top-left label */}
-      <div className="vq-fs-label absolute top-[14px] left-[14px] z-10 max-w-[calc(100%-64px)] bg-[rgba(15,23,42,0.75)] border border-[rgba(255,255,255,0.15)] py-[6px] px-[12px] rounded-[8px] text-white text-[12px] font-semibold backdrop-blur-[4px] overflow-hidden text-ellipsis whitespace-nowrap">
+      <div className="vq-fs-label" style={{ position: 'absolute', top: 14, left: 14, zIndex: 10, maxWidth: 'calc(100% - 64px)', background: 'rgba(15,23,42,0.75)', border: '1px solid rgba(255,255,255,0.15)', padding: '6px 12px', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, backdropFilter: 'blur(4px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {camName}{site ? ` — ${site}` : ''}
       </div>
 
@@ -134,7 +117,14 @@ function FullscreenCameraView({ channel, onPrev, onNext, onClose, onExpand, isEx
         <button
           type="button"
           onClick={onClose}
-          className="vq-fs-close absolute top-[14px] right-[14px] z-50 w-[36px] h-[36px] box-border bg-[#ef4444] border-2 border-white rounded-full text-white flex items-center justify-center cursor-pointer shadow-[0_2px_10px_rgba(0,0,0,.5)] shrink-0"
+          className="vq-fs-close"
+          style={{
+            position: 'absolute', top: 14, right: 14, zIndex: 50,
+            width: 36, height: 36, boxSizing: 'border-box',
+            background: '#ef4444', border: '2px solid #fff', borderRadius: '50%',
+            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', boxShadow: '0 2px 10px rgba(0,0,0,.5)', flexShrink: 0,
+          }}
           onMouseEnter={e => e.currentTarget.style.background = '#dc2626'}
           onMouseLeave={e => e.currentTarget.style.background = '#ef4444'}
         >
@@ -146,7 +136,8 @@ function FullscreenCameraView({ channel, onPrev, onNext, onClose, onExpand, isEx
       {onPrev && (
         <button
           onClick={onPrev}
-          className="vq-fs-nav vq-fs-nav-prev absolute left-[16px] top-1/2 -translate-y-1/2 z-10 w-[40px] h-[40px] rounded-full bg-[rgba(15,23,42,0.65)] border border-[rgba(255,255,255,0.15)] text-white cursor-pointer flex items-center justify-center"
+          className="vq-fs-nav vq-fs-nav-prev"
+          style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 10, width: 40, height: 40, borderRadius: '50%', background: 'rgba(15,23,42,0.65)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
           <ChevronLeft size={20} />
         </button>
@@ -154,7 +145,8 @@ function FullscreenCameraView({ channel, onPrev, onNext, onClose, onExpand, isEx
       {onNext && (
         <button
           onClick={onNext}
-          className="vq-fs-nav vq-fs-nav-next absolute right-[16px] top-1/2 -translate-y-1/2 z-10 w-[40px] h-[40px] rounded-full bg-[rgba(15,23,42,0.65)] border border-[rgba(255,255,255,0.15)] text-white cursor-pointer flex items-center justify-center"
+          className="vq-fs-nav vq-fs-nav-next"
+          style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 10, width: 40, height: 40, borderRadius: '50%', background: 'rgba(15,23,42,0.65)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
           <ChevronRight size={20} />
         </button>
@@ -165,7 +157,7 @@ function FullscreenCameraView({ channel, onPrev, onNext, onClose, onExpand, isEx
         <button
           onClick={onExpand}
           title={isExpanded ? 'Exit fullscreen' : 'Fullscreen'}
-          className="absolute bottom-[14px] right-[14px] z-10 w-[30px] h-[30px] rounded-[6px] bg-[rgba(6,8,13,.6)] border border-[rgba(255,255,255,.15)] backdrop-blur-[4px] flex items-center justify-center cursor-pointer"
+          style={{ position: 'absolute', bottom: 14, right: 14, zIndex: 10, width: 30, height: 30, borderRadius: 6, background: 'rgba(6,8,13,.6)', border: '1px solid rgba(255,255,255,.15)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
         >
           {isExpanded ? <Minimize2 size={14} color="#fff" /> : <Maximize2 size={14} color="#fff" />}
         </button>
@@ -196,13 +188,6 @@ export default function LiveWallGrid() {
   const [selType, setSelType] = useState([]); // checkin | checkout
 
   const size     = SIZES[sizeIdx] || SIZES[2];
-
-  const isMobile = useIsMobile();
-  // On phones (outside fullscreen, and not the single-camera 1×1 view which
-  // fills the height by design) let the page grow and scroll with the app's
-  // outer scroll container instead of clamping the grid into a tiny inner
-  // scroll region under the tall wrapped toolbar.
-  const relax = isMobile && !isPageFS && size.cols !== 1;
 
   /* Location/NVR/Department/CamType are applied server-side; camera is
      applied client-side so its own selection never shrinks the options. */
@@ -323,23 +308,27 @@ export default function LiveWallGrid() {
   }, []);
 
   /* pill — uses CSS vars so it works in both themes */
-  const pill = (active) =>
-    `flex items-center gap-[6px] h-[34px] px-[16px] rounded-[8px] cursor-pointer text-[12.5px] font-medium select-none transition-all duration-150 border ${
-      active ? 'bg-[var(--bg3)] text-[var(--tx)] border-[var(--bd2)]' : 'bg-[var(--bg2)] text-[var(--tx2)] border-[var(--bd)]'
-    }`;
+  const pill = (active) => ({
+    display: 'flex', alignItems: 'center', gap: 6,
+    height: 34, padding: '0 16px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 500,
+    background: active ? 'var(--bg3)' : 'var(--bg2)',
+    color: active ? 'var(--tx)' : 'var(--tx2)',
+    border: `1px solid ${active ? 'var(--bd2)' : 'var(--bd)'}`,
+    userSelect: 'none', transition: 'all .15s',
+  });
 
   return (
     <div
       ref={pageRef}
-      className={`flex flex-col bg-[var(--bg0)] ${relax ? 'h-auto min-h-full overflow-visible' : 'h-full overflow-hidden'}`}
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg0)', overflow: 'hidden' }}
     >
       {/* ── Fullscreen camera modal ───────────────────────────────── */}
       {fullscreen && (
         <div
           onClick={closeFullscreen}
-          className="fixed inset-0 z-[9999] bg-[rgba(4,6,12,.93)] flex items-center justify-center backdrop-blur-[6px]"
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(4,6,12,.93)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(6px)' }}
         >
-          <div className="vq-fs-modal w-[95vw] h-[95vh] relative rounded-[12px] overflow-hidden bg-[var(--bg0)]" onClick={e => e.stopPropagation()}>
+          <div className="vq-fs-modal" onClick={e => e.stopPropagation()} style={{ width: '95vw', height: '95vh', position: 'relative', borderRadius: 12, overflow: 'hidden', background: 'var(--bg0)' }}>
             <FullscreenCameraView
               channel={fullscreen}
               onClose={closeFullscreen}
@@ -363,10 +352,10 @@ export default function LiveWallGrid() {
       )}
 
       {/* ── Toolbar ──────────────────────────────────────────────── */}
-      <div className="vq-wall-toolbar flex items-center gap-[8px] py-[10px] px-[16px] bg-[var(--bg1solid)] border-b border-[var(--bd)] flex-wrap shrink-0">
+      <div className="vq-wall-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: 'var(--bg1solid)', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap', flexShrink: 0 }}>
 
         {/* Grid size toggles */}
-        <div className="vq-wall-sizetoggle flex gap-[3px] bg-[var(--bg2)] border border-[var(--bd)] rounded-[9px] p-[3px]">
+        <div className="vq-wall-sizetoggle" style={{ display: 'flex', gap: 3, background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 9, padding: 3 }}>
           {SIZES.map((s) => {
             const realIdx = SIZES.indexOf(s);
             const active  = realIdx === sizeIdx;
@@ -375,9 +364,14 @@ export default function LiveWallGrid() {
               <div
                 key={s.label}
                 onClick={() => { setSizeIdx(realIdx); setPage(0); }}
-                className={`flex items-center gap-[5px] py-[5px] px-[11px] rounded-[6px] cursor-pointer font-[family-name:var(--mono)] text-[11.5px] font-semibold transition-all duration-150 ${
-                  active ? 'bg-[var(--bg3)] text-[var(--tx)]' : 'bg-transparent text-[var(--tx3)]'
-                }`}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '5px 11px', borderRadius: 6, cursor: 'pointer',
+                  fontFamily: 'var(--mono)', fontSize: 11.5, fontWeight: 600,
+                  background: active ? 'var(--bg3)' : 'transparent',
+                  color: active ? 'var(--tx)' : 'var(--tx3)',
+                  transition: 'all .15s',
+                }}
               >
                 {Icon && <Icon />} {s.label}
               </div>
@@ -386,13 +380,14 @@ export default function LiveWallGrid() {
         </div>
 
         {/* Search (placed right after the grid toggles) */}
-        <div className="vq-wall-search flex items-center gap-[7px] h-[40px] px-[11px] rounded-[8px] bg-[var(--bg2)] border border-[var(--bd)] min-w-[180px] flex-[1_1_180px]">
-          <Search size={13} className="text-[var(--ph)] shrink-0" />
+        <div className="vq-wall-search" style={{ display: 'flex', alignItems: 'center', gap: 7, height: 40, padding: '0 11px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', minWidth: 180, flex: '1 1 180px' }}>
+          <Search size={13} style={{ color: 'var(--ph)', flexShrink: 0 }} />
           <input
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(0); }}
             placeholder="Search cameras…"
-            className="vq-ph-hl flex-1 min-w-0 bg-transparent border-0 outline-none text-[var(--tx)] text-[12px]"
+            className="vq-ph-hl"
+            style={{ flex: 1, minWidth: 0, background: 'transparent', border: 0, outline: 'none', color: 'var(--tx)', fontSize: 12 }}
           />
         </div>
 
@@ -451,17 +446,17 @@ export default function LiveWallGrid() {
         />
 
         {/* Status filter */}
-        <div className="relative shrink-0">
+        <div style={{ position: 'relative', flexShrink: 0 }}>
           <select
             value={statusFilter}
             onChange={e => { setStatusFilter(e.target.value); setPage(0); }}
-            className={`${pill(!!statusFilter)} pr-[28px] appearance-none cursor-pointer`}
+            style={{ ...pill(!!statusFilter), paddingRight: 28, appearance: 'none', cursor: 'pointer' }}
           >
             <option value="">All Status</option>
             <option value="live">Live</option>
             <option value="offline">Offline</option>
           </select>
-          <svg className="absolute right-[9px] top-1/2 -translate-y-1/2 pointer-events-none text-[var(--tx3)]" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+          <svg style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
         </div>
 
         {/* Clear-all filters — only when a filter is active */}
@@ -469,7 +464,7 @@ export default function LiveWallGrid() {
           <button
             onClick={clearFilters}
             title="Clear all filters"
-            className="flex items-center gap-[5px] h-[40px] px-[14px] rounded-[8px] bg-[var(--brand)] border border-[var(--brand)] cursor-pointer text-white text-[12.5px] font-semibold shrink-0"
+            style={{ display: 'flex', alignItems: 'center', gap: 5, height: 40, padding: '0 14px', borderRadius: 8, background: 'var(--brand)', border: '1px solid var(--brand)', cursor: 'pointer', color: '#fff', fontSize: 12.5, fontWeight: 600, flexShrink: 0 }}
           >
             <X size={13} />
             Clear
@@ -477,16 +472,16 @@ export default function LiveWallGrid() {
         )}
 
         {/* Camera count */}
-        <span className="font-[family-name:var(--mono)] text-[11px] font-semibold text-[var(--ph)] ml-[4px] whitespace-nowrap shrink-0">
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, color: 'var(--ph)', marginLeft: 4, whiteSpace: 'nowrap', flexShrink: 0 }}>
           Showing {visible.length} of {list.length} cameras
         </span>
 
-        <div className="flex-1" />
+        <div style={{ flex: 1 }} />
 
         {/* Active (live-streaming) cameras badge */}
         {activeCount > 0 && (
-          <div className="flex items-center gap-[6px] text-[11.5px] font-semibold text-[var(--ok)] whitespace-nowrap shrink-0">
-            <span className="vq-blink w-[7px] h-[7px] rounded-full bg-[var(--ok)] inline-block shadow-[0_0_6px_var(--ok)] shrink-0" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: 'var(--ok)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--ok)', display: 'inline-block', boxShadow: '0 0 6px var(--ok)', flexShrink: 0 }} className="vq-blink" />
             {activeCount} active camera{activeCount !== 1 ? 's' : ''}
           </div>
         )}
@@ -495,7 +490,7 @@ export default function LiveWallGrid() {
         <button
           onClick={togglePageFullscreen}
           title={isPageFS ? 'Exit fullscreen' : 'Fullscreen'}
-          className="flex items-center gap-[6px] h-[34px] px-[12px] rounded-[8px] bg-[var(--bg2)] border border-[var(--bd)] cursor-pointer text-[var(--tx2)] text-[12px] font-medium shrink-0 whitespace-nowrap"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)', fontSize: 12, fontWeight: 500, flexShrink: 0, whiteSpace: 'nowrap' }}
         >
           {isPageFS ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
           {isPageFS ? 'Exit' : 'Fullscreen'}
@@ -503,7 +498,7 @@ export default function LiveWallGrid() {
       </div>
 
       {/* ── Grid ─────────────────────────────────────────────────── */}
-      <div className={`flex-1 min-h-0 flex-col ${relax ? 'overflow-visible' : (size.cols === 1 ? 'overflow-hidden' : 'overflow-auto')} ${size.cols === 1 ? 'p-0 flex' : 'p-[6px] block'}`}>
+      <div style={{ flex: 1, minHeight: 0, overflow: size.cols === 1 ? 'hidden' : 'auto', padding: size.cols === 1 ? 0 : 6, display: size.cols === 1 ? 'flex' : 'block', flexDirection: 'column' }}>
         <AsyncBoundary
           loading={channels.loading}
           error={channels.error}
@@ -515,7 +510,7 @@ export default function LiveWallGrid() {
           {() => (
             <>
               {size.cols === 1 && visible[0] ? (
-                <div className="flex-1 min-h-0">
+                <div style={{ flex: 1, minHeight: 0 }}>
                   <FullscreenCameraView
                     channel={visible[0]}
                     onPrev={pages > 1 ? () => setPage(p => (p - 1 + pages) % pages) : null}
@@ -525,12 +520,12 @@ export default function LiveWallGrid() {
                   />
                 </div>
               ) : (
-                <div className="vq-wall-grid grid gap-[4px]" data-cols={size.cols} style={{ gridTemplateColumns: `repeat(${size.cols},1fr)` }}>
+                <div className="vq-wall-grid" data-cols={size.cols} style={{ display: 'grid', gridTemplateColumns: `repeat(${size.cols},1fr)`, gap: 4 }}>
                   {visible.map((c, idx) => {
                     const id = c._id || c.channelId;
                     const camLabel = `CAM-${String(safePage * size.perPage + idx + 1).padStart(3, '0')}`;
                     return (
-                      <div key={id} className="aspect-[16/9]">
+                      <div key={id} style={{ aspectRatio: '16/9' }}>
                         <CameraStreamTile
                           channel={c}
                           camLabel={camLabel}
@@ -547,25 +542,21 @@ export default function LiveWallGrid() {
 
               {/* Pagination */}
               {pages > 1 && size.cols !== 1 && (
-                <div className="flex items-center justify-center gap-[10px] pt-[14px] px-[8px] pb-[4px] flex-wrap">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '14px 8px 4px', flexWrap: 'wrap' }}>
                   <button
                     disabled={safePage === 0}
                     onClick={() => setPage(p => Math.max(0, p - 1))}
-                    className={`h-[32px] px-[16px] rounded-[7px] bg-[var(--bg2)] border border-[var(--bd)] text-[12px] shrink-0 ${
-                      safePage === 0 ? 'text-[var(--tx3)] cursor-default' : 'text-[var(--tx)] cursor-pointer'
-                    }`}
+                    style={{ height: 32, padding: '0 16px', borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--bd)', color: safePage === 0 ? 'var(--tx3)' : 'var(--tx)', fontSize: 12, cursor: safePage === 0 ? 'default' : 'pointer', flexShrink: 0 }}
                   >
                     Prev
                   </button>
-                  <span className="font-[family-name:var(--mono)] text-[11.5px] text-[var(--tx3)] whitespace-nowrap shrink-0">
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--tx3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
                     {safePage + 1} / {pages}
                   </span>
                   <button
                     disabled={safePage + 1 >= pages}
                     onClick={() => setPage(p => p + 1)}
-                    className={`h-[32px] px-[16px] rounded-[7px] bg-[var(--bg2)] border border-[var(--bd)] text-[12px] shrink-0 ${
-                      safePage + 1 >= pages ? 'text-[var(--tx3)] cursor-default' : 'text-[var(--tx)] cursor-pointer'
-                    }`}
+                    style={{ height: 32, padding: '0 16px', borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--bd)', color: safePage + 1 >= pages ? 'var(--tx3)' : 'var(--tx)', fontSize: 12, cursor: safePage + 1 >= pages ? 'default' : 'pointer', flexShrink: 0 }}
                   >
                     Next
                   </button>

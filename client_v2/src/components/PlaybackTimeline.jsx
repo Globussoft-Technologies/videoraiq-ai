@@ -347,14 +347,14 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
   const hourTicks = [0, 4, 8, 12, 16, 20, 24];
 
   return (
-    <div className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[14px] p-[16px] flex flex-col gap-[12px] min-w-0 max-w-full box-border">
+    <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 14, padding: 16, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }}>
       {/* Responsive breakpoints for this component only — same <style>+vq- className
           pattern used elsewhere in the app (e.g. AlertsView.jsx / tokens.css) rather
           than inventing a new one. Prefixed vq-pbtl- to avoid clashing with the
           global vq-* rules in theme/tokens.css. */}
       <style>{`
         @media (max-width: 640px) {
-          .vq-pbtl-video { height: 52vh !important; min-height: 300px !important; }
+          .vq-pbtl-video { height: 42vh !important; min-height: 220px !important; }
           .vq-pbtl-camlabel { font-size: 11px !important; padding: 5px 8px !important; max-width: calc(100% - 56px) !important; }
           .vq-pbtl-navbtn { width: 32px !important; height: 32px !important; left: 8px !important; right: 8px !important; }
           .vq-pbtl-expand { width: 26px !important; height: 26px !important; bottom: 8px !important; right: 8px !important; }
@@ -372,10 +372,10 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
       `}</style>
 
       {/* Video surface — the only screen in Camera View; shows the recording, never live */}
-      <div className="vq-pbtl-video relative h-[60vh] min-h-[360px] bg-black rounded-[10px] overflow-hidden">
-        <video ref={videoRef} muted playsInline className={`w-full h-full object-contain ${videoState === 'ready' ? 'block' : 'hidden'}`} />
+      <div className="vq-pbtl-video" style={{ position: 'relative', height: '60vh', minHeight: 360, background: '#000', borderRadius: 10, overflow: 'hidden' }}>
+        <video ref={videoRef} muted playsInline style={{ width: '100%', height: '100%', objectFit: 'contain', display: videoState === 'ready' ? 'block' : 'none' }} />
         {videoState !== 'ready' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-[8px] text-[#2563EB] text-[13px] p-[12px] text-center">
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#2563EB', fontSize: 13, padding: 12, textAlign: 'center' }}>
             {videoState === 'loading' && (
               <>
                 <Wifi size={34} className="vq-blink" />
@@ -383,16 +383,16 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
               </>
             )}
             {videoState === 'no-recording' && (
-              <span className="text-[rgba(255,255,255,.55)] font-[family-name:var(--mono)] text-[12px]">No recording available for this time</span>
+              <span style={{ color: 'rgba(255,255,255,.55)', fontFamily: 'var(--mono)', fontSize: 12 }}>No recording available for this time</span>
             )}
             {videoState === 'idle' && (
-              <span className="text-[rgba(255,255,255,.55)] font-[family-name:var(--mono)] text-[12px]">Select a point on the timeline</span>
+              <span style={{ color: 'rgba(255,255,255,.55)', fontFamily: 'var(--mono)', fontSize: 12 }}>Select a point on the timeline</span>
             )}
           </div>
         )}
 
         {/* Top-left: camera name + site */}
-        <div className="vq-pbtl-camlabel absolute top-[14px] left-[14px] z-10 max-w-[calc(100%_-_64px)] bg-[rgba(15,23,42,0.75)] border border-[rgba(255,255,255,0.15)] px-[12px] py-[6px] rounded-[8px] text-white text-[12px] font-semibold backdrop-blur-[4px] overflow-hidden text-ellipsis whitespace-nowrap">
+        <div className="vq-pbtl-camlabel" style={{ position: 'absolute', top: 14, left: 14, zIndex: 10, maxWidth: 'calc(100% - 64px)', background: 'rgba(15,23,42,0.75)', border: '1px solid rgba(255,255,255,0.15)', padding: '6px 12px', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, backdropFilter: 'blur(4px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {camName}{camSite ? ` — ${camSite}` : ''}
         </div>
 
@@ -400,7 +400,8 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
         {onPrev && (
           <button
             onClick={onPrev}
-            className="vq-pbtl-navbtn absolute left-[16px] top-1/2 -translate-y-1/2 z-10 w-[40px] h-[40px] rounded-full bg-[rgba(15,23,42,0.65)] border border-[rgba(255,255,255,0.15)] text-white cursor-pointer flex items-center justify-center"
+            className="vq-pbtl-navbtn"
+            style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 10, width: 40, height: 40, borderRadius: '50%', background: 'rgba(15,23,42,0.65)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
             <ChevronLeft size={20} />
           </button>
@@ -408,7 +409,8 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
         {onNext && (
           <button
             onClick={onNext}
-            className="vq-pbtl-navbtn absolute right-[16px] top-1/2 -translate-y-1/2 z-10 w-[40px] h-[40px] rounded-full bg-[rgba(15,23,42,0.65)] border border-[rgba(255,255,255,0.15)] text-white cursor-pointer flex items-center justify-center"
+            className="vq-pbtl-navbtn"
+            style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 10, width: 40, height: 40, borderRadius: '50%', background: 'rgba(15,23,42,0.65)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
             <ChevronRight size={20} />
           </button>
@@ -419,7 +421,8 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
           <button
             onClick={onExpand}
             title={isExpanded ? 'Exit fullscreen' : 'Fullscreen'}
-            className="vq-pbtl-expand absolute bottom-[14px] right-[14px] z-10 w-[30px] h-[30px] rounded-[6px] bg-[rgba(6,8,13,.6)] border border-[rgba(255,255,255,.15)] backdrop-blur-[4px] flex items-center justify-center cursor-pointer"
+            className="vq-pbtl-expand"
+            style={{ position: 'absolute', bottom: 14, right: 14, zIndex: 10, width: 30, height: 30, borderRadius: 6, background: 'rgba(6,8,13,.6)', border: '1px solid rgba(255,255,255,.15)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
           >
             {isExpanded ? <Minimize2 size={14} color="#fff" /> : <Maximize2 size={14} color="#fff" />}
           </button>
@@ -427,26 +430,26 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
       </div>
 
       {/* Transport row: elapsed time · skip/rewind/play/forward/skip pill · speed selector */}
-      <div className="vq-pbtl-transport flex items-center gap-x-[12px] gap-y-[8px] flex-wrap">
-        <span className="vq-pbtl-clock font-[family-name:var(--mono)] text-[13px] text-[var(--tx)] min-w-[150px] whitespace-nowrap">
+      <div className="vq-pbtl-transport" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', rowGap: 8 }}>
+        <span className="vq-pbtl-clock" style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--tx)', minWidth: 150, whiteSpace: 'nowrap' }}>
           {fmtClock(cursorMs)} / 24:00:00
         </span>
 
-        <div className="vq-pbtl-spacer flex-1" />
+        <div className="vq-pbtl-spacer" style={{ flex: 1 }} />
 
         {/* Transport pill: skip-to-start · rewind 30s · play/pause · forward 30s · skip-to-end */}
-        <div className="vq-pbtl-pill flex items-center gap-[6px] bg-[var(--bg2)] border border-[var(--bd)] rounded-[20px] px-[6px] py-[4px]">
+        <div className="vq-pbtl-pill" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 20, padding: '4px 6px' }}>
           <button
             onClick={skipToStart}
             title="Jump to start of day"
-            className="w-[30px] h-[30px] rounded-full bg-transparent border-0 text-[var(--tx2)] cursor-pointer flex items-center justify-center flex-none"
+            style={{ width: 30, height: 30, borderRadius: '50%', background: 'transparent', border: 0, color: 'var(--tx2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}
           >
             <SkipBack size={15} />
           </button>
           <button
             onClick={() => skipBy(-SKIP_MS)}
             title="Rewind 30 sec"
-            className="w-[30px] h-[30px] rounded-full bg-transparent border-0 text-[var(--tx2)] cursor-pointer flex items-center justify-center flex-none"
+            style={{ width: 30, height: 30, borderRadius: '50%', background: 'transparent', border: 0, color: 'var(--tx2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}
           >
             <RotateCcw size={15} />
           </button>
@@ -457,36 +460,36 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
             }}
             disabled={videoState === 'loading'}
             title={videoState === 'no-recording' ? 'Retry loading this time' : playing ? 'Pause' : 'Play'}
-            className={`w-[34px] h-[34px] rounded-full bg-[var(--violet)] border-0 text-white flex items-center justify-center flex-none ${videoState === 'loading' ? 'cursor-default opacity-50' : 'cursor-pointer opacity-100'}`}
+            style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--violet)', border: 0, color: '#fff', cursor: videoState === 'loading' ? 'default' : 'pointer', opacity: videoState === 'loading' ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}
           >
             {playing && videoState === 'ready' ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
           </button>
           <button
             onClick={() => skipBy(SKIP_MS)}
             title="Forward 30 sec"
-            className="w-[30px] h-[30px] rounded-full bg-transparent border-0 text-[var(--tx2)] cursor-pointer flex items-center justify-center flex-none"
+            style={{ width: 30, height: 30, borderRadius: '50%', background: 'transparent', border: 0, color: 'var(--tx2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}
           >
             <RotateCw size={15} />
           </button>
           <button
             onClick={skipToEnd}
             title="Jump to end of day"
-            className="w-[30px] h-[30px] rounded-full bg-transparent border-0 text-[var(--tx2)] cursor-pointer flex items-center justify-center flex-none"
+            style={{ width: 30, height: 30, borderRadius: '50%', background: 'transparent', border: 0, color: 'var(--tx2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}
           >
             <SkipForward size={15} />
           </button>
         </div>
 
-        <div className="vq-pbtl-spacer flex-1" />
+        <div className="vq-pbtl-spacer" style={{ flex: 1 }} />
 
         {/* Speed selector — sets both timeline zoom and actual video.playbackRate */}
-        <div className="vq-pbtl-speed flex gap-[4px] min-w-[150px] justify-end">
+        <div className="vq-pbtl-speed" style={{ display: 'flex', gap: 4, minWidth: 150, justifyContent: 'flex-end' }}>
           {ZOOM_LEVELS.map((z, i) => (
             <button
               key={z}
               onClick={() => setZoomIdx(i)}
               title={`Play at ${z}× speed`}
-              className={`rounded-[6px] px-[10px] py-[3px] text-[11px] font-[family-name:var(--mono)] cursor-pointer border ${zoomIdx === i ? 'bg-[var(--bg3)] border-[var(--blue)] text-[var(--blue)]' : 'bg-[var(--bg2)] border-[var(--bd)] text-[var(--tx2)]'}`}
+              style={{ background: zoomIdx === i ? 'var(--bg3)' : 'var(--bg2)', border: `1px solid ${zoomIdx === i ? 'var(--blue)' : 'var(--bd)'}`, borderRadius: 6, padding: '3px 10px', fontSize: 11, fontFamily: 'var(--mono)', color: zoomIdx === i ? 'var(--blue)' : 'var(--tx2)', cursor: 'pointer' }}
             >
               {z}×
             </button>
@@ -498,16 +501,15 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
           (navy → blue → cyan, filled proportionally to playback position).
           Zoom widens the inner track (scrollable) rather than scaling it, so
           hit-testing for click/drag stays in sync with marker positions. */}
-      <div ref={scrollRef} className={`max-w-full ${ZOOM_LEVELS[zoomIdx] > 1 ? 'overflow-x-auto' : 'overflow-x-hidden'}`}>
+      <div ref={scrollRef} style={{ overflowX: ZOOM_LEVELS[zoomIdx] > 1 ? 'auto' : 'hidden', maxWidth: '100%' }}>
         <div
           ref={trackRef}
           onClick={handleTrackClick}
           onPointerDown={handlePointerDown}
-          className="relative h-[48px] bg-[#e2e8f0] rounded-[6px] shadow-[inset_0_1px_3px_rgba(0,0,0,.15)] cursor-pointer min-w-full overflow-hidden"
-          style={{ width: `${ZOOM_LEVELS[zoomIdx] * 100}%` }}
+          style={{ position: 'relative', height: 48, background: '#e2e8f0', borderRadius: 6, boxShadow: 'inset 0 1px 3px rgba(0,0,0,.15)', cursor: 'pointer', width: `${ZOOM_LEVELS[zoomIdx] * 100}%`, minWidth: '100%', overflow: 'hidden' }}
         >
           {/* progress fill — static 3-stop gradient, width = playback position */}
-          <div className="absolute left-0 top-0 bottom-0 bg-[linear-gradient(90deg,#07486A_0%,#2563EB_50%,#06B6D4_100%)]" style={{ width: `${cursorPct}%`, transition: dragging ? 'none' : 'width .1s linear' }} />
+          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${cursorPct}%`, background: 'linear-gradient(90deg, #07486A 0%, #2563EB 50%, #06B6D4 100%)', transition: dragging ? 'none' : 'width .1s linear' }} />
 
           {/* recording availability (dim overlay where no segment exists) */}
           {segments.map((seg, i) => {
@@ -515,7 +517,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
             const width = ((seg.end - seg.start) / DAY_MS) * 100;
             if (width <= 0) return null;
             return (
-              <div key={i} className="absolute top-0 bottom-0 bg-[rgba(255,255,255,.06)] border-x border-[rgba(255,255,255,.25)]" style={{ left: `${left}%`, width: `${width}%` }} />
+              <div key={i} style={{ position: 'absolute', left: `${left}%`, width: `${width}%`, top: 0, bottom: 0, background: 'rgba(255,255,255,.06)', borderLeft: '1px solid rgba(255,255,255,.25)', borderRight: '1px solid rgba(255,255,255,.25)' }} />
             );
           })}
 
@@ -528,25 +530,24 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
               <div
                 key={ev._id}
                 title={`${ev.incidentName || ev.incidentType} · ${t.toLocaleTimeString()}`}
-                className="absolute top-0 bottom-0 w-[4px] rounded-[2px] -translate-x-1/2 shadow-[0_0_4px_rgba(0,0,0,.4)]"
-                style={{ left: `${leftPct}%`, background: eventColor(ev.incidentType) }}
+                style={{ position: 'absolute', left: `${leftPct}%`, top: 0, bottom: 0, width: 4, background: eventColor(ev.incidentType), borderRadius: 2, transform: 'translateX(-50%)', boxShadow: '0 0 4px rgba(0,0,0,.4)' }}
               />
             );
           })}
 
           {/* scrub cursor — the gradient fill's leading edge, made visible as a thin bright line */}
-          <div className={`absolute top-0 bottom-0 bg-white shadow-[0_0_6px_rgba(255,255,255,.8)] -translate-x-1/2 ${dragging ? 'w-[3px]' : 'w-[2px]'}`} style={{ left: `${cursorPct}%` }} />
+          <div style={{ position: 'absolute', left: `${cursorPct}%`, top: 0, bottom: 0, width: dragging ? 3 : 2, background: '#fff', boxShadow: '0 0 6px rgba(255,255,255,.8)', transform: 'translateX(-50%)' }} />
 
           {/* hour ticks scale with the track so they stay aligned at any zoom */}
-          <div className="vq-pbtl-hourticks absolute left-0 right-0 -bottom-[16px] flex justify-between text-[10px] text-[var(--tx3)] font-[family-name:var(--mono)] pointer-events-none">
+          <div className="vq-pbtl-hourticks" style={{ position: 'absolute', left: 0, right: 0, bottom: -16, display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--tx3)', fontFamily: 'var(--mono)', pointerEvents: 'none' }}>
             {hourTicks.map((h) => <span key={h}>{pad2(h)}:00</span>)}
           </div>
         </div>
       </div>
-      <div className="h-[12px]" />{/* spacer for the absolutely-positioned hour-tick row above */}
+      <div style={{ height: 12 }} />{/* spacer for the absolutely-positioned hour-tick row above */}
 
       {loadingMeta && (
-        <span className="text-[10.5px] text-[var(--tx3)] font-[family-name:var(--mono)]">Loading recording timeline…</span>
+        <span style={{ fontSize: 10.5, color: 'var(--tx3)', fontFamily: 'var(--mono)' }}>Loading recording timeline…</span>
       )}
     </div>
   );

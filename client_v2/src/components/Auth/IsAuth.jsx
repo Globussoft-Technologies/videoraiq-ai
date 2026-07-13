@@ -11,7 +11,7 @@ const HOST = import.meta.env.VITE_BACKEND;
  * (client/src/components/Auth/IsAuth.jsx): it does not just check that a cookie
  * exists, it VALIDATES the access token against the backend
  * (POST /api/v1/auth/by-login-token). Only a token the server confirms renders
- * the protected tree; anything else is cleared and bounced to /admin-login.
+ * the protected tree; anything else is cleared and bounced to /user-login.
  *
  * (V1 also resolves an aMember redirect + permission routing; the standalone V2
  * has neither, so this is the token-validation core of that flow.)
@@ -23,7 +23,7 @@ export default function IsAuth({ children }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const toLogin = () =>
-    navigate('/admin-login', { replace: true, state: { from: location } });
+    navigate('/user-login', { replace: true, state: { from: location } });
 
   useEffect(() => {
     const token = getAccessToken();

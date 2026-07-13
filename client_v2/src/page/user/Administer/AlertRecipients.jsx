@@ -26,29 +26,15 @@ const STATUS_FILTERS = [
   { key: 'unverified', label: 'Unverified' },
 ];
 
-// Shared Tailwind classes for the field labels shown beside each value in the mobile card layout.
-const M_LABEL = 'font-[family-name:var(--mono)] text-[9.5px] tracking-[.07em] text-[var(--tx3)] shrink-0';
-
-// Track a narrow (phone) viewport so the fixed-grid table can fall back to stacked cards.
-function useIsMobile(maxWidth = 640) {
-  const query = `(max-width:${maxWidth}px)`;
-  const [isMobile, setIsMobile] = useState(
-    typeof window !== 'undefined' ? window.matchMedia(query).matches : false,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia(query);
-    const on = () => setIsMobile(mq.matches);
-    on();
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, [query]);
-  return isMobile;
-}
-
 function Avatar({ name }) {
   const initials = (name || '?').trim().slice(0, 2).toUpperCase();
   return (
-    <span className="w-[32px] h-[32px] rounded-full shrink-0 flex items-center justify-center bg-[linear-gradient(135deg,var(--blue),var(--violet))] text-white text-[11.5px] font-bold font-[family-name:var(--mono)]">
+    <span style={{
+      width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'linear-gradient(135deg,var(--blue),var(--violet))',
+      color: '#fff', fontSize: 11.5, fontWeight: 700, fontFamily: 'var(--mono)',
+    }}>
       {initials}
     </span>
   );
@@ -90,44 +76,48 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[300] bg-[rgba(6,8,13,.62)] backdrop-blur-[4px] flex items-center justify-center p-[24px]"
+      style={{
+        position: 'fixed', inset: 0, zIndex: 300,
+        background: 'rgba(6,8,13,.62)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+      }}
     >
       <div
         onClick={e => e.stopPropagation()}
-        className="w-[440px] max-w-full bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] overflow-hidden"
+        style={{ width: 440, maxWidth: '100%', background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 16, overflow: 'hidden' }}
       >
-        <div className="flex items-center justify-between py-[16px] px-[20px] border-b border-[var(--bd)]">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--bd)' }}>
           <div>
-            <div className="font-[family-name:var(--disp)] font-semibold text-[15.5px]">Add Notification Recipient</div>
-            <div className="text-[11.5px] text-[var(--tx3)] mt-[2px]">Enter contact details and choose alert types</div>
+            <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15.5 }}>Add Notification Recipient</div>
+            <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2 }}>Enter contact details and choose alert types</div>
           </div>
-          <button onClick={onClose} className="w-[28px] h-[28px] rounded-[8px] flex items-center justify-center bg-transparent border border-[var(--bd)] text-[var(--tx3)] cursor-pointer">
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid var(--bd)', color: 'var(--tx3)', cursor: 'pointer' }}>
             <X size={14} />
           </button>
         </div>
 
-        <div className="py-[18px] px-[20px] flex flex-col gap-[14px]">
+        <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <div className="text-[11px] text-[var(--tx2)] mb-[6px]">Full Name</div>
+            <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>Full Name</div>
             <input
               value={fullName}
               onChange={e => setFullName(e.target.value)}
               placeholder="e.g. John Doe"
-              className="w-full box-border h-[38px] px-[12px] rounded-[9px] bg-[var(--bg2)] border border-[var(--bd)] text-[12.5px] text-[var(--tx)] outline-none"
+              style={{ width: '100%', boxSizing: 'border-box', height: 38, padding: '0 12px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5, color: 'var(--tx)', outline: 'none' }}
             />
           </div>
           <div>
-            <div className="text-[11px] text-[var(--tx2)] mb-[6px]">Email Address</div>
+            <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>Email Address</div>
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="e.g. michael@company.com"
-              className="w-full box-border h-[38px] px-[12px] rounded-[9px] bg-[var(--bg2)] border border-[var(--bd)] text-[12.5px] text-[var(--tx)] outline-none"
+              style={{ width: '100%', boxSizing: 'border-box', height: 38, padding: '0 12px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5, color: 'var(--tx)', outline: 'none' }}
             />
           </div>
           <div>
-            <div className="text-[11px] text-[var(--tx2)] mb-[6px]">Detection Types</div>
+            <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>Detection Types</div>
             <MultiSelect
               options={typeOptions}
               value={incidentIds}
@@ -139,14 +129,20 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
           </div>
         </div>
 
-        <div className="flex justify-end gap-[8px] py-[15px] px-[20px] border-t border-[var(--bd)]">
-          <button onClick={onClose} disabled={saving} className="text-[12.5px] font-semibold text-[var(--tx2)] border border-[var(--bd)] rounded-[9px] py-[9px] px-[16px] cursor-pointer bg-transparent">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '15px 20px', borderTop: '1px solid var(--bd)' }}>
+          <button onClick={onClose} disabled={saving} style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)', border: '1px solid var(--bd)', borderRadius: 9, padding: '9px 16px', cursor: 'pointer', background: 'none' }}>
             Cancel
           </button>
           <button
             onClick={submit}
             disabled={saving}
-            className={`flex items-center gap-[7px] text-[12.5px] font-semibold text-white bg-[linear-gradient(135deg,var(--blue),var(--violet))] rounded-[9px] py-[9px] px-[18px] border-none ${saving ? 'cursor-wait opacity-70' : 'cursor-pointer opacity-100'}`}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 7,
+              fontSize: 12.5, fontWeight: 600, color: '#fff',
+              background: 'linear-gradient(135deg,var(--blue),var(--violet))',
+              borderRadius: 9, padding: '9px 18px', cursor: saving ? 'wait' : 'pointer', border: 'none',
+              opacity: saving ? 0.7 : 1,
+            }}
           >
             {saving && <Loader2 size={13} className="animate-spin" />}
             {saving ? 'Adding…' : 'Add'}
@@ -204,83 +200,50 @@ function RowDetectionTypes({ recipient, detectionTypes, canEdit, onSaved }) {
 }
 
 /* ── Recipient row ────────────────────────────────────────────────────────── */
-function RecipientRow({ recipient, detectionTypes, canEdit, canDelete, onVerify, onDelete, onSaved, isMobile }) {
-  const statusBadge = recipient.verified ? (
-    <span className="flex items-center gap-[5px] text-[10.5px] font-semibold text-[var(--ok)] border border-[var(--ok)] rounded-[20px] py-[3px] px-[9px] whitespace-nowrap">
-      ✓ Verified
-    </span>
-  ) : canEdit ? (
-    <button
-      onClick={onVerify}
-      className="text-[10.5px] font-semibold text-white bg-[var(--blue)] border-none rounded-[20px] py-[4px] px-[10px] cursor-pointer whitespace-nowrap"
-    >
-      Verify
-    </button>
-  ) : (
-    <span className="text-[10.5px] font-semibold text-[var(--warn)] border border-[var(--warn)] rounded-[20px] py-[3px] px-[9px] whitespace-nowrap">
-      Unverified
-    </span>
-  );
-
-  const detectionTypesSelect = <RowDetectionTypes recipient={recipient} detectionTypes={detectionTypes} canEdit={canEdit} onSaved={onSaved} />;
-
-  const deleteBtn = canDelete && (
-    <button
-      onClick={onDelete}
-      title="Delete recipient"
-      className="w-[30px] h-[30px] rounded-[8px] flex items-center justify-center bg-transparent border border-[rgba(255,77,77,.4)] text-[var(--crit)] cursor-pointer shrink-0"
-    >
-      <Trash2 size={13} />
-    </button>
-  );
-
-  // On phones the 4-column grid overflows, so each recipient becomes a stacked
-  // card with the columns turned into labelled rows.
-  if (isMobile) {
-    return (
-      <div className="flex flex-col gap-[12px] py-[14px] px-[16px] border-b border-[var(--bd)]">
-        <div className="flex items-center gap-[10px] min-w-0">
-          <Avatar name={recipient.fullName} />
-          <span className="text-[13px] font-semibold text-[var(--tx)] whitespace-nowrap overflow-hidden text-ellipsis flex-1 min-w-0">
-            {recipient.fullName || '—'}
-          </span>
-          {deleteBtn}
-        </div>
-        <div className="flex items-center gap-[10px]">
-          <span className={M_LABEL}>EMAIL</span>
-          <span className="text-[12px] text-[var(--tx2)] overflow-hidden text-ellipsis whitespace-nowrap ml-auto min-w-0">
-            {recipient.value}
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-[10px]">
-          <span className={M_LABEL}>STATUS</span>
-          {statusBadge}
-        </div>
-        <div className="flex items-center justify-between gap-[10px]">
-          <span className={M_LABEL}>DETECTIONS</span>
-          {detectionTypesSelect}
-        </div>
-      </div>
-    );
-  }
-
+function RecipientRow({ recipient, detectionTypes, canEdit, canDelete, onVerify, onDelete, onSaved }) {
   return (
-    <div className="grid grid-cols-[1.4fr_1.6fr_1.2fr_44px] items-center gap-[12px] py-[12px] px-[16px] border-b border-[var(--bd)]">
-      <div className="flex items-center gap-[10px] min-w-0">
+    <div style={{
+      display: 'grid', gridTemplateColumns: '1.4fr 1.6fr 1.2fr 44px',
+      alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--bd)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
         <Avatar name={recipient.fullName} />
-        <span className="text-[12.5px] font-semibold text-[var(--tx)] whitespace-nowrap overflow-hidden text-ellipsis">
+        <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {recipient.fullName || '—'}
         </span>
       </div>
-      <div className="text-[12px] text-[var(--tx2)] whitespace-nowrap overflow-hidden text-ellipsis">
+      <div style={{ fontSize: 12, color: 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {recipient.value}
       </div>
-      <div className="flex items-center gap-[8px] flex-wrap">
-        {statusBadge}
-        {detectionTypesSelect}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {recipient.verified ? (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 600, color: 'var(--ok)', border: '1px solid var(--ok)', borderRadius: 20, padding: '3px 9px', whiteSpace: 'nowrap' }}>
+            ✓ Verified
+          </span>
+        ) : canEdit ? (
+          <button
+            onClick={onVerify}
+            style={{ fontSize: 10.5, fontWeight: 600, color: '#fff', background: 'var(--blue)', border: 'none', borderRadius: 20, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+          >
+            Verify
+          </button>
+        ) : (
+          <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--warn)', border: '1px solid var(--warn)', borderRadius: 20, padding: '3px 9px', whiteSpace: 'nowrap' }}>
+            Unverified
+          </span>
+        )}
+        <RowDetectionTypes recipient={recipient} detectionTypes={detectionTypes} canEdit={canEdit} onSaved={onSaved} />
       </div>
-      <div className="flex justify-center">
-        {deleteBtn}
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        {canDelete && (
+          <button
+            onClick={onDelete}
+            title="Delete recipient"
+            style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid rgba(255,77,77,.4)', color: 'var(--crit)', cursor: 'pointer' }}
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -288,7 +251,6 @@ function RecipientRow({ recipient, detectionTypes, canEdit, canDelete, onVerify,
 
 /* ── Main page ────────────────────────────────────────────────────────────── */
 export default function AlertRecipients() {
-  const isMobile = useIsMobile();
   const { permissions } = usePermissions();
   const canView = permissions?.recipients?.view ?? true;
   const canCreate = permissions?.recipients?.create ?? true;
@@ -350,46 +312,55 @@ export default function AlertRecipients() {
 
   if (!canView) {
     return (
-      <div className="p-[40px] text-center text-[var(--tx3)] text-[13px]">
+      <div style={{ padding: 40, textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>
         You don't have permission to view Alert Recipients.
       </div>
     );
   }
 
   return (
-    <div className={`${isMobile ? 'p-[14px]' : 'p-[22px]'} flex flex-col gap-[18px]`}>
+    <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
       {/* Toolbar */}
-      <div className="flex items-center gap-[10px] flex-wrap">
-        <div className={`flex items-center gap-[7px] h-[36px] px-[12px] rounded-[9px] bg-[var(--bg2)] border border-[var(--bd)] min-w-[220px] ${isMobile ? 'flex-[1_1_100%]' : 'flex-[0_1_auto]'}`}>
-          <Search size={14} className="text-[var(--tx3)] shrink-0" />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 12px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)', minWidth: 220 }}>
+          <Search size={14} style={{ color: 'var(--tx3)', flexShrink: 0 }} />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search recipients..."
-            className="flex-1 bg-transparent border-0 outline-none text-[var(--tx)] text-[12.5px]"
+            style={{ flex: 1, background: 'transparent', border: 0, outline: 'none', color: 'var(--tx)', fontSize: 12.5 }}
           />
         </div>
 
-        <div className="flex gap-[4px] bg-[var(--bg2)] border border-[var(--bd)] rounded-[9px] p-[3px]">
+        <div style={{ display: 'flex', gap: 4, background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 9, padding: 3 }}>
           {STATUS_FILTERS.map(f => (
             <button
               key={f.key}
               onClick={() => setStatusFilter(f.key)}
-              className={`py-[6px] px-[13px] rounded-[6px] border-none cursor-pointer text-[12px] font-semibold ${
-                statusFilter === f.key ? 'bg-[var(--blue)] text-white' : 'bg-transparent text-[var(--tx2)]'
-              }`}
+              style={{
+                padding: '6px 13px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                fontSize: 12, fontWeight: 600,
+                background: statusFilter === f.key ? 'var(--blue)' : 'transparent',
+                color: statusFilter === f.key ? '#fff' : 'var(--tx2)',
+              }}
             >
               {f.label}
             </button>
           ))}
         </div>
 
-        <div className="flex-1" />
+        <div style={{ flex: 1 }} />
 
         {canCreate && (
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-[7px] text-[12.5px] font-semibold text-white bg-[linear-gradient(135deg,var(--blue),var(--violet))] rounded-[9px] py-[9px] px-[16px] cursor-pointer border-none shadow-[0_0_14px_rgba(99,102,241,.3)]"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 7,
+              fontSize: 12.5, fontWeight: 600, color: '#fff',
+              background: 'linear-gradient(135deg,var(--blue),var(--violet))',
+              borderRadius: 9, padding: '9px 16px', cursor: 'pointer', border: 'none',
+              boxShadow: '0 0 14px rgba(99,102,241,.3)',
+            }}
           >
             <Plus size={14} /> Add New
           </button>
@@ -397,16 +368,15 @@ export default function AlertRecipients() {
       </div>
 
       {/* Table */}
-      <div className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[14px] overflow-hidden">
-        <div className="flex items-center justify-between py-[14px] px-[16px] border-b border-[var(--bd)]">
-          <span className="font-[family-name:var(--disp)] font-semibold text-[14px]">All Email Recipients</span>
-          <span className="font-[family-name:var(--mono)] text-[11px] text-[var(--tx3)]">
+      <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid var(--bd)' }}>
+          <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>All Email Recipients</span>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>
             {verifiedCount} verified · {recipients.length - verifiedCount} pending
           </span>
         </div>
 
-        {/* Column header — hidden on phones, where each row renders its own inline labels. */}
-        <div className={`${isMobile ? 'hidden' : 'grid'} grid-cols-[1.4fr_1.6fr_1.2fr_44px] py-[10px] px-[16px] border-b border-[var(--bd)] font-[family-name:var(--mono)] text-[9.5px] tracking-[.07em] text-[var(--tx3)]`}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.6fr 1.2fr 44px', padding: '10px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)' }}>
           <span>NAME</span>
           <span>EMAIL ID</span>
           <span>STATUS &amp; DETECTIONS</span>
@@ -431,7 +401,6 @@ export default function AlertRecipients() {
               onVerify={() => handleVerify(r)}
               onDelete={() => setDeleteTarget(r)}
               onSaved={recipientsApi.refetch}
-              isMobile={isMobile}
             />
           ))}
         </AsyncBoundary>

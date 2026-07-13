@@ -1,24 +1,6 @@
-import { useEffect, useState } from 'react';
 import { Panel } from '../../../components/primitives';
 import { Empty } from '../../../components/States';
 import sitemap from '../../../assets/sitemap2.jpg';
-
-// Track a narrow (phone) viewport — the label-flip below applies on mobile only,
-// leaving the desktop map layout untouched.
-function useIsMobile(maxWidth = 640) {
-  const query = `(max-width:${maxWidth}px)`;
-  const [isMobile, setIsMobile] = useState(
-    typeof window !== 'undefined' ? window.matchMedia(query).matches : false,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia(query);
-    const on = () => setIsMobile(mq.matches);
-    on();
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, [query]);
-  return isMobile;
-}
 
 /**
  * Multi-site network map — matches the design reference exactly.
@@ -39,7 +21,6 @@ function statusColor(alertCount, critCount) {
 }
 
 export default function MultiSiteNetwork({ sites = [] }) {
-  const isMobile = useIsMobile();
   const list = Array.isArray(sites) ? sites.slice(0, SLOTS.length) : [];
   const n = list.length;
   const totalCams = list.reduce((a, s) => a + (s.cameraCount || 0), 0);
@@ -62,8 +43,14 @@ export default function MultiSiteNetwork({ sites = [] }) {
   return (
     <Panel
       gradient
-      className="vq-msn p-0 relative overflow-hidden min-h-[380px]"
-      style={{ background: 'linear-gradient(180deg,var(--bg1),var(--bg0))' }}
+      className="vq-msn"
+      style={{
+        padding: 0,
+        position: 'relative',
+        overflow: 'hidden',
+        minHeight: 380,
+        background: 'linear-gradient(180deg,var(--bg1),var(--bg0))',
+      }}
     >
       {/* Responsive breakpoints scoped to this component, following the
           existing .vq-* media-query convention used in theme/tokens.css. */}
@@ -102,21 +89,50 @@ export default function MultiSiteNetwork({ sites = [] }) {
       <img
         src={sitemap}
         alt=""
-        className="absolute inset-0 w-full h-full object-cover object-center z-0 opacity-[.92]"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          objectPosition: 'center',
+          zIndex: 0,
+          opacity: 0.92,
+        }}
       />
-      <div className="absolute inset-0 z-0 bg-[linear-gradient(180deg,rgba(8,16,30,.30),rgba(8,16,30,.52))] pointer-events-none" />
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 0,
+          background: 'linear-gradient(180deg,rgba(8,16,30,.30),rgba(8,16,30,.52))',
+          pointerEvents: 'none',
+        }}
+      />
 
-      <div className="vq-msn-header absolute top-[16px] left-[18px] right-[18px] z-[3] [text-shadow:0_1px_6px_rgba(0,0,0,.85)]">
-        <div className="min-w-0">
-          <div className="font-[family-name:var(--disp)] font-semibold text-[14px] text-[#f4f8ff]">Multi-Site Network</div>
-          <div className="text-[11px] text-[#c7d6ee] mt-[2px]">
+      <div
+        className="vq-msn-header"
+        style={{ position: 'absolute', top: 16, left: 18, right: 18, zIndex: 3, textShadow: '0 1px 6px rgba(0,0,0,.85)' }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, color: '#f4f8ff' }}>Multi-Site Network</div>
+          <div style={{ fontSize: 11, color: '#c7d6ee', marginTop: 2 }}>
             {n} site{n === 1 ? '' : 's'} · {totalCams.toLocaleString()} camera{totalCams === 1 ? '' : 's'} · live topology
           </div>
         </div>
-        <div className="vq-msn-legend flex gap-[6px] font-[family-name:var(--mono)] text-[10px] [text-shadow:0_1px_5px_rgba(0,0,0,.8)]">
+        <div
+          className="vq-msn-legend"
+          style={{
+            display: 'flex',
+            gap: 6,
+            fontFamily: 'var(--mono)',
+            fontSize: 10,
+            textShadow: '0 1px 5px rgba(0,0,0,.8)',
+          }}
+        >
           {[['OK', 'var(--ok)'], ['WARN', 'var(--warn)'], ['ALERT', 'var(--crit)']].map(([l, c]) => (
-            <span key={l} className="flex items-center gap-[5px] text-[#d4e0f2]">
-              <span className="w-[7px] h-[7px] rounded-full" style={{ background: c }} />
+            <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#d4e0f2' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: c }} />
               {l}
             </span>
           ))}
@@ -124,15 +140,23 @@ export default function MultiSiteNetwork({ sites = [] }) {
       </div>
 
       {/* grid + glow */}
-      <div className="absolute inset-0 bg-[linear-gradient(var(--grid)_1px,transparent_1px),linear-gradient(90deg,var(--grid)_1px,transparent_1px)] bg-[length:38px_38px]" />
-      <div className="absolute inset-0 bg-[radial-gradient(700px_360px_at_38%_42%,rgba(59,130,246,.10),transparent_70%)]" />
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage:
+            'linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px)',
+          backgroundSize: '38px 38px',
+        }}
+      />
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(700px 360px at 38% 42%,rgba(59,130,246,.10),transparent 70%)' }} />
 
       {n === 0 ? (
         <Empty label="No sites configured" minH={360} />
       ) : (
         <>
           {/* connecting lines */}
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
             {lines.map((l, i) => (
               <line
                 key={i}
@@ -143,45 +167,64 @@ export default function MultiSiteNetwork({ sites = [] }) {
                 stroke="rgba(99,140,255,.32)"
                 strokeWidth=".3"
                 strokeDasharray="1.4 1.4"
-                className="[animation:vq-dash_1.6s_linear_infinite]"
+                style={{ animation: 'vq-dash 1.6s linear infinite' }}
               />
             ))}
           </svg>
 
-          {nodes.map((nd, i) => {
-            // On mobile, right-side nodes render their label to the LEFT of the
-            // dot so it doesn't extend past the (narrow) card edge and get
-            // clipped. Desktop keeps every label on the right, as before.
-            const flip = isMobile && nd.x > 60;
-            return (
+          {nodes.map((nd, i) => (
             <div
               key={i}
-              className="absolute z-[2] -translate-x-1/2 -translate-y-1/2"
               style={{
+                position: 'absolute',
                 left: `${nd.x}%`,
                 top: `${nd.y}%`,
+                transform: 'translate(-50%,-50%)',
+                zIndex: 2,
               }}
             >
               <div
-                className="absolute left-1/2 top-1/2 w-[18px] h-[18px] rounded-full -translate-x-1/2 -translate-y-1/2 [animation:vq-ring_2.6s_ease-out_infinite]"
-                style={{ border: `1.5px solid ${nd.color}` }}
-              />
-              <div
-                className="w-[13px] h-[13px] rounded-full border-2 border-[var(--bg0)]"
                 style={{
-                  background: nd.color,
-                  boxShadow: `0 0 14px ${nd.color}`,
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  width: 18,
+                  height: 18,
+                  borderRadius: '50%',
+                  border: `1.5px solid ${nd.color}`,
+                  transform: 'translate(-50%,-50%)',
+                  animation: 'vq-ring 2.6s ease-out infinite',
                 }}
               />
               <div
-                className={`vq-msn-node-label absolute top-[-7px] whitespace-nowrap bg-[var(--tooltip)] border border-[var(--bd)] rounded-[7px] py-[4px] px-[8px] backdrop-blur-[6px] ${flip ? 'right-[18px] text-right' : 'left-[18px]'}`}
+                style={{
+                  width: 13,
+                  height: 13,
+                  borderRadius: '50%',
+                  background: nd.color,
+                  boxShadow: `0 0 14px ${nd.color}`,
+                  border: '2px solid var(--bg0)',
+                }}
+              />
+              <div
+                className="vq-msn-node-label"
+                style={{
+                  position: 'absolute',
+                  left: 18,
+                  top: -7,
+                  whiteSpace: 'nowrap',
+                  background: 'var(--tooltip)',
+                  border: '1px solid var(--bd)',
+                  borderRadius: 7,
+                  padding: '4px 8px',
+                  backdropFilter: 'blur(6px)',
+                }}
               >
-                <div className="text-[11px] font-semibold leading-[1.1] overflow-hidden text-ellipsis">{nd.name}</div>
-                <div className="font-[family-name:var(--mono)] text-[9.5px] text-[var(--tx3)]">{nd.cams} cams</div>
+                <div style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{nd.name}</div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--tx3)' }}>{nd.cams} cams</div>
               </div>
             </div>
-            );
-          })}
+          ))}
         </>
       )}
     </Panel>

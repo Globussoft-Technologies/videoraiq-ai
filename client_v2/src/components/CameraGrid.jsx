@@ -55,23 +55,6 @@ export function getEnabledEngines(channel) {
 /* Camera View pages one camera at a time — no grid layout. */
 const PER_PAGE = 1;
 
-// Track a narrow (phone) viewport so the locked full-height layout can relax
-// into a normally-scrolling page (the toolbar wraps very tall on phones).
-function useIsMobile(maxWidth = 640) {
-  const query = `(max-width:${maxWidth}px)`;
-  const [isMobile, setIsMobile] = useState(
-    typeof window !== 'undefined' ? window.matchMedia(query).matches : false,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia(query);
-    const on = () => setIsMobile(mq.matches);
-    on();
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, [query]);
-  return isMobile;
-}
-
 /** Local YYYY-MM-DD for a Date — matches an <input type="date"> value, not UTC-shifted. */
 function toDateInputValue(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -88,12 +71,6 @@ export default function CameraGrid() {
   const [isPageFS,   setIsPageFS]   = useState(false); // browser fullscreen
   const [dateStr,    setDateStr]    = useState(() => toDateInputValue(new Date())); // playback date, YYYY-MM-DD
   const pageRef = useRef(null);
-
-  const isMobile = useIsMobile();
-  // On phones (outside fullscreen) let the page grow and scroll with the app's
-  // outer scroll container instead of clamping to 100% height with an inner
-  // scroll region — otherwise the tall wrapped toolbar squeezes the video to a sliver.
-  const relax = isMobile && !isPageFS;
 
   const todayStr = useMemo(() => toDateInputValue(new Date()), []);
   const playbackDate = useMemo(() => {
@@ -199,29 +176,32 @@ export default function CameraGrid() {
   }, []);
 
   /* pill — uses CSS vars so it works in both themes */
-  const pillCls = (active) =>
-    `flex items-center gap-[6px] h-[34px] rounded-[8px] cursor-pointer text-[12.5px] font-medium select-none transition-all duration-150 border ${
-      active
-        ? 'bg-[var(--bg3)] text-[var(--tx)] border-[var(--bd2)]'
-        : 'bg-[var(--bg2)] text-[var(--tx2)] border-[var(--bd)]'
-    }`;
+  const pill = (active) => ({
+    display: 'flex', alignItems: 'center', gap: 6,
+    height: 34, padding: '0 16px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 500,
+    background: active ? 'var(--bg3)' : 'var(--bg2)',
+    color: active ? 'var(--tx)' : 'var(--tx2)',
+    border: `1px solid ${active ? 'var(--bd2)' : 'var(--bd)'}`,
+    userSelect: 'none', transition: 'all .15s',
+  });
 
   return (
     <div
       ref={pageRef}
-      className={`flex flex-col bg-[var(--bg0)] ${relax ? 'h-auto min-h-full overflow-visible' : 'h-full overflow-hidden'}`}
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg0)', overflow: 'hidden' }}
     >
       {/* ── Toolbar ──────────────────────────────────────────────── */}
-      <div className="vq-wall-toolbar flex items-center gap-[8px] py-[10px] px-[16px] bg-[var(--bg1solid)] border-b border-[var(--bd)] flex-wrap shrink-0">
+      <div className="vq-wall-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: 'var(--bg1solid)', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap', flexShrink: 0 }}>
 
         {/* Search */}
-        <div className="vq-wall-search flex items-center gap-[7px] h-[40px] px-[11px] rounded-[8px] bg-[var(--bg2)] border border-[var(--bd)] min-w-[180px] flex-[1_1_180px]">
-          <Search size={13} className="text-[var(--ph)] shrink-0" />
+        <div className="vq-wall-search" style={{ display: 'flex', alignItems: 'center', gap: 7, height: 40, padding: '0 11px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', minWidth: 180, flex: '1 1 180px' }}>
+          <Search size={13} style={{ color: 'var(--ph)', flexShrink: 0 }} />
           <input
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(0); }}
             placeholder="Search cameras…"
-            className="vq-ph-hl flex-1 min-w-0 bg-transparent border-0 outline-none text-[var(--tx)] text-[12px]"
+            className="vq-ph-hl"
+            style={{ flex: 1, minWidth: 0, background: 'transparent', border: 0, outline: 'none', color: 'var(--tx)', fontSize: 12 }}
           />
         </div>
 
@@ -280,15 +260,15 @@ export default function CameraGrid() {
         />
 
         {/* Playback date filter */}
-        <div className="relative max-w-full shrink-0">
-          <Calendar size={13} className={`absolute left-[10px] top-1/2 -translate-y-1/2 pointer-events-none ${dateStr !== todayStr ? 'text-[var(--blue)]' : 'text-[var(--tx3)]'}`} />
+        <div style={{ position: 'relative', maxWidth: '100%', flexShrink: 0 }}>
+          <Calendar size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: dateStr !== todayStr ? 'var(--blue)' : 'var(--tx3)' }} />
           <input
             type="date"
             value={dateStr}
             max={todayStr}
             onChange={e => { if (e.target.value) setDateStr(e.target.value); }}
             title="Select playback date"
-            className={`${pillCls(dateStr !== todayStr)} pl-[30px] pr-[16px] max-w-full box-border`}
+            style={{ ...pill(dateStr !== todayStr), paddingLeft: 30, maxWidth: '100%', boxSizing: 'border-box' }}
           />
         </div>
 
@@ -297,7 +277,7 @@ export default function CameraGrid() {
           <button
             onClick={clearFilters}
             title="Clear all filters"
-            className="flex items-center gap-[5px] h-[40px] px-[14px] rounded-[8px] bg-[var(--brand)] border border-[var(--brand)] cursor-pointer text-white text-[12.5px] font-semibold"
+            style={{ display: 'flex', alignItems: 'center', gap: 5, height: 40, padding: '0 14px', borderRadius: 8, background: 'var(--brand)', border: '1px solid var(--brand)', cursor: 'pointer', color: '#fff', fontSize: 12.5, fontWeight: 600 }}
           >
             <X size={13} />
             Clear
@@ -305,17 +285,17 @@ export default function CameraGrid() {
         )}
 
         {/* Camera count */}
-        <span className="font-[family-name:var(--mono)] text-[11px] font-semibold text-[var(--ph)] ml-[4px] whitespace-nowrap">
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, color: 'var(--ph)', marginLeft: 4, whiteSpace: 'nowrap' }}>
           Showing {visible.length} of {list.length} cameras
         </span>
 
-        <div className="flex-[1_1_0%] min-w-0" />
+        <div style={{ flex: '1 1 0%', minWidth: 0 }} />
 
         {/* Fullscreen page toggle */}
         <button
           onClick={togglePageFullscreen}
           title={isPageFS ? 'Exit fullscreen' : 'Fullscreen'}
-          className="flex items-center gap-[6px] h-[34px] px-[12px] rounded-[8px] bg-[var(--bg2)] border border-[var(--bd)] cursor-pointer text-[var(--tx2)] text-[12px] font-medium"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)', fontSize: 12, fontWeight: 500 }}
         >
           {isPageFS ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
           {isPageFS ? 'Exit' : 'Fullscreen'}
@@ -326,7 +306,7 @@ export default function CameraGrid() {
           One video surface only: PlaybackTimeline owns it end-to-end
           (recording, not the live feed). Prev/next switch which camera's
           recording is loaded; there is no separate live-view screen. ── */}
-      <div className={`flex-1 min-h-0 ${relax ? 'overflow-visible p-[12px]' : 'overflow-auto p-[16px]'}`}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 16 }}>
         <AsyncBoundary
           loading={channels.loading}
           error={channels.error}

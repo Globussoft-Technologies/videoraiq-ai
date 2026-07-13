@@ -101,12 +101,6 @@ const MultiSelect = ({
 
   const selectedLabels = options.filter((o) => value.includes(o.id)).map((o) => o.label);
 
-  /* When the page is in browser fullscreen, only the fullscreen element and
-     its descendants are painted — a panel portaled to document.body would be
-     invisible. Portal into the active fullscreen element instead when present. */
-  const portalTarget =
-    (typeof document !== 'undefined' && document.fullscreenElement) || document.body;
-
   return (
     <div className={`relative ${className}`} ref={wrapperRef}>
       <button
@@ -201,7 +195,7 @@ const MultiSelect = ({
             )}
           </div>
         </div>,
-        portalTarget
+        document.body
       )}
     </div>
   );
