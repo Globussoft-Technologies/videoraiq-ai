@@ -383,8 +383,8 @@ const handlesettingType = async (type) => {
               </div>
             )}
 
-            {/* Zone Name Input */}
-            {appliedDetection !== null && (
+            {/* Zone Name Input — hidden per request (top-row field shown after saving the detection area) */}
+            {/* {appliedDetection !== null && (
               <div className="flex flex-col gap-1 lg:flex-1 min-w-[150px]">
                 <label className="text-[10px] font-semibold text-[#64748B] uppercase px-1">
                   Zone Name
@@ -399,7 +399,7 @@ const handlesettingType = async (type) => {
                   readOnly
                 />
               </div>
-            )}
+            )} */}
 
             {/* Enable Switch & Edit Button */}
             <div className="flex items-end gap-2 lg:ml-auto pt-4">
