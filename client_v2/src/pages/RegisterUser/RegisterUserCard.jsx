@@ -413,7 +413,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
                 audio={false}
                 ref={webcamRef}
                 screenshotFormat="image/jpeg"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover object-top"
               />
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-56 border-2 border-white/50 rounded-[40%] pointer-events-none" />
             </div>

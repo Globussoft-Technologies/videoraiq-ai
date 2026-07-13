@@ -119,7 +119,7 @@ export const UserCard = ({ user, handleEdit, handleDelete, setSelectedUser, setI
           <img
             src={pics.length > 0 ? `${nasUrl}/api/v1/uploads/${pics[imgIdx]}` : getInitialsPlaceholder(user.firstName, user.lastName)}
             alt={fullName}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover object-top"
             onError={(e) => {
               e.target.onerror = null;
               e.target.src = getInitialsPlaceholder(user.firstName, user.lastName);
@@ -212,7 +212,7 @@ export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, hand
               e.target.onerror = null;
               e.target.src = getInitialsPlaceholder(user.firstName, user.lastName, 40);
             }}
-            className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-[var(--bd)]"
+            className="w-8 h-8 rounded-full object-cover object-top shrink-0 ring-1 ring-[var(--bd)]"
           />
           <div className="min-w-0">
             <p className="text-xs font-semibold text-[var(--tx)] truncate">

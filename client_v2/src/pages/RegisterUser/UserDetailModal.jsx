@@ -70,7 +70,7 @@ const UserDetailModal = ({ user, isOpen, onClose, nasUrl }) => {
                       : getInitialsPlaceholder(user.firstName, user.lastName)
                   }
                   alt={`${user.firstName} ${user.lastName}`}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover object-top"
                   onError={(e) => {
                     e.target.onerror = null;
                     e.target.src = getInitialsPlaceholder(user.firstName, user.lastName);

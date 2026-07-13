@@ -20,6 +20,7 @@ import AddProfile from './pages/RegisterUser/AddProfile';
 import AttendanceLogs from './pages/AttendanceLogs/AttendanceLogs';
 import AccessLogs from './pages/AccessLogs/AccessLogs';
 import TaggedUsers from './pages/TaggedUsers/TaggedUsers';
+import DetectedUsers from './pages/DetectedUsers/DetectedUsers';
 import PersonCountLogs from './pages/PersonCountLogs/PersonCountLogs';
 import DeskAbsenceLogs from './pages/DeskAbsenceLogs/DeskAbsenceLogs';
 import ANPRLogs from './pages/ANPRLogs/ANPRLogs';
@@ -46,6 +47,7 @@ export const v2Routes = (
     <Route path="logs/attendance" element={<AttendanceLogs />} />
     <Route path="logs/access" element={<AccessLogs />} />
     <Route path="logs/tagged-users" element={<TaggedUsers />} />
+    <Route path="logs/detected-users" element={<DetectedUsers />} />
     <Route path="logs/anpr" element={<ANPRLogs />} />
 
     {/* <Route path="logs/person-count" element={<PersonCountLogs />} />
