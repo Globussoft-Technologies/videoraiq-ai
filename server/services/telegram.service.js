@@ -1,10 +1,17 @@
 import config from "config";
 import axios from "axios";
+import crypto from "crypto";
 import logger from "../utils/logger.js";
 import adminModel from "../core/v1/admin/admin.model.js";
 import { buildIncidentTelegramMessage, buildIncidentImageUrl } from "../messagingService/message.helper.js";
 const botToken = config.get("domainPoint.botToken");
 const chatId = config.get("domainPoint.chatId");
+
+// Shared platform bot used for the one-bot linking flow (Option A). Falls back
+// to domainPoint.botToken if a dedicated Telegram.botToken isn't configured.
+const platformBotToken = config.has("Telegram.botToken")
+  ? config.get("Telegram.botToken")
+  : botToken;
 
 class TelegramService {
   constructor() {
@@ -26,10 +33,11 @@ class TelegramService {
     }
   }
 
-  // Resolve the incident Telegram bot+channel for an admin. Admin-specific
-  // only: BOTH the admin's telegramBotToken and telegramChatId must be set,
-  // otherwise returns empty (this admin gets no Telegram alert — no global
-  // fallback). Pass the admin's _id or user_id.
+  // Resolve the incident Telegram bot+channel for an admin. Uses the shared
+  // platform bot by default (one-bot model) and the admin's own bot token only
+  // if they set one (override, backward compatible). telegramChatId must be set
+  // (bound via the linking flow) or this admin gets no Telegram alert. Pass the
+  // admin's _id or user_id.
   async _resolveIncidentTelegram(adminId) {
     if (!adminId) return { token: "", chat: "" };
     try {
@@ -37,12 +45,88 @@ class TelegramService {
       const query = isObjectId ? { _id: adminId } : { user_id: String(adminId) };
       const admin = await adminModel.findOne(query).select("telegramBotToken telegramChatId").lean();
       return {
-        token: admin?.telegramBotToken || "",
+        token: admin?.telegramBotToken || platformBotToken || "",
         chat: admin?.telegramChatId || "",
       };
     } catch (err) {
       logger.error(`[TELEGRAM] Failed to resolve admin telegram for ${adminId}`, err.message);
       return { token: "", chat: "" };
+    }
+  }
+
+  // --- One-bot linking (Option A) -----------------------------------------
+
+  // Return (creating if needed) the stable verification code for an admin. The
+  // client posts this in their channel after adding the platform bot as admin.
+  async getLinkCode(adminId) {
+    const isObjectId = /^[a-f\d]{24}$/i.test(String(adminId));
+    const query = isObjectId ? { _id: adminId } : { user_id: String(adminId) };
+    const admin = await adminModel.findOne(query).select("telegramLinkCode telegramChatId").lean();
+    if (!admin) return null;
+    if (admin.telegramLinkCode) {
+      return { code: admin.telegramLinkCode, linked: !!admin.telegramChatId, chatId: admin.telegramChatId || null };
+    }
+    // Generate a short, unambiguous code, e.g. VRIQ-8F3A2C.
+    const code = `VRIQ-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+    await adminModel.updateOne({ _id: admin._id }, { $set: { telegramLinkCode: code } });
+    return { code, linked: false, chatId: null };
+  }
+
+  // Unlink: clear the bound channel (and rotate the code) for an admin.
+  async unlink(adminId) {
+    const isObjectId = /^[a-f\d]{24}$/i.test(String(adminId));
+    const query = isObjectId ? { _id: adminId } : { user_id: String(adminId) };
+    const res = await adminModel.updateOne(query, {
+      $set: { telegramChatId: null, telegramLinkCode: null },
+    });
+    return res.modifiedCount > 0;
+  }
+
+  // Extract "VRIQ-XXXXXXXX" (case-insensitive) from a message's text/caption.
+  _extractLinkCode(text) {
+    if (!text) return null;
+    const m = String(text).toUpperCase().match(/VRIQ-[0-9A-F]{8}/);
+    return m ? m[0] : null;
+  }
+
+  // Webhook handler. When the client posts their code in the channel (or DMs the
+  // bot), Telegram delivers the update here: it carries the code (-> which admin)
+  // AND the chat_id (-> which channel). Bind them. Best-effort, never throws.
+  async handleUpdate(update) {
+    try {
+      // Accept channel_post, group message, or a private message to the bot.
+      const msg = update?.channel_post || update?.message || update?.edited_channel_post || update?.edited_message;
+      if (!msg) return { ok: true, matched: false };
+
+      const code = this._extractLinkCode(msg.text || msg.caption);
+      if (!code) return { ok: true, matched: false };
+
+      const chat = msg.chat;
+      if (!chat?.id) return { ok: true, matched: false };
+      const boundChatId = String(chat.id);
+
+      const admin = await adminModel.findOne({ telegramLinkCode: code }).select("_id").lean();
+      if (!admin) {
+        logger.warn(`[TELEGRAM] link code not found: ${code}`);
+        return { ok: true, matched: false };
+      }
+
+      await adminModel.updateOne({ _id: admin._id }, { $set: { telegramChatId: boundChatId } });
+      logger.info(`[TELEGRAM] linked admin ${admin._id} -> chat ${boundChatId}`);
+
+      // Best-effort confirmation into the channel. _deliver sends as MarkdownV2,
+      // so escape the reserved chars (here just the periods).
+      this._enqueue(boundChatId, {
+        token: platformBotToken,
+        chat: boundChatId,
+        message: "✅ This channel is now linked\\. Incident alerts will arrive here\\.",
+        imageUrl: "",
+      });
+
+      return { ok: true, matched: true, adminId: String(admin._id), chatId: boundChatId };
+    } catch (err) {
+      logger.error(`[TELEGRAM] handleUpdate error: ${err?.message || err}`);
+      return { ok: true, matched: false };
     }
   }
 

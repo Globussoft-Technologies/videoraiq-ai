@@ -59,6 +59,11 @@ const adminSchema = new mongoose.Schema({
   // if BOTH are set (no global fallback); otherwise this admin gets no Telegram.
   telegramBotToken: { type: String, default: null },
   telegramChatId: { type: String, default: null },
+  // One-bot linking (Option A): a unique verification code shown to the client.
+  // The client adds the shared platform bot to their channel and posts this code
+  // there; the bot's webhook matches the code -> this admin and saves the
+  // channel's chat_id into telegramChatId. Cleared/rotated on unlink.
+  telegramLinkCode: { type: String, default: null, index: true },
   // Per-admin detection config. Key = settingType, value = custom display name.
   // If a key is present, that detection is allowed for this admin.
   // Empty object = all detections allowed with default names.
