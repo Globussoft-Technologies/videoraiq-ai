@@ -72,13 +72,36 @@ class TelegramService {
     return { code, linked: false, chatId: null };
   }
 
-  // Unlink: clear the bound channel (and rotate the code) for an admin.
+  // Unlink: clear the bound channel + rotate the code, and make the bot leave
+  // the channel so it no longer sits there with admin rights. Reading the old
+  // chatId BEFORE nulling it lets us call leaveChat. The leaveChat is
+  // fire-and-forget — a Telegram failure must never fail the unlink.
   async unlink(adminId) {
     const isObjectId = /^[a-f\d]{24}$/i.test(String(adminId));
     const query = isObjectId ? { _id: adminId } : { user_id: String(adminId) };
+
+    const admin = await adminModel
+      .findOne(query)
+      .select("telegramChatId telegramBotToken")
+      .lean();
+
     const res = await adminModel.updateOne(query, {
       $set: { telegramChatId: null, telegramLinkCode: null },
     });
+
+    // Ask Telegram to remove the bot from the channel (best-effort).
+    const oldChatId = admin?.telegramChatId;
+    if (oldChatId) {
+      const token = admin?.telegramBotToken || platformBotToken;
+      axios
+        .post(`https://api.telegram.org/bot${token}/leaveChat`, { chat_id: oldChatId })
+        .catch((err) =>
+          logger.error(
+            `[TELEGRAM] leaveChat failed for ${oldChatId}: ${err?.response?.data ? JSON.stringify(err.response.data) : err.message}`,
+          ),
+        );
+    }
+
     return res.modifiedCount > 0;
   }
 
