@@ -410,6 +410,7 @@ const AddNVRForm = ({ onClose, isEdit, initialData, fetchNvrData, title }) => {
                                                     <SelectItem value='cpplus'>CP Plus</SelectItem>
                                                     <SelectItem value='tiandy'>Tiandy</SelectItem>
                                                     <SelectItem value='securus'>Securus</SelectItem>
+                                                    <SelectItem value='dahua'>Dahua</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         )}
