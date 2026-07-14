@@ -234,7 +234,13 @@ class TelegramService {
         return this._deliver(job, true);
       }
       const reason = data ? JSON.stringify(data) : error?.message || String(error);
-      logger.error(`[TELEGRAM] Failed to send incident: ${reason}`);
+      logger.error(`[TELEGRAM] Failed to send incident to ${chat}: ${reason}`);
+      // A dead/unknown chat will never work — clear the stale binding so we stop
+      // erroring on every future incident (self-heals; the admin re-links).
+      if (this._isDeadChatError(data)) {
+        await this._clearDeadChat(chat);
+        return; // no point trying the text fallback to the same dead chat
+      }
       // Fall back to plain text only if the PHOTO failed for a non-429 reason
       // (e.g. Telegram couldn't fetch the image URL).
       if (imageUrl && data?.error_code !== 429) {
@@ -246,12 +252,40 @@ class TelegramService {
             disable_web_page_preview: false,
           });
         } catch (fbErr) {
-          const fbReason = fbErr?.response?.data
-            ? JSON.stringify(fbErr.response.data)
-            : fbErr?.message || String(fbErr);
-          logger.error(`[TELEGRAM] Fallback text also failed: ${fbReason}`);
+          const fbData = fbErr?.response?.data;
+          const fbReason = fbData ? JSON.stringify(fbData) : fbErr?.message || String(fbErr);
+          logger.error(`[TELEGRAM] Fallback text also failed for ${chat}: ${fbReason}`);
+          if (this._isDeadChatError(fbData)) await this._clearDeadChat(chat);
         }
       }
+    }
+  }
+
+  // Telegram errors that mean the chat is permanently unusable (bot removed,
+  // channel deleted, wrong id) — as opposed to transient issues.
+  _isDeadChatError(data) {
+    const d = String(data?.description || "").toLowerCase();
+    return (
+      data?.error_code === 400 &&
+      (d.includes("chat not found") ||
+        d.includes("bot was kicked") ||
+        d.includes("bot is not a member") ||
+        d.includes("chat was deleted"))
+    );
+  }
+
+  // Null out a stale telegramChatId so incidents stop targeting a dead chat.
+  async _clearDeadChat(chat) {
+    try {
+      const res = await adminModel.updateOne(
+        { telegramChatId: String(chat) },
+        { $set: { telegramChatId: null } },
+      );
+      if (res.modifiedCount > 0) {
+        logger.warn(`[TELEGRAM] cleared stale telegramChatId ${chat} (chat unreachable)`);
+      }
+    } catch (err) {
+      logger.error(`[TELEGRAM] failed to clear stale chat ${chat}: ${err?.message}`);
     }
   }
 
