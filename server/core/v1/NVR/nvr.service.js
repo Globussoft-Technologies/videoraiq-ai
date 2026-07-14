@@ -1176,7 +1176,8 @@ class NVRService {
           deviceInfo,
           cameras: cameraList,
         };
-      } else if (brand.toLowerCase() === "cpplus") {
+      } else if (brand.toLowerCase() === "cpplus" || brand.toLowerCase() === "dahua") {
+        // CP-Plus and Dahua share the same Dahua CGI protocol/endpoints.
         // Helper function to parse CP Plus plain text response
         const parseCPPlusResponse = (text) => {
           const lines = text.split("\n");
