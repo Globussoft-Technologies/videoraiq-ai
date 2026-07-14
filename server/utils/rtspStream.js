@@ -130,8 +130,8 @@ export const buildRTSPUrl = (nvr, channel, streamType = "main") => {
     const streamId = channel.rtspChannels?.[streamIndex]?.id || "";
 
     return `rtsp://${username}:${decryptedPassword}@${decryptedIp}:${nvr.rtspPort}${streamEndpoint}${streamId}`;
-  } else if (nvr.brand === "cpplus") {
-    // CP Plus: rtsp://user:pass@ip:port/cam/realmonitor?channel=1&subtype=0
+  } else if (nvr.brand === "cpplus" || nvr.brand === "dahua") {
+    // CP Plus / Dahua (same protocol): rtsp://user:pass@ip:port/cam/realmonitor?channel=1&subtype=0
     const streamEndpoint = channel.streamEndpoint; // /cam/realmonitor
     const channelId = channel.channelId;
     const subtype = streamType === "main" ? 0 : 1;
