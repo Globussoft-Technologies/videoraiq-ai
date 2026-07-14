@@ -260,7 +260,11 @@ function groupRemoteDeviceProperties(data) {
   return Object.values(groups);
 }
 
-async function handleCPPlusRegistration(req, res) {
+// Shared registration for the Dahua CGI protocol. CP-Plus is a Dahua OEM, so
+// both brands speak the identical /cgi-bin API (magicBox.cgi, configManager.cgi,
+// table.*). Only the stored `brand` and the response label differ.
+async function registerDahuaProtocolNvr(req, res, brand = "cpplus") {
+  const brandLabel = brand === "dahua" ? "Dahua" : "CP Plus";
   const {
     ip,
     username,
@@ -310,7 +314,7 @@ async function handleCPPlusRegistration(req, res) {
       port,
       rtspPort,
       nvrName,
-      brand: "cpplus",
+      brand,
       deviceName:
         deviceInfoData["deviceName"] ||
         deviceInfoData["DeviceName"] ||
@@ -493,7 +497,7 @@ async function handleCPPlusRegistration(req, res) {
 
     return res.status(201).json(
       Response.userSuccessResp(
-        "CP Plus NVR and channels registered successfully",
+        `${brandLabel} NVR and channels registered successfully`,
         {
           nvr: { ...savedNVR?._doc, cameraCount: cameraResults.length },
           channels: cameraResults,
@@ -501,7 +505,7 @@ async function handleCPPlusRegistration(req, res) {
       )
     );
   } catch (error) {
-    logger.error("CP Plus Register NVR Error:", error);
+    logger.error(`${brandLabel} Register NVR Error:`, error);
     const isDuplicateError = error?.message?.includes("E11000");
     const errMsg = isDuplicateError
       ? "NVR already exists"
@@ -510,6 +514,11 @@ async function handleCPPlusRegistration(req, res) {
       .status(500)
       .json(Response.errorResp("NVR registration failed", errMsg));
   }
+}
+
+// CP-Plus and Dahua both use the Dahua CGI protocol above; thin brand wrappers.
+async function handleCPPlusRegistration(req, res) {
+  return registerDahuaProtocolNvr(req, res, "cpplus");
 }
 
 // Helper function to parse resolution codes
@@ -783,11 +792,7 @@ async function handleTiandyRegistration(req, res) {
 
 
 async function handleDahuaRegistration(req, res) {
-  return res
-    .status(500)
-    .json(
-      Response.errorResp("NVR registration failed", "Dahua is not available")
-    );
+  return registerDahuaProtocolNvr(req, res, "dahua");
 }
 async function handlePramaRegistration(req, res) {
   return res
@@ -1393,12 +1398,9 @@ async function updateSecurusChannels(_nvr, _plainPassword, res) {
   return res.status(500).json(Response.errorResp("Channel update failed", "Securus channel update not yet implemented"));
 }
 
-async function updateDahuaChannels(_nvr, _plainPassword, res) {
-  return res
-    .status(500)
-    .json(
-      Response.errorResp("Channel update failed", "Dahua is not available")
-    );
+// Dahua uses the same CGI protocol as CP-Plus, so channel refresh is identical.
+async function updateDahuaChannels(nvr, plainPassword, res) {
+  return updateCPPlusChannels(nvr, plainPassword, res);
 }
 
 async function updatePramaChannels(_nvr, _plainPassword, res) {

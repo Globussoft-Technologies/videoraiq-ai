@@ -425,7 +425,20 @@ class NVRService {
               );
           }
         } else if (existingNvr.brand === "dahua") {
-          // TODO: Add Dahua auth test logic
+          // Dahua uses the same CGI protocol as CP-Plus.
+          const testClient = new DigestFetch(username, passwordToUse);
+          const testRes = await testClient.fetch(
+            `http://${ip}:${port}/cgi-bin/magicBox.cgi?action=getSystemInfo`,
+          );
+          if (!testRes.ok) {
+            return res
+              .status(400)
+              .json(
+                Response.userFailResp(
+                  "Dahua NVR authentication failed with new credentials",
+                ),
+              );
+          }
         } else if (existingNvr.brand === "prama") {
           // TODO: Add Prama auth test logic
         }
@@ -1816,7 +1829,7 @@ class NVRService {
     try {
       const brandLower = brand?.toLowerCase();
 
-      if (!['hikvision', 'cpplus'].includes(brandLower)) {
+      if (!['hikvision', 'cpplus', 'dahua'].includes(brandLower)) {
         return {
           error: 'NVR brand not yet supported'
         };
@@ -1851,7 +1864,8 @@ class NVRService {
 
         cameraResponse = await camerasResponse.json();
 
-      } else if (brandLower === 'cpplus') {
+      } else if (brandLower === 'cpplus' || brandLower === 'dahua') {
+        // CP-Plus and Dahua share the same protocol/endpoints.
         const deviceResponse = await fetch(
           `http://${host}/API/System/SystemInfo`,
           {
@@ -1862,7 +1876,7 @@ class NVRService {
         );
 
         if (!deviceResponse.ok) {
-          return { error: 'Failed to fetch device info from CP Plus NVR' };
+          return { error: `Failed to fetch device info from ${brandLower === 'dahua' ? 'Dahua' : 'CP Plus'} NVR` };
         }
 
         deviceInfo = await deviceResponse.json();
