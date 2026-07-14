@@ -22,6 +22,26 @@ export const getRecipients = async (type,searchTerm,filterValue,skip = 0, limit 
   }
 }
 
+// Telegram: fetch the admin's verification code + current link status.
+// Returns { code, linked, chatId } (or null on failure).
+export const getTelegramLinkCode = async () => {
+  const token = await waitForToken();
+  try {
+    const response = await fetch(`${apiUrl}/api/v1/telegram/link-code`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        'x-access-token': token,
+      },
+    });
+    const data = await response.json();
+    return data.body?.data || null;
+  } catch (error) {
+    console.error("Error fetching telegram link code:", error);
+    return null;
+  }
+};
+
 export const getDetectionTypes = async () => {
   const token = await waitForToken();
   try {

@@ -16,6 +16,7 @@ import { getRecipients, getDetectionTypes } from '@/page/user/Settings/Api/get';
 import { resendMailOrSMS } from '@/page/user/Settings/Api/post';
 import { handleAddRecipient } from '@/utils/recipientUtils';
 import RecipientList from './RecipientList';
+import TelegramAlerts from '@/page/user/Settings/components/TelegramAlerts';
 import AddRecipientModal from '@/components/NotificationRecipientModal/AddRecipientModal';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -131,6 +132,12 @@ const NotificationRecipients = () => {
     <div className="bg-[#FFFFFF] rounded-[18px] min-h-[100vh]">
       <header>
         <div className="bg-white rounded-[18px] px-4 pt-6 pb-4">
+          {/* Telegram channel linking — an incident-alert delivery target,
+              alongside the email/phone recipients below. */}
+          <div className="mb-4">
+            <TelegramAlerts />
+          </div>
+
           {/* Top Section: Headings + Button */}
           <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between">
             {/* Left: Label + Heading */}
