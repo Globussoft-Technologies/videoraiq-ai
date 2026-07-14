@@ -1179,16 +1179,21 @@ class NVRService {
       } else if (brand.toLowerCase() === "cpplus" || brand.toLowerCase() === "dahua") {
         // CP-Plus and Dahua share the same Dahua CGI protocol/endpoints.
         // Fetch with a hard timeout so an unreachable/slow NVR fails fast with a
-        // clean error instead of hanging until an upstream 524. Aborts at 10s.
-        const fetchWithTimeout = async (url, ms = 10000) => {
-          const controller = new AbortController();
-          const t = setTimeout(() => controller.abort(), ms);
-          try {
-            return await client.fetch(url, { signal: controller.signal });
-          } finally {
-            clearTimeout(t);
-          }
-        };
+        // clean error instead of hanging until an upstream 524.
+        // NOTE: do NOT pass an AbortController signal into DigestFetch.fetch —
+        // DigestFetch issues TWO requests (challenge -> authed retry) reusing the
+        // same options, and a shared signal breaks that handshake (it stalls).
+        // Race the whole call against a timer instead.
+        const fetchWithTimeout = (url, ms = 10000) =>
+          Promise.race([
+            client.fetch(url),
+            new Promise((_, reject) =>
+              setTimeout(
+                () => reject(Object.assign(new Error("NVR request timed out"), { name: "AbortError" })),
+                ms,
+              ),
+            ),
+          ]);
         // Helper function to parse CP Plus plain text response
         const parseCPPlusResponse = (text) => {
           const lines = text.split("\n");
