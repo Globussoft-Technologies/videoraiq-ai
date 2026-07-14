@@ -1,5 +1,5 @@
 import { Panel } from '../../../components/primitives';
-import { AsyncBoundary } from '../../../components/States';
+import { AsyncBoundary, Empty } from '../../../components/States';
 import { num } from '../../../lib/format';
 import { ENGINE_PALETTE as PALETTE, engineMeta } from '../../../lib/engineMeta';
 
@@ -88,6 +88,9 @@ export default function EngineActivity({ todayEngines = [], events24h = [], tota
             {/* Engine Activity · Today */}
             <div>
               <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 14 }}>Engine Activity · Today</div>
+              {todayEngines.length === 0 ? (
+                <Empty label="No detections today" minH={120} />
+              ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
                 {todayEngines.map((e, i) => {
                   const meta = engineMeta(e.type);
@@ -126,6 +129,7 @@ export default function EngineActivity({ todayEngines = [], events24h = [], tota
                   );
                 })}
               </div>
+              )}
             </div>
 
             {/* Detection Events · 24h */}
@@ -134,6 +138,10 @@ export default function EngineActivity({ todayEngines = [], events24h = [], tota
                 <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Detection Events · 24h</div>
                 <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>{num(total24h)} total</span>
               </div>
+              {total24h === 0 ? (
+                <Empty label="No detection events in the last 24h" minH={170} />
+              ) : (
+              <>
               <div style={{ flex: 1, position: 'relative', minHeight: 170 }}>
                 <svg viewBox={`0 0 ${chartW} ${chartH}`} preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
                   <defs>
@@ -157,6 +165,8 @@ export default function EngineActivity({ todayEngines = [], events24h = [], tota
               <div style={{ textAlign: 'center', fontFamily: 'var(--mono)', fontSize: 8.5, letterSpacing: '.12em', color: 'var(--tx3)', textTransform: 'uppercase', marginTop: 5, paddingLeft: 58 }}>
                 Time of day · last 24h
               </div>
+              </>
+              )}
             </div>
           </div>
         )}

@@ -235,33 +235,66 @@ export default function LiveWallGrid() {
     setStatusFilter(''); setSearch(''); setPage(0);
   };
 
-  /* track which channels are live (updated by CameraStream via onLiveChange) */
+  /* track which channels are live (updated by CameraStream via onLiveChange).
+     Debounced: a status flip only commits after holding steady for 4s, so a
+     brief HLS buffering stall (onWaiting→onPlaying within a second) doesn't
+     bounce a camera between the visible grid and the hidden probe layer —
+     that bounce was remounting streams in a loop (continuous reload). */
   const [liveSet, setLiveSet] = useState(() => new Set());
+  const liveTimersRef = useRef({});
   const setLive = useCallback((id, isLive) => {
-    setLiveSet(prev => {
-      const next = new Set(prev);
-      isLive ? next.add(id) : next.delete(id);
-      return next;
-    });
+    const timers = liveTimersRef.current;
+    if (timers[id]) { clearTimeout(timers[id]); delete timers[id]; }
+    timers[id] = setTimeout(() => {
+      delete timers[id];
+      setLiveSet(prev => {
+        if (prev.has(id) === isLive) return prev;
+        const next = new Set(prev);
+        isLive ? next.add(id) : next.delete(id);
+        return next;
+      });
+    }, 4000);
+  }, []);
+  useEffect(() => () => {
+    Object.values(liveTimersRef.current).forEach(clearTimeout);
   }, []);
 
   const activeCount = liveSet.size;
 
-  const list = useMemo(() => {
+  // Filters other than status — this is the candidate set whose real live/offline
+  // status must be known BEFORE the status filter can correctly narrow it down.
+  const preStatusList = useMemo(() => {
     let arr = Array.isArray(channels.data) ? channels.data : [];
     if (search.trim()) {
       const q = search.toLowerCase();
       arr = arr.filter(c => `${c.customName || ''} ${c.name || ''} ${c.location || ''}`.toLowerCase().includes(q));
     }
-    if (selCam.length)              arr = arr.filter(c => selCam.includes(c._id || c.channelId));
+    if (selCam.length) arr = arr.filter(c => selCam.includes(c._id || c.channelId));
+    return arr;
+  }, [channels.data, search, selCam]);
+
+  const list = useMemo(() => {
+    let arr = preStatusList;
     if (statusFilter === 'live')    arr = arr.filter(c => liveSet.has(c._id || c.channelId));
     if (statusFilter === 'offline') arr = arr.filter(c => !liveSet.has(c._id || c.channelId));
     return arr;
-  }, [channels.data, search, selCam, statusFilter, liveSet]);
+  }, [preStatusList, statusFilter, liveSet]);
 
   const pages    = Math.max(1, Math.ceil(list.length / size.perPage));
   const safePage = Math.min(page, pages - 1);
   const visible  = list.slice(safePage * size.perPage, safePage * size.perPage + size.perPage);
+
+  // Background probes — every candidate camera (not just the ones paginated
+  // into view) connects its stream off-screen so liveSet reflects true status
+  // BEFORE the Live/Offline filter runs. Without this, switching to "Live"
+  // can only ever show cameras that happened to be visible earlier (a camera
+  // filtered out by "Live" never mounts, so it can never prove it's live) —
+  // that chicken-and-egg is what made results inconsistent.
+  const visibleIds = useMemo(() => new Set(visible.map(c => c._id || c.channelId)), [visible]);
+  const probeList = useMemo(
+    () => preStatusList.filter(c => !visibleIds.has(c._id || c.channelId)),
+    [preStatusList, visibleIds]
+  );
 
   const autoPageFsRef = useRef(false);
 
@@ -471,9 +504,12 @@ export default function LiveWallGrid() {
           </button>
         )}
 
-        {/* Camera count */}
+        {/* Camera count — denominator is the total under the server-side
+            (location/NVR/department/type) filters, not further narrowed by
+            the camera-name pick or status filter, so picking a single camera
+            still reads e.g. "1 of 4" rather than "1 of 1". */}
         <span style={{ fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, color: 'var(--ph)', marginLeft: 4, whiteSpace: 'nowrap', flexShrink: 0 }}>
-          Showing {visible.length} of {list.length} cameras
+          Showing {visible.length} of {(Array.isArray(channels.data) ? channels.data : []).length} cameras
         </span>
 
         <div style={{ flex: 1 }} />
@@ -565,6 +601,26 @@ export default function LiveWallGrid() {
             </>
           )}
         </AsyncBoundary>
+      </div>
+
+      {/* Hidden probes — connect every non-visible candidate camera's stream in
+          the background purely to learn its real live/offline state (see
+          probeList comment above). */}
+      <div style={{ position: 'fixed', top: 0, left: 0, width: 0, height: 0, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }} aria-hidden="true">
+        {probeList.map((c) => {
+          const id = c._id || c.channelId;
+          return (
+            <CameraStreamTile
+              key={id}
+              channel={c}
+              camLabel=""
+              channelId={id}
+              setLive={setLive}
+              onMaximize={() => {}}
+              rounded={false}
+            />
+          );
+        })}
       </div>
     </div>
   );

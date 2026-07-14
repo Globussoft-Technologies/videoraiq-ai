@@ -60,10 +60,11 @@ export default function CommandCenter() {
   const [selectedDepts, setSelectedDepts] = useState([]);
   const [selectedCamTypes, setSelectedCamTypes] = useState([]);
 
-  // Whether the camera currently selected in the Live Camera panel is actually
-  // streaming — reported up by CameraStream's onLiveChange, same mechanism
-  // Live Wall uses for its LIVE/OFFLINE badges (no backend "is streaming" query exists).
-  const [selectedCameraLive, setSelectedCameraLive] = useState(false);
+  // Real "N of the filtered cameras are actually streaming" tally — LiveCamera
+  // probes every tab's stream in the background (not just the active one) since
+  // there's no backend field for per-camera online status.
+  const [onlineCameras, setOnlineCameras] = useState({ online: 0, total: 0 });
+  const onOnlineCountChange = useCallback((online, total) => setOnlineCameras({ online, total }), []);
 
   // Options for the filter dropdowns.
   const locationsApi = useApi(() => getLocations(0, 200), []);
@@ -264,17 +265,9 @@ export default function CommandCenter() {
         }}
         className="vq-cc-filters"
       >
-        <div style={{ minWidth: 190, flex: '1 1 190px', maxWidth: 240 }}>
-          <SharedMultiSelect
-            options={locationOptions}
-            value={selectedLocations}
-            onChange={setSelectedLocations}
-            placeholder="Select Location"
-            searchPlaceholder="Search locations..."
-            maxHeight="max-h-48"
-            msg="No Location Found"
-          />
-        </div>
+        {/* Select Location dropdown hidden — redundant with the top-bar site
+            switcher, which already drives `location` in the outlet context
+            that `filters` falls back to below. */}
         <div style={{ minWidth: 190, flex: '1 1 190px', maxWidth: 240 }}>
           <SharedMultiSelect
             options={nvrOptions}
@@ -314,14 +307,14 @@ export default function CommandCenter() {
         stats={header.data || {}}
         dailyTotals={dailyTotals}
         sitesCount={sites.length}
-        selectedCameraLive={selectedCameraLive}
+        onlineCameras={onlineCameras}
         loading={header.loading}
       />
 
       {/* Live camera + attendance | latest incident + controls */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 18 }} className="vq-cc-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
-          <LiveCamera channels={channels.data || []} loading={channels.loading} latestByChannel={latestByChannel} onLiveChange={setSelectedCameraLive} />
+          <LiveCamera channels={channels.data || []} loading={channels.loading} latestByChannel={latestByChannel} onOnlineCountChange={onOnlineCountChange} />
           <LiveAttendance
             people={people}
             socketLogs={attendanceLogs}

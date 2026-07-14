@@ -11,6 +11,25 @@ import { timeAgo } from '../lib/format';
 
 const SEV_COLOR = { high: 'var(--crit)', critical: 'var(--crit)', moderate: 'var(--warn)', medium: 'var(--warn)', low: 'var(--tx3)' };
 
+// Read notification ids persist locally so the unread badge stays cleared
+// across the 60s poll refresh and page reloads (the alerts feed itself has
+// no per-user read state on the server).
+const READ_IDS_KEY = 'vq_read_notification_ids';
+function loadReadIds() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(READ_IDS_KEY) || '[]'));
+  } catch {
+    return new Set();
+  }
+}
+function saveReadIds(ids) {
+  try {
+    localStorage.setItem(READ_IDS_KEY, JSON.stringify([...ids]));
+  } catch {
+    // ignore storage errors (e.g. private browsing quota)
+  }
+}
+
 // Maps a route path segment to its nav/VIEW_META key, for the handful of
 // routes whose URL segment (nav.config.js `path`) differs from its `key`.
 const PATH_TO_KEY = { dashboard: 'overview', live: 'wall' };
@@ -54,14 +73,26 @@ function Shell() {
   // Notifications + alerts badge from the recent alert feed.
   const { data: crit } = useApi(() => getCriticalityStats({}, { skip: 0, limit: 8 }), [], { pollMs: 60000 });
   const recentAlerts = crit?.recentAlerts || [];
+  const [readIds, setReadIds] = useState(loadReadIds);
   const notifications = recentAlerts.map((a, i) => ({
     id: a._id || i,
     title: a.incidentName || a.displayName || a.incidentType || 'Detection event',
     cam: a.channelData?.name || a.nvrData?.nvrName || '',
     time: a.timeAgo || timeAgo(a.timeOfIncident),
     sevColor: SEV_COLOR[(a.severity || '').toLowerCase()] || 'var(--warn)',
+    read: readIds.has(a._id || i),
   }));
+  const unreadCount = notifications.filter((n) => !n.read).length;
   const alertsBadge = recentAlerts.filter((a) => !a.resolved).length || crit?.totalCount || 0;
+
+  const markNotificationsRead = useCallback((ids) => {
+    setReadIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      saveReadIds(next);
+      return next;
+    });
+  }, []);
 
   const onSiteChange = useCallback((label, raw) => {
     setSiteFilter(label);
@@ -113,6 +144,8 @@ function Shell() {
           siteFilter={siteFilter}
           onSiteChange={onSiteChange}
           notifications={notifications}
+          unreadCount={unreadCount}
+          onMarkNotificationsRead={markNotificationsRead}
           onMenuClick={isMobile ? () => setNavOpen(true) : undefined}
         />
         <div className="vq-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { VideoOff } from 'lucide-react';
 import { Panel, ActionLink } from '../../../components/primitives';
@@ -11,7 +11,7 @@ import CameraStream from '../../../components/CameraStream';
  * this camera; the tile's maximize icon puts just the video into real
  * browser fullscreen in place.
  */
-export default function LiveCamera({ channels = [], loading, latestByChannel = {}, onLiveChange }) {
+export default function LiveCamera({ channels = [], loading, latestByChannel = {}, onLiveChange, onOnlineCountChange }) {
   const navigate = useNavigate();
   const cams = useMemo(() => (Array.isArray(channels) ? channels.slice(0, 8) : []), [channels]);
   const [activeId, setActiveId] = useState(null);
@@ -20,7 +20,33 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
   const active = cams.find((c) => (c._id || c.id) === activeId) || cams[0];
   const activeKey = active?._id || active?.id;
   const snapshot = active ? latestByChannel[activeKey] : null;
-  const online = active ? active.status !== 'offline' : false;
+
+  // Real online/offline per tab — each tab's stream connection is probed in the
+  // background (hidden, same HLS decode Live Wall uses per tile) since there's
+  // no reliable "is this camera live" field from the backend to read instead.
+  const [liveById, setLiveById] = useState({});
+  const setTabLive = useCallback((id, isLive) => {
+    setLiveById((prev) => (prev[id] === isLive ? prev : { ...prev, [id]: isLive }));
+  }, []);
+  useEffect(() => {
+    // Drop entries for cameras no longer in the current filtered tab list.
+    const ids = new Set(cams.map((c) => c._id || c.id));
+    setLiveById((prev) => {
+      const next = {};
+      let changed = false;
+      Object.keys(prev).forEach((id) => {
+        if (ids.has(id)) next[id] = prev[id];
+        else changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [cams]);
+  const onlineCount = cams.filter((c) => liveById[c._id || c.id]).length;
+  useEffect(() => {
+    onOnlineCountChange?.(onlineCount, cams.length);
+  }, [onlineCount, cams.length, onOnlineCountChange]);
+
+  const online = active ? !!liveById[activeKey] : false;
   const liveColor = !active ? 'var(--tx3)' : online ? 'var(--ok)' : 'var(--crit)';
 
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -63,7 +89,7 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
         {cams.map((c) => {
           const id = c._id || c.id;
           const isActive = id === activeKey;
-          const dot = c.status === 'offline' ? 'var(--crit)' : c.status === 'warning' ? 'var(--warn)' : 'var(--ok)';
+          const dot = liveById[id] ? 'var(--ok)' : 'var(--crit)';
           return (
             <div
               key={id}
@@ -98,8 +124,34 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
         ) : !active ? (
           <Empty icon={VideoOff} label="No cameras configured" minH={220} />
         ) : (
-          <CameraStream key={activeKey} channel={active} onMaximize={toggleTileFullscreen} isFullscreen={isFullscreen} onLiveChange={onLiveChange} minH={220} />
+          <CameraStream
+            key={activeKey}
+            channel={active}
+            onMaximize={toggleTileFullscreen}
+            isFullscreen={isFullscreen}
+            onLiveChange={(isLive) => { setTabLive(activeKey, isLive); onLiveChange?.(isLive); }}
+            minH={220}
+          />
         )}
+      </div>
+
+      {/* Hidden probes — every other tab's stream is connected in the background
+          (not rendered) purely to learn its real live/offline state for the
+          "Cameras Online" count and tab dots; the active tab's own tile above
+          already reports its status via onLiveChange. */}
+      <div style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }} aria-hidden="true">
+        {cams.filter((c) => (c._id || c.id) !== activeKey).map((c) => {
+          const id = c._id || c.id;
+          return (
+            <CameraStream
+              key={id}
+              channel={c}
+              showOverlay={false}
+              onLiveChange={(isLive) => setTabLive(id, isLive)}
+              minH={1}
+            />
+          );
+        })}
       </div>
     </Panel>
   );

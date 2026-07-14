@@ -32,7 +32,7 @@ const iconBtn = {
   flex: '0 0 auto',
 };
 
-export default function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange, notifications = [], onSearch, onMenuClick }) {
+export default function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange, notifications = [], unreadCount, onMarkNotificationsRead, onSearch, onMenuClick }) {
   const { theme, setTheme } = useTheme();
   const clock = useClock();
   const navigate = useNavigate();
@@ -49,6 +49,7 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
   const moreRef = useRef(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const { isMuted, toggleMute } = useAttendanceSocket() || {};
+  const unreadNum = unreadCount ?? notifications.length;
 
   // The header drops widgets progressively as IT gets narrow — measured with a
   // ResizeObserver on the header itself, not the window, because the sidebar
@@ -78,6 +79,15 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
   const closeSearch = useCallback(() => setSearchOpen(false), []);
   const closeSite = useCallback(() => setSiteOpen(false), []);
   const closeNotif = useCallback(() => setNotifOpen(false), []);
+  // Opening the panel is the "seen" signal — clears the unread badge, same as
+  // any standard notification tray (Slack, GitHub, etc).
+  const openNotif = useCallback(() => {
+    setNotifOpen((o) => {
+      const next = !o;
+      if (next) onMarkNotificationsRead?.(notifications.map((n) => n.id));
+      return next;
+    });
+  }, [notifications, onMarkNotificationsRead]);
   const closeMore = useCallback(() => setMoreOpen(false), []);
   useOutsideClick(searchRef, searchOpen, closeSearch);
   useOutsideClick(siteRef, siteOpen, closeSite);
@@ -350,23 +360,25 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
             style={{ position: 'absolute', top: 44, right: 0, width: 228, background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, boxShadow: '0 18px 50px rgba(0,0,0,.6)', zIndex: 60, padding: 6 }}
           >
               <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.08em', color: 'var(--tx3)', padding: '6px 9px 4px' }}>SWITCH SITE</div>
-              {['All Sites', ...sites].map((s) => {
-                const label = typeof s === 'string' ? s : s.locationName || s.name;
-                const active = label === siteFilter;
-                return (
-                  <div
-                    key={label}
-                    onClick={() => {
-                      onSiteChange?.(label, s);
-                      setSiteOpen(false);
-                    }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 9px', borderRadius: 9, cursor: 'pointer', color: active ? 'var(--blue)' : 'var(--tx2)', fontSize: 12.5, fontWeight: active ? 600 : 500 }}
-                  >
-                    <MapPin size={13} strokeWidth={1.8} style={{ flex: '0 0 auto', opacity: 0.8 }} />
-                    <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
-                  </div>
-                );
-              })}
+              <div className="vq-scroll" style={{ maxHeight: 34 * 5, overflowY: 'auto' }}>
+                {['All Sites', ...sites].map((s) => {
+                  const label = typeof s === 'string' ? s : s.locationName || s.name;
+                  const active = label === siteFilter;
+                  return (
+                    <div
+                      key={label}
+                      onClick={() => {
+                        onSiteChange?.(label, s);
+                        setSiteOpen(false);
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 9px', borderRadius: 9, cursor: 'pointer', color: active ? 'var(--blue)' : 'var(--tx2)', fontSize: 12.5, fontWeight: active ? 600 : 500 }}
+                    >
+                      <MapPin size={13} strokeWidth={1.8} style={{ flex: '0 0 auto', opacity: 0.8 }} />
+                      <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+                    </div>
+                  );
+                })}
+              </div>
           </div>
         )}
       </div>
@@ -448,7 +460,7 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
           style={{ ...iconBtn, position: 'relative' }}
         >
           <Bell size={17} strokeWidth={1.7} style={{ color: 'var(--tx2)' }} />
-          {notifications.length > 0 && (
+          {unreadNum > 0 && (
             <span
               style={{
                 position: 'absolute',
@@ -469,7 +481,7 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
                 boxShadow: '0 0 8px rgba(255,77,77,.6)',
               }}
             >
-              {notifications.length}
+              {unreadNum}
             </span>
           )}
         </div>
@@ -480,10 +492,19 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
           >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', borderBottom: '1px solid var(--bd)' }}>
                 <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 13.5 }}>Notifications</span>
-                {notifications.length > 0 && (
+                {unreadNum > 0 && (
                   <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: '#fff', background: 'var(--crit)', borderRadius: 8, padding: '1px 7px' }}>
-                    {notifications.length} new
+                    {unreadNum} new
                   </span>
+                )}
+                {notifications.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onMarkNotificationsRead?.(notifications.map((n) => n.id))}
+                    style={{ marginLeft: 'auto', background: 'none', border: 0, cursor: 'pointer', fontSize: 11, color: 'var(--blue)', padding: 0 }}
+                  >
+                    Mark all as read
+                  </button>
                 )}
               </div>
               <div className="vq-scroll" style={{ maxHeight: 332, overflowY: 'auto' }}>
@@ -491,15 +512,31 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
                   <div style={{ padding: 22, textAlign: 'center', fontSize: 12, color: 'var(--tx3)' }}>You're all caught up</div>
                 ) : (
                   notifications.map((n, i) => (
-                    <div key={n.id || i} onClick={n.go} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px', borderBottom: '1px solid var(--bd)', cursor: 'pointer' }}>
-                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: n.sevColor || 'var(--warn)', boxShadow: `0 0 7px ${n.sevColor || 'var(--warn)'}`, flex: '0 0 auto', marginTop: 5 }} />
+                    <div
+                      key={n.id || i}
+                      onClick={() => {
+                        onMarkNotificationsRead?.([n.id]);
+                        n.go?.();
+                      }}
+                      style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px', borderBottom: '1px solid var(--bd)', cursor: 'pointer', background: n.read ? 'transparent' : 'var(--bg2)' }}
+                    >
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: n.read ? 'var(--bd2)' : (n.sevColor || 'var(--warn)'), boxShadow: n.read ? 'none' : `0 0 7px ${n.sevColor || 'var(--warn)'}`, flex: '0 0 auto', marginTop: 5 }} />
                       <span style={{ minWidth: 0, flex: 1 }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 500, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.title}</span>
+                        <span style={{ fontSize: 12.5, fontWeight: n.read ? 400 : 500, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.title}</span>
                         <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>{[n.cam, n.time].filter(Boolean).join(' · ')}</span>
                       </span>
                     </div>
                   ))
                 )}
+              </div>
+              <div
+                onClick={() => {
+                  setNotifOpen(false);
+                  navigate('/alerts');
+                }}
+                style={{ padding: '10px 14px', textAlign: 'center', fontSize: 12, fontWeight: 500, color: 'var(--blue)', borderTop: '1px solid var(--bd)', cursor: 'pointer' }}
+              >
+                View all alerts
               </div>
           </div>
         )}

@@ -9,15 +9,16 @@ import { num } from '../../../lib/format';
  * "Cameras Online" does NOT use stats.activeCameras — that backend field
  * actually counts cameras with an AI detection engine enabled, not cameras
  * that are live/streaming (there's no org-wide "is this stream up" query).
- * Instead it shows whether the camera currently selected in the Live Camera
- * panel is actually streaming right now, out of the total camera count.
+ * Instead LiveCamera probes every filtered camera's stream in the background
+ * and reports how many actually connect, out of the filtered total.
  */
-export default function KpiRow({ stats = {}, dailyTotals = [], sitesCount = 0, selectedCameraLive = false, loading }) {
+export default function KpiRow({ stats = {}, dailyTotals = [], sitesCount = 0, onlineCameras = { online: 0, total: 0 }, loading }) {
   const eventsToday = dailyTotals.length ? dailyTotals[dailyTotals.length - 1] : 0;
-  const cameras = `${selectedCameraLive ? 1 : 0}/${num(stats.overAllCameraCount ?? 0)}`;
+  const camerasTotal = onlineCameras.total || num(stats.overAllCameraCount ?? 0);
+  const cameras = `${num(onlineCameras.online)}/${num(camerasTotal)}`;
 
   const cards = [
-    { label: 'Cameras Online', value: cameras, sub: 'selected camera live', color: 'var(--blue)' },
+    { label: 'Cameras Online', value: cameras, sub: 'streaming now', color: 'var(--blue)' },
     { label: 'Active Alerts', value: num(stats.totalAlerts ?? 0), sub: 'unresolved', color: 'var(--warn)', spark: dailyTotals },
     { label: 'Critical', value: num(stats.criticalAlerts ?? 0), sub: 'high severity', color: 'var(--crit)' },
     { label: 'Events Today', value: num(eventsToday), sub: 'detections', color: 'var(--violet)', spark: dailyTotals },
