@@ -1178,6 +1178,17 @@ class NVRService {
         };
       } else if (brand.toLowerCase() === "cpplus" || brand.toLowerCase() === "dahua") {
         // CP-Plus and Dahua share the same Dahua CGI protocol/endpoints.
+        // Fetch with a hard timeout so an unreachable/slow NVR fails fast with a
+        // clean error instead of hanging until an upstream 524. Aborts at 10s.
+        const fetchWithTimeout = async (url, ms = 10000) => {
+          const controller = new AbortController();
+          const t = setTimeout(() => controller.abort(), ms);
+          try {
+            return await client.fetch(url, { signal: controller.signal });
+          } finally {
+            clearTimeout(t);
+          }
+        };
         // Helper function to parse CP Plus plain text response
         const parseCPPlusResponse = (text) => {
           const lines = text.split("\n");
@@ -1219,7 +1230,7 @@ class NVRService {
           return Object.values(groups);
         };
 
-        const deviceInfoRes = await client.fetch(
+        const deviceInfoRes = await fetchWithTimeout(
           `http://${ip}:${port}/cgi-bin/magicBox.cgi?action=getSystemInfo`
         );
 
@@ -1254,7 +1265,7 @@ class NVRService {
         };
 
         // Get channel titles
-        const channelTitlesRes = await client.fetch(
+        const channelTitlesRes = await fetchWithTimeout(
           `http://${ip}:${port}/cgi-bin/configManager.cgi?action=getConfig&name=ChannelTitle`
         );
         const channelTitlesText = await channelTitlesRes.text();
@@ -1270,7 +1281,7 @@ class NVRService {
         });
 
         // Get channels
-        const channelsRes = await client.fetch(
+        const channelsRes = await fetchWithTimeout(
           `http://${ip}:${port}/cgi-bin/configManager.cgi?action=getConfig&name=VideoInOptions`
         );
         const channelsText = await channelsRes.text();
@@ -1281,7 +1292,7 @@ class NVRService {
         );
 
         // Get encode config
-        const encodeRes = await client.fetch(
+        const encodeRes = await fetchWithTimeout(
           `http://${ip}:${port}/cgi-bin/configManager.cgi?action=getConfig&name=Encode`
         );
         const encodeText = await encodeRes.text();
@@ -1640,6 +1651,14 @@ class NVRService {
       }
     } catch (error) {
       logger.error("Fetch Cameras From NVR Error:", error);
+      // Abort = the NVR didn't respond in time (usually unreachable from the
+      // server's network or a firewall block), not a code failure.
+      if (error?.name === "AbortError") {
+        return {
+          error:
+            "NVR did not respond in time. Check that the server can reach the NVR's IP/port (network/firewall).",
+        };
+      }
       return { error: error.message };
     }
   }
