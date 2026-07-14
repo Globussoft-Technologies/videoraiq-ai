@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node server.js && node ./core/v1/jobs/utils/worker.js",
     "dev": "node ./views/swagger.config.js && nodemon server.js",
+    "dev:v2": "node ./views/swagger.config.js && node ./views/swagger-v2.config.js && nodemon server.js",
     "swagger": "node ./views/swagger.config.js",
+    "swagger:v2": "node ./views/swagger-v2.config.js",
+    "swagger:all": "node ./views/swagger.config.js && node ./views/swagger-v2.config.js",
     "production": "node bootstrap.js",
     "build": "rm -rf dist && rm -rf obf_src && npm run obfuscate && npm run encrypt",
     "obfuscate": "node ./scripts/copy_for_obfuscation.js && javascript-obfuscator obf_src --output dist --config ./obfuscator-strong.json",

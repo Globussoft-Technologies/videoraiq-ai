@@ -34,6 +34,10 @@ const swaggerFile = JSON.parse(
   fs.readFileSync("./views/swagger-api-view.json", "utf-8")
 );
 
+const swaggerFileV2 = fs.existsSync("./views/swagger-api-v2-view.json")
+  ? JSON.parse(fs.readFileSync("./views/swagger-api-v2-view.json", "utf-8"))
+  : { info: { title: "v2 API — run npm run swagger:v2 to generate" }, paths: {} };
+
 const app = express();
 const PORT = config.get("port");
 
@@ -90,13 +94,22 @@ app.get("/metrics", metricsHandler);
 
 app.use("/api", routes);
 
-app.use(
-  "/api-doc",
-  auth,
-  swaggerAuthLogger,
-  swaggerUi.serve,
-  swaggerUi.setup(swaggerFile)
-);
+// Two Swagger docs on one server: swaggerUi.serve is shared/stateful, so the
+// last setup() wins for BOTH mounts. Use serveFiles(spec) per router so each
+// mount serves its own spec.
+// v2 Swagger UI
+const swaggerV2Router = express.Router();
+swaggerV2Router.use(auth, swaggerAuthLogger);
+swaggerV2Router.use("/", swaggerUi.serveFiles(swaggerFileV2));
+swaggerV2Router.get("/", swaggerUi.setup(swaggerFileV2));
+app.use("/api-doc/v2", swaggerV2Router);
+
+// v1 Swagger UI
+const swaggerV1Router = express.Router();
+swaggerV1Router.use(auth, swaggerAuthLogger);
+swaggerV1Router.use("/", swaggerUi.serveFiles(swaggerFile));
+swaggerV1Router.get("/", swaggerUi.setup(swaggerFile));
+app.use("/api-doc", swaggerV1Router);
 
 // ------------------------
 // 🧯 GLOBAL ERROR HANDLER

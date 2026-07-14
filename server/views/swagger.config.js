@@ -1,11 +1,13 @@
 import swaggerAutogen from "swagger-autogen";
 const swagger = swaggerAutogen();
 import config from "config";
+import { definitions as sharedDefinitions } from "./swagger-definitions.js";
+console.log(config.get("swagger_host_url"),"HOST1")
 
 const doc = {
   info: {
-    app_version: config.get("app_version") ?? "1.0.0",
-    title: "EMP Surveillance API`s",
+    version: config.get("app_version") ?? "1.0.0",
+    title: "EMP Surveillance API's",
     description: "Documentation",
   },
   host: config.get("swagger_host_url"),
@@ -1217,10 +1219,11 @@ const doc = {
         ]
         },
   },
+  definitions: { ...sharedDefinitions },
 };
 
 const outputFile = "./views/swagger-api-view.json";
-const endpointsFiles = ["./server.js"];
+const endpointsFiles = ["./views/swagger-v1-entry.js"];
 
 /* NOTE: if you use the express Router, you must pass in the
    'endpointsFiles' only the root file where the route starts,
