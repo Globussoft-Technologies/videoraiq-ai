@@ -33,14 +33,14 @@ export const getDeskAbsenceLogs = async ({
       channelIds.length > 0 && { channelIds: channelIds.join(',') }),
     ...(Array.isArray(zoneNames) && zoneNames.length > 0 && { zoneNames }),
   };
-  return axios.post(`${HOST}/api/v1/incidents/logs/desk-absence`, body, {
+  return axios.post(`${HOST}/incidents/logs/desk-absence`, body, {
     headers: jsonHeaders(),
   });
 };
 
 /** Zone-name options for the zone filter. */
 export const getZoneNames = async () => {
-  return axios.get(`${HOST}/api/v1/incidents/logs/desk-absence/filter/zone-names`, {
+  return axios.get(`${HOST}/incidents/logs/desk-absence/filter/zone-names`, {
     headers: {
       Accept: 'application/json',
       'x-access-token': getAccessToken(),
@@ -51,7 +51,7 @@ export const getZoneNames = async () => {
 /** Authorized NVRs for the filter dropdown. */
 export const getNVRs = async () => {
   return axios.post(
-    `${HOST}/api/v1/authorizedChannels/getNVRS`,
+    `${HOST}/authorizedChannels/getNVRS`,
     {},
     { headers: jsonHeaders() }
   );
@@ -59,7 +59,7 @@ export const getNVRs = async () => {
 
 /** Channels/cameras for the selected NVRs. */
 export const getchannels = async (data) => {
-  return axios.post(`${HOST}/api/v1/authorizedChannels/getChannels`, data, {
+  return axios.post(`${HOST}/authorizedChannels/getChannels`, data, {
     headers: jsonHeaders(),
   });
 };

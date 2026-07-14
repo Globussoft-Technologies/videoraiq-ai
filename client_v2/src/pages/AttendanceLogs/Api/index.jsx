@@ -34,7 +34,7 @@ export const getAttendanceLogs = async (
   const body = {
     employeeLocations: Array.isArray(employeeLocations) ? employeeLocations : [],
   };
-  return axios.post(`${HOST}/api/v1/attendance/get`, body, {
+  return axios.post(`${HOST}/attendance/get`, body, {
     params: {
       name: searchInput || '',
       channelId: cameraId,
@@ -58,7 +58,7 @@ export const getAttendanceLogs = async (
 /** Detailed check-in/out pairs for a single employee on a given day (break logs). */
 export const getAttendanceUserLogs = async (employeeId, date) => {
   return axios.post(
-    `${HOST}/api/v1/attendance/user-logs`,
+    `${HOST}/attendance/user-logs`,
     { employeeId, date },
     { headers: jsonHeaders() }
   );
@@ -66,7 +66,7 @@ export const getAttendanceUserLogs = async (employeeId, date) => {
 
 /** Departments list for the filter dropdown. */
 export const filterByDepartment = async (data) => {
-  return axios.post(`${HOST}/api/v1/departments/get`, data, {
+  return axios.post(`${HOST}/departments/get`, data, {
     headers: jsonHeaders(),
   });
 };
@@ -74,7 +74,7 @@ export const filterByDepartment = async (data) => {
 /** Authorized NVRs for the filter dropdown. */
 export const getNVRs = async () => {
   return axios.post(
-    `${HOST}/api/v1/authorizedChannels/getNVRS`,
+    `${HOST}/authorizedChannels/getNVRS`,
     {},
     { headers: jsonHeaders() }
   );
@@ -82,7 +82,7 @@ export const getNVRs = async () => {
 
 /** Channels/cameras for the selected NVRs. */
 export const getchannels = async (data) => {
-  return axios.post(`${HOST}/api/v1/authorizedChannels/getChannels`, data, {
+  return axios.post(`${HOST}/authorizedChannels/getChannels`, data, {
     headers: jsonHeaders(),
   });
 };
@@ -94,7 +94,7 @@ export const getEmployeeLocations = async ({ skip = 0, limit = 100, search = '' 
   params.append('limit', limit);
   if (search) params.append('search', search);
   return axios.post(
-    `${HOST}/api/v1/locations/employee-location?${params.toString()}`,
+    `${HOST}/locations/employee-location?${params.toString()}`,
     {},
     { headers: jsonHeaders() }
   );

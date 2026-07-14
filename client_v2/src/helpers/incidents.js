@@ -13,7 +13,7 @@ const unwrap = (res) => {
 export const fetchIncidents = async ({ skip = 0, limit = 12 } = {}, filter = {}) => {
   const token = getAccessToken();
   const res = await axios.post(
-    `${Api_url}/api/v1/incidents?skip=${skip}&limit=${limit}`,
+    `${Api_url}/incidents?skip=${skip}&limit=${limit}`,
     filter,
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
@@ -24,7 +24,7 @@ export const fetchIncidents = async ({ skip = 0, limit = 12 } = {}, filter = {})
 export const fetchIncidentStats = async (filter = {}) => {
   const token = getAccessToken();
   const res = await axios.post(
-    `${Api_url}/api/v1/dashboard/headerStats`,
+    `${Api_url}/dashboard/headerStats`,
     filter,
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
@@ -34,7 +34,7 @@ export const fetchIncidentStats = async (filter = {}) => {
 export const fetchDetectionTypes = async ({ skip = 0, limit = 100 } = {}) => {
   const token = getAccessToken();
   const res = await axios.get(
-    `${Api_url}/api/v1/incidents/getIncidentLists?skip=${skip}&limit=${limit}`,
+    `${Api_url}/incidents/getIncidentLists?skip=${skip}&limit=${limit}`,
     { headers: { 'x-access-token': token } }
   );
   const body = res?.data?.body;
@@ -45,7 +45,7 @@ export const fetchDetectionTypes = async ({ skip = 0, limit = 100 } = {}) => {
 export const fetchIncidentsByType = async ({ incidentType, skip = 0, limit = 12 } = {}) => {
   const token = getAccessToken();
   const res = await axios.get(
-    `${Api_url}/api/v1/dashboard/getIncidentsByType`,
+    `${Api_url}/dashboard/getIncidentsByType`,
     { params: { incidentType, skip, limit }, headers: { 'x-access-token': token } }
   );
   return unwrap(res) || {};
@@ -54,7 +54,7 @@ export const fetchIncidentsByType = async ({ incidentType, skip = 0, limit = 12 
 export const updateReportStatus = async (payload) => {
   const token = getAccessToken();
   const res = await axios.post(
-    `${Api_url}/api/v1/incidents/update-report-status`,
+    `${Api_url}/incidents/update-report-status`,
     payload,
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
@@ -64,7 +64,7 @@ export const updateReportStatus = async (payload) => {
 export const deleteIncidents = async (incidentIds = []) => {
   const token = getAccessToken();
   const res = await axios.delete(
-    `${Api_url}/api/v1/incidents/delete-by-incidentIds`,
+    `${Api_url}/incidents/delete-by-incidentIds`,
     { data: { incidentIds }, headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
   return unwrap(res);

@@ -14,7 +14,7 @@ const unwrap = (res) => {
 
 /**
  * Camera View playback — exclusive to CameraGrid's single-camera view.
- * Calls the real backend endpoints (POST /api/v1/channel/playback-url,
+ * Calls the real backend endpoints (POST /channel/playback-url,
  * /playback-timeline); no mock data. Playback URL support is backend/NVR-brand
  * dependent (Hikvision/Tiandy/Prama/local-Tiandy) — callers must handle
  * failures as "no recording available" rather than assume success.
@@ -63,7 +63,7 @@ export function toCompactLocalTime(date) {
 export const getPlaybackUrl = async ({ channelId, streamId, startTime, endTime, sessionId }) => {
   const token = getAccessToken();
   const res = await axios.post(
-    `${Api_url}/api/v1/channel/playback-url`,
+    `${Api_url}/channel/playback-url`,
     {
       channelId,
       streamId,
@@ -81,7 +81,7 @@ export const getPlaybackUrl = async ({ channelId, streamId, startTime, endTime, 
 export const getPlaybackTimeline = async ({ nvrId, cameraId, channel, startTime, endTime }) => {
   const token = getAccessToken();
   const res = await axios.post(
-    `${Api_url}/api/v1/channel/playback-timeline`,
+    `${Api_url}/channel/playback-timeline`,
     { nvrId, cameraId, channel, startTime, endTime },
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );

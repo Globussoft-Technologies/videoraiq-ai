@@ -13,7 +13,7 @@ const unwrap = (res) => {
 export const getLocations = async (skip = 0, limit = 100, search = '') => {
   const token = getAccessToken();
   const res = await axios.post(
-    `${Api_url}/api/v1/locations/fetch?skip=${skip}&limit=${limit}&search=${search}`,
+    `${Api_url}/locations/fetch?skip=${skip}&limit=${limit}&search=${search}`,
     {},
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
@@ -46,7 +46,7 @@ export const getChannels = async ({
   if (dept) params.append('department', dept);
   if (type) params.append('camType', type);
   if (cam) params.append('_id', cam);
-  const res = await axios.get(`${Api_url}/api/v1/channel/?${params.toString()}`, {
+  const res = await axios.get(`${Api_url}/channel/?${params.toString()}`, {
     headers: { 'x-access-token': token },
   });
   const data = unwrap(res);
@@ -58,7 +58,7 @@ export const getChannels = async ({
 export const getNVRs = async () => {
   const token = getAccessToken();
   const res = await axios.post(
-    `${Api_url}/api/v1/authorizedChannels/getNVRS`,
+    `${Api_url}/authorizedChannels/getNVRS`,
     {},
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
@@ -70,7 +70,7 @@ export const getNVRs = async () => {
 export const getDepartments = async ({ skip = 0, limit = 100 } = {}) => {
   const token = getAccessToken();
   const res = await axios.post(
-    `${Api_url}/api/v1/departments/get`,
+    `${Api_url}/departments/get`,
     { skip, limit },
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
@@ -82,7 +82,7 @@ export const getDepartments = async ({ skip = 0, limit = 100 } = {}) => {
 export const getAttendance = async ({ startDate = '', endDate = '', name = '', skip = 0, limit = 12, employeeLocations = [] } = {}) => {
   const token = getAccessToken();
   const res = await axios.post(
-    `${Api_url}/api/v1/attendance/get`,
+    `${Api_url}/attendance/get`,
     { employeeLocations: Array.isArray(employeeLocations) ? employeeLocations : [] },
     { params: { name, startDate, endDate, skip, limit, sortField: 'date', sortOrder: 'desc' }, headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
@@ -94,7 +94,7 @@ export const getAttendance = async ({ startDate = '', endDate = '', name = '', s
 export const updateIncidentReportStatus = async (payload) => {
   const token = getAccessToken();
   const res = await axios.post(
-    `${Api_url}/api/v1/incidents/update-report-status`,
+    `${Api_url}/incidents/update-report-status`,
     payload,
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );

@@ -66,7 +66,7 @@ const UserDetailModal = ({ user, isOpen, onClose, nasUrl }) => {
                 <img
                   src={
                     hasImages
-                      ? `${nasUrl}/api/v1/uploads/${profilePics[currentImageIndex]}`
+                      ? `${nasUrl}/uploads/${profilePics[currentImageIndex]}`
                       : getInitialsPlaceholder(user.firstName, user.lastName)
                   }
                   alt={`${user.firstName} ${user.lastName}`}

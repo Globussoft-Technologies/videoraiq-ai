@@ -418,7 +418,7 @@ function DateRangePicker({ from, to, onFrom, onTo, onClear }) {
 async function fetchDepartments() {
   const token = getAccessToken();
   const res = await axios.post(
-    `${import.meta.env.VITE_BACKEND}/api/v1/departments/get`,
+    `${import.meta.env.VITE_BACKEND}/departments/get`,
     {},
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );

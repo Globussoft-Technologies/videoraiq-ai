@@ -12,14 +12,14 @@ const unwrap = (res) => {
 
 export const fetchAdmin = async () => {
   const token = getAccessToken();
-  const res = await axios.get(`${Api_url}/api/v1/admin/fetch`, { headers: { 'x-access-token': token } });
+  const res = await axios.get(`${Api_url}/admin/fetch`, { headers: { 'x-access-token': token } });
   return unwrap(res) || {};
 };
 
 export const getUsers = async (skip = 0, limit = 10, search = '') => {
   const token = getAccessToken();
   const res = await axios.post(
-    `${Api_url}/api/v1/users/fetch?skip=${skip}&limit=${limit}&searchQuery=${search}&orderBy=userName&sort=asc`,
+    `${Api_url}/users/fetch?skip=${skip}&limit=${limit}&searchQuery=${search}&orderBy=userName&sort=asc`,
     { sortField: 'userName', sortOrder: 'asc' },
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
@@ -31,7 +31,7 @@ export const getUsers = async (skip = 0, limit = 10, search = '') => {
 
 export const createUser = async (data) => {
   const token = getAccessToken();
-  const res = await axios.post(`${Api_url}/api/v1/users/create`, data, {
+  const res = await axios.post(`${Api_url}/users/create`, data, {
     headers: { 'Content-Type': 'application/json', 'x-access-token': token },
   });
   return unwrap(res);
@@ -39,7 +39,7 @@ export const createUser = async (data) => {
 
 export const deleteUser = async (userId) => {
   const token = getAccessToken();
-  const res = await axios.delete(`${Api_url}/api/v1/users/delete?userId=${userId}`, {
+  const res = await axios.delete(`${Api_url}/users/delete?userId=${userId}`, {
     headers: { 'x-access-token': token },
   });
   return unwrap(res);
@@ -48,7 +48,7 @@ export const deleteUser = async (userId) => {
 export const getRoles = async (skip = 0, limit = 50, searchQuery = '') => {
   const token = getAccessToken();
   const res = await axios.post(
-    `${Api_url}/api/v1/permissions/roles_permissions?searchQuery=${searchQuery}&skip=${skip}&limit=${limit}`,
+    `${Api_url}/permissions/roles_permissions?searchQuery=${searchQuery}&skip=${skip}&limit=${limit}`,
     {},
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
@@ -60,7 +60,7 @@ export const getRoles = async (skip = 0, limit = 50, searchQuery = '') => {
 
 export const fetchLogsSound = async () => {
   const token = getAccessToken();
-  const res = await axios.get(`${Api_url}/api/v1/admin/fetch-logs-sound`, { headers: { 'x-access-token': token } });
+  const res = await axios.get(`${Api_url}/admin/fetch-logs-sound`, { headers: { 'x-access-token': token } });
   const data = unwrap(res);
   return typeof data === 'boolean' ? data : data?.logsSound ?? false;
 };
@@ -68,7 +68,7 @@ export const fetchLogsSound = async () => {
 export const updateLogsSound = async (logsSound) => {
   const token = getAccessToken();
   const res = await axios.put(
-    `${Api_url}/api/v1/admin/update-logs-sound`,
+    `${Api_url}/admin/update-logs-sound`,
     { logsSound },
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );

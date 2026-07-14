@@ -666,7 +666,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     }
   };
 
-  // "Reset Detection UI" — same DELETE /api/v1/detection-settings/:id V1 uses
+  // "Reset Detection UI" — same DELETE /detection-settings/:id V1 uses
   // under that label (Innersettings.jsx → ResetConfirmationDialog). Removes the
   // whole DetectionSetting doc and unlinks it from every camera referencing it,
   // not just this one.

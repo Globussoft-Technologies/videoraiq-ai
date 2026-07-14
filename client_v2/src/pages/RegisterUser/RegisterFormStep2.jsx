@@ -3,7 +3,7 @@ import { Upload, Camera, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 const orgId = import.meta.env.VITE_ORGANISATION_ID;
-const uploadDomain = `${import.meta.env.VITE_BACKEND}/api/v1/uploads`;
+const uploadDomain = `${import.meta.env.VITE_BACKEND}/uploads`;
 
 const RegisterFormStep2 = ({
   uploadedImagePaths,

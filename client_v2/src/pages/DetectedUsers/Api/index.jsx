@@ -26,7 +26,7 @@ export const getGroupedFaceImages = async (
   if (search) params.search = search;
   if (startDate) params.startDate = startDate;
   if (endDate) params.endDate = endDate;
-  return axios.get(`${HOST}/api/v1/faceImages/grouped`, {
+  return axios.get(`${HOST}/faceImages/grouped`, {
     params,
     headers: authHeaders(),
   });
@@ -34,7 +34,7 @@ export const getGroupedFaceImages = async (
 
 // Delete one or more face images by their ids.
 export const deleteFaceImages = async (imageIds) =>
-  axios.delete(`${HOST}/api/v1/faceImages/delete`, {
+  axios.delete(`${HOST}/faceImages/delete`, {
     data: { imageIds },
     headers: authHeaders({ 'Content-Type': 'application/json' }),
   });
@@ -42,14 +42,14 @@ export const deleteFaceImages = async (imageIds) =>
 // Tag every image of a dsId with an authorized user.
 export const tagFaceImages = async (dsId, authorizedUserId) =>
   axios.patch(
-    `${HOST}/api/v1/faceImages/tag`,
+    `${HOST}/faceImages/tag`,
     { dsId, authorizedUserId },
     { headers: authHeaders({ 'Content-Type': 'application/json' }) }
   );
 
 // Create an authorized user so a dsId folder can be tagged immediately.
 export const quickCreateFaceUser = async (payload) =>
-  axios.post(`${HOST}/api/v1/faceImages/quick-create-user`, payload, {
+  axios.post(`${HOST}/faceImages/quick-create-user`, payload, {
     headers: authHeaders({ 'Content-Type': 'application/json' }),
   });
 

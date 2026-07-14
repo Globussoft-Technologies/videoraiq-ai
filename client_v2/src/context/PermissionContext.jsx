@@ -8,7 +8,7 @@ const PermissionContext = createContext();
 const getAllUserPermissions = async () => {
   const token = getAccessToken();
   const HOST = import.meta.env.VITE_BACKEND;
-  return axios.get(`${HOST}/api/v1/permissions/user-permissions`, {
+  return axios.get(`${HOST}/permissions/user-permissions`, {
     headers: {
       Accept: 'application/json',
       'x-access-token': token,

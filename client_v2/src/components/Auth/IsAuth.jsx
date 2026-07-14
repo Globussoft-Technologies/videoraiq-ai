@@ -10,7 +10,7 @@ const HOST = import.meta.env.VITE_BACKEND;
  * Route guard for the V2 app — same method as the V1 IsAuth
  * (client/src/components/Auth/IsAuth.jsx): it does not just check that a cookie
  * exists, it VALIDATES the access token against the backend
- * (POST /api/v1/auth/by-login-token). Only a token the server confirms renders
+ * (POST /auth/by-login-token). Only a token the server confirms renders
  * the protected tree; anything else is cleared and bounced to /admin-login.
  *
  * (V1 also resolves an aMember redirect + permission routing; the standalone V2
@@ -35,7 +35,7 @@ export default function IsAuth({ children }) {
 
     async function checkAccess() {
       try {
-        const response = await fetch(`${HOST}/api/v1/auth/by-login-token`, {
+        const response = await fetch(`${HOST}/auth/by-login-token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token }),

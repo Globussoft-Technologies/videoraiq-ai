@@ -9,7 +9,7 @@ const HOST = import.meta.env.VITE_BACKEND;
  */
 export const fetchPersonCountLogs = async ({ skip, limit, startDate, endDate }) => {
   const token = getAccessToken();
-  return axios.get(`${HOST}/api/v1/incidents/logs/person-count`, {
+  return axios.get(`${HOST}/incidents/logs/person-count`, {
     params: {
       skip,
       limit,

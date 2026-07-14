@@ -12,7 +12,7 @@ const unwrap = (res) => {
 
 const get = async (path, params = {}) => {
   const token = getAccessToken();
-  const res = await axios.get(`${Api_url}/api/v1/analytics/${path}`, {
+  const res = await axios.get(`${Api_url}/analytics/${path}`, {
     params,
     headers: { 'x-access-token': token },
   });

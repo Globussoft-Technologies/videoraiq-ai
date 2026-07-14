@@ -16,7 +16,7 @@ function Tile({ label, value, sub, subColor = 'var(--tx3)', color = 'var(--tx)',
 }
 
 /**
- * All 4 tiles are real, derived from /api/v1/analytics/overview. The original
+ * All 4 tiles are real, derived from /analytics/overview. The original
  * mockup's False Positive Rate / Mean Response Time / Platform Uptime tiles
  * are gone — nothing in the system tracks that data — so they're replaced
  * with metrics that actually exist: resolved rate, detection-enabled cameras

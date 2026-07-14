@@ -294,7 +294,7 @@ const TagFolderModal = ({ open, folder, onClose, onTagged }) => {
                 users.map((u) => {
                   const avatar =
                     u.profilePics && u.profilePics.length > 0
-                      ? `${nasUrl}/api/v1/uploads${u.profilePics[0]}`
+                      ? `${nasUrl}/uploads${u.profilePics[0]}`
                       : getInitialsPlaceholder(u.firstName, u.lastName);
                   const isSelected = selectedUserId === u._id;
                   return (

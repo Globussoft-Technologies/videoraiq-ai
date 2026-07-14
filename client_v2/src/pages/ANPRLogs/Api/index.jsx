@@ -17,7 +17,7 @@ const getHeaders = () => ({
 /** Authorized NVRs for the filter dropdown. */
 export const getNVRs = async () => {
   return axios.post(
-    `${HOST}/api/v1/authorizedChannels/getNVRS`,
+    `${HOST}/authorizedChannels/getNVRS`,
     {},
     { headers: jsonHeaders() }
   );
@@ -25,7 +25,7 @@ export const getNVRs = async () => {
 
 /** Channels/cameras for the selected NVRs. */
 export const getchannels = async (data) => {
-  return axios.post(`${HOST}/api/v1/authorizedChannels/getChannels`, data, {
+  return axios.post(`${HOST}/authorizedChannels/getChannels`, data, {
     headers: jsonHeaders(),
   });
 };
@@ -49,7 +49,7 @@ export const fetchVehicleObstructionLogs = async ({
   vehicleNumber,
   search,
 }) => {
-  return axios.get(`${HOST}/api/v1/incidents/logs/vehicle-detection`, {
+  return axios.get(`${HOST}/incidents/logs/vehicle-detection`, {
     params: {
       skip,
       limit,
@@ -71,7 +71,7 @@ export const fetchVehicleObstructionLogs = async ({
 
 /** Distinct vehicle numbers for the vehicle-number filter dropdown. */
 export const getVehicleNumbers = async (search) => {
-  return axios.get(`${HOST}/api/v1/incidents/logs/vehicle-detection/numbers`, {
+  return axios.get(`${HOST}/incidents/logs/vehicle-detection/numbers`, {
     params: {
       ...(search && { search }),
     },

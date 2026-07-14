@@ -9,7 +9,7 @@ import { waitForToken } from '@/utils/waitForToken';
 const apiUrl = import.meta.env.VITE_BACKEND;
 
 export const api = axios.create({
-  baseURL: `${apiUrl}/api/v1`,
+  baseURL: `${apiUrl}`,
   headers: { 'Content-Type': 'application/json' },
 });
 

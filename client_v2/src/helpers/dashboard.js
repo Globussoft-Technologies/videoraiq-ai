@@ -13,7 +13,7 @@ const unwrap = (res) => {
 export const getHeaderStats = async (filters = {}) => {
   const token = getAccessToken();
   const res = await axios.post(
-    `${Api_url}/api/v1/dashboard/headerStats`,
+    `${Api_url}/dashboard/headerStats`,
     filters,
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
@@ -23,7 +23,7 @@ export const getHeaderStats = async (filters = {}) => {
 export const getCriticalityStats = async (filters = {}, { skip = 0, limit = 8 } = {}) => {
   const token = getAccessToken();
   const res = await axios.post(
-    `${Api_url}/api/v1/dashboard/criticalityStats?skip=${skip}&limit=${limit}`,
+    `${Api_url}/dashboard/criticalityStats?skip=${skip}&limit=${limit}`,
     filters,
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
@@ -33,7 +33,7 @@ export const getCriticalityStats = async (filters = {}, { skip = 0, limit = 8 } 
 export const getDetectionChart = async (filters = {}) => {
   const token = getAccessToken();
   const res = await axios.post(
-    `${Api_url}/api/v1/dashboard/detectionChart`,
+    `${Api_url}/dashboard/detectionChart`,
     filters,
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
@@ -43,7 +43,7 @@ export const getDetectionChart = async (filters = {}) => {
 export const getRecentIncidents = async (params = {}) => {
   const token = getAccessToken();
   const res = await axios.get(
-    `${Api_url}/api/v1/dashboard/recentIncidents`,
+    `${Api_url}/dashboard/recentIncidents`,
     { params, headers: { 'x-access-token': token } }
   );
   return unwrap(res) || {};
@@ -52,7 +52,7 @@ export const getRecentIncidents = async (params = {}) => {
 export const getSidebarConfig = async () => {
   const token = getAccessToken();
   const res = await axios.get(
-    `${Api_url}/api/v1/dashboard/getSidebarConfig`,
+    `${Api_url}/dashboard/getSidebarConfig`,
     { headers: { 'x-access-token': token } }
   );
   return unwrap(res) || {};
@@ -61,7 +61,7 @@ export const getSidebarConfig = async () => {
 export const getWeeklyComparison = async (filters = {}) => {
   const token = getAccessToken();
   const res = await axios.post(
-    `${Api_url}/api/v1/dashboard/dashboardWeeklyComparisonChart`,
+    `${Api_url}/dashboard/dashboardWeeklyComparisonChart`,
     filters,
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );

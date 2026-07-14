@@ -30,7 +30,7 @@ function getAvatarBorderColor(name) {
   return DEPT_COLORS[index];
 }
 
-const IMAGE_URL = import.meta.env.VITE_INCIDENT_URL || `${import.meta.env.VITE_BACKEND}/api/v1/uploads/`;
+const IMAGE_URL = import.meta.env.VITE_INCIDENT_URL || `${import.meta.env.VITE_BACKEND}/uploads/`;
 
 /**
  * Prepend the uploads base URL to a relative path.
@@ -45,7 +45,7 @@ function img(path) {
 /**
  * Map one REST attendance log item to display fields.
  *
- * REST shape (from /api/v1/attendance/get, confirmed via V1 AttendanceLog.jsx):
+ * REST shape (from /attendance/get, confirmed via V1 AttendanceLog.jsx):
  *   item.employee.firstName / lastName / profilePics[0] / departmentId.departmentName
  *   item.logInTime   — "09:00:00" or null
  *   item.logOutTime  — "17:00:00" or null

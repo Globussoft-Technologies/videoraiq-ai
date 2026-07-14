@@ -29,7 +29,7 @@ const DetailItem = ({ icon: Icon, label, value }) => (
 );
 
 const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, onClose = () => {} }) => {
-  const BASE_URL = import.meta.env.VITE_BACKEND + '/api/v1/uploads';
+  const BASE_URL = import.meta.env.VITE_BACKEND + '/uploads';
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [imageLoaded, setImageLoaded] = useState(false);

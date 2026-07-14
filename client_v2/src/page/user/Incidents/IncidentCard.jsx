@@ -19,7 +19,7 @@ function statusOf(item) {
 async function apiMarkResolved(id, incidentType, resolved) {
   const token = getAccessToken();
   const res = await axios.put(
-    `${import.meta.env.VITE_BACKEND}/api/v1/incidents/${id}`,
+    `${import.meta.env.VITE_BACKEND}/incidents/${id}`,
     { resolved, incidentType },
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
@@ -29,7 +29,7 @@ async function apiMarkResolved(id, incidentType, resolved) {
 async function apiReport(incidentId, description) {
   const token = getAccessToken();
   const res = await axios.post(
-    `${import.meta.env.VITE_BACKEND}/api/v1/incidents/update-report-status`,
+    `${import.meta.env.VITE_BACKEND}/incidents/update-report-status`,
     { incidentId, status: true, description },
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );

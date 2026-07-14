@@ -151,7 +151,7 @@ const TagUserDropdown = ({ anchorRect, busy, onSelect, onClose }) => {
             const tagged = !!u.tag;
             const avatar =
               u.profilePics && u.profilePics.length > 0
-                ? `${nasUrl}/api/v1/uploads${u.profilePics[0]}`
+                ? `${nasUrl}/uploads${u.profilePics[0]}`
                 : getInitialsPlaceholder(u.firstName, u.lastName);
             return (
               <button

@@ -7,7 +7,7 @@ export const INTERVAL_KEY = 'detected_users_auto_refresh_interval';
 
 // The /grouped API returns image fields as relative paths, so build the full
 // upload URL from VITE_BACKEND here.
-export const uploadDomain = import.meta.env.VITE_BACKEND + '/api/v1/uploads';
+export const uploadDomain = import.meta.env.VITE_BACKEND + '/uploads';
 
 // Map a raw /grouped API group into the folder shape the UI renders. `images`
 // are full display URLs (leading slash stripped before joining so the grid src

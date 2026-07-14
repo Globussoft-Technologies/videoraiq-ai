@@ -15,7 +15,7 @@ const getSingleImageUrl = (item) => {
     item?.imageUrls?.[0]?.images?.person ||
     item?.imageUrls?.[0]?.images?.face ||
     item?.imageUrls?.[0]?.images?.frame;
-  return img ? `${import.meta.env.VITE_BACKEND}/api/v1/uploads/${img}` : '';
+  return img ? `${import.meta.env.VITE_BACKEND}/uploads/${img}` : '';
 };
 
 const rowDate = (item) =>

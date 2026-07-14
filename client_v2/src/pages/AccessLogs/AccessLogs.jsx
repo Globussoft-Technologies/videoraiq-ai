@@ -222,9 +222,9 @@ const AccessLogs = () => {
           .find(Boolean);
         const image =
           log.userInfo?.profilePics?.length > 0
-            ? `${nasUrl}/api/v1/uploads${log.userInfo.profilePics[0]}`
+            ? `${nasUrl}/uploads${log.userInfo.profilePics[0]}`
             : firstSessionImg
-              ? `${nasUrl}/api/v1/uploads${firstSessionImg}`
+              ? `${nasUrl}/uploads${firstSessionImg}`
               : unknownimg;
         const imageUrls = sessions.map((session) => {
           const images = session.images;
@@ -236,7 +236,7 @@ const AccessLogs = () => {
               session?.images?.personImage ||
               session?.images?.frameImage ||
               session?.images?.faceImage;
-            return img ? `${nasUrl}/api/v1/uploads${img}` : null;
+            return img ? `${nasUrl}/uploads${img}` : null;
           })
           .filter(Boolean);
         const timestamp = sessions.map((session) => session.timestamp);

@@ -12,7 +12,7 @@ import ResponseFunnelCard from './ResponseFunnelCard';
 
 /**
  * Trends, heatmaps & engine performance. Every widget on this page is backed
- * by /api/v1/analytics/* — nothing is static/mocked. The 7 Days / 30 Days /
+ * by /analytics/* — nothing is static/mocked. The 7 Days / 30 Days /
  * Custom range filter drives every widget except Detections by Hour, which
  * is inherently single-day ("today") and has its own dedicated endpoint.
  *

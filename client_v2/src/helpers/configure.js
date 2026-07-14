@@ -12,7 +12,7 @@ const unwrap = (res) => {
 
 export const getNvrs = async (skip = 0, limit = 100) => {
   const token = getAccessToken();
-  const res = await axios.get(`${Api_url}/api/v1/nvr/?skip=${skip}&limit=${limit}`, {
+  const res = await axios.get(`${Api_url}/nvr/?skip=${skip}&limit=${limit}`, {
     headers: { 'x-access-token': token },
   });
   const data = unwrap(res);
@@ -22,7 +22,7 @@ export const getNvrs = async (skip = 0, limit = 100) => {
 
 export const getCamerasByNvr = async (nvrId) => {
   const token = getAccessToken();
-  const res = await axios.get(`${Api_url}/api/v1/channel/nvr/${nvrId}`, {
+  const res = await axios.get(`${Api_url}/channel/nvr/${nvrId}`, {
     headers: { 'x-access-token': token },
   });
   const data = unwrap(res);
@@ -33,7 +33,7 @@ export const getCamerasByNvr = async (nvrId) => {
 export const getChannels = async ({ skip = 0, limit = 100, nvrId = '', search = '' } = {}) => {
   const token = getAccessToken();
   const res = await axios.get(
-    `${Api_url}/api/v1/channel/?nvrId=${nvrId}&skip=${skip}&limit=${limit}&search=${search}`,
+    `${Api_url}/channel/?nvrId=${nvrId}&skip=${skip}&limit=${limit}&search=${search}`,
     { headers: { 'x-access-token': token } }
   );
   const data = unwrap(res);
@@ -43,7 +43,7 @@ export const getChannels = async ({ skip = 0, limit = 100, nvrId = '', search = 
 
 export const getDetectionTypes = async () => {
   const token = getAccessToken();
-  const res = await axios.get(`${Api_url}/api/v1/detection-settings/types`, {
+  const res = await axios.get(`${Api_url}/detection-settings/types`, {
     headers: { 'x-access-token': token },
   });
   const data = unwrap(res);
@@ -53,7 +53,7 @@ export const getDetectionTypes = async () => {
 export const getDetectionSettings = async ({ skip = 0, limit = 50, nvrIds = '', channelIds = '', name = '' } = {}) => {
   const token = getAccessToken();
   const res = await axios.get(
-    `${Api_url}/api/v1/detection-settings/?nvrIds=${nvrIds}&channelIds=${channelIds}&name=${name}&skip=${skip}&limit=${limit}`,
+    `${Api_url}/detection-settings/?nvrIds=${nvrIds}&channelIds=${channelIds}&name=${name}&skip=${skip}&limit=${limit}`,
     { headers: { 'x-access-token': token } }
   );
   const data = unwrap(res);
@@ -66,30 +66,30 @@ export const getDetectionSettings = async ({ skip = 0, limit = 50, nvrIds = '', 
 
 export const updateDetectionSetting = async (id, data) => {
   const token = getAccessToken();
-  const res = await axios.put(`${Api_url}/api/v1/detection-settings/${id}`, data, {
+  const res = await axios.put(`${Api_url}/detection-settings/${id}`, data, {
     headers: { 'Content-Type': 'application/json', 'x-access-token': token },
   });
   return unwrap(res);
 };
 
 /** Create a brand-new DetectionSetting for a camera that has never had this
- * type configured — same POST /api/v1/detection-settings V1 uses on first save. */
+ * type configured — same POST /detection-settings V1 uses on first save. */
 export const createDetectionSetting = async (data) => {
   const token = getAccessToken();
-  const res = await axios.post(`${Api_url}/api/v1/detection-settings`, data, {
+  const res = await axios.post(`${Api_url}/detection-settings`, data, {
     headers: { 'Content-Type': 'application/json', 'x-access-token': token },
   });
   return unwrap(res);
 };
 
 /**
- * Fully delete a DetectionSetting — same DELETE /api/v1/detection-settings/:id
+ * Fully delete a DetectionSetting — same DELETE /detection-settings/:id
  * V1 uses (exposed there as "Reset Detection UI"). Removes the whole document
  * and unsets detections.<settingType> on every channel referencing it.
  */
 export const deleteDetectionSetting = async (id) => {
   const token = getAccessToken();
-  const res = await axios.delete(`${Api_url}/api/v1/detection-settings/${id}`, {
+  const res = await axios.delete(`${Api_url}/detection-settings/${id}`, {
     headers: { 'x-access-token': token },
   });
   return unwrap(res);
@@ -100,7 +100,7 @@ export const deleteDetectionSetting = async (id) => {
  * (startTime/endTime per zone_config) are interpreted against it. */
 export const getTimezones = async () => {
   const token = getAccessToken();
-  const res = await axios.get(`${Api_url}/api/v1/admin/timezones`, {
+  const res = await axios.get(`${Api_url}/admin/timezones`, {
     headers: { 'x-access-token': token },
   });
   const data = unwrap(res);
@@ -109,7 +109,7 @@ export const getTimezones = async () => {
 
 export const getSavedTimezone = async () => {
   const token = getAccessToken();
-  const res = await axios.get(`${Api_url}/api/v1/admin/timezone`, {
+  const res = await axios.get(`${Api_url}/admin/timezone`, {
     headers: { 'x-access-token': token },
   });
   const data = unwrap(res);
@@ -118,7 +118,7 @@ export const getSavedTimezone = async () => {
 
 export const updateSavedTimezone = async (timezone) => {
   const token = getAccessToken();
-  const res = await axios.put(`${Api_url}/api/v1/admin/timezone`, { timezone }, {
+  const res = await axios.put(`${Api_url}/admin/timezone`, { timezone }, {
     headers: { 'Content-Type': 'application/json', 'x-access-token': token },
   });
   return unwrap(res);
@@ -126,7 +126,7 @@ export const updateSavedTimezone = async (timezone) => {
 
 export const getNvrsWithChannels = async (settingType = '') => {
   const token = getAccessToken();
-  const res = await axios.get(`${Api_url}/api/v1/nvr/with-channels?settingType=${settingType}`, {
+  const res = await axios.get(`${Api_url}/nvr/with-channels?settingType=${settingType}`, {
     headers: { 'x-access-token': token },
   });
   return unwrap(res) || [];
@@ -135,35 +135,35 @@ export const getNvrsWithChannels = async (settingType = '') => {
 /* ── NVR connect / onboard cameras ──────────────────────────────────────── */
 export const registerAndFetchCameras = async (data) => {
   const token = getAccessToken();
-  return axios.post(`${Api_url}/api/v1/nvr/register-and-fetch`, data, {
+  return axios.post(`${Api_url}/nvr/register-and-fetch`, data, {
     headers: { 'Content-Type': 'application/json', 'x-access-token': token },
   });
 };
 
 export const addSelectedCameras = async (data) => {
   const token = getAccessToken();
-  return axios.post(`${Api_url}/api/v1/nvr/add-cameras`, data, {
+  return axios.post(`${Api_url}/nvr/add-cameras`, data, {
     headers: { 'Content-Type': 'application/json', 'x-access-token': token },
   });
 };
 
 export const updateNvrById = async (id, data) => {
   const token = getAccessToken();
-  return axios.patch(`${Api_url}/api/v1/nvr/${id}`, data, {
+  return axios.patch(`${Api_url}/nvr/${id}`, data, {
     headers: { 'Content-Type': 'application/json', 'x-access-token': token },
   });
 };
 
 export const deleteNvrById = async (id) => {
   const token = getAccessToken();
-  return axios.delete(`${Api_url}/api/v1/nvr/${id}`, {
+  return axios.delete(`${Api_url}/nvr/${id}`, {
     headers: { 'x-access-token': token },
   });
 };
 
 export const getNvrCamerasForEdit = async (nvrId) => {
   const token = getAccessToken();
-  const res = await axios.get(`${Api_url}/api/v1/nvr/edit/${nvrId}`, {
+  const res = await axios.get(`${Api_url}/nvr/edit/${nvrId}`, {
     headers: { 'x-access-token': token },
   });
   return res?.data?.body;
@@ -171,14 +171,14 @@ export const getNvrCamerasForEdit = async (nvrId) => {
 
 export const removeNvrCamera = async (cameraId) => {
   const token = getAccessToken();
-  return axios.delete(`${Api_url}/api/v1/nvr/camera/${cameraId}`, {
+  return axios.delete(`${Api_url}/nvr/camera/${cameraId}`, {
     headers: { 'x-access-token': token },
   });
 };
 
 export const refetchNvrChannels = async (nvrId) => {
   const token = getAccessToken();
-  return axios.patch(`${Api_url}/api/v1/nvr/refetch/${nvrId}`, {}, {
+  return axios.patch(`${Api_url}/nvr/refetch/${nvrId}`, {}, {
     headers: { 'x-access-token': token },
   });
 };
@@ -186,7 +186,7 @@ export const refetchNvrChannels = async (nvrId) => {
 /* ── Camera Settings page (per-NVR channel + department assignment) ────── */
 export const getNvrChannelDetails = async (nvrId) => {
   const token = getAccessToken();
-  const res = await axios.get(`${Api_url}/api/v1/channel/nvr/${nvrId}`, {
+  const res = await axios.get(`${Api_url}/channel/nvr/${nvrId}`, {
     headers: { 'x-access-token': token },
   });
   return res?.data?.body;
@@ -194,7 +194,7 @@ export const getNvrChannelDetails = async (nvrId) => {
 
 export const updateChannel = async (channelId, data) => {
   const token = getAccessToken();
-  return axios.put(`${Api_url}/api/v1/channel/${channelId}`, data, {
+  return axios.put(`${Api_url}/channel/${channelId}`, data, {
     headers: { 'Content-Type': 'application/json', 'x-access-token': token },
   });
 };
@@ -206,7 +206,7 @@ export const updateChannel = async (channelId, data) => {
  */
 export const toggleChannelDetection = async ({ channelId, detectionType, enable }) => {
   const token = getAccessToken();
-  return axios.put(`${Api_url}/api/v1/channel/detection/toggle`, { channelId, detectionType, enable }, {
+  return axios.put(`${Api_url}/channel/detection/toggle`, { channelId, detectionType, enable }, {
     headers: { 'Content-Type': 'application/json', 'x-access-token': token },
   });
 };

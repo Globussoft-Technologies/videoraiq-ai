@@ -5,7 +5,7 @@ const Api_url = import.meta.env.VITE_BACKEND;
 export const fetchDepartments = async (skip = 0, limit = 10, search = "") => {
   const token = getAccessToken();
   return await axios.post(
-    `${Api_url}/api/v1/departments/get`,
+    `${Api_url}/departments/get`,
     { skip, limit, search },
     {
       headers: {
@@ -18,7 +18,7 @@ export const fetchDepartments = async (skip = 0, limit = 10, search = "") => {
 
 export const createDepartment = async (data) => {
   const token = getAccessToken();
-  return await axios.post(`${Api_url}/api/v1/departments/create`, data, {
+  return await axios.post(`${Api_url}/departments/create`, data, {
     headers: {
       'Content-Type': 'application/json',
       'x-access-token': token,
@@ -28,7 +28,7 @@ export const createDepartment = async (data) => {
 
 export const updateDepartment = async (id, data) => {
   const token = getAccessToken();
-  return await axios.put(`${Api_url}/api/v1/departments/update?departmentId=${id}`, data, {
+  return await axios.put(`${Api_url}/departments/update?departmentId=${id}`, data, {
     headers: {
       'Content-Type': 'application/json',
       'x-access-token': token,
@@ -38,7 +38,7 @@ export const updateDepartment = async (id, data) => {
 
 export const deleteDepartment = async (id) => {
   const token = getAccessToken();
-  return await axios.delete(`${Api_url}/api/v1/departments/delete?departmentId=${id}`, {
+  return await axios.delete(`${Api_url}/departments/delete?departmentId=${id}`, {
     headers: {
       'Content-Type': 'application/json',
       'x-access-token': token,

@@ -117,7 +117,7 @@ export const UserCard = ({ user, handleEdit, handleDelete, setSelectedUser, setI
         )}
         <div className="w-20 h-20 rounded-full overflow-hidden shrink-0 ring-4 ring-[var(--bg1solid)] shadow-md">
           <img
-            src={pics.length > 0 ? `${nasUrl}/api/v1/uploads/${pics[imgIdx]}` : getInitialsPlaceholder(user.firstName, user.lastName)}
+            src={pics.length > 0 ? `${nasUrl}/uploads/${pics[imgIdx]}` : getInitialsPlaceholder(user.firstName, user.lastName)}
             alt={fullName}
             className="w-full h-full object-cover object-top"
             onError={(e) => {
@@ -178,7 +178,7 @@ export const UserCard = ({ user, handleEdit, handleDelete, setSelectedUser, setI
 /* ─────────────── Table row ─────────────── */
 export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, handleDelete, setSelectedUser, setIsUserModalOpen, selectedUserIds, toggleUserSelection }) => {
   const pics = user.profilePics || [];
-  const avatar = pics.length > 0 ? `${nasUrl}/api/v1/uploads/${pics[0]}` : getInitialsPlaceholder(user.firstName, user.lastName, 40);
+  const avatar = pics.length > 0 ? `${nasUrl}/uploads/${pics[0]}` : getInitialsPlaceholder(user.firstName, user.lastName, 40);
 
   return (
     <tr

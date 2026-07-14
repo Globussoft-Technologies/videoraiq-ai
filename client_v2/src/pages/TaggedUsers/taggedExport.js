@@ -42,7 +42,7 @@ const getSingleImageUrl = (item) => {
     item?.sessions?.[0]?.images?.frameImage ||
     item?.sessions?.[0]?.images?.personImage ||
     item?.sessions?.[0]?.images?.faceImage;
-  return img ? `${import.meta.env.VITE_BACKEND}/api/v1/uploads/${img}` : '';
+  return img ? `${import.meta.env.VITE_BACKEND}/uploads/${img}` : '';
 };
 
 /**

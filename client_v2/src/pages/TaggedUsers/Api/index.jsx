@@ -16,13 +16,13 @@ const jsonHeaders = () => ({
  */
 export const getAllAccessLogsDetails = async (data) => {
   const { sortField, sortOrder, ...bodyData } = data;
-  const url = `${HOST}/api/v1/accessLogs/get?sortField=${sortField}&sortOrder=${sortOrder}`;
+  const url = `${HOST}/accessLogs/get?sortField=${sortField}&sortOrder=${sortOrder}`;
   return axios.post(url, bodyData, { headers: jsonHeaders() });
 };
 
 /** Departments list for the filter dropdown. */
 export const filterByDepartment = async (data) => {
-  return axios.post(`${HOST}/api/v1/departments/get`, data, {
+  return axios.post(`${HOST}/departments/get`, data, {
     headers: jsonHeaders(),
   });
 };
@@ -30,7 +30,7 @@ export const filterByDepartment = async (data) => {
 /** Authorized NVRs for the filter dropdown. */
 export const getNVRs = async () => {
   return axios.post(
-    `${HOST}/api/v1/authorizedChannels/getNVRS`,
+    `${HOST}/authorizedChannels/getNVRS`,
     {},
     { headers: jsonHeaders() }
   );
@@ -38,7 +38,7 @@ export const getNVRs = async () => {
 
 /** Channels/cameras for the selected NVRs. */
 export const getchannels = async (data) => {
-  return axios.post(`${HOST}/api/v1/authorizedChannels/getChannels`, data, {
+  return axios.post(`${HOST}/authorizedChannels/getChannels`, data, {
     headers: jsonHeaders(),
   });
 };
@@ -50,7 +50,7 @@ export const getEmployeeLocations = async ({ skip = 0, limit = 100, search = '' 
   params.append('limit', limit);
   if (search) params.append('search', search);
   return axios.post(
-    `${HOST}/api/v1/locations/employee-location?${params.toString()}`,
+    `${HOST}/locations/employee-location?${params.toString()}`,
     {},
     { headers: jsonHeaders() }
   );
@@ -61,7 +61,7 @@ export const tagUser = async (userId, data) => {
   const token = await waitForToken();
   const query = userId ? `?userId=${userId}` : '';
   const response = await axios.patch(
-    `${HOST}/api/v1/authorizedUsers/tag-user${query}`,
+    `${HOST}/authorizedUsers/tag-user${query}`,
     data,
     {
       headers: {

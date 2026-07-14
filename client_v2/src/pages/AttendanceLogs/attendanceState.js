@@ -57,7 +57,7 @@ export const initialState = {
   dateRange: { start: null, end: null },
 
   // constants
-  BASE_URL: import.meta.env.VITE_BACKEND + '/api/v1/uploads',
+  BASE_URL: import.meta.env.VITE_BACKEND + '/uploads',
   USER_AVTAR_INITIALS: import.meta.env.VITE_INITIALS_URL,
   todayISO: moment().format('YYYY-MM-DD'),
 };

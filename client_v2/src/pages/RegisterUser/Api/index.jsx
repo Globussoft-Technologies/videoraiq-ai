@@ -13,7 +13,7 @@ const authHeaders = (extra = {}) => ({
 /** Paginated employee list with optional location/department filters. */
 export const authorizedUsers = async (skip = 0, limit = 10, search = '', data = {}) => {
   const response = await axios.post(
-    `${Api_url}/api/v1/authorizedUsers/fetch?skip=${skip}&limit=${limit}&search=${search}`,
+    `${Api_url}/authorizedUsers/fetch?skip=${skip}&limit=${limit}&search=${search}`,
     data,
     { headers: authHeaders({ 'Content-Type': 'application/json' }) }
   );
@@ -25,7 +25,7 @@ export const authorizedUsers = async (skip = 0, limit = 10, search = '', data = 
  * Content-Type is intentionally omitted so the browser sets the multipart boundary.
  */
 export const createAuthorizedUser = async (payload, token) => {
-  const response = await axios.post(`${Api_url}/api/v1/authorizedUsers/create`, payload, {
+  const response = await axios.post(`${Api_url}/authorizedUsers/create`, payload, {
     headers: { 'x-access-token': token || getAccessToken() },
   });
   return response.data;
@@ -34,7 +34,7 @@ export const createAuthorizedUser = async (payload, token) => {
 /** Update an existing authorized user (FormData). */
 export const updateUserDetails = async (employeeId, payload) => {
   const response = await axios.put(
-    `${Api_url}/api/v1/authorizedUsers/update?userId=${employeeId}`,
+    `${Api_url}/authorizedUsers/update?userId=${employeeId}`,
     payload,
     { headers: authHeaders() }
   );
@@ -43,7 +43,7 @@ export const updateUserDetails = async (employeeId, payload) => {
 
 /** Delete a single authorized user. */
 export const delete_user = async (userId) => {
-  return axios.delete(`${Api_url}/api/v1/authorizedUsers/delete`, {
+  return axios.delete(`${Api_url}/authorizedUsers/delete`, {
     params: { userId },
     headers: authHeaders({ 'Content-Type': 'application/json' }),
   });
@@ -51,14 +51,14 @@ export const delete_user = async (userId) => {
 
 /** Delete all authorized users. */
 export const delete_all_users = async () => {
-  return axios.delete(`${Api_url}/api/v1/authorizedUsers/delete-all`, {
+  return axios.delete(`${Api_url}/authorizedUsers/delete-all`, {
     headers: authHeaders({ 'Content-Type': 'application/json' }),
   });
 };
 
 /** Verify a face image against enrolled users (FormData). */
 export const verifyUser = async (payload) => {
-  const response = await axios.post(`${Api_url}/api/v1/authorizedUsers/verifyUser`, payload, {
+  const response = await axios.post(`${Api_url}/authorizedUsers/verifyUser`, payload, {
     headers: authHeaders(),
   });
   return response.data;
@@ -66,7 +66,7 @@ export const verifyUser = async (payload) => {
 
 /** Bulk import employees from a parsed spreadsheet (JSON). */
 export const bulkUploadUsers = async (data) => {
-  const response = await axios.post(`${Api_url}/api/v1/authorizedUsers/bulk-import`, data, {
+  const response = await axios.post(`${Api_url}/authorizedUsers/bulk-import`, data, {
     headers: authHeaders(),
   });
   return response.data;
@@ -81,7 +81,7 @@ export const bulkUploadUsers = async (data) => {
  */
 export const fetchDepartments = async (skip = 0, limit = 100, search = '', token) => {
   return axios.post(
-    `${Api_url}/api/v1/departments/get`,
+    `${Api_url}/departments/get`,
     { skip, limit, search },
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token || getAccessToken() } }
   );
@@ -90,7 +90,7 @@ export const fetchDepartments = async (skip = 0, limit = 100, search = '', token
 /** Employee locations (raw axios response). `token` overrides the session token (see fetchDepartments). */
 export const getEmployeeLocations = async (token) => {
   return axios.post(
-    `${Api_url}/api/v1/locations/employee-location`,
+    `${Api_url}/locations/employee-location`,
     {},
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token || getAccessToken() } }
   );
@@ -98,7 +98,7 @@ export const getEmployeeLocations = async (token) => {
 
 /** Departments for the filter (authorizedChannels), returns response.data.body. */
 export const getFilterDepartments = async (data = {}) => {
-  const response = await axios.post(`${Api_url}/api/v1/authorizedChannels/departments`, data, {
+  const response = await axios.post(`${Api_url}/authorizedChannels/departments`, data, {
     headers: authHeaders({ 'Content-Type': 'application/json' }),
   });
   return response?.data?.body;
@@ -106,7 +106,7 @@ export const getFilterDepartments = async (data = {}) => {
 
 /** Check whether an email is already registered. `token` overrides the session token (public portal). */
 export const isEmailExist = async (email, token) => {
-  return axios.get(`${Api_url}/api/v1/users/isEmailExist/`, {
+  return axios.get(`${Api_url}/users/isEmailExist/`, {
     params: { email },
     headers: { 'Content-Type': 'application/json', 'x-access-token': token || getAccessToken() },
   });
@@ -115,42 +115,42 @@ export const isEmailExist = async (email, token) => {
 /* ─────────────── Import employees by organization email ─────────────── */
 
 export const isEmpAdminApi = async (data) => {
-  const response = await axios.post(`${Api_url}/api/v1/users/check-emp-admin`, data, {
+  const response = await axios.post(`${Api_url}/users/check-emp-admin`, data, {
     headers: authHeaders(),
   });
   return response?.data;
 };
 
 export const getEmpUsers = async (data) => {
-  const response = await axios.post(`${Api_url}/api/v1/users/allOrgEmployee`, data, {
+  const response = await axios.post(`${Api_url}/users/allOrgEmployee`, data, {
     headers: authHeaders(),
   });
   return response?.data;
 };
 
 export const addempUsers = async (data) => {
-  const response = await axios.post(`${Api_url}/api/v1/users/import-users`, data, {
+  const response = await axios.post(`${Api_url}/users/import-users`, data, {
     headers: authHeaders(),
   });
   return response?.data;
 };
 
 export const addEmpEmails = async (data) => {
-  const response = await axios.post(`${Api_url}/api/v1/admin/add-emp-emails`, data, {
+  const response = await axios.post(`${Api_url}/admin/add-emp-emails`, data, {
     headers: authHeaders(),
   });
   return response?.data;
 };
 
 export const getEmpEmails = async () => {
-  const response = await axios.get(`${Api_url}/api/v1/admin/get-emp-emails`, {
+  const response = await axios.get(`${Api_url}/admin/get-emp-emails`, {
     headers: authHeaders(),
   });
   return response?.data;
 };
 
 export const deleteEmpEmail = async (data) => {
-  const response = await axios.delete(`${Api_url}/api/v1/admin/delete-emp-email`, {
+  const response = await axios.delete(`${Api_url}/admin/delete-emp-email`, {
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     data,
   });
@@ -158,14 +158,14 @@ export const deleteEmpEmail = async (data) => {
 };
 
 export const getLocationByEmpEmail = async () => {
-  const response = await axios.get(`${Api_url}/api/v1/admin/get-location-by-emp-email`, {
+  const response = await axios.get(`${Api_url}/admin/get-location-by-emp-email`, {
     headers: authHeaders(),
   });
   return response?.data;
 };
 
 export const importUsersProgress = async () => {
-  const response = await axios.get(`${Api_url}/api/v1/users/import-users-progress`, {
+  const response = await axios.get(`${Api_url}/users/import-users-progress`, {
     headers: authHeaders({ accept: 'application/json' }),
   });
   return response?.data;
