@@ -1178,15 +1178,26 @@ class NVRService {
         };
       } else if (brand.toLowerCase() === "cpplus" || brand.toLowerCase() === "dahua") {
         // CP-Plus and Dahua share the same Dahua CGI protocol/endpoints.
+        //
+        // Use node-fetch with a DEDICATED http.Agent (keepAlive:false) for these
+        // NVR calls instead of Node's global undici fetch. In the long-running,
+        // busy app the shared global connection pool can starve a fresh outbound
+        // request of a socket, so DigestFetch (which grabs global fetch) hangs —
+        // even though the same call is instant in a quiet process. A private,
+        // non-pooled agent avoids that contention entirely.
+        const { default: nodeFetch } = await import("node-fetch");
+        const { Agent } = await import("http");
+        const nvrAgent = new Agent({ keepAlive: false, maxSockets: 4 });
+        const dahuaClient = new DigestFetch(username, password);
+        dahuaClient.getClient = async () => nodeFetch; // force node-fetch, not global undici
         // Fetch with a hard timeout so an unreachable/slow NVR fails fast with a
-        // clean error instead of hanging until an upstream 524.
-        // NOTE: do NOT pass an AbortController signal into DigestFetch.fetch —
-        // DigestFetch issues TWO requests (challenge -> authed retry) reusing the
-        // same options, and a shared signal breaks that handshake (it stalls).
-        // Race the whole call against a timer instead.
+        // clean error instead of hanging. NOTE: do NOT pass an AbortController
+        // signal into DigestFetch.fetch — it issues TWO requests (challenge ->
+        // authed retry) reusing the same options, and a shared signal breaks that
+        // handshake. Race the whole call against a timer instead.
         const fetchWithTimeout = (url, ms = 10000) =>
           Promise.race([
-            client.fetch(url),
+            dahuaClient.fetch(url, { agent: nvrAgent }),
             new Promise((_, reject) =>
               setTimeout(
                 () => reject(Object.assign(new Error("NVR request timed out"), { name: "AbortError" })),
