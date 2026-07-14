@@ -36,7 +36,9 @@ const navItemStyle = (active, collapsed) => ({
 function groupLabelStyle() {
   return {
     fontSize: 9.5,
-    color: 'var(--tx3)',
+    // Use --tx2 (not the dimmer --tx3) so section headers stay legible against
+    // the near-black sidebar background in dark theme.
+    color: 'var(--tx2)',
     letterSpacing: '.16em',
     padding: '14px 10px 6px',
     fontFamily: 'var(--mono)',

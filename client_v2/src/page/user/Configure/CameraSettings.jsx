@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, RefreshCw, Pencil, Loader2, X, Eye, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Search, RefreshCw, Pencil, Loader2, X, Eye, ChevronDown, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import { getNvrChannelDetails, updateChannel, refetchNvrChannels } from '../../../helpers/configure';
@@ -89,7 +89,7 @@ function DeptMultiSelect({ options, selected, onChange, disabled }) {
   }, [open]);
 
   const filtered = options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()));
-  const selectedLabels = options.filter(o => selected.includes(o.value)).map(o => o.label);
+  const selectedOptions = options.filter(o => selected.includes(o.value));
 
   const toggle = (value) => {
     onChange(selected.includes(value) ? selected.filter(v => v !== value) : [...selected, value]);
@@ -108,19 +108,41 @@ function DeptMultiSelect({ options, selected, onChange, disabled }) {
           cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1,
         }}
       >
-        {selectedLabels.length === 0 ? (
+        {selectedOptions.length === 0 ? (
           <span style={{ fontSize: 12, color: 'var(--tx3)' }}>Select…</span>
         ) : (
-          selectedLabels.slice(0, 3).map(l => (
-            <span key={l} style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--blue)', background: 'rgba(59,130,246,.12)', borderRadius: 5, padding: '2px 7px' }}>
-              {l}
+          selectedOptions.slice(0, 3).map(o => (
+            <span key={o.value} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10.5, fontWeight: 600, color: 'var(--blue)', background: 'rgba(59,130,246,.12)', borderRadius: 5, padding: '2px 4px 2px 7px' }}>
+              {o.label}
+              {!disabled && (
+                <span
+                  role="button"
+                  title="Remove"
+                  onClick={(e) => { e.stopPropagation(); toggle(o.value); }}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 14, height: 14, borderRadius: 3, cursor: 'pointer', color: 'var(--blue)' }}
+                >
+                  <X size={11} />
+                </span>
+              )}
             </span>
           ))
         )}
-        {selectedLabels.length > 3 && (
-          <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>+{selectedLabels.length - 3}</span>
+        {selectedOptions.length > 3 && (
+          <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>+{selectedOptions.length - 3}</span>
         )}
-        <ChevronDown size={13} style={{ marginLeft: 'auto', color: 'var(--tx3)', flexShrink: 0 }} />
+        <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+          {!disabled && selectedOptions.length > 0 && (
+            <span
+              role="button"
+              title="Clear all"
+              onClick={(e) => { e.stopPropagation(); onChange([]); }}
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: 4, cursor: 'pointer', color: 'var(--tx3)' }}
+            >
+              <X size={13} />
+            </span>
+          )}
+          <ChevronDown size={13} style={{ color: 'var(--tx3)' }} />
+        </span>
       </button>
 
       {open && coords && createPortal(
@@ -175,30 +197,103 @@ function DeptMultiSelect({ options, selected, onChange, disabled }) {
 }
 
 // ── Live preview modal ──────────────────────────────────────────────────────
-function LivePreviewModal({ camera, onClose }) {
+function LivePreviewModal({ camera, cameraList = [], onClose, departmentOptions = [], onSaved }) {
   const videoRef = useRef(null);
+  const [activeCamera, setActiveCamera] = useState(camera);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const url = streamUrl(camera);
+  // Inline camera-settings editor (alias + departments) shown over the feed —
+  // mirrors the client LiveViewModal so a camera can be renamed / reassigned
+  // without leaving the live view.
+  const [isEditing, setIsEditing] = useState(false);
+  const [aliasLabel, setAliasLabel] = useState(camera.aliasName || '');
+  const [aliasInput, setAliasInput] = useState(camera.aliasName || '');
+  const [selectedDepts, setSelectedDepts] = useState(camera.departments || []);
+  const [saving, setSaving] = useState(false);
+
+  // Navigate between cameras (prev/next). List only contains viewable cameras.
+  const list = cameraList.length ? cameraList : [camera];
+  const currentIndex = list.findIndex(c => c.id === activeCamera.id);
+
+  // Reset feed + editor state whenever the active camera changes.
+  useEffect(() => {
+    setIsLoading(true);
+    setHasError(false);
+    setErrorMsg('');
+    setIsEditing(false);
+    setAliasLabel(activeCamera.aliasName || '');
+    setAliasInput(activeCamera.aliasName || '');
+    setSelectedDepts(activeCamera.departments || []);
+  }, [activeCamera]);
+
+  const goPrev = () => {
+    if (list.length < 2) return;
+    setActiveCamera(list[(currentIndex - 1 + list.length) % list.length]);
+  };
+  const goNext = () => {
+    if (list.length < 2) return;
+    setActiveCamera(list[(currentIndex + 1) % list.length]);
+  };
+
+  const url = streamUrl(activeCamera);
 
   useHlsPlayer(videoRef, url, {
     autoPlay: true,
     onError: (msg) => { setErrorMsg(msg); setIsLoading(false); setHasError(true); },
   });
 
+  const openEditor = () => {
+    setAliasInput(aliasLabel);
+    setIsEditing(true);
+  };
+
+  async function handleSaveSettings() {
+    setSaving(true);
+    try {
+      const resp = await updateChannel(activeCamera.id, {
+        customName: aliasInput.trim(),
+        department: selectedDepts,
+      });
+      if (resp?.data?.body?.status === 'success') {
+        toast.success(resp?.data?.body?.message || 'Camera settings updated');
+        setAliasLabel(aliasInput.trim());
+        onSaved?.(activeCamera.id, { aliasName: aliasInput.trim(), departments: selectedDepts });
+        setIsEditing(false);
+      } else {
+        toast.error(resp?.data?.body?.message || 'Failed to update camera settings');
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.body?.message || 'Failed to update camera settings');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(4,6,12,.85)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 640, maxWidth: '100%', background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 30px 80px rgba(0,0,0,.55)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 1040, maxWidth: '95vw', background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 30px 80px rgba(0,0,0,.55)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--bd)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span className="vq-blink" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--crit)', display: 'inline-block' }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>{camera.aliasName || camera.cameraName}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)' }}>{activeCamera.cameraName}</span>
+            {!isEditing && (
+              <span style={{ fontSize: 10.5, color: 'var(--tx3)', border: '1px solid var(--bd)', background: 'var(--bg2)', borderRadius: 5, padding: '2px 7px' }}>
+                {aliasLabel || 'No Alias'}
+              </span>
+            )}
           </div>
-          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: 'var(--tx3)', cursor: 'pointer' }}>
-            <X size={14} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {!isEditing && (
+              <button onClick={openEditor} title="Camera Settings" style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg2)', border: '1px solid var(--bd)', color: 'var(--tx2)', cursor: 'pointer' }}>
+                <Settings size={15} />
+              </button>
+            )}
+            <button onClick={onClose} title="Close" style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(239,68,68,.12)', border: '1px solid var(--crit)', color: 'var(--crit)', cursor: 'pointer' }}>
+            <X size={15} />
           </button>
+          </div>
         </div>
         <div style={{ position: 'relative', background: '#000', aspectRatio: '16/9' }}>
           {isLoading && !hasError && (
@@ -217,6 +312,72 @@ function LivePreviewModal({ camera, onClose }) {
             onCanPlay={() => { setIsLoading(false); setHasError(false); }}
             onPlaying={() => { setIsLoading(false); setHasError(false); }}
           />
+          <span style={{ position: 'absolute', bottom: 10, left: 10, fontSize: 9.5, fontWeight: 700, color: 'var(--crit)', background: 'rgba(0,0,0,.55)', border: '1px solid var(--crit)', borderRadius: 5, padding: '3px 8px', letterSpacing: '.05em' }}>
+            LIVE
+          </span>
+
+          {/* Prev / Next camera navigation */}
+          {!isEditing && list.length > 1 && (
+            <>
+              <button
+                onClick={goPrev}
+                title="Previous camera"
+                style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', width: 42, height: 42, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.45)', border: '1px solid rgba(255,255,255,.15)', color: '#fff', cursor: 'pointer', backdropFilter: 'blur(4px)', zIndex: 4 }}
+              >
+                <ChevronLeft size={22} />
+              </button>
+              <button
+                onClick={goNext}
+                title="Next camera"
+                style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', width: 42, height: 42, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.45)', border: '1px solid rgba(255,255,255,.15)', color: '#fff', cursor: 'pointer', backdropFilter: 'blur(4px)', zIndex: 4 }}
+              >
+                <ChevronRight size={22} />
+              </button>
+            </>
+          )}
+
+          {/* Inline camera-settings editor */}
+          {isEditing && (
+            <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: 14, right: 14, width: 300, maxWidth: 'calc(100% - 28px)', background: 'rgba(10,12,18,.72)', backdropFilter: 'blur(16px)', border: '1px solid var(--bd2)', borderRadius: 14, padding: 16, boxShadow: '0 20px 50px rgba(0,0,0,.5)', zIndex: 5 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: '#fff' }}>
+                  <Pencil size={14} style={{ color: 'var(--blue)' }} /> Camera Settings
+                </span>
+                <button onClick={() => setIsEditing(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.6)', cursor: 'pointer', display: 'flex' }}>
+                  <X size={16} />
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.55)', marginBottom: 6 }}>Alias Name</div>
+                  <input
+                    autoFocus
+                    value={aliasInput}
+                    onChange={e => setAliasInput(e.target.value)}
+                    placeholder="Enter camera alias"
+                    style={{ width: '100%', boxSizing: 'border-box', height: 36, padding: '0 12px', borderRadius: 9, background: 'rgba(0,0,0,.25)', border: '1px solid rgba(255,255,255,.12)', fontSize: 12.5, color: '#fff', outline: 'none' }}
+                  />
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.55)', marginBottom: 6 }}>Assigned Departments</div>
+                  <DeptMultiSelect
+                    options={departmentOptions}
+                    selected={selectedDepts}
+                    onChange={setSelectedDepts}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 8, paddingTop: 2 }}>
+                  <button onClick={() => setIsEditing(false)} disabled={saving} style={{ flex: 1, height: 34, borderRadius: 9, background: 'none', border: '1px solid rgba(255,255,255,.14)', color: 'rgba(255,255,255,.75)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                  <button onClick={handleSaveSettings} disabled={saving} style={{ flex: 1, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,var(--blue),var(--violet))', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: saving ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: saving ? 0.7 : 1 }}>
+                    {saving && <Loader2 size={12} className="animate-spin" />}
+                    {saving ? 'Saving…' : 'Save Details'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -334,7 +495,7 @@ export default function CameraSettings() {
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
       {/* Back */}
       <button
-        onClick={() => navigate('/v2/cameras')}
+        onClick={() => navigate('/cameras')}
         style={{ display: 'flex', alignItems: 'center', gap: 8, alignSelf: 'flex-start', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx2)' }}
       >
         <span style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--bg2)', border: '1px solid var(--bd)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -465,7 +626,15 @@ export default function CameraSettings() {
         />
       )}
       {previewCamera && (
-        <LivePreviewModal camera={previewCamera} onClose={() => setPreviewCamera(null)} />
+        <LivePreviewModal
+          camera={previewCamera}
+          cameraList={filtered.filter(c => c.streamingUrl)}
+          departmentOptions={departmentOptions}
+          onClose={() => setPreviewCamera(null)}
+          onSaved={(cameraId, patch) =>
+            setTableData(prev => prev.map(c => (c.id === cameraId ? { ...c, ...patch } : c)))
+          }
+        />
       )}
     </div>
   );

@@ -215,13 +215,10 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox 
             </div>
           )}
 
-          {/* Top-left: detection badge + mark-as-resolved (shown on hover) */}
+          {/* Top-left: mark-as-resolved (shown on hover). The detection-type
+             badge lives bottom-left instead, so it never collides with the
+             "Persons: N" / ID labels the engine bakes into the top of the frame. */}
           <div style={{ position: 'absolute', top: 9, left: 9, right: 9, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            {/* Detection type badge */}
-            <div style={{ background: sevColor, color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5, letterSpacing: '.3px', whiteSpace: 'nowrap' }}>
-              {det}
-            </div>
-
             {/* Mark as resolved — visible on hover */}
             {hover && (
               <button
@@ -262,8 +259,12 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox 
             {(item.severity || 'LOW').toUpperCase().slice(0, 4)}
           </div>
 
-          {/* Bottom-left: timestamp + camera name */}
-          <div style={{ position: 'absolute', bottom: 9, left: 9, maxWidth: 'calc(50% - 14px)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
+          {/* Bottom-left: detection type badge + timestamp + camera name */}
+          <div style={{ position: 'absolute', bottom: 9, left: 9, maxWidth: 'calc(60% - 14px)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
+            {/* Detection type badge (moved here to avoid the baked-in count/ID labels up top) */}
+            <div style={{ background: sevColor, color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5, letterSpacing: '.3px', whiteSpace: 'nowrap', boxShadow: '0 1px 6px rgba(0,0,0,.55)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {det}
+            </div>
             <span style={{ fontFamily: 'monospace', fontSize: 9.5, color: '#fff', background: 'rgba(0,0,0,.55)', padding: '2px 8px', borderRadius: 5, backdropFilter: 'blur(4px)', maxWidth: '100%', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', boxSizing: 'border-box' }}>
               {shortDateTime(item.timeOfIncident)}
             </span>

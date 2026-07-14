@@ -221,7 +221,7 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
           {title}
         </div>
         {!isNarrow && (
-          <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
+          <div style={{ fontSize: 11, color: 'var(--tx2)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
         )}
       </div>
 
@@ -440,7 +440,13 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
 
       {/* Notifications */}
       <div ref={notifRef} style={{ position: 'relative', flex: '0 0 auto' }}>
-        <div onClick={() => setNotifOpen((o) => !o)} style={{ ...iconBtn, position: 'relative' }}>
+        <div
+          onClick={() => setNotifOpen((o) => !o)}
+          role="button"
+          aria-label="Notifications"
+          title={notifications.length > 0 ? `Notifications — ${notifications.length} new` : 'Notifications'}
+          style={{ ...iconBtn, position: 'relative' }}
+        >
           <Bell size={17} strokeWidth={1.7} style={{ color: 'var(--tx2)' }} />
           {notifications.length > 0 && (
             <span

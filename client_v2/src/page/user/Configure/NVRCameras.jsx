@@ -1140,7 +1140,7 @@ export default function NVRCameras() {
 
   const handleViewCamera = (c) => {
     const camId = c._id || c.channelId;
-    navigate(`/v2/wall${camId ? `?cam=${camId}` : ''}`);
+    navigate(`/live${camId ? `?cam=${camId}` : ''}`);
   };
 
   const handleConfirmDeleteNvr = async () => {
@@ -1236,7 +1236,7 @@ export default function NVRCameras() {
                   key={n._id || n.id}
                   nvr={n}
                   onEdit={setEditingNvr}
-                  onCameraSettings={(nvr) => navigate('/v2/camera-settings', { state: { nvrId: nvr._id || nvr.id } })}
+                  onCameraSettings={(nvr) => navigate('/camera-settings', { state: { nvrId: nvr._id || nvr.id } })}
                   onDelete={setDeleteTarget}
                 />
               ))}
