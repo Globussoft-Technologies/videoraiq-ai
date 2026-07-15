@@ -63,6 +63,11 @@ class ClientService {
       const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 50);
       const search = (req.query.search || "").trim();
 
+      // ponytail: only DB fields are sortable; plan/cameras/status are enriched post-query
+      const SORTABLE = { name: "name_f", email: "email", login: "login", createdAt: "createdAt" };
+      const sortField = SORTABLE[req.query.sortBy] || "createdAt";
+      const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
+
       const filter = {};
       if (search) {
         const rx = { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
@@ -70,7 +75,7 @@ class ClientService {
       }
 
       const [admins, totalCount] = await Promise.all([
-        adminModel.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+        adminModel.find(filter).sort({ [sortField]: sortOrder, _id: 1 }).skip(skip).limit(limit),
         adminModel.countDocuments(filter),
       ]);
 
