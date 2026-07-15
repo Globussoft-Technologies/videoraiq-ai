@@ -7,6 +7,8 @@ import NVRModel from "../NVR/nvr.model.js";
 import channelModel from "../channels/channels.model.js";
 import clientDetectionAllocationModel from "../clientConfig/clientDetectionAllocation.model.js";
 import clientCameraDetectionModel from "../clientConfig/clientCameraDetection.model.js";
+import { Incident } from "../incidents/incidents.model.js";
+import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
 import AUTHService from "../Auth/auth.service.js";
 
 const baseUrl = config.get("aMember.baseUrl");
@@ -112,6 +114,171 @@ class ClientService {
     } catch (err) {
       logger.error(`client listAdmins: ${err.message}`);
       return res.send(Response.userFailResp("Failed to fetch admins", err.message));
+    }
+  }
+
+  // GET /client/overview
+  // Fleet Overview header tiles + panels, from local data plus aMember
+  // (plan name + subscription status per client, via the existing helpers).
+  async fleetOverview(req, res) {
+    try {
+      const since24h = new Date(Date.now() - 24 * 3600000);
+
+      const [admins, nvrAgg, detectionAgg, controlAgg, alerts24h] = await Promise.all([
+        adminModel.find().select("user_id name_f name_l login purchasedCameras").lean(),
+        NVRModel.aggregate([{ $group: { _id: "$userId", cameras: { $sum: "$cameraCount" } } }]),
+        clientCameraDetectionModel.aggregate([
+          { $match: { enabled: true } },
+          { $group: { _id: "$settingType", count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+        ]),
+        // aggregate() bypasses the channel find-hook, so match isAdded explicitly.
+        channelModel.aggregate([
+          { $match: { isAdded: true } },
+          { $group: { _id: "$control", count: { $sum: 1 } } },
+        ]),
+        Incident.countDocuments({ timeOfIncident: { $gte: since24h } }),
+      ]);
+
+      // ponytail: one aMember status+invoice lookup per client — fine at this
+      // fleet size, cache the responses if clients grow into the hundreds.
+      const enriched = await Promise.all(
+        admins.map(async (a) => {
+          const [plan, sub] = await Promise.all([
+            this._getLatestInvoiceName(a.user_id),
+            this._getSubscriptionStatus(a.user_id),
+          ]);
+          return { ...a, plan, status: sub.status };
+        })
+      );
+
+      const provisionedByUser = Object.fromEntries(nvrAgg.map((n) => [n._id, n.cameras]));
+      const camerasLicensed = admins.reduce((s, a) => s + (a.purchasedCameras || 0), 0);
+      const camerasProvisioned = nvrAgg.reduce((s, n) => s + n.cameras, 0);
+      const detectionsRunning = detectionAgg.reduce((s, d) => s + d.count, 0);
+      const controls = Object.fromEntries(controlAgg.map((c) => [c._id, c.count]));
+
+      const cameraUtilisation = enriched.map((a) => ({
+        adminId: a._id,
+        name: `${a.name_f || ""} ${a.name_l || ""}`.trim() || a.login,
+        provisioned: provisionedByUser[a.user_id] || 0,
+        licensed: a.purchasedCameras || 0,
+      }));
+
+      const planCounts = {};
+      for (const a of enriched) {
+        const plan = a.plan || "No plan";
+        planCounts[plan] = (planCounts[plan] || 0) + 1;
+      }
+
+      return res.send(
+        Response.SuccessResp("Fleet overview fetched", {
+          totals: {
+            clients: admins.length,
+            activeClients: enriched.filter((a) => a.status === "active").length,
+            camerasLicensed,
+            camerasProvisioned,
+            detectionsRunning,
+            alerts24h,
+          },
+          cameraUtilisation,
+          clientsByPlan: Object.entries(planCounts).map(([plan, clients]) => ({ plan, clients })),
+          detectionsByType: detectionAgg.map((d) => ({
+            settingType: d._id,
+            name: DETECTION_TYPES[d._id] || d._id,
+            count: d.count,
+          })),
+          // No true stream-health data exists: running/stopped is the camera's
+          // detection control state; idleCapacity = licensed - provisioned.
+          cameraHealth: {
+            running: controls[1] || 0,
+            stopped: controls[0] || 0,
+            idleCapacity: Math.max(camerasLicensed - camerasProvisioned, 0),
+          },
+        })
+      );
+    } catch (err) {
+      logger.error(`client fleetOverview: ${err.message}`);
+      return res.send(Response.userFailResp("Failed to fetch fleet overview", err.message));
+    }
+  }
+
+  // GET /client/top-alerts?hours=24&limit=5
+  // Clients ranked by incident count in the window (Incident.userId = admin.user_id).
+  // Powers the "Top Clients by Alert Volume" panel on Fleet Overview.
+  async topClientsByAlertVolume(req, res) {
+    try {
+      const hours = Math.min(Math.max(parseInt(req.query.hours) || 24, 1), 720);
+      const limit = Math.min(Math.max(parseInt(req.query.limit) || 5, 1), 50);
+      const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+      const agg = await Incident.aggregate([
+        { $match: { timeOfIncident: { $gte: since } } },
+        { $group: { _id: "$userId", alerts: { $sum: 1 } } },
+        { $sort: { alerts: -1 } },
+        { $limit: limit },
+      ]);
+
+      const admins = await adminModel
+        .find({ user_id: { $in: agg.map((a) => a._id) } })
+        .select("user_id name_f name_l login email")
+        .lean();
+      const byUser = Object.fromEntries(admins.map((a) => [a.user_id, a]));
+
+      const clients = agg.map((row, i) => {
+        const admin = byUser[row._id];
+        return {
+          rank: i + 1,
+          adminId: admin?._id || null,
+          userId: row._id,
+          name: admin ? `${admin.name_f || ""} ${admin.name_l || ""}`.trim() || admin.login : row._id,
+          email: admin?.email || null,
+          alerts: row.alerts,
+        };
+      });
+
+      return res.send(Response.SuccessResp("Top clients by alert volume fetched", { hours, clients }));
+    } catch (err) {
+      logger.error(`client topClientsByAlertVolume: ${err.message}`);
+      return res.send(Response.userFailResp("Failed to fetch top clients by alert volume", err.message));
+    }
+  }
+
+  // GET /client/alerts-graph?hours=24
+  // Fleet-wide hourly incident counts for the "Alerts - last 24h" bar chart.
+  // Buckets are UTC hour starts, zero-filled, oldest first; the last bucket is
+  // the current (partial) hour.
+  async alertsGraph(req, res) {
+    try {
+      const hours = Math.min(Math.max(parseInt(req.query.hours) || 24, 1), 168);
+      const start = new Date();
+      start.setUTCMinutes(0, 0, 0);
+      start.setUTCHours(start.getUTCHours() - (hours - 1));
+
+      const agg = await Incident.aggregate([
+        { $match: { timeOfIncident: { $gte: start } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: "%Y-%m-%dT%H:00:00Z", date: "$timeOfIncident" } },
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+      const byHour = Object.fromEntries(agg.map((b) => [b._id, b.count]));
+
+      let total = 0;
+      const buckets = [];
+      for (let i = 0; i < hours; i++) {
+        const key = new Date(start.getTime() + i * 3600000).toISOString().slice(0, 13) + ":00:00Z";
+        const count = byHour[key] || 0;
+        total += count;
+        buckets.push({ hour: key, count });
+      }
+
+      return res.send(Response.SuccessResp("Alerts graph fetched", { hours, total, buckets }));
+    } catch (err) {
+      logger.error(`client alertsGraph: ${err.message}`);
+      return res.send(Response.userFailResp("Failed to fetch alerts graph", err.message));
     }
   }
 
