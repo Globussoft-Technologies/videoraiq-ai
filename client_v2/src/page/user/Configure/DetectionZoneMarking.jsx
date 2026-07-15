@@ -136,7 +136,9 @@ function SaveDetectionAreaModal({ initialName, initialPriority, zones, extraFiel
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(6,9,15,.6)', zIndex: 50,
+      // Above the sidebar (80) and header (60) — at 50 the dim layer sat under
+      // the chrome, leaving it lit up while the rest of the page dimmed.
+      position: 'fixed', inset: 0, background: 'rgba(6,9,15,.6)', zIndex: 200,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
       <div style={{
@@ -1129,7 +1131,9 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
 
       {showDeleteConfirm && activeType && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(6,9,15,.6)', zIndex: 50,
+          // Above the sidebar (80) and header (60) — at 50 the dim layer sat under
+      // the chrome, leaving it lit up while the rest of the page dimmed.
+      position: 'fixed', inset: 0, background: 'rgba(6,9,15,.6)', zIndex: 200,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
         }}>
           <div style={{

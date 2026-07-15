@@ -40,6 +40,16 @@ const MultiSelect = ({
   const triggerRef = useRef(null);
   const panelRef = useRef(null);
 
+  // While an element is fullscreen the browser paints only that element's
+  // subtree, so a panel portalled to <body> would mount but never be visible.
+  const [portalHost, setPortalHost] = useState(() => document.body);
+  useEffect(() => {
+    const sync = () => setPortalHost(document.fullscreenElement || document.body);
+    sync();
+    document.addEventListener('fullscreenchange', sync);
+    return () => document.removeEventListener('fullscreenchange', sync);
+  }, []);
+
   useEffect(() => {
     const onClick = (e) => {
       if (
@@ -195,7 +205,7 @@ const MultiSelect = ({
             )}
           </div>
         </div>,
-        document.body
+        portalHost
       )}
     </div>
   );

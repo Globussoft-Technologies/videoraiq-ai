@@ -219,16 +219,13 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
         background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, padding: 24, width: '100%', maxWidth: 520, boxSizing: 'border-box',
         maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 8px 40px rgba(0,0,0,.5)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>
             {readOnly ? 'View Permissions' : 'Configure Permissions'} — {role.roleName}
           </span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx3)', padding: 4 }}>
             <X size={14} />
           </button>
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 12 }}>
-          Per-module access. Channels' Create/Delete are locked, matching V1.
         </div>
 
         <div style={{ overflowX: 'auto' }}>

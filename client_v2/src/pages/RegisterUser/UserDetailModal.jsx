@@ -61,7 +61,7 @@ const UserDetailModal = ({ user, isOpen, onClose, nasUrl }) => {
         {user ? (
           <div className="flex flex-col md:flex-row max-h-[85vh] overflow-y-auto md:overflow-hidden md:h-full">
             {/* Left: image carousel */}
-            <div className="w-full md:w-1/2 bg-[var(--bg2)] flex flex-col items-center justify-center p-4 sm:p-6 relative group/images">
+            <div className="group/carousel w-full md:w-1/2 bg-[var(--bg2)] flex flex-col items-center justify-center p-4 sm:p-6 relative">
               <div className="relative w-full aspect-[4/3] sm:aspect-square max-h-[32vh] sm:max-h-none max-w-[260px] sm:max-w-sm rounded-2xl overflow-hidden shadow-xl bg-[var(--bg3)]">
                 <img
                   src={
@@ -81,23 +81,26 @@ const UserDetailModal = ({ user, isOpen, onClose, nasUrl }) => {
                     <button
                       type="button"
                       onClick={prev}
-                      className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-[var(--bg1solid)]/90 text-[var(--tx)] shadow-lg hover:scale-110 transition-all cursor-pointer"
+                      className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-[var(--bg1solid)]/90 text-[var(--tx)] shadow-lg hover:scale-110 transition-all cursor-pointer opacity-100 md:opacity-0 md:group-hover/carousel:opacity-100 md:focus-visible:opacity-100"
                     >
                       <ChevronLeft className="w-6 h-6" />
                     </button>
                     <button
                       type="button"
                       onClick={next}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-[var(--bg1solid)]/90 text-[var(--tx)] shadow-lg hover:scale-110 transition-all cursor-pointer"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-[var(--bg1solid)]/90 text-[var(--tx)] shadow-lg hover:scale-110 transition-all cursor-pointer opacity-100 md:opacity-0 md:group-hover/carousel:opacity-100 md:focus-visible:opacity-100"
                     >
                       <ChevronRight className="w-6 h-6" />
                     </button>
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+                    {/* Always-on hint that more images exist. The pill scrim keeps
+                        the dots legible over a light photo, where the bare dots
+                        used to wash out entirely. */}
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-full bg-black/45 backdrop-blur-sm px-1.5 py-1 shadow-lg">
                       {profilePics.map((_, idx) => (
                         <div
                           key={idx}
-                          className={`h-1.5 rounded-full transition-all ${
-                            idx === currentImageIndex ? 'w-6 bg-[var(--blue)]' : 'w-1.5 bg-[var(--bd2)]'
+                          className={`h-1 rounded-full transition-all ${
+                            idx === currentImageIndex ? 'w-3.5 bg-[var(--blue)]' : 'w-1 bg-white/65'
                           }`}
                         />
                       ))}

@@ -272,7 +272,7 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
                     onSearch?.(e.target.value);
                   }}
                   onFocus={onSearchFocus}
-                  placeholder="Search cameras, events, plates…"
+                  placeholder="Search cameras and pages…"
                   style={{ fontSize: 13, flex: 1, minWidth: 0, background: 'transparent', border: 0, outline: 'none', color: 'var(--tx)' }}
                 />
               </div>
@@ -310,7 +310,7 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
                 onSearch?.(e.target.value);
               }}
               onFocus={onSearchFocus}
-              placeholder="Search cameras, events, plates…"
+              placeholder="Search cameras and pages…"
               style={{ fontSize: 12.5, flex: 1, minWidth: 0, background: 'transparent', border: 0, outline: 'none', color: 'var(--tx)' }}
             />
             <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', border: '1px solid var(--bd)', borderRadius: 4, padding: '1px 5px', flex: '0 0 auto' }}>

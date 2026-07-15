@@ -6,6 +6,7 @@ import { useApi } from '../../../hooks/useApi';
 import { usePermissions } from '../../../context/PermissionContext';
 import DeleteConfirmation from '../../../components/DeleteConfirmation';
 import MultiSelect from '../../../components/MultiSelect';
+import TelegramAlerts from './TelegramAlerts';
 import { getDetectionTypes } from '../../../helpers/configure';
 import { getRecipients, createRecipient, updateRecipient, removeRecipient, resendVerification } from '../../../helpers/recipients';
 
@@ -320,6 +321,10 @@ export default function AlertRecipients() {
 
   return (
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+      {/* Telegram Alerts Menu  */}
+      {/* <TelegramAlerts /> */}
+
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 12px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)', minWidth: 220 }}>

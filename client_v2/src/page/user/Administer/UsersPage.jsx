@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, Plus, X, Eye, EyeOff, Shuffle, Copy, Pencil, Trash2, ChevronDown } from 'lucide-react';
 import { toast as sonnerToast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
 import MultiSelect from '../../../components/MultiSelect';
+import DeleteConfirmation from '../../../components/DeleteConfirmation';
 import HScrollHint from '../../../components/HScrollHint';
 import {
-  getUsers, createUser, updateUser, deleteUser, getRoles,
+  getUsers, createUser, updateUser, deleteUser, bulkDeleteUsers, getRoles,
   getEmployeeLocations, getNvrsForUserAccess, getChannelsForUserAccess, getDepartmentsForUserAccess,
 } from '../../../api/administer';
 import { getLocations } from '../../../helpers/monitoring';
@@ -200,12 +202,60 @@ function UserRow({ u, checked, onToggle, onEdit, onDelete }) {
 }
 
 // ── Add / Edit user modal (shared) ──────────────────────────────────────────
+const ROLE_PANEL_MAX_H = 176;
+
 function RoleSelect({ roles, loading, value, onChange }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const wrapperRef = useRef(null);
+  const triggerRef = useRef(null);
+  const panelRef = useRef(null);
   const activeLabel = roles.find(r => r._id === value)?.roleName || 'Select role';
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => {
+      if (wrapperRef.current?.contains(e.target)) return;
+      if (panelRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  /* The modal body scrolls (overflow-y: auto), which clips an absolutely
+     positioned panel — and this field sits low enough in edit mode that the
+     list opened straight over the footer buttons. Portal out with fixed
+     coords and flip above the trigger when there isn't room below, matching
+     the sibling MultiSelect on this same form. */
+  useLayoutEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const panelH = panelRef.current?.offsetHeight || ROLE_PANEL_MAX_H;
+      const openUpward = rect.bottom + panelH + 8 > window.innerHeight && rect.top - panelH - 8 >= 0;
+      setPos({
+        position: 'fixed',
+        top: openUpward ? Math.max(8, rect.top - panelH - 4) : rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+      });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [open]);
+
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative' }} ref={wrapperRef}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(v => !v)}
         style={{
@@ -217,10 +267,10 @@ function RoleSelect({ roles, loading, value, onChange }) {
         {activeLabel}
         <ChevronDown size={14} style={{ color: 'var(--tx3)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
       </button>
-      {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, zIndex: 50,
-          maxHeight: 176, overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
+      {open && pos && createPortal(
+        <div ref={panelRef} style={{
+          ...pos, zIndex: 10000,
+          maxHeight: ROLE_PANEL_MAX_H, overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
           borderRadius: 10, boxShadow: '0 18px 50px rgba(0,0,0,.35)', padding: 5,
         }}>
           {loading ? (
@@ -238,7 +288,8 @@ function RoleSelect({ roles, loading, value, onChange }) {
               {r.roleName}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -626,6 +677,8 @@ export default function UsersPage() {
   const [search, setSearch]       = useState('');
   const [page, setPage]           = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [deleting, setDeleting]   = useState(false);
   const [editUser, setEditUser]   = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selected, setSelected]   = useState({});
@@ -665,6 +718,7 @@ export default function UsersPage() {
   };
 
   const handleDelete = async (u) => {
+    setDeleting(true);
     try {
       await deleteUser(u._id);
       sonnerToast.success(`${userName(u)} removed`);
@@ -672,7 +726,28 @@ export default function UsersPage() {
     } catch {
       sonnerToast.error('Failed to remove user');
     } finally {
+      setDeleting(false);
       setConfirmDelete(null);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Object.keys(selected).filter(id => selected[id]);
+    if (!ids.length) return;
+    setDeleting(true);
+    try {
+      // Server reports how many documents it actually removed — surface that
+      // rather than assuming every selected id matched.
+      const result = await bulkDeleteUsers(ids);
+      const removed = result?.deletedCount ?? ids.length;
+      sonnerToast.success(`${removed} user${removed === 1 ? '' : 's'} removed`);
+      setSelected({});
+      usersApi.refetch();
+    } catch (err) {
+      sonnerToast.error(err?.response?.data?.message || 'Failed to remove users');
+    } finally {
+      setDeleting(false);
+      setConfirmBulkDelete(false);
     }
   };
 
@@ -734,10 +809,10 @@ export default function UsersPage() {
               Assign Role
             </button>
             <button
-              onClick={() => setSelected({})}
-              style={{ height: 32, padding: '0 12px', display: 'flex', alignItems: 'center', gap: 6, borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, fontWeight: 500, cursor: 'pointer', color: 'var(--tx)' }}
+              onClick={() => setConfirmBulkDelete(true)}
+              style={{ height: 32, padding: '0 12px', display: 'flex', alignItems: 'center', gap: 6, borderRadius: 8, background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.45)', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--crit)' }}
             >
-              Clear
+              <Trash2 size={13} /> Delete
             </button>
           </div>
         </div>
@@ -813,52 +888,31 @@ export default function UsersPage() {
         />
       )}
 
-      {confirmDelete && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
-        }}>
-          <div style={{
-            background: 'var(--bg1solid)', border: '1px solid var(--bd)',
-            borderRadius: 14, padding: 24, width: 340,
-            boxShadow: '0 8px 40px rgba(0,0,0,.5)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Remove User</span>
-              <button onClick={() => setConfirmDelete(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx3)', padding: 4 }}>
-                <X size={14} />
-              </button>
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--tx2)', lineHeight: 1.5, marginBottom: 18 }}>
-              Remove <strong style={{ color: 'var(--tx)' }}>{userName(confirmDelete)}</strong> from the system?
-              This action cannot be undone.
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => setConfirmDelete(null)}
-                style={{
-                  flex: 1, height: 36, borderRadius: 8, fontSize: 12.5, fontWeight: 600,
-                  background: 'var(--bg2)', border: '1px solid var(--bd)',
-                  cursor: 'pointer', color: 'var(--tx2)',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDelete(confirmDelete)}
-                style={{
-                  flex: 1, height: 36, borderRadius: 8, fontSize: 12.5, fontWeight: 600,
-                  background: 'rgba(239,68,68,.14)', border: '1px solid rgba(239,68,68,.5)',
-                  cursor: 'pointer', color: '#ef4444',
-                }}
-              >
-                Remove
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteConfirmation
+        open={!!confirmDelete}
+        icon={<Trash2 className="w-7 h-7 text-[var(--crit)]" />}
+        message={
+          confirmDelete
+            ? <>Are you sure you want to delete "{userName(confirmDelete)}" user?</>
+            : 'Are you sure you want to delete this user?'
+        }
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={() => handleDelete(confirmDelete)}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        loading={deleting}
+      />
+
+      <DeleteConfirmation
+        open={confirmBulkDelete}
+        icon={<Trash2 className="w-7 h-7 text-[var(--crit)]" />}
+        message={`Are you sure you want to delete ${selCount} selected user${selCount === 1 ? '' : 's'}?`}
+        onClose={() => setConfirmBulkDelete(false)}
+        onConfirm={handleBulkDelete}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        loading={deleting}
+      />
     </div>
   );
 }
