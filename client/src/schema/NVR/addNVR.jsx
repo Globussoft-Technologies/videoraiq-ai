@@ -38,7 +38,8 @@ export const nvrSchema = yup.object().shape({
   brand: yup
     .string()
     .required('Brand is required')
-    .oneOf(['hikvision', 'cpplus'], 'Invalid brand'),
+    // .oneOf(['hikvision', 'cpplus'], 'Invalid brand'), 
+    ,
 
   password: yup.string().when('$isEdit', {
     is: false,
