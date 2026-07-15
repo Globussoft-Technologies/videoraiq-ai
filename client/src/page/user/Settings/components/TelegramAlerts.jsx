@@ -156,7 +156,7 @@ const TelegramAlerts = () => {
                 type="button"
                 onClick={handleUnlink}
                 disabled={unlinking}
-                className="mt-4 inline-flex items-center gap-2 rounded-full border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-60"
+                className="mt-4 inline-flex items-center gap-2 rounded-full border cursor-pointer border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-60"
               >
                 {unlinking ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 Disconnect
@@ -175,9 +175,9 @@ const TelegramAlerts = () => {
                 <li>
                   Add our bot as an admin:{' '}
                   <span className="font-medium text-[#07486A]">{BOT_USERNAME}</span>{' '}
-                  (grant the “Post Messages” permission).
+                  (grant all the permissions).
                 </li>
-                <li>Post the code below in your channel.</li>
+                <li>Copy the below code below and paste in your channel and hit enter</li>
               </ol>
 
               {/* Code + copy */}
@@ -188,22 +188,22 @@ const TelegramAlerts = () => {
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#07486A] px-3 py-2 text-sm font-medium text-[#07486A] hover:bg-[#07486A] hover:text-white transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-lg cursor-pointer border border-[#07486A] px-3 py-2 text-sm font-medium text-[#07486A] hover:bg-[#07486A] hover:text-white transition-colors"
                 >
                   {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   {copied ? 'Copied' : 'Copy'}
                 </button>
               </div>
 
-              <p className="mt-3 text-xs text-[#7A7A7A]">
+              {/* <p className="mt-3 text-xs text-[#7A7A7A]">
                 Once posted, this page will update to “Connected” automatically.
-              </p>
+              </p> */}
 
               <button
                 type="button"
                 onClick={handleRefresh}
                 disabled={refreshing}
-                className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#07486A] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-60"
+                className="mt-3 inline-flex items-center gap-2 rounded-full cursor-pointer bg-[#07486A] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-60"
               >
                 {refreshing ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
