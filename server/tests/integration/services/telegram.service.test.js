@@ -42,6 +42,44 @@ describe("TelegramService.sendMessage", () => {
   });
 });
 
+describe("TelegramService._deliver photo-fetch retry", () => {
+  const fetchErr = () => ({
+    response: {
+      data: { ok: false, error_code: 400, description: "Bad Request: failed to get HTTP URL content" },
+    },
+  });
+
+  it("retries sendPhoto once when Telegram can't fetch the image URL", async () => {
+    axios.post.mockRejectedValueOnce(fetchErr()).mockResolvedValueOnce({ data: { ok: true } });
+
+    vi.useFakeTimers();
+    const p = TelegramService._deliver({ token: "t", chat: "c", message: "m", imageUrl: "http://img" });
+    await vi.advanceTimersByTimeAsync(3000);
+    await p;
+    vi.useRealTimers();
+
+    expect(axios.post).toHaveBeenCalledTimes(2);
+    expect(axios.post.mock.calls[0][0]).toMatch(/sendPhoto$/);
+    expect(axios.post.mock.calls[1][0]).toMatch(/sendPhoto$/);
+  });
+
+  it("falls back to text only after the retried photo also fails", async () => {
+    axios.post
+      .mockRejectedValueOnce(fetchErr())
+      .mockRejectedValueOnce(fetchErr())
+      .mockResolvedValueOnce({ data: { ok: true } });
+
+    vi.useFakeTimers();
+    const p = TelegramService._deliver({ token: "t", chat: "c", message: "m", imageUrl: "http://img" });
+    await vi.advanceTimersByTimeAsync(3000);
+    await p;
+    vi.useRealTimers();
+
+    expect(axios.post).toHaveBeenCalledTimes(3);
+    expect(axios.post.mock.calls[2][0]).toMatch(/sendMessage$/);
+  });
+});
+
 describe("TelegramService.sendDomainRegistration", () => {
   it("formats the domain registration payload and forwards to sendMessage", async () => {
     axios.post.mockResolvedValueOnce({ data: { ok: true } });

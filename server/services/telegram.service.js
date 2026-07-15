@@ -178,6 +178,11 @@ class TelegramService {
       if (!token || !chat) return; // admin has no bot/channel configured
       const message = buildIncidentTelegramMessage(incident, nvrData, channelData, timezone);
       const imageUrl = buildIncidentImageUrl(incident);
+      // Makes "why was this alert text-only" diagnosable: no Image on the
+      // incident means the alert can never carry a photo.
+      if (!imageUrl) {
+        logger.warn(`[TELEGRAM] incident ${incident?._id} has no Image — sending text-only alert`);
+      }
       this._enqueue(chat, { token, chat, message, imageUrl });
     } catch (err) {
       logger.error(`[TELEGRAM] sendIncident enqueue error: ${err?.message || err}`);
@@ -255,6 +260,15 @@ class TelegramService {
         await this._clearDeadChat(chat);
         return; // no point trying the text fallback to the same dead chat
       }
+      // Telegram fetches imageUrl itself, and a just-created snapshot may not
+      // be downloadable yet (upload race). Retry the photo ONCE after a short
+      // delay before degrading the alert to text.
+      if (imageUrl && this._isPhotoFetchError(data) && !job._photoRetried) {
+        job._photoRetried = true;
+        logger.warn(`[TELEGRAM] photo fetch failed for ${chat} — retrying photo in 3s`);
+        await new Promise((r) => setTimeout(r, 3000));
+        return this._deliver(job, isRetry);
+      }
       // Fall back to plain text only if the PHOTO failed for a non-429 reason
       // (e.g. Telegram couldn't fetch the image URL).
       if (imageUrl && data?.error_code !== 429) {
@@ -273,6 +287,18 @@ class TelegramService {
         }
       }
     }
+  }
+
+  // Telegram errors that mean it couldn't download the photo URL (file not
+  // there yet / bad content type) — worth one retry before the text fallback.
+  _isPhotoFetchError(data) {
+    const d = String(data?.description || "").toLowerCase();
+    return (
+      data?.error_code === 400 &&
+      (d.includes("failed to get http url content") ||
+        d.includes("wrong file identifier") ||
+        d.includes("wrong type of the web page content"))
+    );
   }
 
   // Telegram errors that mean the chat is permanently unusable (bot removed,
