@@ -1,4 +1,17 @@
 import config from 'config';
+import { DETECTION_TYPES } from '../constants/detectionTypes.js';
+
+// Map an incident's raw type (e.g. "personalProtectiveEquipment") to its
+// human-readable label from DETECTION_TYPES (keys carry a "Settings" suffix).
+// Falls back to the raw type (spaced) when there is no matching entry.
+export const friendlyType = (incidentType) => {
+  if (!incidentType) return "N/A";
+  return (
+    DETECTION_TYPES[incidentType] ||
+    DETECTION_TYPES[`${incidentType}Settings`] ||
+    String(incidentType).replace(/_/g, " ")
+  );
+};
 
 // Format an incident timestamp in the admin's timezone. Falls back to the
 // server's local zone when no valid IANA tz is given. Invalid tz strings are
@@ -31,7 +44,7 @@ export const buildIncidentMessage = (incident, timezone) => {
       .replace(/[\u2002\u2003\u00A0]/g, ' ')       // en space/em space/nbsp → normal space
       .replace(/[^\x00-\x7F]/g, '');               // remove non-ASCII (optional)
 
-  let details = `🚨 Type: ${normalize(incidentType.replace(/_/g, ' '))}\n`;
+  let details = `🚨 Type: ${normalize(friendlyType(incidentType))}\n`;
   details += `Time: ${formatIncidentTime(timeOfIncident, timezone)}\n`;
   if (videoLink) details += `📹 Video: ${normalize(videoLink)}\n`;
 
@@ -59,7 +72,7 @@ export const buildIncidentWhatsAppMessage = (incident = {}, nvrData = {}, channe
 
   const lines = [
     `🚨 *Incident Alert*`,
-    `*Type:* ${(incidentType || "").replace(/_/g, " ") || "N/A"}`,
+    `*Type:* ${friendlyType(incidentType)}`,
     incidentName ? `*Name:* ${incidentName}` : null,
     `*Time:* ${formatIncidentTime(timeOfIncident, timezone)}`,
     severity ? `*Severity:* ${severity}` : null,
@@ -108,7 +121,7 @@ export const buildIncidentTelegramMessage = (incident = {}, nvrData = {}, channe
   const lines = [
     `🚨 *INCIDENT ALERT*`,
     ``,
-    `*Type:* ${up((incidentType || "").replace(/_/g, " "))}`,
+    `*Type:* ${up(friendlyType(incidentType))}`,
     incidentName ? `*Name:* ${up(incidentName)}` : null,
     `*Time:* ${timeOfIncident ? up(formatIncidentTime(timeOfIncident, timezone)) : "N/A"}`,
     severity ? `*Severity:* ${up(severity)}` : null,

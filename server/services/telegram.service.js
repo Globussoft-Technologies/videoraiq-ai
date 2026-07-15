@@ -69,10 +69,12 @@ class TelegramService {
     if (admin.telegramLinkCode) {
       return { code: admin.telegramLinkCode, linked: !!admin.telegramChatId, chatId: admin.telegramChatId || null };
     }
-    // Generate a short, unambiguous code, e.g. VRIQ-8F3A2C.
+    // No active code (never generated, or consumed after a successful link).
+    // Generate a fresh single-use code, but report the real link status —
+    // telegramChatId may already be set from a prior link.
     const code = `VRIQ-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
     await adminModel.updateOne({ _id: admin._id }, { $set: { telegramLinkCode: code } });
-    return { code, linked: false, chatId: null };
+    return { code, linked: !!admin.telegramChatId, chatId: admin.telegramChatId || null };
   }
 
   // Unlink: clear the bound channel + rotate the code, and make the bot leave
@@ -131,13 +133,19 @@ class TelegramService {
       if (!chat?.id) return { ok: true, matched: false };
       const boundChatId = String(chat.id);
 
-      const admin = await adminModel.findOne({ telegramLinkCode: code }).select("_id").lean();
+      // Match AND consume the code atomically: only bind if this exact code is
+      // still active, and clear it in the same write so it becomes single-use.
+      // Prevents a leaked/re-posted code from re-binding another channel later.
+      const admin = await adminModel.findOneAndUpdate(
+        { telegramLinkCode: code },
+        { $set: { telegramChatId: boundChatId, telegramLinkCode: null } },
+        { new: false },
+      ).select("_id").lean();
       if (!admin) {
-        logger.warn(`[TELEGRAM] link code not found: ${code}`);
+        logger.warn(`[TELEGRAM] link code not found or already used: ${code}`);
         return { ok: true, matched: false };
       }
 
-      await adminModel.updateOne({ _id: admin._id }, { $set: { telegramChatId: boundChatId } });
       logger.info(`[TELEGRAM] linked admin ${admin._id} -> chat ${boundChatId}`);
 
       // Best-effort confirmation into the channel. _deliver sends as MarkdownV2,
