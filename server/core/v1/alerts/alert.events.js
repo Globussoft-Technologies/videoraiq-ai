@@ -43,6 +43,15 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
       console.warn(`No detection config found for type: ${detectionType}`, { detectionType, channelId });
       return;
     }
+
+    // Alerts (mail / WhatsApp / Telegram) should show the detection setting's
+    // name — what the user configured in the frontend — not the raw
+    // incidentName. Override incidentName on the objects passed to the builders.
+    const detectionSettingName = matchedDetection?.id?.name;
+    if (detectionSettingName) {
+      if (incidentData) incidentData.incidentName = detectionSettingName;
+      if (saved) saved.incidentName = detectionSettingName;
+    }
       // Step 4: Group alerts by recipientModel
       const groupedAlerts = matchedDetection?.id?.alerts
 

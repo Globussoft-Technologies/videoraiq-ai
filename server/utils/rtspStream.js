@@ -180,7 +180,7 @@ export const registerCameraStream = async (id, rtspUrl, userId) => {
   const redisKey = `stream_url:${id}`;
   try {
     const { host, token } = await resolveStream(userId);
-    console.log(rtspUrl, "rtspUrl");
+    console.log(`[STREAM add-camera] id=${id} host=${host} rtsp_url=${rtspUrl}`);
     const response = await axios.post(
       `${host}/api/add-camera`,
       {
