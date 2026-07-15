@@ -110,10 +110,13 @@ class TelegramService {
     return res.modifiedCount > 0;
   }
 
-  // Extract "VRIQ-XXXXXXXX" (case-insensitive) from a message's text/caption.
+  // Return the code ONLY if the message is exactly "VRIQ-XXXXXXXX" (8 hex,
+  // case-insensitive), ignoring surrounding whitespace. The whole message must
+  // be the code — anything else (extra chars like "VRIQ-9961072B222", or a code
+  // buried in a sentence) is rejected, so only the exact generated key links.
   _extractLinkCode(text) {
     if (!text) return null;
-    const m = String(text).toUpperCase().match(/VRIQ-[0-9A-F]{8}/);
+    const m = String(text).trim().toUpperCase().match(/^VRIQ-[0-9A-F]{8}$/);
     return m ? m[0] : null;
   }
 
