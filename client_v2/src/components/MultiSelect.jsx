@@ -32,6 +32,7 @@ const MultiSelect = ({
   searchPlaceholder = 'Search...',
   maxHeight = 'max-h-[220px]',
   msg = 'No options',
+  openUp = false,
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -70,7 +71,7 @@ const MultiSelect = ({
       if (!trigger) return;
       const rect = trigger.getBoundingClientRect();
       const panelHeight = panelRef.current?.offsetHeight || 320;
-      const openUpward = rect.bottom + panelHeight > window.innerHeight && rect.top - panelHeight >= 0;
+      const openUpward = openUp || (rect.bottom + panelHeight > window.innerHeight && rect.top - panelHeight >= 0);
       setPos({
         position: 'fixed',
         top: openUpward ? Math.max(8, rect.top - panelHeight - 4) : rect.bottom + 4,
@@ -86,15 +87,25 @@ const MultiSelect = ({
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
     };
-  }, [open]);
+  }, [open, openUp]);
+
+  // An option with `isHeader` is a non-selectable section label (e.g. an NVR
+  // name above its cameras). Searching matches real options only; a header is
+  // then kept solely when it still has at least one option under it, so a
+  // filtered list never shows an empty group.
+  const isPickable = (o) => !o.isHeader && !o.disabled;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter((o) => o.label?.toLowerCase().includes(q));
+    const matched = q
+      ? options.filter((o) => o.isHeader || o.label?.toLowerCase().includes(q))
+      : options;
+    return matched.filter((o, i) => (o.isHeader ? isPickable(matched[i + 1] ?? {}) : true));
   }, [options, query]);
 
   const toggle = (id) => {
+    const opt = options.find((o) => o.id === id);
+    if (opt && !isPickable(opt)) return;
     if (value.includes(id)) {
       onChange(value.filter((v) => v !== id));
     } else {
@@ -103,13 +114,13 @@ const MultiSelect = ({
   };
 
   const selectAll = () => {
-    const ids = filtered.map((o) => o.id);
+    const ids = filtered.filter(isPickable).map((o) => o.id);
     onChange(Array.from(new Set([...value, ...ids])));
   };
 
   const clearAll = () => onChange([]);
 
-  const selectedLabels = options.filter((o) => value.includes(o.id)).map((o) => o.label);
+  const selectedLabels = options.filter((o) => isPickable(o) && value.includes(o.id)).map((o) => o.label);
 
   return (
     <div className={`relative ${className}`} ref={wrapperRef}>
@@ -119,13 +130,21 @@ const MultiSelect = ({
         onClick={() => setOpen((o) => !o)}
         className="flex items-center justify-between gap-2 w-full h-10 px-3 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx)] text-sm cursor-pointer hover:border-[var(--brand)] transition-colors"
       >
-        <span className={`truncate ${selectedLabels.length ? 'text-[var(--tx)]' : 'text-[var(--ph)] font-medium'}`}>
-          {selectedLabels.length === 0
-            ? placeholder
-            : selectedLabels.length <= 2
-              ? selectedLabels.join(', ')
-              : `${selectedLabels.length} selected`}
-        </span>
+        {/* First selection reads in full; the rest collapse into a "+N more"
+            badge, so the trigger still names something concrete instead of a
+            bare count. Title carries the full list for the truncated case. */}
+        {selectedLabels.length === 0 ? (
+          <span className="truncate text-[var(--ph)] font-medium">{placeholder}</span>
+        ) : (
+          <span className="flex items-center gap-1.5 min-w-0" title={selectedLabels.join(', ')}>
+            <span className="truncate text-[var(--tx)]">{selectedLabels[0]}</span>
+            {selectedLabels.length > 1 && (
+              <span className="shrink-0 rounded-full bg-[var(--brand)] px-2 py-0.5 text-[11px] font-semibold leading-normal text-white">
+                +{selectedLabels.length - 1} more
+              </span>
+            )}
+          </span>
+        )}
         <div className="flex items-center gap-1 shrink-0">
           {value.length > 0 && (
             <X
@@ -183,6 +202,16 @@ const MultiSelect = ({
               <div className="px-3 py-2 text-xs text-[var(--tx3)]">{msg}</div>
             ) : (
               filtered.map((opt) => {
+                if (opt.isHeader) {
+                  return (
+                    <div
+                      key={opt.id}
+                      className="sticky top-0 px-3 py-1.5 bg-[var(--bg2)] text-[11px] font-semibold uppercase tracking-wide text-[var(--tx2)] select-none"
+                    >
+                      {opt.label}
+                    </div>
+                  );
+                }
                 const active = value.includes(opt.id);
                 return (
                   <button

@@ -74,7 +74,21 @@ export async function getNvrsForUserAccess(selectedLocations = []) {
 export async function getChannelsForUserAccess({ selectedLocations = [], nvrIds = [] } = {}) {
   const res = await api.post('/authorizedChannels/getChannels', { selectedLocations, nvrIds, isUserRegFilter: true });
   const data = unwrap(res);
-  return Array.isArray(data) ? data : (data?.channels ?? []);
+  const list = Array.isArray(data) ? data : (data?.channels ?? []);
+  // isUserRegFilter makes every branch of the server handler group the results
+  // by NVR — [{ nvrId, nvrName, brand, channels: [...] }] — rather than return
+  // channels. Flatten to a channel list but carry the parent NVR down onto each
+  // channel, so callers can regroup them under NVR headings (V1's
+  // NewPermissionForm does exactly this). Items without a `channels` array are
+  // already channels.
+  return list.flatMap((nvr) => {
+    if (!Array.isArray(nvr?.channels)) return [nvr];
+    return nvr.channels.map((ch) => ({
+      ...ch,
+      nvrId: ch.nvrId || nvr.nvrId || nvr._id,
+      nvrName: nvr.nvrName || ch.nvrName || nvr.name || 'Unknown NVR',
+    }));
+  });
 }
 
 export async function getDepartmentsForUserAccess({ channelsIds = [], employeeLocations = [] } = {}) {

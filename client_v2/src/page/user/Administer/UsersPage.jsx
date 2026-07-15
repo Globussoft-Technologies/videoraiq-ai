@@ -1,5 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useRef, useState } from 'react';
 import { Search, Plus, X, Eye, EyeOff, Shuffle, Copy, Pencil, Trash2, ChevronDown } from 'lucide-react';
 import { toast as sonnerToast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
@@ -206,56 +205,21 @@ const ROLE_PANEL_MAX_H = 176;
 
 function RoleSelect({ roles, loading, value, onChange }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState(null);
   const wrapperRef = useRef(null);
-  const triggerRef = useRef(null);
-  const panelRef = useRef(null);
   const activeLabel = roles.find(r => r._id === value)?.roleName || 'Select role';
 
   useEffect(() => {
     if (!open) return;
     const onDown = (e) => {
-      if (wrapperRef.current?.contains(e.target)) return;
-      if (panelRef.current?.contains(e.target)) return;
-      setOpen(false);
+      if (!wrapperRef.current?.contains(e.target)) setOpen(false);
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
-  /* The modal body scrolls (overflow-y: auto), which clips an absolutely
-     positioned panel — and this field sits low enough in edit mode that the
-     list opened straight over the footer buttons. Portal out with fixed
-     coords and flip above the trigger when there isn't room below, matching
-     the sibling MultiSelect on this same form. */
-  useLayoutEffect(() => {
-    if (!open) return;
-    const update = () => {
-      const trigger = triggerRef.current;
-      if (!trigger) return;
-      const rect = trigger.getBoundingClientRect();
-      const panelH = panelRef.current?.offsetHeight || ROLE_PANEL_MAX_H;
-      const openUpward = rect.bottom + panelH + 8 > window.innerHeight && rect.top - panelH - 8 >= 0;
-      setPos({
-        position: 'fixed',
-        top: openUpward ? Math.max(8, rect.top - panelH - 4) : rect.bottom + 4,
-        left: rect.left,
-        width: rect.width,
-      });
-    };
-    update();
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
-    return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
-    };
-  }, [open]);
-
   return (
     <div style={{ position: 'relative' }} ref={wrapperRef}>
       <button
-        ref={triggerRef}
         type="button"
         onClick={() => setOpen(v => !v)}
         style={{
@@ -267,9 +231,12 @@ function RoleSelect({ roles, loading, value, onChange }) {
         {activeLabel}
         <ChevronDown size={14} style={{ color: 'var(--tx3)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
       </button>
-      {open && pos && createPortal(
-        <div ref={panelRef} style={{
-          ...pos, zIndex: 10000,
+      {/* Opens upward, anchored to the trigger. This field sits low in the form,
+          so dropping down pushed the list past the bottom of the card; growing
+          up keeps it over the fields above and inside the modal. */}
+      {open && (
+        <div style={{
+          position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 4, zIndex: 50,
           maxHeight: ROLE_PANEL_MAX_H, overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
           borderRadius: 10, boxShadow: '0 18px 50px rgba(0,0,0,.35)', padding: 5,
         }}>
@@ -288,8 +255,7 @@ function RoleSelect({ roles, loading, value, onChange }) {
               {r.roleName}
             </div>
           ))}
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   );
@@ -452,7 +418,25 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   const employeeLocationMultiOptions = employeeLocationOptions.map(l => ({ id: l.locationName || l.name, label: l.locationName || l.name })).filter(o => o.id);
   const locationMultiOptions = locationOptions.map(l => ({ id: l.locationName || l.name, label: l.locationName || l.name })).filter(o => o.id);
   const nvrMultiOptions = nvrOptions.map(n => ({ id: n._id, label: n.nvrName || n.name }));
-  const channelMultiOptions = channelOptions.map(c => ({ id: c._id, label: c.name || c.customName }));
+  // Cameras are listed under their NVR: a non-selectable header row per NVR
+  // followed by that NVR's channels — the same grouping V1's NewPermissionForm
+  // builds. customName first, matching how Live Wall labels cameras.
+  const channelMultiOptions = (() => {
+    const groups = new Map();
+    channelOptions.forEach((c) => {
+      const key = String(c.nvrId ?? '');
+      if (!groups.has(key)) groups.set(key, { nvrName: c.nvrName || 'Unknown NVR', channels: [] });
+      groups.get(key).channels.push(c);
+    });
+    const out = [];
+    groups.forEach((group, nvrId) => {
+      out.push({ id: `nvr-header-${nvrId}`, label: group.nvrName, isHeader: true });
+      group.channels.forEach((c) => {
+        out.push({ id: c._id, label: c.customName || c.name || 'Unnamed Channel' });
+      });
+    });
+    return out;
+  })();
   const departmentMultiOptions = departmentOptions.map(d => ({ id: d._id, label: d.departmentName || d.name }));
 
   return (
@@ -568,7 +552,9 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                     value={selectedChannels}
                     onChange={setSelectedChannels}
                     placeholder="Select channels"
+                    searchPlaceholder="Search cameras..."
                     msg="No channels found"
+                    openUp
                   />
                 </div>
                 <div>
@@ -579,6 +565,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                     onChange={setSelectedDepartments}
                     placeholder="Select departments"
                     msg="No departments found"
+                    openUp
                   />
                 </div>
               </div>
