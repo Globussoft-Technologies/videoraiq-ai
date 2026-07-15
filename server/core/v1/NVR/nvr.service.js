@@ -1,4 +1,5 @@
 import DigestFetch from "digest-fetch";
+import axios from "axios";
 import NVR from "./nvr.model.js";
 import Camera from "../channels/channels.model.js";
 import logger from "../../../utils/logger.js";
@@ -425,20 +426,7 @@ class NVRService {
               );
           }
         } else if (existingNvr.brand === "dahua") {
-          // Dahua uses the same CGI protocol as CP-Plus.
-          const testClient = new DigestFetch(username, passwordToUse);
-          const testRes = await testClient.fetch(
-            `http://${ip}:${port}/cgi-bin/magicBox.cgi?action=getSystemInfo`,
-          );
-          if (!testRes.ok) {
-            return res
-              .status(400)
-              .json(
-                Response.userFailResp(
-                  "Dahua NVR authentication failed with new credentials",
-                ),
-              );
-          }
+          // TODO: Add Dahua auth test logic
         } else if (existingNvr.brand === "prama") {
           // TODO: Add Prama auth test logic
         }
@@ -1176,35 +1164,7 @@ class NVRService {
           deviceInfo,
           cameras: cameraList,
         };
-      } else if (brand.toLowerCase() === "cpplus" || brand.toLowerCase() === "dahua") {
-        // CP-Plus and Dahua share the same Dahua CGI protocol/endpoints.
-        //
-        // Use node-fetch with a DEDICATED http.Agent (keepAlive:false) for these
-        // NVR calls instead of Node's global undici fetch. In the long-running,
-        // busy app the shared global connection pool can starve a fresh outbound
-        // request of a socket, so DigestFetch (which grabs global fetch) hangs —
-        // even though the same call is instant in a quiet process. A private,
-        // non-pooled agent avoids that contention entirely.
-        const { default: nodeFetch } = await import("node-fetch");
-        const { Agent } = await import("http");
-        const nvrAgent = new Agent({ keepAlive: false, maxSockets: 4 });
-        const dahuaClient = new DigestFetch(username, password);
-        dahuaClient.getClient = async () => nodeFetch; // force node-fetch, not global undici
-        // Fetch with a hard timeout so an unreachable/slow NVR fails fast with a
-        // clean error instead of hanging. NOTE: do NOT pass an AbortController
-        // signal into DigestFetch.fetch — it issues TWO requests (challenge ->
-        // authed retry) reusing the same options, and a shared signal breaks that
-        // handshake. Race the whole call against a timer instead.
-        const fetchWithTimeout = (url, ms = 10000) =>
-          Promise.race([
-            dahuaClient.fetch(url, { agent: nvrAgent }),
-            new Promise((_, reject) =>
-              setTimeout(
-                () => reject(Object.assign(new Error("NVR request timed out"), { name: "AbortError" })),
-                ms,
-              ),
-            ),
-          ]);
+      } else if (brand.toLowerCase() === "cpplus") {
         // Helper function to parse CP Plus plain text response
         const parseCPPlusResponse = (text) => {
           const lines = text.split("\n");
@@ -1246,7 +1206,7 @@ class NVRService {
           return Object.values(groups);
         };
 
-        const deviceInfoRes = await fetchWithTimeout(
+        const deviceInfoRes = await client.fetch(
           `http://${ip}:${port}/cgi-bin/magicBox.cgi?action=getSystemInfo`
         );
 
@@ -1281,7 +1241,7 @@ class NVRService {
         };
 
         // Get channel titles
-        const channelTitlesRes = await fetchWithTimeout(
+        const channelTitlesRes = await client.fetch(
           `http://${ip}:${port}/cgi-bin/configManager.cgi?action=getConfig&name=ChannelTitle`
         );
         const channelTitlesText = await channelTitlesRes.text();
@@ -1297,7 +1257,7 @@ class NVRService {
         });
 
         // Get channels
-        const channelsRes = await fetchWithTimeout(
+        const channelsRes = await client.fetch(
           `http://${ip}:${port}/cgi-bin/configManager.cgi?action=getConfig&name=VideoInOptions`
         );
         const channelsText = await channelsRes.text();
@@ -1308,7 +1268,7 @@ class NVRService {
         );
 
         // Get encode config
-        const encodeRes = await fetchWithTimeout(
+        const encodeRes = await client.fetch(
           `http://${ip}:${port}/cgi-bin/configManager.cgi?action=getConfig&name=Encode`
         );
         const encodeText = await encodeRes.text();
@@ -1369,6 +1329,175 @@ class NVRService {
             chGroup.Name ||
             `Camera ${parseInt(chId) + 1}`;
 
+          cameraList.push({
+            channelId: (parseInt(chId) + 1).toString(),
+            rtspChannels,
+            name: cameraName,
+            ipAddress: chGroup?.IPAddress || "",
+            model: chGroup?.Model || "",
+            serialNumber: chGroup?.SerialNumber || "",
+            firmwareVersion: chGroup?.FirmwareVersion || "",
+            streamEndpoint: "/cam/realmonitor",
+          });
+        }
+
+        return {
+          deviceInfo,
+          cameras: cameraList,
+        };
+      } else if (brand.toLowerCase() === "dahua") {
+        // Dahua: dedicated, SEPARATE brand implementation (not shared with CP-Plus).
+        // Same Dahua CGI endpoints, but the HTTP Digest handshake is done manually
+        // over axios. Native fetch/undici (what DigestFetch uses) HANGS inside the
+        // long-running busy app; axios (the app's standard HTTP client) does not.
+        const { createHash, randomBytes } = await import("crypto");
+        const md5 = (s) => createHash("md5").update(s).digest("hex");
+
+        // Digest-authenticated GET returning { ok, status, text() } (fetch-like).
+        const dahuaGet = async (url, ms = 10000) => {
+          const u = new URL(url);
+          const uri = u.pathname + u.search;
+          const doGet = (headers) =>
+            axios.get(url, {
+              headers,
+              timeout: ms,
+              validateStatus: (st) => st === 401 || (st >= 200 && st < 300),
+              responseType: "text",
+              transformResponse: [(d) => d],
+            });
+          const first = await doGet({});
+          if (first.status !== 401) {
+            return { ok: first.status >= 200 && first.status < 300, status: first.status, text: async () => first.data };
+          }
+          const w = first.headers["www-authenticate"] || "";
+          const pick = (k) => (w.match(new RegExp(k + '="?([^",]+)"?')) || [])[1] || "";
+          const realm = pick("realm"), nonce = pick("nonce"), qop = pick("qop"), opaque = pick("opaque");
+          const cnonce = randomBytes(8).toString("hex");
+          const nc = "00000001";
+          const ha1 = md5(username + ":" + realm + ":" + password);
+          const ha2 = md5("GET:" + uri);
+          const response = qop
+            ? md5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":" + qop + ":" + ha2)
+            : md5(ha1 + ":" + nonce + ":" + ha2);
+          let auth = 'Digest username="' + username + '", realm="' + realm + '", nonce="' + nonce + '", uri="' + uri + '", response="' + response + '"';
+          if (qop) auth += ", qop=" + qop + ", nc=" + nc + ', cnonce="' + cnonce + '"';
+          if (opaque) auth += ', opaque="' + opaque + '"';
+          const second = await doGet({ Authorization: auth });
+          return { ok: second.status >= 200 && second.status < 300, status: second.status, text: async () => second.data };
+        };
+
+        // Parse Dahua "table.X=Y" plain-text response into a flat object.
+        const parseDahuaResponse = (text) => {
+          const result = {};
+          text.split("\n").forEach((line) => {
+            const trimmed = line.trim();
+            if (trimmed && trimmed.includes("=")) {
+              const [key, ...valueParts] = trimmed.split("=");
+              result[key.trim()] = valueParts.join("=").trim();
+            }
+          });
+          return result;
+        };
+
+        const groupDahuaArray = (data, prefix) => {
+          const groups = {};
+          Object.keys(data).forEach((key) => {
+            if (key.startsWith(prefix)) {
+              const match = key.match(/\[(\d+)\](?:\[(\d+)\])?\.?(.+)?/);
+              if (match) {
+                const index1 = match[1];
+                const index2 = match[2];
+                const property = match[3];
+                const groupKey = index2 ? index1 + "_" + index2 : index1;
+                if (!groups[groupKey]) {
+                  groups[groupKey] = { channel: index1, stream: index2 };
+                }
+                if (property) groups[groupKey][property] = data[key];
+              }
+            }
+          });
+          return Object.values(groups);
+        };
+
+        const deviceInfoRes = await dahuaGet(
+          "http://" + ip + ":" + port + "/cgi-bin/magicBox.cgi?action=getSystemInfo"
+        );
+        if (!deviceInfoRes.ok) {
+          return { error: "Failed to authenticate with Dahua NVR" };
+        }
+        const deviceInfoData = parseDahuaResponse(await deviceInfoRes.text());
+
+        // Best-effort device type (model), separate endpoint.
+        let deviceTypeData = {};
+        try {
+          const dtRes = await dahuaGet(
+            "http://" + ip + ":" + port + "/cgi-bin/magicBox.cgi?action=getDeviceType"
+          );
+          if (dtRes.ok) deviceTypeData = parseDahuaResponse(await dtRes.text());
+        } catch (_) { /* optional */ }
+
+        const deviceInfo = {
+          deviceName: deviceInfoData["deviceName"] || deviceInfoData["DeviceName"] || "",
+          model: deviceTypeData["type"] || deviceInfoData["updateSerial"] || deviceInfoData["deviceType"] || "",
+          serialNumber: deviceInfoData["serialNumber"] || deviceInfoData["SerialNo"] || "",
+          macAddress: deviceInfoData["macAddress"] || deviceInfoData["MacAddress"] || "",
+          firmwareVersion: deviceInfoData["softwareVersion"] || deviceInfoData["SoftwareVersion"] || deviceInfoData["processor"] || "",
+          deviceType: deviceInfoData["deviceClass"] || deviceInfoData["DeviceClass"] || "",
+        };
+
+        // Channel titles
+        const channelTitlesData = parseDahuaResponse(
+          await (await dahuaGet("http://" + ip + ":" + port + "/cgi-bin/configManager.cgi?action=getConfig&name=ChannelTitle")).text()
+        );
+        const channelNames = {};
+        Object.keys(channelTitlesData).forEach((key) => {
+          const m = key.match(/table\.ChannelTitle\[(\d+)\]\.Name/);
+          if (m) channelNames[m[1]] = channelTitlesData[key];
+        });
+
+        // Channels
+        const channelsData = parseDahuaResponse(
+          await (await dahuaGet("http://" + ip + ":" + port + "/cgi-bin/configManager.cgi?action=getConfig&name=VideoInOptions")).text()
+        );
+        const channelGroups = groupDahuaArray(channelsData, "table.VideoInOptions[");
+
+        // Encode (resolutions)
+        const encodeData = parseDahuaResponse(
+          await (await dahuaGet("http://" + ip + ":" + port + "/cgi-bin/configManager.cgi?action=getConfig&name=Encode")).text()
+        );
+        const encodeGroups = {};
+        Object.keys(encodeData).forEach((key) => {
+          const m = key.match(
+            /table\.Encode\[(\d+)\]\.(MainFormat|ExtraFormat)\[(\d+)\]\.Video\.(Width|Height|Compression|BitRate|FPS)/
+          );
+          if (m) {
+            const channelIdx = m[1], streamTypeK = m[2], streamIdx = m[3], property = m[4];
+            const streamKey = channelIdx + "_" + streamTypeK + "_" + streamIdx;
+            if (!encodeGroups[streamKey]) {
+              encodeGroups[streamKey] = {
+                channel: channelIdx,
+                streamType: streamTypeK,
+                streamIdx,
+                id: (parseInt(channelIdx) + 1) + (streamTypeK === "MainFormat" ? "01" : "02"),
+              };
+            }
+            if (property === "Width") encodeGroups[streamKey].width = parseInt(encodeData[key], 10);
+            else if (property === "Height") encodeGroups[streamKey].height = parseInt(encodeData[key], 10);
+          }
+        });
+
+        const cameraList = [];
+        for (const chGroup of channelGroups) {
+          const chId = chGroup.channel;
+          const channelStreams = Object.values(encodeGroups).filter(
+            (stream) => stream.channel === chId && stream.width && stream.height
+          );
+          const rtspChannels = channelStreams.map((stream) => ({
+            id: stream.id,
+            resolution: { width: stream.width || 0, height: stream.height || 0 },
+          }));
+          const cameraName =
+            channelNames[chId] || chGroup.Alias || chGroup.Name || ("Camera " + (parseInt(chId) + 1));
           cameraList.push({
             channelId: (parseInt(chId) + 1).toString(),
             rtspChannels,
@@ -1667,14 +1796,6 @@ class NVRService {
       }
     } catch (error) {
       logger.error("Fetch Cameras From NVR Error:", error);
-      // Abort = the NVR didn't respond in time (usually unreachable from the
-      // server's network or a firewall block), not a code failure.
-      if (error?.name === "AbortError") {
-        return {
-          error:
-            "NVR did not respond in time. Check that the server can reach the NVR's IP/port (network/firewall).",
-        };
-      }
       return { error: error.message };
     }
   }
@@ -1865,7 +1986,7 @@ class NVRService {
     try {
       const brandLower = brand?.toLowerCase();
 
-      if (!['hikvision', 'cpplus', 'dahua'].includes(brandLower)) {
+      if (!['hikvision', 'cpplus'].includes(brandLower)) {
         return {
           error: 'NVR brand not yet supported'
         };
@@ -1900,8 +2021,7 @@ class NVRService {
 
         cameraResponse = await camerasResponse.json();
 
-      } else if (brandLower === 'cpplus' || brandLower === 'dahua') {
-        // CP-Plus and Dahua share the same protocol/endpoints.
+      } else if (brandLower === 'cpplus') {
         const deviceResponse = await fetch(
           `http://${host}/API/System/SystemInfo`,
           {
@@ -1912,7 +2032,7 @@ class NVRService {
         );
 
         if (!deviceResponse.ok) {
-          return { error: `Failed to fetch device info from ${brandLower === 'dahua' ? 'Dahua' : 'CP Plus'} NVR` };
+          return { error: 'Failed to fetch device info from CP Plus NVR' };
         }
 
         deviceInfo = await deviceResponse.json();

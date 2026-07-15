@@ -130,13 +130,25 @@ export const buildRTSPUrl = (nvr, channel, streamType = "main") => {
     const streamId = channel.rtspChannels?.[streamIndex]?.id || "";
 
     return `rtsp://${username}:${decryptedPassword}@${decryptedIp}:${nvr.rtspPort}${streamEndpoint}${streamId}`;
-  } else if (nvr.brand === "cpplus" || nvr.brand === "dahua") {
-    // CP Plus / Dahua (same protocol): rtsp://user:pass@ip:port/cam/realmonitor?channel=1&subtype=0
+  } else if (nvr.brand === "cpplus") {
+    // CP Plus: rtsp://user:pass@ip:port/cam/realmonitor?channel=1&subtype=0
     const streamEndpoint = channel.streamEndpoint; // /cam/realmonitor
     const channelId = channel.channelId;
     const subtype = streamType === "main" ? 0 : 1;
 
     return `rtsp://${username}:${decryptedPassword}@${decryptedIp}:${nvr.rtspPort}${streamEndpoint}?channel=${channelId}&subtype=${subtype}`;
+  } else if (nvr.brand === "dahua") {
+    // Dahua (separate brand): rtsp://user:pass@ip:rtspPort/cam/realmonitor?channel=1&subtype=0
+    // Percent-encode user/pass so special chars (e.g. '@' in "cctv@2024") don't
+    // break URL parsing — an unencoded '@' makes clients read the password as
+    // part of the host.
+    const streamEndpoint = channel.streamEndpoint || "/cam/realmonitor";
+    const channelId = channel.channelId;
+    const subtype = streamType === "main" ? 0 : 1;
+    const encUser = encodeURIComponent(username);
+    const encPass = encodeURIComponent(decryptedPassword);
+
+    return `rtsp://${encUser}:${encPass}@${decryptedIp}:${nvr.rtspPort}${streamEndpoint}?channel=${channelId}&subtype=${subtype}`;
   } else if (nvr.brand === "tiandy") {
     // Tiandy: rtsp://user:pass@ip:rtspPort/ChannelNo/StreamType
     // StreamType: 1 = main stream, 2 = sub stream
@@ -168,6 +180,7 @@ export const registerCameraStream = async (id, rtspUrl, userId) => {
   const redisKey = `stream_url:${id}`;
   try {
     const { host, token } = await resolveStream(userId);
+    console.log(rtspUrl, "rtspUrl");
     const response = await axios.post(
       `${host}/api/add-camera`,
       {
@@ -185,9 +198,13 @@ export const registerCameraStream = async (id, rtspUrl, userId) => {
       let streamUrl = response?.data?.url;
       await redis.set(redisKey, streamUrl); // optionally set expiration
     }
-    buildStreamingUrl(nvrValidate,channelId)
   } catch (err) {
-    logger.error(`Failed to add camera`, err.message);
+    // Surface the real reason (streaming service unreachable / auth / bad url)
+    // instead of the bare "Failed to add camera".
+    const detail = err?.response?.data
+      ? JSON.stringify(err.response.data)
+      : err?.code || err?.message || String(err);
+    logger.error(`Failed to add camera ${id}: ${detail}`);
   }
 };
 
