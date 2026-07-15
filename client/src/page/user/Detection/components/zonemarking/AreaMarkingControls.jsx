@@ -317,7 +317,11 @@ return;
   );
 
   const [showClearModal, setShowClearModal] = useState(false);
-  const [priority, setPriority] = useState("moderate");
+  // Priority persists as settings.levelOfImportance — seed from the applied
+  // detection so reopening shows what was saved, not the default.
+  const [priority, setPriority] = useState(
+    appliedDetection?.settings?.levelOfImportance || "moderate"
+  );
   const [showSaveModal, setShowSaveModal] = useState(false);
   // Per-zone UI config: one entry per zone the user drew on the stream.
   // Shape: { name, capacity, threshold, schedule }. UI-only for now (not persisted).
@@ -356,6 +360,7 @@ console.log('appliedDetection', appliedDetection);
       setZoneName(appliedDetection?.settings?.referencePoints?.zone_name || '');
       setDetectionName(appliedDetection?.name || '');
       setDetectionEnabled(appliedDetection?.enabled || false);
+      setPriority(appliedDetection?.settings?.levelOfImportance || 'moderate');
       setObstructionThreshold(appliedDetection?.settings?.obstruction_threshold_sec || 10);
 
       // Build one zone-config block per drawn zone. getZones() returns a nested
