@@ -43,9 +43,12 @@ class TelegramService {
     try {
       const isObjectId = /^[a-f\d]{24}$/i.test(String(adminId));
       const query = isObjectId ? { _id: adminId } : { user_id: String(adminId) };
-      const admin = await adminModel.findOne(query).select("telegramBotToken telegramChatId").lean();
+      const admin = await adminModel.findOne(query).select("telegramChatId").lean();
+      // One-bot model: the platform bot token comes from config/env and is the
+      // single source of truth. Changing Telegram.botToken in env applies to
+      // every admin immediately — no stale per-admin token can override it.
       return {
-        token: admin?.telegramBotToken || platformBotToken || "",
+        token: platformBotToken || "",
         chat: admin?.telegramChatId || "",
       };
     } catch (err) {
@@ -82,19 +85,19 @@ class TelegramService {
 
     const admin = await adminModel
       .findOne(query)
-      .select("telegramChatId telegramBotToken")
+      .select("telegramChatId")
       .lean();
 
     const res = await adminModel.updateOne(query, {
       $set: { telegramChatId: null, telegramLinkCode: null },
     });
 
-    // Ask Telegram to remove the bot from the channel (best-effort).
+    // Ask Telegram to remove the bot from the channel (best-effort). Always the
+    // env platform bot (single source of truth).
     const oldChatId = admin?.telegramChatId;
     if (oldChatId) {
-      const token = admin?.telegramBotToken || platformBotToken;
       axios
-        .post(`https://api.telegram.org/bot${token}/leaveChat`, { chat_id: oldChatId })
+        .post(`https://api.telegram.org/bot${platformBotToken}/leaveChat`, { chat_id: oldChatId })
         .catch((err) =>
           logger.error(
             `[TELEGRAM] leaveChat failed for ${oldChatId}: ${err?.response?.data ? JSON.stringify(err.response.data) : err.message}`,
