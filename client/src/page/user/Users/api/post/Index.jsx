@@ -15,7 +15,7 @@ export const forgotPassword = async function (data) {
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-    
+
     },
   });
 };

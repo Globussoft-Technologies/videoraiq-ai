@@ -24,23 +24,40 @@ export default function ActivityHeatmapCard({ params }) {
       </div>
       <AsyncBoundary loading={api.loading} error={api.error} isEmpty={!api.loading && !api.error && max === 0} onRetry={api.refetch} minH={160} emptyLabel="No detections in range">
         {() => (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--tx3)', padding: '1px 0' }}>
-              {dayLabels.map((d) => <span key={d}>{d}</span>)}
-            </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {grid.map((row, ri) => (
-                <div key={ri} style={{ display: 'flex', gap: 2 }}>
-                  {row.map((v, ci) => (
-                    <div key={ci} style={{ flex: 1, aspectRatio: '1', borderRadius: 2, background: heatCellColor(v, max) }} />
-                  ))}
+          <>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--tx3)', padding: '1px 0' }}>
+                {dayLabels.map((d) => <span key={d}>{d}</span>)}
+              </div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {grid.map((row, ri) => (
+                  <div key={ri} style={{ display: 'flex', gap: 2 }}>
+                    {row.map((v, ci) => (
+                      <div
+                        key={ci}
+                        title={`${dayLabels[ri] || ''} ${String(ci).padStart(2, '0')}:00 — ${v} alert${v === 1 ? '' : 's'}`}
+                        style={{ flex: 1, aspectRatio: '1', borderRadius: 2, background: heatCellColor(v, max) }}
+                      />
+                    ))}
+                  </div>
+                ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 8.5, color: 'var(--tx3)', marginTop: 3 }}>
+                  <span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>23h</span>
                 </div>
-              ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 8.5, color: 'var(--tx3)', marginTop: 3 }}>
-                <span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>23h</span>
               </div>
             </div>
-          </div>
+            {/* Legend — cell color = alert volume in that hour, relative to the
+                busiest hour/day cell in range (`max`); darker/pinker = busier. */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 10 }}>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--tx3)' }}>Fewer alerts</span>
+              <div style={{ display: 'flex', gap: 2 }}>
+                {[0, 0.2, 0.4, 0.6, 0.8, 1].map((r) => (
+                  <div key={r} style={{ width: 16, height: 10, borderRadius: 2, background: heatCellColor(r, 1) }} />
+                ))}
+              </div>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--tx3)' }}>More alerts</span>
+            </div>
+          </>
         )}
       </AsyncBoundary>
     </Panel>

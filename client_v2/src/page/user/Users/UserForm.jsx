@@ -280,7 +280,7 @@ const LoginForm = () => {
                 )}
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", marginTop: 2 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2 }}>
                 <label
                   style={{
                     display: "flex",
@@ -314,6 +314,13 @@ const LoginForm = () => {
                   </span>
                   Remember me
                 </label>
+                <span
+                  className="vqlogin-link"
+                  onClick={() => { window.location.href = import.meta.env.VITE_AMEMBER_MEMBER_URL; }}
+                  style={{ fontSize: 12.5, fontWeight: 600, color: "#6ea0ff", cursor: "pointer" }}
+                >
+                  Forgot password?
+                </span>
               </div>
 
               <CtaButton

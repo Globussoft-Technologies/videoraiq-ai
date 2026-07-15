@@ -627,15 +627,39 @@ class IncidentsService {
         reportStatus,
         checkInOrCheckOutCamera,
         incidentTypeFilter,
+        severity,
+        statusFilter,
       } = req.body;
 
       const matchStage = {
         Image: { $exists: true, $nin: [null, "", undefined, "https://"] },
         incidentType: { $nin: ["countPersons", "lineCrossing", "countVehicles"] },
         userId: user_id.toString(),
-        resolved: false,
         incidentName: { $not: /Guard Present/i }
       };
+
+      // Filter: status (new / acknowledged / resolved). Defaults to
+      // unresolved-only (previous hardcoded behavior) when nothing is selected.
+      const statusFilters = Array.isArray(statusFilter)
+        ? statusFilter
+        : statusFilter
+        ? [statusFilter]
+        : [];
+      const STATUS_CONDITIONS = {
+        new: { resolved: false, "report.status": { $ne: true } },
+        acknowledged: { resolved: false, "report.status": true },
+        resolved: { resolved: true },
+      };
+      if (statusFilters.length) {
+        const statusOr = statusFilters
+          .map((s) => STATUS_CONDITIONS[s])
+          .filter(Boolean);
+        if (statusOr.length) {
+          matchStage.$and = [...(matchStage.$and || []), { $or: statusOr }];
+        }
+      } else {
+        matchStage.resolved = false;
+      }
 
       // Collect every channel/nvr scoping filter as a candidate set of string ids.
       // These are intersected (AND) at the end so multiple filters narrow together
@@ -722,6 +746,14 @@ class IncidentsService {
       //Filter Incidents based on report status for members
       if (reportStatus !== undefined && reportStatus) {
         matchStage["report.status"] = reportStatus;
+      }
+
+      // Filter: severity (single value or array)
+      if (severity !== undefined && severity !== null && severity !== "") {
+        const severities = Array.isArray(severity) ? severity : [severity];
+        if (severities.length) {
+          matchStage.severity = { $in: severities };
+        }
       }
 
       const orConditions = [];

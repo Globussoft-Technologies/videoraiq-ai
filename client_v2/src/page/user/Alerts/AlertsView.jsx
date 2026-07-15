@@ -10,7 +10,7 @@ import { fetchIncidents, updateReportStatus } from '../../../helpers/incidents';
 
 const TABS = [
   { key: 'all', label: 'All' },
-  { key: 'high', label: 'Critical' },
+  { key: 'high', label: 'High' },
   { key: 'moderate', label: 'Medium' },
   { key: 'low', label: 'Low' },
 ];

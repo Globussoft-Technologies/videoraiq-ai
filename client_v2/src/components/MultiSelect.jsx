@@ -162,6 +162,7 @@ const MultiSelect = ({
       {open && pos && createPortal(
         <div
           ref={panelRef}
+          data-vq-portal-panel
           style={pos}
           className="z-[10000] rounded-[10px] border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg overflow-hidden"
         >

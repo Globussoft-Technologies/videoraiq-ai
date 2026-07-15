@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Search, Calendar, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal } from 'lucide-react';
+import { Search, Calendar, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2 } from 'lucide-react';
 import { AsyncBoundary } from '../../../components/States';
 import SharedMultiSelect from '../../../components/MultiSelect';
 import IncidentCard from './IncidentCard';
@@ -16,10 +16,9 @@ import getAccessToken from '../../../utils/getAccessToken';
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 const SEVERITIES = [
-  { key: 'high',     label: 'Critical' },
-  { key: 'moderate', label: 'High'     },
-  { key: 'medium',   label: 'Medium'   },
-  { key: 'low',      label: 'Low'      },
+  { key: 'high',     label: 'High'   },
+  { key: 'moderate', label: 'Medium' },
+  { key: 'low',      label: 'Low'    },
 ];
 
 const STATUSES = [
@@ -27,12 +26,6 @@ const STATUSES = [
   { key: 'acknowledged', label: 'Ack'      },
   { key: 'resolved',     label: 'Resolved' },
 ];
-
-function statusKey(item) {
-  if (item.resolved) return 'resolved';
-  if (item.report?.status === true) return 'acknowledged';
-  return 'new';
-}
 
 const chip = (active, color = 'var(--blue)') => ({
   fontSize: 12, fontWeight: 500,
@@ -441,7 +434,17 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
   }, [nvrIds.join(',')]);
 
   useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    // The NVR/Camera/Department/Location pickers below are SharedMultiSelect,
+    // which portals its open panel to document.body (so it isn't clipped by
+    // this popover's own bounds) — that panel lives outside `ref`'s subtree,
+    // so a plain containment check treats every checkbox click as "outside"
+    // and closes this popover before the selection registers. Recognize any
+    // portaled panel (tagged with data-vq-portal-panel) as still "inside".
+    const h = (e) => {
+      if (ref.current && ref.current.contains(e.target)) return;
+      if (e.target.closest?.('[data-vq-portal-panel]')) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, []);
@@ -527,7 +530,14 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
             msg="No Department Found"
           />
           <SharedMultiSelect
-            options={locs.map(o => ({ id: o._id || o.locationName || o.name || String(o), label: o.locationName || o.name || String(o) }))}
+            options={locs.map(o => {
+              // The backend matches NVR.location by NAME (a plain string field,
+              // not an ObjectId ref) — id MUST be the name, not o._id, or the
+              // filter silently matches zero incidents. Same fix already
+              // applied in CommandCenter.jsx's location filter.
+              const name = o.locationName || o.name || String(o);
+              return { id: name, label: name };
+            })}
             value={locIds}
             onChange={setLocIds}
             placeholder="Select Location"
@@ -585,7 +595,7 @@ function IncidentLightbox({ items, index, onIndexChange, onClose }) {
   if (!item) return null;
   const imgSrc = item.Image ? mediaUrl(item.Image) : null;
   const det    = detectionLabel(item.incidentType || item.displayName);
-  const cam    = item.channelData?.name || item.cameraId || '';
+  const cam    = item.channelData?.name || '';
   const site   = item.nvrData?.nvrName  || item.location  || '';
 
   return (
@@ -683,6 +693,21 @@ export default function IncidentCenter() {
   const ctx    = useOutletContext() || {};
   const ctxLoc = ctx.location || '';
 
+  const pageRef = useRef(null);
+  const [isPageFS, setIsPageFS] = useState(false);
+  function togglePageFullscreen() {
+    if (!document.fullscreenElement) {
+      pageRef.current?.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  }
+  useEffect(() => {
+    const h = () => setIsPageFS(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', h);
+    return () => document.removeEventListener('fullscreenchange', h);
+  }, []);
+
   const [page,       setPage]       = useState(0);
   const [pageSize,   setPageSize]   = useState(10);
   const [lightboxIndex, setLightboxIndex] = useState(null);
@@ -705,8 +730,10 @@ export default function IncidentCenter() {
     if (channelIds.length) f.channelId          = channelIds;
     if (deptIds.length)    f.department         = deptIds;
     if (locIds.length)     f.location           = locIds;
+    if (sevSet.size)       f.severity           = [...sevSet];
+    if (statusSet.size)    f.statusFilter       = [...statusSet];
     return f;
-  }, [ctxLoc, detTypes, dateFrom, dateTo, nvrIds, channelIds, deptIds, locIds]);
+  }, [ctxLoc, detTypes, dateFrom, dateTo, nvrIds, channelIds, deptIds, locIds, sevSet, statusSet]);
 
   const stats = useApi(() => fetchIncidentStats(serverFilter), [JSON.stringify(serverFilter)], { pollMs: 60000 });
   const types = useApi(() => fetchDetectionTypes(), []);
@@ -715,12 +742,7 @@ export default function IncidentCenter() {
     [page, pageSize, JSON.stringify(serverFilter)]
   );
 
-  const items = useMemo(() => {
-    let list = grid.data?.items || [];
-    if (sevSet.size)    list = list.filter((i) => sevSet.has((i.severity || '').toLowerCase()));
-    if (statusSet.size) list = list.filter((i) => statusSet.has(statusKey(i)));
-    return list;
-  }, [grid.data, sevSet, statusSet]);
+  const items = useMemo(() => grid.data?.items || [], [grid.data]);
 
   const totalCount = grid.data?.totalCount ?? 0;
   const pages      = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -741,7 +763,7 @@ export default function IncidentCenter() {
   const s    = stats.data || {};
   const kpis = [
     { label: 'Total Incidents · 24h', value: num((s.totalAlerts ?? 0) + (s.incidentsResolved ?? 0)), color: 'var(--tx)' },
-    { label: 'Critical',              value: num(s.criticalAlerts   ?? 0), color: 'var(--crit)' },
+    { label: 'High',                  value: num(s.criticalAlerts   ?? 0), color: 'var(--crit)' },
     { label: 'Unresolved (New)',      value: num(s.totalAlerts      ?? 0), color: 'var(--warn)' },
     { label: 'Resolved',             value: num(s.incidentsResolved ?? 0), color: 'var(--ok)'   },
   ];
@@ -755,7 +777,7 @@ export default function IncidentCenter() {
   }, [types.data]);
 
   return (
-    <div className="vq-inc-page" style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 20, background: 'var(--bg0)', minHeight: '100%' }}>
+    <div ref={pageRef} className="vq-inc-page" style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 20, background: 'var(--bg0)', minHeight: '100%', overflow: isPageFS ? 'auto' : undefined }}>
       <style>{`
         @media (max-width: 1024px) {
           .vq-inc-kpis { grid-template-columns: repeat(2,1fr) !important; }
@@ -832,11 +854,18 @@ export default function IncidentCenter() {
             </button>
           )}
 
-          <div style={{ marginLeft: 'auto' }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
             <RefreshControl
               storageKey="incident_center"
               onManualRefresh={() => { stats.refetch(); grid.refetch(); }}
             />
+            <button
+              onClick={togglePageFullscreen}
+              title={isPageFS ? 'Exit fullscreen' : 'Fullscreen'}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)' }}
+            >
+              {isPageFS ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            </button>
           </div>
         </div>
 

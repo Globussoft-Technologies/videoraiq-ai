@@ -83,7 +83,6 @@ function Shell() {
     read: readIds.has(a._id || i),
   }));
   const unreadCount = notifications.filter((n) => !n.read).length;
-  const alertsBadge = recentAlerts.filter((a) => !a.resolved).length || crit?.totalCount || 0;
 
   const markNotificationsRead = useCallback((ids) => {
     setReadIds((prev) => {
@@ -124,7 +123,6 @@ function Shell() {
       }}
     >
       <Sidebar
-        badges={{ alerts: alertsBadge }}
         isMobile={isMobile}
         mobileOpen={navOpen}
         onMobileClose={() => setNavOpen(false)}

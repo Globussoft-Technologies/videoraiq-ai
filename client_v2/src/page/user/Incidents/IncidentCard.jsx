@@ -156,7 +156,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox 
 
   const det      = detectionLabel(item.incidentType || item.displayName);
   const st       = statusOf({ ...item, resolved: localResolved });
-  const cam      = item.channelData?.name || item.cameraId || '';
+  const cam      = item.channelData?.name || '';
   const site     = item.nvrData?.nvrName  || item.location  || '';
   const conf     = item.confidence ?? item.accuracy ?? item.score;
   const imgSrc   = item.Image ? mediaUrl(item.Image) : null;

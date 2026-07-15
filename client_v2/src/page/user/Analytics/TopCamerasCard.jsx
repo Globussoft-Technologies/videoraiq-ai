@@ -12,7 +12,7 @@ export default function TopCamerasCard({ params, limit = 5 }) {
 
   return (
     <Panel style={{ padding: 18 }}>
-      <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 16 }}>Top Cameras by Events</div>
+      <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 16 }}>Top Cameras by Detections</div>
       <AsyncBoundary loading={api.loading} error={api.error} isEmpty={!api.loading && !api.error && cameras.length === 0} onRetry={api.refetch} minH={160} emptyLabel="No detections in range">
         {() => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
