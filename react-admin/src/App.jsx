@@ -8,6 +8,7 @@ import Clients from './pages/clients/Clients'
 import ClientConfig from './pages/clients/ClientConfig'
 import DetectionCatalog from './pages/detectionCatalog/DetectionCatalog'
 import SubscriptionPlans from './pages/subscriptionPlans/SubscriptionPlans'
+import FleetOverview from './pages/fleet/FleetOverview'
 import ComingSoon from './pages/placeholder/ComingSoon'
 
 const App = () => {
@@ -28,7 +29,7 @@ const App = () => {
         <Route path="/clients/:adminId" element={<ClientConfig />} />
         <Route path="/detection-catalog" element={<DetectionCatalog />} />
         <Route path="/subscription-plans" element={<SubscriptionPlans />} />
-        <Route path="/fleet" element={<ComingSoon title="Fleet Overview" />} />
+        <Route path="/fleet" element={<FleetOverview />} />
         <Route path="/feature-roadmap" element={<ComingSoon title="Feature Roadmap" />} />
       </Route>
 

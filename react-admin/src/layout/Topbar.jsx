@@ -1,4 +1,9 @@
+import { getAuthUser, getInitials } from '../utils/authUser'
+
 const Topbar = ({ eyebrow, title }) => {
+  const user = getAuthUser()
+  const name = user?.name || 'Super Admin'
+
   return (
     <header className="flex items-center justify-between border-b border-gray-200 bg-white/70 px-8 py-4 backdrop-blur-sm dark:border-white/8 dark:bg-transparent">
       <div>
@@ -23,8 +28,11 @@ const Topbar = ({ eyebrow, title }) => {
           </span>
         </div>
 
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-fuchsia-500 text-sm font-semibold text-white">
-          SA
+        <span
+          title={name}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-purple-500 to-fuchsia-500 text-sm font-semibold text-white"
+        >
+          {getInitials(name)}
         </span>
       </div>
     </header>

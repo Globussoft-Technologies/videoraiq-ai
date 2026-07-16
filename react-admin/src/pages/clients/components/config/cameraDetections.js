@@ -1,6 +1,6 @@
-// Styling helpers for the per-camera detection pills. The list of detection
-// types now comes from the API (GET /detection-settings/types), so this file
-// only provides colours + short labels — no hardcoded type list.
+// Styling helpers for the per-camera detection pills. The detection types are
+// read straight off each camera's `detections` object, so this file only
+// provides pill colours + short labels — no hardcoded type list, no API call.
 
 // Rotating "enabled" pill colours, assigned by index so all detection types
 // get a distinct-ish tint even as the backend adds more.
@@ -23,9 +23,9 @@ export const pillColor = (index) => PILL_ON_COLORS[index % PILL_ON_COLORS.length
 export const PILL_OFF =
   'border-gray-200 bg-transparent text-gray-400 dark:border-white/10 dark:text-gray-500'
 
-// Turn an API display name into a compact pill label.
-// "Personal Protective Equipment Detection" → "PPE"; otherwise drops the
-// trailing "Detection" and trims obvious filler so pills stay short.
+// Turn a detection settingType key into a compact pill label.
+// Known types get a curated short label; anything else is derived from the key
+// by stripping the trailing "Settings"/"Detection" and spacing out camelCase.
 const SHORT_OVERRIDES = {
   personalProtectiveEquipmentSettings: 'PPE',
   vehicleDetectionSettings: 'ANPR',
@@ -34,10 +34,13 @@ const SHORT_OVERRIDES = {
   vehicleObstructionSettings: 'Vehicle/Obstruction',
 }
 
-export const shortLabel = (settingType, name = '') => {
+export const shortLabel = (settingType = '') => {
   if (SHORT_OVERRIDES[settingType]) return SHORT_OVERRIDES[settingType]
-  return name
-    .replace(/\s*Detection$/i, '')
-    .replace(/\s*Settings$/i, '')
-    .trim() || name
+  const words = settingType
+    .replace(/Settings$/i, '')
+    .replace(/Detection$/i, '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2') // camelCase → spaced
+    .trim()
+  // Title-case the first letter so "unauthorizedAccess" → "Unauthorized Access".
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : settingType
 }

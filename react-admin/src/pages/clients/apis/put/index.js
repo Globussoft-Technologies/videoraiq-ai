@@ -31,3 +31,14 @@ export const updateDetection = async (adminId, settingType, { cameraAllocation, 
   )
   return response.data
 }
+
+// Toggle one detection's enabled flag for a single camera (ClientCameraDetection).
+export const updateCameraDetection = async (adminId, cameraId, { settingType, enabled }) => {
+  const token = await waitForToken()
+  const response = await axios.patch(
+    `${apiUrl}/api/v1/client/${adminId}/cameras/${cameraId}/detections`,
+    { settingType, enabled },
+    authHeaders(token)
+  )
+  return response.data
+}

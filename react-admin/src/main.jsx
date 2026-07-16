@@ -6,6 +6,10 @@ import 'react-toastify/dist/ReactToastify.css'
 import './index.css'
 import App from './App.jsx'
 import { ThemeProvider } from './context/ThemeContext.jsx'
+import { setupAxiosInterceptors } from './utils/axiosSetup'
+
+// Global 401/invalid-token handling: log out on an expired session.
+setupAxiosInterceptors()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

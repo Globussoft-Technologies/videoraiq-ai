@@ -41,6 +41,20 @@ const Clients = () => {
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  // Server-side sort. Only name/email are sortable (see ClientsTable).
+  const [sortBy, setSortBy] = useState('')
+  const [sortOrder, setSortOrder] = useState('asc')
+
+  // Toggle direction when re-clicking the same column; new column starts asc.
+  const handleSort = (key) => {
+    if (sortBy === key) {
+      setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortBy(key)
+      setSortOrder('asc')
+    }
+    setPage(0)
+  }
 
   // Debounce the search input, and reset to the first page on a new search.
   useEffect(() => {
@@ -59,7 +73,7 @@ const Clients = () => {
       setLoading(true)
       setError('')
       try {
-        const res = await getClients(page * pageSize, pageSize, debouncedQuery)
+        const res = await getClients(page * pageSize, pageSize, debouncedQuery, sortBy, sortOrder)
         if (cancelled) return
         const data = res?.body?.data ?? res?.data ?? {}
         const admins = Array.isArray(data.admins) ? data.admins : []
@@ -79,7 +93,7 @@ const Clients = () => {
     return () => {
       cancelled = true
     }
-  }, [page, pageSize, debouncedQuery])
+  }, [page, pageSize, debouncedQuery, sortBy, sortOrder])
 
   return (
     <>
@@ -124,7 +138,13 @@ const Clients = () => {
           <LoadingState message="Loading clients…" />
         ) : (
           <>
-            <ClientsTable clients={clients} searching={debouncedQuery.length > 0} />
+            <ClientsTable
+              clients={clients}
+              searching={debouncedQuery.length > 0}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSort={handleSort}
+            />
             {total > 0 && (
               <Pagination
                 page={page}

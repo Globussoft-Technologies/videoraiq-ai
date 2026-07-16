@@ -1,12 +1,15 @@
-import { Video, Trash2 } from 'lucide-react'
+import { Video } from 'lucide-react'
 import { pillColor, shortLabel, PILL_OFF } from './cameraDetections'
 
-// `detectionTypes` is [{ settingType, name }] — the canonical list from the API.
-const CameraRow = ({ camera, detectionTypes }) => {
+// Pills are driven straight off the camera's own `detections` object — one pill
+// per key present. Clicking a pill toggles that detection's enabled flag; the
+// parent tracks the change and persists it on Save.
+const CameraRow = ({ camera, onToggle }) => {
   const { name, channelId, nvrName, detections = {} } = camera
+  const settingTypes = Object.keys(detections)
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2.4fr)_40px] items-center gap-4 border-b border-gray-100 px-6 py-4 last:border-b-0 dark:border-white/5">
+    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2.4fr)] items-center gap-4 border-b border-gray-100 px-6 py-4 last:border-b-0 dark:border-white/5">
       {/* Camera identity */}
       <div className="flex items-center gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500 dark:bg-white/6 dark:text-gray-400">
@@ -22,32 +25,30 @@ const CameraRow = ({ camera, detectionTypes }) => {
         </div>
       </div>
 
-      {/* Detection pills — reflect the camera's enabled state */}
+      {/* Detection pills — click to toggle enabled/disabled */}
       <div className="flex flex-wrap gap-1.5">
-        {detectionTypes.map((d, i) => {
-          const enabled = detections[d.settingType] === true
-          return (
-            <span
-              key={d.settingType}
-              title={d.name}
-              className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-medium ${
-                enabled ? pillColor(i) : PILL_OFF
-              }`}
-            >
-              {shortLabel(d.settingType, d.name)}
-            </span>
-          )
-        })}
+        {settingTypes.length === 0 ? (
+          <span className="text-xs text-gray-400 dark:text-gray-600">No detections linked</span>
+        ) : (
+          settingTypes.map((settingType, i) => {
+            const enabled = detections[settingType] === true
+            const label = shortLabel(settingType)
+            return (
+              <button
+                key={settingType}
+                type="button"
+                onClick={() => onToggle(camera.cameraId, settingType, !enabled)}
+                title={`${enabled ? 'Disable' : 'Enable'} ${label}`}
+                className={`inline-flex cursor-pointer rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                  enabled ? pillColor(i) : PILL_OFF
+                }`}
+              >
+                {label}
+              </button>
+            )
+          })
+        )}
       </div>
-
-      {/* Delete (display-only for now) */}
-      <button
-        type="button"
-        aria-label={`Remove ${name}`}
-        className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-red-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:border-white/10 dark:hover:bg-red-500/10"
-      >
-        <Trash2 size={15} strokeWidth={2} />
-      </button>
     </div>
   )
 }

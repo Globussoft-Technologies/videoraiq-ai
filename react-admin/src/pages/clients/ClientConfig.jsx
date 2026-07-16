@@ -7,8 +7,8 @@ import SubscriptionCard from './components/config/SubscriptionCard'
 import DetectionRow from './components/config/DetectionRow'
 import CamerasPanel from './components/config/CamerasPanel'
 import LoadingState from '../../components/UI/LoadingState'
-import { getClientConfig, getClientCameras, getDetectionTypes } from './apis/get/clientConfig'
-import { updatePurchasedCameras, updateDetection } from './apis/put'
+import { getClientConfig, getClientCameras } from './apis/get/clientConfig'
+import { updatePurchasedCameras, updateDetection, updateCameraDetection } from './apis/put'
 import { getApiMessage, notifyApiError, notifyApiSuccess } from '../../utils/apiError'
 
 const getInitials = (name = '') => {
@@ -42,9 +42,10 @@ const ClientConfig = () => {
   const [cameras, setCameras] = useState([])
   const [camerasLoaded, setCamerasLoaded] = useState(false)
   const [camerasLoading, setCamerasLoading] = useState(false)
-
-  // Canonical [{ settingType, name }] list of every detection type.
-  const [detectionTypes, setDetectionTypes] = useState([])
+  // Baseline of each camera's detections, so Save only PATCHes what toggled.
+  // Shape: { [cameraId]: { [settingType]: enabledBool } }
+  const [camerasBaseline, setCamerasBaseline] = useState({})
+  const [savingCameras, setSavingCameras] = useState(false)
 
   // Bump to re-run the config fetch (Retry button).
   const [reloadKey, setReloadKey] = useState(0)
@@ -97,7 +98,11 @@ const ClientConfig = () => {
         const res = await getClientCameras(adminId)
         if (cancelled) return
         const data = res?.body?.data ?? res?.data ?? {}
-        setCameras(Array.isArray(data.cameras) ? data.cameras : [])
+        const list = Array.isArray(data.cameras) ? data.cameras : []
+        setCameras(list)
+        setCamerasBaseline(
+          Object.fromEntries(list.map((c) => [c.cameraId, { ...(c.detections || {}) }]))
+        )
         setCamerasLoaded(true)
       } catch (err) {
         if (cancelled) return
@@ -113,28 +118,57 @@ const ClientConfig = () => {
     }
   }, [tab, camerasLoaded, adminId])
 
-  // Canonical detection-types map — fetched once, used by the camera pills.
-  useEffect(() => {
-    let cancelled = false
+  // Flip one camera's detection pill in local state (persisted on Save).
+  const toggleCameraDetection = (cameraId, settingType, enabled) => {
+    setCameras((prev) =>
+      prev.map((c) =>
+        c.cameraId === cameraId
+          ? { ...c, detections: { ...c.detections, [settingType]: enabled } }
+          : c
+      )
+    )
+  }
 
-    const fetchTypes = async () => {
-      try {
-        const res = await getDetectionTypes()
-        if (cancelled) return
-        const map = res?.body?.data?.detectionTypes ?? res?.data?.detectionTypes ?? {}
-        setDetectionTypes(
-          Object.entries(map).map(([settingType, name]) => ({ settingType, name }))
-        )
-      } catch {
-        // Non-fatal: pills just won't render if this fails.
+  // Cameras whose detections differ from the fetched baseline, with the exact
+  // { settingType, enabled } toggles that changed — the PATCH payloads to send.
+  const dirtyCameraToggles = useMemo(() => {
+    const changes = []
+    for (const cam of cameras) {
+      const base = camerasBaseline[cam.cameraId] || {}
+      for (const [settingType, enabled] of Object.entries(cam.detections || {})) {
+        if (base[settingType] !== enabled) {
+          changes.push({ cameraId: cam.cameraId, settingType, enabled })
+        }
       }
     }
+    return changes
+  }, [cameras, camerasBaseline])
 
-    fetchTypes()
-    return () => {
-      cancelled = true
+  const camerasTabDirty = dirtyCameraToggles.length > 0
+
+  const handleSaveCameras = async () => {
+    if (!camerasTabDirty) return
+    setSavingCameras(true)
+    try {
+      // One PATCH per changed toggle (endpoint toggles a single detection/camera).
+      let lastRes
+      for (const t of dirtyCameraToggles) {
+        lastRes = await updateCameraDetection(adminId, t.cameraId, {
+          settingType: t.settingType,
+          enabled: t.enabled,
+        })
+      }
+      notifyApiSuccess(lastRes, 'Camera detections updated')
+      // Re-baseline from the now-saved local state so the dirty state clears.
+      setCamerasBaseline(
+        Object.fromEntries(cameras.map((c) => [c.cameraId, { ...(c.detections || {}) }]))
+      )
+    } catch (err) {
+      notifyApiError(err, 'Failed to update camera detections')
+    } finally {
+      setSavingCameras(false)
     }
-  }, [])
+  }
 
   const setDetection = (settingType, patch) => {
     setSaved(false)
@@ -239,7 +273,7 @@ const ClientConfig = () => {
             )}
           </div>
 
-          {/* Save applies to the License & Detections tab only. */}
+          {/* License tab: save camera license + detection allocations. */}
           {tab === 'license' && (
             <div className="flex items-center gap-3">
               {saved && !isDirty && (
@@ -255,6 +289,19 @@ const ClientConfig = () => {
                 {saving ? 'Saving…' : 'Save Configuration'}
               </button>
             </div>
+          )}
+
+          {/* Cameras tab: save per-camera detection toggles. */}
+          {tab === 'cameras' && (
+            <button
+              type="button"
+              onClick={handleSaveCameras}
+              disabled={!camerasTabDirty || savingCameras}
+              className="inline-flex items-center gap-2 rounded-xl bg-linear-to-r from-blue-600 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Save size={16} strokeWidth={2.2} />
+              {savingCameras ? 'Saving…' : 'Save Configuration'}
+            </button>
           )}
         </div>
 
@@ -309,7 +356,7 @@ const ClientConfig = () => {
           camerasLoading ? (
             <LoadingState message="Loading cameras…" />
           ) : (
-            <CamerasPanel cameras={cameras} detectionTypes={detectionTypes} />
+            <CamerasPanel cameras={cameras} onToggle={toggleCameraDetection} />
           )
         ) : (
           <>

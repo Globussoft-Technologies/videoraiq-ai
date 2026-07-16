@@ -28,16 +28,3 @@ export const getClientCameras = async (adminId) => {
 
   return response.data
 }
-
-// Canonical map of every detection settingType → display name.
-export const getDetectionTypes = async () => {
-  const token = await waitForToken()
-  const response = await axios.get(`${apiUrl}/api/v1/detection-settings/types`, {
-    headers: {
-      'Content-Type': 'application/json',
-      'x-access-token': token,
-    },
-  })
-
-  return response.data
-}

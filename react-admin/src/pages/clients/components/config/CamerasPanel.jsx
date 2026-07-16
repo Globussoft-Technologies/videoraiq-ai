@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 import CameraRow from './CameraRow'
 
-const CamerasPanel = ({ cameras, detectionTypes = [] }) => {
+const CamerasPanel = ({ cameras, onToggle }) => {
   const [query, setQuery] = useState('')
 
   const filtered = useMemo(() => {
@@ -50,14 +50,13 @@ const CamerasPanel = ({ cameras, detectionTypes = [] }) => {
 
       {/* Table */}
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/8 dark:bg-[#0b0d13]">
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_40px] gap-4 border-b border-gray-200 px-6 py-3 dark:border-white/8">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2.4fr)] gap-4 border-b border-gray-200 px-6 py-3 dark:border-white/8">
           <span className="font-mono text-[10px] font-semibold tracking-[0.12em] text-gray-400 uppercase dark:text-gray-600">
             Camera
           </span>
           <span className="font-mono text-[10px] font-semibold tracking-[0.12em] text-gray-400 uppercase dark:text-gray-600">
             Detections Enabled
           </span>
-          <span />
         </div>
 
         {filtered.length === 0 ? (
@@ -66,7 +65,7 @@ const CamerasPanel = ({ cameras, detectionTypes = [] }) => {
           </p>
         ) : (
           filtered.map((camera) => (
-            <CameraRow key={camera.cameraId} camera={camera} detectionTypes={detectionTypes} />
+            <CameraRow key={camera.cameraId} camera={camera} onToggle={onToggle} />
           ))
         )}
       </div>
