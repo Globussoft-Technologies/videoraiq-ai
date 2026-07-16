@@ -263,7 +263,7 @@ const DetectedUsers = () => {
   }
 
   return (
-    <div className="p-3 sm:p-4 lg:p-[22px]">
+    <div className="p-3 sm:p-4 lg:p-[22px] flex flex-col min-h-full">
       {activeFolder ? (
         <FolderDetailView
           folder={activeFolder}

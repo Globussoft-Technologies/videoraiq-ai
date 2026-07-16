@@ -6,10 +6,11 @@ import {
   ChartColumnBig,
   ChevronLeft,
   ChevronRight,
+  Loader2,
+  SearchX,
 } from 'lucide-react';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
-import notfound from '@/assets/notfound.svg';
 
 import { fetchPersonCountLogs } from './Api';
 import { buildChart } from './personCountChart';
@@ -148,9 +149,9 @@ const PersonCountLogs = () => {
   }
 
   return (
-    <div className="min-h-screen">
-      <div className="w-full p-3 sm:p-4 space-y-5 md:space-y-7 xl:space-y-8 bg-[var(--bg1solid)] rounded-[18px]">
-        <div className="border-[var(--bd)] rounded-[8px] xl:rounded-[20px] bg-[var(--bg2)] p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4">
+    <div className="min-h-full flex flex-col">
+      <div className="w-full flex flex-1 flex-col p-3 sm:p-4 space-y-5 md:space-y-7 xl:space-y-8 bg-[var(--bg1solid)] rounded-[18px]">
+        <div className="flex flex-1 flex-col border-[var(--bd)] rounded-[8px] xl:rounded-[20px] bg-[var(--bg2)] p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4">
           <h2 className="text-base font-semibold text-[var(--brand)] dark:text-[#0094e2]">
             Person Count Logs
           </h2>
@@ -193,16 +194,32 @@ const PersonCountLogs = () => {
 
           {/* Content */}
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-[var(--tx3)] text-sm">
-              Loading...
+            <div className="flex flex-1 items-center justify-center text-[var(--brand)]">
+              <Loader2 className="w-10 h-10 animate-spin" />
             </div>
           ) : error ? (
-            <div className="flex items-center justify-center py-16 text-[var(--crit)] text-sm">
-              Failed to load data.
+            <div className="flex flex-1 flex-col items-center justify-center py-16">
+              <div className="w-16 h-16 rounded-full bg-[var(--crit)]/10 border border-[var(--crit)]/20 flex items-center justify-center mb-4">
+                <SearchX className="w-7 h-7 text-[var(--crit)]" />
+              </div>
+              <p className="text-[18px] font-semibold text-[var(--tx)]" style={{ fontFamily: 'var(--disp)' }}>
+                Failed to load
+              </p>
+              <p className="text-sm text-[var(--tx3)] mt-1.5 max-w-[320px] text-center">
+                Something went wrong while loading person count logs. Please refresh and try again.
+              </p>
             </div>
           ) : charts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 min-h-[68vh]">
-              <img src={notfound} alt="No logs found" className="w-64 h-64 mb-4" />
+            <div className="flex flex-1 flex-col items-center justify-center py-16">
+              <div className="w-16 h-16 rounded-full bg-[var(--bg2)] border border-[var(--bd)] flex items-center justify-center mb-4">
+                <SearchX className="w-7 h-7 text-[var(--tx3)]" />
+              </div>
+              <p className="text-[18px] font-semibold text-[var(--tx)]" style={{ fontFamily: 'var(--disp)' }}>
+                No person count logs found
+              </p>
+              <p className="text-sm text-[var(--tx3)] mt-1.5 max-w-[320px] text-center">
+                There are no person count logs for the selected date range. Try widening the range.
+              </p>
             </div>
           ) : (
             <div className="space-y-6">

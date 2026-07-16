@@ -45,8 +45,8 @@ const FolderGridView = ({
   selectedFoldersImageCount,
   onConfirmDeleteFolders,
 }) => (
-  <div className="flex flex-col">
-    <div className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] p-4 sm:p-5 space-y-4">
+  <div className="flex flex-1 flex-col">
+    <div className="flex flex-1 flex-col bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] p-4 sm:p-5 space-y-4">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative w-full md:w-[260px] flex items-center h-10 rounded-[10px] bg-[var(--bg2)] border border-[var(--bd)] focus-within:border-[var(--violet)] focus-within:ring-2 focus-within:ring-[var(--violet)]/15 transition-colors">
@@ -112,11 +112,11 @@ const FolderGridView = ({
 
       {/* Grid */}
       {loading ? (
-        <div className="flex items-center justify-center min-h-[58vh] text-[var(--brand)]">
+        <div className="flex flex-1 items-center justify-center text-[var(--brand)]">
           <Loader2 className="w-10 h-10 animate-spin" />
         </div>
       ) : error ? (
-        <div className="flex flex-col items-center justify-center min-h-[58vh] py-16">
+        <div className="flex flex-1 flex-col items-center justify-center py-16">
           <div className="w-16 h-16 rounded-full bg-[var(--crit)]/10 border border-[var(--crit)]/20 flex items-center justify-center mb-4">
             <SearchX className="w-7 h-7 text-[var(--crit)]" />
           </div>
@@ -128,7 +128,7 @@ const FolderGridView = ({
           </p>
         </div>
       ) : folders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center min-h-[58vh] py-16">
+        <div className="flex flex-1 flex-col items-center justify-center py-16">
           <div className="w-16 h-16 rounded-full bg-[var(--bg2)] border border-[var(--bd)] flex items-center justify-center mb-4">
             <SearchX className="w-7 h-7 text-[var(--tx3)]" />
           </div>

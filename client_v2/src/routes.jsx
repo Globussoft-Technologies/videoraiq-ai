@@ -49,9 +49,8 @@ export const v2Routes = (
     <Route path="logs/tagged-users" element={<TaggedUsers />} />
     <Route path="logs/detected-users" element={<DetectedUsers />} />
     <Route path="logs/anpr" element={<ANPRLogs />} />
-
-    {/* <Route path="logs/person-count" element={<PersonCountLogs />} />
-    <Route path="logs/absence" element={<DeskAbsenceLogs />} /> */}
+    <Route path="logs/desk-absence" element={<DeskAbsenceLogs />} />
+    <Route path="logs/person-count" element={<PersonCountLogs />} />
 
     {/* Configure */}
     <Route path="cameras" element={<NVRCameras />} />
