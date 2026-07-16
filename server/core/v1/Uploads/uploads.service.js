@@ -109,7 +109,7 @@ class UploadService {
         } catch (error) {
             console.error("Error fetching media:", error);
             if (!res.headersSent) {
-                res.status(500).json({ status: "failed", message: `Failed to fetch media: ${error.message}` });
+                res.status(error.statusCode || 500).json({ status: "failed", message: `Failed to fetch media: ${error.message}` });
             }
         }
     }

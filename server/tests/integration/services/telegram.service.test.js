@@ -72,20 +72,23 @@ describe("TelegramService._deliver photo-fetch retry", () => {
     expect(axios.post.mock.calls[1][0]).toMatch(/sendPhoto$/);
   });
 
-  it("falls back to text only after the retried photo also fails", async () => {
+  it("falls back to text only after every scheduled photo retry fails", async () => {
     axios.post
+      .mockRejectedValueOnce(fetchErr())
       .mockRejectedValueOnce(fetchErr())
       .mockRejectedValueOnce(fetchErr())
       .mockResolvedValueOnce({ data: { ok: true } });
 
     vi.useFakeTimers();
     const p = TelegramService._deliver({ token: "t", chat: "c", message: "m", imageUrl: "http://img" });
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(3000); // first retry
+    await vi.advanceTimersByTimeAsync(15000); // second retry
     await p;
     vi.useRealTimers();
 
-    expect(axios.post).toHaveBeenCalledTimes(3);
-    expect(axios.post.mock.calls[2][0]).toMatch(/sendMessage$/);
+    expect(axios.post).toHaveBeenCalledTimes(4); // photo ×3, then text
+    expect(axios.post.mock.calls[2][0]).toMatch(/sendPhoto$/);
+    expect(axios.post.mock.calls[3][0]).toMatch(/sendMessage$/);
   });
 });
 

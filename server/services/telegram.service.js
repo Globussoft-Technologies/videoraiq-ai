@@ -19,6 +19,9 @@ class TelegramService {
     this._queues = new Map(); // chat_id -> { jobs: [], running: bool }
     this._MIN_GAP_MS = 1100; // ~1 msg/sec per chat (a little headroom)
     this._MAX_QUEUE = 100; // cap per-chat backlog to bound memory during bursts
+    // Photo-fetch retry schedule: 3s catches an upload race, 15s rides out
+    // NFS visibility lag / a flaky SFTP read on the media store.
+    this._PHOTO_RETRY_DELAYS_MS = [3000, 15000];
   }
 
   async sendMessage(message) {
@@ -270,7 +273,9 @@ class TelegramService {
         return this._deliver(job, true);
       }
       const reason = data ? JSON.stringify(data) : error?.message || String(error);
-      logger.error(`[TELEGRAM] Failed to send incident to ${chat}: ${reason}`);
+      logger.error(
+        `[TELEGRAM] Failed to send incident to ${chat}: ${reason}${imageUrl ? ` (image: ${imageUrl})` : ""}`,
+      );
       // A dead/unknown chat will never work — clear the stale binding so we stop
       // erroring on every future incident (self-heals; the admin re-links).
       if (this._isDeadChatError(data)) {
@@ -278,13 +283,19 @@ class TelegramService {
         return; // no point trying the text fallback to the same dead chat
       }
       // Telegram fetches imageUrl itself, and a just-created snapshot may not
-      // be downloadable yet (upload race). Retry the photo ONCE after a short
-      // delay before degrading the alert to text.
-      if (imageUrl && this._isPhotoFetchError(data) && !job._photoRetried) {
-        job._photoRetried = true;
-        logger.warn(`[TELEGRAM] photo fetch failed for ${chat} — retrying photo in 3s`);
-        await new Promise((r) => setTimeout(r, 3000));
-        return this._deliver(job, isRetry);
+      // be downloadable yet (upload race / NFS visibility lag / SFTP blip).
+      // Retry the photo on a short-then-long schedule before degrading to text.
+      if (imageUrl && this._isPhotoFetchError(data)) {
+        const attempt = job._photoAttempt || 0;
+        if (attempt < this._PHOTO_RETRY_DELAYS_MS.length) {
+          job._photoAttempt = attempt + 1;
+          const wait = this._PHOTO_RETRY_DELAYS_MS[attempt];
+          logger.warn(
+            `[TELEGRAM] photo fetch failed for ${chat} — retry ${attempt + 1}/${this._PHOTO_RETRY_DELAYS_MS.length} in ${wait / 1000}s`,
+          );
+          await new Promise((r) => setTimeout(r, wait));
+          return this._deliver(job, isRetry);
+        }
       }
       // Fall back to plain text only if the PHOTO failed for a non-429 reason
       // (e.g. Telegram couldn't fetch the image URL).

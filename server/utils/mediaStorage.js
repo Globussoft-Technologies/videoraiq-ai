@@ -238,6 +238,15 @@ export async function streamMedia(mediaPath, res) {
   }
 
   await withSFTPConnection(async (sftp) => {
+    // Stat before streaming: the caller has already set image/* headers, so a
+    // stream that dies on "No such file" would otherwise go out as a truncated
+    // 200 "image" (Telegram reads that as "wrong type of the web page content").
+    // A missing file must be a clean 404 instead.
+    if (!(await sftp.exists(mediaPath))) {
+      const err = new Error("File not found in storage.");
+      err.statusCode = 404;
+      throw err;
+    }
     const sftpStream = await sftp.createReadStream(mediaPath);
     sftpStream.on("error", (err) => {
       logger.error("SFTP stream error:", err);
