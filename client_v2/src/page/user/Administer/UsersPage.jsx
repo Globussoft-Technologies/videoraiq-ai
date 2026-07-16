@@ -54,6 +54,12 @@ function userEmail(u) {
 function userRoleName(u) {
   return u.roleIds?.roleName || u.role || u.roleName || '';
 }
+// The API nests failures under body.message (see utils/response.js), so reading
+// data.message alone swallowed real errors — e.g. the 409 raised when an email
+// already belongs to another user.
+function apiError(err, fallback) {
+  return err?.response?.data?.body?.message || err?.response?.data?.message || fallback;
+}
 // Ported exactly from V1's NewPermissionForm.jsx generateStrongPassword() —
 // 16 chars, one of each character class guaranteed, then shuffled.
 function genPassword() {
@@ -231,12 +237,11 @@ function RoleSelect({ roles, loading, value, onChange }) {
         {activeLabel}
         <ChevronDown size={14} style={{ color: 'var(--tx3)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
       </button>
-      {/* Opens upward, anchored to the trigger. This field sits low in the form,
-          so dropping down pushed the list past the bottom of the card; growing
-          up keeps it over the fields above and inside the modal. */}
+      {/* Opens downward, anchored to the trigger — both modes now render the
+          Camera Access rows below this field, so there is room underneath. */}
       {open && (
         <div style={{
-          position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 4, zIndex: 50,
+          position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, zIndex: 50,
           maxHeight: ROLE_PANEL_MAX_H, overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
           borderRadius: 10, boxShadow: '0 18px 50px rgba(0,0,0,.35)', padding: 5,
         }}>
@@ -271,13 +276,26 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   const [lastName, setLastName]   = useState(initialLast);
   const [email, setEmail]       = useState(isEdit ? (user.email || userEmail(user)) : '');
   const [roleId, setRoleId]     = useState(isEdit ? (user.roleIds?._id || user.roleIds || '') : '');
-  const [employeeLocations, setEmployeeLocations] = useState([]);
-  const [selectedLocations, setSelectedLocations] = useState([]);
-  const [selectedNvrs, setSelectedNvrs] = useState([]);
-  const [selectedChannels, setSelectedChannels] = useState([]);
-  const [selectedDepartments, setSelectedDepartments] = useState([]);
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+
+  /* Existing camera access for this user. users/fetch joins the authorizedChannels
+     doc onto every user, so editing needs no extra request. locations and
+     employeeLocations are stored as name strings; nvrIds/departmentIds/channels
+     come back populated as objects — normalise both to plain ids. */
+  const access = (isEdit ? user?.authorizedChannels : null) || {};
+  const toIds = (arr) => (Array.isArray(arr) ? arr : [])
+    .map((x) => (x && typeof x === 'object' ? (x._id || x.id) : x))
+    .filter(Boolean);
+
+  const [employeeLocations, setEmployeeLocations] = useState(() => toIds(access.employeeLocations));
+  const [selectedLocations, setSelectedLocations] = useState(() => toIds(access.locations));
+  const [selectedNvrs, setSelectedNvrs] = useState(() => toIds(access.nvrIds));
+  const [selectedChannels, setSelectedChannels] = useState(() => toIds(access.channels));
+  const [selectedDepartments, setSelectedDepartments] = useState(() => toIds(access.departmentIds));
+  // users/fetch returns the password decrypted, so edit prefills it the way V1
+  // does. Sending it back unchanged is a no-op: the update endpoint compares
+  // against the stored value and skips when they match.
+  const [password, setPassword] = useState(isEdit ? (user.password || '') : '');
+  const [confirmPassword, setConfirmPassword] = useState(isEdit ? (user.password || '') : '');
   const [showPass, setShowPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [saving, setSaving]     = useState(false);
@@ -333,6 +351,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
       const prunedNvrs = selectedNvrs.filter(id => validNvrIds.has(id));
       if (prunedNvrs.length !== selectedNvrs.length) setSelectedNvrs(prunedNvrs);
       const channels = await getChannelsForUserAccess({ selectedLocations, nvrIds: prunedNvrs });
+      console.log('channels for user access', channels);
       if (cancelled) return;
       setChannelOptions(channels || []);
     })();
@@ -377,18 +396,35 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   const handleSave = async () => {
     if (!username.trim()) return sonnerToast.error('Username is required');
     if (!firstName.trim()) return sonnerToast.error('First name is required');
-    if (!isEdit && !email.trim()) return sonnerToast.error('Email is required');
+    if (!email.trim()) return sonnerToast.error('Email is required');
     if (!isEdit && !password) return sonnerToast.error('Password is required');
-    if (!isEdit && password !== confirmPassword) return sonnerToast.error('Passwords do not match');
+    // Editing may leave the password untouched, but if it is edited the two
+    // fields still have to agree.
+    if (password !== confirmPassword) return sonnerToast.error('Passwords do not match');
 
     setSaving(true);
     try {
       if (isEdit) {
         await onSave({
+          userName: username.trim(),
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           email: email.trim(),
           roleIds: roleId ? [roleId] : [],
+          // Only send a password when one is present; the server no-ops it when
+          // it matches what is already stored.
+          ...(password.trim()
+            ? { password: password.trim(), confirmPassword: confirmPassword.trim() }
+            : {}),
+          // Same shape V1's edit sends — without this the access fields would
+          // render but silently discard any change on save.
+          authorizedChannelsData: {
+            employeeLocations: employeeLocations.length ? employeeLocations : undefined,
+            locations: selectedLocations,
+            nvrIds: selectedNvrs,
+            departmentIds: selectedDepartments,
+            channelIds: selectedChannels,
+          },
         });
       } else {
         await onSave({
@@ -430,8 +466,10 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
     });
     const out = [];
     groups.forEach((group, nvrId) => {
+
       out.push({ id: `nvr-header-${nvrId}`, label: group.nvrName, isHeader: true });
       group.channels.forEach((c) => {
+        console.log('channel for user access', c);
         out.push({ id: c._id, label: c.customName || c.name || 'Unnamed Channel' });
       });
     });
@@ -467,18 +505,12 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
               <TextInput
                 placeholder="Search or type new user…"
                 value={username}
-                disabled={isEdit}
                 onChange={e => setUsername(e.target.value)}
-                style={isEdit ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
               />
             </div>
             <div>
               <FieldLabel>Email ID *</FieldLabel>
-              {isEdit ? (
-                <TextInput value={email} disabled style={{ opacity: 0.6, cursor: 'not-allowed' }} />
-              ) : (
-                <TextInput placeholder="Enter email address" type="email" value={email} onChange={e => setEmail(e.target.value)} />
-              )}
+              <TextInput placeholder="Enter email address" type="email" value={email} onChange={e => setEmail(e.target.value)} />
             </div>
           </div>
 
@@ -501,23 +533,21 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
               <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: -4, marginBottom: 6 }}>Assign the correct role permissions to this user.</div>
               <RoleSelect roles={roles} loading={rolesLoading} value={roleId} onChange={setRoleId} />
             </div>
-            {!isEdit && (
-              <div>
-                <FieldLabel>Employee Access</FieldLabel>
-                <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: -4, marginBottom: 6 }}>Select the employee location access.</div>
-                <MultiSelect
-                  options={employeeLocationMultiOptions}
-                  value={employeeLocations}
-                  onChange={setEmployeeLocations}
-                  placeholder="Select employee access"
-                  msg="No employee locations found"
-                />
-              </div>
-            )}
+            <div>
+              <FieldLabel>Employee Access</FieldLabel>
+              <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: -4, marginBottom: 6 }}>Select the employee location access.</div>
+              <MultiSelect
+                options={employeeLocationMultiOptions}
+                value={employeeLocations}
+                onChange={setEmployeeLocations}
+                placeholder="Select employee access"
+                msg="No employee locations found"
+              />
+            </div>
           </div>
 
-          {!isEdit && (
-            <>
+          {/* Camera Access applies to both modes — in edit it arrives prefilled
+              from the user's existing authorizedChannels. */}
               <div style={{ height: 1, background: 'var(--bd)' }} />
               <div style={{ fontSize: 13, fontWeight: 600 }}>Camera Access</div>
 
@@ -574,7 +604,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
 
               <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 14 }}>
                 <div>
-                  <FieldLabel>New password *</FieldLabel>
+                  <FieldLabel>{isEdit ? 'Update password' : 'New password *'}</FieldLabel>
                   <div style={{ position: 'relative' }}>
                     <TextInput
                       placeholder="Enter new password"
@@ -592,7 +622,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                   </div>
                 </div>
                 <div>
-                  <FieldLabel>Confirm password *</FieldLabel>
+                  <FieldLabel>{isEdit ? 'Confirm password' : 'Confirm password *'}</FieldLabel>
                   <div style={{ position: 'relative' }}>
                     <TextInput
                       placeholder="Re-enter password"
@@ -627,8 +657,6 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                   <Copy size={14} />
                 </button>
               </div>
-            </>
-          )}
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
@@ -700,7 +728,7 @@ export default function UsersPage() {
       setShowAddModal(false);
       usersApi.refetch();
     } catch (err) {
-      sonnerToast.error(err?.response?.data?.message || 'Failed to register user');
+      sonnerToast.error(apiError(err, 'Failed to register user'));
     }
   };
 
@@ -745,7 +773,7 @@ export default function UsersPage() {
       setEditUser(null);
       usersApi.refetch();
     } catch (err) {
-      sonnerToast.error(err?.response?.data?.message || 'Failed to update user');
+      sonnerToast.error(apiError(err, 'Failed to update user'));
     }
   };
 
