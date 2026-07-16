@@ -8,14 +8,23 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 vi.mock("axios", () => ({ default: { post: vi.fn() } }));
+vi.mock("../../../core/v1/admin/admin.model.js", () => ({
+  default: { findOne: vi.fn(), findOneAndUpdate: vi.fn(), updateOne: vi.fn() },
+}));
 
 const axios = (await import("axios")).default;
+const adminModel = (await import("../../../core/v1/admin/admin.model.js")).default;
 const { default: TelegramService } = await import(
   "../../../services/telegram.service.js"
 );
 
+// adminModel queries chain .select().lean() — resolve to `value`.
+const chainResolving = (value) => ({ select: () => ({ lean: async () => value }) });
+
 beforeEach(() => {
   axios.post.mockReset();
+  adminModel.findOne.mockReset();
+  adminModel.findOneAndUpdate.mockReset();
 });
 
 describe("TelegramService.sendMessage", () => {
@@ -77,6 +86,40 @@ describe("TelegramService._deliver photo-fetch retry", () => {
 
     expect(axios.post).toHaveBeenCalledTimes(3);
     expect(axios.post.mock.calls[2][0]).toMatch(/sendMessage$/);
+  });
+});
+
+describe("TelegramService.handleUpdate linking", () => {
+  const update = { channel_post: { text: "VRIQ-ABCDEF12", chat: { id: -100123 } } };
+
+  it("does NOT bind the channel when the bot cannot post the confirmation", async () => {
+    adminModel.findOne.mockReturnValueOnce(chainResolving({ _id: "a1" }));
+    axios.post.mockRejectedValueOnce({
+      response: {
+        data: { ok: false, error_code: 400, description: "Bad Request: need administrator rights in the channel chat" },
+      },
+    });
+
+    const res = await TelegramService.handleUpdate(update);
+
+    expect(res.matched).toBe(false);
+    expect(adminModel.findOneAndUpdate).not.toHaveBeenCalled(); // code stays active, chat not bound
+  });
+
+  it("binds the channel only after the confirmation is delivered", async () => {
+    adminModel.findOne.mockReturnValueOnce(chainResolving({ _id: "a1" }));
+    axios.post.mockResolvedValueOnce({ data: { ok: true } });
+    adminModel.findOneAndUpdate.mockReturnValueOnce(chainResolving({ _id: "a1" }));
+
+    const res = await TelegramService.handleUpdate(update);
+
+    expect(res).toMatchObject({ ok: true, matched: true, adminId: "a1", chatId: "-100123" });
+    expect(axios.post.mock.calls[0][0]).toMatch(/sendMessage$/);
+    expect(adminModel.findOneAndUpdate).toHaveBeenCalledWith(
+      { telegramLinkCode: "VRIQ-ABCDEF12" },
+      { $set: { telegramChatId: "-100123", telegramLinkCode: null } },
+      { new: false },
+    );
   });
 });
 

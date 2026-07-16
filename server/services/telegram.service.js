@@ -136,6 +136,32 @@ class TelegramService {
       if (!chat?.id) return { ok: true, matched: false };
       const boundChatId = String(chat.id);
 
+      // The code must belong to an admin before anything is sent to the chat.
+      const candidate = await adminModel.findOne({ telegramLinkCode: code }).select("_id").lean();
+      if (!candidate) {
+        logger.warn(`[TELEGRAM] link code not found or already used: ${code}`);
+        return { ok: true, matched: false };
+      }
+
+      // Prove the bot can actually post here BEFORE binding — if its post
+      // rights were revoked, alerts would silently go nowhere while the
+      // dashboard shows "connected". The confirmation message doubles as the
+      // probe; on failure the code stays active so the client can fix the
+      // bot's permissions and post it again.
+      try {
+        await axios.post(`https://api.telegram.org/bot${platformBotToken}/sendMessage`, {
+          chat_id: boundChatId,
+          text: "✅ This channel is now linked\\. Incident alerts will arrive here\\.",
+          parse_mode: "MarkdownV2",
+        });
+      } catch (sendErr) {
+        const reason = sendErr?.response?.data
+          ? JSON.stringify(sendErr.response.data)
+          : sendErr?.message || String(sendErr);
+        logger.warn(`[TELEGRAM] link rejected for chat ${boundChatId} — bot cannot post: ${reason}`);
+        return { ok: true, matched: false };
+      }
+
       // Match AND consume the code atomically: only bind if this exact code is
       // still active, and clear it in the same write so it becomes single-use.
       // Prevents a leaked/re-posted code from re-binding another channel later.
@@ -150,15 +176,6 @@ class TelegramService {
       }
 
       logger.info(`[TELEGRAM] linked admin ${admin._id} -> chat ${boundChatId}`);
-
-      // Best-effort confirmation into the channel. _deliver sends as MarkdownV2,
-      // so escape the reserved chars (here just the periods).
-      this._enqueue(boundChatId, {
-        token: platformBotToken,
-        chat: boundChatId,
-        message: "✅ This channel is now linked\\. Incident alerts will arrive here\\.",
-        imageUrl: "",
-      });
 
       return { ok: true, matched: true, adminId: String(admin._id), chatId: boundChatId };
     } catch (err) {
