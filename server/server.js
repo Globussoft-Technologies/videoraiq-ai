@@ -24,6 +24,7 @@ import { initSocket } from "./socket.js"; // <-- Socket.io setup
 import { mustRunInsideContainer } from "./scripts/check.js";
 import { prometheusMiddleware } from "./middlewares/prometheusMiddleware.js";
 import { metricsHandler } from "./utils/prometheus.js";
+import { scheduleRetentionSweep } from "./services/retention.service.js";
 
 if (process.env.T === "D") mustRunInsideContainer();
 
@@ -133,6 +134,9 @@ const startServer = async () => {
         `🚀 Server with Socket.IO running on port ${PORT} in ${process.env.NODE_ENV} mode`
       );
     });
+
+    // Data-retention sweeper (no-op unless DataRetention.enabled). Never throws.
+    scheduleRetentionSweep();
   } catch (error) {
     logger.error(`❗ Failed to start server: ${error.message}`);
     process.exit(1);
