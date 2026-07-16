@@ -354,7 +354,10 @@ const VehicleDetectionIncident = Incident.discriminator('vehicleDetection', Vehi
 const vehicleObstructionSchema = new Schema({
   count: {type:Number,default:0},
   triggerNotification: { type: Boolean, default: true },
-  vehicleNumber:{type:String,default:null}
+  vehicleNumber:{type:String,default:null},
+  // When the vehicle entered the dispatch area (sent in the trigger payload).
+  // timeOfIncident doubles as the dispatch exit time for this type.
+  dispatchEntryTime: {type:Date,default:null}
 });
 const VehicleObstructionIncident = Incident.discriminator('vehicleObstruction', vehicleObstructionSchema);
 

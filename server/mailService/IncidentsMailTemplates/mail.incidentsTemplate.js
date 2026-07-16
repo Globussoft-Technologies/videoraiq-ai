@@ -1,5 +1,9 @@
 import config from "config";
 import { encrypt, decrypt } from "../../utils/cryptoUtils.js";
+
+// Weekday name for the Day row shown in every incident mail (same locale as
+// the templates' formattedTime).
+const dayOf = (t) => (t ? new Date(t).toLocaleDateString("en-IN", { weekday: "long" }) : "N/A");
 export let IncidentMail = (incidentData, alertBasedOn, nvrOrChannelDetails) => {
   const {
     incidentName,
@@ -125,6 +129,7 @@ export let IncidentMail = (incidentData, alertBasedOn, nvrOrChannelDetails) => {
     <div class="container">
       <div class="header">
         <h2>🚨 Incident Reported: ${incidentName} (${incidentType})</h2>
+        <p><strong>Day:</strong> ${dayOf(timeOfIncident)}</p>
         <p><strong>Time:</strong> ${timeOfIncident}</p>
       </div>
 
@@ -328,6 +333,14 @@ export let loiteringWithoutAuthTemplate = (
   <span style="margin-left:6px;"><strong>Time of Incident</strong></span>
   </td>
   <td style="padding:6px 10px; color: #626262;">${formattedTime}</td>
+  </tr>
+
+  <tr>
+  <td style="padding:6px 10px;">
+  <img src="https://i.postimg.cc/SRrQMQD9/clock.png" width="24" alt="" style="vertical-align:middle;">
+  <span style="margin-left:6px;"><strong>Day</strong></span>
+  </td>
+  <td style="padding:6px 10px; color: #626262;">${dayOf(timeOfIncident)}</td>
   </tr>
   
   <tr>
@@ -563,6 +576,14 @@ export let LoiteringWithAuthIncident = (incidentData, nvrData, channelData) => {
   <span style="margin-left:6px;"><strong style="color: #333333;">Time of Incident</strong></span>
   </td>
   <td style="padding:6px 10px;color: #626262; font-weight: 400;">${formattedTime}</td>
+  </tr>
+
+  <tr>
+  <td style="padding:6px 10px;">
+  <img src="https://i.postimg.cc/SRrQMQD9/clock.png" width="24" alt="" style="vertical-align:middle;">
+  <span style="margin-left:6px;"><strong style="color: #333333;">Day</strong></span>
+  </td>
+  <td style="padding:6px 10px;color: #626262; font-weight: 400;">${dayOf(timeOfIncident)}</td>
   </tr>
   
   <tr>
@@ -810,6 +831,14 @@ export let unauthorizedAccessIncident = (
   </td>
   <td style="padding:6px 10px;color: #626262; font-weight: 400;">${formattedTime}</td>
   </tr>
+
+  <tr>
+  <td style="padding:6px 10px;">
+  <img src="https://i.postimg.cc/SRrQMQD9/clock.png" width="24" alt="" style="vertical-align:middle;">
+  <span style="margin-left:6px;"><strong style="color: #333333;">Day</strong></span>
+  </td>
+  <td style="padding:6px 10px;color: #626262; font-weight: 400;">${dayOf(timeOfIncident)}</td>
+  </tr>
   
   <tr>
   <td style="padding:6px 10px;">
@@ -1038,6 +1067,14 @@ export let LineCrossingAuthIncident = (incidentData, nvrData, channelData) => {
   <span style="margin-left:6px;"><strong style="color: #333333;">Time of Incident</strong></span>
   </td>
   <td style="padding:6px 10px;color: #626262; font-weight: 400;">${formattedTime}</td>
+  </tr>
+
+  <tr>
+  <td style="padding:6px 10px;">
+  <img src="https://i.postimg.cc/SRrQMQD9/clock.png" width="24" alt="" style="vertical-align:middle;">
+  <span style="margin-left:6px;"><strong style="color: #333333;">Day</strong></span>
+  </td>
+  <td style="padding:6px 10px;color: #626262; font-weight: 400;">${dayOf(timeOfIncident)}</td>
   </tr>
   
   <tr>
@@ -1320,6 +1357,14 @@ export let motionDetectionAuthTemplate = (
   </td>
   <td style="padding:6px 10px;color: #626262; font-weight: 400;">${formattedTime}</td>
   </tr>
+
+  <tr>
+  <td style="padding:6px 10px;">
+  <img src="https://i.postimg.cc/SRrQMQD9/clock.png" width="24" alt="" style="vertical-align:middle;">
+  <span style="margin-left:6px;"><strong style="color: #333333;">Day</strong></span>
+  </td>
+  <td style="padding:6px 10px;color: #626262; font-weight: 400;">${dayOf(timeOfIncident)}</td>
+  </tr>
   
   <tr>
   <td style="padding:6px 10px;">
@@ -1551,6 +1596,7 @@ export let genericObjectDetectionTemplate = (
       <h2>Generic Object Detection Report</h2>
   
       <div class="section"><span class="label">Incident Type:</span> genericObjectDetection</div>
+      <div class="section"><span class="label">Day:</span> ${dayOf(incidentData.timeOfIncident)}</div>
       <div class="section"><span class="label">Time of Incident:</span> ${incidentData.timeOfIncident}</div>
       <div class="section"><span class="label">Zone:</span> ${incidentData.zone}</div>
   
@@ -1647,6 +1693,7 @@ export let countVehiclesTemplate = (incidentData, nvrData, channelData) => {
       <h2>Vehicle Count Report</h2>
   
       <div class="section"><span class="label">Incident Type:</span> countVehicles</div>
+      <div class="section"><span class="label">Day:</span> ${dayOf(incidentData.timeOfIncident)}</div>
       <div class="section"><span class="label">Time of Incident:</span> ${incidentData.timeOfIncident}</div>
       <div class="section"><span class="label">Zone:</span> ${incidentData.zone}</div>
   
@@ -1738,6 +1785,11 @@ export const crowdDetectionTemplate = (incidentData, nvrData, channelData) => {
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
                     <strong>Zone:</strong> ${zone || "N/A"}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
                   </td>
                 </tr>
                 <tr>
@@ -1930,6 +1982,11 @@ export const countPersonsTemplate = (incidentData, nvrData, channelData) => {
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
                     <strong>Zone:</strong> ${zone || "N/A"}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
                   </td>
                 </tr>
                 <tr>
@@ -2156,6 +2213,10 @@ export const personDetectedTemplate = (incidentData, nvrData, channelData) => {
                   <td style="padding:6px 10px;color:#626262;">${formattedTime}</td>
                 </tr>
                 <tr>
+                  <td style="padding:6px 10px;"><strong>Day</strong></td>
+                  <td style="padding:6px 10px;color:#626262;">${dayOf(timeOfIncident)}</td>
+                </tr>
+                <tr>
                   <td style="padding:6px 10px;"><strong>Zone</strong></td>
                   <td style="padding:6px 10px;color:#626262;">${zone || "N/A"}</td>
                 </tr>
@@ -2320,6 +2381,11 @@ export const personalProtectiveEquipmentTemplate = (
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
                     <strong>Zone:</strong> ${zone || "N/A"}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
                   </td>
                 </tr>
                 <tr>
@@ -2533,6 +2599,11 @@ export const foodServicePPEDetectionTemplate = (
                 </tr>
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
                     <strong>Time of Incident:</strong> ${formattedTime}
                   </td>
                 </tr>
@@ -2728,6 +2799,11 @@ export const doorDetectionTemplate = (incidentData, nvrData, channelData) => {
                   </td>
                 </tr>
 
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                  </td>
+                </tr>
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
                     <strong>Time of Incident:</strong> ${formattedTime}
@@ -2931,6 +3007,11 @@ export const lightDetectionTemplate = (incidentData, nvrData, channelData) => {
 
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
                     <strong>Time of Incident:</strong> ${formattedTime}
                   </td>
                 </tr>
@@ -3107,6 +3188,11 @@ export let bagDetectionTemplate = (incidentData, nvrData, channelData) => {
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
                     <strong>Zone:</strong> ${zone || "N/A"}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
                   </td>
                 </tr>
                 <tr>
@@ -3325,6 +3411,11 @@ export const vehicleDetectionTemplate = (
 
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
                     <strong>Time of Incident:</strong> ${timeOfIncident}
                   </td>
                 </tr>
@@ -3539,6 +3630,12 @@ Automated Incident Notification
 
 <tr>
 <td style="font-size:14px;padding-bottom:6px;">
+<strong>Day:</strong> ${dayOf(timeOfIncident)}
+</td>
+</tr>
+
+<tr>
+<td style="font-size:14px;padding-bottom:6px;">
 <strong>Time of Incident:</strong> ${formattedTime}
 </td>
 </tr>
@@ -3724,6 +3821,12 @@ Automated Incident Notification
 <tr>
 <td style="font-size:14px;padding-bottom:6px;">
 <strong>Zone:</strong> ${zone || "N/A"}
+</td>
+</tr>
+
+<tr>
+<td style="font-size:14px;padding-bottom:6px;">
+<strong>Day:</strong> ${dayOf(timeOfIncident)}
 </td>
 </tr>
 
@@ -4164,6 +4267,11 @@ const industrialEquipmentTemplate = (
                
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
                     <strong>Time of Incident:</strong> ${timeOfIncident}
                   </td>
                 </tr>
@@ -4354,6 +4462,11 @@ export const waterSpillageDetectionTemplate = (
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
                     <strong>Zone:</strong> ${zone || "N/A"}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
                   </td>
                 </tr>
                 <tr>
@@ -4550,6 +4663,11 @@ export let loiteringDetectionTemplate = (incidentData, nvrData, channelData) => 
                 </tr>
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
                     <strong>Time of Incident:</strong> ${formattedTime}
                   </td>
                 </tr>
@@ -4674,7 +4792,17 @@ export const vehicleObstructionTemplate = (
     Image,
     vehicleNumber,
     currentStatus, // OPENED | CLOSED
+    dispatchEntryTime,
   } = incidentData;
+
+  // Dispatch window: entry comes in the trigger payload, exit is timeOfIncident.
+  const formattedEntryTime = dispatchEntryTime
+    ? new Date(dispatchEntryTime).toLocaleString("en-IN", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        hour12: true,
+      })
+    : "N/A";
 
   const getSeverityStyles = (level = "low") => {
     switch (level) {
@@ -4765,7 +4893,19 @@ export const vehicleObstructionTemplate = (
 
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Time of Incident:</strong> ${timeOfIncident}
+                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Dispatch Entry Time:</strong> ${formattedEntryTime}
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Dispatch Exit Time:</strong> ${formattedTime}
                   </td>
                 </tr>
 
@@ -4949,6 +5089,11 @@ export let tableOccupancyDetectionTemplate = (incidentData, nvrData, channelData
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
                     <strong>Zone:</strong> ${zone || "N/A"}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
                   </td>
                 </tr>
                 <tr>
@@ -5139,6 +5284,11 @@ export let mobilePhoneDetectionTemplate = (incidentData, nvrData, channelData) =
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
                     <strong>Zone:</strong> ${zone || "N/A"}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
                   </td>
                 </tr>
                 <tr>

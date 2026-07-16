@@ -27,6 +27,18 @@ export const formatIncidentTime = (timeOfIncident, timezone) => {
   }
 };
 
+// Weekday name for an incident timestamp in the admin's timezone (same
+// fallback rules as formatIncidentTime).
+export const formatIncidentDay = (timeOfIncident, timezone) => {
+  if (!timeOfIncident) return "N/A";
+  const d = new Date(timeOfIncident);
+  try {
+    return d.toLocaleDateString("en-US", { weekday: "long", ...(timezone ? { timeZone: timezone } : {}) });
+  } catch {
+    return d.toLocaleDateString("en-US", { weekday: "long" });
+  }
+};
+
 export const buildIncidentMessage = (incident, timezone) => {
   const {
     incidentName,
@@ -107,6 +119,7 @@ export const buildIncidentTelegramMessage = (incident = {}, nvrData = {}, channe
     severity,
     zone,
     description,
+    dispatchEntryTime,
   } = incident;
 
   // MarkdownV2 requires escaping these chars in any text/value so that user
@@ -118,12 +131,23 @@ export const buildIncidentTelegramMessage = (incident = {}, nvrData = {}, channe
   const cameraName = channelData?.customName || channelData?.name || incident?.cameraId || "N/A";
   const nvrName = nvrData?.nvrName || "N/A";
 
+  // vehicleObstruction tracks a dispatch window: entry time arrives in the
+  // trigger payload, timeOfIncident is the exit. Other types keep plain Time.
+  const timeLines =
+    incidentType === "vehicleObstruction"
+      ? [
+          `*Dispatch Entry Time:* ${dispatchEntryTime ? up(formatIncidentTime(dispatchEntryTime, timezone)) : "N/A"}`,
+          `*Dispatch Exit Time:* ${timeOfIncident ? up(formatIncidentTime(timeOfIncident, timezone)) : "N/A"}`,
+        ]
+      : [`*Time:* ${timeOfIncident ? up(formatIncidentTime(timeOfIncident, timezone)) : "N/A"}`];
+
   const lines = [
     `🚨 *INCIDENT ALERT*`,
     ``,
     `*Type:* ${up(friendlyType(incidentType))}`,
     incidentName ? `*Name:* ${up(incidentName)}` : null,
-    `*Time:* ${timeOfIncident ? up(formatIncidentTime(timeOfIncident, timezone)) : "N/A"}`,
+    `*Day:* ${up(formatIncidentDay(timeOfIncident, timezone))}`,
+    ...timeLines,
     severity ? `*Severity:* ${up(severity)}` : null,
     `*Camera:* ${up(cameraName)}`,
     `*NVR:* ${up(nvrName)}`,
