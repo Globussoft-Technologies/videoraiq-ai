@@ -18,7 +18,14 @@ export let completeConfig = {
         trackLogs: { view: false, create: false, edit: false, delete: false },
         deskLogs: { view: false, create: false, edit: false, delete: false },
         guardLogs: { view: false, create: false, edit: false, delete: false },
-        ANPRLogs: { view: false, create: false, edit: false, delete: false }
+        ANPRLogs: { view: false, create: false, edit: false, delete: false },
+        conveyorLogs: { view: false, create: false, edit: false, delete: false },
+        vehicleObstructionLogs: { view: false, create: false, edit: false, delete: false },
+        vehicleCountLogs: { view: false, create: false, edit: false, delete: false },
+        crusherLogs: { view: false, create: false, edit: false, delete: false },
+        lineCrossingLogs: { view: false, create: false, edit: false, delete: false },
+        waterSpillLogs: { view: false, create: false, edit: false, delete: false },
+        unauthorizedAccessLogs: { view: false, create: false, edit: false, delete: false }
     },
     locations: { view: false, create: false, edit: false, delete: false },
     playbacks:{ view: false, create: false, edit: false, delete: false }
@@ -45,7 +52,14 @@ export let adminConfig = {
         trackLogs: { view: true, create: true, edit: true, delete: true },
         deskLogs: { view: true, create: true, edit: true, delete: true },
         guardLogs: { view: true, create: true, edit: true, delete: true },
-        ANPRLogs: { view: true, create: true, edit: true, delete: true }
+        ANPRLogs: { view: true, create: true, edit: true, delete: true },
+        conveyorLogs: { view: true, create: true, edit: true, delete: true },
+        vehicleObstructionLogs: { view: true, create: true, edit: true, delete: true },
+        vehicleCountLogs: { view: true, create: true, edit: true, delete: true },
+        crusherLogs: { view: true, create: true, edit: true, delete: true },
+        lineCrossingLogs: { view: true, create: true, edit: true, delete: true },
+        waterSpillLogs: { view: true, create: true, edit: true, delete: true },
+        unauthorizedAccessLogs: { view: true, create: true, edit: true, delete: true }
     },
     locations: { view: true, create: true, edit: true, delete: true },
     playbacks:{ view: true, create: true, edit: true, delete: true },
@@ -72,7 +86,14 @@ export let readConfig = {
         trackLogs: { view: true, create: false, edit: false, delete: false },
         deskLogs: { view: true, create: false, edit: false, delete: false },
         guardLogs: { view: true, create: false, edit: false, delete: false },
-        ANPRLogs: { view: true, create: false, edit: false, delete: false }
+        ANPRLogs: { view: true, create: false, edit: false, delete: false },
+        conveyorLogs: { view: true, create: false, edit: false, delete: false },
+        vehicleObstructionLogs: { view: true, create: false, edit: false, delete: false },
+        vehicleCountLogs: { view: true, create: false, edit: false, delete: false },
+        crusherLogs: { view: true, create: false, edit: false, delete: false },
+        lineCrossingLogs: { view: true, create: false, edit: false, delete: false },
+        waterSpillLogs: { view: true, create: false, edit: false, delete: false },
+        unauthorizedAccessLogs: { view: true, create: false, edit: false, delete: false }
     },
     locations: { view: true, create: false, edit: false, delete: false },
     playbacks:{ view: true, create: false, edit: false, delete: false }
@@ -100,7 +121,13 @@ export let writeConfig = {
         deskLogs: { view: true, create: true, edit: true, delete: false },
         guardLogs: { view: true, create: true, edit: true, delete: false },
         ANPRLogs: { view: true, create: true, edit: true, delete: false },
-        
+        conveyorLogs: { view: true, create: true, edit: true, delete: false },
+        vehicleObstructionLogs: { view: true, create: true, edit: true, delete: false },
+        vehicleCountLogs: { view: true, create: true, edit: true, delete: false },
+        crusherLogs: { view: true, create: true, edit: true, delete: false },
+        lineCrossingLogs: { view: true, create: true, edit: true, delete: false },
+        waterSpillLogs: { view: true, create: true, edit: true, delete: false },
+        unauthorizedAccessLogs: { view: true, create: true, edit: true, delete: false }
     },
     locations: { view: true, create: true, edit: true, delete: false },
     playbacks:{ view: true, create: true, edit: true, delete: false }

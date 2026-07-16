@@ -196,3 +196,55 @@ export async function syncPermissionLocations(adminId) {
     logger.error("Error auto-syncing permission locations:", err);
   }
 }
+
+// Back-fills the stevinrock-specific log sub-permissions (conveyor, crusher,
+// line-crossing, etc.) onto permission docs that predate them. Mirrors
+// syncPermissionLocations: additive-only ($exists:false guards so a role's
+// customised values are never overwritten), per-role-tier defaults, and fully
+// try/caught so a failure here can never break login or stop the server.
+// Called fire-and-forget on login; must stay self-contained.
+export async function syncStevinrockLogPermissions(adminId) {
+  try {
+    if (!adminId) return;
+
+    // Log sections introduced after the original permission seed. Each is
+    // back-filled independently so partially-migrated docs still get the rest.
+    const logKeys = [
+      "conveyorLogs",
+      "vehicleObstructionLogs",
+      "vehicleCountLogs",
+      "crusherLogs",
+      "lineCrossingLogs",
+      "waterSpillLogs",
+      "unauthorizedAccessLogs",
+    ];
+
+    // Per-tier value + the role-name matcher, matching syncPermissionLocations'
+    // admin / read / write / custom split. Custom (non admin/read/write) roles
+    // get full access to stay consistent with the locations back-fill above.
+    const tiers = [
+      { match: { $regex: /admin/i }, value: { view: true, create: true, edit: true, delete: true } },
+      { match: { $regex: /read/i }, value: { view: true, create: false, edit: false, delete: false } },
+      { match: { $regex: /write/i }, value: { view: true, create: true, edit: true, delete: false } },
+      { match: { $not: { $regex: /admin|read|write/i } }, value: { view: true, create: true, edit: true, delete: true } },
+    ];
+
+    for (const tier of tiers) {
+      for (const key of logKeys) {
+        const path = `permissionConfig.logs.${key}`;
+        await permissionModel.updateMany(
+          {
+            adminId: adminId,
+            permissionName: tier.match,
+            [path]: { $exists: false },
+          },
+          { $set: { [path]: tier.value } }
+        );
+      }
+    }
+
+    logger.info(`Synced stevinrock log permission config for admin: ${adminId}`);
+  } catch (err) {
+    logger.error("Error auto-syncing stevinrock log permissions:", err);
+  }
+}

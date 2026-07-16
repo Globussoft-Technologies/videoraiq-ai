@@ -4,7 +4,35 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/Tooltip
 import { CheckCheck, X, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const LOG_SUB_KEYS = ['accessLogs', 'attendanceLogs', 'ANPRLogs', 'trackLogs', 'deskLogs', 'guardLogs'];
+// Stevinrock-only log sections. Gated behind VITE_CLIENT so the extra rows
+// (and their cascade / Select-All / OR-recompute participation) only appear
+// for the stevinrock client, mirroring the LogsSidebar gate.
+const isStevinrockClient = import.meta.env.VITE_CLIENT === 'stevinrock';
+
+const STEVINROCK_LOG_KEYS = [
+  'conveyorLogs',
+  'vehicleObstructionLogs',
+  'vehicleCountLogs',
+  'crusherLogs',
+  'lineCrossingLogs',
+  'waterSpillLogs',
+  'unauthorizedAccessLogs',
+];
+
+const STEVINROCK_LOG_LABELS = {
+  conveyorLogs: 'Conveyor Logs',
+  vehicleObstructionLogs: 'Vehicle Obstruction Logs',
+  vehicleCountLogs: 'Vehicle Count Logs',
+  crusherLogs: 'Crusher Logs',
+  lineCrossingLogs: 'Line Crossing Logs',
+  waterSpillLogs: 'Water Spill Logs',
+  unauthorizedAccessLogs: 'Unauthorized Access Logs',
+};
+
+const LOG_SUB_KEYS = [
+  'accessLogs', 'attendanceLogs', 'ANPRLogs', 'trackLogs', 'deskLogs', 'guardLogs',
+  ...(isStevinrockClient ? STEVINROCK_LOG_KEYS : []),
+];
 const LOG_SUB_LABELS = {
   accessLogs: 'Access Logs',
   attendanceLogs: 'Attendance Logs',
@@ -12,6 +40,7 @@ const LOG_SUB_LABELS = {
   // trackLogs: 'Track Logs',
   // deskLogs: 'Desk Logs',
   // guardLogs: 'Guard Logs',
+  ...(isStevinrockClient ? STEVINROCK_LOG_LABELS : {}),
 };
 const EMPTY_ACTIONS = { view: false, create: false, edit: false, delete: false };
 
@@ -310,7 +339,7 @@ const PermissionStep = ({ permissions, onChange, readOnly, roleData }) => {
                             key={subKey}
                             className="grid grid-cols-5 items-center bg-white py-3 px-4 rounded-md border border-[#eeeeee] ml-6"
                           >
-                            <div className="2xl:text-sm whitespace-nowrap text-xs text-[#555555] pl-2">
+                            <div className="2xl:text-sm text-xs text-[#555555] pl-2 pr-2 leading-tight wrap-break-word">
                               {LOG_SUB_LABELS[subKey]}
                             </div>
                             {['view', 'create', 'edit', 'delete'].map((perm) => {
