@@ -218,11 +218,13 @@ class AUTHService {
     }
   }
 
-  // Mint an admin JWT valid for `days` days (1-5), then AES-encrypt it so the
-  // frontend (sharing ENCRYPTION_KEY/IV) can decrypt. Payload mirrors the
-  // identity fields of the login token, so verifyToken authenticates it as the
-  // admin. ponytail: any authenticated caller can mint for any adminId — add a
-  // superadmin/role guard before treating this as an impersonation endpoint.
+  // Mint an admin JWT valid for `days` days (1-5) carrying the SAME payload
+  // fields as the login token (verifyUser), then AES-encrypt it so the frontend
+  // (sharing ENCRYPTION_KEY/IV) can decrypt. Subscriptions/plan come from
+  // aMember by user_id (login uses the password-based check; here we resolve the
+  // same data without a password). ponytail: any authenticated caller can mint
+  // for any adminId — add a superadmin/role guard before treating this as an
+  // impersonation endpoint.
   async generateAdminToken(req, res) {
     try {
       const days = parseInt(req.body?.days, 10);
@@ -241,18 +243,54 @@ class AUTHService {
         return res.status(404).json({ ok: false, msg: "Admin not found" });
       }
 
+      // Subscriptions from aMember by user_id (no password needed).
+      let subscriptions = {};
+      try {
+        const access = await this.getAmemberAccessByUserId(admin.user_id);
+        subscriptions = this.extractSubscriptions(access) || {};
+      } catch (e) {
+        logger.error(`generateAdminToken subscriptions(${admin.user_id}): ${e.message}`);
+      }
+
+      // Identical field set to the login token (verifyUser).
       const tokenPayload = {
         status: true,
         user_id: admin.user_id,
         login: admin.login,
         adminId: admin._id,
         orgId: admin.orgId,
-        user_name: `${admin.name_f ?? ""} ${admin.name_l ?? ""}`.trim(),
+        user_name: (admin.name_f ?? "") + " " + (admin.name_l ?? ""),
         user_email: admin.email,
         name_f: admin.name_f ?? "",
         name_l: admin.name_l ?? "",
-        created_from: "admin-token-api",
+        userSubscriptionType: subscriptions,
+        created_from: "EMP",
+        enablePhoneRecipients: config.get("enablePhoneRecipients"),
+        streamHost: `${(admin.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
       };
+
+      // firstIncidentCreatedDate — mirrors login (earliest incident overall).
+      const firstIncident = await Incident.aggregate([
+        { $sort: { createdAt: 1 } },
+        { $project: { timeOfIncident: 1 } },
+      ]);
+      tokenPayload.firstIncidentCreatedDate = firstIncident?.length
+        ? firstIncident[0]?.timeOfIncident
+        : "no Incidents found to provide firstIncidentCreatedDate";
+
+      // Plan details — same conditional on the first subscription id as login.
+      const firstSub = Object.keys(subscriptions)[0];
+      try {
+        if (firstSub == this.customPlanID) {
+          tokenPayload.customPlan = await this.getCustomPlanDetails(admin.user_id);
+          tokenPayload.applyCustomPlan = true;
+        } else if (firstSub == this.topUpPlanID) {
+          tokenPayload.topUpPlan = await this.getTopUpPlanDetails(admin.user_id);
+          tokenPayload.applyTopUpPlan = true;
+        }
+      } catch (e) {
+        logger.error(`generateAdminToken plan(${admin.user_id}): ${e.message}`);
+      }
 
       const jwtToken = generateToken(tokenPayload, this.secretKey, `${days}d`);
       const token = encrypt(jwtToken); // frontend decrypts with the shared ENCRYPTION_KEY/IV
@@ -264,6 +302,7 @@ class AUTHService {
         token,
         days,
         expiresAt,
+        user: tokenPayload,
       });
     } catch (err) {
       logger.error(`generateAdminToken: ${err.message}`);
