@@ -139,15 +139,15 @@ describe("AuthUsersService.createAuthUser", () => {
     expect(payload(res).message).toMatch(/Missing required fields/);
   });
 
-  it("returns 400 when fewer than 3 profile pics are uploaded", async () => {
+  it("returns 400 when no profile pics are uploaded", async () => {
     const { req, res, next } = serviceCtx({
       adminId: admin._id,
       body: { firstName: "A", lastName: "B", email: "a@b.com" },
     });
-    req.files = [fakeFile()]; // only 1 file
+    req.files = []; // no files
     await AuthUsersService.createAuthUser(req, res, next);
     expect(res.statusCode).toBe(400);
-    expect(payload(res).error).toMatch(/Minimum 3 profile pic/);
+    expect(payload(res).error).toMatch(/At least 1 profile pic/);
   });
 
   it("rejects invalid departmentId format string", async () => {
@@ -406,17 +406,17 @@ describe("AuthUsersService.updateAuthUser", () => {
     expect(payload(res).message).toMatch(/already exists/);
   });
 
-  it("rejects when final profilePic count is not exactly 3", async () => {
+  it("rejects when final profilePic count is less than 1", async () => {
     const u = await seedUser();
     const { req, res, next } = serviceCtx({
       adminId: admin._id,
       query: { userId: u._id.toString() },
-      // sending only 2 pics + no new files → final count = 2
-      body: { profilePics: ["only-one.jpg", "only-two.jpg"], email: u.email },
+      // sending no pics + no new files → final count = 0
+      body: { profilePics: [], email: u.email },
     });
     await AuthUsersService.updateAuthUser(req, res, next);
     expect(payload(res).status).toBe("failed");
-    expect(payload(res).message).toMatch(/Exactly 3 profile images/);
+    expect(payload(res).message).toMatch(/At least 1 profile image/);
   });
 
   it("happy path → 200, axios.put succeeds, user is marked verified:true", async () => {

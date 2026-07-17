@@ -535,7 +535,7 @@ return bypassUsers.find(
               user_id: userData?.user_id,
             });
             if (!adminData) {
-              adminData = await this.registerAdminIfNotExists(userData);
+              adminData = (await this.registerAdminIfNotExists(userData))?.admin;
             }
             if (adminData?._id) {
               this.registerAdminLicense(adminData, userData).catch((err) => {
@@ -590,7 +590,7 @@ return bypassUsers.find(
         user_id: userData?.user_id,
       });
       if (!adminData) {
-        adminData = await this.registerAdminIfNotExists(userData);
+        adminData = (await this.registerAdminIfNotExists(userData))?.admin;
       }
 
       // ✅ Backfill newly added logsSound field for old users

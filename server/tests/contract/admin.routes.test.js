@@ -18,6 +18,12 @@ vi.mock("../../core/v1/admin/admin.controller.js", () => ({
     getDeletionProgress: vi.fn(async (req, res) => res.status(200).json({ success: true, progress: 0 })),
     updateLogsSound: vi.fn(async (req, res) => res.status(200).json({ success: true })),
     fetchLogsSound: vi.fn(async (req, res) => res.status(200).json({ success: true, enabled: false })),
+    fetchTimezone: vi.fn(async (req, res) => res.status(200).json({ success: true, data: {} })),
+    getTimezones: vi.fn(async (req, res) => res.status(200).json({ success: true, data: [] })),
+    updateTimezone: vi.fn(async (req, res) => res.status(200).json({ success: true })),
+    getAllowedDetections: vi.fn(async (req, res) => res.status(200).json({ success: true, data: [] })),
+    updateAllowedDetections: vi.fn(async (req, res) => res.status(200).json({ success: true })),
+    updateStreamHost: vi.fn(async (req, res) => res.status(200).json({ success: true })),
   },
 }));
 

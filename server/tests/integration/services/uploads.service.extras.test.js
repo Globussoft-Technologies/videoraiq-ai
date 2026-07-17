@@ -108,7 +108,7 @@ describe("UploadService.uploadMedia — body branches", () => {
     const inner = res._body?.body ?? res._body;
     const remote = inner?.data?.remotePath ?? inner?.remotePath;
     // The path should start with SFTP.Path from config and include the media type and folder
-    expect(remote).toMatch(/^\/sftp\/test\/uploads\/images\/avatars\/\d+-photo\.png$/);
+    expect(remote).toMatch(/^\/sftp\/test\/uploads\/images\/avatars\/\d+-[0-9a-f-]+-photo\.png$/);
     // Ensure no NAS-specific paths leak through
     expect(remote).not.toContain("/mnt/nfs");
     expect(remote).not.toContain("videoraiq-media-NAS");

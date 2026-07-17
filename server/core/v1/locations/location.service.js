@@ -3,6 +3,7 @@ import Response from "../../../utils/response.js";
 import locationValidator from "./location.validation.js";
 import locationModel from "./location.model.js";
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
+import authorizedChannelsModel from "../cameraRestrictions/authorizedChannels.model.js";
 import NVRModel from "../NVR/nvr.model.js";
 
 class LocationService {
@@ -261,6 +262,20 @@ class LocationService {
         authorizedUsersModel.distinct("location", { adminId })
       ]);
 
+      // Member scoping: the find hook restricts module docs to the member's
+      // employeeLocations, but the employee-name merge below bypasses it. Resolve
+      // the same allowed set so both sources respect the restriction. null = no
+      // restriction (no member, or no authorizedChannels doc → full access).
+      let allowedEmpLocations = null;
+      if (memberId) {
+        const authorized = await authorizedChannelsModel.findOne({ userId: memberId });
+        if (authorized) {
+          allowedEmpLocations = new Set(
+            (authorized.employeeLocations || []).map((l) => l?.trim().toLowerCase())
+          );
+        }
+      }
+
       // Merge with NO duplicate locationName (case-insensitive) across either
       // source. Module docs win; then append each employee-location name only if
       // its lowercased name hasn't been seen yet. Apply the same search filter to
@@ -279,6 +294,7 @@ class LocationService {
         const key = loc?.trim().toLowerCase();
         if (!key || seen.has(key)) continue;
         if (searchTrim && !key.includes(searchTrim)) continue;
+        if (allowedEmpLocations && !allowedEmpLocations.has(key)) continue;
         seen.add(key);
         merged.push({ locationName: loc, source: "employee" });
       }

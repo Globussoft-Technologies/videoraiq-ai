@@ -21,6 +21,12 @@ vi.mock("../../core/v1/incidents/incidents.controller.js", () => ({
     getWaterSpillageDetectionLogs: vi.fn(async (req, res) => res.status(200).json({ success: true, data: [] })),
     getVehicleCountLogs: vi.fn(async (req, res) => res.status(200).json({ success: true, data: [] })),
     getLineCrossingLogs: vi.fn(async (req, res) => res.status(200).json({ success: true, data: [] })),
+    getPersonCountLogs: vi.fn(async (req, res) => res.status(200).json({ success: true, data: [] })),
+    getDeskAbsenceLogs: vi.fn(async (req, res) => res.status(200).json({ success: true, data: [] })),
+    getDeskAbsenceZoneNames: vi.fn(async (req, res) => res.status(200).json({ success: true, data: [] })),
+    editIncidentDetails: vi.fn(async (req, res) => res.status(200).json({ success: true })),
+    deleteIncidentsByAdminAndDateRange: vi.fn(async (req, res) => res.status(202).json({ success: true })),
+    getDeletionJobStatus: vi.fn(async (req, res) => res.status(200).json({ success: true, data: {} })),
   },
 }));
 

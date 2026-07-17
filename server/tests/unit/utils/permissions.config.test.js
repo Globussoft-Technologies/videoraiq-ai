@@ -51,6 +51,13 @@ const LOG_SUBSECTIONS = [
   "deskLogs",
   "guardLogs",
   "ANPRLogs",
+  "conveyorLogs",
+  "crusherLogs",
+  "lineCrossingLogs",
+  "unauthorizedAccessLogs",
+  "vehicleCountLogs",
+  "vehicleObstructionLogs",
+  "waterSpillLogs",
 ];
 
 const CRUD_KEYS = ["view", "create", "edit", "delete"];

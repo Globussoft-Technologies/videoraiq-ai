@@ -20,7 +20,7 @@
  *   4. recipients.model.js               — chainable find(...).select().lean()
  *   5. incidents.model.js                — chainable findOne(...).populate().lean()
  *   6. mailService/mail.helper.js        — MailResponse default export
- *   7. messagingService/.../sms.incidentsFunction.js — sendIncidentSMS
+ *   7. messagingService/.../sms.incidentsFunction.js — sendIncidentWhatsApp
  *
  * R92 — server phase (test-only).
  */
@@ -54,6 +54,16 @@ vi.mock("../../../core/v1/incidents/incidents.model.js", () => ({
   },
 }));
 
+// alert.events reads the admin's timezone via adminModel.findById(adminId)
+//   .select("timezone").lean(). Mock it so a non-ObjectId test adminId
+// ("admin-1") doesn't hit Mongoose's real ObjectId cast (which would throw
+// and make triggerAlertOnIncident bail before sending anything).
+vi.mock("../../../core/v1/admin/admin.model.js", () => ({
+  default: {
+    findById: vi.fn(() => ({ select: () => ({ lean: async () => ({ timezone: "UTC" }) }) })),
+  },
+}));
+
 vi.mock("../../../mailService/mail.helper.js", () => ({
   default: {
     loiteringWithoutAuth: vi.fn().mockResolvedValue("sent"),
@@ -82,9 +92,9 @@ vi.mock("../../../mailService/mail.helper.js", () => ({
 }));
 
 vi.mock(
-  "../../../messagingService/IncidentsSMSFunction/sms.incidentsFunction.js",
+  "../../../messagingService/IncidentsWhatsAppFunction/whatsapp.incidentsFunction.js",
   () => ({
-    sendIncidentSMS: vi.fn().mockResolvedValue({ ok: true }),
+    sendIncidentWhatsApp: vi.fn().mockResolvedValue({ ok: true }),
   })
 );
 
@@ -106,8 +116,8 @@ const { Incident } = await import(
 const { default: MailResponse } = await import(
   "../../../mailService/mail.helper.js"
 );
-const { sendIncidentSMS } = await import(
-  "../../../messagingService/IncidentsSMSFunction/sms.incidentsFunction.js"
+const { sendIncidentWhatsApp } = await import(
+  "../../../messagingService/IncidentsWhatsAppFunction/whatsapp.incidentsFunction.js"
 );
 
 /** Build a chainable channelsModel.findOne().populate(...).lean() that
@@ -195,20 +205,21 @@ describe("triggerAlertOnIncident", () => {
       "user@a.com",
       "user@b.com",
     ]);
-    expect(sendIncidentSMS).toHaveBeenCalledTimes(1);
-    expect(sendIncidentSMS.mock.calls[0][1]).toEqual(["+1234567890"]);
+    expect(sendIncidentWhatsApp).toHaveBeenCalledTimes(1);
+    expect(sendIncidentWhatsApp.mock.calls[0][1]).toEqual(["+1234567890"]);
     // No res.status calls on the happy path.
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  it("responds 404 when the second channel lookup returns null", async () => {
+  // triggerAlertOnIncident is a fire-and-forget background trigger (no res —
+  // it runs after the incident-create response is already sent). When the
+  // channel/detections are missing it just warns and returns without alerting.
+  it("skips alerting when the second channel lookup returns null", async () => {
     setupChannelsChain({ detections: {}, alerts: [] }, null);
     nvrModel.findOne.mockResolvedValueOnce({ _id: "nvr-1" });
     setupIncidentChain({ _id: "inc-1" });
 
-    const res = makeRes();
     await triggerAlertOnIncident({
-      res,
       detectionType: "loiteringWithoutAuth",
       nvrId: "nvr-1",
       channelId: "ch-1",
@@ -216,15 +227,11 @@ describe("triggerAlertOnIncident", () => {
       adminId: "admin-1",
     });
 
-    expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({
-      message: "Channel or detections not found",
-    });
     expect(MailResponse.loiteringWithoutAuth).not.toHaveBeenCalled();
-    expect(sendIncidentSMS).not.toHaveBeenCalled();
+    expect(sendIncidentWhatsApp).not.toHaveBeenCalled();
   });
 
-  it("responds 404 when no detection config matches the type", async () => {
+  it("skips alerting when no detection config matches the type", async () => {
     setupChannelsChain(
       { detections: { someOtherSettings: "x" }, alerts: [] },
       { detections: { someOtherSettings: { id: { alerts: [] } } } }
@@ -232,9 +239,7 @@ describe("triggerAlertOnIncident", () => {
     nvrModel.findOne.mockResolvedValueOnce({ _id: "nvr-1" });
     setupIncidentChain({ _id: "inc-1" });
 
-    const res = makeRes();
     await triggerAlertOnIncident({
-      res,
       detectionType: "loiteringWithAuth", // doesn't match "someOtherSettings"
       nvrId: "nvr-1",
       channelId: "ch-1",
@@ -242,10 +247,6 @@ describe("triggerAlertOnIncident", () => {
       adminId: "admin-1",
     });
 
-    expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({
-      message: "No detection config found for type: loiteringWithAuth",
-    });
     expect(MailResponse.LoiteringWithAuth).not.toHaveBeenCalled();
   });
 
@@ -280,7 +281,7 @@ describe("triggerAlertOnIncident", () => {
     expect(MailResponse.unauthorizedAccess.mock.calls[0][0]).toEqual([
       "dup@test.com",
     ]);
-    expect(sendIncidentSMS).not.toHaveBeenCalled();
+    expect(sendIncidentWhatsApp).not.toHaveBeenCalled();
   });
 
   it("skips both email and SMS when neither recipient list returns anyone", async () => {
@@ -309,7 +310,7 @@ describe("triggerAlertOnIncident", () => {
     });
 
     expect(MailResponse.LineCrossingAuth).not.toHaveBeenCalled();
-    expect(sendIncidentSMS).not.toHaveBeenCalled();
+    expect(sendIncidentWhatsApp).not.toHaveBeenCalled();
     // No res.status call on the happy zero-recipient path.
     expect(res.status).not.toHaveBeenCalled();
   });
@@ -338,7 +339,7 @@ describe("triggerAlertOnIncident", () => {
     // No res.status / res.json from the swallowed catch.
     expect(res.status).not.toHaveBeenCalled();
     expect(MailResponse.loiteringWithoutAuth).not.toHaveBeenCalled();
-    expect(sendIncidentSMS).not.toHaveBeenCalled();
+    expect(sendIncidentWhatsApp).not.toHaveBeenCalled();
   });
 
   it("dispatches LoiteringWithAuth template on the matching detectionType", async () => {

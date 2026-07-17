@@ -107,6 +107,7 @@ async function seedScene({ SettingModel, settingType, channelDetections }) {
     streamingPath: "/Streaming/Channels/101",
     localChannelId: "1",
     name: "Gate Cam",
+    isAdded: true,
     detections: channelDetections(setting),
   });
   return { admin, nvrId, channel, setting };
@@ -295,6 +296,7 @@ describe("IncidentsService.createIncidents — same-day update guards", () => {
       streamingPath: "/Streaming/Channels/101",
       localChannelId: "1",
       name: "x",
+      isAdded: true,
     });
     const { req, res, next } = serviceCtx({
       body: {

@@ -22,6 +22,7 @@ vi.stubGlobal("fetch", fetchMock);
 vi.mock("../../../utils/helperFunctions.js", () => ({
   autoSyncLocations: vi.fn().mockResolvedValue(undefined),
   syncPermissionLocations: vi.fn().mockResolvedValue(undefined),
+  syncStevinrockLogPermissions: vi.fn().mockResolvedValue(undefined),
 }));
 
 const { default: AUTHService } = await import(

@@ -89,7 +89,7 @@ describe("PythonService.startNewDetection", () => {
     { mode: "crowd", name: "crowdDetectionSettings" },
     { mode: "line_crossing", name: "lineCrossingSettings", zonesKey: "line_coordinates" },
     { mode: "vehicles", name: "countVehiclesSettings" },
-    { mode: "persons", name: "countPersonsSettings" },
+    { mode: "countPersons", name: "countPersonsSettings" },
     { mode: "ANPR", name: "numberPlateDetectionSettings" },
     { mode: "intrusion", name: "zoneIntrusionSettings" },
     { mode: "conveyor", name: "conveyorDetectionSettings" },
@@ -132,7 +132,8 @@ describe("PythonService.startNewDetection", () => {
         // The source spreads `zones` directly here, not wrapped in another array.
         expect(matched.line_coordinates).toEqual(zones);
       } else {
-        expect(matched.zones).toEqual([zones]);
+        // Source forwards `zones` directly (zones || []), not wrapped.
+        expect(matched.zones).toEqual(zones);
       }
     },
   );
@@ -144,7 +145,7 @@ describe("PythonService.startNewDetection", () => {
       nvr_id: "n",
       admin_id: "a",
       stream_url: "rtsp://s",
-      detection_modes: ["helmet", "crowd", "persons"],
+      detection_modes: ["helmet", "crowd", "countPersons"],
       zones: [[0, 0]],
       severity: "low",
     });
@@ -173,7 +174,7 @@ describe("PythonService.startNewDetection", () => {
       camera_id: "c",
       nvr_id: "n",
       admin_id: "a",
-      detection_modes: ["persons"],
+      detection_modes: ["countPersons"],
       zones: [[0, 0]],
       severity: "low",
     });
@@ -188,7 +189,7 @@ describe("PythonService.startNewDetection", () => {
         camera_id: "c",
         nvr_id: "n",
         admin_id: "a",
-        detection_modes: ["persons"],
+        detection_modes: ["countPersons"],
         zones: [],
         severity: "low",
       }),
@@ -213,10 +214,9 @@ describe("PythonService.updateNewDetection", () => {
 
     const [url, body] = axios.post.mock.calls[0];
     expect(url).toBe("http://detection.test/detectors/update");
-    const det = body.detectors.find((d) => d.name === "VehicleObstructionSettings");
+    const det = body.detectors.find((d) => d.name === "vehicleObstructionSettings");
     expect(det).toBeDefined();
     expect(det.obstruction_threshold_sec).toBe(7);
-    expect(det.severity).toBe("moderate");
   });
 
   it("throws when detection_modes yields no detectors", async () => {

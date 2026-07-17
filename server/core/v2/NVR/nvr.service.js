@@ -297,6 +297,7 @@ class NVRService {
                 name: cam.name,
                 streamingPath: cam.streamingPath,
                 localChannelId: cam.localChannelId,
+                isAdded: true,
               });
               syncResult.created.push({
                 _id: newChannel._id,

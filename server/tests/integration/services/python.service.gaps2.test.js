@@ -71,7 +71,7 @@ describe("PythonService.startNewDetection — tail detection_modes (lines 212-23
       const [, body] = axios.post.mock.calls[0];
       const matched = body.detectors.find((d) => d.name === name);
       expect(matched).toBeDefined();
-      expect(matched.zones).toEqual([zones]);
+      expect(matched.zones).toEqual(zones);
       if (carriesObstruction) {
         expect(matched.obstruction_threshold_sec).toBe(7);
       }
@@ -106,7 +106,7 @@ describe("PythonService.updateNewDetection — tail detection_modes (lines 367-3
       const matched = body.detectors.find((d) => d.name === name);
       expect(matched).toBeDefined();
       expect(matched.obstruction_threshold_sec).toBe(12);
-      expect(matched.zones).toEqual([zones]);
+      expect(matched.zones).toEqual(zones);
     },
   );
 });

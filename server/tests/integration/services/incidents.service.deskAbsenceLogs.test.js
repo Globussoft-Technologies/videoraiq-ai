@@ -137,7 +137,7 @@ describe("IncidentsService.getDeskAbsenceLogs", () => {
 
     const { req, res, next } = serviceCtx({
       user_id: "100",
-      query: { startDate: "2026-06-01", endDate: "2026-06-30" },
+      body: { startDate: "2026-06-01", endDate: "2026-06-30" },
     });
     await IncidentsService.getDeskAbsenceLogs(req, res, next);
     expect(res._body.body.data.totalCount).toBe(1);
@@ -153,14 +153,14 @@ describe("IncidentsService.getDeskAbsenceLogs", () => {
     await seedDetection({ nvrId: nvr3, channelId: new mongoose.Types.ObjectId() });
 
     {
-      const { req, res, next } = serviceCtx({ user_id: "100", query: { nvrId: nvr1.toString() } });
+      const { req, res, next } = serviceCtx({ user_id: "100", body: { nvrId: nvr1.toString() } });
       await IncidentsService.getDeskAbsenceLogs(req, res, next);
       expect(res._body.body.data.totalCount).toBe(1);
     }
     {
       const { req, res, next } = serviceCtx({
         user_id: "100",
-        query: { nvrIds: `${nvr1.toString()},${nvr2.toString()}` },
+        body: { nvrIds: `${nvr1.toString()},${nvr2.toString()}` },
       });
       await IncidentsService.getDeskAbsenceLogs(req, res, next);
       expect(res._body.body.data.totalCount).toBe(2);
@@ -189,7 +189,7 @@ describe("IncidentsService.getDeskAbsenceLogs", () => {
     const { req, res, next } = serviceCtx({
       user_id: "100",
       authorizedChannel: { channels: [ch1] },
-      query: { channelIds: ch2.toString() },
+      body: { channelIds: ch2.toString() },
     });
     await IncidentsService.getDeskAbsenceLogs(req, res, next);
     expect(res._body.body.data.totalCount).toBe(0);
@@ -206,7 +206,7 @@ describe("IncidentsService.getDeskAbsenceLogs", () => {
 
     const { req, res, next } = serviceCtx({
       user_id: "100",
-      query: { zoneName: "Reception" },
+      body: { zoneNames: ["Reception"] },
     });
     await IncidentsService.getDeskAbsenceLogs(req, res, next);
     // Only chMixed survives, and only its Reception point remains.
@@ -223,7 +223,7 @@ describe("IncidentsService.getDeskAbsenceLogs", () => {
     }
     const { req, res, next } = serviceCtx({
       user_id: "100",
-      query: { skip: "1", limit: "2" },
+      body: { skip: "1", limit: "2" },
     });
     await IncidentsService.getDeskAbsenceLogs(req, res, next);
     expect(res._body.body.data.totalCount).toBe(5);

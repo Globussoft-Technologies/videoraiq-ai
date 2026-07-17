@@ -68,7 +68,7 @@ describe("PythonService.updateNewDetection — per-mode branches", () => {
       zonesKey: "line_coordinates",
     },
     { mode: "vehicles", name: "countVehiclesSettings" },
-    { mode: "persons", name: "countPersonsSettings" },
+    { mode: "countPersons", name: "countPersonsSettings" },
     { mode: "intrusion", name: "zoneIntrusionSettings" },
     { mode: "conveyor", name: "conveyorDetectionSettings" },
     { mode: "crusher", name: "crusherDetectionSettings" },
@@ -109,7 +109,8 @@ describe("PythonService.updateNewDetection — per-mode branches", () => {
         // line_crossing spreads zones directly, not wrapped.
         expect(matched.line_coordinates).toEqual(zones);
       } else {
-        expect(matched.zones).toEqual([zones]);
+        // Source forwards `zones` directly (zones || []), not wrapped.
+        expect(matched.zones).toEqual(zones);
       }
     },
   );
@@ -176,8 +177,8 @@ describe("PythonService.stopNewDetection — remaining mode branches", () => {
   const cases = [
     { mode: "vest", name: "personalProtectiveEquipmentSettings" },
     { mode: "line_crossing", name: "lineCrossingSettings" },
-    { mode: "persons", name: "countPersonsSettings" },
-    { mode: "vehicle_obstruction", name: "VehicleObstructionSettings" },
+    { mode: "countPersons", name: "countPersonsSettings" },
+    { mode: "vehicleObstruction", name: "vehicleObstructionSettings" },
     { mode: "conveyor", name: "conveyorDetectionSettings" },
     { mode: "crusher", name: "crusherDetectionSettings" },
     { mode: "water_spillage", name: "waterSpillageDetectionSettings" },
@@ -207,8 +208,8 @@ describe("PythonService.stopNewDetection — remaining mode branches", () => {
       "crowd",
       "line_crossing",
       "vehicles",
-      "persons",
-      "vehicle_obstruction",
+      "countPersons",
+      "vehicleObstruction",
       "intrusion",
       "conveyor",
       "crusher",
@@ -228,7 +229,7 @@ describe("PythonService.stopNewDetection — remaining mode branches", () => {
         "lineCrossingSettings",
         "countVehiclesSettings",
         "countPersonsSettings",
-        "VehicleObstructionSettings",
+        "vehicleObstructionSettings",
         "zoneIntrusionSettings",
         "conveyorDetectionSettings",
         "crusherDetectionSettings",

@@ -89,6 +89,7 @@ describe("NVRService.updateNvr — happy path", () => {
       streamingPath: "/Streaming/Channels/101",
       localChannelId: "ch-1",
       name: "Cam-1",
+      isAdded: true,
     });
     const unchangedCh = await Channel.create({
       nvrId: nvr._id,
@@ -96,6 +97,7 @@ describe("NVRService.updateNvr — happy path", () => {
       streamingPath: "/Streaming/Channels/201",
       localChannelId: "ch-2",
       name: "Cam-2",
+      isAdded: true,
     });
 
     const { req, res, next } = serviceCtx({

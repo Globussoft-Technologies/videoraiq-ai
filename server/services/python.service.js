@@ -362,6 +362,7 @@ class PythonService {
           name: "personalProtectiveEquipmentSettings",
           zone_configs,
           zones: zones || [],
+          severity,
         });
       }
 
@@ -370,6 +371,7 @@ class PythonService {
           name: "crowdDetectionSettings",
           zone_configs,
           zones: zones || [],
+          severity,
         });
       }
 
@@ -378,6 +380,7 @@ class PythonService {
           name: "lineCrossingSettings",
           zone_configs,
           line_coordinates: zones || [],
+          severity,
         });
       }
 
@@ -386,6 +389,7 @@ class PythonService {
           name: "countVehiclesSettings",
           zone_configs,
           zones: zones || [],
+          severity,
         });
       }
 
@@ -394,6 +398,7 @@ class PythonService {
           name: "countPersonsSettings",
           zone_configs,
           zones: zones || [],
+          severity,
         });
       }
 
@@ -411,6 +416,7 @@ class PythonService {
           name: "zoneIntrusionSettings",
           zone_configs,
           zones: zones || [],
+          severity,
         });
       }
 
@@ -419,6 +425,7 @@ class PythonService {
           name: "conveyorDetectionSettings",
           zone_configs,
           zones: zones || [],
+          severity,
         });
       }
 
@@ -624,12 +631,6 @@ class PythonService {
 
       if (detectionModes?.includes("vehicleType")) {
         detectors.push("vehicleTypeDetectionSettings");
-      }
-      if( detectionModes?.includes("loitering")) {
-        detectors.push("loiteringDetectionSettings");
-      }
-      if( detectionModes?.includes("vehicleObstruction")) {
-        detectors.push("vehicleObstructionSettings");
       }
       if( detectionModes?.includes("tableOccupancySettings")) {
         detectors.push("tableOccupancyDetectionSettings");

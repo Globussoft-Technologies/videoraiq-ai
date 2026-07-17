@@ -88,6 +88,7 @@ async function seedScene({ SettingModel, settingType, channelDetections }) {
     streamingPath: "/Streaming/Channels/101",
     localChannelId: "1",
     name: "Cam-X",
+    isAdded: true,
     detections: channelDetections(setting),
   });
   return { admin, nvrId, channel, setting };

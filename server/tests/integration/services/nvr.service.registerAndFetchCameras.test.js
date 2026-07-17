@@ -251,15 +251,29 @@ describe("NVRService.registerAndFetchCameras — new-NVR branch", () => {
     // pass, so a real .create() would reject validation. Spy NVR.create to
     // return a deterministic saved doc so we can pin the 201 response shape
     // without coupling to the schema gap.
+    const savedNvrId = new mongoose.Types.ObjectId();
     const fakeSavedNvr = {
-      _id: new mongoose.Types.ObjectId(),
-      userId: USER_ID,
-      nvrName: "Lobby-NVR",
-      brand: "hikvision",
-      location: "HQ",
-      cameraCount: 0,
+      _id: savedNvrId,
+      // Response spreads `savedNvr._doc`, so mirror a Mongoose doc here.
+      _doc: {
+        _id: savedNvrId,
+        userId: USER_ID,
+        nvrName: "Lobby-NVR",
+        brand: "hikvision",
+        location: "HQ",
+        cameraCount: 0,
+      },
     };
     const createSpy = vi.spyOn(NVR, "create").mockResolvedValue(fakeSavedNvr);
+
+    // The service now persists each fetched camera via Camera.create. Under the
+    // local Channel schema those docs require localChannelId/streamingPath which
+    // the cloud-shaped fetch payload doesn't carry — spy Camera.create to keep
+    // this test decoupled from the schema gap (same reasoning as NVR.create).
+    vi.spyOn(Camera, "create").mockImplementation(async (doc) => ({
+      _id: new mongoose.Types.ObjectId(),
+      ...doc,
+    }));
 
     vi.spyOn(NVRService, "_fetchCamerasFromNvr").mockResolvedValue({
       deviceInfo: {
@@ -299,7 +313,7 @@ describe("NVRService.registerAndFetchCameras — new-NVR branch", () => {
     expect(createArg.deviceName).toBe("DS-1234");
     expect(createArg.serialNumber).toBe("SN-9001");
     expect(createArg.cameraCount).toBe(0);
-    expect(createArg.location).toBe("HQ");
+    expect(createArg.location).toBe("hq"); // lower-cased in the service
   });
 
   it("lower-cases the brand before persisting (HIKVISION → hikvision)", async () => {

@@ -210,6 +210,7 @@ describe("IncidentsService.createIncidents — happy path", () => {
       streamingPath: "/Streaming/Channels/101",
       localChannelId: "1",
       name: "Front Door",
+      isAdded: true,
       detections: {
         countPersonsSettings: { id: detectionSetting._id, enabled: true },
       },
@@ -347,6 +348,7 @@ describe("IncidentsService.createIncidents — additional discriminators", () =>
       streamingPath: "/Streaming/Channels/101",
       localChannelId: "1",
       name: "Front Door",
+      isAdded: true,
       detections: channelDetections(setting),
     });
     return { admin, nvrId, channel, setting };
@@ -492,6 +494,7 @@ describe("IncidentsService.createIncidents — additional discriminators", () =>
       streamingPath: "/Streaming/Channels/101",
       localChannelId: "1",
       name: "Cam",
+      isAdded: true,
       detections: {},
     });
     const { req, res, next } = serviceCtx({

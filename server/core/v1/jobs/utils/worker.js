@@ -1,7 +1,6 @@
 import { Worker } from "bullmq";
 import { redis } from "../../../../utils/database.js";
 import { getDelayMinutes, getExpectedRunAt } from "./time.util.js";
-import deletionWorker from "./deletionWorker.js";
 
 const MAX_DELAY_MINUTES = 5;
 
@@ -54,5 +53,3 @@ async function callStartAPI(payload) {
 async function callStopAPI(payload) {
   console.log("⏹️ STOP API", payload);
 }
-
-// Ensure deletion worker is running (imported above)

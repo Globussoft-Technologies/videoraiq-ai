@@ -316,6 +316,8 @@ class ProfilesServices {
       const profileData = decryptData(encryptedContent);
 
       const payload = {
+        createdBy: req?.verified?.userData?.memberId ? req?.verified?.userData?.memberId : req?.verified?.userData?.adminId,
+        userType: req?.verified?.userData?.memberId ? "users" : "Admin",
         user: req?.verified?.userData?.adminId,
         basics: profileData?.basics || {},
         notification: profileData?.notification || {},

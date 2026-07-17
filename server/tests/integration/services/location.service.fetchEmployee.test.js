@@ -138,8 +138,9 @@ describe("LocationService.fetchEmployeeLocation", () => {
     await LocationService.fetchEmployeeLocation(req, res, next);
     expect(res.statusCode).toBe(200);
     expect(payload(res).data.locations).toHaveLength(2);
-    // totalCount is the un-paginated count.
-    expect(payload(res).data.totalCount).toBe(5);
+    // totalCount is the un-paginated count: 5 Location docs + the employee's "HQ"
+    // location (no matching Location doc, so merged in as an employee source).
+    expect(payload(res).data.totalCount).toBe(6);
   });
 
   it("scopes results when a member's authorizedChannels.employeeLocations is set", async () => {
