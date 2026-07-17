@@ -7,9 +7,13 @@ body {
   font-family: 'Poppins', sans-serif;
 }
 #root {
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
+  width: 100%;
+  /* Use min-height + dynamic viewport height so standalone pages
+     (register-employee, login, reset-password) can scroll on mobile
+     and in-app browsers. The authenticated Layout manages its own
+     internal scroll container, so it is unaffected. */
+  min-height: 100dvh;
+  overflow-x: hidden;
 }
 input[type='time'] {
   -webkit-appearance: none;
