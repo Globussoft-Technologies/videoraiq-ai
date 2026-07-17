@@ -205,10 +205,6 @@ const [uploadedImageUrls, setUploadedImageUrls] = useState(["", "", ""]); // New
     .min(1, 'Last Name must be at least 1 character'),
     email: Yup.string()
     .email('Invalid email')
-   .matches(
-    /^[^\s@]+@[^\s@]+\.(com|net|org|in|co|io|edu|gov)$/,
-    'Invalid email format'
-  )
     .required('Email is required'),
     designation: Yup.string()
     .required('Designation is required'),
