@@ -20,7 +20,7 @@ import permissionModel from "../permission/permissions.model.js";
 import locationModel from "../locations/location.model.js";
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
 import NVRModel from "../NVR/nvr.model.js";
-import { autoSyncLocations, syncPermissionLocations } from "../../../utils/helperFunctions.js";
+import { autoSyncLocations, syncPermissionLocations, syncStevinrockLogPermissions } from "../../../utils/helperFunctions.js";
 const backendToken = config.get("Backend.token");
 const detectionHost = config.get("PythonService.detectionUrl");
 const APP_ENV = config.get("APP_ENV");
@@ -824,6 +824,7 @@ return bypassUsers.find(
       // ============================================
       await autoSyncLocations(adminData, userData);
       await syncPermissionLocations(adminData?._id);
+      await syncStevinrockLogPermissions(adminData?._id);
       // ============================================
 
       tokenPayload.firstIncidentCreatedDate = firstIncidentCreatedDate?.length

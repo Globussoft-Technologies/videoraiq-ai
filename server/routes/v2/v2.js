@@ -36,6 +36,7 @@ import entryRoutes from "../../core/v2/entry/entry.routes.js";
 import vehicleRoutes from "../../core/v2/vehicle/vehicle.routes.js";
 import locationRoutes from "../../core/v2/locations/location.routes.js";
 import faceImagesRoutes from "../../core/v2/faceImages/faceImages.routes.js";
+import telegramRoutes from "../../core/v2/telegram/telegram.routes.js";
 
 const router = express.Router();
 
@@ -86,6 +87,9 @@ router.use("/locations", verifyToken, locationRoutes);
 router.use("/analytics", verifyToken, analyticsRoutes);
 // faceImages.routes.js applies verifyToken per-route, so mount plain (like v1).
 router.use("/faceImages", faceImagesRoutes);
+// Telegram: /link-code + /unlink are authed inside the router; /webhook is
+// public (Telegram calls it), so mount WITHOUT a router-level verifyToken.
+router.use("/telegram", telegramRoutes);
 
 export default router;
 
