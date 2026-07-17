@@ -316,7 +316,7 @@ const LoginForm = () => {
                 </label>
                 <span
                   className="vqlogin-link"
-                  onClick={() => { window.location.href = import.meta.env.VITE_AMEMBER_MEMBER_URL; }}
+                  onClick={() => navigate("/forgot-password")}
                   style={{ fontSize: 12.5, fontWeight: 600, color: "#6ea0ff", cursor: "pointer" }}
                 >
                   Forgot password?

@@ -1,8 +1,8 @@
 import { createBrowserRouter, createRoutesFromElements, Navigate, Outlet, Route } from 'react-router-dom';
 import { v2Routes } from './routes';
 import LoginForm from '@/page/user/Users/UserForm';
-// import ForgotPassword from '@/page/user/Users/ForgotPassword';
-// import ResetPassword from '@/page/user/Users/ResetPassword';
+import ForgotPassword from '@/page/user/Users/ForgotPassword';
+import ResetPassword from '@/page/user/Users/ResetPassword';
 import EmployeeLogin from '@/page/user/Portal/EmployeeLogin';
 import EmployeeRegister from '@/page/user/Portal/EmployeeRegister';
 import IsAuth from '@/components/Auth/IsAuth';
@@ -21,8 +21,8 @@ export const router = createBrowserRouter(
   createRoutesFromElements(
     <Route>
       <Route path="/admin-login" element={<LoginForm />} />
-      {/* <Route path="/forgot-password" element={<ForgotPassword />} /> */}
-      {/* <Route path="/reset-password" element={<ResetPassword />} /> */}
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/employee-login" element={<EmployeeLogin />} />
       <Route path="/employee-register" element={<EmployeeRegister />} />
       <Route path="/logout" element={<Logout />} />
