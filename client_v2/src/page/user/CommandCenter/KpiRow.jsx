@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import KpiCard from '../../../components/KpiCard';
 import { num } from '../../../lib/format';
 
@@ -12,18 +13,24 @@ import { num } from '../../../lib/format';
  * Instead LiveCamera probes every filtered camera's stream in the background
  * and reports how many actually connect, out of the filtered total.
  */
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export default function KpiRow({ stats = {}, dailyTotals = [], sitesCount = 0, onlineCameras = { online: 0, total: 0 }, loading }) {
+  const navigate = useNavigate();
   const eventsToday = dailyTotals.length ? dailyTotals[dailyTotals.length - 1] : 0;
   const camerasTotal = onlineCameras.total || num(stats.overAllCameraCount ?? 0);
   const cameras = `${num(onlineCameras.online)}/${num(camerasTotal)}`;
 
   const cards = [
     { label: 'Cameras Online', value: cameras, sub: 'streaming now', color: 'var(--blue)' },
-    { label: 'Active Alerts', value: num(stats.totalAlerts ?? 0), sub: 'unresolved', color: 'var(--warn)', spark: dailyTotals },
-    { label: 'Critical', value: num(stats.criticalAlerts ?? 0), sub: 'high severity', color: 'var(--crit)' },
-    { label: 'Events Today', value: num(eventsToday), sub: 'detections', color: 'var(--violet)', spark: dailyTotals },
-    { label: 'Resolved', value: num(stats.incidentsResolved ?? 0), sub: 'incidents', color: 'var(--ok)' },
-    { label: 'Sites Online', value: sitesCount ? `${sitesCount}/${sitesCount}` : '—', sub: 'monitored', color: 'var(--cyan)', unavailable: !sitesCount },
+    { label: 'Active Alerts', value: num(stats.totalAlerts ?? 0), sub: 'unresolved', color: 'var(--warn)', spark: dailyTotals, onClick: () => navigate('/alerts', { state: { statusFilter: 'new' } }) },
+    { label: 'High', value: num(stats.criticalAlerts ?? 0), sub: 'high severity', color: 'var(--crit)', onClick: () => navigate('/incidents', { state: { severityFilter: 'high' } }) },
+    { label: 'Events Today', value: num(eventsToday), sub: 'detections', color: 'var(--violet)', spark: dailyTotals, onClick: () => navigate('/incidents', { state: { date: todayStr() } }) },
+    { label: 'Resolved', value: num(stats.incidentsResolved ?? 0), sub: 'incidents', color: 'var(--ok)', onClick: () => navigate('/incidents', { state: { statusFilter: 'resolved' } }) },
+    { label: 'Sites Online', value: sitesCount ? `${sitesCount}/${sitesCount}` : '—', sub: 'monitored', color: 'var(--cyan)', unavailable: !sitesCount, onClick: () => navigate('/locations') },
   ];
 
   return (

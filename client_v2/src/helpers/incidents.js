@@ -21,6 +21,20 @@ export const fetchIncidents = async ({ skip = 0, limit = 12 } = {}, filter = {})
   return { items: Array.isArray(d.data) ? d.data : [], totalCount: d.totalCount ?? 0 };
 };
 
+// Fetches a single incident by id — used to deep-link a notification straight
+// to its alert, since the general feed may not include it (older, or filtered
+// out by the current severity/status/date tabs).
+export const fetchIncidentById = async (incidentId) => {
+  const token = getAccessToken();
+  const res = await axios.get(
+    `${Api_url}/incidents/getIncident`,
+    { params: { incidentId }, headers: { 'x-access-token': token } }
+  );
+  const d = res?.data || {};
+  const items = Array.isArray(d.data) ? d.data : [];
+  return items[0] || null;
+};
+
 export const fetchIncidentStats = async (filter = {}) => {
   const token = getAccessToken();
   const res = await axios.post(

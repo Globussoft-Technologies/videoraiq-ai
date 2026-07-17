@@ -28,8 +28,8 @@ export let completeConfig = {
         unauthorizedAccessLogs: { view: false, create: false, edit: false, delete: false }
     },
     locations: { view: false, create: false, edit: false, delete: false },
-    playbacks:{ view: false, create: false, edit: false, delete: false }
-    
+    playbacks: { view: false, create: false, edit: false, delete: false }
+
 };
 
 export let adminConfig = {
@@ -62,8 +62,8 @@ export let adminConfig = {
         unauthorizedAccessLogs: { view: true, create: true, edit: true, delete: true }
     },
     locations: { view: true, create: true, edit: true, delete: true },
-    playbacks:{ view: true, create: true, edit: true, delete: true },
-        
+    playbacks: { view: true, create: true, edit: true, delete: true },
+
 };
 
 export let readConfig = {
@@ -96,7 +96,7 @@ export let readConfig = {
         unauthorizedAccessLogs: { view: true, create: false, edit: false, delete: false }
     },
     locations: { view: true, create: false, edit: false, delete: false },
-    playbacks:{ view: true, create: false, edit: false, delete: false }
+    playbacks: { view: true, create: false, edit: false, delete: false }
 
 };
 
@@ -130,7 +130,7 @@ export let writeConfig = {
         unauthorizedAccessLogs: { view: true, create: true, edit: true, delete: false }
     },
     locations: { view: true, create: true, edit: true, delete: false },
-    playbacks:{ view: true, create: true, edit: true, delete: false }
+    playbacks: { view: true, create: true, edit: true, delete: false }
 };
 
 

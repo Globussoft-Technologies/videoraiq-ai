@@ -1,4 +1,5 @@
 import { generateToken } from "../../../middlewares/decodeToken.js";
+import { encrypt } from "../../../utils/cryptoUtils.js";
 import logger from "../../../utils/logger.js";
 import { resolveAdminEndpoints } from "../../../utils/adminEndpoints.js";
 import { stopAllStreams, resumeAllStreams } from "../../../utils/stopStreams.js";
@@ -214,6 +215,59 @@ class AUTHService {
       );
     } catch (error) {
       logger.error("registerAdminLicense error:", error?.message || error);
+    }
+  }
+
+  // Mint an admin JWT valid for `days` days (1-5), then AES-encrypt it so the
+  // frontend (sharing ENCRYPTION_KEY/IV) can decrypt. Payload mirrors the
+  // identity fields of the login token, so verifyToken authenticates it as the
+  // admin. ponytail: any authenticated caller can mint for any adminId — add a
+  // superadmin/role guard before treating this as an impersonation endpoint.
+  async generateAdminToken(req, res) {
+    try {
+      const days = parseInt(req.body?.days, 10);
+      if (!Number.isInteger(days) || days < 1 || days > 5) {
+        return res.status(400).json({ ok: false, msg: "days must be an integer between 1 and 5" });
+      }
+
+      // Default to the authenticated admin; allow an explicit adminId override.
+      const adminId = req.body?.adminId || req?.verified?.userData?.adminId;
+      if (!adminId || !/^[a-f\d]{24}$/i.test(String(adminId))) {
+        return res.status(400).json({ ok: false, msg: "A valid adminId is required" });
+      }
+
+      const admin = await adminModel.findById(adminId).lean();
+      if (!admin) {
+        return res.status(404).json({ ok: false, msg: "Admin not found" });
+      }
+
+      const tokenPayload = {
+        status: true,
+        user_id: admin.user_id,
+        login: admin.login,
+        adminId: admin._id,
+        orgId: admin.orgId,
+        user_name: `${admin.name_f ?? ""} ${admin.name_l ?? ""}`.trim(),
+        user_email: admin.email,
+        name_f: admin.name_f ?? "",
+        name_l: admin.name_l ?? "",
+        created_from: "admin-token-api",
+      };
+
+      const jwtToken = generateToken(tokenPayload, this.secretKey, `${days}d`);
+      const token = encrypt(jwtToken); // frontend decrypts with the shared ENCRYPTION_KEY/IV
+      const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+
+      return res.status(200).json({
+        ok: true,
+        msg: "Admin token generated",
+        token,
+        days,
+        expiresAt,
+      });
+    } catch (err) {
+      logger.error(`generateAdminToken: ${err.message}`);
+      return res.status(500).json({ ok: false, msg: "Failed to generate admin token" });
     }
   }
 

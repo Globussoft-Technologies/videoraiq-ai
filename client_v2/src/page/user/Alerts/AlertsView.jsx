@@ -1,12 +1,18 @@
-import { useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
 import { X } from 'lucide-react';
 import { Panel, Badge } from '../../../components/primitives';
-import { AsyncBoundary } from '../../../components/States';
-import { useApi } from '../../../hooks/useApi';
+import { AsyncBoundary, Loading } from '../../../components/States';
+import DateRangePicker from '../../../components/DateRangePicker';
 import { severity, detectionLabel, shortDateTime, timeAgo, mediaUrl } from '../../../lib/format';
-import { fetchIncidents, updateReportStatus } from '../../../helpers/incidents';
+import { fetchIncidents, fetchIncidentById, updateReportStatus } from '../../../helpers/incidents';
+
+const PAGE_SIZE = 50;
+// Auto-refresh only while the user is looking at just the first page — once
+// they've scrolled to load more, a silent 30s poll would reset/shrink the
+// list out from under them, so polling pauses until they're back on page 1.
+const POLL_MS = 30000;
 
 const TABS = [
   { key: 'all', label: 'All' },
@@ -14,6 +20,20 @@ const TABS = [
   { key: 'moderate', label: 'Medium' },
   { key: 'low', label: 'Low' },
 ];
+
+// Client-side status filter — the same New/Acknowledged/Resolved states
+// statusOf() already derives per row, just relabeled here ("Active" = New).
+const STATUS_TABS = [
+  { key: 'all', label: 'All' },
+  { key: 'new', label: 'Active' },
+  { key: 'acknowledged', label: 'Acknowledged' },
+];
+
+function statusKeyOf(item) {
+  if (item.resolved) return 'resolved';
+  if (item.report?.status === true) return 'acknowledged';
+  return 'new';
+}
 
 function tab(active) {
   return {
@@ -139,19 +159,148 @@ function ReportModal({ item, onClose, onSuccess }) {
 export default function AlertsView() {
   const ctx = useOutletContext() || {};
   const location = ctx.location || '';
+  const routerLocation = useLocation();
+  // A KPI card elsewhere (Command Center's "Active Alerts" tile) can
+  // deep-link here with an initial status filter via navigate(..., { state }).
+  const initialStatusFilter = routerLocation.state?.statusFilter;
+  // A notification click (Header's bell tray) deep-links here with a specific
+  // incident id — fetched directly by id since it may not be in the general
+  // feed's first page (older, or hidden by whatever tab/filter is active).
+  const initialAlertId = routerLocation.state?.alertId;
   const [sev, setSev] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(() => initialStatusFilter || 'all');
   const [selected, setSelected] = useState(null);
+  const [deepLinkedIncident, setDeepLinkedIncident] = useState(null);
+
+  useEffect(() => {
+    if (!initialAlertId) return;
+    let cancelled = false;
+    fetchIncidentById(initialAlertId)
+      .then((incident) => {
+        if (cancelled || !incident) return;
+        setDeepLinkedIncident(incident);
+        setSelected(incident);
+      })
+      .catch(() => {
+        if (!cancelled) toast.error('Could not load that alert');
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialAlertId]);
   const [busy, setBusy] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
-  const filter = useMemo(() => (location ? { location } : {}), [location]);
-  const feed = useApi(() => fetchIncidents({ skip: 0, limit: 50 }, filter), [filter], { pollMs: 30000 });
+  const filter = useMemo(() => {
+    const f = {};
+    if (location) f.location = location;
+    if (dateFrom && dateTo) { f.startDate = dateFrom; f.endDate = dateTo; }
+    return f;
+  }, [location, dateFrom, dateTo]);
+
+  const clearDate = useCallback(() => { setDateFrom(''); setDateTo(''); }, []);
+
+  const hasFilters = sev !== 'all' || statusFilter !== 'all' || !!(dateFrom && dateTo);
+  const clearAllFilters = useCallback(() => {
+    setSev('all');
+    setStatusFilter('all');
+    setDateFrom('');
+    setDateTo('');
+  }, []);
+
+  // Manual pagination (not useApi) so pages can accumulate as the user
+  // scrolls, instead of each fetch replacing the whole list.
+  const [items, setItems] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState(null);
+  const listRef = useRef(null);
+  const requestIdRef = useRef(0);
+
+  const hasMore = items.length < totalCount;
+  // Polling only resumes once the user is back down to just the first page —
+  // otherwise a background refresh would silently wipe out scrolled-in pages.
+  const isFirstPageOnly = items.length <= PAGE_SIZE;
+
+  const loadPage = useCallback(async (skip, { append }) => {
+    const requestId = ++requestIdRef.current;
+    append ? setLoadingMore(true) : setLoading(true);
+    setError(null);
+    try {
+      const result = await fetchIncidents({ skip, limit: PAGE_SIZE }, filter);
+      if (requestId !== requestIdRef.current) return; // superseded by a newer request
+      setItems((prev) => (append ? [...prev, ...result.items] : result.items));
+      setTotalCount(result.totalCount);
+    } catch (err) {
+      if (requestId === requestIdRef.current) setError(err);
+    } finally {
+      if (requestId === requestIdRef.current) {
+        append ? setLoadingMore(false) : setLoading(false);
+      }
+    }
+  }, [filter]);
+
+  // Filter change (e.g. site switch) resets back to page 1.
+  useEffect(() => {
+    loadPage(0, { append: false });
+  }, [loadPage]);
+
+  // Poll only while sitting on just the first page.
+  useEffect(() => {
+    if (!isFirstPageOnly) return;
+    const id = setInterval(() => loadPage(0, { append: false }), POLL_MS);
+    return () => clearInterval(id);
+  }, [isFirstPageOnly, loadPage]);
+
+  const loadMore = useCallback(() => {
+    if (loading || loadingMore || !hasMore) return;
+    loadPage(items.length, { append: true });
+  }, [loading, loadingMore, hasMore, items.length, loadPage]);
+
+  const handleScroll = useCallback((e) => {
+    const el = e.target;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) loadMore();
+  }, [loadMore]);
+
+  const refetch = useCallback(() => loadPage(0, { append: false }), [loadPage]);
 
   const rows = useMemo(() => {
-    let list = feed.data?.items || [];
+    let list = items;
     if (sev !== 'all') list = list.filter((i) => (i.severity || '').toLowerCase() === sev);
+    if (statusFilter !== 'all') list = list.filter((i) => statusKeyOf(i) === statusFilter);
     return list;
-  }, [feed.data, sev]);
+  }, [items, sev, statusFilter]);
+
+  // Per-tab counts, out of what's currently loaded (not the true server-side
+  // total — the backend's stats endpoint doesn't break down by severity ×
+  // status). Each axis's count respects the other axis's active filter, so
+  // e.g. severity counts update when a status tab is selected, and vice versa.
+  const byStatus = useMemo(
+    () => (statusFilter === 'all' ? items : items.filter((i) => statusKeyOf(i) === statusFilter)),
+    [items, statusFilter]
+  );
+  const bySeverity = useMemo(
+    () => (sev === 'all' ? items : items.filter((i) => (i.severity || '').toLowerCase() === sev)),
+    [items, sev]
+  );
+  const sevCounts = useMemo(() => {
+    const counts = { all: byStatus.length, high: 0, moderate: 0, low: 0 };
+    byStatus.forEach((i) => {
+      const s = (i.severity || '').toLowerCase();
+      if (counts[s] !== undefined) counts[s] += 1;
+    });
+    return counts;
+  }, [byStatus]);
+  const statusCounts = useMemo(() => {
+    const counts = { all: bySeverity.length, new: 0, acknowledged: 0 };
+    bySeverity.forEach((i) => {
+      const s = statusKeyOf(i);
+      if (counts[s] !== undefined) counts[s] += 1;
+    });
+    return counts;
+  }, [bySeverity]);
 
   const active = selected || rows[0] || null;
 
@@ -161,7 +310,7 @@ export default function AlertsView() {
     try {
       await updateReportStatus({ incidentId: active._id, status: true, description: '' });
       toast.success('Acknowledged');
-      feed.refetch();
+      refetch();
     } catch {
       toast.error('Could not acknowledge');
     } finally {
@@ -188,8 +337,19 @@ export default function AlertsView() {
         }
       `}</style>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        {TABS.map((t) => <div key={t.key} onClick={() => setSev(t.key)} style={tab(sev === t.key)}>{t.label}</div>)}
-        <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)' }}>{rows.length} events</span>
+        {TABS.map((t) => <div key={t.key} onClick={() => setSev(t.key)} style={tab(sev === t.key)}>{t.label} ({sevCounts[t.key]})</div>)}
+        <div style={{ width: 1, height: 20, background: 'var(--bd2)' }} />
+        {STATUS_TABS.map((t) => <div key={t.key} onClick={() => setStatusFilter(t.key)} style={tab(statusFilter === t.key)}>{t.label} ({statusCounts[t.key]})</div>)}
+        <div style={{ width: 1, height: 20, background: 'var(--bd2)' }} />
+        <DateRangePicker from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo} onClear={clearDate} />
+        {hasFilters && (
+          <button onClick={clearAllFilters} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: '#fff', background: 'var(--crit)', border: '1px solid var(--crit)', borderRadius: 7, cursor: 'pointer', padding: '5px 10px' }}>
+            <X size={13} /> Clear
+          </button>
+        )}
+        <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)' }}>
+          {sev === 'all' && statusFilter === 'all' ? `${items.length} of ${totalCount} events` : `${rows.length} events`}
+        </span>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16, minWidth: 0 }} className="vq-cc-grid vq-alerts-grid">
@@ -198,9 +358,9 @@ export default function AlertsView() {
           <div className="vq-alerts-row-head" style={{ display: 'grid', gridTemplateColumns: '80px 1fr 110px 110px', gap: 8, padding: '11px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>
             <span>SEVERITY</span><span>EVENT</span><span>TIME</span><span className="vq-alerts-col-status">STATUS</span>
           </div>
-          <AsyncBoundary loading={feed.loading} error={feed.error} isEmpty={!feed.loading && !feed.error && rows.length === 0} onRetry={feed.refetch} minH={300} emptyLabel="No alerts">
+          <AsyncBoundary loading={loading} error={error} isEmpty={!loading && !error && rows.length === 0} onRetry={refetch} minH={300} emptyLabel="No alerts">
             {() => (
-              <div className="vq-scroll" style={{ maxHeight: '64vh', overflowY: 'auto' }}>
+              <div ref={listRef} onScroll={handleScroll} className="vq-scroll" style={{ maxHeight: '64vh', overflowY: 'auto' }}>
                 {rows.map((it) => {
                   const s = severity(it.severity);
                   const st = statusOf(it);
@@ -224,6 +384,7 @@ export default function AlertsView() {
                     </div>
                   );
                 })}
+                {loadingMore && <Loading label="Loading more…" minH={60} />}
               </div>
             )}
           </AsyncBoundary>
@@ -274,7 +435,7 @@ export default function AlertsView() {
         <ReportModal
           item={active}
           onClose={() => setReportOpen(false)}
-          onSuccess={feed.refetch}
+          onSuccess={refetch}
         />
       )}
     </div>

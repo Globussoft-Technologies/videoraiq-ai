@@ -49,7 +49,7 @@ function userName(u) {
   return n || u.userName || u.username || 'Unknown';
 }
 function userEmail(u) {
-  return u.userName || u.email || u.username || '';
+  return u.email || u.userName || u.username || '';
 }
 function userRoleName(u) {
   return u.roleIds?.roleName || u.role || u.roleName || '';
@@ -271,7 +271,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   const initialFirst = isEdit ? (user.firstName || '') : '';
   const initialLast  = isEdit ? (user.lastName || '') : '';
 
-  const [username, setUsername] = useState(isEdit ? userEmail(user) : '');
+  const [username, setUsername] = useState(isEdit ? (user.userName || user.username || '') : '');
   const [firstName, setFirstName] = useState(initialFirst);
   const [lastName, setLastName]   = useState(initialLast);
   const [email, setEmail]       = useState(isEdit ? (user.email || userEmail(user)) : '');

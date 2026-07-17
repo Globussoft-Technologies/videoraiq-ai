@@ -16,10 +16,15 @@ export default function KpiCard({
   unavailable = false,
   loading = false,
   title,
+  onClick,
 }) {
   return (
     <div
       title={title}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(e); } } : undefined}
       style={{
         background: 'var(--bg1)',
         border: '1px solid var(--bd)',
@@ -27,6 +32,7 @@ export default function KpiCard({
         padding: 15,
         position: 'relative',
         overflow: 'hidden',
+        cursor: onClick ? 'pointer' : 'default',
       }}
     >
       <div style={{ fontSize: 11, color: 'var(--tx2)', letterSpacing: '.02em' }}>{label}</div>

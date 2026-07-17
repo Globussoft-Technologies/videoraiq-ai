@@ -83,6 +83,11 @@ router.get(
   incidentsController.getWaterSpillageDetectionLogs,
 );
 router.get(
+  "/logs/unauthorized-access",
+  viewAccessCheck,
+  incidentsController.getUnauthorizedAccessLogs,
+);
+router.get(
   "/logs/vehicle-count",
   viewAccessCheck,
   incidentsController.getVehicleCountLogs,

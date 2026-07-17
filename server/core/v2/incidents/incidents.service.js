@@ -2714,6 +2714,19 @@ console.log(result,'result');
     }
   }
 
+  async getUnauthorizedAccessLogs(req, res, next) {
+    try {
+      return await this._fetchIncidentLogs({
+        req,
+        res,
+        incidentType: "unauthorizedAccess",
+      });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch unauthorized access logs", 500));
+    }
+  }
+
   async getVehicleCountLogs(req, res, next) {
     try {
       const { minCount, maxCount } = req.query;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { V2ThemeProvider, useTheme } from '../theme/ThemeContext';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -46,6 +46,7 @@ function currentViewKey(pathname) {
 function Shell() {
   const { theme } = useTheme();
   const location = useLocation();
+  const navigate = useNavigate();
   const viewKey = currentViewKey(location.pathname);
   const meta = VIEW_META[viewKey] || VIEW_META.overview;
 
@@ -81,6 +82,7 @@ function Shell() {
     time: a.timeAgo || timeAgo(a.timeOfIncident),
     sevColor: SEV_COLOR[(a.severity || '').toLowerCase()] || 'var(--warn)',
     read: readIds.has(a._id || i),
+    go: a._id ? () => navigate('/alerts', { state: { alertId: a._id } }) : undefined,
   }));
   const unreadCount = notifications.filter((n) => !n.read).length;
 

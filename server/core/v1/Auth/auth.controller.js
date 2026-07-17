@@ -29,6 +29,17 @@ class authController {
        return await AUTHService.decodeToken(req, res, next);
     }
 
+    async generateAdminToken(req, res, next) {
+        /* #swagger.tags = ['Auth']
+                            #swagger.description = 'Generate an encrypted admin token valid for N days (max 5). Body: { adminId, days }. Requires an authenticated token.' */
+        /*	#swagger.parameters['data'] = {
+                                in: 'body',
+                                required: true,
+                                schema: { adminId: '507f1f77bcf86cd799439011', days: 5 }
+        } */
+        return await AUTHService.generateAdminToken(req, res, next);
+    }
+
     async getFromAmemberUserDetails(req, res, next) {
         /* #swagger.tags = ['Auth']
                             #swagger.description = 'This routes is used to get user details from aMember by username' */

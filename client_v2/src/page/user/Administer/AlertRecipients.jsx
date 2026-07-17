@@ -164,7 +164,11 @@ function RowDetectionTypes({ recipient, detectionTypes, canEdit, onSaved }) {
   const selected = recipient.incidentTypes || [];
 
   async function handleChange(next) {
-    if (!canEdit || busy) return;
+    if (busy) return;
+    if (!canEdit) {
+      toast.error("You don't have permission to edit Alert Recipients.");
+      return;
+    }
     setBusy(true);
     try {
       const result = await updateRecipient(recipient._id, { incidentTypes: next });

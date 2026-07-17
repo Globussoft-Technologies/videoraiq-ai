@@ -26,3 +26,13 @@ body,
 body {
   font-family: var(--ui, 'Poppins', system-ui, sans-serif);
 }
+
+/* Sonner toast close button: right side, vertically centered (default is top-left).
+   Sonner's own rule targets [data-sonner-toast][data-styled='true'] [data-close-button]
+   and reads position from CSS vars, so match that specificity and override the vars too. */
+[data-sonner-toast][data-styled='true'] [data-close-button] {
+  left: auto !important;
+  right: 8px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}

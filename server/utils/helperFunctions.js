@@ -221,12 +221,14 @@ export async function syncStevinrockLogPermissions(adminId) {
 
     // Per-tier value + the role-name matcher, matching syncPermissionLocations'
     // admin / read / write / custom split. Custom (non admin/read/write) roles
-    // get full access to stay consistent with the locations back-fill above.
+    // get denied by default — a newly-introduced permission must never grant
+    // itself access on a role it wasn't explicitly configured for; an admin
+    // opts custom roles in later via Roles & Permission.
     const tiers = [
       { match: { $regex: /admin/i }, value: { view: true, create: true, edit: true, delete: true } },
       { match: { $regex: /read/i }, value: { view: true, create: false, edit: false, delete: false } },
       { match: { $regex: /write/i }, value: { view: true, create: true, edit: true, delete: false } },
-      { match: { $not: { $regex: /admin|read|write/i } }, value: { view: true, create: true, edit: true, delete: true } },
+      { match: { $not: { $regex: /admin|read|write/i } }, value: { view: false, create: false, edit: false, delete: false } },
     ];
 
     for (const tier of tiers) {

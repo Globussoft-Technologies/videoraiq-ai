@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import ConfirmationModal from '@/components/DeleteConfirmation';
 import getAccessToken from '@/utils/getAccessToken';
 import { useTheme } from '@/theme/ThemeContext';
+import { usePermissions } from '@/context/PermissionContext';
 import RegisterForm from './RegisterForm';
 import RegisterUserCard from './RegisterUserCard';
 import VerifyUserDialog from './VerifyUserDialog';
@@ -49,6 +50,9 @@ const AddProfile = () => {
   const { theme } = useTheme();
   const token = getAccessToken();
   const decodedtoken = token ? decodeJwt(token) : null;
+  const { permissions } = usePermissions();
+  const canEditUsers = permissions?.Users?.edit;
+  const canDeleteUsers = permissions?.Users?.delete;
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -173,15 +177,29 @@ const AddProfile = () => {
   const handleSelectAll = () =>
     setSelectedUserIds(allUsersSelected ? [] : users.map((u) => u._id));
 
-  const handleEdit = (user) => setEditUser(user);
+  const handleEdit = (user) => {
+    if (!canEditUsers) {
+      toast.error("You don't have permission to edit Users.");
+      return;
+    }
+    setEditUser(user);
+  };
 
   const handleDelete = (userId) => {
+    if (!canDeleteUsers) {
+      toast.error("You don't have permission to delete Users.");
+      return;
+    }
     setDeleteTargetIds([userId]);
     setOpenDeleteConfirm(true);
   };
 
   const handleBulkDelete = () => {
     if (selectedUserIds.length === 0) return;
+    if (!canDeleteUsers) {
+      toast.error("You don't have permission to delete Users.");
+      return;
+    }
     setDeleteTargetIds(selectedUserIds);
     setOpenDeleteConfirm(true);
   };
@@ -221,6 +239,14 @@ const AddProfile = () => {
       }
     }
     setDeleting(false);
+  };
+
+  const handleDeleteAllClick = () => {
+    if (!canDeleteUsers) {
+      toast.error("You don't have permission to delete Users.");
+      return;
+    }
+    setOpenDeleteAllConfirm(true);
   };
 
   const confirmDeleteAll = async () => {
@@ -395,7 +421,7 @@ const AddProfile = () => {
 
             <button
               type="button"
-              onClick={() => setOpenDeleteAllConfirm(true)}
+              onClick={handleDeleteAllClick}
               className="cursor-pointer flex items-center gap-1.5 px-3 py-2 bg-[var(--crit)] hover:opacity-90 text-white rounded-lg text-xs font-medium"
             >
               <Trash2 className="w-4 h-4" />

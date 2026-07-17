@@ -22,7 +22,15 @@ const PERMISSION_MODULES = [
   'roles', 'departments', 'detectionSettings', 'profiles', 'recipients',
   'locations', 'playbacks',
 ];
-const LOG_SUBMODULES = ['global', 'accessLogs', 'attendanceLogs', 'trackLogs', 'deskLogs', 'guardLogs', 'ANPRLogs'];
+// Every sub-module the backend seeds under permissionConfig.logs (see
+// server/core/v1/permission/permissions.config.js's completeConfig.logs) —
+// updatePermissions() 400s on any subKey not already present there, so this
+// list must stay a superset match of that seed, not just of nav.config.js.
+const LOG_SUBMODULES = [
+  'global', 'accessLogs', 'attendanceLogs', 'trackLogs', 'deskLogs', 'guardLogs', 'ANPRLogs',
+  'conveyorLogs', 'vehicleObstructionLogs', 'vehicleCountLogs', 'crusherLogs',
+  'lineCrossingLogs', 'waterSpillLogs', 'unauthorizedAccessLogs',
+];
 
 const MODULE_LABELS = {
   NVR: 'NVR', channels: 'Channels', LIVE: 'Live', dashboard: 'Dashboard',
@@ -31,6 +39,10 @@ const MODULE_LABELS = {
   recipients: 'Recipients', locations: 'Locations', playbacks: 'Playbacks',
   global: 'Global', accessLogs: 'Access Logs', attendanceLogs: 'Attendance Logs',
   trackLogs: 'Track Logs', deskLogs: 'Desk Logs', guardLogs: 'Guard Logs', ANPRLogs: 'ANPR Logs',
+  conveyorLogs: 'Conveyor Logs', vehicleObstructionLogs: 'Vehicle Obstruction Logs',
+  vehicleCountLogs: 'Vehicle Count Logs', crusherLogs: 'Crusher Logs',
+  lineCrossingLogs: 'Line Crossing Logs', waterSpillLogs: 'Water Spill Logs',
+  unauthorizedAccessLogs: 'Unauthorized Access Logs',
 };
 
 function Checkbox({ checked, disabled, onToggle }) {
