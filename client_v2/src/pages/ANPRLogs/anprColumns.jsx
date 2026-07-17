@@ -1,6 +1,6 @@
 import React from 'react';
 import moment from 'moment-timezone';
-import { Image } from 'lucide-react';
+import { Image, Pencil } from 'lucide-react';
 import { styles } from './anprState';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 
@@ -45,7 +45,7 @@ const formatPlate = (value) => {
  * Build the ANPR log table columns. `onSort(field)` toggles sort for the
  * sortable headers, `onPreview(url)` opens the incident image modal.
  */
-export const buildColumns = ({ onSort, onPreview }) => [
+export const buildColumns = ({ onSort, onPreview, onEdit }) => [
   {
     accessorKey: 'snap',
     header: 'Snap',
@@ -138,6 +138,24 @@ export const buildColumns = ({ onSort, onPreview }) => [
     ),
     cell: ({ row }) => <span className={styles.text}>{formatTime(row.original.createdAt)}</span>,
   },
+  ...(typeof onEdit === 'function'
+    ? [
+        {
+          accessorKey: 'actions',
+          header: 'Actions',
+          cell: ({ row }) => (
+            <button
+              onClick={() => onEdit(row.original)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] hover:text-[var(--brand)] hover:border-[var(--brand)] transition-colors cursor-pointer"
+              title="Edit incident"
+              aria-label="Edit incident"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+          ),
+        },
+      ]
+    : []),
 ];
 
 /**
@@ -146,13 +164,26 @@ export const buildColumns = ({ onSort, onPreview }) => [
  * full-size image preview modal (ANPR's existing "big mode").
  * `ctx` = { onPreview }.
  */
-export const renderANPRCard = (row, { onPreview }) => (
+export const renderANPRCard = (row, { onPreview, onEdit }) => (
   <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[13px] overflow-hidden hover:border-[var(--bd2)] transition-colors h-full w-full min-w-0">
     {/* Snapshot fills the top of the card */}
     <div
       className="relative bg-[#0a0e15] flex items-center justify-center"
       style={{ aspectRatio: '4 / 3' }}
     >
+      {typeof onEdit === 'function' && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(row);
+          }}
+          className="absolute top-2 left-2 z-30 w-8 h-8 flex items-center justify-center rounded-lg bg-[rgba(6,8,13,.72)] text-white hover:bg-[rgba(6,8,13,.9)] cursor-pointer shadow-sm"
+          title="Edit incident"
+          aria-label="Edit incident"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+      )}
       {row.incidentImageUrl ? (
         <ImageWithLoader
           src={row.incidentImageUrl}

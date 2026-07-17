@@ -31,6 +31,16 @@ export const getchannels = async (data) => {
 };
 
 /**
+ * Update an ANPR/incident's editable details (name, vehicle number, severity,
+ * time, NVR, camera). Ported from V1's EditANPRLogDialog `editIncidentDetails`.
+ */
+export const editIncidentDetails = async (id, data) => {
+  return axios.patch(`${HOST}/incidents/${id}/details`, data, {
+    headers: jsonHeaders(),
+  });
+};
+
+/**
  * Paginated vehicle / obstruction (ANPR) detection logs.
  * Filters live in the query string. Mirrors the V1 contract exactly.
  */

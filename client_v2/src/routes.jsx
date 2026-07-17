@@ -24,6 +24,13 @@ import DetectedUsers from './pages/DetectedUsers/DetectedUsers';
 import PersonCountLogs from './pages/PersonCountLogs/PersonCountLogs';
 import DeskAbsenceLogs from './pages/DeskAbsenceLogs/DeskAbsenceLogs';
 import ANPRLogs from './pages/ANPRLogs/ANPRLogs';
+import VehicleCountLogs from './pages/VehicleCountLogs/VehicleCountLogs';
+import ConveyorLogs from './pages/ConveyorLogs/ConveyorLogs';
+import VehicleObstructionLogs from './pages/VehicleObstructionLogs/VehicleObstructionLogs';
+import CrusherLogs from './pages/CrusherLogs/CrusherLogs';
+import LineCrossingLogs from './pages/LineCrossingLogs/LineCrossingLogs';
+import WaterSpillLogs from './pages/WaterSpillLogs/WaterSpillLogs';
+import UnauthorizedAccessLogs from './pages/UnauthorizedAccessLogs/UnauthorizedAccessLogs';
 
 const STUBS = [
   ['faces', 'faces', '/logs/tagged-users'],
@@ -52,6 +59,16 @@ export const v2Routes = (
     <Route path="logs/desk-absence" element={<DeskAbsenceLogs />} />
     <Route path="logs/person-count" element={<PersonCountLogs />} />
 
+    {/* Stevinrock incident logs — each is a thin component wrapping the shared
+        IncidentLogsPage with its config; Vehicle Count is a chart page. */}
+    <Route path="logs/conveyor" element={<ConveyorLogs />} />
+    <Route path="logs/vehicle-obstruction" element={<VehicleObstructionLogs />} />
+    <Route path="logs/vehicle-count" element={<VehicleCountLogs />} />
+    <Route path="logs/crusher" element={<CrusherLogs />} />
+    <Route path="logs/line-crossing" element={<LineCrossingLogs />} />
+    <Route path="logs/water-spill" element={<WaterSpillLogs />} />
+    <Route path="logs/unauthorized-access" element={<UnauthorizedAccessLogs />} />
+
     {/* Configure */}
     <Route path="cameras" element={<NVRCameras />} />
     <Route path="camera-settings" element={<CameraSettings />} />
@@ -59,7 +76,7 @@ export const v2Routes = (
     <Route path="recipients" element={<AlertRecipients />} />
     {/* Administer */}
     <Route path="users" element={<UsersPage />} />
-    <Route path="settings" element={<SystemSettings />} />
+    <Route path="settings" element={<SystemSettings />} />  
     {STUBS.map(([key, path, legacy]) => (
       <Route key={key} path={path} element={<Placeholder viewKey={key} legacyPath={legacy} />} />
     ))}

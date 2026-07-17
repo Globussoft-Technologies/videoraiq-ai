@@ -20,7 +20,25 @@ import {
   UserPlus,
   ShieldCheck,
   Bell,
+  Container,
+  OctagonAlert,
+  CarFront,
+  Hammer,
+  GitBranch,
+  Droplets,
+  Ban,
 } from 'lucide-react';
+
+// Mining incident log tabs (conveyor, crusher, etc.) — shown for every client.
+const stevinrockLogItems = [
+  { key: 'conveyor', label: 'Conveyor Logs', path: 'logs/conveyor', icon: Container },
+  { key: 'vehicle-obstruction', label: 'Vehicle Obstruction Logs', path: 'logs/vehicle-obstruction', icon: OctagonAlert },
+  { key: 'vehicle-count', label: 'Vehicle Count Logs', path: 'logs/vehicle-count', icon: CarFront },
+  { key: 'crusher', label: 'Crusher Logs', path: 'logs/crusher', icon: Hammer },
+  { key: 'line-crossing', label: 'Line Crossing Logs', path: 'logs/line-crossing', icon: GitBranch },
+  { key: 'water-spill', label: 'Water Spill Logs', path: 'logs/water-spill', icon: Droplets },
+  { key: 'unauthorized-access', label: 'Unauthorized Access Logs', path: 'logs/unauthorized-access', icon: Ban },
+];
 
 /**
  * V2 navigation grouped exactly as the prototype sidebar
@@ -67,6 +85,8 @@ export const NAV_GROUPS = [
       { key: 'person-count', label: 'Person Count Logs', path: 'logs/person-count', icon: UserCheck },
       { key: 'desk-absence', label: 'Desk Absence Logs', path: 'logs/desk-absence', icon: UserMinus },
       { key: 'anpr', label: 'ANPR Logs', path: 'logs/anpr', icon: Car },
+      // Mining incident logs — shown for every client.
+      ...stevinrockLogItems,
     ],
   },
   {
@@ -112,6 +132,13 @@ export const VIEW_META = {
   'person-count': { title: 'Person Count Logs', sub: 'Zone occupancy & headcount over time' },
   anpr: { title: 'ANPR / Vehicle Logs', sub: 'Vehicle entry / exit & plate matches' },
   'desk-absence': { title: 'Desk Absence Logs', sub: 'Post & seat absence detections' },
+  conveyor: { title: 'Conveyor Logs', sub: 'Conveyor load / running-state detections' },
+  'vehicle-obstruction': { title: 'Vehicle Obstruction Logs', sub: 'Blocked-path & obstruction detections' },
+  'vehicle-count': { title: 'Vehicle Count Logs', sub: 'Vehicle throughput over time' },
+  crusher: { title: 'Crusher Logs', sub: 'Crusher operating-state detections' },
+  'line-crossing': { title: 'Line Crossing Logs', sub: 'Boundary & line-crossing detections' },
+  'water-spill': { title: 'Water Spill Logs', sub: 'Water spillage detections' },
+  'unauthorized-access': { title: 'Unauthorized Access Logs', sub: 'Restricted-zone entry detections' },
   users: { title: 'User Role Detail', sub: 'Manage users and their assigned roles' },
   roles: { title: 'Roles & Permission', sub: 'Define roles and per-module access' },
   recipients: { title: 'Alert Recipients', sub: 'Who gets notified for each detection type' },

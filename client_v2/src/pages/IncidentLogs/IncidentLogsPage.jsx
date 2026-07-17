@@ -7,26 +7,26 @@ import AccessDenied from '@/components/AccessDenied';
 import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePage';
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
 import ExportButton from '@/pages/AttendanceLogs/components/ExportButton';
+import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
 
-import { initialState, reducer, REFRESH_KEY, INTERVAL_KEY } from './anprState';
-import { buildColumns, renderANPRCard } from './anprColumns';
-import { handleANPRExport } from './anprExport';
-import ANPRFilterPopover from './components/ANPRFilterPopover';
-import VehicleNumberSelect from './components/VehicleNumberSelect';
-import ImagePreviewModal from './components/ImagePreviewModal';
-import EditIncidentDialog from '@/pages/IncidentLogs/components/EditIncidentDialog';
-import {
-  getNVRs,
-  getchannels,
-  fetchVehicleObstructionLogs,
-  getVehicleNumbers,
-  editIncidentDetails,
-} from './Api';
+import { initialState, reducer } from './incidentState';
+import { buildColumns, renderIncidentCard } from './incidentColumns';
+import { handleIncidentExport } from './incidentExport';
+import IncidentFilterPopover from './components/IncidentFilterPopover';
+import EditIncidentDialog from './components/EditIncidentDialog';
+import { getNVRs, getchannels, fetchIncidentLogs } from './Api';
 
-const HOST = import.meta.env.VITE_BACKEND;
-
-const ANPRLogs = () => {
+/**
+ * Shared page for the six stevinrock incident-table logs (conveyor, crusher,
+ * vehicle-obstruction, line-crossing, water-spill, unauthorized-access).
+ * Behaviour is identical to the ANPR log page; the `config` prop selects the
+ * endpoint, title, columns, filters and export naming. Route it with a `key`
+ * so navigating between log types remounts (resetting filters to today).
+ */
+const IncidentLogsPage = ({ config }) => {
   const maxDateDefault = useMemo(() => moment().endOf('day').toDate(), []);
+  const REFRESH_KEY = `${config.storagePrefix}_auto_refresh_enabled`;
+  const INTERVAL_KEY = `${config.storagePrefix}_auto_refresh_interval`;
 
   const [state, dispatch] = useReducer(reducer, initialState);
   const {
@@ -45,11 +45,7 @@ const ANPRLogs = () => {
     nvrIds,
     channelIds,
     severity,
-    resolved,
-    reportStatus,
-    vehicleNumber,
-    vehicleNumberList,
-    vehicleNumberSearch,
+    status,
     limit,
   } = state;
 
@@ -62,7 +58,7 @@ const ANPRLogs = () => {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
   });
   const [manualTrigger, setManualTrigger] = useState(0);
-  const [viewMode, setViewMode] = useState('grid'); // 'table' | 'grid' — default grid
+  const [viewMode, setViewMode] = useState('grid'); // 'table' | 'grid'
   const [previewImage, setPreviewImage] = useState(null);
   const [previewImageLoading, setPreviewImageLoading] = useState(false);
   const [editRow, setEditRow] = useState(null);
@@ -70,12 +66,12 @@ const ANPRLogs = () => {
   const { permissions, loading: permissionsLoading } = usePermissions();
   const navigate = useNavigate();
 
-  // Logs permissions may be flat ({ view, edit }) or nested per sub-section
-  // (ANPRLogs, global, …). Resolve in order: section-specific → global → flat.
+  // Logs permissions may be flat ({ view, edit }) or nested per sub-section.
+  // Resolve in order: section-specific → global → flat.
   const resolveLogPerm = (action) => {
     const logs = permissions?.logs;
     if (!logs) return false;
-    if (typeof logs.ANPRLogs?.[action] === 'boolean') return logs.ANPRLogs[action];
+    if (typeof logs[config.permissionKey]?.[action] === 'boolean') return logs[config.permissionKey][action];
     if (typeof logs.global?.[action] === 'boolean') return logs.global[action];
     if (typeof logs[action] === 'boolean') return logs[action];
     return false;
@@ -83,27 +79,9 @@ const ANPRLogs = () => {
   const canView = resolveLogPerm('view');
   const canEdit = resolveLogPerm('edit');
 
-  // Land the user on a sub-route whose tab actually appears in the sidebar.
-  useEffect(() => {
-    if (permissionsLoading) return;
-    const logs = permissions?.logs;
-    if (!logs) return;
-    if (logs.ANPRLogs?.view === true) return;
-    const candidates = [
-      ['attendanceLogs', '/logs/attendance'],
-      ['accessLogs', '/logs/access'],
-    ];
-    for (const [key, route] of candidates) {
-      if (logs[key]?.view === true) {
-        navigate(route, { replace: true });
-        return;
-      }
-    }
-  }, [permissionsLoading, permissions, navigate]);
-
   /* ─────────────── Auto-refresh persistence ─────────────── */
-  useEffect(() => localStorage.setItem(REFRESH_KEY, autoRefresh), [autoRefresh]);
-  useEffect(() => localStorage.setItem(INTERVAL_KEY, refreshInterval), [refreshInterval]);
+  useEffect(() => localStorage.setItem(REFRESH_KEY, autoRefresh), [REFRESH_KEY, autoRefresh]);
+  useEffect(() => localStorage.setItem(INTERVAL_KEY, refreshInterval), [INTERVAL_KEY, refreshInterval]);
 
   /* ─────────────── Filter metadata ─────────────── */
   useEffect(() => {
@@ -128,26 +106,10 @@ const ANPRLogs = () => {
     })();
   }, [nvrIds]);
 
-  // Fetch distinct vehicle numbers (debounced when search changes).
-  useEffect(() => {
-    const handle = setTimeout(async () => {
-      try {
-        const res = await getVehicleNumbers(vehicleNumberSearch);
-        dispatch({
-          type: 'SET_VEHICLE_NUMBER_LIST',
-          value: res?.data?.body?.data?.vehicleNumbers || [],
-        });
-      } catch (err) {
-        console.log('Error fetching vehicle numbers:', err);
-      }
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [vehicleNumberSearch]);
-
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
     dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
-  }, [nvrIds, channelIds, severity, resolved, reportStatus, vehicleNumber, limit]);
+  }, [nvrIds, channelIds, severity, status, limit]);
 
   const skip = (currentPage - 1) * limit;
 
@@ -156,7 +118,8 @@ const ANPRLogs = () => {
     dispatch({ type: 'SET_LOADING', value: true });
     dispatch({ type: 'SET_ERROR', value: null });
     try {
-      const res = await fetchVehicleObstructionLogs({
+      const res = await fetchIncidentLogs({
+        endpoint: config.endpoint,
         skip,
         limit,
         startDate,
@@ -166,9 +129,7 @@ const ANPRLogs = () => {
         nvrIds,
         channelIds,
         severity,
-        resolved,
-        reportStatus,
-        vehicleNumber,
+        status: config.showStatus ? status : undefined,
         search: searchInput,
       });
 
@@ -182,43 +143,26 @@ const ANPRLogs = () => {
         id: item._id,
         _id: item._id,
         incidentName: item.incidentName || '--',
+        currentStatus: item.currentStatus || '--',
         nvrName: item.nvrData?.nvrName || '--',
         channelName: item.channelData?.name || '--',
         nvrId: item.nvrId || item.nvrData?._id || '',
         channelId: item.channelId || item.channelData?._id || '',
-        timeOfIncident: item.timeOfIncident || '--',
         createdAt: item.createdAt,
-        imageUrl: item.Image ? `${HOST}${item.Image}` : null,
         incidentImageUrl: item.Image ? `${INCIDENT_URL}${item.Image}` : null,
-        vehicleNumber: item.vehicleNumber || '--',
         severity: item.severity || '--',
-        resolved: item.resolved,
-        reportStatus: item.reportStatus,
       }));
 
       dispatch({ type: 'SET_ROWS', value: mapped });
       dispatch({ type: 'SET_TOTAL_COUNT', value: total });
     } catch (err) {
-      console.log('Error fetching vehicle obstruction logs:', err);
+      console.log(`Error fetching ${config.title}:`, err);
       dispatch({ type: 'SET_ERROR', value: err });
     } finally {
       dispatch({ type: 'SET_LOADING', value: false });
     }
-  }, [
-    skip,
-    limit,
-    startDate,
-    endDate,
-    sortField,
-    sortOrder,
-    nvrIds,
-    channelIds,
-    severity,
-    resolved,
-    reportStatus,
-    vehicleNumber,
-    searchInput,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, status, searchInput]);
 
   useEffect(() => {
     fetchLogs();
@@ -253,47 +197,44 @@ const ANPRLogs = () => {
     setPreviewImageLoading(false);
   };
 
-  const onSort = useCallback((field) => {
-    dispatch({ type: 'SET_SORT_FIELD', value: field });
-    dispatch({ type: 'SET_SORT_ORDER', value: sortOrder === 'asc' ? 'desc' : 'asc' });
-  }, [sortOrder]);
+  const onSort = useCallback(
+    (field) => {
+      dispatch({ type: 'SET_SORT_FIELD', value: field });
+      dispatch({ type: 'SET_SORT_ORDER', value: sortOrder === 'asc' ? 'desc' : 'asc' });
+    },
+    [sortOrder]
+  );
 
   const onEdit = useMemo(
     () => (canEdit ? (r) => setEditRow(r) : undefined),
     [canEdit]
   );
 
-  // Stable api object so the edit dialog's fetch effects don't re-run each render.
-  const editApi = useMemo(() => ({ getNVRs, getchannels, editIncidentDetails }), []);
-
   const columns = useMemo(
-    () => buildColumns({ onSort, onPreview: openPreview, onEdit }),
-    [onSort, openPreview, onEdit]
+    () => buildColumns(config, { onSort, onPreview: openPreview, onEdit }),
+    [config, onSort, openPreview, onEdit]
   );
 
   const gridCard = useCallback(
-    (item) => renderANPRCard(item, { onPreview: openPreview, onEdit }),
-    [openPreview, onEdit]
+    (item) => renderIncidentCard(item, config, { onPreview: openPreview, onEdit }),
+    [config, openPreview, onEdit]
   );
 
   // KPI tiles — derived from the loaded page + server total (no placeholder data).
   const stats = useMemo(() => {
     const list = rows || [];
-    const high = list.filter((r) => (r.severity || '').toLowerCase() === 'high').length;
-    const resolvedCount = list.filter((r) => r.resolved).length;
-    const uniquePlates = new Set(
-      list.map((r) => r.vehicleNumber).filter((v) => v && v !== '--')
-    ).size;
+    const bySeverity = (name) =>
+      list.filter((r) => (r.severity || '').toLowerCase() === name).length;
     return [
       { label: 'Incidents', value: totalCount ?? 0, color: 'var(--blue)' },
-      { label: 'High Severity (page)', value: high, color: 'var(--crit)' },
-      { label: 'Resolved (page)', value: resolvedCount, color: 'var(--ok)' },
-      { label: 'Unique Plates (page)', value: uniquePlates, color: 'var(--cyan)' },
+      { label: 'High (page)', value: bySeverity('high'), color: 'var(--crit)' },
+      { label: 'Moderate (page)', value: bySeverity('moderate'), color: 'var(--warn)' },
+      { label: 'Low (page)', value: bySeverity('low'), color: 'var(--ok)' },
     ];
   }, [rows, totalCount]);
 
   const handleExport = (format) =>
-    handleANPRExport(format, {
+    handleIncidentExport(format, config, {
       startDate,
       endDate,
       sortField,
@@ -301,21 +242,14 @@ const ANPRLogs = () => {
       nvrIds,
       channelIds,
       severity,
-      resolved,
-      reportStatus,
-      vehicleNumber,
+      status: config.showStatus ? status : undefined,
       searchInput,
     });
 
   /* ─────────────── Guards ─────────────── */
   if (permissionsLoading) return null;
   if (!canView) {
-    return (
-      <AccessDenied
-        message="You don't have permission to view Logs."
-        onBack={() => navigate(-1)}
-      />
-    );
+    return <AccessDenied message={config.accessDenied} onBack={() => navigate(-1)} />;
   }
 
   return (
@@ -330,9 +264,6 @@ const ANPRLogs = () => {
       <EditIncidentDialog
         open={!!editRow}
         row={editRow}
-        title="Edit ANPR Log"
-        showVehicleNumber
-        api={editApi}
         onClose={() => setEditRow(null)}
         onSaved={() => setManualTrigger((prev) => prev + 1)}
       />
@@ -352,7 +283,7 @@ const ANPRLogs = () => {
         onPageChange={(p) => dispatch({ type: 'SET_CURRENT_PAGE', value: p })}
         limit={limit}
         onLimitChange={(v) => dispatch({ type: 'SET_LIMIT', value: v })}
-        searchKeys={['incidentName', 'nvrName', 'channelName', 'vehicleNumber']}
+        searchKeys={['incidentName', 'nvrName', 'channelName']}
         searchQuery={searchInput}
         onSearchChange={(v) => dispatch({ type: 'SET_SEARCH_INPUT', value: v })}
         startDate={startDate}
@@ -380,18 +311,10 @@ const ANPRLogs = () => {
           dispatch({ type: 'SET_END_DATE', value: e });
         }}
       >
-        <VehicleNumberSelect
-          vehicleNumber={vehicleNumber}
-          setVehicleNumber={(v) => dispatch({ type: 'SET_VEHICLE_NUMBER', value: v })}
-          vehicleNumberList={vehicleNumberList}
-          vehicleNumberSearch={vehicleNumberSearch}
-          setVehicleNumberSearch={(v) => dispatch({ type: 'SET_VEHICLE_NUMBER_SEARCH', value: v })}
-        />
-
         {canEdit && <ExportButton onClick={() => handleExport('excel')}>Excel</ExportButton>}
         {canEdit && <ExportButton onClick={() => handleExport('pdf')}>PDF</ExportButton>}
 
-        <ANPRFilterPopover
+        <IncidentFilterPopover
           nvrOptions={nvrOptions}
           nvrIds={nvrIds}
           setNvrIds={(v) => dispatch({ type: 'SET_NVR_IDS', value: Array.isArray(v) ? v : [] })}
@@ -400,6 +323,9 @@ const ANPRLogs = () => {
           channelIds={channelIds}
           severity={severity}
           setSeverity={(v) => dispatch({ type: 'SET_SEVERITY', value: v })}
+          showStatus={config.showStatus}
+          status={status}
+          setStatus={(v) => dispatch({ type: 'SET_STATUS', value: v })}
         />
 
         <AutoRefreshComponent
@@ -414,4 +340,4 @@ const ANPRLogs = () => {
   );
 };
 
-export default ANPRLogs;
+export default IncidentLogsPage;

@@ -71,14 +71,31 @@ const MultiSelect = ({
       if (!trigger) return;
       const rect = trigger.getBoundingClientRect();
       const panelHeight = panelRef.current?.offsetHeight || 320;
-      const openUpward = openUp || (rect.bottom + panelHeight > window.innerHeight && rect.top - panelHeight >= 0);
-      setPos({
-        position: 'fixed',
-        top: openUpward ? Math.max(8, rect.top - panelHeight - 4) : rect.bottom + 4,
-        left: rect.left,
-        width: rect.width,
-        minWidth: 220,
-      });
+      // Flip up when `openUp` is set, or when the panel won't fit below and
+      // there's more room above. When opening upward we anchor by the panel's
+      // BOTTOM edge (`bottom`) rather than computing a `top` from an estimated
+      // panelHeight — that estimate (320 before the panel is measured) left a
+      // large gap above the trigger when the real panel was short. Anchoring by
+      // bottom makes the panel hug the trigger regardless of its height.
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const fitsBelow = spaceBelow >= panelHeight;
+      const openUpward = openUp || (!fitsBelow && spaceAbove > spaceBelow);
+      setPos(openUpward
+        ? {
+            position: 'fixed',
+            bottom: Math.max(8, window.innerHeight - rect.top + 4),
+            left: rect.left,
+            width: rect.width,
+            minWidth: 220,
+          }
+        : {
+            position: 'fixed',
+            top: rect.bottom + 4,
+            left: rect.left,
+            width: rect.width,
+            minWidth: 220,
+          });
     };
     update();
     window.addEventListener('resize', update);

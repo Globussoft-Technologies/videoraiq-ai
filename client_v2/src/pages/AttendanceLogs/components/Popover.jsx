@@ -94,16 +94,34 @@ export const PopoverContent = ({ children, className, align = 'start', sideOffse
       if (!el) return;
       const r = el.getBoundingClientRect();
       const vw = window.innerWidth;
-      // Measured content width once rendered; fall back to a sane default so
+      const vh = window.innerHeight;
+      // Measured content size once rendered; fall back to a sane default so
       // the very first pass is close, then the rAF pass below corrects it.
       const w = Math.min(ctx.contentRef.current?.offsetWidth || 320, vw - GUTTER * 2);
       // Anchor to the trigger's right (align end) or left, then clamp so the
       // panel never spills off either edge on small (mobile/tablet) screens.
       let left = align === 'end' ? Math.round(r.right - w) : Math.round(r.left);
       left = Math.max(GUTTER, Math.min(left, vw - w - GUTTER));
+
+      // Vertical: open downward by default, but flip above the trigger when the
+      // panel would overflow the bottom of the viewport and there's more room
+      // above (e.g. a time picker on the last field of a modal). When neither
+      // side fully fits, clamp within the viewport rather than spilling off.
+      const h = ctx.contentRef.current?.offsetHeight || 0;
+      let top = r.bottom + sideOffset;
+      if (h) {
+        const spaceBelow = vh - r.bottom;
+        const spaceAbove = r.top;
+        if (top + h + GUTTER > vh && spaceAbove > spaceBelow) {
+          top = Math.max(GUTTER, r.top - sideOffset - h);
+        } else {
+          top = Math.min(top, Math.max(GUTTER, vh - h - GUTTER));
+        }
+      }
+
       setPos({
         position: 'fixed',
-        top: Math.round(r.bottom + sideOffset),
+        top: Math.round(top),
         left,
         maxWidth: `calc(100vw - ${GUTTER * 2}px)`,
       });

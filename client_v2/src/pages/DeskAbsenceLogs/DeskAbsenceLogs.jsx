@@ -255,52 +255,48 @@ const DeskAbsenceLogs = () => {
   }
 
   return (
-    <div className="min-h-full flex flex-col">
-      <div className="w-full flex flex-1 flex-col p-3 sm:p-4 space-y-5 md:space-y-7 xl:space-y-8 bg-[var(--bg1solid)] rounded-[18px]">
-        <div className="flex flex-1 flex-col border-[var(--bd)] rounded-[8px] xl:rounded-[20px] bg-[var(--bg2)] p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4">
-          <h2 className="text-base font-semibold text-[var(--brand)]  dark:text-[#0094e2]">
-            Desk Absence Logs
-          </h2>
+    <div className="p-3 sm:p-4 lg:p-[22px] flex flex-col gap-3 sm:gap-[18px] min-h-full">
+      <div className="w-full flex flex-1 flex-col bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] p-4 sm:p-5 space-y-4">
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-center gap-3">
+          <DateRangePicker
+            startDate={propStart}
+            endDate={propEnd}
+            maxDate={maxDateDefault}
+            onRangeChange={(range) => {
+              if (!range) return;
+              const toIso = (d) =>
+                d instanceof Date ? moment(d).format('YYYY-MM-DD') : d;
+              let s = range.start ? toIso(range.start) : null;
+              let e = range.end ? toIso(range.end) : null;
+              if (s && !e) e = s;
+              if (!s && e) s = e;
+              // Clearing resets to today (empty dates would return all data).
+              if (!s && !e) {
+                const today = moment().format('YYYY-MM-DD');
+                s = today;
+                e = today;
+              }
+              setStartDate(s);
+              setEndDate(e);
+            }}
+          />
 
-          {/* Toolbar */}
-          <div className="flex flex-wrap items-center gap-3 pt-1">
-            <DateRangePicker
-              startDate={propStart}
-              endDate={propEnd}
-              maxDate={maxDateDefault}
-              onRangeChange={(range) => {
-                if (!range) return;
-                const toIso = (d) =>
-                  d instanceof Date ? moment(d).format('YYYY-MM-DD') : d;
-                let s = range.start ? toIso(range.start) : null;
-                let e = range.end ? toIso(range.end) : null;
-                if (s && !e) e = s;
-                if (!s && e) s = e;
-                // Clearing resets to today (empty dates would return all data).
-                if (!s && !e) {
-                  const today = moment().format('YYYY-MM-DD');
-                  s = today;
-                  e = today;
-                }
-                setStartDate(s);
-                setEndDate(e);
-              }}
-            />
-
+          <div className="w-full md:flex md:items-center md:ml-auto md:w-auto gap-3 flex flex-wrap">
             {/* NVR / Camera / Zone filters */}
             <Popover>
               <PopoverTrigger asChild>
-                <Button className="flex bg-[linear-gradient(94.16deg,#FFFFFF_0.77%,#AAE2FF_99.4%)] rounded-lg text-[#333333] cursor-pointer items-center gap-2 relative h-9">
+                <Button className="flex bg-[var(--violet)]/10 border border-[var(--violet)]/30 rounded-lg text-[var(--violet)] font-semibold hover:bg-[var(--violet)]/15 cursor-pointer items-center gap-2 relative h-10">
                   <Filter className="w-4 h-4" />
                   Filters
                   {activeFiltersCount > 0 && (
-                    <span className="bg-[var(--brand)] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] h-5 flex items-center justify-center">
+                    <span className="bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] h-5 flex items-center justify-center">
                       {activeFiltersCount}
                     </span>
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[320px] rounded-xl p-4" align="start">
+              <PopoverContent className="w-[320px] rounded-xl p-4" align="end">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b border-[var(--bd)] pb-2">
                     <h4 className="font-semibold text-base text-[var(--tx)]">Filters</h4>
@@ -352,151 +348,149 @@ const DeskAbsenceLogs = () => {
               </PopoverContent>
             </Popover>
 
-            <div className="ml-auto">
-              <AutoRefreshComponent
-                isActive={autoRefresh}
-                onActiveChange={setAutoRefresh}
-                refreshInterval={refreshInterval}
-                onIntervalChange={setRefreshInterval}
-                onManualRefresh={() => setManualTrigger((prev) => prev + 1)}
-              />
-            </div>
+            <AutoRefreshComponent
+              isActive={autoRefresh}
+              onActiveChange={setAutoRefresh}
+              refreshInterval={refreshInterval}
+              onIntervalChange={setRefreshInterval}
+              onManualRefresh={() => setManualTrigger((prev) => prev + 1)}
+            />
           </div>
-
-          {/* Content */}
-          {loading ? (
-            <div className="flex flex-1 items-center justify-center text-[var(--brand)]">
-              <Loader2 className="w-10 h-10 animate-spin" />
-            </div>
-          ) : error ? (
-            <div className="flex flex-1 flex-col items-center justify-center py-16">
-              <div className="w-16 h-16 rounded-full bg-[var(--crit)]/10 border border-[var(--crit)]/20 flex items-center justify-center mb-4">
-                <SearchX className="w-7 h-7 text-[var(--crit)]" />
-              </div>
-              <p className="text-[18px] font-semibold text-[var(--tx)]" style={{ fontFamily: 'var(--disp)' }}>
-                Failed to load
-              </p>
-              <p className="text-sm text-[var(--tx3)] mt-1.5 max-w-[320px] text-center">
-                Something went wrong while loading desk absence logs. Please refresh and try again.
-              </p>
-            </div>
-          ) : charts.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center py-16">
-              <div className="w-16 h-16 rounded-full bg-[var(--bg2)] border border-[var(--bd)] flex items-center justify-center mb-4">
-                <SearchX className="w-7 h-7 text-[var(--tx3)]" />
-              </div>
-              <p className="text-[18px] font-semibold text-[var(--tx)]" style={{ fontFamily: 'var(--disp)' }}>
-                No desk absence logs found
-              </p>
-              <p className="text-sm text-[var(--tx3)] mt-1.5 max-w-[320px] text-center">
-                There are no desk absence logs for the selected date range. Try widening the range or clearing filters.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {charts.map((chart, idx) => (
-                <div
-                  key={idx}
-                  className="bg-[var(--bg1solid)] rounded-xl border border-[var(--bd)] p-4 shadow-sm"
-                >
-                  {/* NVR + Camera header */}
-                  <div className="flex items-center gap-4 mb-3">
-                    <span className="text-xs font-medium text-[var(--tx2)] bg-[var(--bg2)] px-3 py-1 rounded-full">
-                      NVR Name:{' '}
-                      <span className="text-[var(--brand)] font-semibold">
-                        {chart.nvrName}
-                      </span>
-                    </span>
-                    <span className="text-xs font-medium text-[var(--tx2)] bg-[var(--bg2)] px-3 py-1 rounded-full">
-                      Camera Name:{' '}
-                      <span className="text-[var(--brand)] font-semibold">
-                        {chart.cameraName}
-                      </span>
-                    </span>
-                  </div>
-
-                  {chart.seriesData.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-[220px] text-[var(--tx3)] text-sm">
-                      <ChartColumnBig className="w-10 h-10 mb-2 text-[var(--tx3)]" />
-                      No time-series data
-                    </div>
-                  ) : (
-                    <ReactApexChart
-                      options={chart.options}
-                      series={[{ name: 'Person Count', data: chart.seriesData }]}
-                      type="area"
-                      height={280}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
-        {/* Pagination */}
-        {!loading && charts.length > 0 && (
-          <div className="mt-6 grid grid-cols-3 items-center gap-4">
-            <div className="text-sm text-[var(--tx)] bg-[var(--bg2)] px-3 py-1.5 font-[400] rounded-[5px] w-42 inline-flex items-center gap-2">
-              Total logs -{' '}
-              <span className="text-[var(--brand)] font-medium bg-[var(--brand)]/10 px-2.5 py-1 rounded-md">
-                {totalCount}
-              </span>
+        {/* Content */}
+        {loading ? (
+          <div className="flex flex-1 items-center justify-center">
+            <Loader2 className="w-10 h-10 text-[var(--brand)] animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="flex flex-1 flex-col items-center justify-center py-16">
+            <div className="w-16 h-16 rounded-full bg-[var(--crit)]/10 border border-[var(--crit)]/20 flex items-center justify-center mb-4">
+              <SearchX className="w-7 h-7 text-[var(--crit)]" />
             </div>
-
-            <div className="flex items-center justify-center gap-2">
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className={`flex items-center justify-center w-8 h-8 rounded ${
-                  currentPage === 1
-                    ? 'text-[var(--tx3)] cursor-not-allowed'
-                    : 'text-[var(--tx2)] hover:bg-[var(--bg3)] cursor-pointer'
-                }`}
+            <p className="text-[18px] font-semibold text-[var(--tx)]" style={{ fontFamily: 'var(--disp)' }}>
+              Failed to load
+            </p>
+            <p className="text-sm text-[var(--tx3)] mt-1.5 max-w-[320px] text-center">
+              Something went wrong while loading desk absence logs. Please refresh and try again.
+            </p>
+          </div>
+        ) : charts.length === 0 ? (
+          <div className="flex flex-1 flex-col items-center justify-center py-16">
+            <div className="w-16 h-16 rounded-full bg-[var(--bg2)] border border-[var(--bd)] flex items-center justify-center mb-4">
+              <SearchX className="w-7 h-7 text-[var(--tx3)]" />
+            </div>
+            <p className="text-[18px] font-semibold text-[var(--tx)]" style={{ fontFamily: 'var(--disp)' }}>
+              No desk absence logs found
+            </p>
+            <p className="text-sm text-[var(--tx3)] mt-1.5 max-w-[320px] text-center">
+              There are no desk absence logs for the selected date range. Try widening the range or clearing filters.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {charts.map((chart, idx) => (
+              <div
+                key={idx}
+                className="bg-[var(--bg2)] rounded-[12px] border border-[var(--bd)] p-4 shadow-sm"
               >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-
-              {getPaginationPages().map((page, index) =>
-                page === '...' ? (
-                  <span
-                    key={`ellipsis-${index}`}
-                    className="flex items-center justify-center w-8 h-8 text-[var(--tx3)]"
-                  >
-                    ...
+                {/* NVR + Camera header */}
+                <div className="flex flex-wrap items-center gap-3 mb-3">
+                  <span className="text-xs font-medium text-[var(--tx2)] bg-[var(--bg1)] border border-[var(--bd)] px-3 py-1 rounded-full">
+                    NVR Name:{' '}
+                    <span className="text-[var(--violet)] font-semibold">
+                      {chart.nvrName}
+                    </span>
                   </span>
+                  <span className="text-xs font-medium text-[var(--tx2)] bg-[var(--bg1)] border border-[var(--bd)] px-3 py-1 rounded-full">
+                    Camera Name:{' '}
+                    <span className="text-[var(--violet)] font-semibold">
+                      {chart.cameraName}
+                    </span>
+                  </span>
+                </div>
+
+                {chart.seriesData.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-[220px] text-[var(--tx3)] text-sm">
+                    <ChartColumnBig className="w-10 h-10 mb-2 text-[var(--tx3)]" />
+                    No time-series data
+                  </div>
                 ) : (
-                  <button
-                    key={page}
-                    onClick={() => handlePageChange(page)}
-                    className={`flex items-center justify-center w-8 h-8 rounded text-sm font-medium cursor-pointer ${
-                      currentPage === page
-                        ? 'bg-[var(--brand)] text-white'
-                        : 'text-[var(--tx2)] hover:bg-[var(--bg3)]'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                )
-              )}
-
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className={`flex items-center justify-center w-8 h-8 rounded ${
-                  currentPage === totalPages
-                    ? 'text-[var(--tx3)] cursor-not-allowed'
-                    : 'text-[var(--tx2)] hover:bg-[var(--bg3)] cursor-pointer'
-                }`}
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div />
+                  <ReactApexChart
+                    options={chart.options}
+                    series={[{ name: 'Person Count', data: chart.seriesData }]}
+                    type="area"
+                    height={280}
+                  />
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
+
+      {/* Pagination */}
+      {!loading && charts.length > 0 && (
+        <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 items-center gap-4">
+          <div className="text-sm text-[var(--tx2)] bg-[var(--bg2)] px-3 py-1.5 font-normal rounded-[8px] w-fit inline-flex items-center gap-2">
+            Total logs -{' '}
+            <span className="text-[var(--violet)] font-semibold bg-[var(--violet)]/10 px-2.5 py-1 rounded-md">
+              {totalCount}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className={`flex items-center justify-center w-8 h-8 rounded ${
+                currentPage === 1
+                  ? 'text-[var(--tx3)] cursor-not-allowed'
+                  : 'text-[var(--tx2)] hover:bg-[var(--bg2)] cursor-pointer'
+              }`}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            {getPaginationPages().map((page, index) =>
+              page === '...' ? (
+                <span
+                  key={`ellipsis-${index}`}
+                  className="flex items-center justify-center w-8 h-8 text-[var(--tx3)]"
+                >
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={page}
+                  onClick={() => handlePageChange(page)}
+                  className={`flex items-center justify-center w-8 h-8 rounded text-sm font-medium cursor-pointer ${
+                    currentPage === page
+                      ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white'
+                      : 'text-[var(--tx2)] hover:bg-[var(--bg2)]'
+                  }`}
+                >
+                  {page}
+                </button>
+              )
+            )}
+
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className={`flex items-center justify-center w-8 h-8 rounded ${
+                currentPage === totalPages
+                  ? 'text-[var(--tx3)] cursor-not-allowed'
+                  : 'text-[var(--tx2)] hover:bg-[var(--bg2)] cursor-pointer'
+              }`}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div />
+        </div>
+      )}
     </div>
   );
 };
