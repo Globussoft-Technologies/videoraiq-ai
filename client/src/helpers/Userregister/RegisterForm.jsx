@@ -213,7 +213,7 @@ const [uploadedImageUrls, setUploadedImageUrls] = useState(["", "", ""]); // New
     designation: Yup.string()
     .required('Designation is required'),
     location: Yup.string(),
-    departmentId: Yup.string().required('Department is required'),
+    departmentId: Yup.string(),
   });
 
   const validationSchemaStep2 = Yup.object().shape({});
@@ -390,9 +390,9 @@ const checkEmail=async(email)=>{
 
               <div className="p-8 flex-1 overflow-y-auto min-h-0">
                 {step === 1 ? (
-                  <RegisterFormStep1 
-                    departments={departments} 
-                    locations={Array.from(new Set([...parentLocations, ...fetchedLocations]))} 
+                  <RegisterFormStep1
+                    departments={departments}
+                    locations={Array.from(new Set([...parentLocations, ...fetchedLocations]))}
                   />
                 ) : (
                   <RegisterFormStep2 

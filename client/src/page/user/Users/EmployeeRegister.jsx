@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import RegisterFormStep1 from '@/helpers/Userregister/RegisterFormStep1';
 import RegisterFormStep2 from '@/helpers/Userregister/RegisterFormStep2';
 import getAccessToken from '@/utils/getAccessToken';
+import { decrypt } from '@/helpers/decriptNvr';
 import adminbg from '@/assets/adminbg2.webp';
 import logo from '@/assets/logo2.svg';
 
@@ -30,7 +31,15 @@ const EmployeeRegister = () => {
   const departmentAPI = BACKEND + '/api/v1/departments/get';
   const isEmailExistAPI = BACKEND + '/api/v1/users/isEmailExist/';
   const employeeLocationsAPI = BACKEND + '/api/v1/locations/employee-location';
-  const AUTH_TOKEN = getAccessToken();
+  // The registration link carries an AES-encrypted admin token as ?token=.
+  // Falls back to the cookie token when the page is opened without one.
+  const AUTH_TOKEN = useMemo(() => {
+    const encrypted = new URLSearchParams(window.location.search).get('token');
+    if (!encrypted) return getAccessToken();
+    // decrypt() returns its input unchanged when it cannot decrypt.
+    const decrypted = decrypt(encrypted);
+    return decrypted && decrypted !== encrypted ? decrypted : null;
+  }, []);
 
   const TAG = '[EmployeeRegister]';
   const log = (...args) => console.log(TAG, ...args);

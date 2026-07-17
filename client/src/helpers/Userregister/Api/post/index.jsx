@@ -12,6 +12,17 @@ export const bulkUploadUsers = async (data) => {
   return response?.data;
 }
 
+export const generateAdminToken = async ({ adminId, days }) => {
+  const token = await getAccessToken();
+  const response = await axios.post(`${apiUrl}/api/v1/auth/generate-admin-token`, { adminId, days }, {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token
+    }
+  });
+  return response?.data;
+}
+
 export const verifyUser = async (data) => {
   const token = await getAccessToken();
   const response = await axios.post(`${apiUrl}/api/v1/authorizedUsers/verifyUser`, data, {

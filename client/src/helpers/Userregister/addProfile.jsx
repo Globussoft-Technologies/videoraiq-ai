@@ -18,6 +18,7 @@ import {
   FilePlus,
   LayoutGrid,
   List,
+  Link as LinkIcon,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -41,6 +42,7 @@ import ConfirmationModal from '@/page/user/Detection/components/DeleteConfirmati
 import { bulkUploadUsers, isEmpAdminApi } from './Api/post';
 import { getEmployeeLocations } from '@/page/user/UserDetails/Api/Post';
 import ImportEmpUsersModal from './ImortEmpUsers';
+import GenerateRegLinkModal from './GenerateRegLinkModal';
 import { useAuth } from '@/context/AuthContext';
 import MultiSelect from '@/components/ui/multiselect';
 import { UserDetailModal } from './UserDetailModal';
@@ -382,6 +384,7 @@ const AddProfile = () => {
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [deleting, setDeleting] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showRegLinkModal, setShowRegLinkModal] = useState(false);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
   const [locations, setLocations] = useState([]);
    const [departments, setDepartments] = useState([]);
@@ -764,6 +767,20 @@ const AddProfile = () => {
                 onClose={() => setShowImportModal(false)}
                 refreshLocations={loadLocations}
                 refreshDepartments={loadDepartments}
+              />
+
+              <button
+                onClick={() => setShowRegLinkModal(true)}
+                className="flex items-center focus:outline-none gap-1 sm:gap-2 px-1.5 py-1 md:px-2 md:py-1.5 lg:px-3 lg:py-2 bg-[#07486A] text-white rounded-[8px] md:rounded-[5px] text-[10px] md:text-[10px] 2xl:text-xs cursor-pointer"
+              >
+                <LinkIcon className="w-3.5 h-3.5 md:w-3.5 md:h-3.5 2xl:w-4 2xl:h-4 text-white" />
+                <span className="md:hidden lg:flex">Generate Registration Link</span>
+              </button>
+
+              <GenerateRegLinkModal
+                open={showRegLinkModal}
+                onClose={() => setShowRegLinkModal(false)}
+                adminId={decodedtoken?.adminId}
               />
 
               <RegisterForm
