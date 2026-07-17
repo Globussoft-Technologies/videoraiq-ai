@@ -13,7 +13,6 @@ import { initialState, reducer } from './incidentState';
 import { buildColumns, renderIncidentCard } from './incidentColumns';
 import { handleIncidentExport } from './incidentExport';
 import IncidentFilterPopover from './components/IncidentFilterPopover';
-import EditIncidentDialog from './components/EditIncidentDialog';
 import { getNVRs, getchannels, fetchIncidentLogs } from './Api';
 
 /**
@@ -61,7 +60,6 @@ const IncidentLogsPage = ({ config }) => {
   const [viewMode, setViewMode] = useState('grid'); // 'table' | 'grid'
   const [previewImage, setPreviewImage] = useState(null);
   const [previewImageLoading, setPreviewImageLoading] = useState(false);
-  const [editRow, setEditRow] = useState(null);
 
   const { permissions, loading: permissionsLoading } = usePermissions();
   const navigate = useNavigate();
@@ -205,19 +203,14 @@ const IncidentLogsPage = ({ config }) => {
     [sortOrder]
   );
 
-  const onEdit = useMemo(
-    () => (canEdit ? (r) => setEditRow(r) : undefined),
-    [canEdit]
-  );
-
   const columns = useMemo(
-    () => buildColumns(config, { onSort, onPreview: openPreview, onEdit }),
-    [config, onSort, openPreview, onEdit]
+    () => buildColumns(config, { onSort, onPreview: openPreview }),
+    [config, onSort, openPreview]
   );
 
   const gridCard = useCallback(
-    (item) => renderIncidentCard(item, config, { onPreview: openPreview, onEdit }),
-    [config, openPreview, onEdit]
+    (item) => renderIncidentCard(item, config, { onPreview: openPreview }),
+    [config, openPreview]
   );
 
   // KPI tiles — derived from the loaded page + server total (no placeholder data).
@@ -259,13 +252,6 @@ const IncidentLogsPage = ({ config }) => {
         loading={previewImageLoading}
         setLoading={setPreviewImageLoading}
         onClose={closePreview}
-      />
-
-      <EditIncidentDialog
-        open={!!editRow}
-        row={editRow}
-        onClose={() => setEditRow(null)}
-        onSaved={() => setManualTrigger((prev) => prev + 1)}
       />
 
       <ReusableTablePage
