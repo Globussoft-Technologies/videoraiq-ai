@@ -38,7 +38,10 @@ async function apiReport(incidentId, description) {
 
 /* ── Report modal ─────────────────────────────────────────────────────────── */
 function ReportModal({ item, onClose, onSuccess }) {
-  const existing     = item.report?.status && item.report?.description ? item.report : null;
+  // Reported status alone means "already reported" — description can be
+  // empty (report.description defaults to "" server-side), and that must
+  // still show the "already reported" view, not the blank write form.
+  const existing     = item.report?.status ? item.report : null;
   const [desc, setDesc]       = useState(existing?.description || '');
   const [editing, setEditing] = useState(!existing);
   const [loading, setLoading] = useState(false);
@@ -87,7 +90,9 @@ function ReportModal({ item, onClose, onSuccess }) {
           <>
             <div style={{ background: 'rgba(34,197,94,.07)', border: '1px solid rgba(34,197,94,.2)', borderRadius: 10, padding: '14px', marginBottom: 14 }}>
               <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ok)', marginBottom: 8 }}>Report Status: Completed</div>
-              <div style={{ fontSize: 13, color: 'var(--tx2)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{existing.description}</div>
+              <div style={{ fontSize: 13, color: existing.description ? 'var(--tx2)' : 'var(--tx3)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {existing.description || 'No description provided.'}
+              </div>
               {existing.reportedAt && (
                 <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 10 }}>
                   Submitted on {new Date(existing.reportedAt).toLocaleString()}
@@ -129,7 +134,7 @@ function ReportModal({ item, onClose, onSuccess }) {
               >
                 {editing && existing ? 'Cancel' : 'Close'}
               </button>
-              <button onClick={submit} style={btnStyle('primary')} disabled={loading || !desc.trim()}>
+              <button onClick={submit} style={btnStyle('primary')} disabled={loading}>
                 {loading ? 'Reporting…' : 'Report'}
               </button>
             </div>

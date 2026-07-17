@@ -148,18 +148,31 @@ class UsersService {
         filter.roleIds = { $in: roleIds };
       }
   
-      // ✅ Add search for userName, firstName, lastName, and roleName
+      // ✅ Add search for userName, firstName, lastName, email, and roleName.
+      // A display name like "chandana Testing" is firstName + lastName in
+      // separate fields, so searching the full typed string against each
+      // field alone never matches. Split into words and require each word to
+      // match at least one field (in any combination of first/last/etc), so
+      // "chandana Testing" still finds firstName:"chandana" lastName:"Testing".
       if (searchQuery?.trim()) {
-        filter.$or = [
-          { userName: { $regex: searchQuery, $options: "i" } },
-          { firstName: { $regex: searchQuery, $options: "i" } },
-          { lastName: { $regex: searchQuery, $options: "i" } },
-        ];
-  
-        // ✅ Include users having matching roleIds
-        if (roleIdsFromSearch?.length) {
-          filter.$or.push({ roleIds: { $in: roleIdsFromSearch } });
-        }
+        const searchWords = searchQuery.trim().split(/\s+/).filter(Boolean);
+        const nameOrEmailMatch = (word) => ({
+          $or: [
+            { userName: { $regex: word, $options: "i" } },
+            { firstName: { $regex: word, $options: "i" } },
+            { lastName: { $regex: word, $options: "i" } },
+            { email: { $regex: word, $options: "i" } },
+          ],
+        });
+
+        const roleMatch = roleIdsFromSearch?.length
+          ? { roleIds: { $in: roleIdsFromSearch } }
+          : null;
+
+        // Each word must match name/email fields — OR'd with a full-string
+        // role-name match, so searching a role name still works untouched.
+        const wordsMatch = { $and: searchWords.map(nameOrEmailMatch) };
+        filter.$or = roleMatch ? [wordsMatch, roleMatch] : [wordsMatch];
       }
   
       // ✅ Fetch users and count simultaneously
@@ -512,16 +525,23 @@ class UsersService {
             return res.status(404).json(Response.userFailResp("Authorized user not found"));
           }
       
-          // Check if another user already has the same firstName, lastName, and email
-          const duplicateUser = await authorizedUsersModel.findOne({
-            _id: { $ne: userId }, // Exclude current user
-            email,
-          });
-      
-          if (duplicateUser) {
-            return res.status(409).json(Response.userFailResp(
-              "Another authorized user with email already exists"
-            ));
+          // Check if another user under the same admin already has this email
+          // (scoped by adminId, same as createAuthUser's duplicate check —
+          // otherwise a same-email user belonging to a different admin, or a
+          // pre-existing duplicate elsewhere, would block edits that don't
+          // even touch the email field).
+          if (email !== existingUser.email) {
+            const duplicateUser = await authorizedUsersModel.findOne({
+              _id: { $ne: userId }, // Exclude current user
+              email,
+              adminId: existingUser.adminId,
+            });
+
+            if (duplicateUser) {
+              return res.status(409).json(Response.userFailResp(
+                "Another authorized user with email already exists"
+              ));
+            }
           }
           let dataToUpdate = { userName,firstName, lastName, email, profilePics ,adminId:isAdminExist?._id,roleIds};
 

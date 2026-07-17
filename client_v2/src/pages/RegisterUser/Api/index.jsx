@@ -87,10 +87,12 @@ export const fetchDepartments = async (skip = 0, limit = 100, search = '', token
   );
 };
 
-/** Employee locations (raw axios response). `token` overrides the session token (see fetchDepartments). */
+/** Employee locations (raw axios response). `token` overrides the session token (see fetchDepartments).
+ * The endpoint paginates and defaults to limit=10 when no query params are sent — passing a large
+ * limit here keeps dropdowns (Register User's Location select, etc.) from silently truncating. */
 export const getEmployeeLocations = async (token) => {
   return axios.post(
-    `${Api_url}/locations/employee-location`,
+    `${Api_url}/locations/employee-location?skip=0&limit=1000`,
     {},
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token || getAccessToken() } }
   );

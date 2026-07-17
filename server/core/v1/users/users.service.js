@@ -512,16 +512,23 @@ class UsersService {
             return res.status(404).json(Response.userFailResp("Authorized user not found"));
           }
       
-          // Check if another user already has the same firstName, lastName, and email
-          const duplicateUser = await authorizedUsersModel.findOne({
-            _id: { $ne: userId }, // Exclude current user
-            email,
-          });
-      
-          if (duplicateUser) {
-            return res.status(409).json(Response.userFailResp(
-              "Another authorized user with email already exists"
-            ));
+          // Check if another user under the same admin already has this email
+          // (scoped by adminId, same as createAuthUser's duplicate check —
+          // otherwise a same-email user belonging to a different admin, or a
+          // pre-existing duplicate elsewhere, would block edits that don't
+          // even touch the email field).
+          if (email !== existingUser.email) {
+            const duplicateUser = await authorizedUsersModel.findOne({
+              _id: { $ne: userId }, // Exclude current user
+              email,
+              adminId: existingUser.adminId,
+            });
+
+            if (duplicateUser) {
+              return res.status(409).json(Response.userFailResp(
+                "Another authorized user with email already exists"
+              ));
+            }
           }
           let dataToUpdate = { userName,firstName, lastName, email, profilePics ,adminId:isAdminExist?._id,roleIds};
 

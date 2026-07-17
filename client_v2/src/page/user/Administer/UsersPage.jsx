@@ -506,22 +506,23 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                 placeholder="Search or type new user…"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
+                autoComplete="off"
               />
             </div>
             <div>
               <FieldLabel>Email ID *</FieldLabel>
-              <TextInput placeholder="Enter email address" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+              <TextInput placeholder="Enter email address" type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="off" />
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 14 }}>
             <div>
               <FieldLabel>First name *</FieldLabel>
-              <TextInput placeholder="Enter first name" value={firstName} onChange={e => setFirstName(e.target.value)} />
+              <TextInput placeholder="Enter first name" value={firstName} onChange={e => setFirstName(e.target.value)} autoComplete="off" />
             </div>
             <div>
               <FieldLabel>Last name *</FieldLabel>
-              <TextInput placeholder="Enter last name" value={lastName} onChange={e => setLastName(e.target.value)} />
+              <TextInput placeholder="Enter last name" value={lastName} onChange={e => setLastName(e.target.value)} autoComplete="off" />
             </div>
           </div>
 
@@ -612,6 +613,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                       value={password}
                       onChange={e => setPassword(e.target.value)}
                       style={{ paddingRight: 34 }}
+                      autoComplete="new-password"
                     />
                     <button
                       onClick={() => setShowPass(v => !v)}
@@ -630,6 +632,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                       value={confirmPassword}
                       onChange={e => setConfirmPassword(e.target.value)}
                       style={{ paddingRight: 34 }}
+                      autoComplete="new-password"
                     />
                     <button
                       onClick={() => setShowConfirmPass(v => !v)}
@@ -687,9 +690,69 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   );
 }
 
+// ── Bulk "Assign Role" trigger + dropdown (selected-users toolbar) ─────────
+// Same 5-visible-row scroll behavior as RoleSelect (ROLE_PANEL_MAX_H), just a
+// button trigger instead of a form field, since this isn't bound to one user.
+function BulkAssignRoleButton({ roles, rolesLoading, disabled, onAssign }) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => {
+      if (!wrapperRef.current?.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        disabled={disabled}
+        style={{
+          height: 32, padding: '0 12px', display: 'flex', alignItems: 'center', gap: 6, borderRadius: 8,
+          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, fontWeight: 500,
+          cursor: disabled ? 'default' : 'pointer', color: 'var(--tx)', opacity: disabled ? 0.6 : 1,
+        }}
+      >
+        Assign Role
+        <ChevronDown size={13} style={{ color: 'var(--tx3)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 50, width: 200,
+          maxHeight: ROLE_PANEL_MAX_H, overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
+          borderRadius: 10, boxShadow: '0 18px 50px rgba(0,0,0,.35)', padding: 5,
+        }}>
+          {rolesLoading ? (
+            <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--tx3)' }}>Loading roles…</div>
+          ) : roles.length === 0 ? (
+            <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--tx3)' }}>No roles found</div>
+          ) : roles.map(r => (
+            <div
+              key={r._id}
+              onClick={() => { setOpen(false); onAssign(r); }}
+              style={{ padding: '8px 10px', borderRadius: 7, fontSize: 12.5, cursor: 'pointer', color: 'var(--tx)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg2)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              {r.roleName}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── main page ─────────────────────────────────────────────────────────────────
 export default function UsersPage() {
   const [search, setSearch]       = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const debounceRef = useRef(null);
   const [page, setPage]           = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
@@ -697,12 +760,23 @@ export default function UsersPage() {
   const [editUser, setEditUser]   = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selected, setSelected]   = useState({});
+  const [assigningRole, setAssigningRole] = useState(false);
   const LIMIT = 10;
+
+  // Debounce the search box: typing fires a new request per keystroke
+  // otherwise, and fast typing can return responses out of order — the
+  // debounce plus useApi's own staleness guard keep the list matching what's
+  // actually in the box.
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(debounceRef.current);
+  }, [search]);
 
   const rolesApi     = useApi(() => getRoles({ limit: 100 }), []);
   const usersApi     = useApi(
-    () => getUsers({ skip: page * LIMIT, limit: LIMIT, searchQuery: search }),
-    [page, search],
+    () => getUsers({ skip: page * LIMIT, limit: LIMIT, searchQuery: debouncedSearch }),
+    [page, debouncedSearch],
   );
 
   const roles     = rolesApi.data?.roles ?? [];
@@ -723,7 +797,14 @@ export default function UsersPage() {
 
   const handleCreate = async (payload) => {
     try {
-      await createUser(payload);
+      const result = await createUser(payload);
+      // The backend returns validation failures as HTTP 200 with
+      // body.status: 'failed' (no rejected promise), so a successful POST
+      // here does NOT mean the user was actually created — check status.
+      if (result?.status && result.status !== 'success') {
+        sonnerToast.error(result?.message || 'Failed to register user');
+        return;
+      }
       sonnerToast.success('User registered successfully');
       setShowAddModal(false);
       usersApi.refetch();
@@ -766,9 +847,75 @@ export default function UsersPage() {
     }
   };
 
+  const handleBulkAssignRole = async (role) => {
+    const ids = Object.keys(selected).filter(id => selected[id]);
+    if (!ids.length) return;
+    const targets = users.filter(u => ids.includes(u._id));
+    if (!targets.length) return;
+
+    const toIds = (arr) => (Array.isArray(arr) ? arr : [])
+      .map((x) => (x && typeof x === 'object' ? (x._id || x.id) : x))
+      .filter(Boolean);
+
+    setAssigningRole(true);
+    let succeeded = 0;
+    let failed = 0;
+    try {
+      await Promise.all(targets.map(async (u) => {
+        const access = u.authorizedChannels || {};
+        try {
+          // Same full-payload shape UserFormModal's edit save sends — the
+          // backend rebuilds every field from the body, so a role-only patch
+          // would blank out the rest.
+          const result = await updateUser(u._id, {
+            userName: u.userName || '',
+            firstName: u.firstName || '',
+            lastName: u.lastName || '',
+            email: u.email || '',
+            roleIds: [role._id],
+            authorizedChannelsData: {
+              employeeLocations: toIds(access.employeeLocations).length ? toIds(access.employeeLocations) : undefined,
+              locations: toIds(access.locations),
+              nvrIds: toIds(access.nvrIds),
+              departmentIds: toIds(access.departmentIds),
+              channelIds: toIds(access.channels),
+            },
+          });
+          if (result?.status && result.status !== 'success') {
+            failed += 1;
+          } else {
+            succeeded += 1;
+          }
+        } catch {
+          failed += 1;
+        }
+      }));
+
+      if (succeeded > 0) {
+        sonnerToast.success(
+          failed === 0
+            ? `${role.roleName} assigned to ${succeeded} user${succeeded === 1 ? '' : 's'}`
+            : `${role.roleName} assigned to ${succeeded}, ${failed} failed`
+        );
+      } else {
+        sonnerToast.error(`Failed to assign ${role.roleName} to ${failed} user${failed === 1 ? '' : 's'}`);
+      }
+      setSelected({});
+      usersApi.refetch();
+    } finally {
+      setAssigningRole(false);
+    }
+  };
+
   const handleSaveEdit = async (patch) => {
     try {
-      await updateUser(editUser._id, patch);
+      const result = await updateUser(editUser._id, patch);
+      // Same as create: some validation failures return HTTP 200 with
+      // body.status: 'failed' rather than a rejected promise.
+      if (result?.status && result.status !== 'success') {
+        sonnerToast.error(result?.message || 'Failed to update user');
+        return;
+      }
       sonnerToast.success(`${userName(editUser)} updated`);
       setEditUser(null);
       usersApi.refetch();
@@ -786,6 +933,7 @@ export default function UsersPage() {
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(0); }}
             placeholder="Search users by name or email…"
+            autoComplete="off"
             style={{
               width: '100%', boxSizing: 'border-box', height: 40, padding: '0 12px 0 36px', borderRadius: 10,
               background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13, color: 'var(--tx)', outline: 'none',
@@ -817,12 +965,12 @@ export default function UsersPage() {
         }}>
           <span style={{ fontSize: 12.5, fontWeight: 600 }}>{selCount} selected</span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => sonnerToast(`Assign role to ${selCount} users`)}
-              style={{ height: 32, padding: '0 12px', display: 'flex', alignItems: 'center', gap: 6, borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, fontWeight: 500, cursor: 'pointer', color: 'var(--tx)' }}
-            >
-              Assign Role
-            </button>
+            <BulkAssignRoleButton
+              roles={roles}
+              rolesLoading={rolesApi.loading}
+              disabled={assigningRole}
+              onAssign={handleBulkAssignRole}
+            />
             <button
               onClick={() => setConfirmBulkDelete(true)}
               style={{ height: 32, padding: '0 12px', display: 'flex', alignItems: 'center', gap: 6, borderRadius: 8, background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.45)', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--crit)' }}

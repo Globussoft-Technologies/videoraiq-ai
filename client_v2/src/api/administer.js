@@ -30,7 +30,7 @@ export async function getDepartments({ skip = 0, limit = 100 } = {}) {
   return { departments, total: data?.total ?? data?.totalCount ?? departments.length };
 }
 
-export async function getEmployeeLocations({ skip = 0, limit = 100, search = '' } = {}) {
+export async function getEmployeeLocations({ skip = 0, limit = 1000, search = '' } = {}) {
   const res = await api.post(`/locations/employee-location?skip=${skip}&limit=${limit}&search=${search}`, {});
   const data = unwrap(res);
   if (Array.isArray(data)) return data;
