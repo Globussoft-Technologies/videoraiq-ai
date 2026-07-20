@@ -34,6 +34,7 @@ import superAdminRoutes from "../../core/v1/superAdmin/superAdmin.routes.js";
 import clientRoutes from "../../core/v1/client/client.routes.js";
 import clientConfigRoutes from "../../core/v1/clientConfig/clientConfig.routes.js";
 import detectionCatalogRoutes from "../../core/v1/detectionCatalog/detectionCatalog.routes.js";
+import plansRoutes from "../../core/v1/plans/plans.routes.js";
 
 const router = express.Router();
 
@@ -74,5 +75,6 @@ router.use("/superAdmin", superAdminRoutes);
 router.use("/client", clientRoutes);
 router.use("/client-config", clientConfigRoutes);
 router.use("/detection-catalog", detectionCatalogRoutes);
+router.use("/plans", plansRoutes);
 
 export default router;
