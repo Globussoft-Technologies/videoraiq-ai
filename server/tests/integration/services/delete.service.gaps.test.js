@@ -88,8 +88,19 @@ const { default: DeleteService } = await import(
   "../../../services/delete.service.js"
 );
 
-/** chainable: Channel.find(...).select("_id") → docs */
-const queryWithSelect = (docs) => ({ select: vi.fn().mockResolvedValue(docs) });
+/**
+ * Chainable query stub. The delete path calls
+ * `.setOptions({ includeInactive: true })` (bypassing the isAdded pre-hook)
+ * and sometimes `.select()`, then awaits.
+ */
+const query = (docs) => {
+  const q = {
+    setOptions: vi.fn(() => q),
+    select: vi.fn(() => q),
+    then: (resolve, reject) => Promise.resolve(docs).then(resolve, reject),
+  };
+  return q;
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -97,15 +108,18 @@ beforeEach(() => {
 
 describe("DeleteService.deleteNVR — APP_ENV=cloud arm (lines 26-30)", () => {
   it("calls deleteStreamingCamera + redis.del for each channel when APP_ENV is cloud", async () => {
-    // Two channels under the NVR.
-    Channel.find.mockResolvedValueOnce([
-      { _id: "ch-A", nvrId: "nvr-cloud" },
-      { _id: "ch-B", nvrId: "nvr-cloud" },
-    ]);
+    // Two added channels under the NVR. Only added cameras were ever
+    // registered with the streaming service, so only they get torn down.
+    Channel.find.mockReturnValueOnce(
+      query([
+        { _id: "ch-A", nvrId: "nvr-cloud", isAdded: true },
+        { _id: "ch-B", nvrId: "nvr-cloud", isAdded: true },
+      ]),
+    );
     // Cascade re-fetches via findById.
     Channel.findById
-      .mockResolvedValueOnce({ _id: "ch-A" })
-      .mockResolvedValueOnce({ _id: "ch-B" });
+      .mockReturnValueOnce(query({ _id: "ch-A" }))
+      .mockReturnValueOnce(query({ _id: "ch-B" }));
     Incident.deleteMany.mockResolvedValue({ deletedCount: 0 });
     Channel.deleteOne.mockResolvedValue({ deletedCount: 1 });
     NVR.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
@@ -115,9 +129,7 @@ describe("DeleteService.deleteNVR — APP_ENV=cloud arm (lines 26-30)", () => {
     redis.del.mockResolvedValue(1);
 
     // deleteDataFromUserAccounts — no-op path.
-    Channel.find.mockReturnValueOnce(queryWithSelect([]));
     NVR.distinct.mockResolvedValueOnce([]);
-    authorizedChannelsModel.find.mockResolvedValueOnce([]);
 
     const out = await DeleteService.deleteNVR("nvr-cloud");
     expect(out).toBe(true);
@@ -142,9 +154,32 @@ describe("DeleteService.deleteNVR — APP_ENV=cloud arm (lines 26-30)", () => {
     expect(NVR.deleteOne).toHaveBeenCalledWith({ _id: "nvr-cloud" });
   });
 
+  it("skips the streaming teardown for a camera that was never added", async () => {
+    // An un-added camera was never registered via registerCameraStream, so
+    // calling the streaming API for it would 404 and abort the whole delete.
+    Channel.find.mockReturnValueOnce(
+      query([{ _id: "ch-never", nvrId: "nvr-cloud", isAdded: false }]),
+    );
+    Channel.findById.mockReturnValueOnce(query({ _id: "ch-never" }));
+    Incident.deleteMany.mockResolvedValue({ deletedCount: 0 });
+    Channel.deleteOne.mockResolvedValue({ deletedCount: 1 });
+    NVR.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
+    NVR.distinct.mockResolvedValueOnce([]);
+
+    const out = await DeleteService.deleteNVR("nvr-cloud");
+    expect(out).toBe(true);
+
+    expect(axios.delete).not.toHaveBeenCalled();
+    expect(redis.del).not.toHaveBeenCalled();
+    // ...but the camera row itself is still gone.
+    expect(Channel.deleteOne).toHaveBeenCalledWith({ _id: "ch-never" });
+  });
+
   it("wraps a deleteStreamingCamera failure as the outer 'Failed to delete NVR' message", async () => {
-    Channel.find.mockResolvedValueOnce([{ _id: "ch-X", nvrId: "nvr-X" }]);
-    Channel.findById.mockResolvedValueOnce({ _id: "ch-X" });
+    Channel.find.mockReturnValueOnce(
+      query([{ _id: "ch-X", nvrId: "nvr-X", isAdded: true }]),
+    );
+    Channel.findById.mockReturnValueOnce(query({ _id: "ch-X" }));
     // Streaming API down -> deleteStreamingCamera throws its inner wrapped error,
     // which then bubbles up to deleteNVR's outer catch and gets re-wrapped.
     axios.delete.mockRejectedValueOnce(new Error("502 bad gateway"));
@@ -160,17 +195,11 @@ describe("DeleteService.deleteNVR — APP_ENV=cloud arm (lines 26-30)", () => {
 });
 
 describe("DeleteService.deleteDataFromUserAccounts — outer catch (lines 143-147)", () => {
-  it("wraps a Channel.find().select() failure as 'Failed to delete NVR...' via deleteNVR", async () => {
+  it("wraps a location-lookup failure as 'Failed to delete NVR...' via deleteNVR", async () => {
     // Reach deleteDataFromUserAccounts cleanly: zero channels in the outer
-    // cascade, NVR.deleteOne succeeds, then the *second* Channel.find call
-    // (the one inside deleteDataFromUserAccounts with `.select("_id")`)
-    // rejects.
-    Channel.find.mockResolvedValueOnce([]); // outer loop — no channels
-    NVR.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
-    // Second Channel.find — the chainable .select("_id") query throws.
-    Channel.find.mockReturnValueOnce({
-      select: vi.fn().mockRejectedValue(new Error("db read failed")),
-    });
+    // cascade, then the NVR.distinct("location") lookup inside it rejects.
+    Channel.find.mockReturnValueOnce(query([])); // outer loop — no channels
+    NVR.distinct.mockRejectedValueOnce(new Error("db read failed"));
 
     // deleteDataFromUserAccounts throws its own wrapped error, which is
     // then caught by deleteNVR and re-wrapped with the outer message.
@@ -178,9 +207,9 @@ describe("DeleteService.deleteDataFromUserAccounts — outer catch (lines 143-14
       "Failed to delete NVR and its associated resources.",
     );
 
-    // None of the downstream cleanup ran (authorizedChannelsModel.find was
-    // never reached) because the failure occurred before that point.
-    expect(authorizedChannelsModel.find).not.toHaveBeenCalled();
+    // The failure happens before any pruning, and before the NVR row is
+    // removed — so a cleanup outage can't leave a half-deleted NVR.
     expect(authorizedChannelsModel.updateMany).not.toHaveBeenCalled();
+    expect(NVR.deleteOne).not.toHaveBeenCalled();
   });
 });

@@ -16,12 +16,23 @@ class DeleteService {
     try {
       const nvrId = nId?._id ? nId._id : nId;
 
-      const channels = await Channel.find({ nvrId });
+      // includeInactive: the Channel pre(/^find/) hook injects { isAdded: true }
+      // into every query unless we opt out. Without it this finds only added
+      // cameras, so cameras that were discovered from the NVR but never added
+      // outlive the NVR they belong to.
+      const channels = await Channel.find({ nvrId }).setOptions({
+        includeInactive: true,
+      });
+      // Captured before the loop: once the channels are deleted this list can
+      // never be rebuilt, which is why the authorized-list cleanup below was
+      // silently doing nothing.
+      const channelIds = channels.map((c) => c._id);
 
       for (const channel of channels) {
-        // const uid = `${nvrId}-${channel._id}`;
-        // !old
-        if (APP_ENV === "cloud") {
+        // Only added cameras were ever registered with the streaming service
+        // (registerCameraStream runs in the add flow), so tearing down an
+        // un-added one would 404 and abort the whole delete.
+        if (APP_ENV === "cloud" && channel.isAdded) {
           const uid = `${nvrId.toString()}-${channel._id.toString()}`;
           const redisKey = `stream_url:${uid}`;
           await this.deleteStreamingCamera(uid, channel.userId);
@@ -31,9 +42,12 @@ class DeleteService {
         // *commom
         await this.deleteChannel(channel._id);
       }
+      // Before deleting the NVR: this reads the NVR's location to strip it from
+      // users' authorized lists, which found nothing once the row was gone.
+      await this.deleteDataFromUserAccounts(nvrId, channelIds);
+
       // Delete the NVR itself
       await NVR.deleteOne({ _id: nvrId });
-      await this.deleteDataFromUserAccounts(nvrId);
 
       logger.info(`Deleted NVR ${nvrId} and all associated resources.`);
       return true;
@@ -45,7 +59,11 @@ class DeleteService {
 
   static async deleteChannel(channelId) {
     try {
-      const channel = await Channel.findById(channelId);
+      // findById hits the same isAdded pre-hook, so an un-added camera would
+      // read as "not found" and abort the NVR delete mid-way.
+      const channel = await Channel.findById(channelId).setOptions({
+        includeInactive: true,
+      });
       if (!channel) {
         throw new Error("Channel not found");
       }
@@ -90,31 +108,28 @@ class DeleteService {
     }
   }
 
-  static async deleteDataFromUserAccounts(nvrId) {
+  static async deleteDataFromUserAccounts(nvrId, knownChannelIds = null) {
     try {
-      // Convert to string once
-      const nvrIdStr = nvrId.toString();
-
-      // 1️⃣ Get all channelIds of this NVR
-      const channelsRelatedToNVR = await Channel.find({ nvrId }).select("_id");
-      const channelIds = channelsRelatedToNVR.map((ch) => ch._id);
+      // 1️⃣ Channel ids of this NVR. deleteNVR passes them in because it has
+      // already deleted the channels by this point; the lookup is the fallback
+      // for any other caller.
+      const channelIds =
+        knownChannelIds ??
+        (
+          await Channel.find({ nvrId })
+            .setOptions({ includeInactive: true })
+            .select("_id")
+        ).map((ch) => ch._id);
 
       // 2️⃣ Get distinct locations of this NVR
       const locationsRelatedToNVR = await NVR.distinct("location", {
         _id: nvrId,
       });
 
-      // 3️⃣ Find entries where this NVR is authorized
-      const authorizedNVR = await authorizedChannelsModel.find({
-        nvrIds: nvrId,
-      });
-
-      if (!authorizedNVR.length) {
-        console.log("No users are authorized for this NVR, nothing to remove");
-        return;
-      }
-
-      // 4️⃣ Remove NVR from all user authorized list (using $pull -> more efficient)
+      // 3️⃣ Remove NVR from all user authorized list (using $pull -> more efficient)
+      // No early return on "nobody is authorized for this NVR": a user can hold
+      // its channels or locations without holding the NVR itself, and bailing
+      // here skipped those two cleanups entirely.
       await authorizedChannelsModel.updateMany(
         { nvrIds: nvrId },
         { $pull: { nvrIds: nvrId } }

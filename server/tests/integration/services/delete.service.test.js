@@ -63,8 +63,30 @@ vi.mock("../../../utils/logger.js", () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-/** Build a chainable query stub: `Channel.find(...).select(...)` resolves to `docs`. */
-const queryWithSelect = (docs) => ({ select: vi.fn().mockResolvedValue(docs) });
+/**
+ * Chainable query stub. The delete path calls
+ * `.setOptions({ includeInactive: true })` (to bypass the isAdded pre-hook)
+ * and sometimes `.select()`, then awaits — so the stub has to support both
+ * and still be thenable.
+ */
+const query = (docs) => {
+  const q = {
+    setOptions: vi.fn(() => q),
+    select: vi.fn(() => q),
+    then: (resolve, reject) => Promise.resolve(docs).then(resolve, reject),
+  };
+  return q;
+};
+
+/** Same shape, but rejects when awaited. */
+const failingQuery = (err) => {
+  const q = {
+    setOptions: vi.fn(() => q),
+    select: vi.fn(() => q),
+    then: (resolve, reject) => Promise.reject(err).then(resolve, reject),
+  };
+  return q;
+};
 
 const axios = (await import("axios")).default;
 const { default: NVR } = await import("../../../core/v1/NVR/nvr.model.js");
@@ -88,7 +110,7 @@ beforeEach(() => {
 
 describe("DeleteService.deleteChannel", () => {
   it("deletes incidents and the channel itself when the channel exists", async () => {
-    Channel.findById.mockResolvedValueOnce({ _id: "ch-1", nvrId: "nvr-1" });
+    Channel.findById.mockReturnValueOnce(query({ _id: "ch-1", nvrId: "nvr-1" }));
     Incident.deleteMany.mockResolvedValueOnce({ deletedCount: 3 });
     Channel.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
 
@@ -101,7 +123,7 @@ describe("DeleteService.deleteChannel", () => {
   });
 
   it("wraps a missing channel in 'Failed to delete channel...' error", async () => {
-    Channel.findById.mockResolvedValueOnce(null);
+    Channel.findById.mockReturnValueOnce(query(null));
     await expect(DeleteService.deleteChannel("missing")).rejects.toThrow(
       "Failed to delete channel and its associated resources.",
     );
@@ -111,7 +133,7 @@ describe("DeleteService.deleteChannel", () => {
   });
 
   it("wraps a Mongo error in the same 'Failed to delete channel...' message", async () => {
-    Channel.findById.mockRejectedValueOnce(new Error("mongo down"));
+    Channel.findById.mockReturnValueOnce(failingQuery(new Error("mongo down")));
     await expect(DeleteService.deleteChannel("ch-x")).rejects.toThrow(
       "Failed to delete channel and its associated resources.",
     );
@@ -142,28 +164,25 @@ describe("DeleteService.deleteStreamingCamera", () => {
 
 describe("DeleteService.deleteNVR", () => {
   it("cascades through channels, removes the NVR, and prunes authorized user data", async () => {
-    // Two channels under the NVR.
-    Channel.find.mockResolvedValueOnce([
-      { _id: "ch-1", nvrId: "nvr-1" },
-      { _id: "ch-2", nvrId: "nvr-1" },
-    ]);
+    // Two channels under the NVR — one of them never added, which the cascade
+    // must still delete.
+    Channel.find.mockReturnValueOnce(
+      query([
+        { _id: "ch-1", nvrId: "nvr-1", isAdded: true },
+        { _id: "ch-2", nvrId: "nvr-1", isAdded: false },
+      ]),
+    );
     // deleteChannel re-fetches each channel via findById, then cascades.
     Channel.findById
-      .mockResolvedValueOnce({ _id: "ch-1", nvrId: "nvr-1" })
-      .mockResolvedValueOnce({ _id: "ch-2", nvrId: "nvr-1" });
+      .mockReturnValueOnce(query({ _id: "ch-1", nvrId: "nvr-1" }))
+      .mockReturnValueOnce(query({ _id: "ch-2", nvrId: "nvr-1" }));
     Incident.deleteMany.mockResolvedValue({ deletedCount: 0 });
     Channel.deleteOne.mockResolvedValue({ deletedCount: 1 });
     NVR.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
 
-    // deleteDataFromUserAccounts: second Channel.find call is chained with
-    // `.select("_id")`, so the mock must return a thenable query stub.
-    Channel.find.mockReturnValueOnce(
-      queryWithSelect([{ _id: "ch-1" }, { _id: "ch-2" }]),
-    );
+    // deleteDataFromUserAccounts now receives the channel ids collected before
+    // the cascade, so it no longer re-queries Channel.
     NVR.distinct.mockResolvedValueOnce(["loc-1"]);
-    authorizedChannelsModel.find.mockResolvedValueOnce([
-      { _id: "ac-1", nvrIds: ["nvr-1"] },
-    ]);
     authorizedChannelsModel.updateMany.mockResolvedValue({ modifiedCount: 1 });
 
     const out = await DeleteService.deleteNVR("nvr-1");
@@ -190,25 +209,28 @@ describe("DeleteService.deleteNVR", () => {
     expect(JSON.stringify(callArgs)).toContain("locations");
   });
 
-  it("short-circuits the user-cleanup when no authorizedChannels reference the NVR", async () => {
+  it("still prunes the nvrId from users when the NVR has no channels or locations", async () => {
     // Zero channels — outer for-loop is skipped.
-    Channel.find.mockResolvedValueOnce([]);
+    Channel.find.mockReturnValueOnce(query([]));
     NVR.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
-
-    // deleteDataFromUserAccounts call sequence:
-    Channel.find.mockReturnValueOnce(queryWithSelect([])); // no channels
     NVR.distinct.mockResolvedValueOnce([]); // no locations
-    authorizedChannelsModel.find.mockResolvedValueOnce([]); // no authorized refs
 
     const out = await DeleteService.deleteNVR("nvr-empty");
     expect(out).toBe(true);
 
-    // Early-return branch — no updateMany calls.
-    expect(authorizedChannelsModel.updateMany).not.toHaveBeenCalled();
+    // Only the nvrIds pull runs; the channels/locations pulls are skipped
+    // because both lists are empty. This used to early-return before any
+    // updateMany at all, which skipped cleanup for users who held the NVR's
+    // channels or locations without holding the NVR itself.
+    expect(authorizedChannelsModel.updateMany).toHaveBeenCalledTimes(1);
+    expect(authorizedChannelsModel.updateMany).toHaveBeenCalledWith(
+      { nvrIds: "nvr-empty" },
+      { $pull: { nvrIds: "nvr-empty" } },
+    );
   });
 
   it("wraps any failure in 'Failed to delete NVR...'", async () => {
-    Channel.find.mockRejectedValueOnce(new Error("db down"));
+    Channel.find.mockReturnValueOnce(failingQuery(new Error("db down")));
     await expect(DeleteService.deleteNVR("nvr-broken")).rejects.toThrow(
       "Failed to delete NVR and its associated resources.",
     );
@@ -219,11 +241,9 @@ describe("DeleteService.deleteNVR", () => {
   it("unwraps an object-form nvrId via the `?._id` ternary on entry", async () => {
     // When the caller passes `{ _id: "nvr-2" }` the service should still
     // resolve `nvrId = "nvr-2"` and use it for all downstream Mongo calls.
-    Channel.find.mockResolvedValueOnce([]);
+    Channel.find.mockReturnValueOnce(query([]));
     NVR.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
-    Channel.find.mockReturnValueOnce(queryWithSelect([]));
     NVR.distinct.mockResolvedValueOnce([]);
-    authorizedChannelsModel.find.mockResolvedValueOnce([]);
 
     await DeleteService.deleteNVR({ _id: "nvr-2" });
 
