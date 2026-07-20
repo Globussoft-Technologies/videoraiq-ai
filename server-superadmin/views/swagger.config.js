@@ -30,6 +30,31 @@ const doc = {
     },
   ],
   definitions: {
+    // Subscription plan catalog. Display only — aMember still owns billing,
+    // so priceLabel is a free-text label ("$149", "Custom"), not a number.
+    createPlan: {
+      $name: "Starter",
+      amemberProductId: "17",
+      tagline: "Small sites & single locations",
+      priceLabel: "$149",
+      pricePeriod: "/mo",
+      features: ["Up to 8 cameras", "Face Recognition", "Email alerts"],
+      isPopular: false,
+      sortOrder: 1,
+    },
+    // Every key optional: only the ones sent are changed. Set archived: true
+    // to hide a plan from the catalog without deleting it.
+    updatePlan: {
+      name: "Pro",
+      amemberProductId: "19",
+      tagline: "Growing multi-camera deployments",
+      priceLabel: "$449",
+      pricePeriod: "/mo",
+      features: ["Up to 24 cameras", "All Starter detections", "Priority support"],
+      isPopular: true,
+      sortOrder: 2,
+      archived: false,
+    },
     registerNVR: {
       ip: "string",
       port: 80,
