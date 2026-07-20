@@ -12,8 +12,28 @@ vi.mock("../../../utils/mediaStorage.js", () => ({
   toRelativeMediaPath: (v) => v,
 }));
 
+// Stubs for the per-admin sweep: global config, the admin lookup, and the one
+// dataset those tests exercise. Attendance/access-log models stay real — with
+// no retention configured for them the sweep returns before ever querying.
+const h = vi.hoisted(() => ({ cfg: {}, adminDocs: [], incidentFind: vi.fn() }));
+
+vi.mock("config", () => ({ default: { has: () => true, get: () => h.cfg } }));
+vi.mock("../../../core/v1/admin/admin.model.js", () => ({
+  default: {
+    find: () => ({ select: () => ({ lean: async () => h.adminDocs }) }),
+    updateOne: vi.fn(async () => ({})),
+  },
+}));
+vi.mock("../../../core/v1/incidents/incidents.model.js", () => ({
+  Incident: {
+    modelName: "Incident",
+    find: h.incidentFind,
+    deleteMany: vi.fn(async () => ({ deletedCount: 0 })),
+  },
+}));
+
 const { deleteMedia } = await import("../../../utils/mediaStorage.js");
-const { retentionCutoff, collectMediaPaths, sweepDataset } = await import(
+const { retentionCutoff, collectMediaPaths, sweepDataset, runRetentionSweep } = await import(
   "../../../services/retention.service.js"
 );
 
@@ -150,5 +170,108 @@ describe("sweepDataset", () => {
     const res = await sweepDataset({ ...baseArgs, model, deadline: Date.now() - 1 });
     expect(res).toMatchObject({ deleted: 0, timedOut: true });
     expect(model.find).not.toHaveBeenCalled();
+  });
+
+  it("merges an owner filter into the query", async () => {
+    const model = fakeModel([[]]);
+    await sweepDataset({
+      ...baseArgs,
+      model,
+      deadline: Date.now() + 60_000,
+      ownerFilter: { userId: "42" },
+    });
+    expect(model.find.mock.calls[0][0]).toMatchObject({ userId: "42" });
+  });
+});
+
+describe("runRetentionSweep per-admin overrides", () => {
+  // Capture the query of every incident sweep pass; return an empty batch.
+  const queries = [];
+  beforeEach(() => {
+    queries.length = 0;
+    h.cfg = { incidents: "3m", batchSize: 200, maxRunMinutes: 60 };
+    h.incidentFind.mockReset();
+    h.incidentFind.mockImplementation((q) => {
+      queries.push(q);
+      return { sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) };
+    });
+  });
+
+  it("sweeps an overriding admin on their own cutoff and excludes them from the global pass", async () => {
+    h.adminDocs = [{ _id: "aaa", user_id: "42", retention: { incidents: "1y" } }];
+
+    await runRetentionSweep();
+
+    expect(queries).toHaveLength(2);
+    // Incidents key off the admin's string user_id, not their _id.
+    expect(queries[0].userId).toBe("42");
+    expect(queries[1].userId).toEqual({ $nin: ["42"] });
+    // Their own pass uses 1y; the global pass uses 3m.
+    expect(queries[0].timeOfIncident.$lt.getTime()).toBeLessThan(
+      queries[1].timeOfIncident.$lt.getTime(),
+    );
+  });
+
+  it('runs no pass for "never" but still excludes that admin from the global pass', async () => {
+    h.adminDocs = [{ _id: "aaa", user_id: "42", retention: { incidents: "never" } }];
+
+    await runRetentionSweep();
+
+    expect(queries).toHaveLength(1);
+    expect(queries[0].userId).toEqual({ $nin: ["42"] });
+  });
+
+  it("sweeps everything globally when no admin overrides", async () => {
+    h.adminDocs = [];
+
+    await runRetentionSweep();
+
+    expect(queries).toHaveLength(1);
+    expect(queries[0].userId).toBeUndefined();
+  });
+
+  it("skips a disabled admin entirely, and still excludes them globally", async () => {
+    h.adminDocs = [{ _id: "aaa", user_id: "42", retention: { enabled: false } }];
+
+    await runRetentionSweep();
+
+    expect(queries).toHaveLength(1);
+    expect(queries[0].userId).toEqual({ $nin: ["42"] });
+  });
+
+  it("honours a per-admin intervalHours, skipping until the window elapses", async () => {
+    const hourAgo = new Date(Date.now() - 3_600_000);
+    h.adminDocs = [
+      { _id: "aaa", user_id: "42", retention: { intervalHours: 24, lastSweepAt: hourAgo } },
+    ];
+
+    await runRetentionSweep();
+
+    // Not due — no pass of their own, but the global pass must still skip them.
+    expect(queries).toHaveLength(1);
+    expect(queries[0].userId).toEqual({ $nin: ["42"] });
+  });
+
+  it("uses the admin's own batchSize for their pass and the global one elsewhere", async () => {
+    h.cfg = { incidents: "3m", batchSize: 200, maxRunMinutes: 60 };
+    h.adminDocs = [
+      { _id: "aaa", user_id: "42", retention: { incidents: "1y", batchSize: 7 } },
+    ];
+    const limits = [];
+    h.incidentFind.mockImplementation((q) => {
+      queries.push(q);
+      return {
+        sort: () => ({
+          limit: (n) => {
+            limits.push(n);
+            return { select: () => ({ lean: async () => [] }) };
+          },
+        }),
+      };
+    });
+
+    await runRetentionSweep();
+
+    expect(limits).toEqual([7, 200]);
   });
 });

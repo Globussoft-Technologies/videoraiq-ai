@@ -64,6 +64,23 @@ const adminSchema = new mongoose.Schema({
   // there; the bot's webhook matches the code -> this admin and saves the
   // channel's chat_id into telegramChatId. Cleared/rotated on unlink.
   telegramLinkCode: { type: String, default: null, index: true },
+  // Per-admin data retention overrides — same shape as the global DataRetention
+  // config block. Every key is null by default, meaning "use the global value".
+  //   enabled: false        -> never sweep this admin's data
+  //   incidents/attendance/accessLogs: "90d" | "3m" | "1y" | "never"
+  //   batchSize/maxRunMinutes: this admin's own pass sizing / time slice
+  //   intervalHours: sweep this admin at most this often (lastSweepAt is the
+  //                  sweeper's bookkeeping for it — not settable by the API)
+  retention: {
+    enabled: { type: Boolean, default: null },
+    incidents: { type: String, default: null },
+    attendance: { type: String, default: null },
+    accessLogs: { type: String, default: null },
+    batchSize: { type: Number, default: null },
+    maxRunMinutes: { type: Number, default: null },
+    intervalHours: { type: Number, default: null },
+    lastSweepAt: { type: Date, default: null },
+  },
   // Per-admin detection config. Key = settingType, value = custom display name.
   // If a key is present, that detection is allowed for this admin.
   // Empty object = all detections allowed with default names.

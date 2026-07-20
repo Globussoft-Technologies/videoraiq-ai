@@ -706,6 +706,18 @@ export const definitions = {
     updateLogsSound: {
       logsSound: true,
     },
+    // Only the keys you send are changed; null reverts one to the global
+    // DataRetention config. Periods accept "90d" | "3m" | "1y" | "never".
+    updateRetention: {
+      userId: "22",
+      enabled: true,
+      incidents: "1y",
+      attendance: "6m",
+      accessLogs: "never",
+      batchSize: 200,
+      maxRunMinutes: 60,
+      intervalHours: 24,
+    },
     bulkExportProfiles: {
       ids: ["684954f488ba3228238e466d", "684954f488ba3228238e466d"],
     },

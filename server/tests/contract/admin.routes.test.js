@@ -24,6 +24,7 @@ vi.mock("../../core/v1/admin/admin.controller.js", () => ({
     getAllowedDetections: vi.fn(async (req, res) => res.status(200).json({ success: true, data: [] })),
     updateAllowedDetections: vi.fn(async (req, res) => res.status(200).json({ success: true })),
     updateStreamHost: vi.fn(async (req, res) => res.status(200).json({ success: true })),
+    updateRetention: vi.fn(async (req, res) => res.status(200).json({ success: true })),
   },
 }));
 

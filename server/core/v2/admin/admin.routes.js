@@ -22,5 +22,6 @@ router.put("/update-stream-host",verifyToken,adminController.updateStreamHost);
 router.get("/timezones",verifyToken,adminController.getTimezones);
 router.get("/timezone",verifyToken,adminController.fetchTimezone);
 router.put("/timezone",verifyToken,adminController.updateTimezone);
+router.put("/retention",verifyToken,adminController.updateRetention);
 
 export default router;

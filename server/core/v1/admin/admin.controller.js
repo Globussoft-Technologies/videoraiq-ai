@@ -316,6 +316,21 @@ class AdminController {
     return await adminService.updateStreamHost(req, res, next);
   }
 
+  async updateRetention(req, res, next) {
+    /* #swagger.tags = ['Admin']
+    #swagger.description = 'Set or clear a target admin data retention overrides. Only keys present in the body change; pass null to revert a key to the global DataRetention config.'
+    #swagger.parameters['data'] = {
+        in: 'body',
+        description: 'Target admin user_id and any of enabled, incidents, attendance, accessLogs, batchSize, maxRunMinutes, intervalHours',
+        required: true,
+        schema: { $ref: "#/definitions/updateRetention" }
+    }
+    #swagger.responses[200] = { description: 'Retention config updated successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return await adminService.updateRetention(req, res, next);
+  }
+
 }
 
 export default new AdminController();

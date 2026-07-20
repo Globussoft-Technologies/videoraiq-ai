@@ -12,6 +12,7 @@ import roleModel from "../roles/roles.model.js";
 import departmentModel from "../departments/departments.model.js"
 import { deleteAuthorizedUserById } from "../users/users.service.js";
 import users from "./../users/users.model.js"
+import { retentionCutoff } from "../../../services/retention.service.js";
 
 async function runWithConcurrency(tasks, limit) {
   const executing = new Set();
@@ -827,7 +828,8 @@ class AdminService {
   // A field set to null/"" reverts to the global config default. Only fields
   // present in the body are updated. Kept named updateStreamHost for route
   // compatibility. Overridable fields:
-  //   streamHost, streamToken, dsAuthUsersAPI, attendanceUrl, detectionUrl
+  //   streamHost, streamToken, dsAuthUsersAPI, attendanceUrl, detectionUrl,
+  //   telegramBotToken, telegramChatId, retention{Incidents,Attendance,AccessLogs}
   async updateStreamHost(req, res, next) {
     try {
       const { userId } = req.body;
@@ -882,6 +884,83 @@ class AdminService {
           detectionUrl: updatedAdmin.detectionUrl,
           telegramBotToken: updatedAdmin.telegramBotToken,
           telegramChatId: updatedAdmin.telegramChatId,
+        })
+      );
+    } catch (error) {
+      next(new AppError(error, 500));
+    }
+  }
+
+  // Set or clear a target admin's DataRetention overrides. Only keys present in
+  // the body change; pass null (or "") to clear one back to the global default.
+  async updateRetention(req, res, next) {
+    try {
+      const { userId } = req.body;
+      if (!userId) {
+        return res.send(Response.userFailResp("userId is required.", "Validation Failed!"));
+      }
+
+      const SPEC_KEYS = ["incidents", "attendance", "accessLogs"];
+      // Bounds keep a typo from turning into an unbounded sweep loop.
+      const NUM_KEYS = { batchSize: [1, 10000], maxRunMinutes: [1, 1440], intervalHours: [1, 8760] };
+      const fail = (msg) => res.send(Response.userFailResp(msg, "Validation Failed!"));
+      const update = {};
+
+      if (req.body.enabled !== undefined) {
+        const v = req.body.enabled;
+        if (v !== null && typeof v !== "boolean") {
+          return fail("enabled must be true, false, or null.");
+        }
+        update["retention.enabled"] = v;
+      }
+
+      for (const k of SPEC_KEYS) {
+        const v = req.body[k];
+        if (v === undefined) continue;
+        if (v === null || v === "") {
+          update[`retention.${k}`] = null;
+          continue;
+        }
+        // Validated with the sweeper's own parser, so the API can never store a
+        // spec the sweeper won't read — which would silently mean "keep forever".
+        const spec = String(v).trim();
+        if (spec.toLowerCase() !== "never" && !retentionCutoff(spec)) {
+          return fail(`${k} must be like "90d", "3m", "1y", or "never" (or null for the global default).`);
+        }
+        update[`retention.${k}`] = spec.toLowerCase() === "never" ? "never" : spec;
+      }
+
+      for (const [k, [min, max]] of Object.entries(NUM_KEYS)) {
+        const v = req.body[k];
+        if (v === undefined) continue;
+        if (v === null || v === "") {
+          update[`retention.${k}`] = null;
+          continue;
+        }
+        const n = Number(v);
+        if (!Number.isInteger(n) || n < min || n > max) {
+          return fail(`${k} must be a whole number between ${min} and ${max} (or null for the global default).`);
+        }
+        update[`retention.${k}`] = n;
+      }
+
+      if (!Object.keys(update).length) {
+        return fail(`Provide one of: enabled, ${SPEC_KEYS.join(", ")}, ${Object.keys(NUM_KEYS).join(", ")}.`);
+      }
+
+      const updatedAdmin = await adminModel.findOneAndUpdate(
+        { user_id: String(userId) },
+        { $set: update },
+        { new: true }
+      );
+      if (!updatedAdmin) {
+        return res.send(Response.userFailResp("Admin not found!", "Validation Failed!"));
+      }
+
+      return res.send(
+        Response.userSuccessResp("Retention config updated successfully.", {
+          user_id: updatedAdmin.user_id,
+          retention: updatedAdmin.retention,
         })
       );
     } catch (error) {

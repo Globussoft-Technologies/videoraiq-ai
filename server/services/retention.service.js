@@ -16,6 +16,20 @@
  *     "intervalHours": 24       // how often to sweep (default 24)
  *   }
  *
+ * Per-admin overrides live on the Admin doc under `retention`, not in config —
+ * same keys as the block above, each null by default meaning "use the global
+ * value". An admin carrying ANY override is swept in their own pass using
+ * their merged settings, and is excluded from the global pass, so a longer
+ * per-admin retention is never undercut by the global cutoff.
+ *   retention.enabled: false  -> never sweep this admin
+ *   retention.<dataset>: "never" -> keep that dataset forever for this admin
+ *   retention.batchSize / maxRunMinutes -> sizing for their own pass; the
+ *     time slice is still clamped to the global run budget
+ *   retention.intervalHours -> sweep them at most this often, tracked via
+ *     retention.lastSweepAt (the global intervalHours remains the tick rate)
+ * The global `enabled` flag stays a process-wide kill switch: when it is off
+ * nothing is scheduled, per-admin settings included.
+ *
  * Safety properties (this runs inside the API process, which exits on any
  * unhandled rejection — nothing here may ever throw out of a timer):
  * - every entry point is fully try/caught; a sweep failure only logs
@@ -29,6 +43,7 @@
 import config from "config";
 import mongoose from "mongoose";
 import logger from "../utils/logger.js";
+import adminModel from "../core/v1/admin/admin.model.js";
 import { Incident } from "../core/v1/incidents/incidents.model.js";
 import attendanceModel from "../core/v1/attendance/attendance.model.js";
 import accessLogsModel from "../core/v1/accesslogs/accesslogs.model.js";
@@ -56,12 +71,29 @@ const MEDIA_KEYS = new Set([
 const MEDIA_SELECT =
   "_id Image currentImage videoLink timeSeries.Image events.images sessions.images usersLogs.sessions.images";
 
+// ownerField: the column on the swept doc that identifies the owning admin.
+// ownerFrom: which Admin field that column holds — incidents store the admin's
+// STRING user_id, everything else stores the admin's _id ObjectId. Getting this
+// pair wrong makes the owner filter match nothing (a silent no-op sweep).
 const DATASETS = [
-  { retentionKey: "incidents", model: Incident, dateField: "timeOfIncident" },
-  { retentionKey: "attendance", model: attendanceModel, dateField: "createdAt" },
-  { retentionKey: "accessLogs", model: accessLogsModel, dateField: "createdAt" },
-  { retentionKey: "accessLogs", model: newAccessLogsModel, dateField: "createdAt" },
-  { retentionKey: "accessLogs", model: reworkedAccessLogsModel, dateField: "createdAt" },
+  { retentionKey: "incidents", model: Incident, dateField: "timeOfIncident", ownerField: "userId", ownerFrom: "user_id" },
+  { retentionKey: "attendance", model: attendanceModel, dateField: "createdAt", ownerField: "user", ownerFrom: "_id" },
+  { retentionKey: "accessLogs", model: accessLogsModel, dateField: "createdAt", ownerField: "admin", ownerFrom: "_id" },
+  { retentionKey: "accessLogs", model: newAccessLogsModel, dateField: "createdAt", ownerField: "admin", ownerFrom: "_id" },
+  { retentionKey: "accessLogs", model: reworkedAccessLogsModel, dateField: "createdAt", ownerField: "admin", ownerFrom: "_id" },
+];
+
+// Keys an admin may override under `retention`. lastSweepAt is excluded — it is
+// the sweeper's own bookkeeping, not a setting, and must not mark an admin as
+// "has overrides" on its own.
+export const OVERRIDE_KEYS = [
+  "enabled",
+  "incidents",
+  "attendance",
+  "accessLogs",
+  "batchSize",
+  "maxRunMinutes",
+  "intervalHours",
 ];
 
 /** "90d" | "3m" | "1y" -> cutoff Date (null when unset/invalid). */
@@ -125,9 +157,17 @@ async function deleteMediaBestEffort(paths, label) {
  * time), so this never collection-scans a huge collection per batch. The date
  * field is also matched as the source of truth.
  */
-export async function sweepDataset({ model, dateField, cutoff, batchSize, deadline, label }) {
+export async function sweepDataset({
+  model,
+  dateField,
+  cutoff,
+  batchSize,
+  deadline,
+  label,
+  ownerFilter,
+}) {
   const idCutoff = mongoose.Types.ObjectId.createFromTime(Math.floor(cutoff.getTime() / 1000));
-  const query = { _id: { $lt: idCutoff }, [dateField]: { $lt: cutoff } };
+  const query = { ...ownerFilter, _id: { $lt: idCutoff }, [dateField]: { $lt: cutoff } };
 
   let deleted = 0;
   let mediaFailures = 0;
@@ -158,6 +198,55 @@ export async function sweepDataset({ model, dateField, cutoff, batchSize, deadli
   return { deleted, mediaFailures, timedOut: Date.now() >= deadline };
 }
 
+/**
+ * Admins carrying any per-admin retention override. Returns null if the lookup
+ * fails — the caller then skips the sweep entirely rather than fall back to the
+ * global cutoff, which could delete data an admin configured to keep longer.
+ */
+async function loadRetentionOverrides() {
+  try {
+    return await adminModel
+      .find({ $or: OVERRIDE_KEYS.map((k) => ({ [`retention.${k}`]: { $ne: null } })) })
+      .select("_id user_id retention")
+      .lean();
+  } catch (err) {
+    logger.error(`[RETENTION] failed to load per-admin overrides: ${err?.message}`);
+    return null;
+  }
+}
+
+/** Drop unset keys so an override object can layer cleanly over the global config. */
+const definedOnly = (obj) =>
+  Object.fromEntries(
+    Object.entries(obj || {}).filter(([, v]) => v !== null && v !== undefined && v !== ""),
+  );
+
+/**
+ * Per-admin intervalHours gate. The global interval is the tick rate; an admin
+ * asking to be swept less often is skipped until their window elapses. Unset
+ * (or never swept) means "every tick", matching the global behaviour.
+ */
+function dueForSweep(retention, now = Date.now()) {
+  const hours = Number(retention?.intervalHours);
+  if (!Number.isFinite(hours) || hours <= 0) return true;
+  const last = retention?.lastSweepAt;
+  if (!last) return true;
+  const at = new Date(last).getTime();
+  return !Number.isFinite(at) || now - at >= hours * 3_600_000;
+}
+
+/** Record that an admin's pass ran, for their intervalHours gate. Never throws. */
+async function markSwept(adminId) {
+  try {
+    await adminModel.updateOne(
+      { _id: adminId },
+      { $set: { "retention.lastSweepAt": new Date() } },
+    );
+  } catch (err) {
+    logger.error(`[RETENTION] failed to record lastSweepAt for ${adminId}: ${err?.message}`);
+  }
+}
+
 let running = false; // ponytail: in-process lock — one API instance runs the sweeper
 
 /** One full sweep across all configured datasets. Never throws. */
@@ -170,16 +259,16 @@ export async function runRetentionSweep() {
   const summary = {};
   try {
     const cfg = config.has("DataRetention") ? config.get("DataRetention") : {};
-    const batchSize = Math.max(Number(cfg.batchSize) || 200, 1);
-    const deadline = Date.now() + (Math.max(Number(cfg.maxRunMinutes) || 60, 1)) * 60_000;
+    const globalBatchSize = Math.max(Number(cfg.batchSize) || 200, 1);
+    const globalDeadline =
+      Date.now() + Math.max(Number(cfg.maxRunMinutes) || 60, 1) * 60_000;
 
-    for (const dataset of DATASETS) {
-      const cutoff = retentionCutoff(cfg[dataset.retentionKey]);
-      if (!cutoff) continue; // no retention configured for this dataset — keep forever
-
-      const label = `${dataset.retentionKey}/${dataset.model.modelName}`;
+    // One dataset (or one admin's pass) failing must not stop the others.
+    const runPass = async ({ dataset, cutoff, label, ownerFilter, batchSize, deadline }) => {
       try {
-        const result = await sweepDataset({ ...dataset, cutoff, batchSize, deadline, label });
+        const result = await sweepDataset({
+          ...dataset, cutoff, batchSize, deadline, label, ownerFilter,
+        });
         summary[label] = result;
         if (result.deleted || result.mediaFailures) {
           logger.info(
@@ -189,10 +278,80 @@ export async function runRetentionSweep() {
           );
         }
       } catch (err) {
-        // One dataset failing must not stop the others.
         summary[label] = { error: err?.message };
         logger.error(`[RETENTION] ${label} sweep failed: ${err?.message}`);
       }
+    };
+
+    const overrides = await loadRetentionOverrides();
+    if (!overrides) return summary; // can't tell whose rules differ — delete nothing
+
+    // --- per-admin passes: each overriding admin, on their own merged settings.
+    for (const admin of overrides) {
+      const eff = { ...cfg, ...definedOnly(admin.retention) };
+      const who = admin.user_id;
+
+      if (eff.enabled === false) continue; // opted out entirely
+      if (!dueForSweep(admin.retention)) continue; // not due under their own interval
+
+      // Their time slice is clamped to the global run budget: one admin must
+      // not be able to consume the whole sweep window and starve the rest.
+      const deadline = Math.min(
+        globalDeadline,
+        Date.now() + Math.max(Number(eff.maxRunMinutes) || 60, 1) * 60_000,
+      );
+      const batchSize = Math.max(Number(eff.batchSize) || 200, 1);
+
+      for (const dataset of DATASETS) {
+        const owner = dataset.ownerFrom === "_id" ? admin._id : String(who ?? "");
+        if (!owner) continue;
+
+        const spec = eff[dataset.retentionKey];
+        const cutoff = retentionCutoff(spec);
+        if (!cutoff) {
+          // "never" = keep forever. Anything else unparseable is also kept, but
+          // loudly — silently deleting on a typo is unrecoverable.
+          if (spec != null && String(spec).trim().toLowerCase() !== "never") {
+            logger.warn(
+              `[RETENTION] ${dataset.retentionKey}: admin ${who} has invalid retention "${spec}" — keeping data`,
+            );
+          }
+          continue;
+        }
+        await runPass({
+          dataset,
+          cutoff,
+          batchSize,
+          deadline,
+          label: `${dataset.retentionKey}/${dataset.model.modelName}#${who}`,
+          ownerFilter: { [dataset.ownerField]: owner },
+        });
+      }
+      await markSwept(admin._id);
+    }
+
+    // --- global pass: everyone without overrides. Overriding admins are
+    // excluded whatever happened above — including when they were skipped for
+    // being disabled, not yet due, or set to keep forever. That exclusion is
+    // the point: otherwise the global cutoff silently undoes their settings.
+    for (const dataset of DATASETS) {
+      const cutoff = retentionCutoff(cfg[dataset.retentionKey]);
+      if (!cutoff) continue; // no global retention for this dataset — keep forever
+
+      const excluded = overrides
+        .map((a) => (dataset.ownerFrom === "_id" ? a._id : String(a.user_id ?? "")))
+        .filter(Boolean);
+
+      await runPass({
+        dataset,
+        cutoff,
+        batchSize: globalBatchSize,
+        deadline: globalDeadline,
+        label: `${dataset.retentionKey}/${dataset.model.modelName}`,
+        ownerFilter: excluded.length
+          ? { [dataset.ownerField]: { $nin: excluded } }
+          : undefined,
+      });
     }
   } catch (err) {
     logger.error(`[RETENTION] sweep failed: ${err?.message}`);
