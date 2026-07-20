@@ -8,6 +8,7 @@ import {
   FilePlus,
   LayoutGrid,
   List,
+  Link as LinkIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
@@ -24,6 +25,7 @@ import { UserDetailModal } from './UserDetailModal';
 import MultiSelect from './MultiSelect';
 import UsersListView from './UsersListView';
 import BulkUploadModal from './BulkUploadModal';
+import GenerateRegLinkModal from './GenerateRegLinkModal';
 import UsersPagination from './UsersPagination';
 import {
   authorizedUsers,
@@ -80,6 +82,7 @@ const AddProfile = () => {
 
   const [showImportModal, setShowImportModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [showRegLinkModal, setShowRegLinkModal] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [selectedFileName, setSelectedFileName] = useState('');
   const [uploadErrors, setUploadErrors] = useState([]);
@@ -399,6 +402,11 @@ const AddProfile = () => {
               <span>Register Bulk Employee</span>
             </button>
 
+            <button onClick={() => setShowRegLinkModal(true)} className={actionBtn}>
+              <LinkIcon className="w-4 h-4" />
+              <span>Generate Registration Link</span>
+            </button>
+
             {/* Edit uses the existing modal register form (opens when editUser is set). */}
             <RegisterForm
               fetchUsers={fetchUsers}
@@ -430,7 +438,7 @@ const AddProfile = () => {
           </div>
         </div>
 
-        {/* Content */}
+         
         <UsersListView
           viewMode={viewMode}
           loading={loading}
@@ -455,6 +463,12 @@ const AddProfile = () => {
           bulkLoading={bulkLoading}
           uploadErrors={uploadErrors}
           onUpload={handleBulkUpload}
+        />
+
+        <GenerateRegLinkModal
+          open={showRegLinkModal}
+          onClose={() => setShowRegLinkModal(false)}
+          adminId={decodedtoken?.adminId}
         />
 
         <ImportEmpUsersModal

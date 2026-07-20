@@ -22,28 +22,30 @@
   caret-color: #0f1729;
 }
 
-/* focus ring for inputs / selects */
-.vqp-input:focus,
-.vqp-select:focus {
+/* focus ring for inputs */
+.vqp-input:focus {
   border-color: #3b82f6 !important;
   background: #fff !important;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
-/* dropdown option list colours (native <option>s) */
-.vqp-select {
-  accent-color: #2a6fdb;
+/* slim scrollbar for the PCombo option panel */
+.vqp-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
-.vqp-select option {
-  background: #ffffff;
-  color: #0f1729;
-  padding: 8px 12px;
+.vqp-scroll::-webkit-scrollbar {
+  width: 6px;
 }
-.vqp-select option:checked,
-.vqp-select option:hover,
-.vqp-select option:focus {
-  background: #eef5ff;
-  color: #2a6fdb;
+.vqp-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.vqp-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+.vqp-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 /* CTA — shared lift, per-variant colour on hover */

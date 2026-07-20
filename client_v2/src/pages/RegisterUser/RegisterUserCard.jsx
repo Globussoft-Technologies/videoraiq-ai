@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Loader, ArrowLeft, Camera, Upload, X, ChevronDown, ChevronUp } from 'lucide-react';
 import Webcam from 'react-webcam';
 import { toast } from 'sonner';
 import { createAuthorizedUser, isEmailExist } from './Api';
+import SelectField from './SelectField';
 
 const orgId = import.meta.env.VITE_ORGANISATION_ID;
 const requiredImageCount = orgId === 'dubai' ? 1 : 3;
@@ -18,59 +19,6 @@ const fieldInput =
 // Reset the browser's default <fieldset> chrome so it lays out like a plain block.
 const stepFieldset = 'space-y-5 border-0 p-0 m-0 min-w-0';
 
-// 5 visible rows before scrolling. Native <select> option lists can't be
-// height-limited/scrolled via CSS (the browser/OS renders them), so this is a
-// custom dropdown instead — same pattern as RegisterFormStep1's LocationSelect.
-const LOCATION_PANEL_MAX_H = 180;
-
-function LocationSelect({ value, options, onChange }) {
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e) => {
-      if (!wrapperRef.current?.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [open]);
-
-  return (
-    <div ref={wrapperRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        className={`${fieldInput} cursor-pointer flex items-center justify-between text-left`}
-      >
-        <span className={value ? '' : 'text-[var(--tx3)]'}>{value || 'Select location'}</span>
-        <ChevronDown className={`w-4 h-4 text-[var(--tx3)] transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div
-          className="absolute top-full left-0 right-0 mt-1 z-50 rounded-lg border border-[var(--bd2)] bg-[var(--bg1solid)] shadow-lg overflow-y-auto p-1"
-          style={{ maxHeight: LOCATION_PANEL_MAX_H }}
-        >
-          <div
-            onClick={() => { onChange(''); setOpen(false); }}
-            className={`px-2.5 py-2 rounded-md text-sm cursor-pointer hover:bg-[var(--bg2)] ${value ? 'text-[var(--tx)]' : 'text-[var(--tx3)]'}`}
-          >
-            Select location
-          </div>
-          {options.map((loc) => (
-            <div
-              key={loc}
-              onClick={() => { onChange(loc); setOpen(false); }}
-              className={`px-2.5 py-2 rounded-md text-sm cursor-pointer ${value === loc ? 'bg-[var(--blue)] text-white' : 'text-[var(--tx)] hover:bg-[var(--bg2)]'}`}
-            >
-              {loc}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /**
  * Inline two-step "Register New User" card.
@@ -99,6 +47,12 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
   const webcamRef = useRef(null);
 
   const uploadedCount = imagePaths.filter((img) => img instanceof File).length;
+
+  const locationOptions = useMemo(() => locations.map((l) => ({ value: l, label: l })), [locations]);
+  const departmentOptions = useMemo(
+    () => departments.map((d) => ({ value: d._id, label: d.departmentName })),
+    [departments]
+  );
 
   /* ---- photo helpers ---- */
   const uploadFile = (file, index) => {
@@ -252,9 +206,10 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
         <button
           type="button"
           onClick={() => setCollapsed((c) => !c)}
+          disabled={isSubmitting}
           aria-label={collapsed ? 'Expand' : 'Collapse'}
           title={collapsed ? 'Expand' : 'Collapse'}
-          className="flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] hover:text-[var(--tx)] transition-colors cursor-pointer flex-shrink-0"
+          className="flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] hover:text-[var(--tx)] transition-colors cursor-pointer flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
         </button>
@@ -312,22 +267,21 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
             </div>
             <div>
               <label className={fieldLabel}>Location</label>
-              <LocationSelect value={location} options={locations} onChange={setLocation} />
+              <SelectField
+                value={location}
+                options={locationOptions}
+                onChange={setLocation}
+                placeholder="Select location"
+              />
             </div>
             <div>
               <label className={fieldLabel}>Department<Req /></label>
-              <select
-                className={`${fieldInput} cursor-pointer`}
+              <SelectField
                 value={departmentId}
-                onChange={(e) => setDepartmentId(e.target.value)}
-              >
-                <option value="">Select department</option>
-                {departments.map((d) => (
-                  <option key={d._id} value={d._id}>
-                    {d.departmentName}
-                  </option>
-                ))}
-              </select>
+                options={departmentOptions}
+                onChange={setDepartmentId}
+                placeholder="Select department"
+              />
               {errors.department && (
                 <p className="text-xs text-[var(--crit)] mt-1">{errors.department}</p>
               )}

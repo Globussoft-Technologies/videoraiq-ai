@@ -255,6 +255,9 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
     <Dialog
       open={open}
       onOpenChange={(val) => {
+        // Never let the dialog close mid-submit — the request would keep running
+        // with no way to see its result.
+        if (!val && isSubmitting) return;
         setOpen(val);
         if (!val) {
           resetState();
@@ -275,8 +278,13 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
       </DialogTrigger>
       <DialogContent
         className="w-[95vw] max-w-[800px] max-h-[90vh] top-1/2 left-1/2 translate-x-[-50%] translate-y-[-50%] p-0 overflow-hidden bg-[var(--bg1solid)] border border-[var(--bd)] rounded-2xl flex flex-col"
-        closeBtn="text-[var(--tx2)] hover:text-[var(--tx)] top-4 right-4"
+        closeBtn={`text-[var(--tx2)] hover:text-[var(--tx)] top-4 right-4 ${
+          isSubmitting ? 'pointer-events-none opacity-40' : ''
+        }`}
         onOpenAutoFocus={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => isSubmitting && e.preventDefault()}
+        onPointerDownOutside={(e) => isSubmitting && e.preventDefault()}
+        onInteractOutside={(e) => isSubmitting && e.preventDefault()}
       >
         <Formik
           initialValues={initialValues}
@@ -292,7 +300,8 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
                     <button
                       type="button"
                       onClick={() => setStep(1)}
-                      className="absolute left-0 p-2 hover:bg-[var(--bg3)] rounded-full transition-colors cursor-pointer"
+                      disabled={isSubmitting}
+                      className="absolute left-0 p-2 hover:bg-[var(--bg3)] rounded-full transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                     >
                       <ArrowLeft className="w-5 h-5 text-[var(--tx2)]" />
                     </button>
@@ -307,7 +316,14 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
                 </div>
               </DialogHeader>
 
-              <div className="p-6 md:p-8 flex-1 overflow-y-auto min-h-0 vq-scroll">
+              {/* fieldset[disabled] natively blocks every control inside, so
+                  images can't be swapped or removed while the update is in flight. */}
+              <fieldset
+                disabled={isSubmitting}
+                className={`p-6 md:p-8 flex-1 overflow-y-auto min-h-0 vq-scroll border-0 m-0 min-w-0 ${
+                  isSubmitting ? 'opacity-60' : ''
+                }`}
+              >
                 {step === 1 ? (
                   <RegisterFormStep1
                     departments={departments}
@@ -322,7 +338,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
                     onOpenCamera={handleOpenCamera}
                   />
                 )}
-              </div>
+              </fieldset>
 
               <div className="p-6 border-t border-[var(--bd)] flex justify-center">
                 {step === 1 ? (

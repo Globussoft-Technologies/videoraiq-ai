@@ -1,11 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, Check, X, Image as ImageIcon, Info } from "lucide-react";
 import logo from "@/assets/logo.svg";
 import heroShot from "@/assets/7.jpg";
-import { PInput, PSelect, PButton } from "./PortalFields";
+import { PInput, PCombo, PButton } from "./PortalFields";
 import { fetchDepartments, getEmployeeLocations, isEmailExist, createAuthorizedUser } from "@/pages/RegisterUser/Api";
+import getAccessToken from "@/utils/getAccessToken";
+import { decrypt } from "@/helpers/decryptNvr";
 import "./portal.css";
 
 const STEPS = [
@@ -21,14 +23,22 @@ const PHOTO_SLOTS = [
   { key: "right", hint: "Right", label: "Right profile" },
 ];
 
-/* Onboarding token for the public portal. This page runs without a login
-   session/cookie, so the department & location lookups are authenticated with
-   an explicit long-lived token (same approach as the `client` EmployeeRegister).
-   Sourced from VITE_EMPLOYEE_REGISTER_TOKEN in the environment. */
-const AUTH_TOKEN = import.meta.env.VITE_EMPLOYEE_REGISTER_TOKEN;
-
 export default function EmployeeRegister() {
   const navigate = useNavigate();
+
+  /* The registration link carries an AES-encrypted admin token as ?token=.
+     Falls back to the cookie token when the page is opened without one, so an
+     already-logged-in admin can still use the page directly. */
+  const AUTH_TOKEN = useMemo(() => {
+    const encrypted = new URLSearchParams(window.location.search).get("token");
+    if (!encrypted) return getAccessToken();
+    // decrypt() returns its input unchanged when it cannot decrypt.
+    const decrypted = decrypt(encrypted);
+
+
+    return decrypted && decrypted !== encrypted ? decrypted : null;
+  }, []);
+
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     firstName: "",
@@ -47,15 +57,29 @@ export default function EmployeeRegister() {
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
+  const locationOptions = useMemo(() => locations.map((l) => ({ value: l, label: l })), [locations]);
+  const departmentOptions = useMemo(
+    () => departments.map((d) => ({ value: d._id, label: d.departmentName })),
+    [departments]
+  );
+
   /* Load the register-form metadata (departments + employee locations) from the
      same endpoints RegisterUser uses; the onboarding token is passed explicitly
      since this public page has no login session. */
   useEffect(() => {
+    if (!AUTH_TOKEN) {
+      toast.error("This registration link is invalid or has expired");
+      return;
+    }
+
     const loadDepartments = async () => {
       try {
         const res = await fetchDepartments(0, 100, "", AUTH_TOKEN);
-        if (res?.data?.body?.status === "success") {
-          setDepartments(res.data.body.data.data || []);
+        const body = res?.data?.body;
+        if (body?.status === "success") {
+          setDepartments(body.data?.data || []);
+        } else {
+          console.warn("loadDepartments: non-success response", body);
         }
       } catch (err) {
         console.error("Failed to load departments:", err);
@@ -74,7 +98,7 @@ export default function EmployeeRegister() {
 
     loadDepartments();
     loadLocations();
-  }, []);
+  }, [AUTH_TOKEN]);
 
   const validateDetails = () => {
     const errs = {};
@@ -203,30 +227,36 @@ export default function EmployeeRegister() {
   }
 
   return (
-    <div className="vqp flex min-h-screen w-full bg-white font-['IBM_Plex_Sans',sans-serif] text-[#0f1729] overflow-hidden">
+    <div className="vqp flex min-h-screen w-full bg-white font-['IBM_Plex_Sans',sans-serif] text-[#0f1729]">
       {/* ============ LEFT: FORM ============ */}
-      <div className="flex-[1.35] min-w-0 flex flex-col items-center justify-center px-10 py-12 bg-[linear-gradient(180deg,#fbfcff,#f5f7fc)]">
-        <div className="w-full max-w-[470px] animate-[vqpfade_0.7s_ease_both_0.1s]">
+      <div className="flex-[1.35] min-w-0 flex flex-col items-center px-4 sm:px-8 lg:px-10 py-6 sm:py-12 bg-[linear-gradient(180deg,#fbfcff,#f5f7fc)]">
+        {/* Mobile-only brand bar — the hero (which carries the logo) is hidden below lg. */}
+        <div className="lg:hidden w-full max-w-[470px] flex items-center gap-2.5 mb-5">
+          <img src={logo} alt="VideoraIQ" className="h-[26px] w-auto" />
+          <span className="font-['JetBrains_Mono',monospace] text-[10px] tracking-[0.16em] text-[#64748b]">
+            EMPLOYEE PORTAL
+          </span>
+        </div>
+
+        {/* my-auto (not justify-center) so a tall form scrolls instead of
+            having its top clipped off on short screens. */}
+        <div className="w-full max-w-[470px] my-auto animate-[vqpfade_0.7s_ease_both_0.1s]">
           {/* heading */}
-          <div className="text-center mb-6">
-            <div className="relative w-[66px] h-[66px] mx-auto mb-4 flex items-center justify-center rounded-full">
-              {/* <div className="absolute -inset-1.5 rounded-full bg-[radial-gradient(circle,rgba(43,111,219,0.24),transparent_72%)] animate-[vqpglow_2.4s_ease-in-out_infinite]" />
-              <img src={logo} alt="VideoraIQ" className="relative w-[66px] h-[66px] object-contain animate-[vqfloatY_3.4s_ease-in-out_infinite]" /> */}
-            </div>
-            <span className="inline-flex items-center gap-2 font-['JetBrains_Mono',monospace] text-[10.5px] tracking-[0.14em] text-[#3b82f6] border border-[#cfe0fb] bg-[#eef5ff] rounded-full px-[13px] py-[5px] mb-4">
+          <div className="text-center mb-5 sm:mb-6">
+            <span className="inline-flex items-center gap-2 font-['JetBrains_Mono',monospace] text-[9.5px] sm:text-[10.5px] tracking-[0.14em] text-[#3b82f6] border border-[#cfe0fb] bg-[#eef5ff] rounded-full px-[13px] py-[5px] mb-3 sm:mb-4">
               <span className="w-1.5 h-1.5 rounded-full bg-[#3b82f6]" />
               EMPLOYEE ONBOARDING
             </span>
-            <h1 className="font-['Space_Grotesk',sans-serif] font-bold text-[30px] tracking-[-0.02em] m-0 text-[#0f1729]">
+            <h1 className="font-['Space_Grotesk',sans-serif] font-bold text-[24px] sm:text-[30px] tracking-[-0.02em] m-0 text-[#0f1729]">
               Employee Registration
             </h1>
-            <p className="text-[13.5px] text-[#64748b] mt-2 mb-0">
+            <p className="text-[12.5px] sm:text-[13.5px] text-[#64748b] mt-2 mb-0">
               {step === 1 ? "Fill in your details to get registered" : "Add face photos to enable recognition"}
             </p>
           </div>
 
           {/* step indicator */}
-          <div className="flex items-center justify-center gap-0 mb-[26px]">
+          <div className="flex items-center justify-center gap-0 mb-5 sm:mb-[26px]">
             {STEPS.map((s, i) => {
               const active = step === s.n;
               const done = step > s.n;
@@ -247,7 +277,7 @@ export default function EmployeeRegister() {
                     </span>
                   </div>
                   {i < STEPS.length - 1 && (
-                    <span className={`w-[74px] h-0.5 mx-4 rounded-[2px] ${step > s.n ? "bg-[#2a6fdb]" : "bg-[#e3e8f2]"}`} />
+                    <span className={`w-10 sm:w-[74px] h-0.5 mx-2.5 sm:mx-4 rounded-[2px] ${step > s.n ? "bg-[#2a6fdb]" : "bg-[#e3e8f2]"}`} />
                   )}
                 </div>
               );
@@ -255,10 +285,10 @@ export default function EmployeeRegister() {
           </div>
 
           {/* card */}
-          <div className="bg-white border border-[#eceff5] rounded-[18px] p-[26px] shadow-[0_18px_46px_rgba(24,39,75,0.08)]">
+          <div className="bg-white border border-[#eceff5] rounded-[18px] p-4 sm:p-[26px] shadow-[0_18px_46px_rgba(24,39,75,0.08)]">
             {step === 1 ? (
               <form onSubmit={onContinue} className="flex flex-col gap-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-[7px]">
                     <label className="text-[12.5px] font-semibold text-[#334155]">First Name <span className="text-[#ef4444]">*</span></label>
                     <PInput name="firstName" placeholder="Enter first name" value={form.firstName} onChange={set("firstName")} />
@@ -271,7 +301,7 @@ export default function EmployeeRegister() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-[7px]">
                     <label className="text-[12.5px] font-semibold text-[#334155]">Email <span className="text-[#ef4444]">*</span></label>
                     <PInput name="email" type="email" placeholder="name@company.com" value={form.email} onChange={set("email")} />
@@ -284,24 +314,28 @@ export default function EmployeeRegister() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-[7px]">
                     <label className="text-[12.5px] font-semibold text-[#334155]">Location</label>
-                    <PSelect name="location" value={form.location} onChange={set("location")}>
-                      <option value="">Select location</option>
-                      {locations.map((l) => (
-                        <option key={l} value={l}>{l}</option>
-                      ))}
-                    </PSelect>
+                    <PCombo
+                      name="location"
+                      value={form.location}
+                      onChange={set("location")}
+                      placeholder="Select location"
+                      options={locationOptions}
+                      preferUp
+                    />
                   </div>
                   <div className="flex flex-col gap-[7px]">
                     <label className="text-[12.5px] font-semibold text-[#334155]">Department <span className="text-[#ef4444]">*</span></label>
-                    <PSelect name="department" value={form.department} onChange={set("department")}>
-                      <option value="">Select department</option>
-                      {departments.map((d) => (
-                        <option key={d._id} value={d._id}>{d.departmentName}</option>
-                      ))}
-                    </PSelect>
+                    <PCombo
+                      name="department"
+                      value={form.department}
+                      onChange={set("department")}
+                      placeholder="Select department"
+                      options={departmentOptions}
+                      preferUp
+                    />
                     {errors.department && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.department}</div>}
                   </div>
                 </div>
@@ -329,7 +363,7 @@ export default function EmployeeRegister() {
                       <div key={s.key} className="flex flex-col gap-2">
                         <label
                           htmlFor={`vqp-photo-${s.key}`}
-                          className={`vqp-slot relative h-[172px] rounded-[12px] bg-[#f2f8ff] overflow-hidden flex flex-col items-center justify-center gap-2 text-[#94a3b8] ${
+                          className={`vqp-slot relative h-[120px] sm:h-[172px] rounded-[12px] bg-[#f2f8ff] overflow-hidden flex flex-col items-center justify-center gap-2 text-[#94a3b8] ${
                             pic ? "border-[1.5px] border-solid border-[#cfe0fb]" : "border-[1.5px] border-dashed border-[#bcd4f7]"
                           } ${isSubmitting ? "cursor-not-allowed pointer-events-none" : "cursor-pointer"} ${
                             isSubmitting && !pic ? "opacity-60" : "opacity-100"
@@ -368,7 +402,7 @@ export default function EmployeeRegister() {
                 <div className="flex items-stretch gap-3 mt-1">
                   <button
                     type="button"
-                    className={`vqp-ghost flex-[0_0_120px] h-12 rounded-[12px] font-['Space_Grotesk',sans-serif] font-semibold text-[14px] text-[#3b82f6] bg-white border-[1.5px] border-solid border-[#cfe0fb] flex items-center justify-center gap-2 ${
+                    className={`vqp-ghost flex-[0_0_92px] sm:flex-[0_0_120px] h-12 rounded-[12px] font-['Space_Grotesk',sans-serif] font-semibold text-[14px] text-[#3b82f6] bg-white border-[1.5px] border-solid border-[#cfe0fb] flex items-center justify-center gap-2 ${
                       isSubmitting ? "cursor-not-allowed opacity-50 pointer-events-none" : "cursor-pointer opacity-100"
                     }`}
                     onClick={() => setStep(1)}
@@ -397,7 +431,7 @@ export default function EmployeeRegister() {
       </div>
 
       {/* ============ RIGHT: HERO ============ */}
-      <div className="vqp-hero w-[500px] flex-[0_0_500px] relative overflow-hidden flex flex-col justify-between px-[46px] py-[44px] text-[#f4f8ff]">
+      <div className="vqp-hero hidden lg:flex w-[500px] flex-[0_0_500px] relative overflow-hidden flex-col justify-between px-[46px] py-[44px] text-[#f4f8ff]">
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${heroShot})` }} />
         <div className="absolute inset-0 bg-[linear-gradient(160deg,rgba(10,15,26,0.82)_18%,rgba(15,22,42,0.58)_62%,rgba(21,27,52,0.6))]" />
         <div className="absolute inset-0 bg-[linear-gradient(rgba(120,150,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(120,150,255,0.05)_1px,transparent_1px)] bg-[length:44px_44px] animate-[vqpgrid_7s_linear_infinite]" />

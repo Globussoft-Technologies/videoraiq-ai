@@ -72,6 +72,16 @@ export const bulkUploadUsers = async (data) => {
   return response.data;
 };
 
+/** Generate a time-limited admin token used to build a self-registration link. */
+export const generateAdminToken = async ({ adminId, days }) => {
+  const response = await axios.post(
+    `${Api_url}/auth/generate-admin-token`,
+    { adminId, days },
+    { headers: authHeaders({ 'Content-Type': 'application/json' }) }
+  );
+  return response?.data;
+};
+
 /* ─────────────── Register form metadata ─────────────── */
 
 /**
