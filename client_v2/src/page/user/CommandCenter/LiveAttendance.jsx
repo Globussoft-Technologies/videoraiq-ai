@@ -1,6 +1,5 @@
-import { useNavigate } from 'react-router-dom';
 import moment from 'moment';
-import { Panel, ActionLink } from '../../../components/primitives';
+import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 
 const DEPT_COLORS = [
@@ -171,7 +170,6 @@ function mergeAttendance(restPeople, socketLogs) {
 /** Live attendance strip — REST snapshot on load, then live socket check-ins
  * (attendanceLog_<adminId>) merged on top as they arrive. */
 export default function LiveAttendance({ people = [], socketLogs = [], loading, error, isEmpty, onRetry }) {
-  const navigate = useNavigate();
   const items = mergeAttendance(people, socketLogs);
   const present = items.length;
 
@@ -186,7 +184,6 @@ export default function LiveAttendance({ people = [], socketLogs = [], loading, 
           <span className="font-[family-name:var(--mono)] text-[10.5px] text-[var(--tx2)]">
             <span className="text-[var(--ok)] font-semibold">{present}</span> present
           </span>
-          <ActionLink onClick={() => navigate('/logs/attendance')}>Logs →</ActionLink>
         </span>
       </div>
 

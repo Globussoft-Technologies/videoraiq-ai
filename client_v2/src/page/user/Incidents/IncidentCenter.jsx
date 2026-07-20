@@ -537,6 +537,10 @@ export default function IncidentCenter() {
   const totalCount = grid.data?.totalCount ?? 0;
   const pages      = Math.max(1, Math.ceil(totalCount / pageSize));
 
+  // Running total of everything shown up to and including this page — 10, 20,
+  // 30 … — instead of a flat per-page count that reads the same on every page.
+  const shownCount = num(page * pageSize + items.length);
+
   const toggleSet = (setter) => (key) =>
     setter((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
@@ -694,7 +698,7 @@ export default function IncidentCenter() {
 
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ fontSize: 12, color: 'var(--tx3)' }}>
-              {grid.loading ? 'Loading…' : `Showing ${items.length} of ${totalCount}`}
+              {grid.loading ? 'Loading…' : `Showing ${shownCount} of ${num(totalCount)}`}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--tx3)' }}>
               <span>Show</span>
@@ -719,7 +723,7 @@ export default function IncidentCenter() {
             {detTypes.size === 1 ? detectionLabel([...detTypes][0]) : detTypes.size > 1 ? `${detTypes.size} detection types` : 'All detections'}
           </span>
           <span style={{ fontSize: 12, color: 'var(--tx3)' }}>
-            showing {items.length} of {totalCount}
+            showing {shownCount} of {num(totalCount)}
           </span>
         </div>
 

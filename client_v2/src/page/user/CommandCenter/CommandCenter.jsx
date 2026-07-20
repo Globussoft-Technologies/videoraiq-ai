@@ -178,7 +178,10 @@ export default function CommandCenter() {
       nvrId: selectedNvrs,
       department: selectedDepts,
       camType: selectedCamTypes,
-      limit: 12,
+      // The whole filtered set, not just the tabs LiveCamera renders — the
+      // "Cameras Online" denominator is its length, so a small limit here
+      // silently under-reported it (a 16-camera NVR read as 8).
+      limit: 200,
     }),
     [filterKey, selectedCamTypes.join(',')]
   );

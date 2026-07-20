@@ -5,6 +5,9 @@ import { Panel, ActionLink } from '../../../components/primitives';
 import { Loading, Empty } from '../../../components/States';
 import CameraStream from '../../../components/CameraStream';
 
+const TAB_LIMIT = 8;    // switchable tabs rendered in the strip
+const PROBE_LIMIT = 32; // cameras stream-probed for the online tally
+
 /**
  * Command Center live camera panel: switchable camera tabs + the latest frame
  * for the selected camera. "Open full view" jumps to the Live Wall focused on
@@ -13,7 +16,17 @@ import CameraStream from '../../../components/CameraStream';
  */
 export default function LiveCamera({ channels = [], loading, latestByChannel = {}, onLiveChange, onOnlineCountChange }) {
   const navigate = useNavigate();
-  const cams = useMemo(() => (Array.isArray(channels) ? channels.slice(0, 8) : []), [channels]);
+  // Two different lists on purpose:
+  //   probeCams — every camera matching the current filter, each one connected in
+  //     the background so "Cameras Online" counts the whole filtered set. Capped
+  //     because each probe opens a real stream; raise/lower PROBE_LIMIT to trade
+  //     accuracy on huge sites against connection load.
+  //   cams — the handful actually rendered as switchable tabs.
+  const probeCams = useMemo(
+    () => (Array.isArray(channels) ? channels.slice(0, PROBE_LIMIT) : []),
+    [channels]
+  );
+  const cams = useMemo(() => probeCams.slice(0, TAB_LIMIT), [probeCams]);
   const [activeId, setActiveId] = useState(null);
   const tileRef = useRef(null);
 
@@ -29,8 +42,8 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
     setLiveById((prev) => (prev[id] === isLive ? prev : { ...prev, [id]: isLive }));
   }, []);
   useEffect(() => {
-    // Drop entries for cameras no longer in the current filtered tab list.
-    const ids = new Set(cams.map((c) => c._id || c.id));
+    // Drop entries for cameras no longer in the current filtered list.
+    const ids = new Set(probeCams.map((c) => c._id || c.id));
     setLiveById((prev) => {
       const next = {};
       let changed = false;
@@ -40,11 +53,11 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
       });
       return changed ? next : prev;
     });
-  }, [cams]);
-  const onlineCount = cams.filter((c) => liveById[c._id || c.id]).length;
+  }, [probeCams]);
+  const onlineCount = probeCams.filter((c) => liveById[c._id || c.id]).length;
   useEffect(() => {
-    onOnlineCountChange?.(onlineCount, cams.length);
-  }, [onlineCount, cams.length, onOnlineCountChange]);
+    onOnlineCountChange?.(onlineCount, probeCams.length);
+  }, [onlineCount, probeCams.length, onOnlineCountChange]);
 
   const online = active ? !!liveById[activeKey] : false;
   const liveColor = !active ? 'var(--tx3)' : online ? 'var(--ok)' : 'var(--crit)';
@@ -135,12 +148,12 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
         )}
       </div>
 
-      {/* Hidden probes — every other tab's stream is connected in the background
-          (not rendered) purely to learn its real live/offline state for the
-          "Cameras Online" count and tab dots; the active tab's own tile above
-          already reports its status via onLiveChange. */}
+      {/* Hidden probes — every filtered camera's stream is connected in the
+          background (not rendered) purely to learn its real live/offline state
+          for the "Cameras Online" count and tab dots; the active tab's own tile
+          above already reports its status via onLiveChange. */}
       <div style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }} aria-hidden="true">
-        {cams.filter((c) => (c._id || c.id) !== activeKey).map((c) => {
+        {probeCams.filter((c) => (c._id || c.id) !== activeKey).map((c) => {
           const id = c._id || c.id;
           return (
             <CameraStream
