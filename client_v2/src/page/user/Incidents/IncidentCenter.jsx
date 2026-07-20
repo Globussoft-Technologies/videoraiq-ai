@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useOutletContext } from 'react-router-dom';
-import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2 } from 'lucide-react';
+import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2, Flag } from 'lucide-react';
 import { AsyncBoundary } from '../../../components/States';
 import SharedMultiSelect from '../../../components/MultiSelect';
 import DateRangePicker, { fmt } from '../../../components/DateRangePicker';
-import IncidentCard from './IncidentCard';
+import IncidentCard, { apiMarkResolved, ReportModal } from './IncidentCard';
 import RefreshControl from '../../../components/RefreshControl';
 import { useApi } from '../../../hooks/useApi';
 import { num, detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
@@ -337,37 +337,130 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
 /* ── Full-screen incident viewer with prev/next navigation ──────────────────
    Gallery-style lightbox: click arrows, use ←/→ keys, or scroll the wheel to
    move through the currently-filtered `items` list without closing the modal. */
+/* Inline spinner — `vq-spin` keyframes are defined in the page's <style> block. */
+function Spinner({ size = 20, color = '#fff' }) {
+  return (
+    <span
+      style={{
+        width: size, height: size, borderRadius: '50%', display: 'inline-block',
+        border: `2px solid ${color}`, borderTopColor: 'transparent',
+        animation: 'vq-spin .7s linear infinite',
+      }}
+    />
+  );
+}
+
 function navBtnStyle(side) {
   return {
-    position: 'absolute', top: '39vh', [side]: 'clamp(-22px, -2vw, -6px)', transform: 'translateY(-50%)',
+    // Inset from the viewport edge (the lightbox is now full-bleed, so the old
+    // negative offsets would push these off-screen), and above the loading
+    // overlay (20) so the spinner never swallows a click.
+    position: 'absolute', top: '50%', [side]: 20, transform: 'translateY(-50%)',
     width: 46, height: 46, borderRadius: '50%',
     background: 'rgba(15,23,42,.55)', border: '1px solid rgba(255,255,255,.15)',
     backdropFilter: 'blur(6px)', color: '#fff',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    cursor: 'pointer', transition: 'background-color .15s, transform .1s', zIndex: 10,
+    cursor: 'pointer', transition: 'background-color .15s, transform .1s', zIndex: 30,
   };
 }
 
-function IncidentLightbox({ items, index, onIndexChange, onClose }) {
+function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, pageOffset = 0, totalCount = 0, onNavigateGlobal, navLoading = false, navFailedAt = 0 }) {
   const item = items[index];
-  const hasPrev = index > 0;
-  const hasNext = index < items.length - 1;
+  // Navigation spans the whole filtered result set, not just the loaded page:
+  // hitting either end of `items` fetches the neighbouring page via
+  // onNavigateGlobal, so prev/next only stop at the true first/last incident.
+  const globalIndex = pageOffset + index;
+  const total       = totalCount || items.length;
+  const hasPrev = globalIndex > 0;
+  const hasNext = globalIndex < total - 1;
   const wheelLockRef = useRef(false);
 
-  const goPrev = useCallback(() => { if (hasPrev) onIndexChange(index - 1); }, [hasPrev, index, onIndexChange]);
-  const goNext = useCallback(() => { if (hasNext) onIndexChange(index + 1); }, [hasNext, index, onIndexChange]);
+  // Overlay panel state (ported from client's VideoModal): the panel collapses
+  // behind the blue tab, and resolve/report act on the currently-shown incident.
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [reportOpen, setReportOpen]   = useState(false);
+  const [resolved, setResolved]       = useState(false);
+  const [resolving, setResolving]     = useState(false);
+  // Which arrow triggered the in-flight page fetch, so only that one spins.
+  const [navDir, setNavDir] = useState(null);
+  useEffect(() => { if (!navLoading) setNavDir(null); }, [navLoading]);
+
+  // The new page's image needs its own spinner: navLoading covers the fetch,
+  // this covers the image bytes arriving afterwards.
+  const [imgLoading, setImgLoading] = useState(false);
+
+  // Re-seed from the incident whenever navigation lands on a different one,
+  // otherwise the previous incident's resolved state leaks onto the next.
+  useEffect(() => { setResolved(!!item?.resolved); }, [item?._id, item?.id, item?.resolved]);
+
+  // A new incident means a new <img> (keyed by id) that has to load — show the
+  // overlay until onLoad/onError fires. Must be set unconditionally: an
+  // incident with no Image mounts no <img>, so onLoad/onError can never fire
+  // and a leftover `true` would spin forever over a blank frame.
+  useEffect(() => { setImgLoading(!!item?.Image); }, [item?._id, item?.id]);
+
+  // Abandoned cross-page jump: `item` is unchanged, so the effect above won't
+  // re-run and the already-loaded <img> won't fire onLoad again. Without this
+  // the optimistic imgLoading from goPrev/goNext would dim the frame forever.
+  // Seeded with the mount-time value so this only fires on a genuine INCREMENT:
+  // navFailedAt is never reset by the parent, so a bare truthiness check would
+  // clear imgLoading on every later mount and kill the first-load indicator.
+  const seenNavFailRef = useRef(navFailedAt);
+  useEffect(() => {
+    if (navFailedAt === seenNavFailRef.current) return;
+    seenNavFailRef.current = navFailedAt;
+    setImgLoading(false);
+  }, [navFailedAt]);
+
+  // Within the loaded page it's a local index change; at the edges it hands off
+  // to the page-crossing fetch, which is async and drives the spinners.
+  // setImgLoading here (not only in the post-commit effect) closes the gap
+  // where navLoading has cleared but the new item's effect hasn't run yet —
+  // that window rendered an undecoded image with no overlay at all.
+  const goPrev = useCallback(() => {
+    if (!hasPrev || navLoading) return;
+    setImgLoading(true);
+    if (index > 0) onIndexChange(index - 1);
+    else { setNavDir('prev'); onNavigateGlobal?.(globalIndex - 1); }
+  }, [hasPrev, navLoading, index, onIndexChange, onNavigateGlobal, globalIndex]);
+
+  const goNext = useCallback(() => {
+    if (!hasNext || navLoading) return;
+    setImgLoading(true);
+    if (index < items.length - 1) onIndexChange(index + 1);
+    else { setNavDir('next'); onNavigateGlobal?.(globalIndex + 1); }
+  }, [hasNext, navLoading, index, items.length, onIndexChange, onNavigateGlobal, globalIndex]);
+
+  async function handleMarkResolved() {
+    if (resolving || !item) return;
+    setResolving(true);
+    try {
+      const next = !resolved;
+      await apiMarkResolved(item._id || item.id, item.incidentType, next);
+      setResolved(next);
+      onRefresh?.();
+    } catch {
+      // leave the checkbox unchanged so the user sees it didn't take
+    } finally {
+      setResolving(false);
+    }
+  }
 
   useEffect(() => {
     function onKeyDown(e) {
+      // The report modal owns the keyboard while it's open — arrow keys must not
+      // navigate incidents behind it, and Escape should dismiss it first.
+      if (reportOpen) { if (e.key === 'Escape') setReportOpen(false); return; }
       if (e.key === 'ArrowLeft')  goPrev();
       else if (e.key === 'ArrowRight') goNext();
       else if (e.key === 'Escape') onClose();
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [goPrev, goNext, onClose]);
+  }, [goPrev, goNext, onClose, reportOpen]);
 
   function onWheel(e) {
+    if (reportOpen) return;
     if (wheelLockRef.current) return;
     if (Math.abs(e.deltaY) < 10) return;
     wheelLockRef.current = true;
@@ -376,6 +469,8 @@ function IncidentLightbox({ items, index, onIndexChange, onClose }) {
   }
 
   if (!item) return null;
+  // True only when a mounted arrow is rendering its own spinner.
+  const arrowSpinning = navLoading && ((navDir === 'prev' && hasPrev) || (navDir === 'next' && hasNext));
   const imgSrc = item.Image ? mediaUrl(item.Image) : null;
   const det    = detectionLabel(item.incidentType || item.displayName);
   const cam    = item.channelData?.name || '';
@@ -385,9 +480,11 @@ function IncidentLightbox({ items, index, onIndexChange, onClose }) {
     <div
       onClick={onClose}
       onWheel={onWheel}
-      style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(4,6,12,.93)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#000' }}
     >
-      <div onClick={e => e.stopPropagation()} className="vq-inc-lightbox" style={{ position: 'relative', maxWidth: '86vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+      {/* Fills the viewport like client's VideoModal (fixed inset-0 bg-black)
+          rather than a centred 86vw box, so the frame is truly fullscreen. */}
+      <div onClick={e => e.stopPropagation()} className="vq-inc-lightbox" style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
         {hasPrev && (
           <button
             onClick={(e) => { e.stopPropagation(); goPrev(); }}
@@ -398,25 +495,172 @@ function IncidentLightbox({ items, index, onIndexChange, onClose }) {
             onMouseDown={e => e.currentTarget.style.transform = 'translateY(-50%) scale(0.92)'}
             onMouseUp={e => e.currentTarget.style.transform = 'translateY(-50%) scale(1)'}
             title="Previous incident"
+            disabled={navLoading}
           >
-            <ChevronLeft size={22} />
+            {/* Only the arrow that was clicked spins; the centre overlay is the
+                other spinner, and navDir keeps them from doubling up. */}
+            {navLoading && navDir === 'prev' ? <Spinner size={18} /> : <ChevronLeft size={22} />}
           </button>
         )}
 
         {imgSrc && (
-          <img key={item._id || item.id} src={imgSrc} alt={det} style={{ maxWidth: '86vw', maxHeight: '78vh', objectFit: 'contain', borderRadius: 10, display: 'block' }} />
+          <img
+            key={item._id || item.id}
+            src={imgSrc}
+            alt={det}
+            onLoad={() => setImgLoading(false)}
+            onError={() => setImgLoading(false)}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+          />
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#fff', fontSize: 12.5, flexWrap: 'wrap', justifyContent: 'center', textAlign: 'center', maxWidth: '86vw' }}>
-          <span style={{ fontWeight: 600 }}>{item.incidentName || det}</span>
-          {cam && <span style={{ color: 'rgba(255,255,255,.6)' }}>· {[cam, site].filter(Boolean).join(' · ')}</span>}
-          <span style={{ fontFamily: 'monospace', color: 'rgba(255,255,255,.6)' }}>{shortDateTime(item.timeOfIncident)}</span>
-          <span style={{ color: 'rgba(255,255,255,.4)' }}>{index + 1} / {items.length}</span>
+        {/* Exactly one spinner is visible at a time. While a page fetch is in
+            flight the clicked arrow spins, so the centre overlay dims the frame
+            WITHOUT its own spinner; once the fetch lands, the arrow reverts and
+            the centre spinner takes over for the image decode. */}
+        {(navLoading || (imgLoading && !!imgSrc)) && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 20,
+            background: 'rgba(0,0,0,.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none',
+          }}>
+            {/* Suppress the centre spinner only when an arrow is ACTUALLY
+                showing one. Crossing a page boundary flips hasPrev/hasNext the
+                moment pageOffset updates, unmounting the very arrow that
+                started the jump — gating on navLoading alone then left the
+                frame dimmed with no indicator anywhere. */}
+            {!arrowSpinning && <Spinner size={40} />}
+          </div>
+        )}
+
+        {/* ── Security-feed overlay panel (ported from client's VideoModal) ──
+            Collapsible blue tab + angled slate panel carrying the incident
+            title, resolve checkbox and report action. */}
+        <div
+          className="vq-inc-panel"
+          style={{
+            // Overlaid on the image (as in client's VideoModal), not stacked
+            // below it. zIndex sits ABOVE the loading overlay (20) so collapse/
+            // expand keeps working while a fetch is in flight — the panel is
+            // independent of navigation state.
+            position: 'absolute', bottom: 32, left: 32, zIndex: 30,
+            display: 'flex', alignItems: 'stretch', maxWidth: 'calc(100% - 64px)',
+          }}
+        >
+          {/* Blue collapse tab — own stacking context above the panel body so a
+              mis-sized/animating panel can never cover the re-expand click. */}
+          <div style={{ display: 'flex', alignItems: 'center', marginRight: 4, position: 'relative', zIndex: 2, flexShrink: 0 }}>
+            <button
+              onClick={(e) => { e.stopPropagation(); setIsCollapsed(c => !c); }}
+              title={isCollapsed ? 'Show details' : 'Hide details'}
+              style={{
+                width: 16, height: 120, borderRadius: 3, flexShrink: 0,
+                background: '#38bdf8', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'background .15s', zIndex: 10,
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#7dd3fc'}
+              onMouseLeave={e => e.currentTarget.style.background = '#38bdf8'}
+            >
+              {isCollapsed
+                ? <ChevronRight size={12} color="#0f172a" />
+                : <ChevronLeft  size={12} color="#0f172a" />}
+            </button>
+          </div>
+
+          {/* Panel body — unmounted when collapsed. Earlier attempts kept it
+              mounted at width:0, but a zero-width box whose content still laid
+              out at natural size kept covering the tab and eating the click
+              that re-expands it. Unmounting removes that failure mode entirely
+              and makes collapse depend on nothing but isCollapsed. */}
+          {!isCollapsed && (
+          <div
+            className="vq-inc-panel-body"
+            style={{
+              position: 'relative', zIndex: 1, overflow: 'hidden',
+              background: 'rgba(2,6,23,.5)',
+              border: '1px solid rgba(255,255,255,.2)',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,.6)',
+              backdropFilter: 'blur(6px)',
+              clipPath: 'polygon(0 0, 95% 0, 100% 20%, 100% 100%, 5% 100%, 0 80%)',
+            }}
+          >
+            <div className="vq-inc-panel-inner" style={{ display: 'flex', alignItems: 'flex-start', gap: 40, padding: '28px 40px', flexWrap: 'wrap', width: 'max-content', maxWidth: '100%' }}>
+              {/* Title block */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.3em', color: '#38bdf8', textTransform: 'uppercase' }}>
+                  Security Feed
+                </span>
+                <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: '#fff', letterSpacing: '-.02em', textTransform: 'uppercase', lineHeight: 1.15, wordBreak: 'break-word' }}>
+                  {item.incidentName || det}
+                </h1>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,.6)', wordBreak: 'break-word' }}>
+                  {item.description || [cam, site].filter(Boolean).join(' · ')}
+                </p>
+                <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'rgba(255,255,255,.45)', marginTop: 2 }}>
+                  {shortDateTime(item.timeOfIncident)} · {index + 1} / {items.length}
+                </span>
+              </div>
+
+              {/* Mark as resolved */}
+              <div
+                onClick={(e) => { e.stopPropagation(); handleMarkResolved(); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '8px 20px', cursor: resolving ? 'wait' : 'pointer',
+                  border: `1px solid ${resolved ? 'rgba(16,185,129,.5)' : 'rgba(255,255,255,.3)'}`,
+                  background: resolved ? 'rgba(16,185,129,.2)' : 'rgba(255,255,255,.05)',
+                  color: resolved ? '#34d399' : '#fff',
+                  transition: 'all .15s', whiteSpace: 'nowrap',
+                }}
+              >
+                <span style={{
+                  width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                  border: `1.5px solid ${resolved ? '#10b981' : 'rgba(255,255,255,.5)'}`,
+                  background: resolved ? '#10b981' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {resolved && (
+                    <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                      <path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em' }}>
+                  {resolving ? 'Saving…' : resolved ? 'Resolved' : 'Mark As Resolved'}
+                </span>
+              </div>
+
+              {/* Report incident */}
+              <button
+                onClick={(e) => { e.stopPropagation(); setReportOpen(true); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 20px', cursor: 'pointer',
+                  border: '1px solid rgba(59,130,246,.5)',
+                  background: 'rgba(59,130,246,.2)',
+                  color: '#60a5fa', transition: 'background .15s', whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(59,130,246,.3)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(59,130,246,.2)'}
+              >
+                <Flag size={14} />
+                <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em' }}>
+                  {item.report?.status ? 'Reported' : 'Report Incident'}
+                </span>
+              </button>
+            </div>
+
+            {/* Decorative corner accent */}
+            <div style={{ position: 'absolute', top: 0, right: 0, width: 48, height: 48, background: 'rgba(255,255,255,.05)', transform: 'rotate(-45deg) translate(24px,-24px)', pointerEvents: 'none' }} />
+          </div>
+          )}
         </div>
 
         <button
           onClick={onClose}
-          style={{ position: 'absolute', top: 'clamp(-14px, -2vw, -4px)', right: 'clamp(-14px, -2vw, -4px)', width: 32, height: 32, borderRadius: 8, background: 'rgba(6,8,13,.8)', border: '1px solid rgba(255,255,255,.2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}
+          style={{ position: 'absolute', top: 16, right: 16, zIndex: 30, width: 36, height: 36, borderRadius: '50%', background: 'rgba(63,63,63,.5)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', backdropFilter: 'blur(6px)' }}
         >
           <X size={15} />
         </button>
@@ -431,11 +675,24 @@ function IncidentLightbox({ items, index, onIndexChange, onClose }) {
             onMouseDown={e => e.currentTarget.style.transform = 'translateY(-50%) scale(0.92)'}
             onMouseUp={e => e.currentTarget.style.transform = 'translateY(-50%) scale(1)'}
             title="Next incident"
+            disabled={navLoading}
           >
-            <ChevronRight size={22} />
+            {navLoading && navDir === 'next' ? <Spinner size={18} /> : <ChevronRight size={22} />}
           </button>
         )}
       </div>
+
+      {/* Rendered inside the lightbox but outside the stopPropagation wrapper's
+          flow — its own overlay swallows clicks, so the lightbox stays open. */}
+      {reportOpen && (
+        <div onClick={e => e.stopPropagation()}>
+          <ReportModal
+            item={item}
+            onClose={() => setReportOpen(false)}
+            onSuccess={onRefresh}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -501,6 +758,12 @@ export default function IncidentCenter() {
   const [page,       setPage]       = useState(0);
   const [pageSize,   setPageSize]   = useState(10);
   const [lightboxIndex, setLightboxIndex] = useState(null);
+  const [navLoading, setNavLoading] = useState(false);
+  // Bumped when a cross-page jump is abandoned. The lightbox watches this to
+  // undo the imgLoading it set optimistically when navigation began — on an
+  // abandoned jump `item` never changes, so no new <img> mounts and neither
+  // onLoad nor onError would ever fire to clear it.
+  const [navFailedAt, setNavFailedAt] = useState(0);
   const [detTypes,   setDetTypes]   = useState(() => new Set());
   const [sevSet,     setSevSet]     = useState(() => new Set(initialSeverityFilter ? [initialSeverityFilter] : []));
   const [statusSet,  setStatusSet]  = useState(() => new Set(initialStatusFilter ? [initialStatusFilter] : []));
@@ -540,6 +803,54 @@ export default function IncidentCenter() {
   // Running total of everything shown up to and including this page — 10, 20,
   // 30 … — instead of a flat per-page count that reads the same on every page.
   const shownCount = num(page * pageSize + items.length);
+
+  // Lightbox navigation past the edge of the loaded page: jump `page` to
+  // whichever page holds the requested global index and land the lightbox on
+  // that incident's offset within it. The grid fetch is driven by `page`, so
+  // switching pages re-runs it; navLoading clears once the new items arrive.
+  // `page` alone can't tell us whether `items` belongs to the page we asked
+  // for: on a fetch error useApi keeps the previous `data`, so `items` would
+  // still be the OLD page's array while `page` already points at the new one —
+  // landing the lightbox on the wrong incident. Track which page the loaded
+  // items actually came from and only settle when the two agree.
+  const pendingNavRef = useRef(null);
+  const loadedPageRef = useRef(page);
+  useEffect(() => { if (!grid.loading && !grid.error) loadedPageRef.current = page; }, [grid.data]);
+
+  const handleNavigateGlobal = useCallback((globalIdx) => {
+    if (globalIdx < 0 || globalIdx >= totalCount) return;
+    const targetPage   = Math.floor(globalIdx / pageSize);
+    const targetOffset = globalIdx % pageSize;
+    if (targetPage === page) { setLightboxIndex(targetOffset); return; }
+    setNavLoading(true);
+    pendingNavRef.current = { page: targetPage, offset: targetOffset };
+    setPage(targetPage);
+  }, [totalCount, pageSize, page]);
+
+  useEffect(() => {
+    const pending = pendingNavRef.current;
+    if (!pending || grid.loading) return;
+
+    // The request failed — `items` still holds the previously-loaded page, so
+    // roll `page` back to match. Leaving it on the target page desyncs
+    // pageOffset/globalIndex from what's actually displayed: the next arrow
+    // press would skip a whole page, and `shownCount` would overstate.
+    if (grid.error) {
+      pendingNavRef.current = null;
+      setNavLoading(false);
+      setNavFailedAt(n => n + 1);
+      setPage(loadedPageRef.current);
+      return;
+    }
+
+    // Items for a different page (a superseded or unrelated fetch settled) —
+    // keep waiting for the one we actually asked for.
+    if (loadedPageRef.current !== pending.page) return;
+
+    pendingNavRef.current = null;
+    setNavLoading(false);
+    if (items.length) setLightboxIndex(Math.min(pending.offset, items.length - 1));
+  }, [grid.loading, grid.error, items]);
 
   const toggleSet = (setter) => (key) =>
     setter((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
@@ -587,6 +898,17 @@ export default function IncidentCenter() {
         }
         @media (max-width: 480px) {
           .vq-inc-navbtn { width: 36px !important; height: 36px !important; }
+        }
+        @media (max-width: 900px) {
+          /* The angled clip-path and wide gutters eat the whole viewport on
+             small screens — stack the panel's blocks and tighten the padding. */
+          .vq-inc-panel-inner { gap: 16px !important; padding: 18px 22px !important; }
+          .vq-inc-panel-inner h1 { font-size: 18px !important; }
+        }
+        @media (max-width: 640px) {
+          .vq-inc-panel { bottom: 12px !important; left: 12px !important; max-width: calc(100% - 24px) !important; }
+          .vq-inc-panel-body { clip-path: none !important; }
+          .vq-inc-panel-inner { flex-direction: column !important; padding: 14px 16px !important; width: auto !important; }
         }
       `}</style>
 
@@ -725,9 +1047,26 @@ export default function IncidentCenter() {
           <span style={{ fontSize: 12, color: 'var(--tx3)' }}>
             showing {shownCount} of {num(totalCount)}
           </span>
+          {/* The grid keeps rendering the last good page on a failed refresh,
+              so surface the failure here rather than letting it pass silently. */}
+          {grid.error && items.length > 0 && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', fontSize: 11.5, color: 'var(--crit)' }}>
+              Couldn’t refresh — showing last loaded results
+              <button
+                onClick={() => grid.refetch()}
+                style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+              >
+                Retry
+              </button>
+            </span>
+          )}
         </div>
 
-        <AsyncBoundary loading={grid.loading} error={grid.error} onRetry={() => grid.refetch()} minH={720}>
+        {/* Keep showing the last good page when a refetch fails: useApi retains
+            the previous `data` on error, so replacing a readable grid with a
+            full error screen would throw away results the user still has. Only
+            surface the error state when there is genuinely nothing to show. */}
+        <AsyncBoundary loading={grid.loading && !items.length} error={items.length ? null : grid.error} onRetry={() => grid.refetch()} minH={720}>
           {items.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '56px 24px', gap: 12 }}>
               <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -827,6 +1166,12 @@ export default function IncidentCenter() {
           index={Math.min(lightboxIndex, items.length - 1)}
           onIndexChange={setLightboxIndex}
           onClose={() => setLightboxIndex(null)}
+          onRefresh={() => grid.refetch()}
+          pageOffset={page * pageSize}
+          totalCount={totalCount}
+          onNavigateGlobal={handleNavigateGlobal}
+          navLoading={navLoading}
+          navFailedAt={navFailedAt}
         />
       )}
     </div>

@@ -16,7 +16,7 @@ function statusOf(item) {
   return { label: 'New', color: 'var(--crit)' };
 }
 
-async function apiMarkResolved(id, incidentType, resolved) {
+export async function apiMarkResolved(id, incidentType, resolved) {
   const token = getAccessToken();
   const res = await axios.put(
     `${import.meta.env.VITE_BACKEND}/incidents/${id}`,
@@ -37,7 +37,7 @@ async function apiReport(incidentId, description) {
 }
 
 /* ── Report modal ─────────────────────────────────────────────────────────── */
-function ReportModal({ item, onClose, onSuccess }) {
+export function ReportModal({ item, onClose, onSuccess }) {
   // Reported status alone means "already reported" — description can be
   // empty (report.description defaults to "" server-side), and that must
   // still show the "already reported" view, not the blank write form.

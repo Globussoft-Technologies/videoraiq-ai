@@ -5,7 +5,6 @@ import KpiRow from './KpiRow';
 import LiveCamera from './LiveCamera';
 import LiveAttendance from './LiveAttendance';
 import LatestIncident from './LatestIncident';
-import MultiSiteNetwork from './MultiSiteNetwork';
 import LiveThreatFeed from './LiveThreatFeed';
 import EngineActivity from './EngineActivity';
 import SharedMultiSelect from '../../../components/MultiSelect';
@@ -347,7 +346,7 @@ export default function CommandCenter() {
       </div>
 
       {/* Map */}
-      <MultiSiteNetwork sites={sitesEnriched} />
+      {/* <MultiSiteNetwork sites={sitesEnriched} /> */}
 
       {/* Engine activity + 24h detection events */}
       <EngineActivity
