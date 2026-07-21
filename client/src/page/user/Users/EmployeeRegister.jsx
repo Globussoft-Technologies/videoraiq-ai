@@ -30,7 +30,7 @@ const EmployeeRegister = () => {
   const createUserAPI = BACKEND + '/api/v1/authorizedUsers/create';
   const departmentAPI = BACKEND + '/api/v1/departments/get';
   const isEmailExistAPI = BACKEND + '/api/v1/users/isEmailExist/';
-  const employeeLocationsAPI = BACKEND + '/api/v1/locations/employee-location';
+  const employeeLocationsAPI = BACKEND + '/api/v1/locations/employee-location?skip=0&limit=100';
   // The registration link carries an AES-encrypted admin token as ?token=.
   // Falls back to the cookie token when the page is opened without one.
   const AUTH_TOKEN = useMemo(() => {

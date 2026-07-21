@@ -103,7 +103,7 @@ export const getUserById = async (userId) => {
 
 export const getEmployeeLocations = async () => {
   const token = getAccessToken();
-  return await axios.post(`${Api_url}/api/v1/locations/employee-location`, {},{
+  return await axios.post(`${Api_url}/api/v1/locations/employee-location?skip=0&limit=100`, {},{
      headers:{
             'Content-Type':'application/json',
             'x-access-token':token
