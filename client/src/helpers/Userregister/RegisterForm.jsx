@@ -283,7 +283,7 @@ const [uploadedImageUrls, setUploadedImageUrls] = useState(["", "", ""]); // New
         return;
       }
 
-      toast.success("User updated successfully!");
+      toast.success(res?.body?.message || "User updated successfully!");
       }else{
         const res = await fetch(createUserAPI, {
         method: 'POST',
@@ -293,11 +293,12 @@ const [uploadedImageUrls, setUploadedImageUrls] = useState(["", "", ""]); // New
         body: formData,
       });
       const data = await res.json();
-      if (data.body.status !== 'success') {
-        toast.error(data.body.error || data.body.message || "Failed to register user");
+      if (data?.body?.status !== 'success') {
+        // body.error is a generic wrapper — body.message has the actionable reason.
+        toast.error(data?.body?.message || data?.body?.error || "Failed to register user");
         return;
       }
-      toast.success('User registered successfully!');
+      toast.success(data?.body?.message || 'User registered successfully!');
       }
       
       setOpen(false);
@@ -307,7 +308,7 @@ const [uploadedImageUrls, setUploadedImageUrls] = useState(["", "", ""]); // New
       if (fetchUsers) fetchUsers();
     } catch (err) {
       console.error(err);
-      const errorMessage = err?.response?.data?.body?.error || err?.response?.data?.body?.message || err?.message || "An unexpected error occurred";
+      const errorMessage = err?.response?.data?.body?.message ||err?.response?.data?.body?.error || err?.message || "An unexpected error occurred";
       toast.error(errorMessage);
       if (fetchUsers) fetchUsers();
     }finally {

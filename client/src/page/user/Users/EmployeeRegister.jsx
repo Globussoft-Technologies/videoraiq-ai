@@ -265,11 +265,13 @@ const EmployeeRegister = () => {
       log('handleSubmit: response httpStatus=', res.status, 'body=', data?.body);
       if (data?.body?.status !== 'success') {
         warn('handleSubmit: server returned non-success', data?.body);
-        toast.error(data?.body?.error || data?.body?.message || 'Failed to register');
+        // body.error is a generic wrapper ("Authorized user creation failed.") —
+        // body.message carries the actionable reason, so never fall back to error.
+        toast.error(data?.body?.message ||data?.body?.error || 'Failed to register');
         return;
       }
       log('handleSubmit: registration succeeded');
-      toast.success('Registered successfully!');
+      toast.success(data?.body?.message || 'Registered successfully!');
       resetForm();
       setUploadedImagePaths(['', '', '']);
       setUploadedImageUrls(['', '', '']);
