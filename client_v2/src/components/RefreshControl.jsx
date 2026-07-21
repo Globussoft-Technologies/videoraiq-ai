@@ -13,13 +13,21 @@ const PRESETS = [
   { label: '2 min',  value: 120 },
 ];
 
-const MIN_INTERVAL = 10;
+// 0 is a valid, meaningful value (V1's AutoRefreshComponent behaves the same):
+// it means "no auto-refresh". Reaching it switches auto-refresh off and locks
+// the On toggle until a non-zero interval is chosen.
+const MIN_INTERVAL = 0;
 const DEFAULT_INTERVAL = 30;
+// Below a minute the stepper moves one second at a time; at/above a minute it
+// moves a whole minute (1 min → 2 min → 3 min …).
+const MINUTE = 60;
 
 function formatInterval(secs) {
-  if (secs < 60) return `${secs} sec`;
-  const m = secs / 60;
-  return `${m} min`;
+  if (secs <= 0) return '0';
+  if (secs < MINUTE) return `${secs} sec`;
+  const m = Math.floor(secs / MINUTE);
+  const s = secs % MINUTE;
+  return s ? `${m} min ${s} sec` : `${m} min`;
 }
 
 /**
@@ -67,6 +75,8 @@ export default function RefreshControl({ onManualRefresh, storageKey }) {
   // ── Auto-refresh timer (V1 pattern: cancel + restart on change) ───────────
   useEffect(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    // `> 0` is load-bearing: an interval of 0 means "off", and setInterval(fn, 0)
+    // would otherwise refetch every module on each event-loop tick.
     if (isActive && intervalSecs > 0) {
       timerRef.current = setInterval(() => { fnRef.current?.(); }, intervalSecs * 1000);
     }
@@ -84,16 +94,26 @@ export default function RefreshControl({ onManualRefresh, storageKey }) {
     spinTimer.current = setTimeout(() => setSpinning(false), 800);
   }
 
+  // 1-second steps below a minute, then whole minutes (1 min → 2 min → 3 min).
   function handleIncrement() {
-    setIntervalSecs((v) => v < 60 ? v + 10 : v + 60);
+    setIntervalSecs((v) => (v < MINUTE ? v + 1 : v + MINUTE));
   }
 
+  // Mirror of the above; stepping down from 1 min lands on 59s, back into
+  // second-granularity. Hitting 0 means "off", so switch auto-refresh off with
+  // it — same as V1's AutoRefreshComponent.
   function handleDecrement() {
-    setIntervalSecs((v) => {
-      const next = v <= 60 ? v - 10 : v - 60;
-      return Math.max(MIN_INTERVAL, next);
-    });
+    if (intervalSecs <= 0) return;
+    const next = intervalSecs <= MINUTE ? intervalSecs - 1 : intervalSecs - MINUTE;
+    if (next <= 0) {
+      setIntervalSecs(0);
+      setIsActive(false);
+      return;
+    }
+    setIntervalSecs(next);
   }
+
+  const atMin = intervalSecs <= MIN_INTERVAL;
 
   function handlePreset(val) {
     setIntervalSecs(val);
@@ -169,7 +189,14 @@ export default function RefreshControl({ onManualRefresh, storageKey }) {
             {/* Auto-refresh toggle */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <span style={{ fontSize: 13, color: 'var(--tx)' }}>On</span>
-              <Toggle on={isActive} onChange={() => setIsActive((v) => !v)} />
+              {/* An interval of 0 means "no auto-refresh", so there is nothing
+                  to switch on — lock the toggle until a non-zero interval is
+                  picked (matches V1's AutoRefreshComponent). */}
+              <Toggle
+                on={isActive && intervalSecs > 0}
+                onChange={() => setIsActive((v) => !v)}
+                disabled={intervalSecs <= 0}
+              />
             </div>
 
             {/* Interval stepper */}
@@ -179,8 +206,13 @@ export default function RefreshControl({ onManualRefresh, storageKey }) {
                 border: '1px solid var(--bd)', borderRadius: 8, overflow: 'hidden', height: 34,
               }}>
                 <div
-                  onClick={handleDecrement}
-                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRight: '1px solid var(--bd)' }}
+                  onClick={atMin ? undefined : handleDecrement}
+                  title={atMin ? 'Auto refresh is off' : 'Decrease'}
+                  style={{
+                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: atMin ? 'not-allowed' : 'pointer', borderRight: '1px solid var(--bd)',
+                    opacity: atMin ? 0.4 : 1,
+                  }}
                 >
                   <Minus size={13} strokeWidth={2} style={{ color: 'var(--tx3)' }} />
                 </div>

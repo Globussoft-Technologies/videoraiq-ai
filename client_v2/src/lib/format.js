@@ -42,12 +42,18 @@ export function num(n) {
 }
 
 /** Map a backend severity to a short label + color. */
+// Labels are spelled out rather than clipped to 4 chars: the old truncation
+// turned "moderate" into "MODE", and abbreviating it to "MED" still didn't
+// match the "Medium" the severity filter chips use. Kept in sync with
+// SEV_LABEL in Incidents/IncidentCard.jsx.
 export function severity(sev) {
   const s = (sev || '').toLowerCase();
-  if (s === 'high' || s === 'critical') return { short: 'CRIT', color: 'var(--crit)' };
-  if (s === 'moderate' || s === 'medium') return { short: 'MED', color: 'var(--warn)' };
+  if (s === 'critical') return { short: 'CRIT', color: 'var(--crit)' };
+  if (s === 'high') return { short: 'HIGH', color: 'var(--crit)' };
+  if (s === 'moderate' || s === 'medium') return { short: 'MEDIUM', color: 'var(--warn)' };
   if (s === 'low') return { short: 'LOW', color: 'var(--tx3)' };
-  return { short: (sev || 'INFO').toUpperCase().slice(0, 4), color: 'var(--blue)' };
+  // Unknown severity: show it in full. Truncating here is what hid the bug.
+  return { short: (sev || 'INFO').toUpperCase(), color: 'var(--blue)' };
 }
 
 /** Human display name for an incident/detection type. */

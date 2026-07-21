@@ -10,6 +10,15 @@ const SEV_COLOR = {
   low: '#6b7796',
 };
 
+// Explicit short labels — truncating with .slice(0, 4) turned the stored
+// "moderate" into "MODE". Keyed the same way as SEV_COLOR; matches the "MED"
+// badge Command Center's Latest Incident already shows.
+const SEV_LABEL = {
+  high: 'HIGH', critical: 'CRIT',
+  moderate: 'MEDIUM', medium: 'MEDIUM',
+  low: 'LOW',
+};
+
 function statusOf(item) {
   if (item.resolved) return { label: 'Resolved', color: 'var(--ok)' };
   if (item.report?.status === true) return { label: 'Reported', color: 'var(--warn)' };
@@ -184,7 +193,11 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox 
   const site     = item.nvrData?.nvrName  || item.location  || '';
   const conf     = item.confidence ?? item.accuracy ?? item.score;
   const imgSrc   = item.Image ? mediaUrl(item.Image) : null;
-  const sevColor = SEV_COLOR[(item.severity || '').toLowerCase()] || '#6b7796';
+  const sevKey   = (item.severity || '').toLowerCase();
+  const sevColor = SEV_COLOR[sevKey] || '#6b7796';
+  // Fall back to the raw value upper-cased (not truncated) for any severity the
+  // map doesn't know, so a new backend value reads oddly rather than wrongly.
+  const sevLabel = SEV_LABEL[sevKey] || (item.severity || 'LOW').toUpperCase();
   const reported = item.report?.status === true;
 
   function handleCardClick() {
@@ -295,7 +308,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox 
 
           {/* Top-right: severity chip */}
           <div style={{ position: 'absolute', top: 9, right: 9, background: 'rgba(0,0,0,.55)', color: sevColor, fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5, backdropFilter: 'blur(4px)', border: `1px solid ${sevColor}` }}>
-            {(item.severity || 'LOW').toUpperCase().slice(0, 4)}
+            {sevLabel}
           </div>
 
           {/* Bottom-left: detection type badge + timestamp + camera name */}

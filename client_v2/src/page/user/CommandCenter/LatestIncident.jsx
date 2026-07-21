@@ -153,6 +153,7 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
 
   const imgSrc = incident?.Image ? mediaUrl(incident.Image) : null;
 
+   console.log(incident, 'incident');
   const sev = severity(incident?.severity);
   const det = detectionLabel(incident?.incidentType || incident?.displayName);
 
