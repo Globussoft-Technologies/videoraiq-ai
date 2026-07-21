@@ -477,6 +477,14 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   const [selectedType, setSelectedType] = useState(null);
 
   const activeType = allTypes.find(t => t.settingType === selectedType) || null;
+  // Line Crossing draws a single straight line (exactly 2 points), not a
+  // closed area — V1 gives it its own toolbar/shape entirely (see
+  // AreaMarkingControls.jsx's isLineCrossing), unlike every other type here
+  // which draws a filled polygon zone.
+  const isLineCrossing = activeType?.settingType === 'lineCrossingSettings';
+  // A line only needs its 2 endpoints to be savable; every other type still
+  // needs MIN_POINTS_TO_CLOSE (3) to form a closed polygon.
+  const minPointsToSave = isLineCrossing ? 2 : MIN_POINTS_TO_CLOSE;
 
   // Saved/committed zones for this camera+type — each { name, points }. Points
   // are native video pixel coordinates, matching V1's saved shape.
@@ -486,6 +494,8 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   const [drawing, setDrawing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [maxPoints, setMaxPoints] = useState(DEFAULT_MAX_POINTS);
+  // Line Crossing is always exactly 2 points — not adjustable via the +/- stepper.
+  const effectiveMaxPoints = isLineCrossing ? 2 : maxPoints;
   const [activeZoneIndex, setActiveZoneIndex] = useState(null); // which saved zone is highlighted/being renamed
 
   // Load this type's saved zones whenever the selected detection type changes.
@@ -499,8 +509,8 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
 
   // Trim an in-progress polygon if the max-points cap is lowered below what's already placed.
   useEffect(() => {
-    setPoints(prev => (prev.length > maxPoints ? prev.slice(0, maxPoints) : prev));
-  }, [maxPoints]);
+    setPoints(prev => (prev.length > effectiveMaxPoints ? prev.slice(0, effectiveMaxPoints) : prev));
+  }, [effectiveMaxPoints]);
 
   const url = camera?.nvrId?._id ? `stream/${camera.nvrId._id}-${camera._id}/playlist.m3u8` : '';
   useHlsPlayer(videoRef, streamUrl({ streamingUrl: url }), {
@@ -515,12 +525,60 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   };
   const handleVideoReady = () => setVideoState('ready');
 
-  const handleStageClick = (e) => {
-    if (!drawing || !videoSize.w) return;
-    if (points.length >= maxPoints) return; // cap reached — ignore further clicks, matching V1
+  // Line Crossing lets you grab either endpoint and drag it to reposition/
+  // resize the line after it's placed (V1 parity: CameraStreamWithArea.jsx's
+  // corner-drag). Other shapes still only support click-to-place — dragging
+  // isn't wired up for them. Kept in a ref (not state) so mousemove doesn't
+  // re-render on every pixel; only the resulting point update does.
+  const draggingPointIndex = useRef(null);
+  const HIT_RADIUS_PX = 14; // on-screen px, independent of video resolution
+
+  const stageEventToVideoXY = (e) => {
     const rect = stageRef.current.getBoundingClientRect();
-    const x = Math.round((e.clientX - rect.left) / rect.width * videoSize.w);
-    const y = Math.round((e.clientY - rect.top) / rect.height * videoSize.h);
+    return {
+      x: Math.round((e.clientX - rect.left) / rect.width * videoSize.w),
+      y: Math.round((e.clientY - rect.top) / rect.height * videoSize.h),
+    };
+  };
+
+  // A pointerup that ends a drag also fires a native click right after —
+  // without this guard that click would immediately place a new point.
+  const justDraggedRef = useRef(false);
+
+  const handleStagePointerDown = (e) => {
+    if (!isLineCrossing || !videoSize.w || points.length === 0) return;
+    const rect = stageRef.current.getBoundingClientRect();
+    const hitRadiusVideoPx = HIT_RADIUS_PX * (videoSize.w / rect.width);
+    const { x, y } = stageEventToVideoXY(e);
+    const idx = points.findIndex(p => Math.hypot(p.x - x, p.y - y) <= hitRadiusVideoPx);
+    if (idx !== -1) {
+      draggingPointIndex.current = idx;
+      // Keep receiving move/up events even if the cursor leaves the stage
+      // mid-drag (fast drags can outrun the element's bounds otherwise).
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      e.stopPropagation();
+    }
+  };
+
+  const handleStagePointerMove = (e) => {
+    if (draggingPointIndex.current === null || !videoSize.w) return;
+    justDraggedRef.current = true;
+    const { x, y } = stageEventToVideoXY(e);
+    const clampedX = Math.max(0, Math.min(videoSize.w, x));
+    const clampedY = Math.max(0, Math.min(videoSize.h, y));
+    const idx = draggingPointIndex.current;
+    setPoints(prev => prev.map((p, i) => (i === idx ? { x: clampedX, y: clampedY } : p)));
+  };
+
+  const handleStagePointerUp = () => {
+    draggingPointIndex.current = null;
+  };
+
+  const handleStageClick = (e) => {
+    if (justDraggedRef.current) { justDraggedRef.current = false; return; }
+    if (!drawing || !videoSize.w) return;
+    if (points.length >= effectiveMaxPoints) return; // cap reached — ignore further clicks, matching V1
+    const { x, y } = stageEventToVideoXY(e);
     setPoints(prev => [...prev, { x, y }]);
   };
 
@@ -816,9 +874,15 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
           <div
             ref={stageRef}
             onClick={handleStageClick}
+            onPointerDown={handleStagePointerDown}
+            onPointerMove={handleStagePointerMove}
+            onPointerUp={handleStagePointerUp}
+            onPointerLeave={handleStagePointerUp}
             style={{
               position: 'relative', borderRadius: 12, overflow: 'hidden', aspectRatio: '16/9',
-              background: '#0a0e15', cursor: drawing ? 'crosshair' : 'default', border: '1px solid var(--bd)',
+              background: '#0a0e15',
+              cursor: drawing ? 'crosshair' : (isLineCrossing && points.length > 0) ? 'grab' : 'default',
+              border: '1px solid var(--bd)',
             }}
           >
             <video
@@ -848,30 +912,36 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               </div>
             )}
 
-            {/* Points cap + fullscreen pill — top-right, matching V1 */}
-            <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', alignItems: 'center', gap: 6, zIndex: 3 }}>
-              <button
-                onClick={() => setMaxPoints(p => Math.max(MIN_POINTS_TO_CLOSE, p - 1))}
-                title="Decrease max points"
-                style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,.6)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                <Minus size={13} />
-              </button>
-              <span style={{ padding: '4px 9px', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 11, fontFamily: 'var(--mono)', borderRadius: 6 }}>
-                {maxPoints}
-              </span>
-              <button
-                onClick={() => setMaxPoints(p => p + 1)}
-                title="Increase max points"
-                style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,.6)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                <Plus size={13} />
-              </button>
-            </div>
+            {/* Points cap + fullscreen pill — top-right, matching V1. Line
+                Crossing is always exactly 2 points, so the +/- stepper (which
+                adjusts a polygon's point cap) doesn't apply and is hidden. */}
+            {!isLineCrossing && (
+              <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', alignItems: 'center', gap: 6, zIndex: 3 }}>
+                <button
+                  onClick={() => setMaxPoints(p => Math.max(MIN_POINTS_TO_CLOSE, p - 1))}
+                  title="Decrease max points"
+                  style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,.6)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Minus size={13} />
+                </button>
+                <span style={{ padding: '4px 9px', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 11, fontFamily: 'var(--mono)', borderRadius: 6 }}>
+                  {maxPoints}
+                </span>
+                <button
+                  onClick={() => setMaxPoints(p => p + 1)}
+                  title="Increase max points"
+                  style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,.6)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Plus size={13} />
+                </button>
+              </div>
+            )}
 
-            {/* Zone polygon overlay — points are native video pixels, scaled into a 1000x1000 box.
+            {/* Zone overlay — points are native video pixels, scaled into a 1000x1000 box.
                 Committed zones render in amber (matching V1's saved-zone labels); the in-progress
-                polygon renders in blue so it's visually distinct while drawing. */}
+                shape renders in blue so it's visually distinct while drawing. Line Crossing draws
+                an open line (polyline, no fill) instead of a closed filled polygon — it's a
+                crossing line, not an area. */}
             <svg
               viewBox="0 0 1000 1000"
               preserveAspectRatio="none"
@@ -880,12 +950,22 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               {videoSize.w > 0 && zones.map((z, zi) => (
                 <g key={zi} opacity={activeZoneIndex === null || activeZoneIndex === zi ? 1 : 0.35}>
                   {z.points.length > 1 && (
-                    <polygon
-                      points={polygonPointsAttr(z.points, videoSize.w, videoSize.h, 1000, 1000)}
-                      fill="rgba(245,158,11,.18)"
-                      stroke="#f59e0b"
-                      strokeWidth="3.5"
-                    />
+                    isLineCrossing ? (
+                      <polyline
+                        points={polygonPointsAttr(z.points, videoSize.w, videoSize.h, 1000, 1000)}
+                        fill="none"
+                        stroke="#f59e0b"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                      />
+                    ) : (
+                      <polygon
+                        points={polygonPointsAttr(z.points, videoSize.w, videoSize.h, 1000, 1000)}
+                        fill="rgba(245,158,11,.18)"
+                        stroke="#f59e0b"
+                        strokeWidth="3.5"
+                      />
+                    )
                   )}
                   {z.points.map((p, i) => (
                     <circle key={i} cx={(p.x / videoSize.w) * 1000} cy={(p.y / videoSize.h) * 1000} r="6" fill="#f59e0b" stroke="#fff" strokeWidth="2" />
@@ -893,19 +973,31 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
                 </g>
               ))}
               {points.length > 1 && (
-                <polygon
-                  points={polygonPointsAttr(points, videoSize.w, videoSize.h, 1000, 1000)}
-                  fill="rgba(59,130,246,.22)"
-                  stroke="var(--blue)"
-                  strokeWidth="4"
-                />
+                isLineCrossing ? (
+                  <polyline
+                    points={polygonPointsAttr(points, videoSize.w, videoSize.h, 1000, 1000)}
+                    fill="none"
+                    stroke="var(--blue)"
+                    strokeWidth="4.5"
+                    strokeLinecap="round"
+                  />
+                ) : (
+                  <polygon
+                    points={polygonPointsAttr(points, videoSize.w, videoSize.h, 1000, 1000)}
+                    fill="rgba(59,130,246,.22)"
+                    stroke="var(--blue)"
+                    strokeWidth="4"
+                  />
+                )
               )}
               {videoSize.w > 0 && points.map((p, i) => (
+                // Line Crossing's endpoints are draggable, so they render larger
+                // than a regular in-progress polygon vertex — bigger = "grab me".
                 <circle
                   key={i}
                   cx={(p.x / videoSize.w) * 1000}
                   cy={(p.y / videoSize.h) * 1000}
-                  r="8" fill="var(--blue)" stroke="#fff" strokeWidth="2.5"
+                  r={isLineCrossing ? 12 : 8} fill="var(--blue)" stroke="#fff" strokeWidth={isLineCrossing ? 3 : 2.5}
                 />
               ))}
             </svg>
@@ -935,47 +1027,69 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
                   background: 'rgba(8,11,17,.6)', border: '1px solid rgba(255,255,255,.15)',
                   borderRadius: 20, padding: '6px 14px',
                 }}>
-                  ▶ Press "Start Drawing", then click to place zone points
+                  {isLineCrossing
+                    ? '▶ Press "Draw Line", then click twice to place the line'
+                    : '▶ Press "Start Drawing", then click to place zone points'}
                 </span>
               </div>
             )}
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 13 }}>
-            <button
-              onClick={handleMaxArea}
-              disabled={!activeType || !videoSize.w}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
-                background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
-                cursor: (activeType && videoSize.w) ? 'pointer' : 'not-allowed', opacity: (activeType && videoSize.w) ? 1 : 0.5,
-              }}
-            >
-              <Maximize size={14} /> Max Area
-            </button>
-            <button
-              onClick={handleMinArea}
-              disabled={!activeType || !videoSize.w}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
-                background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
-                cursor: (activeType && videoSize.w) ? 'pointer' : 'not-allowed', opacity: (activeType && videoSize.w) ? 1 : 0.5,
-              }}
-            >
-              <Minimize size={14} /> Min Area
-            </button>
-            <button
-              onClick={() => setDrawing(d => !d)}
-              disabled={!activeType}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
-                fontSize: 12, cursor: activeType ? 'pointer' : 'not-allowed', border: '1px solid var(--bd)',
-                background: drawing ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg2)',
-                color: drawing ? '#fff' : 'var(--tx2)', opacity: activeType ? 1 : 0.5,
-              }}
-            >
-              <Pencil size={14} /> {drawing ? 'Stop Drawing' : 'Start Drawing'}
-            </button>
+            {isLineCrossing ? (
+              // Line Crossing places a single straight line (2 clicks), not
+              // an area — Max Area/Min Area presets don't apply to it (V1
+              // parity: AreaMarkingControls.jsx shows only "Draw Line" here).
+              <button
+                onClick={() => setDrawing(d => !d)}
+                disabled={!activeType}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
+                  fontSize: 12, cursor: activeType ? 'pointer' : 'not-allowed', border: '1px solid var(--bd)',
+                  background: drawing ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg2)',
+                  color: drawing ? '#fff' : 'var(--tx2)', opacity: activeType ? 1 : 0.5,
+                }}
+              >
+                <Pencil size={14} /> {drawing ? 'Stop Drawing' : 'Draw Line'}
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={handleMaxArea}
+                  disabled={!activeType || !videoSize.w}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
+                    background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
+                    cursor: (activeType && videoSize.w) ? 'pointer' : 'not-allowed', opacity: (activeType && videoSize.w) ? 1 : 0.5,
+                  }}
+                >
+                  <Maximize size={14} /> Max Area
+                </button>
+                <button
+                  onClick={handleMinArea}
+                  disabled={!activeType || !videoSize.w}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
+                    background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
+                    cursor: (activeType && videoSize.w) ? 'pointer' : 'not-allowed', opacity: (activeType && videoSize.w) ? 1 : 0.5,
+                  }}
+                >
+                  <Minimize size={14} /> Min Area
+                </button>
+                <button
+                  onClick={() => setDrawing(d => !d)}
+                  disabled={!activeType}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
+                    fontSize: 12, cursor: activeType ? 'pointer' : 'not-allowed', border: '1px solid var(--bd)',
+                    background: drawing ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg2)',
+                    color: drawing ? '#fff' : 'var(--tx2)', opacity: activeType ? 1 : 0.5,
+                  }}
+                >
+                  <Pencil size={14} /> {drawing ? 'Stop Drawing' : 'Start Drawing'}
+                </button>
+              </>
+            )}
             <button
               onClick={handleUndo}
               disabled={points.length === 0}
@@ -1001,17 +1115,17 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
             </button>
             <button
               onClick={handleOpenSaveModal}
-              disabled={!activeType || saving || (zones.length === 0 && points.length < MIN_POINTS_TO_CLOSE)}
+              disabled={!activeType || saving || (zones.length === 0 && points.length < minPointsToSave)}
               style={{
                 marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 16px',
                 borderRadius: 8, fontSize: 12.5, fontWeight: 600, color: '#fff', border: 'none',
                 background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-                cursor: (!activeType || saving || (zones.length === 0 && points.length < MIN_POINTS_TO_CLOSE)) ? 'not-allowed' : 'pointer',
-                opacity: (!activeType || saving || (zones.length === 0 && points.length < MIN_POINTS_TO_CLOSE)) ? 0.6 : 1,
+                cursor: (!activeType || saving || (zones.length === 0 && points.length < minPointsToSave)) ? 'not-allowed' : 'pointer',
+                opacity: (!activeType || saving || (zones.length === 0 && points.length < minPointsToSave)) ? 0.6 : 1,
                 boxShadow: '0 3px 12px rgba(99,102,241,.3)',
               }}
             >
-              <Save size={14} /> {saving ? 'Saving…' : 'Save Area'}
+              <Save size={14} /> {saving ? 'Saving…' : isLineCrossing ? 'Save Line' : 'Save Area'}
             </button>
           </div>
         </div>
