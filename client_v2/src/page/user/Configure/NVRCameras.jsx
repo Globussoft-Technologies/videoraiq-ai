@@ -341,8 +341,8 @@ function CameraPreviewModal({ cam, onClose }) {
         ref={containerRef}
         onClick={e => e.stopPropagation()}
         style={{
-          width: 640, maxWidth: '100%', background: 'var(--bg1)',
-          border: '1px solid var(--bd)', borderRadius: 16, overflow: 'hidden',
+          width: 640, maxWidth: '100%', background: 'var(--bg1solid)',
+          border: '1px solid var(--bd2)', borderRadius: 16, overflow: 'hidden',
           boxShadow: '0 30px 80px rgba(0,0,0,.55)',
         }}
       >
@@ -494,7 +494,7 @@ function ManageCamerasModal({ nvr, onClose, onSaved }) {
         style={{
           width: 520, maxWidth: '100%', maxHeight: isMobile ? '88vh' : '85vh',
           display: 'flex', flexDirection: 'column',
-          background: 'var(--bg1)', border: '1px solid var(--bd)',
+          background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
           borderRadius: 16, boxShadow: '0 30px 80px rgba(0,0,0,.55)', overflow: 'hidden',
         }}
       >
@@ -838,7 +838,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
         style={{
           width: 600, maxWidth: '100%', maxHeight: isMobile ? '92vh' : '90vh',
           display: 'flex', flexDirection: 'column',
-          background: 'var(--bg1)', border: '1px solid var(--bd)',
+          background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
           borderRadius: 16, boxShadow: '0 30px 80px rgba(0,0,0,.55)', overflow: 'hidden',
         }}
       >

@@ -26,7 +26,7 @@ function AliasModal({ camera, onClose, onSave }) {
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(6,8,13,.62)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 400, maxWidth: '100%', background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 14, padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 400, maxWidth: '100%', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 14, padding: 20 }}>
         <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--tx)', marginBottom: 14 }}>
           {camera.aliasName ? 'Edit Alias Name' : 'Add Alias Name'}
         </div>
@@ -273,7 +273,7 @@ function LivePreviewModal({ camera, cameraList = [], onClose, departmentOptions 
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(4,6,12,.85)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 1040, maxWidth: '95vw', background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 30px 80px rgba(0,0,0,.55)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 1040, maxWidth: '95vw', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 30px 80px rgba(0,0,0,.55)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--bd)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span className="vq-blink" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--crit)', display: 'inline-block' }} />
