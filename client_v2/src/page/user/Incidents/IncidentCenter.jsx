@@ -210,11 +210,12 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
   const deptsApi = useApi(() => fetchDepartments(), []);
   const locsApi  = useApi(() => getLocations(0, 100), []);
 
-  const [cameras, setCameras] = useState([]);
-  useEffect(() => {
-    if (!nvrIds.length) { setCameras([]); return; }
-    getChannels({ nvrId: nvrIds[0], limit: 200 }).then(d => setCameras(Array.isArray(d) ? d : [])).catch(() => {});
-  }, [nvrIds.join(',')]);
+  // Fetched unconditionally — same as CommandCenter/CameraGrid/LiveWallGrid.
+  // Gating this on nvrIds.length left the Camera picker showing "No Camera
+  // Found" until an NVR was chosen. Passing the whole nvrIds array (csv() in
+  // monitoring.js joins it) narrows by every selected NVR, not just the first.
+  const camsApi = useApi(() => getChannels({ nvrId: nvrIds, limit: 200 }), [nvrIds.join(',')]);
+  const cameras = camsApi.data ?? [];
 
   useEffect(() => {
     // The NVR/Camera/Department/Location pickers below are SharedMultiSelect,
@@ -381,23 +382,51 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, pag
   const [reportOpen, setReportOpen]   = useState(false);
   const [resolved, setResolved]       = useState(false);
   const [resolving, setResolving]     = useState(false);
+  // Transient confirmation shown for a couple of seconds after the request
+  // settles — { text, ok }. Without it the only feedback was the checkbox
+  // quietly filling in, which is easy to miss on a busy frame.
+  const [saveFlash, setSaveFlash]     = useState(null);
+  const flashTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(flashTimerRef.current), []);
   // Which arrow triggered the in-flight page fetch, so only that one spins.
   const [navDir, setNavDir] = useState(null);
   useEffect(() => { if (!navLoading) setNavDir(null); }, [navLoading]);
 
   // The new page's image needs its own spinner: navLoading covers the fetch,
-  // this covers the image bytes arriving afterwards.
-  const [imgLoading, setImgLoading] = useState(false);
+  // this covers the image bytes arriving afterwards. Seeded from the incident
+  // rather than a flat `false` so the very first frame isn't undimmed while it
+  // decodes.
+  const [imgLoading, setImgLoading] = useState(() => !!item?.Image);
+  const imgRef = useRef(null);
 
   // Re-seed from the incident whenever navigation lands on a different one,
   // otherwise the previous incident's resolved state leaks onto the next.
   useEffect(() => { setResolved(!!item?.resolved); }, [item?._id, item?.id, item?.resolved]);
 
+  // Drop a pending confirmation when navigating to another incident — it
+  // belongs to the one the user just acted on, not the one now on screen.
+  // Keyed on id only (not item identity) so onRefresh's refetch, which hands
+  // back a new object for the SAME incident, doesn't wipe the flash early.
+  useEffect(() => {
+    clearTimeout(flashTimerRef.current);
+    setSaveFlash(null);
+  }, [item?._id, item?.id]);
+
   // A new incident means a new <img> (keyed by id) that has to load — show the
-  // overlay until onLoad/onError fires. Must be set unconditionally: an
-  // incident with no Image mounts no <img>, so onLoad/onError can never fire
-  // and a leftover `true` would spin forever over a blank frame.
-  useEffect(() => { setImgLoading(!!item?.Image); }, [item?._id, item?.id]);
+  // overlay until onLoad/onError fires. An incident with no Image mounts no
+  // <img>, so onLoad/onError can never fire and a leftover `true` would spin
+  // forever over a blank frame.
+  //
+  // The `complete` check is load-bearing: the grid card behind the lightbox has
+  // already displayed this exact image, so it comes from cache and fires `load`
+  // during commit — BEFORE this effect runs. Setting `true` unconditionally
+  // then re-dimmed a frame that had already finished, and since `load` never
+  // fires twice for a complete image nothing was left to clear it.
+  useEffect(() => {
+    if (!item?.Image) { setImgLoading(false); return; }
+    const el = imgRef.current;
+    setImgLoading(!(el?.complete && el.naturalWidth > 0));
+  }, [item?._id, item?.id, item?.Image]);
 
   // Abandoned cross-page jump: `item` is unchanged, so the effect above won't
   // re-run and the already-loaded <img> won't fire onLoad again. Without this
@@ -433,14 +462,21 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, pag
 
   async function handleMarkResolved() {
     if (resolving || !item) return;
+    clearTimeout(flashTimerRef.current);
+    setSaveFlash(null);
     setResolving(true);
     try {
       const next = !resolved;
       await apiMarkResolved(item._id || item.id, item.incidentType, next);
       setResolved(next);
       onRefresh?.();
+      setSaveFlash({ text: next ? 'Marked as resolved' : 'Marked unresolved', ok: true });
+      flashTimerRef.current = setTimeout(() => setSaveFlash(null), 2500);
     } catch {
-      // leave the checkbox unchanged so the user sees it didn't take
+      // Leave the checkbox unchanged so the user sees it didn't take, and say
+      // so — previously a failed save was completely silent.
+      setSaveFlash({ text: 'Could not save — try again', ok: false });
+      flashTimerRef.current = setTimeout(() => setSaveFlash(null), 3500);
     } finally {
       setResolving(false);
     }
@@ -506,6 +542,7 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, pag
         {imgSrc && (
           <img
             key={item._id || item.id}
+            ref={imgRef}
             src={imgSrc}
             alt={det}
             onLoad={() => setImgLoading(false)}
@@ -604,31 +641,44 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, pag
               </div>
 
               {/* Mark as resolved */}
+              {/* Three states: idle checkbox → spinner while the request is in
+                  flight → a ~2.5s confirmation flash, then back to idle. */}
               <div
                 onClick={(e) => { e.stopPropagation(); handleMarkResolved(); }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '8px 20px', cursor: resolving ? 'wait' : 'pointer',
-                  border: `1px solid ${resolved ? 'rgba(16,185,129,.5)' : 'rgba(255,255,255,.3)'}`,
-                  background: resolved ? 'rgba(16,185,129,.2)' : 'rgba(255,255,255,.05)',
-                  color: resolved ? '#34d399' : '#fff',
-                  transition: 'all .15s', whiteSpace: 'nowrap',
+                  border: `1px solid ${
+                    saveFlash ? (saveFlash.ok ? 'rgba(16,185,129,.8)' : 'rgba(239,68,68,.7)')
+                              : resolved ? 'rgba(16,185,129,.5)' : 'rgba(255,255,255,.3)'
+                  }`,
+                  background: saveFlash
+                    ? (saveFlash.ok ? 'rgba(16,185,129,.28)' : 'rgba(239,68,68,.2)')
+                    : resolved ? 'rgba(16,185,129,.2)' : 'rgba(255,255,255,.05)',
+                  color: saveFlash
+                    ? (saveFlash.ok ? '#34d399' : '#f87171')
+                    : resolved ? '#34d399' : '#fff',
+                  transition: 'all .2s', whiteSpace: 'nowrap',
                 }}
               >
-                <span style={{
-                  width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-                  border: `1.5px solid ${resolved ? '#10b981' : 'rgba(255,255,255,.5)'}`,
-                  background: resolved ? '#10b981' : 'transparent',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  {resolved && (
-                    <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
-                      <path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  )}
-                </span>
+                {resolving ? (
+                  <Spinner size={16} color="#fff" />
+                ) : (
+                  <span style={{
+                    width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                    border: `1.5px solid ${resolved ? '#10b981' : 'rgba(255,255,255,.5)'}`,
+                    background: resolved ? '#10b981' : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {resolved && (
+                      <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                        <path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
+                )}
                 <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em' }}>
-                  {resolving ? 'Saving…' : resolved ? 'Resolved' : 'Mark As Resolved'}
+                  {resolving ? 'Saving…' : saveFlash ? saveFlash.text : resolved ? 'Resolved' : 'Mark As Resolved'}
                 </span>
               </div>
 

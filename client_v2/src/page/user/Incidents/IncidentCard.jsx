@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ImageOff, Maximize2, X, Flag } from 'lucide-react';
 import { detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
 import axios from 'axios';
@@ -152,12 +152,31 @@ function btnStyle(variant) {
   return { ...base, background: 'var(--bg2)', color: 'var(--tx2)', border: '1px solid var(--bd)' };
 }
 
+/* Inline spinner — `vq-spin` keyframes live in theme/tokens.css, so this works
+   anywhere the card is rendered. */
+function Spinner({ size = 14, color = '#fff' }) {
+  return (
+    <span
+      style={{
+        width: size, height: size, borderRadius: '50%', display: 'inline-block', flexShrink: 0,
+        border: `2px solid ${color}`, borderTopColor: 'transparent',
+        animation: 'vq-spin .7s linear infinite',
+      }}
+    />
+  );
+}
+
 /* ── Card ─────────────────────────────────────────────────────────────────── */
 export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox }) {
   const [reportOpen,   setReportOpen]   = useState(false);
   const [resolving,    setResolving]    = useState(false);
   const [localResolved, setLocalResolved] = useState(item.resolved || false);
   const [hover,        setHover]        = useState(false);
+  // Short-lived confirmation after the request settles — { text, ok }. Matches
+  // the lightbox's Mark As Resolved so both surfaces confirm the same way.
+  const [saveFlash,    setSaveFlash]    = useState(null);
+  const flashTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(flashTimerRef.current), []);
 
   const det      = detectionLabel(item.incidentType || item.displayName);
   const st       = statusOf({ ...item, resolved: localResolved });
@@ -176,14 +195,20 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox 
   async function handleMarkResolved(e) {
     e.stopPropagation();
     if (resolving) return;
+    clearTimeout(flashTimerRef.current);
+    setSaveFlash(null);
     setResolving(true);
     try {
       const newVal = !localResolved;
       await apiMarkResolved(item._id || item.id, item.incidentType, newVal);
       setLocalResolved(newVal);
       onRefresh?.();
+      setSaveFlash({ text: newVal ? 'Resolved' : 'Unresolved', ok: true });
+      flashTimerRef.current = setTimeout(() => setSaveFlash(null), 2500);
     } catch {
-      // silently fail — user sees no state change
+      // Previously failed silently, leaving the user to assume it worked.
+      setSaveFlash({ text: 'Failed — retry', ok: false });
+      flashTimerRef.current = setTimeout(() => setSaveFlash(null), 3500);
     } finally {
       setResolving(false);
     }
@@ -224,37 +249,46 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox 
              badge lives bottom-left instead, so it never collides with the
              "Persons: N" / ID labels the engine bakes into the top of the frame. */}
           <div style={{ position: 'absolute', top: 9, left: 9, right: 9, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            {/* Mark as resolved — visible on hover */}
-            {hover && (
+            {/* Mark as resolved — normally hover-only, but stays mounted while a
+                save is in flight or its confirmation is showing. Gating purely
+                on `hover` meant moving the pointer off the card mid-request
+                unmounted the button and took the spinner with it, so the action
+                looked like it had done nothing. */}
+            {(hover || resolving || saveFlash) && (
               <button
                 onClick={handleMarkResolved}
                 disabled={resolving}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6,
-                  background: 'rgba(0,0,0,.72)', backdropFilter: 'blur(4px)',
-                  border: '1px solid rgba(255,255,255,.18)',
+                  background: saveFlash
+                    ? (saveFlash.ok ? 'rgba(16,185,129,.85)' : 'rgba(239,68,68,.85)')
+                    : 'rgba(0,0,0,.72)',
+                  backdropFilter: 'blur(4px)',
+                  border: `1px solid ${saveFlash ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.18)'}`,
                   borderRadius: 20, padding: '4px 10px 4px 7px',
                   cursor: resolving ? 'wait' : 'pointer',
                   color: '#fff', fontSize: 11, fontWeight: 500,
-                  transition: 'background .15s',
+                  transition: 'background .2s',
                   maxWidth: '100%', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,.9)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,.72)'}
               >
-                {/* Checkbox-like indicator */}
-                <span style={{
-                  width: 14, height: 14, borderRadius: 4, border: `1.5px solid ${localResolved ? 'var(--ok)' : 'rgba(255,255,255,.6)'}`,
-                  background: localResolved ? 'var(--ok)' : 'transparent',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                }}>
-                  {localResolved && (
-                    <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
-                      <path d="M1 3L3 5L7 1" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  )}
-                </span>
-                {resolving ? 'Saving…' : localResolved ? 'Resolved' : 'Mark as resolved'}
+                {resolving ? (
+                  <Spinner size={14} />
+                ) : (
+                  /* Checkbox-like indicator */
+                  <span style={{
+                    width: 14, height: 14, borderRadius: 4, border: `1.5px solid ${localResolved ? 'var(--ok)' : 'rgba(255,255,255,.6)'}`,
+                    background: localResolved ? 'var(--ok)' : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    {localResolved && (
+                      <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
+                        <path d="M1 3L3 5L7 1" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </span>
+                )}
+                {resolving ? 'Saving…' : saveFlash ? saveFlash.text : localResolved ? 'Resolved' : 'Mark as resolved'}
               </button>
             )}
           </div>

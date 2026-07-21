@@ -85,7 +85,15 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{ width: 440, maxWidth: '100%', background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 16, overflow: 'hidden' }}
+        /* --bg1solid, not --bg1: --bg1 is translucent (62% white / 55% navy) and
+           over the overlay's dark scrim it renders as muddy grey with the table
+           showing through. Matches the account menu and other floating panels. */
+        style={{
+          width: 440, maxWidth: '100%',
+          background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
+          borderRadius: 16, overflow: 'hidden',
+          boxShadow: '0 18px 50px rgba(0,0,0,.35)',
+        }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--bd)' }}>
           <div>

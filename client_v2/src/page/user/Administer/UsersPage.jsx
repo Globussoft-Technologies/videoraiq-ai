@@ -44,6 +44,11 @@ function hexA(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
+// Same pattern AlertRecipients.jsx uses, so both forms accept exactly the same
+// set of addresses. The input's type="email" only self-validates on native form
+// submit — this modal saves via an onClick handler, so nothing was checking it.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function userName(u) {
   const n = `${u.firstName || ''} ${u.lastName || ''}`.trim();
   return n || u.userName || u.username || 'Unknown';
@@ -86,17 +91,29 @@ function FieldLabel({ children }) {
   return <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>{children}</div>;
 }
 
-function TextInput({ style, ...props }) {
+function TextInput({ style, invalid = false, ...props }) {
   return (
     <input
       {...props}
+      aria-invalid={invalid || undefined}
       style={{
         width: '100%', height: 38, padding: '0 12px', boxSizing: 'border-box',
-        borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)',
+        borderRadius: 9, background: 'var(--bg2)',
+        border: `1px solid ${invalid ? 'var(--crit)' : 'var(--bd)'}`,
         fontSize: 13, color: 'var(--tx)', outline: 'none',
         ...style,
       }}
     />
+  );
+}
+
+/** Inline validation message shown under the field it belongs to. */
+function FieldError({ children }) {
+  if (!children) return null;
+  return (
+    <div style={{ fontSize: 10.5, color: 'var(--crit)', marginTop: 5, lineHeight: 1.35 }}>
+      {children}
+    </div>
   );
 }
 
@@ -209,7 +226,7 @@ function UserRow({ u, checked, onToggle, onEdit, onDelete }) {
 // ── Add / Edit user modal (shared) ──────────────────────────────────────────
 const ROLE_PANEL_MAX_H = 176;
 
-function RoleSelect({ roles, loading, value, onChange }) {
+function RoleSelect({ roles, loading, value, onChange, invalid = false }) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef(null);
   const activeLabel = roles.find(r => r._id === value)?.roleName || 'Select role';
@@ -230,7 +247,8 @@ function RoleSelect({ roles, loading, value, onChange }) {
         onClick={() => setOpen(v => !v)}
         style={{
           width: '100%', boxSizing: 'border-box', height: 38, padding: '0 34px 0 12px', borderRadius: 9,
-          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13, color: value ? 'var(--tx)' : 'var(--tx3)',
+          background: 'var(--bg2)', border: `1px solid ${invalid ? 'var(--crit)' : 'var(--bd)'}`,
+          fontSize: 13, color: value ? 'var(--tx)' : 'var(--tx3)',
           outline: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', textAlign: 'left',
         }}
       >
@@ -299,6 +317,16 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   const [showPass, setShowPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [saving, setSaving]     = useState(false);
+
+  // Field-level validation, shown under each input rather than as toasts — a
+  // toast names one problem at a time and vanishes, leaving the user to guess
+  // which of eight fields it meant.
+  const [errors, setErrors] = useState({});
+  // Clears this field's message as soon as the user starts correcting it.
+  const bind = (setter, key) => (e) => {
+    setter(e.target.value);
+    setErrors(prev => (prev[key] ? { ...prev, [key]: undefined } : prev));
+  };
 
   const [nvrOptions, setNvrOptions] = useState([]);
   const [channelOptions, setChannelOptions] = useState([]);
@@ -385,6 +413,8 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
     const generated = genPassword();
     setPassword(generated);
     setConfirmPassword(generated);
+    // Fills both fields at once, so any outstanding password error is resolved.
+    setErrors(prev => ({ ...prev, password: undefined, confirmPassword: undefined }));
     sonnerToast.success('Strong password generated successfully!');
   };
   const handleCopyPassword = () => {
@@ -393,14 +423,34 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
     sonnerToast.success('Password copied to clipboard!');
   };
 
+  /* Every required field is checked in one pass so the form can surface all of
+     its problems at once, instead of one-at-a-time as each is fixed. */
+  const validate = () => {
+    const e = {};
+    if (!username.trim())  e.username  = 'Admin user name is required';
+    if (!firstName.trim()) e.firstName = 'First name is required';
+    // Marked required by its label, but neither this form nor the backend
+    // enforced it — a blank surname saved silently and the user then rendered
+    // with only a first name everywhere userName() is used.
+    if (!lastName.trim())  e.lastName  = 'Last name is required';
+
+    if (!email.trim())                     e.email = 'Email is required';
+    else if (!EMAIL_RE.test(email.trim())) e.email = 'Enter a valid email address';
+
+    if (!roleId) e.roleId = 'Select a role for this user';
+
+    // Creating always needs a password; editing prefills the existing one and
+    // may legitimately be left untouched.
+    if (!isEdit && !password) e.password = 'Password is required';
+    if (password !== confirmPassword) e.confirmPassword = 'Passwords do not match';
+
+    return e;
+  };
+
   const handleSave = async () => {
-    if (!username.trim()) return sonnerToast.error('Username is required');
-    if (!firstName.trim()) return sonnerToast.error('First name is required');
-    if (!email.trim()) return sonnerToast.error('Email is required');
-    if (!isEdit && !password) return sonnerToast.error('Password is required');
-    // Editing may leave the password untouched, but if it is edited the two
-    // fields still have to agree.
-    if (password !== confirmPassword) return sonnerToast.error('Passwords do not match');
+    const found = validate();
+    setErrors(found);
+    if (Object.keys(found).length) return;
 
     setSaving(true);
     try {
@@ -482,10 +532,13 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: isMobile ? 12 : 20,
     }}>
+      {/* Trim matches the Add Notification Recipient modal so both read as one
+          system: --bd2 for a border that stays visible against a solid panel,
+          and the shared floating-panel shadow. */}
       <div style={{
-        background: 'var(--bg1solid)', border: '1px solid var(--bd)',
+        background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
         borderRadius: 14, padding: isMobile ? 16 : 24, width: '100%', maxWidth: 640, maxHeight: '88vh', overflowY: 'auto',
-        boxShadow: '0 8px 40px rgba(0,0,0,.5)',
+        boxShadow: '0 18px 50px rgba(0,0,0,.35)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
           <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>{isEdit ? 'Edit User' : 'Add New User'}</span>
@@ -505,24 +558,48 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
               <TextInput
                 placeholder="Search or type new user…"
                 value={username}
-                onChange={e => setUsername(e.target.value)}
+                onChange={bind(setUsername, 'username')}
+                invalid={!!errors.username}
                 autoComplete="off"
               />
+              <FieldError>{errors.username}</FieldError>
             </div>
             <div>
               <FieldLabel>Email ID *</FieldLabel>
-              <TextInput placeholder="Enter email address" type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="off" />
+              <TextInput
+                placeholder="Enter email address"
+                type="email"
+                value={email}
+                onChange={bind(setEmail, 'email')}
+                invalid={!!errors.email}
+                autoComplete="off"
+              />
+              <FieldError>{errors.email}</FieldError>
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 14 }}>
             <div>
               <FieldLabel>First name *</FieldLabel>
-              <TextInput placeholder="Enter first name" value={firstName} onChange={e => setFirstName(e.target.value)} autoComplete="off" />
+              <TextInput
+                placeholder="Enter first name"
+                value={firstName}
+                onChange={bind(setFirstName, 'firstName')}
+                invalid={!!errors.firstName}
+                autoComplete="off"
+              />
+              <FieldError>{errors.firstName}</FieldError>
             </div>
             <div>
               <FieldLabel>Last name *</FieldLabel>
-              <TextInput placeholder="Enter last name" value={lastName} onChange={e => setLastName(e.target.value)} autoComplete="off" />
+              <TextInput
+                placeholder="Enter last name"
+                value={lastName}
+                onChange={bind(setLastName, 'lastName')}
+                invalid={!!errors.lastName}
+                autoComplete="off"
+              />
+              <FieldError>{errors.lastName}</FieldError>
             </div>
           </div>
 
@@ -532,7 +609,14 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
             <div>
               <FieldLabel>Assign Role to the user *</FieldLabel>
               <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: -4, marginBottom: 6 }}>Assign the correct role permissions to this user.</div>
-              <RoleSelect roles={roles} loading={rolesLoading} value={roleId} onChange={setRoleId} />
+              <RoleSelect
+                roles={roles}
+                loading={rolesLoading}
+                value={roleId}
+                onChange={(v) => { setRoleId(v); setErrors(prev => (prev.roleId ? { ...prev, roleId: undefined } : prev)); }}
+                invalid={!!errors.roleId}
+              />
+              <FieldError>{errors.roleId}</FieldError>
             </div>
             <div>
               <FieldLabel>Employee Access</FieldLabel>
@@ -611,7 +695,8 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                       placeholder="Enter new password"
                       type={showPass ? 'text' : 'password'}
                       value={password}
-                      onChange={e => setPassword(e.target.value)}
+                      onChange={bind(setPassword, 'password')}
+                      invalid={!!errors.password}
                       style={{ paddingRight: 34 }}
                       autoComplete="new-password"
                     />
@@ -622,6 +707,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                       {showPass ? <EyeOff size={13} /> : <Eye size={13} />}
                     </button>
                   </div>
+                  <FieldError>{errors.password}</FieldError>
                 </div>
                 <div>
                   <FieldLabel>{isEdit ? 'Confirm password' : 'Confirm password *'}</FieldLabel>
@@ -630,7 +716,8 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                       placeholder="Re-enter password"
                       type={showConfirmPass ? 'text' : 'password'}
                       value={confirmPassword}
-                      onChange={e => setConfirmPassword(e.target.value)}
+                      onChange={bind(setConfirmPassword, 'confirmPassword')}
+                      invalid={!!errors.confirmPassword}
                       style={{ paddingRight: 34 }}
                       autoComplete="new-password"
                     />
@@ -641,6 +728,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                       {showConfirmPass ? <EyeOff size={13} /> : <Eye size={13} />}
                     </button>
                   </div>
+                  <FieldError>{errors.confirmPassword}</FieldError>
                 </div>
               </div>
 

@@ -6,7 +6,7 @@ import { useOutsideClick } from '../hooks/useOutsideClick';
 import { useAuth } from '@/context/AuthContext';
 import { usePermissions } from '@/context/PermissionContext';
 import { useTheme } from '@/theme/ThemeContext';
-import { getSidebarConfig } from '../helpers/dashboard';
+import { getChannels } from '../helpers/configure';
 import { useApi } from '../hooks/useApi';
 import videoraiqLogoColor from '@/assets/videoraiq-logo-color.png';
 import videoraiqLogoWhite from '@/assets/videoraiq-logo-white.png';
@@ -93,11 +93,16 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
     });
   };
 
-  // Engine status footer — real count from the dashboard sidebar config.
-  const { data: cfg } = useApi(getSidebarConfig, []);
-  const configs = cfg?.detectionConfigs || [];
-  const enabledCount = configs.filter((c) => c.isEnabled).length;
-  const totalCount = configs.length;
+  // Engine status footer — live camera health, same source and rule as
+  // Detection Settings (`control === 1` means online). This previously read
+  // DashboardSidebarConfig.detectionConfigs, but that record is seeded once at
+  // admin signup and no V2 screen ever calls updateSidebarConfig, so it was
+  // frozen at its signup value and never matched reality. Polled so the count
+  // keeps up with cameras dropping in and out while the user sits on a page.
+  const { data: channelData } = useApi(() => getChannels({ limit: 500 }), [], { pollMs: 30000 });
+  const channels = channelData?.channels || [];
+  const onlineCount = channels.filter((c) => c.control === 1).length;
+  const totalCount = channelData?.total || channels.length;
 
   const name = user?.user_name || user?.name || user?.user_email?.split('@')[0] || 'User';
   const email = user?.user_email || '';
@@ -285,22 +290,34 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
               <span
-                className="vq-glowpulse"
-                style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--ok)', boxShadow: '0 0 8px var(--ok)' }}
+                className={onlineCount > 0 ? 'vq-glowpulse' : undefined}
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  background: onlineCount > 0 ? 'var(--ok)' : 'var(--toggleoff)',
+                  boxShadow: onlineCount > 0 ? '0 0 8px var(--ok)' : 'none',
+                }}
               />
               <span style={{ fontSize: 11, color: 'var(--tx2)' }}>
-                {enabledCount} of {totalCount} detections live
+                {onlineCount} of {totalCount} {totalCount === 1 ? 'camera' : 'cameras'} online
               </span>
             </div>
-            <div style={{ display: 'flex', gap: 3 }}>
-              {configs.map((c, i) => (
+            {/* One segment per camera; the first `onlineCount` are green. Driven
+                off the same counter as the label above rather than each camera's
+                own flag, so the bar can never disagree with the text. Gap tightens
+                as the camera count grows so 20+ segments still fit the track. */}
+            <div style={{ display: 'flex', gap: totalCount > 12 ? 2 : 3 }}>
+              {Array.from({ length: totalCount }, (_, i) => (
                 <div
                   key={i}
                   style={{
                     flex: 1,
+                    minWidth: 0,
                     height: 4,
                     borderRadius: 2,
-                    background: c.isEnabled ? 'var(--ok)' : 'var(--toggleoff)',
+                    background: i < onlineCount ? 'var(--ok)' : 'var(--toggleoff)',
+                    transition: 'background .3s ease',
                   }}
                 />
               ))}
