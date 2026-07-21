@@ -101,11 +101,16 @@ function Shell() {
   }, []);
 
   // Shared context for child views (selected site -> location filter for the dashboard APIs).
+  // Camera online/total, reported by Command Center's stream probe and shown in
+  // the Sidebar footer. Lives here because this component renders both.
+  const [camHealth, setCamHealth] = useState(null);
+
   const outletCtx = useMemo(
     () => ({
       siteFilter,
       location: siteRaw?.locationName || siteRaw?.name || (siteFilter !== 'All Sites' ? siteFilter : ''),
       sites,
+      setCamHealth,
     }),
     [siteFilter, siteRaw, sites]
   );
@@ -128,6 +133,7 @@ function Shell() {
         isMobile={isMobile}
         mobileOpen={navOpen}
         onMobileClose={() => setNavOpen(false)}
+        camHealth={camHealth}
       />
       {/* Drawer backdrop (mobile only) */}
       {isMobile && navOpen && (

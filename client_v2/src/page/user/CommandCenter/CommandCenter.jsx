@@ -63,8 +63,14 @@ export default function CommandCenter() {
   // probes every tab's stream in the background (not just the active one) since
   // there's no backend field for per-camera online status.
   const [onlineCameras, setOnlineCameras] = useState({ online: 0, total: 0 });
-  const onOnlineCountChange = useCallback((online, total) => setOnlineCameras({ online, total }), []);
+  // Also hand it to the layout so the Sidebar footer can show the same number.
+  const onOnlineCountChange = useCallback((online, total) => {
+    setOnlineCameras({ online, total });
+    ctx.setCamHealth?.({ online, total });
+  }, [ctx]);
 
+
+ 
   // Options for the filter dropdowns.
   const locationsApi = useApi(() => getLocations(0, 200), []);
   const nvrsApi = useApi(() => getNVRs(), []);

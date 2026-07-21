@@ -6,8 +6,6 @@ import { useOutsideClick } from '../hooks/useOutsideClick';
 import { useAuth } from '@/context/AuthContext';
 import { usePermissions } from '@/context/PermissionContext';
 import { useTheme } from '@/theme/ThemeContext';
-import { getChannels } from '../helpers/configure';
-import { useApi } from '../hooks/useApi';
 import videoraiqLogoColor from '@/assets/videoraiq-logo-color.png';
 import videoraiqLogoWhite from '@/assets/videoraiq-logo-white.png';
 
@@ -57,7 +55,7 @@ function isItemVisible(item, permissions) {
   return permissions?.[item.permissionKey]?.view === true;
 }
 
-export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = false, onMobileClose }) {
+export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = false, onMobileClose, camHealth = null }) {
   const { user } = useAuth();
   const { permissions } = usePermissions();
   const { theme } = useTheme();
@@ -93,16 +91,14 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
     });
   };
 
-  // Engine status footer — live camera health, same source and rule as
-  // Detection Settings (`control === 1` means online). This previously read
-  // DashboardSidebarConfig.detectionConfigs, but that record is seeded once at
-  // admin signup and no V2 screen ever calls updateSidebarConfig, so it was
-  // frozen at its signup value and never matched reality. Polled so the count
-  // keeps up with cameras dropping in and out while the user sits on a page.
-  const { data: channelData } = useApi(() => getChannels({ limit: 500 }), [], { pollMs: 30000 });
-  const channels = channelData?.channels || [];
-  const onlineCount = channels.filter((c) => c.control === 1).length;
-  const totalCount = channelData?.total || channels.length;
+  // Camera health footer — the same tally Command Center's "Cameras Online" KPI
+  // shows, passed down from V2Layout. Measuring it here would mean opening a
+  // stream per camera on every page. (`control` is "has a detection enabled",
+  // not "is live", so it can't be used for this.)
+  const onlineCount = camHealth?.online ?? 0;
+  const totalCount = camHealth?.total ?? 0;
+  // Green for online cameras; the dot greys out only when none are up.
+  const healthColor = onlineCount > 0 ? 'var(--ok)' : 'var(--toggleoff)';
 
   const name = user?.user_name || user?.name || user?.user_email?.split('@')[0] || 'User';
   const email = user?.user_email || '';
@@ -295,8 +291,9 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
                   width: 7,
                   height: 7,
                   borderRadius: '50%',
-                  background: onlineCount > 0 ? 'var(--ok)' : 'var(--toggleoff)',
-                  boxShadow: onlineCount > 0 ? '0 0 8px var(--ok)' : 'none',
+                  background: healthColor,
+                  boxShadow: onlineCount > 0 ? `0 0 8px ${healthColor}` : 'none',
+                  transition: 'background .3s ease',
                 }}
               />
               <span style={{ fontSize: 11, color: 'var(--tx2)' }}>
@@ -316,7 +313,7 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
                     minWidth: 0,
                     height: 4,
                     borderRadius: 2,
-                    background: i < onlineCount ? 'var(--ok)' : 'var(--toggleoff)',
+                    background: i < onlineCount ? healthColor : 'var(--toggleoff)',
                     transition: 'background .3s ease',
                   }}
                 />
