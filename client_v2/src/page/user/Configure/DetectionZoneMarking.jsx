@@ -471,11 +471,10 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   const typeLabels = typesApi.data || {};
 
   const allTypes = useMemo(() => allTypesFor(camera, typeLabels), [camera, typeLabels]);
+  // No auto-select — the dropdown starts on its "Select Detection Type"
+  // placeholder so the user explicitly picks one, instead of silently
+  // defaulting to whichever type happens to be first in the list.
   const [selectedType, setSelectedType] = useState(null);
-
-  useEffect(() => {
-    if (!selectedType && allTypes.length) setSelectedType(allTypes[0].settingType);
-  }, [allTypes, selectedType]);
 
   const activeType = allTypes.find(t => t.settingType === selectedType) || null;
 
