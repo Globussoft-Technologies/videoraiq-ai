@@ -28,7 +28,13 @@ class DashboardService {
           if (!isAdminExist) {
             return res.send(Response.userFailResp("Admin not found!", "Validation Failed!."));
           }
-      
+
+          // Re-resolve from the admin doc rather than trusting the JWT's
+          // user_id claim directly — that claim can be stale (user_id is
+          // unique but mutable) and end up matching a different admin's
+          // data, as getAllChannels already guards against.
+          const resolvedUserId = isAdminExist.user_id;
+
           const dateFilter = {};
           if (startDate && endDate) {
             dateFilter.timeOfIncident = {
@@ -36,8 +42,8 @@ class DashboardService {
               $lte: new Date(`${endDate}T23:59:59.999Z`)
             };
           }
-          
-          const userMatch = { userId: data?.user_id.toString(), Image: { $exists: true, $nin: [null, "", undefined, "https://"] }, ...dateFilter };
+
+          const userMatch = { userId: resolvedUserId.toString(), Image: { $exists: true, $nin: [null, "", undefined, "https://"] }, ...dateFilter };
 
           // Apply default or custom incident type filter
           if (incidentTypeFilter?.length) {
@@ -53,7 +59,7 @@ class DashboardService {
             ]
           };
 
-          let channelFilter = { userId: data.user_id.toString()};
+          let channelFilter = { userId: resolvedUserId.toString()};
 
           // nvr wise
           if (nvrId) {
@@ -91,10 +97,20 @@ class DashboardService {
             
               if (filteredNVRIds.length > 0) {
                 const objectIds = filteredNVRIds.map(id => new mongoose.Types.ObjectId(id));
-            
+
                 channelFilter.nvrId = { $in: objectIds };
                 userMatch.nvrId = { $in: objectIds };
+              } else {
+                channelFilter._id = { $in: [] };
+                userMatch.channelId = { $in: [] };
               }
+            }
+
+            if (validNvrIds.length === 0) {
+              // nvrId was requested but every value was an invalid ObjectId —
+              // show zero instead of silently falling back to everything.
+              channelFilter._id = { $in: [] };
+              userMatch.channelId = { $in: [] };
             }
           }
           // cam wise
@@ -131,12 +147,22 @@ class DashboardService {
             
               if (filteredChannelIds.length > 0) {
                 const objectIds = filteredChannelIds.map(id => new mongoose.Types.ObjectId(id));
-            
+
                 channelFilter._id = { $in: objectIds };
                 userMatch.channelId = { $in: objectIds };
+              } else {
+                channelFilter._id = { $in: [] };
+                userMatch.channelId = { $in: [] };
               }
             }
-            
+
+            if (validChannelIds.length === 0) {
+              // channelId was requested but every value was an invalid
+              // ObjectId — show zero instead of silently falling back to
+              // everything.
+              channelFilter._id = { $in: [] };
+              userMatch.channelId = { $in: [] };
+            }
           }
           // location wise
           if (location) {
@@ -144,7 +170,7 @@ class DashboardService {
               ? location
               : location.split(",").map((l) => l.trim());
             const nvrs = await NVR.find({
-              userId: data.user_id.toString(),
+              userId: resolvedUserId.toString(),
               location: { $in: locations },
             }).select("_id");
             const nvrIds = nvrs.map((nvr) => nvr._id);
@@ -153,11 +179,11 @@ class DashboardService {
               if(data?.memberId){
 
                 let filteredNVRIds = [];
-              
+
                 // ✅ Only filter if authorizedNVRs exists and is not empty
                 if (Array.isArray(authorizedNVRs) && authorizedNVRs.length > 0) {
                   const authorizedSet = new Set(authorizedNVRs.map(id => id.toString()));
-              
+
                   // Keep only IDs that are both valid and authorized
                   filteredNVRIds = nvrIds.filter(id =>
                     authorizedSet.has(id.toString())
@@ -166,21 +192,32 @@ class DashboardService {
                   // No authorized NVR — you can either:
                   // Option 1: allow none
                   filteredNVRIds = [];
-              
+
                   // Option 2: allow all valid ones (if that's desired)
                   // filteredNVRIds = validNvrIds;
                 }
-              
+
                 if (filteredNVRIds.length > 0) {
                   const objectIds = filteredNVRIds.map(id => new mongoose.Types.ObjectId(id));
-              
+
                   channelFilter.nvrId = { $in: objectIds };
                   userMatch.nvrId = { $in: objectIds };
+                } else {
+                  // Requested location matched no authorized NVR — show zero,
+                  // not the unfiltered account (previously fell through).
+                  channelFilter._id = { $in: [] };
+                  userMatch.channelId = { $in: [] };
                 }
               }else{
                 channelFilter.nvrId = { $in: nvrIds };
                 userMatch.nvrId = { $in: nvrIds };
               }
+            } else {
+              // Requested location matched no NVR at all (typo, wrong name,
+              // no cameras there yet) — show zero instead of silently
+              // falling back to every camera on the account.
+              channelFilter._id = { $in: [] };
+              userMatch.channelId = { $in: [] };
             }
           }
           // department wise
@@ -190,7 +227,7 @@ class DashboardService {
               : department.split(",").map((d) => d.trim());
             const channels = await channelsModel
               .find({
-                userId: data.user_id.toString(),
+                userId: resolvedUserId.toString(),
                 department: { $in: deptIds },
               })
               .select("_id");
@@ -201,11 +238,11 @@ class DashboardService {
             }
             if (channelIds.length > 0 && data?.memberId) {
               let filteredChannelIds = [];
-            
+
               // ✅ Only filter if authorizedChannels exists and is not empty
               if (Array.isArray(authorizedChannel) && authorizedChannel.length > 0) {
                 const authorizedSet = new Set(authorizedChannel.map(id => id.toString()));
-            
+
                 // Keep only IDs that are both valid and authorized
                 filteredChannelIds = channelIds.filter(id =>
                   authorizedSet.has(id.toString())
@@ -214,17 +251,26 @@ class DashboardService {
                 // No authorized channels — you can either:
                 // Option 1: allow none
                 filteredChannelIds = [];
-            
+
                 // Option 2: allow all valid ones (if that's desired)
                 // filteredChannelIds = validChannelIds;
               }
-            
+
               if (filteredChannelIds.length > 0) {
                 const objectIds = filteredChannelIds.map(id => new mongoose.Types.ObjectId(id));
-            
+
                 channelFilter._id = { $in: objectIds };
                 userMatch.channelId = { $in: objectIds };
+              } else {
+                channelFilter._id = { $in: [] };
+                userMatch.channelId = { $in: [] };
               }
+            }
+            if (channelIds.length === 0) {
+              // Requested department matched no channel at all — show zero
+              // instead of silently falling back to every camera/incident.
+              channelFilter._id = { $in: [] };
+              userMatch.channelId = { $in: [] };
             }
           }
           if (!channelFilter.hasOwnProperty('_id') && data?.memberId) {
@@ -430,11 +476,12 @@ class DashboardService {
                   { "detections.vehicleTypeDetectionSettings.enabled": true },
                 ]
               }),
-              (async () => {
-              const query = channelsModel.find(channelFilter);
-              query.setOptions({ includeInactive: true });
-              return await query.countDocuments();
-            })(),
+              // No includeInactive here — this should count the same "added"
+              // cameras as everywhere else (getAllChannels, NVR.cameraCount).
+              // It previously bypassed the isAdded:true filter and counted
+              // every channel doc ever created for this admin, including
+              // stale/un-added leftovers from repeated NVR scans.
+              channelsModel.countDocuments(channelFilter),
             Incident.countDocuments({ ...userMatch, resolved: true }),
             Incident.countDocuments({
               ...userMatch,
