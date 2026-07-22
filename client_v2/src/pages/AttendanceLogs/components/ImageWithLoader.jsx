@@ -53,6 +53,10 @@ const ImageWithLoader = ({ src, alt = '', className = '', imgClassName = '', ...
         ref={imgRef}
         src={src}
         alt={alt}
+        // Off-screen cards defer their download; async decode keeps the
+        // main thread free so the visible grid stays responsive.
+        loading="lazy"
+        decoding="async"
         onLoad={() => {
           setLoaded(true);
           setShowSpinner(false);

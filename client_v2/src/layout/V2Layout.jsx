@@ -14,6 +14,7 @@ const SEV_COLOR = { high: 'var(--crit)', critical: 'var(--crit)', moderate: 'var
 // Read notification ids persist locally so the unread badge stays cleared
 // across the 60s poll refresh and page reloads (the alerts feed itself has
 // no per-user read state on the server).
+const CAM_HEALTH_KEY = 'vq_cam_health';
 const READ_IDS_KEY = 'vq_read_notification_ids';
 function loadReadIds() {
   try {
@@ -101,9 +102,26 @@ function Shell() {
   }, []);
 
   // Shared context for child views (selected site -> location filter for the dashboard APIs).
-  // Camera online/total, reported by Command Center's stream probe and shown in
-  // the Sidebar footer. Lives here because this component renders both.
-  const [camHealth, setCamHealth] = useState(null);
+  // Camera online/total, reported by the stream probe (Command Center / Detection
+  // Settings) and shown in the Sidebar footer. Lives here because this component
+  // renders both. Persisted to localStorage and seeded from it so the footer bar
+  // still shows the last-known tally on a direct page open / full reload, instead
+  // of blanking until a probing page is visited again.
+  const [camHealth, setCamHealth] = useState(() => {
+    try {
+      const saved = localStorage.getItem(CAM_HEALTH_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  useEffect(() => {
+    try {
+      if (camHealth) localStorage.setItem(CAM_HEALTH_KEY, JSON.stringify(camHealth));
+    } catch {
+      /* ignore */
+    }
+  }, [camHealth]);
 
   const outletCtx = useMemo(
     () => ({

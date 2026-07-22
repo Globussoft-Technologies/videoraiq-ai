@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { Search, Video, ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
 import { getChannels, getNvrs, getDetectionTypes, toggleChannelDetection, updateChannel, getCamerasByNvr } from '../../../helpers/configure';
 import { Popover, PopoverTrigger, PopoverContent } from '../../../pages/AttendanceLogs/components/Popover';
+import CameraStream from '../../../components/CameraStream';
 import DetectionZoneMarking from './DetectionZoneMarking';
 
 const DETECTION_FIELD_KEYS = [
@@ -102,9 +104,10 @@ function AppliedTypesPopover({ camera, typeLabels, onToggle }) {
   );
 }
 
-function CameraRow({ camera, typeLabels, onOpen, onToggleDetection, onCheckTypeChange }) {
-  const online = camera.control === 1;
-
+function CameraRow({ camera, online, typeLabels, onOpen, onToggleDetection, onCheckTypeChange }) {
+  // `online` is the real live-stream status, probed by the parent. The backend's
+  // `camera.control` flag means "has a detection enabled", NOT "is streaming",
+  // so it can't be used here (see Sidebar.jsx / Command Center for the same note).
   return (
     <div
       className="vq-row"
@@ -171,6 +174,10 @@ function CameraRow({ camera, typeLabels, onOpen, onToggleDetection, onCheckTypeC
 const LIMIT = 12;
 
 export default function DetectionSettings() {
+  // setCamHealth is shared via the layout so the Sidebar footer can show the
+  // live camera tally from this page too — otherwise it only ever reflects
+  // Command Center's probe and reads blank/stale on every other page.
+  const { setCamHealth } = useOutletContext() || {};
   const [search, setSearch] = useState('');
   const [nvrFilter, setNvrFilter] = useState('');
   const [page, setPage] = useState(0);
@@ -189,7 +196,36 @@ export default function DetectionSettings() {
   const cameras = channelsApi.data?.channels ?? [];
   const total = channelsApi.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / LIMIT));
-  const onlineCount = cameras.filter(c => c.control === 1).length;
+
+  // Real per-camera online status. There's no backend "is live" field — the
+  // `control` flag only means a detection is enabled — so each camera's HLS
+  // stream is probed in the background (same approach as Command Center's
+  // "Cameras Online") and its live/offline state tracked here by id.
+  const [liveById, setLiveById] = useState({});
+  const setCamLive = useCallback((id, isLive) => {
+    setLiveById(prev => (prev[id] === isLive ? prev : { ...prev, [id]: isLive }));
+  }, []);
+  // Drop entries for cameras no longer on the page (filter / page change).
+  useEffect(() => {
+    const ids = new Set(cameras.map(c => c._id));
+    setLiveById(prev => {
+      const next = {};
+      let changed = false;
+      Object.keys(prev).forEach(id => {
+        if (ids.has(id)) next[id] = prev[id];
+        else changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [cameras]);
+  const onlineCount = cameras.filter(c => liveById[c._id]).length;
+
+  // Publish the probed tally to the shared layout state so the Sidebar footer
+  // reflects live cameras while this page is open (report only the cameras we
+  // actually probe on the page, so online never exceeds total).
+  useEffect(() => {
+    setCamHealth?.({ online: onlineCount, total: cameras.length });
+  }, [onlineCount, cameras.length, setCamHealth]);
 
   // Matches V1: a single toggle endpoint for on/off; 404s if the type was
   // never linked to this camera (no auto-create — same as V1's real behavior).
@@ -300,6 +336,7 @@ export default function DetectionSettings() {
             <CameraRow
               key={camera._id}
               camera={camera}
+              online={!!liveById[camera._id]}
               typeLabels={typeLabels}
               onOpen={() => setOpenCamera(camera)}
               onToggleDetection={handleToggleDetection}
@@ -307,6 +344,22 @@ export default function DetectionSettings() {
             />
           ))}
         </AsyncBoundary>
+      </div>
+
+      {/* Hidden stream probes — each camera's HLS stream is connected in the
+          background (not rendered) purely to learn its real live/offline state
+          for the STATUS column and the online tally. Same technique the Command
+          Center uses; there's no backend field to read instead. */}
+      <div style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }} aria-hidden="true">
+        {cameras.map(camera => (
+          <CameraStream
+            key={camera._id}
+            channel={camera}
+            showOverlay={false}
+            onLiveChange={isLive => setCamLive(camera._id, isLive)}
+            minH={1}
+          />
+        ))}
       </div>
 
       {pages > 1 && (

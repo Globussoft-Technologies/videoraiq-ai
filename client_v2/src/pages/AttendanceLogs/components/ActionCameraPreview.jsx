@@ -42,24 +42,33 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
 
   const isAttendance = module === 'attendancelogs';
 
+  // Drop captures with no image path. An <img> with an empty src never fires
+  // load/error, so a blank capture would otherwise hang on a permanent spinner.
+  // Timestamps / camera types derive from the SAME filtered set so the carousel
+  // index stays aligned.
+  const validCaptures = useMemo(() => {
+    const list = Array.isArray(selectedLog?.imageUrls) ? selectedLog.imageUrls : [];
+    return list.filter((item) =>
+      typeof item === 'object' ? Boolean(item?.url) : Boolean(item)
+    );
+  }, [selectedLog?.imageUrls]);
+
   const fullImageUrls = useMemo(
     () =>
-      (selectedLog?.imageUrls || []).map((item) => {
-        if (typeof item === 'object' && item?.url) return BASE_URL + item.url;
-        if (typeof item === 'string') return BASE_URL + item;
-        return null;
-      }),
-    [selectedLog?.imageUrls, BASE_URL]
+      validCaptures.map((item) =>
+        typeof item === 'object' ? BASE_URL + item.url : BASE_URL + item
+      ),
+    [validCaptures, BASE_URL]
   );
 
   const fullTimestamps = useMemo(
-    () => (selectedLog?.imageUrls || []).map((obj) => obj.timestamp),
-    [selectedLog?.imageUrls]
+    () => validCaptures.map((obj) => obj?.timestamp),
+    [validCaptures]
   );
   const fullTimestamp = useMemo(() => selectedLog?.timestamp || [], [selectedLog?.timestamp]);
   const fullCameraTypes = useMemo(
-    () => (selectedLog?.imageUrls || []).map((obj) => obj.cameraType || null),
-    [selectedLog?.imageUrls]
+    () => validCaptures.map((obj) => obj?.cameraType || null),
+    [validCaptures]
   );
 
   const handleNext = useCallback(() => {
@@ -84,6 +93,22 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
   useEffect(() => {
     if (isOpen) setCurrentIndex(0);
   }, [isOpen]);
+
+  // Warm the neighbouring frames while the current one is on screen so
+  // next/prev navigation shows instantly instead of re-downloading.
+  useEffect(() => {
+    if (!isOpen || fullImageUrls.length < 2) return;
+    const neighbours = [
+      fullImageUrls[(currentIndex + 1) % fullImageUrls.length],
+      fullImageUrls[(currentIndex - 1 + fullImageUrls.length) % fullImageUrls.length],
+    ];
+    neighbours.forEach((url) => {
+      if (!url) return;
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = url;
+    });
+  }, [isOpen, currentIndex, fullImageUrls]);
 
   // Re-arm the spinner whenever the shown image changes.
   useEffect(() => {
@@ -136,6 +161,8 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
                   <img
                     src={fullImageUrls[currentIndex]}
                     alt={`Capture ${currentIndex + 1}`}
+                    decoding="async"
+                    fetchpriority="high"
                     className={`w-full h-full object-contain transition-opacity duration-500 ${
                       imageLoaded ? 'opacity-100' : 'opacity-0'
                     }`}
