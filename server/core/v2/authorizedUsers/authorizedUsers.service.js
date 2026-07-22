@@ -354,7 +354,7 @@ class AuthUsersService {
     async createAuthUser(req, res, _next) {
       try {
         const data = req?.verified?.userData;
-        const { firstName, lastName, email ,departmentId,designation,branch,shiftId,numberPlate} = req.body;
+        const { firstName, lastName, email ,departmentId,designation,branch,shiftId,numberPlate,location} = req.body;
 
         let sftp
         // Establish SFTP connection
@@ -466,7 +466,8 @@ class AuthUsersService {
           profilePics : uploadedFiles,
           designation,
           branch,
-          numberPlate
+          numberPlate,
+          location
         });
 
 
@@ -615,7 +616,8 @@ async updateAuthUser(req, res, _next) {
       designation,
       branch,
       shiftId,
-      numberPlate
+      numberPlate,
+      location
     } = req.body;
 
     if (!userId) {
@@ -767,7 +769,8 @@ async updateAuthUser(req, res, _next) {
         designation,
         branch,
         shiftId,
-        numberPlate
+        numberPlate,
+        location
       },
       { new: true }
     );
