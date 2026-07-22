@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Check, X, Image as ImageIcon, Info } from "lucide-react";
+import { ArrowLeft, Check, X, Info, Camera as CameraIcon, Upload } from "lucide-react";
+import Webcam from "react-webcam";
 import logo from "@/assets/logo.svg";
 import heroShot from "@/assets/7.jpg";
 import { PInput, PCombo, PButton } from "./PortalFields";
@@ -23,6 +24,37 @@ const PHOTO_SLOTS = [
   { key: "right", hint: "Right", label: "Right profile" },
 ];
 
+/* The mobile browser can discard/reload a minimized tab, which would
+   otherwise wipe the in-progress form. Draft state (details + step, and the
+   photos as data URLs) is persisted to sessionStorage keyed by the token in
+   the URL, so reopening the same link restores exactly where the user left
+   off. sessionStorage (not localStorage) so the draft doesn't outlive the
+   browsing session or leak across a shared/public device. */
+const DRAFT_KEY_PREFIX = "vqp_employee_register_draft_";
+
+function draftKey() {
+  const token = new URLSearchParams(window.location.search).get("token") || "default";
+  return `${DRAFT_KEY_PREFIX}${token}`;
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function dataUrlToFile(dataUrl, name) {
+  const [header, base64] = dataUrl.split(",");
+  const mime = header.match(/:(.*?);/)?.[1] || "image/jpeg";
+  const byteString = atob(base64);
+  const ia = new Uint8Array(byteString.length);
+  for (let i = 0; i < byteString.length; i += 1) ia[i] = byteString.charCodeAt(i);
+  return new File([ia], name, { type: mime });
+}
+
 export default function EmployeeRegister() {
   const navigate = useNavigate();
 
@@ -39,7 +71,18 @@ export default function EmployeeRegister() {
     return decrypted && decrypted !== encrypted ? decrypted : null;
   }, []);
 
-  const [step, setStep] = useState(1);
+  // Seed details + step synchronously from any saved draft so a restored tab
+  // never flashes the blank form before repainting with the saved values.
+  const savedDraft = useMemo(() => {
+    try {
+      const raw = sessionStorage.getItem(draftKey());
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const [step, setStep] = useState(savedDraft?.step || 1);
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -47,6 +90,7 @@ export default function EmployeeRegister() {
     designation: "",
     location: "",
     department: "",
+    ...savedDraft?.form,
   });
   const [photos, setPhotos] = useState({});
   const [errors, setErrors] = useState({});
@@ -54,6 +98,57 @@ export default function EmployeeRegister() {
   const [departments, setDepartments] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [registered, setRegistered] = useState(false);
+  const [captureSlot, setCaptureSlot] = useState(null); // key of the slot currently using the webcam
+  const [draftRestored, setDraftRestored] = useState(!savedDraft?.photos);
+  const webcamRef = useRef(null);
+
+  // Photos are stored as data URLs (Files/blob URLs can't survive
+  // sessionStorage or a tab reload), so they're decoded back into real Files
+  // once on mount. Gated behind draftRestored so the save-effect below doesn't
+  // fire (and overwrite the draft with an empty photos object) before this runs.
+  useEffect(() => {
+    if (!savedDraft?.photos) return;
+    (async () => {
+      const entries = await Promise.all(
+        Object.entries(savedDraft.photos).map(async ([key, p]) => {
+          try {
+            const file = dataUrlToFile(p.dataUrl, p.name);
+            return [key, { file, name: p.name, url: URL.createObjectURL(file) }];
+          } catch {
+            return null;
+          }
+        })
+      );
+      const restored = {};
+      entries.forEach((e) => {
+        if (e) restored[e[0]] = e[1];
+      });
+      setPhotos(restored);
+      setDraftRestored(true);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist details + step on every change, and photos (re-encoded to data
+  // URLs) whenever the photo set changes. Skipped until any saved photos have
+  // finished restoring above, and skipped entirely once submitted.
+  useEffect(() => {
+    if (!draftRestored || registered) return;
+    (async () => {
+      try {
+        const photoEntries = await Promise.all(
+          Object.entries(photos).map(async ([key, p]) => [key, { name: p.name, dataUrl: await fileToDataUrl(p.file) }])
+        );
+        const photosOut = {};
+        photoEntries.forEach(([key, v]) => {
+          photosOut[key] = v;
+        });
+        sessionStorage.setItem(draftKey(), JSON.stringify({ step, form, photos: photosOut }));
+      } catch {
+        /* sessionStorage full/unavailable — draft just won't persist this round */
+      }
+    })();
+  }, [step, form, photos, draftRestored, registered]);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -143,6 +238,23 @@ export default function EmployeeRegister() {
     e.target.value = "";
   };
 
+  const openCamera = (key) => () => setCaptureSlot(key);
+
+  const capturePhoto = () => {
+    if (!webcamRef.current || !captureSlot) return;
+    const imageSrc = webcamRef.current.getScreenshot();
+    if (!imageSrc) return;
+    const byteString = atob(imageSrc.split(",")[1]);
+    const mimeString = imageSrc.split(",")[0].split(":")[1].split(";")[0];
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i += 1) ia[i] = byteString.charCodeAt(i);
+    const blob = new Blob([ab], { type: mimeString });
+    const file = new File([blob], `${captureSlot}.jpg`, { type: mimeString });
+    setPhotos((p) => ({ ...p, [captureSlot]: { file, name: file.name, url: URL.createObjectURL(file) } }));
+    setCaptureSlot(null);
+  };
+
   const removePhoto = (key) => {
     if (isSubmitting) return;
     setPhotos((p) => {
@@ -157,6 +269,11 @@ export default function EmployeeRegister() {
     setPhotos({});
     setErrors({});
     setStep(1);
+    try {
+      sessionStorage.removeItem(draftKey());
+    } catch {
+      /* ignore */
+    }
   };
 
   const onSubmit = async () => {
@@ -182,7 +299,10 @@ export default function EmployeeRegister() {
       setIsSubmitting(true);
       const data = await createAuthorizedUser(formData, AUTH_TOKEN);
       if (data?.body?.status !== "success") {
-        toast.error(data?.body?.error || data?.body?.message || "Failed to register");
+        // `message` carries the specific reason (e.g. "no face detected" / "already
+        // registered"); `error` is a generic fallback label like "Authorized user
+        // creation failed." — prefer the specific one so the user knows what to fix.
+        toast.error(data?.body?.message || data?.body?.error || "Failed to register");
         return;
       }
       toast.success("Registered successfully!");
@@ -191,8 +311,8 @@ export default function EmployeeRegister() {
     } catch (err) {
       console.error("Registration failed:", err);
       const msg =
-        err?.response?.data?.body?.error ||
         err?.response?.data?.body?.message ||
+        err?.response?.data?.body?.error ||
         err?.message ||
         "An unexpected error occurred";
       toast.error(msg);
@@ -360,40 +480,45 @@ export default function EmployeeRegister() {
                   {PHOTO_SLOTS.map((s) => {
                     const pic = photos[s.key];
                     return (
-                      <div key={s.key} className="flex flex-col gap-2">
-                        <label
-                          htmlFor={`vqp-photo-${s.key}`}
-                          className={`vqp-slot relative h-[120px] sm:h-[172px] rounded-[12px] bg-[#f2f8ff] overflow-hidden flex flex-col items-center justify-center gap-2 text-[#94a3b8] ${
-                            pic ? "border-[1.5px] border-solid border-[#cfe0fb]" : "border-[1.5px] border-dashed border-[#bcd4f7]"
-                          } ${isSubmitting ? "cursor-not-allowed pointer-events-none" : "cursor-pointer"} ${
-                            isSubmitting && !pic ? "opacity-60" : "opacity-100"
-                          }`}
-                        >
+                      <div key={s.key} className="flex flex-col items-center gap-2">
+                        <div className="w-full aspect-[4/5] max-h-[240px] bg-[#f2f8ff] rounded-[16px] border border-[#e3e8f0] flex items-center justify-center p-2 relative">
                           {pic ? (
                             <>
-                              <img src={pic.url} alt={s.label} className="absolute inset-0 w-full h-full object-cover" />
-                              <span
-                                role="button"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  removePhoto(s.key);
-                                }}
-                                className={`absolute top-1.5 right-1.5 w-[22px] h-[22px] rounded-full bg-[rgba(15,23,41,0.72)] text-white flex items-center justify-center z-[2] ${
-                                  isSubmitting ? "cursor-not-allowed opacity-50 pointer-events-none" : "cursor-pointer opacity-100"
-                                }`}
+                              <img src={pic.url} alt={s.label} className="w-full h-full object-contain rounded-[12px]" />
+                              <button
+                                type="button"
+                                onClick={() => removePhoto(s.key)}
+                                disabled={isSubmitting}
+                                className="absolute top-2 right-2 bg-[#ef4444] text-white p-1.5 rounded-full cursor-pointer shadow-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                <X size={12} />
-                              </span>
+                                <X size={14} />
+                              </button>
                             </>
                           ) : (
-                            <>
-                              <ImageIcon size={26} strokeWidth={1.6} />
-                              <span className="text-[12.5px] font-semibold text-[#64748b]">{s.hint}</span>
-                            </>
+                            <div className="flex flex-col items-center gap-2 w-full">
+                              <label
+                                htmlFor={`vqp-photo-${s.key}`}
+                                className={`flex items-center justify-center gap-1.5 w-full py-2.5 px-2 bg-[#3b82f6]/10 text-[#3b82f6] rounded-[10px] text-[12.5px] font-semibold transition-colors ${
+                                  isSubmitting ? "cursor-not-allowed opacity-50 pointer-events-none" : "cursor-pointer hover:bg-[#3b82f6]/20"
+                                }`}
+                              >
+                                <Upload size={14} />
+                                Click From Files
+                              </label>
+                              <button
+                                type="button"
+                                onClick={openCamera(s.key)}
+                                disabled={isSubmitting}
+                                className="flex items-center justify-center gap-1.5 w-full py-2.5 bg-[#eef1f7] text-[#475569] rounded-[10px] text-[12.5px] font-semibold hover:bg-[#e3e8f0] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                <CameraIcon size={14} />
+                                Take Photo
+                              </button>
+                            </div>
                           )}
-                        </label>
+                        </div>
                         <input id={`vqp-photo-${s.key}`} type="file" accept="image/*" disabled={isSubmitting} onChange={onPickPhoto(s.key)} className="hidden" />
-                        <span className="text-[12px] font-semibold text-[#334155] text-center">{s.label}</span>
+                        <span className="font-semibold text-[#0f1729] text-[13px]">{s.label}</span>
                       </div>
                     );
                   })}
@@ -424,6 +549,47 @@ export default function EmployeeRegister() {
                     />
                   </div>
                 </div>
+
+                {captureSlot && (
+                  <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+                    <div className="bg-white border border-[#eceff5] rounded-[16px] p-4 max-w-md w-full shadow-2xl">
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 className="text-[15px] font-semibold text-[#0f1729]">
+                          Take Photo — {PHOTO_SLOTS.find((s) => s.key === captureSlot)?.label}
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() => setCaptureSlot(null)}
+                          className="p-1 hover:bg-[#f2f8ff] rounded-full cursor-pointer"
+                        >
+                          <X size={18} className="text-[#64748b]" />
+                        </button>
+                      </div>
+                      <div className="relative rounded-[10px] overflow-hidden bg-black aspect-video mb-3 border-4 border-[#eceff5]">
+                        <Webcam
+                          audio={false}
+                          ref={webcamRef}
+                          screenshotFormat="image/jpeg"
+                          screenshotQuality={0.95}
+                          // Without an explicit resolution the browser picks its own default,
+                          // which on some webcams is low enough (e.g. 320x240) that the face
+                          // recognition service can't detect a face and registration fails
+                          // with "Authorized user creation failed". Ask for a real resolution.
+                          videoConstraints={{ width: { ideal: 1280 }, height: { ideal: 960 }, facingMode: "user" }}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-44 border-2 border-white/50 rounded-[40%] pointer-events-none" />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={capturePhoto}
+                        className="w-full h-11 rounded-[10px] font-['Space_Grotesk',sans-serif] font-semibold text-[14px] text-white bg-[#0f2744] cursor-pointer"
+                      >
+                        Capture
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

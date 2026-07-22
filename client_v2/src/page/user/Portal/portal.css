@@ -70,12 +70,6 @@
   border-color: #3b82f6;
 }
 
-/* face-capture slot hover */
-.vqp-slot:hover {
-  border-color: #3b82f6 !important;
-  background: #eaf1fd !important;
-}
-
 /* text links + eye toggle */
 .vqp-link:hover {
   text-decoration: underline;
