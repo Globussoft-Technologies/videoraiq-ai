@@ -209,7 +209,12 @@ class AttendanceService {
     try {
       const pipeline = await this.buildAttendancePipeline(req);
 
-      const attendances = await Attendance.aggregate(pipeline);
+      // strength: 2 → case-insensitive so Name/Location/Department sort
+      // alphabetically instead of MongoDB's default (uppercase before lowercase).
+      const attendances = await Attendance.aggregate(pipeline).collation({
+        locale: "en",
+        strength: 2,
+      });
 
       const firstAttendance = await Attendance.findOne()
         .sort({ createdAt: 1 })
@@ -679,8 +684,11 @@ class AttendanceService {
           sortStage = { "employee.fullName": sortDirection, "employee._id": 1 };
           break;
         case "location":
+          // Employee location is stored as a plain string field (`location`) on
+          // authorizedusers — there is no `locationId` lookup in this pipeline,
+          // so sorting must target `employee.location` directly.
           sortStage = {
-            "employee.locationId.locationName": sortDirection,
+            "employee.location": sortDirection,
             "employee._id": 1,
           };
           break;
@@ -736,7 +744,11 @@ class AttendanceService {
       const format = req.query.format || "excel";
       const pipeline = await this.buildAttendancePipeline(req, true);
 
-      const data = await Attendance.aggregate(pipeline);
+      // Match on-screen ordering: case-insensitive alphabetical sort.
+      const data = await Attendance.aggregate(pipeline).collation({
+        locale: "en",
+        strength: 2,
+      });
 
       if (!data || data.length === 0) {
         return res
