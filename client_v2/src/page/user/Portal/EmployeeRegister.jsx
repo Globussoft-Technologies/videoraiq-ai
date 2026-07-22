@@ -61,14 +61,29 @@ export default function EmployeeRegister() {
   /* The registration link carries an AES-encrypted admin token as ?token=.
      Falls back to the cookie token when the page is opened without one, so an
      already-logged-in admin can still use the page directly. */
+  const [tokenExpired, setTokenExpired] = useState(false);
   const AUTH_TOKEN = useMemo(() => {
     const encrypted = new URLSearchParams(window.location.search).get("token");
     if (!encrypted) return getAccessToken();
     // decrypt() returns its input unchanged when it cannot decrypt.
     const decrypted = decrypt(encrypted);
+    if (!decrypted || decrypted === encrypted) return null;
 
+    // Check if JWT is expired by decoding the payload
+    try {
+      const parts = decrypted.split(".");
+      if (parts.length !== 3) return decrypted; // Invalid JWT format, let backend handle it
+      const payload = JSON.parse(atob(parts[1]));
+      if (payload.exp && Date.now() >= payload.exp * 1000) {
+        setTokenExpired(true);
+        return null;
+      }
+    } catch (e) {
+      // If we can't decode, let the backend validate it
+      console.warn("Failed to decode JWT payload:", e);
+    }
 
-    return decrypted && decrypted !== encrypted ? decrypted : null;
+    return decrypted;
   }, []);
 
   // Seed details + step synchronously from any saved draft so a restored tab
@@ -320,6 +335,26 @@ export default function EmployeeRegister() {
       setIsSubmitting(false);
     }
   };
+
+  if (tokenExpired) {
+    return (
+      <div className="vqp flex items-center justify-center min-h-screen w-full p-6 bg-[linear-gradient(180deg,#fbfcff,#f5f7fc)] font-['IBM_Plex_Sans',sans-serif]">
+        <div className="bg-white border border-[#eceff5] rounded-[18px] px-8 py-10 max-w-[420px] w-full text-center shadow-[0_18px_46px_rgba(24,39,75,0.08)]">
+          <div className="w-16 h-16 mx-auto mb-5 rounded-full flex items-center justify-center bg-[linear-gradient(135deg,#ef4444,#f97316)] shadow-[0_10px_24px_rgba(239,68,68,0.32)]">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h2 className="font-['Space_Grotesk',sans-serif] font-bold text-[30px] tracking-[-0.02em] mt-0 mb-2 text-[#0f1729]">
+            Link Expired
+          </h2>
+          <p className="text-[14px] text-[#64748b] mt-0 mb-6">
+            Please generate a new registration link
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (registered) {
     return (
