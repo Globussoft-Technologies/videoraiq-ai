@@ -498,21 +498,21 @@ export default function EmployeeRegister() {
                             <div className="flex flex-col items-center gap-2 w-full">
                               <label
                                 htmlFor={`vqp-photo-${s.key}`}
-                                className={`flex items-center justify-center gap-1.5 w-full py-2.5 px-2 bg-[#3b82f6]/10 text-[#3b82f6] rounded-[10px] text-[12.5px] font-semibold transition-colors ${
-                                  isSubmitting ? "cursor-not-allowed opacity-50 pointer-events-none" : "cursor-pointer hover:bg-[#3b82f6]/20"
+                                className={`flex items-center justify-center gap-1 w-full min-h-[42px] py-2 px-1 overflow-hidden bg-[#3b82f6]/10 text-[#3b82f6] rounded-[10px] text-[10px] sm:text-[12.5px] font-semibold leading-tight text-center transition-colors ${
+                                  isSubmitting ? "cursor-not-allowed opacity-50 pointer-events-none" : "cursor-pointer hover:bg-[#3b82f6]/20 active:bg-[#3b82f6]/25"
                                 }`}
                               >
-                                <Upload size={14} />
-                                Click From Files
+                                <Upload size={12} className="shrink-0" />
+                                <span className="whitespace-nowrap">Browse</span>
                               </label>
                               <button
                                 type="button"
                                 onClick={openCamera(s.key)}
                                 disabled={isSubmitting}
-                                className="flex items-center justify-center gap-1.5 w-full py-2.5 bg-[#eef1f7] text-[#475569] rounded-[10px] text-[12.5px] font-semibold hover:bg-[#e3e8f0] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex items-center justify-center gap-1 w-full min-h-[42px] py-2 px-1 overflow-hidden bg-[#eef1f7] text-[#475569] rounded-[10px] text-[10px] sm:text-[12.5px] font-semibold leading-tight hover:bg-[#e3e8f0] active:bg-[#e3e8f0] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                <CameraIcon size={14} />
-                                Take Photo
+                                <CameraIcon size={12} className="shrink-0" />
+                                <span className="whitespace-nowrap">Take Photo</span>
                               </button>
                             </div>
                           )}
@@ -551,21 +551,24 @@ export default function EmployeeRegister() {
                 </div>
 
                 {captureSlot && (
-                  <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
-                    <div className="bg-white border border-[#eceff5] rounded-[16px] p-4 max-w-md w-full shadow-2xl">
+                  <div className="fixed inset-0 z-[100] bg-black/85 flex items-end sm:items-center justify-center sm:p-4">
+                    <div className="bg-white w-full sm:max-w-md sm:w-full rounded-t-[20px] sm:rounded-[16px] p-4 sm:p-4 pb-[max(16px,env(safe-area-inset-bottom))] shadow-2xl max-h-[92vh] overflow-y-auto">
                       <div className="flex justify-between items-center mb-3">
-                        <h3 className="text-[15px] font-semibold text-[#0f1729]">
+                        <h3 className="text-[14.5px] sm:text-[15px] font-semibold text-[#0f1729] truncate pr-2">
                           Take Photo — {PHOTO_SLOTS.find((s) => s.key === captureSlot)?.label}
                         </h3>
                         <button
                           type="button"
                           onClick={() => setCaptureSlot(null)}
-                          className="p-1 hover:bg-[#f2f8ff] rounded-full cursor-pointer"
+                          className="p-2 -mr-2 hover:bg-[#f2f8ff] rounded-full cursor-pointer shrink-0"
+                          aria-label="Close camera"
                         >
-                          <X size={18} className="text-[#64748b]" />
+                          <X size={20} className="text-[#64748b]" />
                         </button>
                       </div>
-                      <div className="relative rounded-[10px] overflow-hidden bg-black aspect-video mb-3 border-4 border-[#eceff5]">
+                      {/* Portrait framing suits a face better than 16:9 landscape, and matches
+                          how a phone's front camera is actually held during capture. */}
+                      <div className="relative rounded-[10px] overflow-hidden bg-black aspect-[3/4] sm:aspect-video mb-3 border-4 border-[#eceff5]">
                         <Webcam
                           audio={false}
                           ref={webcamRef}
@@ -578,12 +581,12 @@ export default function EmployeeRegister() {
                           videoConstraints={{ width: { ideal: 1280 }, height: { ideal: 960 }, facingMode: "user" }}
                           className="w-full h-full object-cover"
                         />
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-44 border-2 border-white/50 rounded-[40%] pointer-events-none" />
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[42%] aspect-[3/4] max-w-[180px] border-2 border-white/50 rounded-[40%] pointer-events-none" />
                       </div>
                       <button
                         type="button"
                         onClick={capturePhoto}
-                        className="w-full h-11 rounded-[10px] font-['Space_Grotesk',sans-serif] font-semibold text-[14px] text-white bg-[#0f2744] cursor-pointer"
+                        className="w-full h-12 rounded-[10px] font-['Space_Grotesk',sans-serif] font-semibold text-[14px] text-white bg-[#0f2744] cursor-pointer active:opacity-90"
                       >
                         Capture
                       </button>

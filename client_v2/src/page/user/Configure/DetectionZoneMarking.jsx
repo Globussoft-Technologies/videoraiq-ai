@@ -47,29 +47,6 @@ function extraFieldsFor(settingType) {
 }
 
 /**
- * All detection types (from the global catalog), each flagged with whether
- * it's already linked to this camera. Matches V1: the dropdown lists every
- * type, not just configured ones — selecting an unconfigured type and saving
- * creates a new DetectionSetting rather than requiring one to exist first.
- */
-function allTypesFor(camera, typeLabels) {
-  const detections = camera?.detections || {};
-  return DETECTION_FIELD_KEYS
-    .filter(key => typeLabels[key]) // only types the backend actually supports (has a label)
-    .map(key => {
-      const entry = detections[key];
-      const setting = entry?.id && typeof entry.id === 'object' ? entry.id : null;
-      return {
-        settingType: key,
-        label: typeLabels[key],
-        configured: !!(entry?.id),
-        settingId: setting?._id || (entry?.id && typeof entry.id !== 'object' ? entry.id : null),
-        setting,
-      };
-    });
-}
-
-/**
  * A camera+type can have multiple named zones (e.g. two separate counting
  * areas in one frame). Points are native video pixel coordinates, tied to
  * the video's resolution: settings.referencePoints[cameraId] = an array of
@@ -92,6 +69,38 @@ function zonesFor(setting, cameraId) {
     schedule: scheduleFromConfig(configs[i]),
     points: (poly || []).map(p => (Array.isArray(p) ? { x: p[0], y: p[1] } : p)),
   }));
+}
+
+/**
+ * All detection types (from the global catalog), each flagged with whether
+ * it's already linked to this camera. Matches V1: the dropdown lists every
+ * type, not just configured ones — selecting an unconfigured type and saving
+ * creates a new DetectionSetting rather than requiring one to exist first.
+ *
+ * `configured` is derived from actually having ≥1 saved zone for THIS camera,
+ * not just from a DetectionSetting reference existing on `camera.detections`.
+ * Deleting a camera's last zone updates the DetectionSetting doc (referencePoints
+ * becomes an empty array) but doesn't unlink it from the channel server-side —
+ * so `entry?.id` alone stayed truthy forever after the last zone was removed,
+ * leaving "Already configured for this camera" showing with nothing drawn.
+ */
+function allTypesFor(camera, typeLabels) {
+  const detections = camera?.detections || {};
+  return DETECTION_FIELD_KEYS
+    .filter(key => typeLabels[key]) // only types the backend actually supports (has a label)
+    .map(key => {
+      const entry = detections[key];
+      const setting = entry?.id && typeof entry.id === 'object' ? entry.id : null;
+      const settingId = setting?._id || (entry?.id && typeof entry.id !== 'object' ? entry.id : null);
+      const hasZones = zonesFor(setting, camera?._id).length > 0;
+      return {
+        settingType: key,
+        label: typeLabels[key],
+        configured: !!settingId && hasZones,
+        settingId,
+        setting,
+      };
+    });
 }
 
 const PRIORITY_OPTIONS = [
@@ -525,11 +534,14 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   };
   const handleVideoReady = () => setVideoState('ready');
 
-  // Line Crossing lets you grab either endpoint and drag it to reposition/
-  // resize the line after it's placed (V1 parity: CameraStreamWithArea.jsx's
-  // corner-drag). Other shapes still only support click-to-place — dragging
-  // isn't wired up for them. Kept in a ref (not state) so mousemove doesn't
-  // re-render on every pixel; only the resulting point update does.
+  // Every shape (polygon zones — including the Max/Min Area presets — and
+  // Line Crossing) lets you grab any already-placed point and drag it to
+  // reposition/resize (V1 parity: CameraStreamWithArea.jsx's corner-drag).
+  // Previously this only worked for Line Crossing, so a Min/Max Area
+  // rectangle (or any polygon) had no way to be resized after being placed —
+  // Undo/Clear All only removed points, they couldn't be repositioned.
+  // Kept in a ref (not state) so mousemove doesn't re-render on every pixel;
+  // only the resulting point update does.
   const draggingPointIndex = useRef(null);
   const HIT_RADIUS_PX = 14; // on-screen px, independent of video resolution
 
@@ -546,7 +558,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   const justDraggedRef = useRef(false);
 
   const handleStagePointerDown = (e) => {
-    if (!isLineCrossing || !videoSize.w || points.length === 0) return;
+    if (!videoSize.w || points.length === 0) return;
     const rect = stageRef.current.getBoundingClientRect();
     const hitRadiusVideoPx = HIT_RADIUS_PX * (videoSize.w / rect.width);
     const { x, y } = stageEventToVideoXY(e);
@@ -881,7 +893,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
             style={{
               position: 'relative', borderRadius: 12, overflow: 'hidden', aspectRatio: '16/9',
               background: '#0a0e15',
-              cursor: drawing ? 'crosshair' : (isLineCrossing && points.length > 0) ? 'grab' : 'default',
+              cursor: drawing ? 'crosshair' : points.length > 0 ? 'grab' : 'default',
               border: '1px solid var(--bd)',
             }}
           >
