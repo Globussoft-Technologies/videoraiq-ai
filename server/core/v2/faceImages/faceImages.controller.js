@@ -187,7 +187,7 @@ class FaceImagesController {
   async quickCreateUser(req, res, next) {
     /*
     #swagger.tags = ['FaceImages']
-    #swagger.description = 'Create an Authorized User and immediately tag the given dsId folder with it. Accepts the full authorizedUsers schema (minus password). Only firstName, lastName and dsId are required; every other field (email, departmentId, designation, branch, shiftId, numberPlate, orgId, emp_id, empRoleId, permission, location, locationId, phoneNumber, address1, timezone, profilePics) is optional. If email is omitted a placeholder is auto-generated. verified is set to false since no face data exists yet. Notifies the DS onfly_registration API.'
+    #swagger.description = 'Create an Authorized User and immediately tag the given dsId folder with it. Accepts the full authorizedUsers schema (minus password). Only firstName, lastName and dsId are required; every other field (email, departmentId, designation, branch, shiftId, numberPlate, orgId, emp_id, empRoleId, permission, location, locationId, phoneNumber, address1, timezone, profilePics) is optional. If email is omitted it remains blank. verified is set to false since no face data exists yet. Notifies the DS onfly_registration API.'
     #swagger.parameters['data'] = {
       in: 'body',
       description: 'firstName, lastName and dsId are required; every other authorizedUsers field is optional',
@@ -207,7 +207,7 @@ class FaceImagesController {
             firstName: 'John',
             lastName: 'Doe',
             userName: 'John Doe',
-            email: 'quickcreate+665f2b1c8e4a9d0012ab34ce@placeholder.local',
+            email: '',
             verified: false,
             profilePics: [],
             tag: false,

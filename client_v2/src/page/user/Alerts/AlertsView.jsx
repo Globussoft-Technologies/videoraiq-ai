@@ -53,7 +53,22 @@ function statusOf(item) {
   if (item.report?.status === true) return { label: 'Acknowledged', color: 'var(--blue)' };
   return { label: 'New', color: 'var(--warn)' };
 }
-
+function normalizeIncidentCounts(counts, totalCount = 0) {
+  const n = (value) => Number(value) || 0;
+  return {
+    severity: {
+      all: n(counts?.severity?.all ?? totalCount),
+      high: n(counts?.severity?.high),
+      moderate: n(counts?.severity?.moderate),
+      low: n(counts?.severity?.low),
+    },
+    status: {
+      all: n(counts?.status?.all ?? totalCount),
+      new: n(counts?.status?.new),
+      acknowledged: n(counts?.status?.acknowledged),
+    },
+  };
+}
 function btnStyle(variant) {
   const base = { fontSize: 13, fontWeight: 600, borderRadius: 8, padding: '7px 18px', cursor: 'pointer', border: '1px solid transparent', transition: 'all .15s' };
   if (variant === 'primary') return { ...base, background: 'var(--blue)', color: '#fff', border: '1px solid var(--blue)' };
@@ -171,6 +186,7 @@ export default function AlertsView() {
   const [statusFilter, setStatusFilter] = useState(() => initialStatusFilter || 'all');
   const [selected, setSelected] = useState(null);
   const [deepLinkedIncident, setDeepLinkedIncident] = useState(null);
+  const [acknowledgedIds, setAcknowledgedIds] = useState(() => new Set());
 
   useEffect(() => {
     if (!initialAlertId) return;
@@ -199,6 +215,15 @@ export default function AlertsView() {
     return f;
   }, [location, dateFrom, dateTo]);
 
+  // The table filter is server-side: clicking High/Medium/Low/Active/etc.
+  // must search the full incident set, not only the first loaded page.
+  const listFilter = useMemo(() => {
+    const f = { ...filter };
+    if (sev !== 'all') f.severity = sev;
+    if (statusFilter !== 'all') f.statusFilter = statusFilter;
+    return f;
+  }, [filter, sev, statusFilter]);
+
   const clearDate = useCallback(() => { setDateFrom(''); setDateTo(''); }, []);
 
   const hasFilters = sev !== 'all' || statusFilter !== 'all' || !!(dateFrom && dateTo);
@@ -213,11 +238,13 @@ export default function AlertsView() {
   // scrolls, instead of each fetch replacing the whole list.
   const [items, setItems] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
+  const [countSummary, setCountSummary] = useState(() => normalizeIncidentCounts(null, 0));
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const listRef = useRef(null);
   const requestIdRef = useRef(0);
+  const countsRequestIdRef = useRef(0);
 
   const hasMore = items.length < totalCount;
   // Polling only resumes once the user is back down to just the first page —
@@ -229,7 +256,7 @@ export default function AlertsView() {
     append ? setLoadingMore(true) : setLoading(true);
     setError(null);
     try {
-      const result = await fetchIncidents({ skip, limit: PAGE_SIZE }, filter);
+      const result = await fetchIncidents({ skip, limit: PAGE_SIZE }, listFilter);
       if (requestId !== requestIdRef.current) return; // superseded by a newer request
       setItems((prev) => (append ? [...prev, ...result.items] : result.items));
       setTotalCount(result.totalCount);
@@ -240,12 +267,32 @@ export default function AlertsView() {
         append ? setLoadingMore(false) : setLoading(false);
       }
     }
+  }, [listFilter]);
+
+  const loadCounts = useCallback(async () => {
+    const requestId = ++countsRequestIdRef.current;
+    try {
+      const result = await fetchIncidents({ skip: 0, limit: 1 }, filter);
+      if (requestId !== countsRequestIdRef.current) return;
+      setCountSummary(normalizeIncidentCounts(result.counts, result.totalCount));
+    } catch {
+      if (requestId === countsRequestIdRef.current) {
+        setCountSummary(normalizeIncidentCounts(null, 0));
+      }
+    }
   }, [filter]);
 
-  // Filter change (e.g. site switch) resets back to page 1.
+  // Filter change (e.g. site switch or chip click) resets back to page 1.
   useEffect(() => {
+    setSelected(null);
     loadPage(0, { append: false });
   }, [loadPage]);
+
+  // Chip counts stay based on the full site/date result set, independent of
+  // which chip is currently selected and independent of pagination.
+  useEffect(() => {
+    loadCounts();
+  }, [loadCounts]);
 
   // Poll only while sitting on just the first page.
   useEffect(() => {
@@ -266,49 +313,35 @@ export default function AlertsView() {
 
   const refetch = useCallback(() => loadPage(0, { append: false }), [loadPage]);
 
-  const rows = useMemo(() => {
-    let list = items;
-    if (sev !== 'all') list = list.filter((i) => (i.severity || '').toLowerCase() === sev);
-    if (statusFilter !== 'all') list = list.filter((i) => statusKeyOf(i) === statusFilter);
-    return list;
-  }, [items, sev, statusFilter]);
+  const rows = items;
 
-  // Per-tab counts, out of what's currently loaded (not the true server-side
-  // total — the backend's stats endpoint doesn't break down by severity ×
-  // status). Each axis's count respects the other axis's active filter, so
-  // e.g. severity counts update when a status tab is selected, and vice versa.
-  const byStatus = useMemo(
-    () => (statusFilter === 'all' ? items : items.filter((i) => statusKeyOf(i) === statusFilter)),
-    [items, statusFilter]
-  );
-  const bySeverity = useMemo(
-    () => (sev === 'all' ? items : items.filter((i) => (i.severity || '').toLowerCase() === sev)),
-    [items, sev]
-  );
-  const sevCounts = useMemo(() => {
-    const counts = { all: byStatus.length, high: 0, moderate: 0, low: 0 };
-    byStatus.forEach((i) => {
-      const s = (i.severity || '').toLowerCase();
-      if (counts[s] !== undefined) counts[s] += 1;
-    });
-    return counts;
-  }, [byStatus]);
-  const statusCounts = useMemo(() => {
-    const counts = { all: bySeverity.length, new: 0, acknowledged: 0 };
-    bySeverity.forEach((i) => {
-      const s = statusKeyOf(i);
-      if (counts[s] !== undefined) counts[s] += 1;
-    });
-    return counts;
-  }, [bySeverity]);
+  // Per-tab counts come from the backend aggregate for the full filtered result
+  // set, not from the currently loaded pagination page.
+  const sevCounts = countSummary.severity;
+  const statusCounts = countSummary.status;
 
   const active = selected || rows[0] || null;
+  const activeId = active?._id || active?.id;
+  const activeAcknowledged = !!active?.report?.status || (activeId ? acknowledgedIds.has(activeId) : false);
 
   async function acknowledge() {
-    if (!active?._id) return;
+    if (!activeId || activeAcknowledged) return;
     setBusy(true);
     try {
-      await updateReportStatus({ incidentId: active._id, status: true, description: '' });
+      await updateReportStatus({ incidentId: activeId, status: true, description: '' });
+      const markAcknowledged = (incident) => {
+        const id = incident?._id || incident?.id;
+        if (id !== activeId) return incident;
+        return { ...incident, report: { ...(incident.report || {}), status: true } };
+      };
+      setAcknowledgedIds((prev) => {
+        const next = new Set(prev);
+        next.add(activeId);
+        return next;
+      });
+      setItems((prev) => prev.map(markAcknowledged));
+      setSelected((prev) => markAcknowledged(prev));
+      setDeepLinkedIncident((prev) => markAcknowledged(prev));
       toast.success('Acknowledged');
       refetch();
     } catch {
@@ -413,8 +446,8 @@ export default function AlertsView() {
                 <div style={{ fontSize: 11.5, color: 'var(--tx3)', wordBreak: 'break-word' }}>{[active.channelData?.name, active.nvrData?.nvrName, active.location].filter(Boolean).join(' · ')}</div>
                 {active.description && <div style={{ fontSize: 12, color: 'var(--tx2)', lineHeight: 1.4, wordBreak: 'break-word' }}>{active.description}</div>}
                 <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-                  <div onClick={busy ? undefined : acknowledge} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg,var(--blue),var(--violet))', borderRadius: 8, padding: 9, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
-                    {busy ? '…' : 'Acknowledge'}
+                  <div onClick={busy || activeAcknowledged ? undefined : acknowledge} aria-disabled={busy || activeAcknowledged} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: activeAcknowledged ? 'var(--tx3)' : '#fff', background: activeAcknowledged ? 'var(--bg2)' : 'linear-gradient(135deg,var(--blue),var(--violet))', border: activeAcknowledged ? '1px solid var(--bd)' : '1px solid transparent', borderRadius: 8, padding: 9, cursor: busy ? 'wait' : activeAcknowledged ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+                    {busy ? '…' : activeAcknowledged ? 'Acknowledged' : 'Acknowledge'}
                   </div>
                   <div onClick={() => setReportOpen(true)} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: 'var(--crit)', border: '1px solid rgba(255,77,77,.4)', borderRadius: 8, padding: 9, cursor: 'pointer' }}>
                     {active.report?.status ? 'Reported' : 'Report'}
@@ -441,3 +474,6 @@ export default function AlertsView() {
     </div>
   );
 }
+
+
+

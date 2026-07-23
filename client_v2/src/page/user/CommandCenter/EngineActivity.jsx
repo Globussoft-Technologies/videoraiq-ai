@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Panel } from '../../../components/primitives';
 import { AsyncBoundary, Empty } from '../../../components/States';
 import { num } from '../../../lib/format';
@@ -45,12 +46,19 @@ function areaChartPoints(values, width, height) {
   return { area, line: pts.join(' ') };
 }
 
+function hourRange(index) {
+  const start = String(index).padStart(2, '0');
+  const end = String((index + 1) % 24).padStart(2, '0');
+  return `${start}:00-${end}:00`;
+}
+
 /**
  * Bottom Command Center row:
  *  - Left: per-engine event counts for today.
  *  - Right: 24-hour detection event area chart.
  */
 export default function EngineActivity({ todayEngines = [], events24h = [], total24h = 0, loading, error, isEmpty, onRetry }) {
+  const [hoveredHour, setHoveredHour] = useState(null);
   const { total: todayTotal, segments } = donutSegments(todayEngines);
   // Largest engine count sets the full-width bar; floor at 1 so an empty or
   // all-zero set doesn't divide by zero (or Math.max() → -Infinity).
@@ -62,7 +70,24 @@ export default function EngineActivity({ todayEngines = [], events24h = [], tota
   // Peak hourly count = the chart's top; matches areaChartPoints' own max (…, 1)
   // so the y-axis labels line up with where the line actually peaks/bottoms out.
   const peak = Math.max(...events24h, 1);
-  const yTicks = [1, 0.75, 0.5, 0.25, 0]; // fractions of peak, top → bottom
+  const yTicks = [1, 0.75, 0.5, 0.25, 0]; // fractions of peak, top to bottom
+  const selectedCount = hoveredHour == null ? 0 : (events24h[hoveredHour] || 0);
+  const selectedX = hoveredHour == null ? 0 : (hoveredHour / Math.max(events24h.length - 1, 1)) * 100;
+  const selectedY = hoveredHour == null ? 100 : 100 - (selectedCount / peak) * 98;
+
+  const selectNearestHour = (clientX, element) => {
+    const rect = element.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    setHoveredHour(Math.round(ratio * Math.max(events24h.length - 1, 0)));
+  };
+
+  const handleChartKeyDown = (event) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const lastIndex = Math.max(events24h.length - 1, 0);
+    const current = hoveredHour ?? (event.key === 'ArrowLeft' ? lastIndex : 0);
+    setHoveredHour(Math.min(lastIndex, Math.max(0, current + (event.key === 'ArrowLeft' ? -1 : 1))));
+  };
 
   return (
     <Panel style={{ padding: 16, overflow: 'hidden' }}>
@@ -142,7 +167,19 @@ export default function EngineActivity({ todayEngines = [], events24h = [], tota
                 <Empty label="No detection events in the last 24h" minH={170} />
               ) : (
               <>
-              <div style={{ flex: 1, position: 'relative', minHeight: 170 }}>
+              <div
+                style={{ flex: 1, position: 'relative', minHeight: 170, cursor: 'crosshair', outline: 'none' }}
+                role="img"
+                tabIndex={0}
+                aria-label={hoveredHour == null
+                  ? `Detection events by hour over the last 24 hours. ${num(total24h)} total.`
+                  : `${hourRange(hoveredHour)}: ${num(selectedCount)} detection ${selectedCount === 1 ? 'event' : 'events'}.`}
+                onMouseMove={(event) => selectNearestHour(event.clientX, event.currentTarget)}
+                onMouseLeave={() => setHoveredHour(null)}
+                onFocus={() => setHoveredHour((current) => current ?? Math.max(events24h.length - 1, 0))}
+                onBlur={() => setHoveredHour(null)}
+                onKeyDown={handleChartKeyDown}
+              >
                 <svg viewBox={`0 0 ${chartW} ${chartH}`} preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
                   <defs>
                     <linearGradient id="det-area" x1="0" y1="0" x2="0" y2="1">
@@ -152,7 +189,19 @@ export default function EngineActivity({ todayEngines = [], events24h = [], tota
                   </defs>
                   <polygon points={area} fill="url(#det-area)" />
                   <polyline points={line} fill="none" stroke="var(--blue)" strokeWidth="2.2" strokeLinejoin="round" />
+                  {hoveredHour != null && <>
+                    <line x1={(selectedX / 100) * chartW} x2={(selectedX / 100) * chartW} y1="0" y2={chartH} stroke="var(--blue)" strokeWidth="1" strokeDasharray="4 4" opacity=".55" />
+                    <circle cx={(selectedX / 100) * chartW} cy={(selectedY / 100) * chartH} r="5" fill="var(--panel)" stroke="var(--blue)" strokeWidth="3" vectorEffect="non-scaling-stroke" />
+                  </>}
                 </svg>
+                {hoveredHour != null && (
+                  <div style={{ position: 'absolute', left: `${selectedX}%`, top: selectedY < 38 ? 24 : `${selectedY}%`, transform: `translate(${selectedX < 18 ? '8px' : selectedX > 82 ? 'calc(-100% - 8px)' : '-50%'}, ${selectedY < 38 ? '0' : 'calc(-100% - 12px)'})`, zIndex: 2, minWidth: 142, padding: '9px 11px', border: '1px solid var(--line)', borderRadius: 8, background: 'var(--panel)', boxShadow: '0 8px 24px rgba(15,23,42,.18)', pointerEvents: 'none' }}>
+                    <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--tx3)', marginBottom: 4 }}>{hourRange(hoveredHour)}</div>
+                    <div style={{ fontFamily: 'var(--disp)', fontSize: 12, fontWeight: 600, color: 'var(--tx)' }}>
+                      {num(selectedCount)} detection {selectedCount === 1 ? 'event' : 'events'}
+                    </div>
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--tx3)', marginTop: 8 }}>
                 <span>00:00</span>

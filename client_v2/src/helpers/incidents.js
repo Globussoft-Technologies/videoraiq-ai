@@ -18,7 +18,11 @@ export const fetchIncidents = async ({ skip = 0, limit = 12 } = {}, filter = {})
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
   const d = res?.data || {};
-  return { items: Array.isArray(d.data) ? d.data : [], totalCount: d.totalCount ?? 0 };
+  return {
+    items: Array.isArray(d.data) ? d.data : [],
+    totalCount: d.totalCount ?? 0,
+    counts: d.counts || null,
+  };
 };
 
 // Fetches a single incident by id — used to deep-link a notification straight
@@ -83,3 +87,4 @@ export const deleteIncidents = async (incidentIds = []) => {
   );
   return unwrap(res);
 };
+

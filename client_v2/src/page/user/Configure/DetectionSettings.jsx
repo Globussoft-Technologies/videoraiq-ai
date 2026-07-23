@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { Search, Video, ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
+import ConfirmationModal from '../../../components/DeleteConfirmation';
 import { useApi } from '../../../hooks/useApi';
 import { getChannels, getNvrs, getDetectionTypes, toggleChannelDetection, updateChannel, getCamerasByNvr } from '../../../helpers/configure';
 import { Popover, PopoverTrigger, PopoverContent } from '../../../pages/AttendanceLogs/components/Popover';
@@ -33,22 +34,17 @@ function isTypeEnabled(camera, key) {
 
 /** Popover: toggle each detection type on/off for this one camera. Rendered in a
  * body portal (see Popover.jsx) so it isn't clipped by the table's overflow:hidden. */
-function AppliedTypesPopover({ camera, typeLabels, onToggle }) {
+function AppliedTypesPopover({ camera, typeLabels, onToggleRequest }) {
   const [open, setOpen] = useState(false);
-  const [pending, setPending] = useState(null); // key currently mid-request
 
   // Only show types with a real, known label — several DETECTION_FIELD_KEYS
   // are disabled backend-side (no entry in DETECTION_TYPES) and would
   // otherwise render as raw camelCase keys.
   const availableTypes = DETECTION_FIELD_KEYS.filter(key => typeLabels[key]);
 
-  const handleToggle = async (key, next) => {
-    setPending(key);
-    try {
-      await onToggle(camera, key, next);
-    } finally {
-      setPending(null);
-    }
+  const handleToggle = (key, enabled) => {
+    setOpen(false);
+    onToggleRequest(camera, key, typeLabels[key], enabled);
   };
 
   return (
@@ -75,17 +71,15 @@ function AppliedTypesPopover({ camera, typeLabels, onToggle }) {
             {availableTypes.map(key => {
               const label = typeLabels[key];
               const enabled = isTypeEnabled(camera, key);
-              const busy = pending === key;
               return (
                 <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '7px 6px' }}>
                   <span style={{ fontSize: 12.5, color: 'var(--tx)' }}>{label}</span>
                   <button
-                    onClick={() => handleToggle(key, !enabled)}
-                    disabled={busy}
+                    onClick={() => handleToggle(key, enabled)}
                     style={{
                       width: 36, height: 20, borderRadius: 10, position: 'relative', flexShrink: 0,
                       background: enabled ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg3, #2a2d3a)',
-                      border: '1px solid var(--bd)', cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.6 : 1,
+                      border: '1px solid var(--bd)', cursor: 'pointer',
                     }}
                   >
                     <span style={{
@@ -104,7 +98,7 @@ function AppliedTypesPopover({ camera, typeLabels, onToggle }) {
   );
 }
 
-function CameraRow({ camera, online, typeLabels, onOpen, onToggleDetection, onCheckTypeChange }) {
+function CameraRow({ camera, online, typeLabels, onOpen, onToggleDetectionRequest, onCheckTypeChange }) {
   // `online` is the real live-stream status, probed by the parent. The backend's
   // `camera.control` flag means "has a detection enabled", NOT "is streaming",
   // so it can't be used here (see Sidebar.jsx / Command Center for the same note).
@@ -144,7 +138,7 @@ function CameraRow({ camera, online, typeLabels, onOpen, onToggleDetection, onCh
       </span>
 
       <span style={{ display: 'flex', justifyContent: 'center' }} onClick={e => e.stopPropagation()}>
-        <AppliedTypesPopover camera={camera} typeLabels={typeLabels} onToggle={onToggleDetection} />
+        <AppliedTypesPopover camera={camera} typeLabels={typeLabels} onToggleRequest={onToggleDetectionRequest} />
       </span>
 
       <span style={{ display: 'flex', justifyContent: 'center' }} onClick={e => e.stopPropagation()}>
@@ -182,6 +176,8 @@ export default function DetectionSettings() {
   const [nvrFilter, setNvrFilter] = useState('');
   const [page, setPage] = useState(0);
   const [openCamera, setOpenCamera] = useState(null);
+  const [detectionConfirm, setDetectionConfirm] = useState(null);
+  const [detectionActionLoading, setDetectionActionLoading] = useState(false);
 
   const nvrsApi = useApi(() => getNvrs(0, 100), []);
   const nvrs = nvrsApi.data?.nvrs ?? [];
@@ -236,6 +232,26 @@ export default function DetectionSettings() {
     } catch (err) {
       const msg = err?.response?.data?.body?.message || 'Failed to update detection type.';
       toast.error(msg);
+      throw err;
+    }
+  };
+
+  const handleDetectionToggleRequest = (camera, detectionType, label, currentlyEnabled) => {
+    setDetectionConfirm({ camera, detectionType, label, currentlyEnabled });
+  };
+
+  const handleConfirmDetectionToggle = async () => {
+    if (!detectionConfirm) return;
+    setDetectionActionLoading(true);
+    try {
+      await handleToggleDetection(
+        detectionConfirm.camera,
+        detectionConfirm.detectionType,
+        !detectionConfirm.currentlyEnabled,
+      );
+      setDetectionConfirm(null);
+    } finally {
+      setDetectionActionLoading(false);
     }
   };
 
@@ -339,7 +355,7 @@ export default function DetectionSettings() {
               online={!!liveById[camera._id]}
               typeLabels={typeLabels}
               onOpen={() => setOpenCamera(camera)}
-              onToggleDetection={handleToggleDetection}
+              onToggleDetectionRequest={handleDetectionToggleRequest}
               onCheckTypeChange={handleCheckTypeChange}
             />
           ))}
@@ -381,6 +397,23 @@ export default function DetectionSettings() {
           ))}
         </div>
       )}
+      <ConfirmationModal
+        open={!!detectionConfirm}
+        title="Detection Control"
+        message={detectionConfirm && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left' }}>
+            <div>Camera: <span style={{ fontWeight: 600, color: 'var(--tx)' }}>{detectionConfirm.camera?.customName || detectionConfirm.camera?.name || 'Camera'}</span></div>
+            <div>Detection Type: <span style={{ fontWeight: 600, color: 'var(--tx)' }}>{detectionConfirm.label || detectionConfirm.detectionType}</span></div>
+            <div>Status: <span style={{ fontWeight: 600, color: detectionConfirm.currentlyEnabled ? 'var(--ok)' : 'var(--crit)' }}>{detectionConfirm.currentlyEnabled ? 'Enabled' : 'Disabled'}</span></div>
+          </div>
+        )}
+        confirmLabel={detectionActionLoading ? (detectionConfirm?.currentlyEnabled ? 'Stopping...' : 'Starting...') : (detectionConfirm?.currentlyEnabled ? 'Stop Detection' : 'Start Detection')}
+        cancelLabel="Cancel"
+        onClose={() => !detectionActionLoading && setDetectionConfirm(null)}
+        onConfirm={handleConfirmDetectionToggle}
+        loading={detectionActionLoading}
+        confirmClass={detectionConfirm?.currentlyEnabled ? 'bg-[var(--crit)] text-white hover:opacity-90 shadow-sm shadow-[var(--crit)]/20' : 'bg-[var(--blue)] text-white hover:opacity-90 shadow-sm shadow-[var(--blue)]/20'}
+      />
     </div>
   );
 }

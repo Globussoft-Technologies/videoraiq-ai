@@ -962,17 +962,71 @@ class IncidentsService {
         },
       ]);
       
-      const totalCount = await Incident.countDocuments({
-        ...matchStage,
-        // $or: [
-        //   { triggerNotification: { $exists: false } },
-        //   { triggerNotification: false }
-        // ]
-      });
+      const [countStats = {}] = await Incident.aggregate([
+        { $match: { ...matchStage } },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            high: {
+              $sum: {
+                $cond: [{ $eq: [{ $toLower: { $ifNull: ["$severity", ""] } }, "high"] }, 1, 0],
+              },
+            },
+            moderate: {
+              $sum: {
+                $cond: [{ $eq: [{ $toLower: { $ifNull: ["$severity", ""] } }, "moderate"] }, 1, 0],
+              },
+            },
+            low: {
+              $sum: {
+                $cond: [{ $eq: [{ $toLower: { $ifNull: ["$severity", ""] } }, "low"] }, 1, 0],
+              },
+            },
+            new: {
+              $sum: {
+                $cond: [
+                  { $and: [{ $ne: ["$resolved", true] }, { $ne: ["$report.status", true] }] },
+                  1,
+                  0,
+                ],
+              },
+            },
+            acknowledged: {
+              $sum: {
+                $cond: [
+                  { $and: [{ $ne: ["$resolved", true] }, { $eq: ["$report.status", true] }] },
+                  1,
+                  0,
+                ],
+              },
+            },
+            resolved: {
+              $sum: { $cond: [{ $eq: ["$resolved", true] }, 1, 0] },
+            },
+          },
+        },
+      ]);
+
+      const totalCount = countStats.total || 0;
 
       res.status(200).json({
         message: "Incidents fetched successfully",
         totalCount,
+        counts: {
+          severity: {
+            all: totalCount,
+            high: countStats.high || 0,
+            moderate: countStats.moderate || 0,
+            low: countStats.low || 0,
+          },
+          status: {
+            all: totalCount,
+            new: countStats.new || 0,
+            acknowledged: countStats.acknowledged || 0,
+            resolved: countStats.resolved || 0,
+          },
+        },
         data,
       });
     } catch (error) {
@@ -3184,3 +3238,4 @@ console.log(result,'result');
 }
 
 export default new IncidentsService();
+

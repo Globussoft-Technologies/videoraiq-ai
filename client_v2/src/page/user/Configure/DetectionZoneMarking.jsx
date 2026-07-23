@@ -586,12 +586,45 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     draggingPointIndex.current = null;
   };
 
+  const makeZoneFromPoints = (zonePoints, index = zones.length) => ({
+    name: `Zone ${index + 1}`,
+    capacity: '',
+    threshold: '',
+    schedule: emptySchedule(),
+    points: zonePoints,
+  });
+
   const handleStageClick = (e) => {
     if (justDraggedRef.current) { justDraggedRef.current = false; return; }
     if (!drawing || !videoSize.w) return;
-    if (points.length >= effectiveMaxPoints) return; // cap reached — ignore further clicks, matching V1
+
+    // If a draft already reached the cap before this fix/hot reload, commit it
+    // on the next click so the user can continue with a fresh zone.
+    if (points.length >= effectiveMaxPoints) {
+      if (!isLineCrossing && points.length >= minPointsToSave) {
+        const newIndex = zones.length;
+        setZones(prev => [...prev, makeZoneFromPoints(points, prev.length)]);
+        setPoints([]);
+        setActiveZoneIndex(newIndex);
+      }
+      return;
+    }
+
     const { x, y } = stageEventToVideoXY(e);
-    setPoints(prev => [...prev, { x, y }]);
+    const next = [...points, { x, y }];
+
+    // V1 commits the current polygon into the zones list and clears the
+    // in-progress points, so the max-points cap applies per zone instead of
+    // blocking the whole drawing session after one 6-point zone.
+    if (!isLineCrossing && next.length >= effectiveMaxPoints) {
+      const newIndex = zones.length;
+      setZones(prev => [...prev, makeZoneFromPoints(next, prev.length)]);
+      setPoints([]);
+      setActiveZoneIndex(newIndex);
+      return;
+    }
+
+    setPoints(next);
   };
 
   const handleUndo = () => setPoints(prev => prev.slice(0, -1));
@@ -709,7 +742,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     // so drawing once and hitting Save works without a separate commit step.
     if (zones.length === 0 && points.length < minPointsToSave) return;
     const nextZones = points.length >= minPointsToSave
-      ? [...zones, { name: `Zone ${zones.length + 1}`, capacity: '', threshold: '', schedule: emptySchedule(), points }]
+      ? [...zones, makeZoneFromPoints(points)]
       : zones;
     setPendingZones(nextZones);
     setShowSaveModal(true);
@@ -1005,7 +1038,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
             >
               {videoSize.w > 0 && zones.map((z, zi) => (
-                <g key={zi} opacity={activeZoneIndex === null || activeZoneIndex === zi ? 1 : 0.35}>
+                <g key={zi} opacity={1}>
                   {z.points.length > 1 && (
                     isLineCrossing ? (
                       <polyline
@@ -1070,7 +1103,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
                   transform: 'translate(-4px, -130%)',
                   background: '#ef4444', color: '#fff', fontSize: 10.5, fontWeight: 600,
                   padding: '3px 8px', borderRadius: 5, whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 3,
-                  opacity: activeZoneIndex === null || activeZoneIndex === zi ? 1 : 0.35,
+                  opacity: 1,
                 }}
               >
                 {z.name}
@@ -1452,3 +1485,6 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     </div>
   );
 }
+
+
+

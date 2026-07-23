@@ -13,6 +13,8 @@ import { getInitialsPlaceholder, useDebounce } from '../detectedUtils';
 
 const nasUrl = import.meta.env.VITE_BACKEND || '';
 const PAGE_SIZE = 20;
+const PLACEHOLDER_EMAIL_RE = /^quickcreate\+[a-f0-9]+@placeholder\.local$/i;
+const displayEmail = (email) => (PLACEHOLDER_EMAIL_RE.test(email || '') ? '' : (email || ''));
 
 // Shared field styling — matches the V2 register form language (taller fields,
 // bg3 surface, blue focus border).
@@ -321,7 +323,7 @@ const TagFolderModal = ({ open, folder, onClose, onTagged }) => {
                         <p className="text-xs font-semibold text-[var(--tx)] truncate">
                           {u.userName || `${u.firstName} ${u.lastName}`}
                         </p>
-                        <p className="text-[10px] text-[var(--tx3)] truncate">{u.email}</p>
+                        <p className="text-[10px] text-[var(--tx3)] truncate">{displayEmail(u.email)}</p>
                       </div>
                       {isSelected && (
                         <UserCheck className="w-4 h-4 shrink-0 text-[var(--brand)]" />

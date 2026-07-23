@@ -23,7 +23,6 @@ const authorizedUsersSchema = new mongoose.Schema({
   },
   email: {
     type: String,
-    default: null
   },
   designation: {
     type: String,
@@ -104,7 +103,7 @@ const authorizedUsersSchema = new mongoose.Schema({
 
 authorizedUsersSchema.index(
   { adminId: 1, email: 1 },
-  { unique: true }
+  { unique: true, partialFilterExpression: { email: { $exists: true, $gt: '' } } }
 );
 
 // Encrypt password before save

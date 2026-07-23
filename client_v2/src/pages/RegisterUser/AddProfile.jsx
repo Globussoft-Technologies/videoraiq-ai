@@ -38,6 +38,10 @@ import {
 } from './Api';
 
 const nasUrl = import.meta.env.VITE_BACKEND;
+const PLACEHOLDER_EMAIL_RE = /^quickcreate\+[a-f0-9]+@placeholder\.local$/i;
+const stripPlaceholderEmail = (user) => (
+  PLACEHOLDER_EMAIL_RE.test(user?.email || '') ? { ...user, email: '' } : user
+);
 
 /* Decode a JWT payload without a dependency. */
 const decodeJwt = (token) => {
@@ -145,7 +149,7 @@ const AddProfile = () => {
       const result = await authorizedUsers(skip, limit, debouncedSearch, data);
       if (result?.body?.status === 'success') {
         const count = result.body.data.totalCount || 0;
-        setUsers(result.body.data.users || []);
+        setUsers((result.body.data.users || []).map(stripPlaceholderEmail));
         setTotalCount(count);
         setTotalPages(Math.max(1, Math.ceil(count / limit)));
       }
