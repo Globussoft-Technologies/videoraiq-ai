@@ -4,6 +4,7 @@ import * as Yup from 'yup';
 import { ArrowLeft, X, Loader } from 'lucide-react';
 import Webcam from 'react-webcam';
 import { toast } from 'sonner';
+import { COMPACT_TOAST } from './toastOptions';
 import {
   Dialog,
   DialogContent,
@@ -101,7 +102,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
 
   const uploadFile = (file, _folderName, index) => {
     if (!['image/jpeg', 'image/png'].includes(file.type)) {
-      toast.error('Please upload only JPG or PNG images');
+      toast.error('Please upload only JPG or PNG images', COMPACT_TOAST);
       return;
     }
     setUploadedImagePaths((prev) => {
@@ -115,7 +116,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
       next[index] = previewUrl;
       return next;
     });
-    toast.success('Image selected successfully');
+    toast.success('Image selected successfully', COMPACT_TOAST);
   };
 
   const handleCapture = (folderName) => {
@@ -145,7 +146,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
       next[index] = '';
       return next;
     });
-    toast.success('Image removed successfully');
+    toast.success('Image removed successfully', COMPACT_TOAST);
   };
 
   const handleOpenCamera = (angle) => {
@@ -157,13 +158,13 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
     try {
       const res = await isEmailExist(email);
       if (res?.data?.body?.data?.exists === true) {
-        toast.error('Email already exists');
+        toast.error('Email already exists', COMPACT_TOAST);
         return false;
       }
       return true;
     } catch (err) {
       console.error('Failed to validate email', err);
-      toast.error('Failed to validate email');
+      toast.error('Failed to validate email', COMPACT_TOAST);
       return false;
     }
   };
@@ -203,7 +204,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
     ).length;
 
     if (uploadedCount < requiredImageCount) {
-      toast.error(`Please upload ${requiredImageCount} image${requiredImageCount > 1 ? 's' : ''}`);
+      toast.error(`Please upload ${requiredImageCount} image${requiredImageCount > 1 ? 's' : ''}`, COMPACT_TOAST);
       return;
     }
 
@@ -222,17 +223,17 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
       if (editUser) {
         const data = await updateUserDetails(editUser._id, formData);
         if (data?.body?.status !== 'success') {
-          toast.error(data?.body?.message || 'Failed to update user');
+          toast.error(data?.body?.message || data?.body?.error || 'Failed to update user', COMPACT_TOAST);
           return;
         }
-        toast.success('User updated successfully!');
+        toast.success('User updated successfully!', COMPACT_TOAST);
       } else {
         const data = await createAuthorizedUser(formData);
         if (data?.body?.status !== 'success') {
-          toast.error(data?.body?.error || data?.body?.message || 'Failed to register user');
+          toast.error(data?.body?.message || data?.body?.error || 'Failed to register user', COMPACT_TOAST);
           return;
         }
-        toast.success('User registered successfully!');
+        toast.success('User registered successfully!', COMPACT_TOAST);
       }
       setOpen(false);
       resetState();
@@ -241,11 +242,11 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
     } catch (err) {
       console.error(err);
       const msg =
-        err?.response?.data?.body?.error ||
         err?.response?.data?.body?.message ||
+        err?.response?.data?.body?.error ||
         err?.message ||
         'An unexpected error occurred';
-      toast.error(msg);
+      toast.error(msg, COMPACT_TOAST);
     } finally {
       setIsSubmitting(false);
     }
@@ -355,7 +356,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
                             return acc;
                           }, {})
                         );
-                        toast.error('Please fill all the required fields');
+                        toast.error('Please fill all the required fields', COMPACT_TOAST);
                         return;
                       }
                       if (editUser && values.email === editUser.email) {

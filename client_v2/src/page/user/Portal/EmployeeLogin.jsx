@@ -83,9 +83,11 @@ export default function EmployeeLogin() {
     }
   };
 
-  // Prefill from the saved "remember-me" cookie (identical scheme to the client login).
+  // Prefill from the saved "user-remember-me" cookie. Namespaced separately
+  // from the admin login's cookie so "remember me" on one portal never
+  // prefills credentials on the other.
   useEffect(() => {
-    const saved = Cookies.get("remember-me");
+    const saved = Cookies.get("user-remember-me");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -121,11 +123,11 @@ export default function EmployeeLogin() {
 
         if (rememberMe) {
           Cookies.set(
-            "remember-me",
+            "user-remember-me",
             JSON.stringify({ usernameOrEmail: form.login, password: form.password })
           );
         } else {
-          Cookies.remove("remember-me");
+          Cookies.remove("user-remember-me");
         }
 
         toast.success(response?.data?.body?.message || "Signed in");

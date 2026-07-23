@@ -35,9 +35,11 @@ const LoginForm = () => {
   const isLogin = mode === "login";
   const redirectTo = location.state?.from?.pathname || "/dashboard";
 
-  // Prefill from the saved "remember-me" cookie (identical scheme to V1).
+  // Prefill from the saved "admin-remember-me" cookie. Namespaced separately
+  // from the user login's cookie so "remember me" on one portal never
+  // prefills credentials on the other.
   useEffect(() => {
-    const saved = Cookies.get("remember-me");
+    const saved = Cookies.get("admin-remember-me");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -76,9 +78,9 @@ const LoginForm = () => {
           });
 
           if (rememberMe) {
-            Cookies.set("remember-me", JSON.stringify(values));
+            Cookies.set("admin-remember-me", JSON.stringify(values));
           } else {
-            Cookies.remove("remember-me");
+            Cookies.remove("admin-remember-me");
           }
 
           setUser?.(result.user); // hydrate user context

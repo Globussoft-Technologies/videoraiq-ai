@@ -4,6 +4,7 @@ import Webcam from 'react-webcam';
 import { toast } from 'sonner';
 import { createAuthorizedUser, isEmailExist } from './Api';
 import SelectField from './SelectField';
+import { COMPACT_TOAST } from './toastOptions';
 
 const orgId = import.meta.env.VITE_ORGANISATION_ID;
 const requiredImageCount = orgId === 'dubai' ? 1 : 3;
@@ -57,7 +58,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
   /* ---- photo helpers ---- */
   const uploadFile = (file, index) => {
     if (!['image/jpeg', 'image/png'].includes(file.type)) {
-      toast.error('Please upload only JPG or PNG images');
+      toast.error('Please upload only JPG or PNG images', COMPACT_TOAST);
       return;
     }
     setImagePaths((prev) => {
@@ -134,7 +135,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
 
   const handleNext = async () => {
     if (!validateStep1()) {
-      toast.error('Please fill all required fields');
+      toast.error('Please fill all required fields', COMPACT_TOAST);
       return;
     }
     setCheckingEmail(true);
@@ -142,13 +143,13 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
       const res = await isEmailExist(email.trim());
       if (res?.data?.body?.data?.exists === true) {
         setErrors((e) => ({ ...e, email: 'Email already exists' }));
-        toast.error('Email already exists');
+        toast.error('Email already exists', COMPACT_TOAST);
         return;
       }
       setStep(2);
     } catch (err) {
       console.error('Failed to validate email', err);
-      toast.error('Failed to validate email');
+      toast.error('Failed to validate email', COMPACT_TOAST);
     } finally {
       setCheckingEmail(false);
     }
@@ -157,7 +158,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
   /* ---- submit ---- */
   const handleRegister = async () => {
     if (uploadedCount < requiredImageCount) {
-      toast.error(`Please add ${requiredImageCount} enrollment image${requiredImageCount > 1 ? 's' : ''}`);
+      toast.error(`Please add ${requiredImageCount} enrollment image${requiredImageCount > 1 ? 's' : ''}`, COMPACT_TOAST);
       return;
     }
     const formData = new FormData();
@@ -175,10 +176,10 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
       setIsSubmitting(true);
       const data = await createAuthorizedUser(formData);
       if (data?.body?.status !== 'success') {
-        toast.error(data?.body?.message || data?.body?.error || 'Failed to register user');
+        toast.error(data?.body?.message || data?.body?.error || 'Failed to register user', COMPACT_TOAST);
         return;
       }
-      toast.success('User registered successfully');
+      toast.success('User registered successfully', COMPACT_TOAST);
       reset();
       if (onCreated) onCreated();
     } catch (err) {
@@ -188,12 +189,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
         err?.response?.data?.body?.error ||
         err?.message ||
         'An unexpected error occurred';
-      toast.error(msg, {
-        classNames: {
-          toast: '!items-center !py-3 !w-auto !max-w-[380px]',
-          title: '!leading-tight',
-        },
-      });
+      toast.error(msg, COMPACT_TOAST);
     } finally {
       setIsSubmitting(false);
     }
@@ -352,7 +348,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
                             const file = e.target.files?.[0];
                             if (!file) return;
                             if (!['image/jpeg', 'image/png'].includes(file.type)) {
-                              toast.error('Please upload only JPG or PNG images.');
+                              toast.error('Please upload only JPG or PNG images.', COMPACT_TOAST);
                               e.target.value = '';
                               return;
                             }
