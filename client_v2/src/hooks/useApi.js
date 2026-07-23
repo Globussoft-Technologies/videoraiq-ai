@@ -20,10 +20,14 @@ export function useApi(fetcher, deps = [], opts = {}) {
   // a stale response must never overwrite what a newer request already set.
   const requestIdRef = useRef(0);
 
-  const run = useCallback(async () => {
+  // `silent` refetches without flipping `loading` to true — the previous data
+  // stays rendered while the new request is in flight, so callers can refresh
+  // after a mutation without AsyncBoundary swapping the whole view for a
+  // spinner (avoids a full unmount/remount flicker on e.g. a checkbox toggle).
+  const run = useCallback(async ({ silent = false } = {}) => {
     if (!enabled) return;
     const requestId = ++requestIdRef.current;
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const result = await fetcherRef.current();
@@ -33,7 +37,7 @@ export function useApi(fetcher, deps = [], opts = {}) {
       // eslint-disable-next-line no-console
       console.error('[useApi]', err?.message || err);
     } finally {
-      if (mounted.current && requestId === requestIdRef.current) setLoading(false);
+      if (mounted.current && requestId === requestIdRef.current && !silent) setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);

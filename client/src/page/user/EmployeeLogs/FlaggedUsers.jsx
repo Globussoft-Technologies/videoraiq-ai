@@ -387,6 +387,19 @@ const FlaggedUsers = () => {
     fetchFolders();
   };
 
+  // Save Folder guard: a folder that already carries an authorizedUser has
+  // been tagged/registered — re-tagging it would just fail or duplicate, so
+  // surface a clear message instead of opening the tag modal.
+  const handleSaveFolder = (folder) => {
+    if (folder?.authorizedUser) {
+      toast.info(
+        `This detected user is already ${folder.authorizedUser.name ? `tagged to "${folder.authorizedUser.name}"` : 'tagged'}.`
+      );
+      return;
+    }
+    setTagModalFolder(folder);
+  };
+
   if (permissionsLoading) return null;
   if (!canView) {
     return <AccessDenied message="You don't have permission to view Logs." />;
@@ -449,7 +462,7 @@ const FlaggedUsers = () => {
             )}
             <button
               type="button"
-              onClick={() => setTagModalFolder(activeFolder)}
+              onClick={() => handleSaveFolder(activeFolder)}
               className="flex items-center gap-1.5 bg-[#07486A] text-white rounded-lg px-3 py-2 text-sm cursor-pointer"
             >
               <Save className="w-4 h-4" />

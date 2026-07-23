@@ -257,6 +257,19 @@ const DetectedUsers = () => {
     fetchFolders();
   };
 
+  // Save Folder guard: a folder that already carries an authorizedUser has
+  // been tagged/registered — re-tagging it would just fail or duplicate, so
+  // surface a clear message instead of opening the tag modal.
+  const handleSaveFolder = (folder) => {
+    if (folder?.authorizedUser) {
+      toast.info(
+        `This detected user is already ${folder.authorizedUser.name ? `tagged to "${folder.authorizedUser.name}"` : 'tagged'}.`
+      );
+      return;
+    }
+    setTagModalFolder(folder);
+  };
+
   /* ─────────────── Guards ─────────────── */
   if (permissionsLoading) return null;
   if (!canView) {
@@ -275,7 +288,7 @@ const DetectedUsers = () => {
           toggleSelectAllImages={toggleSelectAllImages}
           onDeleteImagesClick={() => setConfirmDeleteImages(true)}
           deleting={deleting}
-          onSaveFolder={() => setTagModalFolder(activeFolder)}
+          onSaveFolder={() => handleSaveFolder(activeFolder)}
           autoRefresh={autoRefresh}
           setAutoRefresh={setAutoRefresh}
           refreshInterval={refreshInterval}
