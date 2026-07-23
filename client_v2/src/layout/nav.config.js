@@ -57,7 +57,7 @@ export const NAV_GROUPS = [
     items: [
       { key: 'overview', label: 'Command Center', path: 'dashboard', icon: LayoutDashboard, end: true, permissionKey: 'dashboard' },
       { key: 'wall', label: 'Live Wall', path: 'live', icon: Grid2x2, permissionKey: 'LIVE' },
-      { key: 'camera', label: 'Playback', path: 'camera', icon: Video, permissionKey: 'playbacks' },
+      { key: 'camera', label: 'Playback', path: 'playback', icon: Video, permissionKey: 'playbacks' },
       { key: 'alerts', label: 'Alerts', path: 'alerts', icon: TriangleAlert, badgeKey: 'alerts' },
       { key: 'incidents', label: 'Incident Center', path: 'incidents', icon: ShieldAlert, permissionKey: 'incidents' },
     ],

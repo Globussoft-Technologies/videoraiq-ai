@@ -18,9 +18,17 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// dailyTotals is Monday-first (index 0 = Monday … 6 = Sunday), matching the
+// backend's isoDayOfWeek bucketing — Date.getDay() is Sunday-first (0-6), so
+// convert to the same Monday-first index instead of assuming "today" is
+// always the last slot (which only holds true on Sundays).
+function todayIndex() {
+  return (new Date().getDay() + 6) % 7;
+}
+
 export default function KpiRow({ stats = {}, dailyTotals = [], sitesCount = 0, onlineCameras = { online: 0, total: 0 }, loading }) {
   const navigate = useNavigate();
-  const eventsToday = dailyTotals.length ? dailyTotals[dailyTotals.length - 1] : 0;
+  const eventsToday = dailyTotals.length ? dailyTotals[todayIndex()] : 0;
   const camerasTotal = onlineCameras.total || num(stats.overAllCameraCount ?? 0);
   const cameras = `${num(onlineCameras.online)}/${num(camerasTotal)}`;
 

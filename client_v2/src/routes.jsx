@@ -42,7 +42,7 @@ export const v2Routes = (
     <Route index element={<Navigate to="dashboard" replace />} />
     <Route path="dashboard" element={<CommandCenter />} />
     <Route path="live" element={<LiveWall />} />
-    <Route path="camera" element={<CameraView />} />
+    <Route path="playback" element={<CameraView />} />
     <Route path="alerts" element={<AlertsView />} />
     <Route path="incidents" element={<IncidentCenter />} />
     <Route path="analytics" element={<Analytics />} />

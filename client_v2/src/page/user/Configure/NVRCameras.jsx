@@ -45,14 +45,19 @@ function statusColor(status) {
   return '#6b7796';
 }
 
-function FieldLabel({ children }) {
-  return <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>{children}</div>;
+function FieldLabel({ children, required }) {
+  return (
+    <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>
+      {children}
+      {required && <span style={{ color: 'var(--crit, #ef4444)' }}> *</span>}
+    </div>
+  );
 }
 
-function ModalInput({ label, ...props }) {
+function ModalInput({ label, required, ...props }) {
   return (
     <div>
-      <FieldLabel>{label}</FieldLabel>
+      <FieldLabel required={required}>{label}</FieldLabel>
       <input
         {...props}
         style={{
@@ -910,9 +915,9 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                   {NVR_BRANDS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
                 </select>
               </div>
-              <ModalInput label="NVR Name" value={form.name} onChange={set('name')} placeholder="e.g. HQ Core Recorder" />
+              <ModalInput label="NVR Name" required value={form.name} onChange={set('name')} placeholder="e.g. HQ Core Recorder" />
               <div>
-                <FieldLabel>Location</FieldLabel>
+                <FieldLabel required>Location</FieldLabel>
                 <select
                   value={form.location} onChange={set('location')}
                   style={{
@@ -953,18 +958,18 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                 </div>
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
-                <ModalInput label="Public IP Address" value={form.ip} onChange={set('ip')} placeholder="e.g. 203.0.113.24 (no http:// or port)" mono />
+                <ModalInput label="Public IP Address" required value={form.ip} onChange={set('ip')} placeholder="e.g. 203.0.113.24 (no http:// or port)" mono />
               </div>
-              <ModalInput label="Username" value={form.user} onChange={set('user')} placeholder="admin" />
+              <ModalInput label="Username" required value={form.user} onChange={set('user')} placeholder="admin" />
               {isEdit ? (
                 <div />
               ) : (
-                <ModalInput label="Password" type="password" value={form.pass} onChange={set('pass')} placeholder="••••••••" />
+                <ModalInput label="Password" required type="password" value={form.pass} onChange={set('pass')} placeholder="••••••••" />
               )}
               {isEdit && (
                 <>
-                  <ModalInput label="Old Password" type="password" value={form.oldPass} onChange={set('oldPass')} placeholder="••••••••" />
-                  <ModalInput label="New Password" type="password" value={form.newPass} onChange={set('newPass')} placeholder="••••••••" />
+                  <ModalInput label="Old Password" required type="password" value={form.oldPass} onChange={set('oldPass')} placeholder="••••••••" />
+                  <ModalInput label="New Password" required type="password" value={form.newPass} onChange={set('newPass')} placeholder="••••••••" />
                 </>
               )}
               <ModalInput label="RTSP Port" value={form.rtsp} onChange={set('rtsp')} placeholder="554" mono />

@@ -759,15 +759,19 @@ class DashboardService {
           const {nvrId, channelId, location, department} = req.body;
       
           // Get this week's Monday to Sunday
-          // const startOfThisWeek = moment().startOf('isoWeek').toDate();
-          // const endOfThisWeek = moment().endOf('isoWeek').toDate();
-          
-          const startOfLastWeek = moment().subtract(1, 'week').startOf('isoWeek').toDate();
-          const endOfLastWeek = moment().subtract(1, 'week').endOf('isoWeek').toDate();
+          const startOfThisWeek = moment().startOf('isoWeek').toDate();
+          const endOfThisWeek = moment().endOf('isoWeek').toDate();
 
+          // Same "real incident" criteria headerStats uses by default (Image
+          // must exist, countPersons/lineCrossing excluded) — without these,
+          // this chart's per-day totals (incl. "Events Today") counted a
+          // superset of what the rest of the dashboard (Total Incidents,
+          // Active Alerts, Resolved) considers a countable incident.
           const filter = {
             userId: data?.user_id.toString(),
-            timeOfIncident: { $gte: startOfLastWeek, $lte: endOfLastWeek },
+            timeOfIncident: { $gte: startOfThisWeek, $lte: endOfThisWeek },
+            Image: { $exists: true, $nin: [null, "", "https://"] },
+            incidentType: { $nin: ["countPersons", "lineCrossing"] },
           };
           let channelFilter = { userId: data.user_id.toString() };
           const userMatch = { userId: data?.user_id };
