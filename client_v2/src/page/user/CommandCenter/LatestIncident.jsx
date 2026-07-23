@@ -150,18 +150,21 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
   const [busy, setBusy] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [acknowledgedIncidentId, setAcknowledgedIncidentId] = useState(null);
 
   const imgSrc = incident?.Image ? mediaUrl(incident.Image) : null;
 
-   console.log(incident, 'incident');
+  const activeIncidentId = incident?._id || incident?.id;
+  const activeAcknowledged = !!incident?.report?.status || (!!activeIncidentId && acknowledgedIncidentId === activeIncidentId);
   const sev = severity(incident?.severity);
   const det = detectionLabel(incident?.incidentType || incident?.displayName);
 
   async function acknowledge() {
-    if (!incident?._id) return;
+    if (!activeIncidentId || activeAcknowledged) return;
     setBusy(true);
     try {
-      await updateIncidentReportStatus({ incidentId: incident._id, status: true, description: '' });
+      await updateIncidentReportStatus({ incidentId: activeIncidentId, status: true, description: '' });
+      setAcknowledgedIncidentId(activeIncidentId);
       toast.success('Incident acknowledged');
       onChanged?.();
     } catch (e) {
@@ -228,10 +231,11 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
               </div>
               <div style={{ display: 'flex', gap: 7, marginTop: 11, flexWrap: 'wrap' }}>
                 <div
-                  onClick={busy ? undefined : acknowledge}
-                  style={{ flex: 1, textAlign: 'center', fontSize: 11.5, fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg,var(--blue),var(--violet))', borderRadius: 8, padding: 8, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}
+                  onClick={busy || activeAcknowledged ? undefined : acknowledge}
+                  aria-disabled={busy || activeAcknowledged}
+                  style={{ flex: 1, textAlign: 'center', fontSize: 11.5, fontWeight: 600, color: activeAcknowledged ? 'var(--tx3)' : '#fff', background: activeAcknowledged ? 'var(--bg2)' : 'linear-gradient(135deg,var(--blue),var(--violet))', border: activeAcknowledged ? '1px solid var(--bd)' : '1px solid transparent', borderRadius: 8, padding: 8, cursor: busy ? 'wait' : activeAcknowledged ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}
                 >
-                  {busy ? 'â€¦' : 'Acknowledge'}
+                  {busy ? '…' : activeAcknowledged ? 'Acknowledged' : 'Acknowledge'}
                 </div>
                 <div
                   onClick={() => setReportOpen(true)}

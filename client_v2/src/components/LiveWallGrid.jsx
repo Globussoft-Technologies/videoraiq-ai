@@ -580,7 +580,7 @@ export default function LiveWallGrid() {
                   big prev/next chevrons on the fullscreen camera view (above)
                   let you step through cameras, but give no sense of position;
                   this "N / total" bar is the only indicator of that. */}
-              {pages > 1 && (
+              {list.length > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '14px 8px 4px', flexWrap: 'wrap' }}>
                   <button
                     disabled={safePage === 0}
