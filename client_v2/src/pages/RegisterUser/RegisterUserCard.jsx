@@ -175,7 +175,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
       setIsSubmitting(true);
       const data = await createAuthorizedUser(formData);
       if (data?.body?.status !== 'success') {
-        toast.error(data?.body?.error || data?.body?.message || 'Failed to register user');
+        toast.error(data?.body?.message || data?.body?.error || 'Failed to register user');
         return;
       }
       toast.success('User registered successfully');
@@ -184,11 +184,16 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     } catch (err) {
       console.error(err);
       const msg =
-        err?.response?.data?.body?.error ||
         err?.response?.data?.body?.message ||
+        err?.response?.data?.body?.error ||
         err?.message ||
         'An unexpected error occurred';
-      toast.error(msg);
+      toast.error(msg, {
+        classNames: {
+          toast: '!items-center !py-3 !w-auto !max-w-[380px]',
+          title: '!leading-tight',
+        },
+      });
     } finally {
       setIsSubmitting(false);
     }

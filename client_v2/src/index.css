@@ -36,3 +36,10 @@ body {
   top: 50% !important;
   transform: translateY(-50%) !important;
 }
+
+/* The close button now floats over the right edge of the toast, so give the
+   message content room to wrap before it reaches the button instead of
+   running underneath it. */
+[data-sonner-toast][data-styled='true'] [data-content] {
+  padding-right: 20px;
+}

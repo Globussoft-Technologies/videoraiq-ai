@@ -31,6 +31,10 @@ import CrusherLogs from './pages/CrusherLogs/CrusherLogs';
 import LineCrossingLogs from './pages/LineCrossingLogs/LineCrossingLogs';
 import WaterSpillLogs from './pages/WaterSpillLogs/WaterSpillLogs';
 import UnauthorizedAccessLogs from './pages/UnauthorizedAccessLogs/UnauthorizedAccessLogs';
+import ProductivityLog from './pages/ProductivityLog/ProductivityLog';
+import TrackLog from './pages/TrackLog/TrackLog';
+import VisibilityLog from './pages/VisibilityLog/VisibilityLog';
+import GuardLog from './pages/GuardLog/GuardLog';
 
 const STUBS = [
   ['faces', 'faces', '/logs/tagged-users'],
@@ -58,6 +62,10 @@ export const v2Routes = (
     <Route path="logs/anpr" element={<ANPRLogs />} />
     <Route path="logs/desk-absence" element={<DeskAbsenceLogs />} />
     <Route path="logs/person-count" element={<PersonCountLogs />} />
+    <Route path="logs/productivity" element={<ProductivityLog />} />
+    <Route path="logs/track" element={<TrackLog />} />
+    <Route path="logs/visibility" element={<VisibilityLog />} />
+    <Route path="logs/guard" element={<GuardLog />} />
 
     {/* Stevinrock incident logs — each is a thin component wrapping the shared
         IncidentLogsPage with its config; Vehicle Count is a chart page. */}

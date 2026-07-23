@@ -27,6 +27,10 @@ import {
   GitBranch,
   Droplets,
   Ban,
+  Activity,
+  TrendingUp,
+  Eye,
+  Shield,
 } from 'lucide-react';
 
 // Mining incident log tabs (conveyor, crusher, etc.) — shown for every client.
@@ -85,6 +89,10 @@ export const NAV_GROUPS = [
       { key: 'person-count', label: 'Person Count Logs', path: 'logs/person-count', icon: UserCheck },
       { key: 'desk-absence', label: 'Desk Absence Logs', path: 'logs/desk-absence', icon: UserMinus },
       { key: 'anpr', label: 'ANPR Logs', path: 'logs/anpr', icon: Car },
+      { key: 'productivity', label: 'Productivity Logs', path: 'logs/productivity', icon: TrendingUp },
+      { key: 'track', label: 'Track Logs', path: 'logs/track', icon: Activity },
+      { key: 'visibility', label: 'Visibility Logs', path: 'logs/visibility', icon: Eye },
+      { key: 'guard', label: 'Guard Logs', path: 'logs/guard', icon: Shield },
       // Mining incident logs — shown for every client.
       ...stevinrockLogItems,
     ],
@@ -132,6 +140,10 @@ export const VIEW_META = {
   'person-count': { title: 'Person Count Logs', sub: 'Zone occupancy & headcount over time' },
   anpr: { title: 'ANPR / Vehicle Logs', sub: 'Vehicle entry / exit & plate matches' },
   'desk-absence': { title: 'Desk Absence Logs', sub: 'Post & seat absence detections' },
+  productivity: { title: 'Productivity Logs', sub: 'Productive vs. non-productive hours by employee' },
+  track: { title: 'Track Logs', sub: 'Live user & vehicle activity tracking' },
+  visibility: { title: 'Visibility Logs', sub: 'Per-channel presence/absence timeline' },
+  guard: { title: 'Guard Logs', sub: 'Guard presence/absence timeline & export' },
   conveyor: { title: 'Conveyor Logs', sub: 'Conveyor load / running-state detections' },
   'vehicle-obstruction': { title: 'Vehicle Obstruction Logs', sub: 'Blocked-path & obstruction detections' },
   'vehicle-count': { title: 'Vehicle Count Logs', sub: 'Vehicle throughput over time' },
