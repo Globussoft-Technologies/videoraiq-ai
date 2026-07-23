@@ -25,7 +25,7 @@ export default function KpiRow({ stats = {}, dailyTotals = [], sitesCount = 0, o
   const cameras = `${num(onlineCameras.online)}/${num(camerasTotal)}`;
 
   const cards = [
-    { label: 'Cameras Online', value: cameras, sub: 'streaming now', color: 'var(--blue)' },
+    { label: 'Cameras Online', value: cameras, sub: 'streaming now', color: 'var(--blue)', onClick: () => navigate('/live') },
     { label: 'Active Alerts', value: num(stats.totalAlerts ?? 0), sub: 'unresolved', color: 'var(--warn)', spark: dailyTotals, onClick: () => navigate('/alerts', { state: { statusFilter: 'new' } }) },
     { label: 'High', value: num(stats.criticalAlerts ?? 0), sub: 'high severity', color: 'var(--crit)', onClick: () => navigate('/incidents', { state: { severityFilter: 'high' } }) },
     { label: 'Events Today', value: num(eventsToday), sub: 'detections', color: 'var(--violet)', spark: dailyTotals, onClick: () => navigate('/incidents', { state: { date: todayStr() } }) },

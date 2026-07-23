@@ -332,6 +332,7 @@ class AuthUsersService {
               .find(filter, null, { memberId: data?.memberId })
               // .populate("roleIds", "role empRoleId")
               .populate("departmentId", "departmentName empDepartmentId")
+              .sort({ createdAt: -1 })
               .skip(parsedSkip)
               .limit(parsedLimit),
             authorizedUsersModel.countDocuments(filter, { memberId: data?.memberId }),

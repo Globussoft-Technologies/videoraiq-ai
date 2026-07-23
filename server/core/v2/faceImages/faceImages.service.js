@@ -9,6 +9,7 @@ import shiftModel from "../shifts/shifts.model.js";
 import FaceImagesValidator from "./faceImages.validate.js";
 import { deleteMedia, mediaExists, toRelativeMediaPaths } from "../../../utils/mediaStorage.js";
 import dsUserSyncService from "../../../services/dsUserSync.service.js";
+import OptimizedAccessLogs from "../accesslogs/newAccessLogs.model.js";
 
 function escapeRegex(input = "") {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -20,7 +21,17 @@ class FaceImagesService {
   async _tagFaceImages(dsId, authorizedUser, adminId) {
     const result = await faceImagesModel.updateMany(
       { dsId },
-      { $set: { authorizedUserId: authorizedUser._id, adminId } }
+      { $set: { authorizedUserId: authorizedUser._id, adminId, tag: true } }
+    );
+
+    // Also mark this user's access logs as tagged — the Tagged Users page
+    // (client_v2/src/pages/TaggedUsers) filters access logs on `tag: true`,
+    // which is otherwise only set by the separate authorizedUsers "tag-user"
+    // flow. Tagging a face here confirms the same identity, so it should
+    // surface there too instead of being invisible to that page.
+    await OptimizedAccessLogs.updateMany(
+      { userId: authorizedUser._id, tag: { $ne: true } },
+      { $set: { tag: true } }
     );
 
     // Fire-and-forget: notify DS of the tag without blocking or failing the caller's response.

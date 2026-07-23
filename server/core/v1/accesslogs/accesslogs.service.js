@@ -105,6 +105,10 @@ class AccessLogsService {
           const created = await OptimizedAccessLogs.create({
             admin: adminId,
             userId: userId || null,
+            // A recognized detection (userId present) counts as an identity
+            // match — surface it in Tagged Users immediately instead of only
+            // via the separate manual tag-user/tag-folder flows.
+            tag: !!userId,
             date: startOfDay,
             sessions: [newSession]
           });
@@ -124,13 +128,21 @@ class AccessLogsService {
       const diff = newTime - lastTime;
 
       if (diff <= allowedDiff) {
-        // SAME GROUP → append to existing document
+        // SAME GROUP → append to existing document. If this session now
+        // carries a userId the earlier ones didn't (freshly recognized after
+        // being tagged), backfill it onto the doc so it stops showing as
+        // Unknown/untagged.
         todaysLog?.sessions?.push(newSession);
+        if (userId && !todaysLog.userId) {
+          todaysLog.userId = userId;
+          todaysLog.tag = true;
+        }
       } else {
         // NEW GROUP → create a NEW document for today
         const newDoc = await OptimizedAccessLogs.create({
           admin: adminId,
           userId: userId || null,
+          tag: !!userId,
           // date: startOfDay,
           sessions: [newSession]
         });
@@ -419,10 +431,13 @@ class AccessLogsService {
             const created = await OptimizedAccessLogs.create({
               admin: adminId,
               userId: userId || null,
+              // Reached only inside the isUserExist branch, so userId is a
+              // real recognized identity — mark it tagged immediately.
+              tag: true,
               // date: startOfDay,
               sessions: [newSession]
             });
-            return res.send(Response.userSuccessResp("New access log created", created)); 
+            return res.send(Response.userSuccessResp("New access log created", created));
         }
 
 
@@ -438,13 +453,18 @@ class AccessLogsService {
           const diff = newTime - lastTime;
 
           if (diff <= allowedDiff) {
-            // SAME GROUP → append to existing document
+            // SAME GROUP → append to existing document. Backfill userId/tag
+            // in case this doc was first created before the person was
+            // recognized/tagged (started out as Unknown).
             todaysLog?.sessions?.push(newSession);
+            if (!todaysLog.userId) todaysLog.userId = userId;
+            todaysLog.tag = true;
           } else {
             // NEW GROUP → create a NEW document for today
             const newDoc = await OptimizedAccessLogs.create({
               admin: adminId,
               userId: userId || null,
+              tag: true,
               // date: startOfDay,
               sessions: [newSession]
             });

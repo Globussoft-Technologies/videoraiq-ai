@@ -2,7 +2,10 @@ import api, { unwrap } from '../helpers/client';
 
 /* ---- Users ---- */
 
-export async function getUsers({ skip = 0, limit = 10, searchQuery = '', sortField = 'userName', sortOrder = 'asc' } = {}) {
+// Defaults to newest-first (createdAt desc) — matches the backend's own
+// default when no orderBy/sort is sent, so newly added users show up at the
+// top instead of being scattered alphabetically across pages.
+export async function getUsers({ skip = 0, limit = 10, searchQuery = '', sortField = 'createdAt', sortOrder = 'desc' } = {}) {
   const res = await api.post(
     `/users/fetch?skip=${skip}&limit=${limit}&searchQuery=${searchQuery}&orderBy=${sortField}&sort=${sortOrder}`,
     { sortField, sortOrder }

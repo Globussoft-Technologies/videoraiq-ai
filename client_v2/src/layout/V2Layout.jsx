@@ -83,7 +83,20 @@ function Shell() {
     time: a.timeAgo || timeAgo(a.timeOfIncident),
     sevColor: SEV_COLOR[(a.severity || '').toLowerCase()] || 'var(--warn)',
     read: readIds.has(a._id || i),
-    go: a._id ? () => navigate('/alerts', { state: { alertId: a._id } }) : undefined,
+    // Person-count incidents have no image and are excluded from the Alerts
+    // feed entirely (they're a running daily tally, not a snapshot event) —
+    // route those to Person Count Logs instead, everything else as usual.
+    go: a.incidentType === 'countPersons'
+      ? () => navigate('/logs/person-count', {
+          state: {
+            nvrIds: a.nvrId?._id ? [a.nvrId._id] : [],
+            channelIds: a.channelId?._id ? [a.channelId._id] : [],
+            date: a.timeOfIncident ? a.timeOfIncident.slice(0, 10) : undefined,
+          },
+        })
+      : a._id
+        ? () => navigate('/alerts', { state: { alertId: a._id } })
+        : undefined,
   }));
   const unreadCount = notifications.filter((n) => !n.read).length;
 

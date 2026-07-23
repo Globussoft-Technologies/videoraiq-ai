@@ -15,6 +15,7 @@ import departmentModel from "../departments/departments.model.js"
 import config from "config";
 const accessLogsTimeDifference = config.get("accessLogsTimeDifference");
 import OptimizedAccessLogs from "./newAccessLogs.model.js";
+import faceImagesModel from "../faceImages/faceImages.model.js";
 
 
 class AccessLogsService {
@@ -105,6 +106,10 @@ class AccessLogsService {
           const created = await OptimizedAccessLogs.create({
             admin: adminId,
             userId: userId || null,
+            // A recognized detection (userId present) counts as an identity
+            // match — surface it in Tagged Users immediately instead of only
+            // via the separate manual tag-user/tag-folder flows.
+            tag: !!userId,
             date: startOfDay,
             sessions: [newSession]
           });
@@ -124,13 +129,21 @@ class AccessLogsService {
       const diff = newTime - lastTime;
 
       if (diff <= allowedDiff) {
-        // SAME GROUP → append to existing document
+        // SAME GROUP → append to existing document. If this session now
+        // carries a userId the earlier ones didn't (freshly recognized after
+        // being tagged), backfill it onto the doc so it stops showing as
+        // Unknown/untagged.
         todaysLog?.sessions?.push(newSession);
+        if (userId && !todaysLog.userId) {
+          todaysLog.userId = userId;
+          todaysLog.tag = true;
+        }
       } else {
         // NEW GROUP → create a NEW document for today
         const newDoc = await OptimizedAccessLogs.create({
           admin: adminId,
           userId: userId || null,
+          tag: !!userId,
           // date: startOfDay,
           sessions: [newSession]
         });
@@ -419,10 +432,13 @@ class AccessLogsService {
             const created = await OptimizedAccessLogs.create({
               admin: adminId,
               userId: userId || null,
+              // Reached only inside the isUserExist branch, so userId is a
+              // real recognized identity — mark it tagged immediately.
+              tag: true,
               // date: startOfDay,
               sessions: [newSession]
             });
-            return res.send(Response.userSuccessResp("New access log created", created)); 
+            return res.send(Response.userSuccessResp("New access log created", created));
         }
 
 
@@ -438,13 +454,18 @@ class AccessLogsService {
           const diff = newTime - lastTime;
 
           if (diff <= allowedDiff) {
-            // SAME GROUP → append to existing document
+            // SAME GROUP → append to existing document. Backfill userId/tag
+            // in case this doc was first created before the person was
+            // recognized/tagged (started out as Unknown).
             todaysLog?.sessions?.push(newSession);
+            if (!todaysLog.userId) todaysLog.userId = userId;
+            todaysLog.tag = true;
           } else {
             // NEW GROUP → create a NEW document for today
             const newDoc = await OptimizedAccessLogs.create({
               admin: adminId,
               userId: userId || null,
+              tag: true,
               // date: startOfDay,
               sessions: [newSession]
             });
@@ -490,6 +511,97 @@ class AccessLogsService {
       next(new AppError(error.message || error, 500));
     }
   }
+
+/**
+ * Detected Users → tagFolder/quickCreateUser only links a dsId folder to an
+ * authorizedUserId (faceImages.service.js's _tagFaceImages); it never creates
+ * an OptimizedAccessLogs entry. If that person has no access-log history yet
+ * (the common case — they end up in Detected Users precisely because DS
+ * couldn't resolve a userId for them at detection time), the OptimizedAccessLogs
+ * pipeline below has nothing to show, and a fresh tag never appears in Tagged
+ * Users. This surfaces one row per tagged dsId group as a supplemental source,
+ * shaped to match the same row contract taggedState.js's mapAccessLog expects.
+ * Only called for the Tagged Users page (tag === true), not general Access Logs.
+ */
+async _getTaggedFaceImageRows({ adminId, searchQuery, departmentIds, startDate, endDate }) {
+  const dateMatch = {};
+  if (startDate) dateMatch.$gte = moment.tz(startDate, "Asia/Kolkata").startOf("day").toDate();
+  if (endDate) dateMatch.$lte = moment.tz(endDate, "Asia/Kolkata").endOf("day").toDate();
+
+  const deptObjectIds = departmentIds?.length ? departmentIds.map(id => new ObjectId(id)) : [];
+
+  const pipeline = [
+    // tag: true (not just authorizedUserId set) — untagging via authorizedUsers'
+    // tagUser flips this back to false without clearing the userId link, so
+    // relying on authorizedUserId alone would keep showing an untagged row here.
+    { $match: { adminId: new ObjectId(adminId), authorizedUserId: { $ne: null }, tag: true } },
+    { $sort: { createdAt: 1 } },
+    {
+      $group: {
+        _id: "$dsId",
+        authorizedUserId: { $first: "$authorizedUserId" },
+        // "Tagged at" — the moment the folder was linked, not the original
+        // detection time, since that's the event Tagged Users is meant to show.
+        taggedAt: { $max: "$updatedAt" },
+        image: { $first: "$image" },
+      }
+    },
+    ...(Object.keys(dateMatch).length ? [{ $match: { taggedAt: dateMatch } }] : []),
+    {
+      $lookup: {
+        from: "authorizedusers",
+        localField: "authorizedUserId",
+        foreignField: "_id",
+        as: "userInfo"
+      }
+    },
+    { $unwind: "$userInfo" },
+    {
+      $lookup: {
+        from: "departments",
+        localField: "userInfo.departmentId",
+        foreignField: "_id",
+        as: "departmentInfo"
+      }
+    },
+    { $unwind: { path: "$departmentInfo", preserveNullAndEmptyArrays: true } },
+    ...(deptObjectIds.length ? [{ $match: { "departmentInfo._id": { $in: deptObjectIds } } }] : []),
+    ...(searchQuery ? [{ $match: { "userInfo.userName": { $regex: searchQuery, $options: "i" } } }] : []),
+  ];
+
+  const groups = await faceImagesModel.aggregate(pipeline);
+
+  return groups.map((g) => ({
+    logId: `faceImages:${g._id}`,
+    date: g.taggedAt,
+    createdAt: g.taggedAt,
+    updatedAt: g.taggedAt,
+    userId: g.userInfo._id,
+    lastCreatedAt: g.taggedAt,
+    tag: true,
+    sessions: [{
+      // No NVR/channel — this came from a tagged Detected Users folder, not a
+      // live camera hit, so there's no session/camera to attribute it to.
+      nvr: null,
+      channel: null,
+      personName: `${g.userInfo.firstName || ""} ${g.userInfo.lastName || ""}`.trim(),
+      timestamp: g.taggedAt,
+      images: { faceImage: "", personImage: g.image || "", frameImage: "" },
+    }],
+    userInfo: {
+      _id: g.userInfo._id,
+      userName: g.userInfo.userName,
+      email: g.userInfo.email,
+      phone: g.userInfo.phone,
+      profilePics: g.userInfo.profilePics,
+      lastCreatedAt: g.taggedAt,
+    },
+    department: {
+      _id: g.departmentInfo?._id,
+      departmentName: g.departmentInfo?.departmentName,
+    },
+  }));
+}
 
 async getLogs(req, res, next) {
       try {
@@ -714,13 +826,43 @@ async getLogs(req, res, next) {
 
         let accessLogsStartDate = await OptimizedAccessLogs.findOne().sort({ createdAt: 1 }).select("createdAt");
 
+        // Tagged Users only (tag === true): also surface Detected-Users folders
+        // tagged via faceImages — see _getTaggedFaceImageRows for why these
+        // never show up in OptimizedAccessLogs on their own. Merged here so
+        // the frontend only ever calls this one endpoint.
+        let usersLogs = logs;
+        let combinedTotal = total;
+        if (tag === true) {
+          const taggedFaceRows = await this._getTaggedFaceImageRows({
+            adminId, searchQuery, departmentIds, startDate, endDate
+          });
+          if (taggedFaceRows.length) {
+            const getSortValue = (row) => {
+              if (sortField_ === "userInfo.userName") return row.userInfo?.userName || "";
+              if (sortField_ === "departmentInfo.departmentName") return row.department?.departmentName || "";
+              return new Date(row.lastCreatedAt || row.date).getTime();
+            };
+            const merged = [...logs, ...taggedFaceRows];
+            merged.sort((a, b) => {
+              const av = getSortValue(a);
+              const bv = getSortValue(b);
+              if (typeof av === "string" && typeof bv === "string") {
+                return sortDir === 1 ? av.localeCompare(bv) : bv.localeCompare(av);
+              }
+              return sortDir === 1 ? av - bv : bv - av;
+            });
+            combinedTotal = total + taggedFaceRows.length;
+            usersLogs = isExport ? merged : merged.slice(0, limit);
+          }
+        }
+
         return res.send(
           Response.userSuccessResp("Access logs fetched successfully", {
             accessLogsStartDate,
-            total,
+            total: combinedTotal,
             skip,
             limit,
-            usersLogs: logs
+            usersLogs
           })
         );
 

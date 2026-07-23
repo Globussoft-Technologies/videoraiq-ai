@@ -75,7 +75,12 @@ export const mapAccessLog = (log, nasUrl, unknownimg) => {
   return {
     name: log.userInfo?.userName || 'Unknown',
     userId: log.userId || log.userInfo?._id || null,
-    accessLogId: log._id || null,
+    // The backend's getLogs $project only ever forwards `logId` (aliased from
+    // `_id`), never a raw `_id` field — reading log._id here always returned
+    // undefined, which made accessLogId null for every row, which in turn made
+    // `untaggingId === accessLogId` (both null) evaluate true everywhere, so
+    // every row's Tagged pill showed the busy/spinner icon permanently.
+    accessLogId: log.logId || log._id || null,
     tag: !!log.tag,
     department: log.department?.departmentName || '--',
     date: log.date || '--',

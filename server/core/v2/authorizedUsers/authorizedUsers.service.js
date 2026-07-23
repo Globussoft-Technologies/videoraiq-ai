@@ -23,6 +23,7 @@ import shiftModel from "./../shifts/shifts.model.js"
 import channelsModel from "../channels/channels.model.js";
 import LocationModel from "../locations/location.model.js";
 import OptimizedAccessLogs from "../accesslogs/newAccessLogs.model.js";
+import faceImagesModel from "../faceImages/faceImages.model.js";
 
 
 import fs from 'fs';
@@ -332,6 +333,7 @@ class AuthUsersService {
               .find(filter, null, { memberId: data?.memberId })
               // .populate("roleIds", "role empRoleId")
               .populate("departmentId", "departmentName empDepartmentId")
+              .sort({ createdAt: -1 })
               .skip(parsedSkip)
               .limit(parsedLimit),
             authorizedUsersModel.countDocuments(filter, { memberId: data?.memberId }),
@@ -1341,7 +1343,30 @@ async bulkImportAuthUser(req, res, next) {
         return res.status(404).json(Response.userFailResp("Authorized user not found", "Validation Failed!"));
       }
 
+      // For untag, don't trust the client-supplied profileImages — when the
+      // click comes from a Detected-Users-tagged row, the frontend builds
+      // those URLs off VITE_BACKEND (the API host), which DS's network may
+      // not reach at all in non-prod setups, and even when reachable it's
+      // just a face-crop thumbnail rather than a verified reference image.
+      // faceImagesModel already holds this user's actual tagged images
+      // (same source Detected Users uses), so build the DS-facing URL from
+      // there directly, the same way faceImages.service.js's delete flow does.
+      let untagProfileImages = profileImages;
+      if (!tag) {
+        const imageBaseUrl = config.get("ImageView");
+        const linkedImages = await faceImagesModel
+          .find({ authorizedUserId: isUserExist._id })
+          .select("image")
+          .lean();
+        if (linkedImages.length) {
+          untagProfileImages = linkedImages.map((doc) => `${imageBaseUrl}${doc.image}`);
+        }
+      }
+
       // Call /tag or /untag based on tag value — only update DB if API returns success
+      logger.info(`DS ${tag ? 'tag' : 'untag'} request for uid=${isUserExist._id}:`, {
+        profileImages: tag ? profileImages : untagProfileImages,
+      });
       let dsResponse;
       try {
         if (tag) {
@@ -1364,7 +1389,7 @@ async bulkImportAuthUser(req, res, next) {
               uid: isUserExist._id.toString(),
               firstName: isUserExist.firstName,
               lastName: isUserExist.lastName,
-              profileImages: profileImages,
+              profileImages: untagProfileImages,
               admin_id: isAdminExist._id.toString(),
               db: this.getDbName(isAdminExist._id),
             },
@@ -1393,6 +1418,15 @@ async bulkImportAuthUser(req, res, next) {
       if (accessLogId) {
         await OptimizedAccessLogs.findByIdAndUpdate(accessLogId, { tag });
       }
+
+      // A person can be tagged via a real camera detection (OptimizedAccessLogs)
+      // or via a Detected-Users folder (faceImagesModel) — Tagged Users merges
+      // both. Untagging (or re-tagging) from either surface must clear/set the
+      // tag everywhere this userId appears, not just the one accessLogId the
+      // click happened to come from, so the person fully disappears from/
+      // reappears in Tagged Users regardless of which row was acted on.
+      await OptimizedAccessLogs.updateMany({ userId }, { $set: { tag } });
+      await faceImagesModel.updateMany({ authorizedUserId: userId }, { $set: { tag } });
 
       return res.status(200).json(Response.userSuccessResp("User tag updated successfully", updatedUser));
     } catch (error) {

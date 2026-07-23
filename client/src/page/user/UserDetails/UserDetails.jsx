@@ -55,8 +55,11 @@ const Userdetails= () => {
   const [limit] = useState(8);
   const [selectedRoles, setSelectedRoles] = useState([]);
   const [total, setTotal] = useState(0);
-  const [sortOrder, setSortOrder] = useState('asc');
-  const [sortField, setSortField] = useState('userName');
+  // Defaults to newest-first (createdAt desc) so newly added users show up
+  // at the top instead of being scattered alphabetically across pages.
+  // Clicking the "User name" column header still switches to a userName sort.
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [sortField, setSortField] = useState('createdAt');
 
 
   // which columns are visible

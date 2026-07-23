@@ -597,6 +597,41 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   const handleUndo = () => setPoints(prev => prev.slice(0, -1));
   const handleClear = () => setPoints([]);
 
+  // Clear All doubles as a delete for already-saved zones (V1 parity —
+  // AreaMarkingControls' Clear All confirm persists an empty zone list via
+  // the same PUT used elsewhere, not just a local canvas reset). Always
+  // confirm first — losing an in-progress, never-saved polygon is just as
+  // unrecoverable to the user mid-drawing as losing a saved zone.
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  const handleClearAllClick = () => {
+    if (points.length === 0 && zones.length === 0) return;
+    setShowClearConfirm(true);
+  };
+
+  const handleConfirmClearAll = async () => {
+    // No saved zones to persist — just drop the in-progress points locally.
+    if (!(zones.length > 0 && activeType?.settingId)) {
+      setPoints([]);
+      setShowClearConfirm(false);
+      return;
+    }
+    setClearing(true);
+    try {
+      await persistZones({ nextZones: [] });
+      setZones([]);
+      setPoints([]);
+      setShowClearConfirm(false);
+      toast.success('Detection area cleared.');
+      onSaved?.();
+    } catch (err) {
+      toast.error(err?.response?.data?.body?.message || 'Failed to clear zones.');
+    } finally {
+      setClearing(false);
+    }
+  };
+
   // Quick-start rectangle presets (V1 parity) — full-frame / a small fixed
   // box — the user then drags points to adjust; these aren't size limits.
   const handleMaxArea = () => {
@@ -672,8 +707,8 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     if (!activeType) return;
     // The in-progress polygon on the canvas is folded straight into the save,
     // so drawing once and hitting Save works without a separate commit step.
-    if (zones.length === 0 && points.length < MIN_POINTS_TO_CLOSE) return;
-    const nextZones = points.length >= MIN_POINTS_TO_CLOSE
+    if (zones.length === 0 && points.length < minPointsToSave) return;
+    const nextZones = points.length >= minPointsToSave
       ? [...zones, { name: `Zone ${zones.length + 1}`, capacity: '', threshold: '', schedule: emptySchedule(), points }]
       : zones;
     setPendingZones(nextZones);
@@ -718,10 +753,19 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     }
   };
 
-  const handleDeleteZone = async (index) => {
+  // Deleting a zone is destructive and can't be undone, so it goes through
+  // the same confirm-modal pattern as the area reset / clear-all below
+  // instead of firing straight off the trash icon click.
+  const [zoneDeleteIndex, setZoneDeleteIndex] = useState(null);
+  const requestDeleteZone = (index) => setZoneDeleteIndex(index);
+
+  const handleDeleteZone = async () => {
+    const index = zoneDeleteIndex;
+    if (index === null) return;
     const nextZones = zones.filter((_, i) => i !== index);
     if (!activeType?.settingId) {
       setZones(nextZones); // never saved — just drop it locally
+      setZoneDeleteIndex(null);
       return;
     }
     setSavingZoneIndex(index);
@@ -734,6 +778,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
       toast.error(err?.response?.data?.body?.message || 'Failed to delete zone.');
     } finally {
       setSavingZoneIndex(null);
+      setZoneDeleteIndex(null);
     }
   };
 
@@ -1114,13 +1159,13 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               <Undo2 size={14} /> Undo
             </button>
             <button
-              onClick={handleClear}
-              disabled={points.length === 0}
-              title="Clear the in-progress polygon (does not affect already-added zones)"
+              onClick={handleClearAllClick}
+              disabled={points.length === 0 && zones.length === 0}
+              title="Clear the in-progress drawing, or delete all saved zones for this detection type"
               style={{
                 display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
                 background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
-                cursor: points.length ? 'pointer' : 'not-allowed', opacity: points.length ? 1 : 0.5,
+                cursor: (points.length || zones.length) ? 'pointer' : 'not-allowed', opacity: (points.length || zones.length) ? 1 : 0.5,
               }}
             >
               <Trash2 size={14} /> Clear All
@@ -1172,7 +1217,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               onSetActive={setActiveZoneIndex}
               onUpdateField={handleUpdateZoneField}
               onSave={handleSaveZoneName}
-              onDelete={handleDeleteZone}
+              onDelete={requestDeleteZone}
               savingIndex={savingZoneIndex}
             />
           )}
@@ -1298,6 +1343,107 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
                 }}
               >
                 {deleting ? 'Resetting…' : 'Reset Anyway'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showClearConfirm && activeType && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(6,9,15,.6)', zIndex: 200,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        }}>
+          <div style={{
+            width: '100%', maxWidth: 400, background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
+            borderRadius: 16, padding: 22, boxShadow: '0 24px 64px rgba(0,0,0,.45)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <span style={{
+                width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'rgba(239,68,68,.13)', color: '#ef4444', flexShrink: 0,
+              }}>
+                <AlertTriangle size={18} />
+              </span>
+              <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Clear Detection Area</span>
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.5, marginBottom: 20 }}>
+              {zones.length > 0 && activeType?.settingId ? (
+                <>Are you sure you want to clear all marked points?<br /><strong>This will remove the entire detection area. This action cannot be undone.</strong></>
+              ) : (
+                <>Are you sure you want to clear the in-progress drawing? <strong>Any points you've marked so far will be lost and this action cannot be undone.</strong></>
+              )}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                disabled={clearing}
+                style={{
+                  height: 38, padding: '0 16px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)',
+                  fontSize: 12.5, fontWeight: 500, color: 'var(--tx2)', cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmClearAll}
+                disabled={clearing}
+                style={{
+                  height: 38, padding: '0 18px', borderRadius: 9, background: '#ef4444',
+                  border: 'none', fontSize: 12.5, fontWeight: 600, color: '#fff', cursor: clearing ? 'not-allowed' : 'pointer',
+                  opacity: clearing ? 0.7 : 1,
+                }}
+              >
+                {clearing ? 'Clearing…' : 'Clear All'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {zoneDeleteIndex !== null && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(6,9,15,.6)', zIndex: 200,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        }}>
+          <div style={{
+            width: '100%', maxWidth: 400, background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
+            borderRadius: 16, padding: 22, boxShadow: '0 24px 64px rgba(0,0,0,.45)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <span style={{
+                width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'rgba(239,68,68,.13)', color: '#ef4444', flexShrink: 0,
+              }}>
+                <AlertTriangle size={18} />
+              </span>
+              <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Delete Zone?</span>
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.5, marginBottom: 20 }}>
+              Are you sure you want to delete <strong>{zones[zoneDeleteIndex]?.name || 'this zone'}</strong>? <strong>This action cannot be undone.</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                onClick={() => setZoneDeleteIndex(null)}
+                disabled={savingZoneIndex === zoneDeleteIndex}
+                style={{
+                  height: 38, padding: '0 16px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)',
+                  fontSize: 12.5, fontWeight: 500, color: 'var(--tx2)', cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteZone}
+                disabled={savingZoneIndex === zoneDeleteIndex}
+                style={{
+                  height: 38, padding: '0 18px', borderRadius: 9, background: '#ef4444',
+                  border: 'none', fontSize: 12.5, fontWeight: 600, color: '#fff',
+                  cursor: savingZoneIndex === zoneDeleteIndex ? 'not-allowed' : 'pointer',
+                  opacity: savingZoneIndex === zoneDeleteIndex ? 0.7 : 1,
+                }}
+              >
+                {savingZoneIndex === zoneDeleteIndex ? 'Deleting…' : 'Delete Zone'}
               </button>
             </div>
           </div>

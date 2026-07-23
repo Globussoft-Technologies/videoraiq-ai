@@ -1,5 +1,5 @@
-import React, { useEffect, useCallback, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import ReactApexChart from 'react-apexcharts';
 import moment from 'moment-timezone';
 import {
@@ -11,11 +11,13 @@ import {
 } from 'lucide-react';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
+import MultiSelect from '@/components/MultiSelect';
 
 import { fetchPersonCountLogs } from './Api';
 import { buildChart } from './personCountChart';
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
 import DateRangePicker from '@/pages/AttendanceLogs/components/DateRangePicker';
+import { getNvrs, getCamerasByNvr } from '@/helpers/configure';
 
 const LIMIT = 2;
 
@@ -24,6 +26,10 @@ const INTERVAL_KEY = 'person_count_auto_refresh_interval';
 
 const PersonCountLogs = () => {
   const navigate = useNavigate();
+  const routerLocation = useLocation();
+  // A "Person detection" notification (Header's bell tray) can deep-link here
+  // with a specific nvr/camera/date via navigate(..., { state }).
+  const initialFilter = routerLocation.state || {};
   const { permissions, loading: permissionsLoading } = usePermissions();
 
   // Person Count uses the accessLogs permission key in V1. Resolve in order:
@@ -45,8 +51,59 @@ const PersonCountLogs = () => {
   const [error, setError] = useState(null);
   const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [startDate, setStartDate] = useState(moment().format('YYYY-MM-DD'));
-  const [endDate, setEndDate] = useState(moment().format('YYYY-MM-DD'));
+  const [startDate, setStartDate] = useState(() => initialFilter.date || moment().format('YYYY-MM-DD'));
+  const [endDate, setEndDate] = useState(() => initialFilter.date || moment().format('YYYY-MM-DD'));
+
+  // NVR / Camera filter — lets the user pick specific camera(s) instead of
+  // relying on pagination to happen to surface them.
+  const [nvrOptions, setNvrOptions] = useState([]);
+  const [cameraOptions, setCameraOptions] = useState([]);
+  const [selectedNvrIds, setSelectedNvrIds] = useState(() => initialFilter.nvrIds || []);
+  const [selectedCameraIds, setSelectedCameraIds] = useState([]);
+  // One-shot: applied the first time the camera-options effect resolves after
+  // a deep-link, then never consulted again (so manually clearing camera
+  // filters later doesn't keep snapping back to the notification's camera).
+  const pendingCameraIdsRef = useRef(initialFilter.channelIds || []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getNvrs()
+      .then(({ nvrs }) => {
+        if (!cancelled) setNvrOptions(Array.isArray(nvrs) ? nvrs : []);
+      })
+      .catch(() => {
+        if (!cancelled) setNvrOptions([]);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Camera list is the union of the selected NVRs' cameras; drop any camera
+  // pick that no longer belongs to the current NVR selection.
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedNvrIds.length) {
+      setCameraOptions([]);
+      setSelectedCameraIds([]);
+      return;
+    }
+    Promise.all(selectedNvrIds.map((id) => getCamerasByNvr(id)))
+      .then((results) => {
+        if (cancelled) return;
+        const flat = results.flat().filter(Boolean);
+        setCameraOptions(flat);
+        const validIds = new Set(flat.map((c) => c._id || c.id));
+        setSelectedCameraIds((prev) => {
+          const pending = pendingCameraIdsRef.current;
+          const base = pending.length ? pending : prev;
+          pendingCameraIdsRef.current = []; // consume — only applies once
+          return base.filter((id) => validIds.has(id));
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setCameraOptions([]);
+      });
+    return () => { cancelled = true; };
+  }, [selectedNvrIds]);
 
   const [autoRefresh, setAutoRefresh] = useState(() => {
     const saved = localStorage.getItem(REFRESH_KEY);
@@ -74,7 +131,14 @@ const PersonCountLogs = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchPersonCountLogs({ skip, limit: LIMIT, startDate, endDate });
+      const res = await fetchPersonCountLogs({
+        skip,
+        limit: LIMIT,
+        startDate,
+        endDate,
+        nvrIds: selectedNvrIds,
+        channelIds: selectedCameraIds,
+      });
       const body = res?.data?.body?.data;
       setRecords(body?.data || []);
       setTotalCount(body?.totalCount || 0);
@@ -84,7 +148,7 @@ const PersonCountLogs = () => {
     } finally {
       setLoading(false);
     }
-  }, [skip, startDate, endDate]);
+  }, [skip, startDate, endDate, selectedNvrIds, selectedCameraIds]);
 
   useEffect(() => {
     fetchLogs();
@@ -103,7 +167,7 @@ const PersonCountLogs = () => {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [startDate, endDate]);
+  }, [startDate, endDate, selectedNvrIds, selectedCameraIds]);
 
   const handlePageChange = (page) => {
     if (page < 1 || page > totalPages) return;
@@ -175,6 +239,30 @@ const PersonCountLogs = () => {
               setEndDate(e);
             }}
           />
+
+          <div className="w-full sm:w-48">
+            <MultiSelect
+              options={nvrOptions.map((n) => ({ id: n._id || n.id, label: n.nvrName || n.name }))}
+              value={selectedNvrIds}
+              onChange={setSelectedNvrIds}
+              placeholder="Select NVR"
+              searchPlaceholder="Search NVR..."
+              maxHeight="max-h-48"
+              msg="No NVR found"
+            />
+          </div>
+
+          <div className="w-full sm:w-48">
+            <MultiSelect
+              options={cameraOptions.map((c) => ({ id: c._id || c.id, label: c.customName || c.name }))}
+              value={selectedCameraIds}
+              onChange={setSelectedCameraIds}
+              placeholder={selectedNvrIds.length ? 'Select Camera' : 'Select NVR first'}
+              searchPlaceholder="Search camera..."
+              maxHeight="max-h-48"
+              msg="No camera found"
+            />
+          </div>
 
           <div className="w-full md:flex md:items-center md:ml-auto md:w-auto gap-3 flex flex-wrap">
             <AutoRefreshComponent
