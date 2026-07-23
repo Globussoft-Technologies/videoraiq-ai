@@ -69,11 +69,12 @@ const DeskAbsenceLogs = () => {
 
   /* ─────────────── Permissions ─────────────── */
   const { permissions, loading: permissionsLoading } = usePermissions();
-  // Desk Absence uses the accessLogs sub-section permission key. Resolve in
-  // order: section-specific (accessLogs) → global → legacy flat.
+  // Resolve in order: section-specific (deskLogs) → accessLogs (legacy shared
+  // key, kept for roles seeded before deskLogs was wired here) → global.
   const resolveLogPerm = (action) => {
     const logs = permissions?.logs;
     if (!logs) return false;
+    if (typeof logs.deskLogs?.[action] === 'boolean') return logs.deskLogs[action];
     if (typeof logs.accessLogs?.[action] === 'boolean') return logs.accessLogs[action];
     if (typeof logs.global?.[action] === 'boolean') return logs.global[action];
     if (typeof logs[action] === 'boolean') return logs[action];

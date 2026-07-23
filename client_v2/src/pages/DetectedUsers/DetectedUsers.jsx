@@ -65,6 +65,7 @@ const DetectedUsers = () => {
   const resolveLogPerm = (action) => {
     const logs = permissions?.logs;
     if (!logs) return false;
+    if (typeof logs.detectedUsersLogs?.[action] === 'boolean') return logs.detectedUsersLogs[action];
     if (typeof logs.accessLogs?.[action] === 'boolean') return logs.accessLogs[action];
     if (typeof logs.global?.[action] === 'boolean') return logs.global[action];
     if (typeof logs[action] === 'boolean') return logs[action];

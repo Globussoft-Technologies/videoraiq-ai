@@ -103,6 +103,7 @@ const TaggedUsers = () => {
   const resolveLogPerm = (action) => {
     const logs = permissions?.logs;
     if (!logs) return false;
+    if (typeof logs.taggedUsersLogs?.[action] === 'boolean') return logs.taggedUsersLogs[action];
     if (typeof logs.accessLogs?.[action] === 'boolean') return logs.accessLogs[action];
     if (typeof logs.global?.[action] === 'boolean') return logs.global[action];
     if (typeof logs[action] === 'boolean') return logs[action];
@@ -116,7 +117,7 @@ const TaggedUsers = () => {
     if (permissionsLoading) return;
     const logs = permissions?.logs;
     if (!logs) return;
-    if (logs.accessLogs?.view === true) return;
+    if (logs.taggedUsersLogs?.view === true || logs.accessLogs?.view === true) return;
     const candidates = [
       ['attendanceLogs', '/logs/attendance'],
       ['ANPRLogs', '/logs/ANPR'],

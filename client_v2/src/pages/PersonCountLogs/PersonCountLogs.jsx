@@ -32,11 +32,12 @@ const PersonCountLogs = () => {
   const initialFilter = routerLocation.state || {};
   const { permissions, loading: permissionsLoading } = usePermissions();
 
-  // Person Count uses the accessLogs permission key in V1. Resolve in order:
-  // section-specific (accessLogs) → global → legacy flat.
+  // Resolve in order: section-specific (personCountLogs) → accessLogs (legacy
+  // shared key, kept for roles seeded before personCountLogs existed) → global.
   const resolveLogPerm = (action) => {
     const logs = permissions?.logs;
     if (!logs) return false;
+    if (typeof logs.personCountLogs?.[action] === 'boolean') return logs.personCountLogs[action];
     if (typeof logs.accessLogs?.[action] === 'boolean') return logs.accessLogs[action];
     if (typeof logs.global?.[action] === 'boolean') return logs.global[action];
     if (typeof logs[action] === 'boolean') return logs[action];

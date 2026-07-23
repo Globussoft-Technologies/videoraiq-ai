@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, Plus, Settings2, Eye, Pencil, Trash2, X } from 'lucide-react';
+import { Search, Plus, Settings2, Eye, Pencil, Trash2, X, CheckCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
@@ -27,9 +27,11 @@ const PERMISSION_MODULES = [
 // updatePermissions() 400s on any subKey not already present there, so this
 // list must stay a superset match of that seed, not just of nav.config.js.
 const LOG_SUBMODULES = [
-  'global', 'accessLogs', 'attendanceLogs', 'trackLogs', 'deskLogs', 'guardLogs', 'ANPRLogs',
-  'conveyorLogs', 'vehicleObstructionLogs', 'vehicleCountLogs', 'crusherLogs',
-  'lineCrossingLogs', 'waterSpillLogs', 'unauthorizedAccessLogs',
+  'global', 'accessLogs', 'attendanceLogs', 'taggedUsersLogs', 'detectedUsersLogs',
+  'personCountLogs', 'deskLogs', 'ANPRLogs', 'productivityLogs', 'trackLogs',
+  'visibilityLogs', 'guardLogs', 'conveyorLogs', 'vehicleObstructionLogs',
+  'vehicleCountLogs', 'crusherLogs', 'lineCrossingLogs', 'waterSpillLogs',
+  'unauthorizedAccessLogs',
 ];
 
 const MODULE_LABELS = {
@@ -38,7 +40,10 @@ const MODULE_LABELS = {
   departments: 'Departments', detectionSettings: 'Detection Settings', profiles: 'Profiles',
   recipients: 'Recipients', locations: 'Locations', playbacks: 'Playbacks',
   global: 'Global', accessLogs: 'Access Logs', attendanceLogs: 'Attendance Logs',
-  trackLogs: 'Track Logs', deskLogs: 'Desk Logs', guardLogs: 'Guard Logs', ANPRLogs: 'ANPR Logs',
+  taggedUsersLogs: 'Tagged Users', detectedUsersLogs: 'Detected Users',
+  personCountLogs: 'Person Count Logs', deskLogs: 'Desk Absence Logs',
+  productivityLogs: 'Productivity Logs', trackLogs: 'Track Logs',
+  visibilityLogs: 'Visibility Logs', guardLogs: 'Guard Logs', ANPRLogs: 'ANPR Logs',
   conveyorLogs: 'Conveyor Logs', vehicleObstructionLogs: 'Vehicle Obstruction Logs',
   vehicleCountLogs: 'Vehicle Count Logs', crusherLogs: 'Crusher Logs',
   lineCrossingLogs: 'Line Crossing Logs', waterSpillLogs: 'Water Spill Logs',
@@ -195,6 +200,76 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
     });
   };
 
+  // Select All — turn on view/create/edit/delete for every module + every log
+  // sub-module, matching V1's PermissionStep handleSelectAll. `channels`
+  // create/delete stay off (those cells are disabled in the matrix).
+  const selectAll = () => {
+    if (readOnly) return;
+    setConfig(prev => {
+      const next = { ...prev };
+      PERMISSION_MODULES.forEach(m => {
+        next[m] = {
+          view: true,
+          create: m === 'channels' ? false : true,
+          edit: true,
+          delete: m === 'channels' ? false : true,
+        };
+      });
+      const on = { view: true, create: true, edit: true, delete: true };
+      const logs = { ...(prev.logs || {}) };
+      LOG_SUBMODULES.forEach(s => { logs[s] = { ...on }; });
+      next.logs = logs;
+      return next;
+    });
+  };
+
+  // Clear All — turn everything off (matches V1 handleClearAll).
+  const clearAll = () => {
+    if (readOnly) return;
+    setConfig(prev => {
+      const off = { view: false, create: false, edit: false, delete: false };
+      const next = { ...prev };
+      PERMISSION_MODULES.forEach(m => { next[m] = { ...off }; });
+      const logs = { ...(prev.logs || {}) };
+      LOG_SUBMODULES.forEach(s => { logs[s] = { ...off }; });
+      next.logs = logs;
+      return next;
+    });
+  };
+
+  // `channels` create/delete are always disabled in the matrix (row-level rule),
+  // so a column toggle must skip those cells to match what the checkboxes allow.
+  const isCellToggleable = (moduleKey, field) =>
+    !(moduleKey === 'channels' && (field === 'create' || field === 'delete'));
+
+  // Is every toggleable cell in this column already on? Drives the header's
+  // checked indicator and whether a click fills (→all on) or clears the column.
+  const isColumnAllOn = (field) => {
+    const modsOn = PERMISSION_MODULES.every(
+      m => !isCellToggleable(m, field) || config[m]?.[field] === true
+    );
+    const logsOn = LOG_SUBMODULES.every(s => config.logs?.[s]?.[field] === true);
+    return modsOn && logsOn;
+  };
+
+  // Column header toggle: if the column isn't fully on, fill every toggleable
+  // cell (modules + log sub-modules) on; if already all on, clear the column.
+  const toggleColumn = (field) => {
+    if (readOnly) return;
+    const turnOn = !isColumnAllOn(field);
+    setConfig(prev => {
+      const next = { ...prev };
+      PERMISSION_MODULES.forEach(m => {
+        if (!isCellToggleable(m, field)) return;
+        next[m] = { ...(prev[m] || {}), [field]: turnOn };
+      });
+      const logs = { ...(prev.logs || {}) };
+      LOG_SUBMODULES.forEach(s => { logs[s] = { ...(logs[s] || {}), [field]: turnOn }; });
+      next.logs = logs;
+      return next;
+    });
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -240,14 +315,55 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
           </button>
         </div>
 
+        {/* Select All / Clear All — bulk-set every module + log sub-module at
+            once (ported from V1's PermissionStep). Hidden in read-only view. */}
+        {!readOnly && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
+            <button
+              type="button"
+              onClick={selectAll}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5, height: 30, padding: '0 12px',
+                borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#fff', cursor: 'pointer',
+                background: 'linear-gradient(135deg,var(--blue),var(--violet))', border: 'none',
+              }}
+            >
+              <CheckCheck size={14} /> Select All
+            </button>
+            <button
+              type="button"
+              onClick={clearAll}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5, height: 30, padding: '0 12px',
+                borderRadius: 8, fontSize: 12, fontWeight: 600, color: 'var(--tx2)', cursor: 'pointer',
+                background: 'var(--bg2)', border: '1px solid var(--bd)',
+              }}
+            >
+              <X size={14} /> Clear All
+            </button>
+          </div>
+        )}
+
         <div style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 420 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(4,60px)', fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.06em', color: 'var(--tx3)', padding: '0 4px 6px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(4,60px)', fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.06em', color: 'var(--tx3)', padding: '0 4px 6px', alignItems: 'center' }}>
               <span>MODULE</span>
-              <span style={{ textAlign: 'center' }}>VIEW</span>
-              <span style={{ textAlign: 'center' }}>CREATE</span>
-              <span style={{ textAlign: 'center' }}>EDIT</span>
-              <span style={{ textAlign: 'center' }}>DELETE</span>
+              {['view', 'create', 'edit', 'delete'].map(field => {
+                const allOn = isColumnAllOn(field);
+                return (
+                  <span
+                    key={field}
+                    onClick={readOnly ? undefined : () => toggleColumn(field)}
+                    title={readOnly ? undefined : `Toggle ${field} for all modules`}
+                    style={{
+                      textAlign: 'center', cursor: readOnly ? 'default' : 'pointer',
+                      userSelect: 'none', color: allOn ? 'var(--blue)' : 'var(--tx3)',
+                    }}
+                  >
+                    {field.toUpperCase()}
+                  </span>
+                );
+              })}
             </div>
 
             {PERMISSION_MODULES.map(mod => (
@@ -406,12 +522,12 @@ export default function RolesPermission() {
   const total = rolesApi.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / LIMIT));
 
-  // Optimistic toggle: patch the row in place via setData instead of calling
-  // refetch(). refetch() flips useApi's `loading` back to true, and
-  // AsyncBoundary swaps the ENTIRE table for a spinner while any fetch is in
-  // flight (even a background refetch of already-loaded data) — that full
-  // table-unmount/remount on every checkbox click was the visible flicker.
-  // Rolls back to the previous value if the request fails.
+  // Toggling a row flag (view/create/edit/delete) cascades server-side into
+  // EVERY module + log sub-module of the role's permissionConfig (see
+  // roles.service.js update). We optimistically flip the row for instant
+  // feedback, then refetch so the freshly-cascaded permissionConfig is what the
+  // Configure modal reads — otherwise it opens with the stale pre-cascade config
+  // and the checkboxes look empty. Rolls back the row if the request fails.
   const handleToggleField = async (role, field) => {
     const next = !role[field];
     rolesApi.setData(prev => ({
@@ -420,6 +536,9 @@ export default function RolesPermission() {
     }));
     try {
       await updateRolePermission(role._id, field, next);
+      // Silent: pull the freshly-cascaded permissionConfig without a full-table
+      // spinner (the row already shows the new flag optimistically).
+      rolesApi.refetch({ silent: true });
     } catch (err) {
       rolesApi.setData(prev => ({
         ...prev,

@@ -9,6 +9,7 @@ import roleModel from '../roles/roles.model.js';
 import adminModel from '../admin/admin.model.js';
 import config from "config";
 import usersModel from '../users/users.model.js';
+import { completeConfig } from './permissions.config.js';
 
 
 
@@ -178,6 +179,14 @@ class PermissionService {
                                     if (defaultData.permissionConfig[moduleKey].hasOwnProperty(subKey)) {
                                         updatedPermissionConfig[moduleKey][subKey] = {
                                             ...defaultData.permissionConfig[moduleKey][subKey],
+                                            ...permissionConfig[moduleKey][subKey]
+                                        };
+                                    } else if (completeConfig.logs.hasOwnProperty(subKey)) {
+                                        // New log sub-module added to permissions.config.js after this
+                                        // role was seeded — backfill from the static default (all-false)
+                                        // then apply the incoming change, instead of rejecting the update.
+                                        updatedPermissionConfig[moduleKey][subKey] = {
+                                            ...completeConfig.logs[subKey],
                                             ...permissionConfig[moduleKey][subKey]
                                         };
                                     } else {
@@ -580,6 +589,13 @@ class PermissionService {
                                 if (updatedPermissionConfig.logs.hasOwnProperty(subKey)) {
                                     updatedPermissionConfig.logs[subKey] = {
                                         ...updatedPermissionConfig.logs[subKey],
+                                        ...permissionConfigUpdates.logs[subKey]
+                                    };
+                                } else if (completeConfig.logs.hasOwnProperty(subKey)) {
+                                    // Backfill a newly-added log sub-module from the static default
+                                    // for roles seeded before it existed (see updatePermissions).
+                                    updatedPermissionConfig.logs[subKey] = {
+                                        ...completeConfig.logs[subKey],
                                         ...permissionConfigUpdates.logs[subKey]
                                     };
                                 }
