@@ -974,9 +974,6 @@ export default function IncidentCenter() {
             <div style={{ fontSize: 36, fontWeight: 700, color: k.color, lineHeight: 1 }}>
               {stats.loading ? '—' : k.value}
             </div>
-            <div style={{ height: 3, background: 'var(--bg3)', borderRadius: 2, marginTop: 4 }}>
-              <div style={{ width: '60%', height: '100%', background: k.color, borderRadius: 2, opacity: .7 }} />
-            </div>
           </div>
         ))}
       </div>
@@ -1227,3 +1224,4 @@ export default function IncidentCenter() {
     </div>
   );
 }
+
