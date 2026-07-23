@@ -53,13 +53,33 @@ function statusOf(item) {
   if (item.report?.status === true) return { label: 'Acknowledged', color: 'var(--blue)' };
   return { label: 'New', color: 'var(--warn)' };
 }
-function normalizeIncidentCounts(counts, totalCount = 0) {
+function countsFromLoadedIncidents(items = [], totalCount = 0) {
+  const counts = {
+    severity: { all: Number(totalCount) || items.length, high: 0, moderate: 0, low: 0 },
+    status: { all: Number(totalCount) || items.length, new: 0, acknowledged: 0 },
+  };
+  items.forEach((item) => {
+    const sev = (item?.severity || '').toLowerCase();
+    if (sev === 'high') counts.severity.high += 1;
+    if (sev === 'moderate' || sev === 'medium') counts.severity.moderate += 1;
+    if (sev === 'low') counts.severity.low += 1;
+    const status = statusKeyOf(item);
+    if (status === 'new') counts.status.new += 1;
+    if (status === 'acknowledged') counts.status.acknowledged += 1;
+  });
+  return counts;
+}
+
+function normalizeIncidentCounts(counts, totalCount = 0, fallbackItems = []) {
   const n = (value) => Number(value) || 0;
+  if (!counts?.severity && !counts?.status) {
+    return countsFromLoadedIncidents(fallbackItems, totalCount);
+  }
   return {
     severity: {
       all: n(counts?.severity?.all ?? totalCount),
       high: n(counts?.severity?.high),
-      moderate: n(counts?.severity?.moderate),
+      moderate: n(counts?.severity?.moderate ?? counts?.severity?.medium),
       low: n(counts?.severity?.low),
     },
     status: {
@@ -215,14 +235,21 @@ export default function AlertsView() {
     return f;
   }, [location, dateFrom, dateTo]);
 
+  const severityFilterValue = useCallback((value) => {
+    if (value === 'high') return ['high', 'High', 'HIGH'];
+    if (value === 'moderate') return ['moderate', 'medium', 'Moderate', 'Medium', 'MODERATE', 'MEDIUM'];
+    if (value === 'low') return ['low', 'Low', 'LOW'];
+    return value;
+  }, []);
+
   // The table filter is server-side: clicking High/Medium/Low/Active/etc.
   // must search the full incident set, not only the first loaded page.
   const listFilter = useMemo(() => {
     const f = { ...filter };
-    if (sev !== 'all') f.severity = sev;
+    if (sev !== 'all') f.severity = severityFilterValue(sev);
     if (statusFilter !== 'all') f.statusFilter = statusFilter;
     return f;
-  }, [filter, sev, statusFilter]);
+  }, [filter, sev, statusFilter, severityFilterValue]);
 
   const clearDate = useCallback(() => { setDateFrom(''); setDateTo(''); }, []);
 
@@ -274,13 +301,40 @@ export default function AlertsView() {
     try {
       const result = await fetchIncidents({ skip: 0, limit: 1 }, filter);
       if (requestId !== countsRequestIdRef.current) return;
-      setCountSummary(normalizeIncidentCounts(result.counts, result.totalCount));
-    } catch {
-      if (requestId === countsRequestIdRef.current) {
-        setCountSummary(normalizeIncidentCounts(null, 0));
+
+      if (result.counts) {
+        setCountSummary(normalizeIncidentCounts(result.counts, result.totalCount, result.items));
+        return;
       }
+
+      // Backward-compatible fallback for a running backend that has not been
+      // restarted with aggregate `counts` yet: ask the existing paginated API
+      // for one row per chip filter and use only each response's totalCount.
+      const [high, moderate, low, active, acknowledged] = await Promise.all([
+        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, severity: severityFilterValue('high') }),
+        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, severity: severityFilterValue('moderate') }),
+        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, severity: severityFilterValue('low') }),
+        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, statusFilter: 'new' }),
+        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, statusFilter: 'acknowledged' }),
+      ]);
+      if (requestId !== countsRequestIdRef.current) return;
+      setCountSummary({
+        severity: {
+          all: Number(result.totalCount) || 0,
+          high: Number(high.totalCount) || 0,
+          moderate: Number(moderate.totalCount) || 0,
+          low: Number(low.totalCount) || 0,
+        },
+        status: {
+          all: Number(result.totalCount) || 0,
+          new: Number(active.totalCount) || 0,
+          acknowledged: Number(acknowledged.totalCount) || 0,
+        },
+      });
+    } catch {
+      // Keep the current chip counts if the count requests fail.
     }
-  }, [filter]);
+  }, [filter, severityFilterValue]);
 
   // Filter change (e.g. site switch or chip click) resets back to page 1.
   useEffect(() => {
@@ -474,6 +528,9 @@ export default function AlertsView() {
     </div>
   );
 }
+
+
+
 
 
 

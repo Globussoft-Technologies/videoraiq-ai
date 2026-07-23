@@ -748,11 +748,26 @@ class IncidentsService {
         matchStage["report.status"] = reportStatus;
       }
 
-      // Filter: severity (single value or array)
+      // Filter: severity (single value or array). Accept both legacy title-case
+      // values and the v2 chip keys; Medium and Moderate are the same bucket.
       if (severity !== undefined && severity !== null && severity !== "") {
-        const severities = Array.isArray(severity) ? severity : [severity];
-        if (severities.length) {
-          matchStage.severity = { $in: severities };
+        const severities = (Array.isArray(severity) ? severity : [severity])
+          .filter((item) => item !== undefined && item !== null && item !== "")
+          .map((item) => String(item));
+        const expandedSeverities = new Set();
+        severities.forEach((item) => {
+          const lower = item.toLowerCase();
+          const variants = lower === "moderate" || lower === "medium"
+            ? ["moderate", "medium"]
+            : [lower];
+          variants.forEach((variant) => {
+            expandedSeverities.add(variant);
+            expandedSeverities.add(variant.toUpperCase());
+            expandedSeverities.add(variant.charAt(0).toUpperCase() + variant.slice(1));
+          });
+        });
+        if (expandedSeverities.size) {
+          matchStage.severity = { $in: Array.from(expandedSeverities) };
         }
       }
 
@@ -975,7 +990,7 @@ class IncidentsService {
             },
             moderate: {
               $sum: {
-                $cond: [{ $eq: [{ $toLower: { $ifNull: ["$severity", ""] } }, "moderate"] }, 1, 0],
+                $cond: [{ $in: [{ $toLower: { $ifNull: ["$severity", ""] } }, ["moderate", "medium"]] }, 1, 0],
               },
             },
             low: {
