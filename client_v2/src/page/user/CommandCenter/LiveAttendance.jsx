@@ -73,97 +73,6 @@ function img(path) {
 }
 
 /**
- * Map one REST attendance log item to display fields.
- *
- * REST shape (from /attendance/get, confirmed via V1 AttendanceLog.jsx):
- *   item.employee.firstName / lastName / profilePics[0] / departmentId.departmentName
- *   item.logInTime   — "09:00:00" or null
- *   item.logOutTime  — "17:00:00" or null
- *   item.date        — "2024-01-15"
- *   item.imageUrls[0].images.{person|face|frame}
- */
-function mapRestItem(item) {
-  const emp = item.employee || {};
-  const firstName = emp.firstName || '';
-  const lastName = emp.lastName || '';
-
-  let name = firstName.trim();
-  if (!name) {
-    const fullName = emp.name || `${firstName} ${lastName}`.trim() || 'Unknown';
-    name = fullName.split(' ')[0];
-  }
-
-  const dept =
-    emp.departmentId?.departmentName ||
-    emp.departmentName ||
-    emp.designation ||
-    '';
-
-  // Profile photo
-  const profilePic = emp.profilePics?.[0] ? img(emp.profilePics[0]) : null;
-
-  // Captured frame from the check-in event
-  const captureImg =
-    item.imageUrls?.[0]?.images?.person ||
-    item.imageUrls?.[0]?.images?.face ||
-    item.imageUrls?.[0]?.images?.frame;
-  const capturedImage = captureImg ? img(captureImg) : null;
-
-  // A REST row covers a whole day. Show the time of the event the card is
-  // actually reporting — the checkout if there is one, otherwise the check-in —
-  // so the time can't contradict the status dot and the modal.
-  const isOut = !!item.logOutTime;
-  const eventTime = isOut ? item.logOutTime : item.logInTime;
-
-  // logInTime/logOutTime are bare "HH:mm:ss" strings with no date. Feeding one
-  // straight to moment() yields today-at-that-time (or invalid), which showed
-  // the wrong date in the modal for historical rows — combine with item.date.
-  let timestamp = null;
-  if (eventTime && item.date && /^\d{2}:\d{2}(:\d{2})?$/.test(eventTime)) {
-    const m = moment(`${item.date} ${eventTime}`, ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm']);
-    if (m.isValid()) timestamp = m.toISOString();
-  } else if (eventTime) {
-    const m = moment(eventTime);
-    if (m.isValid()) timestamp = m.toISOString();
-  } else if (item.date) {
-    const m = moment(item.date);
-    if (m.isValid()) timestamp = m.toISOString();
-  }
-
-  let timeStr = eventTime || item.date || '';
-  if (timeStr) {
-    if (/^\d{2}:\d{2}:\d{2}$/.test(timeStr)) {
-      timeStr = timeStr.substring(0, 5);
-    } else if (/^\d{2}:\d{2}$/.test(timeStr)) {
-      // already HH:mm
-    } else {
-      const m = moment(timeStr);
-      if (m.isValid()) {
-        timeStr = m.format('HH:mm');
-      }
-    }
-  }
-
-  return {
-    key: `${emp._id || item._id || 'unknown'}_${item.date || ''}`,
-    empKey: emp._id || '',
-    name,
-    fullName: `${firstName} ${lastName}`.trim() || name,
-    dept,
-    profilePic,
-    capturedImage,
-    timeStr,
-    hasOut: isOut,
-    cameraType: isOut ? 'checkout' : 'checkin',
-    timestamp,
-    premise: emp.locationId?.locationName || emp.locationId?.name || emp.location || '',
-    email: emp.email || '',
-    empId: emp.employeeId || emp.empId || '',
-    designation: emp.designation || emp.role || '',
-  };
-}
-
-/**
  * Map one live socket event to display fields.
  *
  * Socket shape (attendanceLog_<adminId>, confirmed via V1 AttendanceLogsLive.jsx):
@@ -241,19 +150,6 @@ function mapSocketItem(data) {
     empId: emp.employeeId || emp.empId || '',
     designation: emp.designation || emp.role || '',
   };
-}
-
-/** Merge live socket events on top of the REST snapshot, live events win on
- * duplicate employee (same dedup key), newest first. */
-function mergeAttendance(restPeople, socketLogs) {
-  const restItems = (Array.isArray(restPeople) ? restPeople : []).map(mapRestItem);
-  const liveItems = (Array.isArray(socketLogs) ? socketLogs : []).map(mapSocketItem);
-  // Match on employee, not on `key` — the two mappers build `key` differently
-  // (socket includes cameraType+timestamp), so a key-based check never matched
-  // and the same person rendered as two cards with contradictory status dots.
-  const seen = new Set(liveItems.map((i) => i.empKey).filter(Boolean));
-  const merged = [...liveItems, ...restItems.filter((i) => !i.empKey || !seen.has(i.empKey))];
-  return merged.slice(0, 12);
 }
 
 /* ── Detail modal ─────────────────────────────────────────────────────────── */
@@ -388,13 +284,14 @@ function DetailModal({ item, onClose }) {
   );
 }
 
-/** Live attendance strip — REST snapshot on load, then live socket check-ins
- * (attendanceLog_<adminId>) merged on top as they arrive. */
-export default function LiveAttendance({ people = [], socketLogs = [], loading, error, isEmpty, onRetry }) {
-  const items = mergeAttendance(people, socketLogs);
+/** Live attendance strip — purely live socket check-ins (attendanceLog_<adminId>),
+ * matching v1's AttendanceLogsLive.jsx: no REST snapshot, so the panel is empty
+ * until the first live event arrives after mount. */
+export default function LiveAttendance() {
+  const { attendanceLogs, isMuted } = useAttendanceSocket() || {};
+  const items = (Array.isArray(attendanceLogs) ? attendanceLogs : []).map(mapSocketItem).slice(0, 12);
   const present = items.length;
 
-  const { isMuted } = useAttendanceSocket() || {};
   const isMutedRef = useRef(isMuted);
   useEffect(() => {
     isMutedRef.current = isMuted;
@@ -406,22 +303,17 @@ export default function LiveAttendance({ people = [], socketLogs = [], loading, 
 
   const [selected, setSelected] = useState(null);
 
-  // Announce live arrivals only. Deliberately driven by `socketLogs`, NOT the
-  // merged `items`: the REST snapshot resolves asynchronously after mount, so
-  // seeding from `items` captured an empty list and then read out the entire
-  // day's history on every page load. REST rows are past events by definition —
-  // only socket events are new. `null` until the first run so any events
-  // already buffered by the context aren't replayed.
+  // Announce live arrivals only. `null` until the first run so any events
+  // already buffered by the context before mount aren't replayed.
   const seenIdsRef = useRef(null);
   useEffect(() => {
-    const live = (Array.isArray(socketLogs) ? socketLogs : []).map(mapSocketItem);
     if (seenIdsRef.current === null) {
-      seenIdsRef.current = new Set(live.map(i => i.key));
+      seenIdsRef.current = new Set(items.map(i => i.key));
       return;
     }
     const seen = seenIdsRef.current;
-    const fresh = live.filter(i => !seen.has(i.key));
-    // socketLogs is newest-first; announce in arrival order.
+    const fresh = items.filter(i => !seen.has(i.key));
+    // attendanceLogs is newest-first; announce in arrival order.
     fresh.slice().reverse().forEach((it) => {
       if (!isMutedRef.current) {
         const dept = it.dept && it.dept !== '--' ? it.dept : 'Employee';
@@ -429,7 +321,7 @@ export default function LiveAttendance({ people = [], socketLogs = [], loading, 
       }
       seen.add(it.key);
     });
-  }, [socketLogs]);
+  }, [items]);
 
   return (
     <Panel className="overflow-hidden flex-1 flex flex-col">
@@ -451,12 +343,9 @@ export default function LiveAttendance({ people = [], socketLogs = [], loading, 
 
       {/* Cards */}
       <AsyncBoundary
-        loading={loading}
-        error={error}
-        isEmpty={isEmpty}
-        onRetry={onRetry}
+        isEmpty={items.length === 0}
         minH={120}
-        emptyLabel="No check-ins yet today"
+        emptyLabel="No attendance events yet"
       >
         {() => (
           <div className="vq-scroll flex gap-2.5 overflow-x-auto px-2.5 py-[13px]">

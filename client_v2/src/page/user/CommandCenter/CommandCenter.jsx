@@ -10,9 +10,8 @@ import EngineActivity from './EngineActivity';
 import SharedMultiSelect from '../../../components/MultiSelect';
 import { useApi } from '../../../hooks/useApi';
 import { getHeaderStats, getDetectionChart, getCriticalityStats, getRecentIncidents } from '../../../helpers/dashboard';
-import { getChannels, getAttendance, getLocations, getNVRs, getDepartments } from '../../../helpers/monitoring';
+import { getChannels, getLocations, getNVRs, getDepartments } from '../../../helpers/monitoring';
 import { fetchIncidents } from '../../../helpers/incidents';
-import { useAttendanceSocket } from '../../../context/AttendanceSocketContext';
 
 const DETECTION_SAMPLE_LIMIT = 1000;
 
@@ -221,17 +220,7 @@ export default function CommandCenter() {
     });
   }, [allChannels.data, alerts, sites]);
 
-  // Live attendance — pass a wide date range (data exists from Dec 2025 per attendanceLogsStartDate).
-  // Without startDate/endDate the API returns 0; with a range it returns real records.
   const today = moment().format('YYYY-MM-DD');
-  const sixMonthsAgo = moment().subtract(6, 'months').format('YYYY-MM-DD');
-  const attendance = useApi(
-    () => getAttendance({ startDate: sixMonthsAgo, endDate: today, limit: 12 }),
-    [today],
-    { pollMs: 60000 }
-  );
-  const people = Array.isArray(attendance.data) ? attendance.data : attendance.data?.data || [];
-  const { attendanceLogs } = useAttendanceSocket() || {};
 
   // Engine activity · Today — aggregate today's incidents by detection type.
   const todayFilter = { ...filters, startDate: today, endDate: today };
@@ -323,14 +312,7 @@ export default function CommandCenter() {
       <div style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 18 }} className="vq-cc-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
           <LiveCamera channels={channels.data || []} loading={channels.loading} latestByChannel={latestByChannel} onOnlineCountChange={onOnlineCountChange} />
-          <LiveAttendance
-            people={people}
-            socketLogs={attendanceLogs}
-            loading={attendance.loading}
-            error={attendance.error}
-            isEmpty={!attendance.loading && !attendance.error && people.length === 0 && !(attendanceLogs || []).length}
-            onRetry={attendance.refetch}
-          />
+          <LiveAttendance />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
           <LatestIncident
