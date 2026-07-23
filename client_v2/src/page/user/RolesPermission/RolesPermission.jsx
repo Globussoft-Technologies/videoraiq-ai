@@ -406,12 +406,25 @@ export default function RolesPermission() {
   const total = rolesApi.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / LIMIT));
 
+  // Optimistic toggle: patch the row in place via setData instead of calling
+  // refetch(). refetch() flips useApi's `loading` back to true, and
+  // AsyncBoundary swaps the ENTIRE table for a spinner while any fetch is in
+  // flight (even a background refetch of already-loaded data) — that full
+  // table-unmount/remount on every checkbox click was the visible flicker.
+  // Rolls back to the previous value if the request fails.
   const handleToggleField = async (role, field) => {
     const next = !role[field];
+    rolesApi.setData(prev => ({
+      ...prev,
+      roles: (prev?.roles ?? []).map(r => (r._id === role._id ? { ...r, [field]: next } : r)),
+    }));
     try {
       await updateRolePermission(role._id, field, next);
-      rolesApi.refetch();
     } catch (err) {
+      rolesApi.setData(prev => ({
+        ...prev,
+        roles: (prev?.roles ?? []).map(r => (r._id === role._id ? { ...r, [field]: role[field] } : r)),
+      }));
       toast.error(err?.response?.data?.body?.message || 'Failed to update permission');
     }
   };
