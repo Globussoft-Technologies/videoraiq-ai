@@ -6,7 +6,7 @@
 import express from "express";
 import mongoSanitize from "express-mongo-sanitize";
 import cookieParser from "cookie-parser";
-import { xss } from "express-xss-sanitizer";
+import sanitizeInput from "../../middlewares/xssSanitizer.js";
 import bodyParser from "body-parser";
 import errorMiddleware from "../../middlewares/errorMiddleware.js";
 
@@ -16,19 +16,7 @@ export function buildApp(mountRouter) {
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
   app.use(mongoSanitize());
-  app.use(
-    xss({
-      allowedKeys: [
-        "password",
-        "confirmPassword",
-        "secretAccessKey",
-        "oldPassword",
-        "newPassword",
-        "login",
-        "pass",
-      ],
-    })
-  );
+  app.use(sanitizeInput);
   app.use(bodyParser.text({ type: "application/xml" }));
   app.set("trust proxy", 1);
 

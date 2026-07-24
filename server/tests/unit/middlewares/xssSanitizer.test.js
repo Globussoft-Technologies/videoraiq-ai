@@ -43,6 +43,21 @@ describe("xssSanitizer middleware", () => {
     expect(req.body.name).toBe("Jane Doe");
   });
 
+  it("does not HTML-encode a bare & (keeps raw JSON, no &amp;)", () => {
+    const { req, res, next } = makeReqRes();
+    req.body = { location: "srinagar | J&k" };
+    sanitizeInput(req, res, next);
+    expect(req.body.location).toBe("srinagar | J&k");
+  });
+
+  it("skips password-like keys entirely (may contain < > &)", () => {
+    const { req, res, next } = makeReqRes();
+    req.body = { password: "a<b>&c!", newPassword: "x&y<z>" };
+    sanitizeInput(req, res, next);
+    expect(req.body.password).toBe("a<b>&c!");
+    expect(req.body.newPassword).toBe("x&y<z>");
+  });
+
   it("always calls next()", () => {
     const { req, res, next } = makeReqRes();
     sanitizeInput(req, res, next);

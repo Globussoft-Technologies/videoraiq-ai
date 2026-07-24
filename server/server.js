@@ -14,7 +14,7 @@ import fs from "fs";
 import bodyParser from "body-parser";
 import config from "config";
 
-import { xss } from "express-xss-sanitizer";
+import sanitizeInput from "./middlewares/xssSanitizer.js";
 import globalErrorHandler from "./middlewares/errorMiddleware.js";
 import routes from "./routes/index.js";
 import { connectDB } from "./utils/database.js";
@@ -56,11 +56,7 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
 app.use(mongoSanitize());
-app.use(
-  xss({
-    allowedKeys: ["password", "confirmPassword", "secretAccessKey", "oldPassword", "newPassword", "login", "pass"],
-  })
-);
+app.use(sanitizeInput);
 app.use(
   cors({
     origin: "*",
