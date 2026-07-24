@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import config from "config";
 import logger from "../../../utils/logger.js";
 import Response from "../../../utils/response.js";
@@ -231,7 +232,11 @@ class FaceImagesService {
           return res.send(Response.validationFailResp("Invalid DepartmentId, please provide valid departmentId", "Validation Failed!"));
         }
       }
-      const email = typeof rawEmail === 'string' && rawEmail.trim() ? rawEmail.trim() : undefined;
+
+      // Placeholder email required to satisfy the {adminId, email} unique index —
+      // multiple quick-created users under the same admin can't all have email:null.
+      const email = typeof rawEmail === "string" && rawEmail.trim() ? rawEmail.trim() : undefined;
+      const placeholderEmail = email ?? `quickcreate+${new mongoose.Types.ObjectId().toHexString()}@placeholder.local`;
 
       if (email) {
         const duplicateUser = await authorizedUsersModel.findOne({ adminId, email });
@@ -245,7 +250,7 @@ class FaceImagesService {
         firstName,
         lastName,
         userName: `${firstName} ${lastName}`,
-        ...(email ? { email } : {}),
+        email: placeholderEmail,
         verified: false,
         departmentId: department?._id || null,
         shiftId: isShiftExist?._id || null,

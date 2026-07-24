@@ -418,8 +418,26 @@ class AnalyticsService {
       ]);
 
       const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-      const peakHour = byHour[0] ? { hour: byHour[0]._id, count: byHour[0].count } : null;
-      const peakDay = byDay[0] ? { day: dayNames[byDay[0]._id - 1], count: byDay[0].count } : null;
+      const peakHourNumber = byHour[0]?._id;
+      const peakDayNumber = byDay[0]?._id;
+
+      const [peakHourDates, peakDayDates] = await Promise.all([
+        peakHourNumber == null ? [] : Incident.aggregate([
+          { $match: { ...match, $expr: { $eq: [{ $hour: "$timeOfIncident" }, peakHourNumber] } } },
+          { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$timeOfIncident" } }, count: { $sum: 1 } } },
+          { $sort: { _id: 1 } },
+          { $project: { _id: 0, date: "$_id", count: 1 } },
+        ]),
+        peakDayNumber == null ? [] : Incident.aggregate([
+          { $match: { ...match, $expr: { $eq: [{ $isoDayOfWeek: "$timeOfIncident" }, peakDayNumber] } } },
+          { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$timeOfIncident" } }, count: { $sum: 1 } } },
+          { $sort: { _id: 1 } },
+          { $project: { _id: 0, date: "$_id", count: 1 } },
+        ]),
+      ]);
+
+      const peakHour = byHour[0] ? { hour: peakHourNumber, count: byHour[0].count, dates: peakHourDates } : null;
+      const peakDay = byDay[0] ? { day: dayNames[peakDayNumber - 1], count: byDay[0].count, dates: peakDayDates } : null;
 
       return res.status(200).json(Response.userSuccessResp("Peak activity fetched successfully", {
         ...describeRange(req, DEFAULT_DAYS),

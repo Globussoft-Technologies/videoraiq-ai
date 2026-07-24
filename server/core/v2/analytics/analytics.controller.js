@@ -268,8 +268,22 @@ class AnalyticsController {
           message: 'Peak activity fetched successfully',
           data: {
             days: 30,
-            peakHour: { hour: 17, count: 1420 },
-            peakDay: { day: 'Fri', count: 4210 }
+            peakHour: {
+              hour: 17,
+              count: 1420,
+              dates: [
+                { date: '2026-07-02', count: 311 },
+                { date: '2026-07-03', count: 280 }
+              ]
+            },
+            peakDay: {
+              day: 'Fri',
+              count: 4210,
+              dates: [
+                { date: '2026-07-03', count: 980 },
+                { date: '2026-07-10', count: 1042 }
+              ]
+            }
           }
         }
       }

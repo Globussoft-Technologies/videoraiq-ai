@@ -743,9 +743,10 @@ class IncidentsService {
         };
       }
 
-      //Filter Incidents based on report status for members
+      // Reported incidents are an active bucket; resolved reports should not leak back into it.
       if (reportStatus !== undefined && reportStatus) {
         matchStage["report.status"] = reportStatus;
+        matchStage.resolved = { $ne: true };
       }
 
       // Filter: severity (single value or array). Accept both legacy title-case
@@ -1823,6 +1824,12 @@ class IncidentsService {
       if (!incident) {
         return res.status(404).json({ error: "Incident not found" });
       }
+      if (incident.resolved && status === true) {
+        return res
+          .status(400)
+          .json(Response.userFailResp("Resolved incidents cannot be reported again."));
+      }
+
       incident.report.status = status;
       incident.report.description = description || "";
 
@@ -2610,8 +2617,11 @@ console.log(result,'result');
 
     if (severity) matchStage.severity = severity;
     if (resolved !== undefined) matchStage.resolved = resolved === "true";
-    if (reportStatus !== undefined)
-      matchStage["report.status"] = reportStatus === "true";
+    if (reportStatus !== undefined) {
+      const isReported = reportStatus === "true";
+      matchStage["report.status"] = isReported;
+      if (isReported) matchStage.resolved = { $ne: true };
+    }
 
     // Escape the free-text term once; reused for every $or branch below.
     let escapedSearch = null;

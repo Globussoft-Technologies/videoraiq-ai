@@ -12,6 +12,53 @@ function formatHour(h) {
   return `${hour12}:00 ${suffix}`;
 }
 
+function formatPeakDate(date) {
+  if (!date) return '';
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function DateBreakdown({ dates = [] }) {
+  const visibleDates = dates.slice(0, 5);
+  const remainingCount = Math.max(dates.length - visibleDates.length, 0);
+
+  if (!visibleDates.length) return null;
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+      {visibleDates.map(({ date, count }) => (
+        <span
+          key={date}
+          title={`${date}: ${num(count)} events`}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 5,
+            padding: '4px 7px',
+            borderRadius: 8,
+            border: '1px solid var(--bd)',
+            background: 'var(--bg2)',
+            color: 'var(--tx2)',
+            fontSize: 10.5,
+            fontFamily: 'var(--mono)',
+            lineHeight: 1,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <span>{formatPeakDate(date)}</span>
+          <span style={{ color: 'var(--tx3)' }}>{num(count)}</span>
+        </span>
+      ))}
+      {remainingCount > 0 && (
+        <span style={{ fontSize: 10.5, color: 'var(--tx3)', alignSelf: 'center' }}>
+          +{remainingCount} more
+        </span>
+      )}
+    </div>
+  );
+}
+
 /**
  * Replaces the Model Performance card (precision/recall/F1/mAP) — there's no
  * ground-truth/validation subsystem in the product, so those metrics can't
@@ -43,6 +90,7 @@ export default function PeakActivityCard({ params }) {
               {peakHour && (
                 <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 4 }}>Total events during the {formatHour(peakHour.hour)} hour bucket over {rangeText}.</div>
               )}
+              <DateBreakdown dates={peakHour?.dates} />
             </div>
 
             <div>
@@ -54,6 +102,7 @@ export default function PeakActivityCard({ params }) {
               {peakDay && (
                 <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 4 }}>Total events across all {peakDay.day}s in {rangeText}, not one specific date.</div>
               )}
+              <DateBreakdown dates={peakDay?.dates} />
             </div>
           </div>
         )}

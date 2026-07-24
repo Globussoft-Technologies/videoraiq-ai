@@ -49,8 +49,8 @@ function tab(active) {
 }
 
 function statusOf(item) {
-  if (item?.report?.status) return { label: 'Reported', color: 'var(--crit)' };
   if (item.resolved) return { label: 'Resolved', color: 'var(--ok)' };
+  if (item?.report?.status) return { label: 'Reported', color: 'var(--crit)' };
   return { label: 'New', color: 'var(--warn)' };
 }
 function countsFromLoadedIncidents(items = [], totalCount = 0) {
@@ -66,7 +66,7 @@ function countsFromLoadedIncidents(items = [], totalCount = 0) {
     const status = statusKeyOf(item);
     if (status === 'new') counts.status.new += 1;
     if (status === 'resolved') counts.status.resolved += 1;
-    if (item?.report?.status) counts.status.reported += 1;
+    if (!item?.resolved && item?.report?.status) counts.status.reported += 1;
   });
   return counts;
 }
@@ -250,12 +250,7 @@ export default function AlertsView() {
     if (sev !== 'all') f.severity = severityFilterValue(sev);
     // The v2 API defaults missing statusFilter to unresolved/active only.
     // Alerts "All" should mean Active + Resolved, so send both explicitly.
-    if (statusFilter === 'reported') {
-      f.statusFilter = ALL_STATUS_FILTER;
-      f.reportStatus = true;
-    } else {
-      f.statusFilter = statusFilter === 'all' ? ALL_STATUS_FILTER : statusFilter;
-    }
+    f.statusFilter = statusFilter === 'all' ? ALL_STATUS_FILTER : statusFilter;
     return f;
   }, [filter, sev, statusFilter, severityFilterValue]);
 
@@ -319,7 +314,7 @@ export default function AlertsView() {
         fetchIncidents({ skip: 0, limit: 1 }, { ...filter, severity: severityFilterValue('low'), statusFilter: ALL_STATUS_FILTER }),
         fetchIncidents({ skip: 0, limit: 1 }, { ...filter, statusFilter: 'new' }),
         fetchIncidents({ skip: 0, limit: 1 }, { ...filter, statusFilter: 'resolved' }),
-        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, statusFilter: ALL_STATUS_FILTER, reportStatus: true }),
+        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, statusFilter: 'reported' }),
       ]);
       if (requestId !== countsRequestIdRef.current) return;
       setCountSummary({

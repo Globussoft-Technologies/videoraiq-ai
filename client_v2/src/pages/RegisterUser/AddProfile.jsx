@@ -39,11 +39,6 @@ import {
 import { stripPlaceholderEmail } from './displayEmail';
 
 const nasUrl = import.meta.env.VITE_BACKEND;
-const PLACEHOLDER_EMAIL_RE = /^quickcreate\+[a-f0-9]+@placeholder\.local$/i;
-const stripPlaceholderEmail = (user) => (
-  PLACEHOLDER_EMAIL_RE.test(user?.email || '') ? { ...user, email: '' } : user
-);
-
 /* Decode a JWT payload without a dependency. */
 const decodeJwt = (token) => {
   try {
