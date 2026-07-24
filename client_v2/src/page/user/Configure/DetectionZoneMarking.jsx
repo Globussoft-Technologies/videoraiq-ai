@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Video, Pencil, Undo2, Trash2, Save, Maximize, Minimize, X, Wifi, Minus, Plus, CheckCircle2, ChevronDown, AlertTriangle, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Video, Pencil, Undo2, Trash2, Save, Maximize, Minimize, Maximize2, Minimize2, X, Wifi, Minus, Plus, CheckCircle2, ChevronDown, AlertTriangle, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import useHlsPlayer from '../../../hooks/useHlsPlayer';
 import { streamUrl } from '../../../lib/stream';
@@ -475,6 +475,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   // rendering a blank box instead of buffering/error UI.
   const [videoState, setVideoState] = useState('loading'); // loading | ready | error
   const [videoSize, setVideoSize] = useState({ w: 0, h: 0 });
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const typesApi = useApi(() => getDetectionTypes(), []);
   const typeLabels = typesApi.data || {};
@@ -500,6 +501,8 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   const [zones, setZones] = useState([]);
   // The polygon currently being drawn, not yet committed to `zones`.
   const [points, setPoints] = useState([]);
+  const [draftZones, setDraftZones] = useState([]);
+  const presetAreaRef = useRef(false);
   const [drawing, setDrawing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [maxPoints, setMaxPoints] = useState(DEFAULT_MAX_POINTS);
@@ -510,7 +513,9 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   // Load this type's saved zones whenever the selected detection type changes.
   useEffect(() => {
     setZones(zonesFor(activeType?.setting, camera._id));
+    setDraftZones([]);
     setPoints([]);
+    presetAreaRef.current = false;
     setDrawing(false);
     setActiveZoneIndex(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -533,6 +538,25 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     if (v?.videoWidth) setVideoSize({ w: v.videoWidth, h: v.videoHeight });
   };
   const handleVideoReady = () => setVideoState('ready');
+
+  useEffect(() => {
+    const syncFullscreen = () => setIsFullscreen(document.fullscreenElement === stageRef.current);
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen);
+  }, []);
+
+  const handleToggleFullscreen = async (e) => {
+    e.stopPropagation();
+    try {
+      if (document.fullscreenElement === stageRef.current) {
+        await document.exitFullscreen?.();
+      } else {
+        await stageRef.current?.requestFullscreen?.();
+      }
+    } catch {
+      toast.error('Fullscreen is not available for this browser.');
+    }
+  };
 
   // Every shape (polygon zones — including the Max/Min Area presets — and
   // Line Crossing) lets you grab any already-placed point and drag it to
@@ -598,37 +622,44 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     if (justDraggedRef.current) { justDraggedRef.current = false; return; }
     if (!drawing || !videoSize.w) return;
 
-    // If a draft already reached the cap before this fix/hot reload, commit it
-    // on the next click so the user can continue with a fresh zone.
-    if (points.length >= effectiveMaxPoints) {
-      if (!isLineCrossing && points.length >= minPointsToSave) {
-        const newIndex = zones.length;
-        setZones(prev => [...prev, makeZoneFromPoints(points, prev.length)]);
-        setPoints([]);
-        setActiveZoneIndex(newIndex);
-      }
-      return;
-    }
-
     const { x, y } = stageEventToVideoXY(e);
-    const next = [...points, { x, y }];
-
-    // V1 commits the current polygon into the zones list and clears the
-    // in-progress points, so the max-points cap applies per zone instead of
-    // blocking the whole drawing session after one 6-point zone.
-    if (!isLineCrossing && next.length >= effectiveMaxPoints) {
-      const newIndex = zones.length;
-      setZones(prev => [...prev, makeZoneFromPoints(next, prev.length)]);
-      setPoints([]);
-      setActiveZoneIndex(newIndex);
+    if (presetAreaRef.current) {
+      presetAreaRef.current = false;
+      setPoints([{ x, y }]);
       return;
     }
 
+    // Reaching the point cap completes the draft only. It should not move into
+    // the saved-zone state or right-side Zone Settings until Save Area is used.
+    if (points.length >= effectiveMaxPoints) return;
+
+    const next = [...points, { x, y }];
     setPoints(next);
+
+    if (!isLineCrossing && next.length >= effectiveMaxPoints) {
+      setDraftZones(prev => [...prev, makeZoneFromPoints(next, zones.length + prev.length)]);
+      setPoints([]);
+    }
   };
 
-  const handleUndo = () => setPoints(prev => prev.slice(0, -1));
-  const handleClear = () => setPoints([]);
+  const handleUndo = () => {
+    if (!drawing) return;
+    presetAreaRef.current = false;
+    if (points.length > 0) {
+      setPoints(prev => prev.slice(0, -1));
+      return;
+    }
+    setDraftZones(prev => {
+      const last = prev[prev.length - 1];
+      if (!last) return prev;
+      setPoints(last.points.slice(0, -1));
+      return prev.slice(0, -1);
+    });
+  };
+  const handleClear = () => {
+    presetAreaRef.current = false;
+    setPoints([]);
+  };
 
   // Clear All doubles as a delete for already-saved zones (V1 parity —
   // AreaMarkingControls' Clear All confirm persists an empty zone list via
@@ -639,13 +670,14 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   const [clearing, setClearing] = useState(false);
 
   const handleClearAllClick = () => {
-    if (points.length === 0 && zones.length === 0) return;
+    if (points.length === 0 && draftZones.length === 0 && zones.length === 0) return;
     setShowClearConfirm(true);
   };
 
   const handleConfirmClearAll = async () => {
     // No saved zones to persist — just drop the in-progress points locally.
     if (!(zones.length > 0 && activeType?.settingId)) {
+      setDraftZones([]);
       setPoints([]);
       setShowClearConfirm(false);
       return;
@@ -654,6 +686,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     try {
       await persistZones({ nextZones: [] });
       setZones([]);
+      setDraftZones([]);
       setPoints([]);
       setShowClearConfirm(false);
       toast.success('Detection area cleared.');
@@ -670,11 +703,13 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   const handleMaxArea = () => {
     if (!videoSize.w) return;
     const { w, h } = videoSize;
+    presetAreaRef.current = true;
     setPoints([{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }]);
     setDrawing(false);
   };
   const handleMinArea = () => {
     if (!videoSize.w) return;
+    presetAreaRef.current = true;
     setPoints([{ x: 100, y: 100 }, { x: 300, y: 100 }, { x: 300, y: 300 }, { x: 100, y: 300 }]);
     setDrawing(false);
   };
@@ -740,10 +775,10 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     if (!activeType) return;
     // The in-progress polygon on the canvas is folded straight into the save,
     // so drawing once and hitting Save works without a separate commit step.
-    if (zones.length === 0 && points.length < minPointsToSave) return;
+    if (zones.length === 0 && draftZones.length === 0 && points.length < minPointsToSave) return;
     const nextZones = points.length >= minPointsToSave
-      ? [...zones, makeZoneFromPoints(points)]
-      : zones;
+      ? [...zones, ...draftZones, makeZoneFromPoints(points, zones.length + draftZones.length)]
+      : [...zones, ...draftZones];
     setPendingZones(nextZones);
     setShowSaveModal(true);
   };
@@ -753,7 +788,9 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     try {
       await persistZones({ detectionName, priority, nextZones: editedZones });
       setZones(editedZones);
+      setDraftZones([]);
       setPoints([]);
+      presetAreaRef.current = false;
       setDrawing(false);
       setShowSaveModal(false);
       toast.success(activeType.settingId ? 'Detection settings updated successfully.' : 'Detection area created and saved.');
@@ -969,7 +1006,8 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
             onPointerUp={handleStagePointerUp}
             onPointerLeave={handleStagePointerUp}
             style={{
-              position: 'relative', borderRadius: 12, overflow: 'hidden', aspectRatio: '16/9',
+              position: 'relative', borderRadius: isFullscreen ? 0 : 12, overflow: 'hidden', aspectRatio: isFullscreen ? 'auto' : '16/9',
+              width: isFullscreen ? '100vw' : undefined, height: isFullscreen ? '100vh' : undefined,
               background: '#0a0e15',
               cursor: drawing ? 'crosshair' : points.length > 0 ? 'grab' : 'default',
               border: '1px solid var(--bd)',
@@ -1002,30 +1040,39 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               </div>
             )}
 
-            {/* Points cap + fullscreen pill — top-right, matching V1. Line
+            {/* Points cap + fullscreen pill ? top-right, matching V1. Line
                 Crossing is always exactly 2 points, so the +/- stepper (which
                 adjusts a polygon's point cap) doesn't apply and is hidden. */}
-            {!isLineCrossing && (
-              <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', alignItems: 'center', gap: 6, zIndex: 3 }}>
-                <button
-                  onClick={() => setMaxPoints(p => Math.max(MIN_POINTS_TO_CLOSE, p - 1))}
-                  title="Decrease max points"
-                  style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,.6)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <Minus size={13} />
-                </button>
-                <span style={{ padding: '4px 9px', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 11, fontFamily: 'var(--mono)', borderRadius: 6 }}>
-                  {maxPoints}
-                </span>
-                <button
-                  onClick={() => setMaxPoints(p => p + 1)}
-                  title="Increase max points"
-                  style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,.6)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <Plus size={13} />
-                </button>
-              </div>
-            )}
+            <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', alignItems: 'center', gap: 6, zIndex: 3 }}>
+              {!isLineCrossing && (
+                <>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setMaxPoints(p => Math.max(MIN_POINTS_TO_CLOSE, p - 1)); }}
+                    title="Decrease max points"
+                    style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,.6)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Minus size={13} />
+                  </button>
+                  <span style={{ padding: '4px 9px', background: 'rgba(0,0,0,.6)', color: '#fff', fontSize: 11, fontFamily: 'var(--mono)', borderRadius: 6 }}>
+                    {maxPoints}
+                  </span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setMaxPoints(p => p + 1); }}
+                    title="Increase max points"
+                    style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,.6)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Plus size={13} />
+                  </button>
+                </>
+              )}
+              <button
+                onClick={handleToggleFullscreen}
+                title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,.6)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+              </button>
+            </div>
 
             {/* Zone overlay — points are native video pixels, scaled into a 1000x1000 box.
                 Committed zones render in amber (matching V1's saved-zone labels); the in-progress
@@ -1059,6 +1106,21 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
                   )}
                   {z.points.map((p, i) => (
                     <circle key={i} cx={(p.x / videoSize.w) * 1000} cy={(p.y / videoSize.h) * 1000} r="6" fill="#f59e0b" stroke="#fff" strokeWidth="2" />
+                  ))}
+                </g>
+              ))}
+              {draftZones.map((z, zi) => (
+                <g key={`draft-${zi}`} opacity={1}>
+                  {z.points.length > 1 && (
+                    <polygon
+                      points={polygonPointsAttr(z.points, videoSize.w, videoSize.h, 1000, 1000)}
+                      fill="rgba(59,130,246,.16)"
+                      stroke="var(--blue)"
+                      strokeWidth="3.5"
+                    />
+                  )}
+                  {z.points.map((p, i) => (
+                    <circle key={i} cx={(p.x / videoSize.w) * 1000} cy={(p.y / videoSize.h) * 1000} r="6" fill="var(--blue)" stroke="#fff" strokeWidth="2" />
                   ))}
                 </g>
               ))}
@@ -1110,7 +1172,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               </span>
             ))}
 
-            {zones.length === 0 && points.length === 0 && videoState !== 'loading' && (
+            {zones.length === 0 && draftZones.length === 0 && points.length === 0 && videoState !== 'loading' && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                 <span style={{
                   fontFamily: 'var(--mono)', fontSize: 11, color: 'rgba(220,232,255,.85)',
@@ -1182,36 +1244,36 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
             )}
             <button
               onClick={handleUndo}
-              disabled={points.length === 0}
+              disabled={!drawing || (points.length === 0 && draftZones.length === 0)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
                 background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
-                cursor: points.length ? 'pointer' : 'not-allowed', opacity: points.length ? 1 : 0.5,
+                cursor: (drawing && (points.length || draftZones.length)) ? 'pointer' : 'not-allowed', opacity: (drawing && (points.length || draftZones.length)) ? 1 : 0.5,
               }}
             >
               <Undo2 size={14} /> Undo
             </button>
             <button
               onClick={handleClearAllClick}
-              disabled={points.length === 0 && zones.length === 0}
+              disabled={points.length === 0 && draftZones.length === 0 && zones.length === 0}
               title="Clear the in-progress drawing, or delete all saved zones for this detection type"
               style={{
                 display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
                 background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
-                cursor: (points.length || zones.length) ? 'pointer' : 'not-allowed', opacity: (points.length || zones.length) ? 1 : 0.5,
+                cursor: (points.length || draftZones.length || zones.length) ? 'pointer' : 'not-allowed', opacity: (points.length || draftZones.length || zones.length) ? 1 : 0.5,
               }}
             >
               <Trash2 size={14} /> Clear All
             </button>
             <button
               onClick={handleOpenSaveModal}
-              disabled={!activeType || saving || (zones.length === 0 && points.length < minPointsToSave)}
+              disabled={!activeType || saving || (zones.length === 0 && draftZones.length === 0 && points.length < minPointsToSave)}
               style={{
                 marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 16px',
                 borderRadius: 8, fontSize: 12.5, fontWeight: 600, color: '#fff', border: 'none',
                 background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-                cursor: (!activeType || saving || (zones.length === 0 && points.length < minPointsToSave)) ? 'not-allowed' : 'pointer',
-                opacity: (!activeType || saving || (zones.length === 0 && points.length < minPointsToSave)) ? 0.6 : 1,
+                cursor: (!activeType || saving || (zones.length === 0 && draftZones.length === 0 && points.length < minPointsToSave)) ? 'not-allowed' : 'pointer',
+                opacity: (!activeType || saving || (zones.length === 0 && draftZones.length === 0 && points.length < minPointsToSave)) ? 0.6 : 1,
                 boxShadow: '0 3px 12px rgba(99,102,241,.3)',
               }}
             >
