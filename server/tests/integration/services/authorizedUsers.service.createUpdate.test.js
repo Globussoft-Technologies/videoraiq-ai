@@ -55,6 +55,8 @@ vi.mock("../../../utils/sftpConnectionCheck.js", () => ({
 }));
 vi.mock("../../../utils/newSFTPConnectionCheck.js", () => ({
   connectSFTP: vi.fn().mockResolvedValue(sftpClient),
+  // createAuthUser/updateAuthUser now release the pooled connection in a finally.
+  releaseSFTP: vi.fn(),
 }));
 vi.mock("axios", () => ({
   default: {

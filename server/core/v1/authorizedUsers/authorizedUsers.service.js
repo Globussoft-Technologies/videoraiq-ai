@@ -8,7 +8,7 @@ import rolesModel from "../roles/roles.model.js";
 import departmentsModel from "../departments/departments.model.js";
 import path from "path";
 import axios from "axios";
-import { connectSFTP } from "../../../utils/newSFTPConnectionCheck.js";
+import { connectSFTP, releaseSFTP } from "../../../utils/newSFTPConnectionCheck.js";
 import {
   checkSftpConnection
 } from "../../../utils/sftpConnectionCheck.js";
@@ -42,6 +42,11 @@ if (!fs.existsSync(cacheDir)) {
         recursive: true
     });
 }
+// Percent-encode each path segment so filenames with spaces/#/&/unicode
+// build valid, fetchable URLs; the /api/v1/uploads route decodes them back.
+const toMediaUrl = (domain, p) =>
+  `${domain}/api/v1/uploads${String(p ?? "").split("/").map(encodeURIComponent).join("/")}`;
+
 class AuthUsersService {
   
   constructor() {
@@ -353,11 +358,11 @@ class AuthUsersService {
       
     
     async createAuthUser(req, res, _next) {
+      let sftp;
       try {
         const data = req?.verified?.userData;
         const { firstName, lastName, email ,departmentId,designation,branch,shiftId,numberPlate,location} = req.body;
 
-        let sftp
         // Establish SFTP connection
         sftp = await connectSFTP();
 
@@ -483,7 +488,7 @@ class AuthUsersService {
             branch: newUser.branch || "",
             designation: newUser.designation || "",
             profileImages:  Array.isArray(uploadedFiles)
-            ? uploadedFiles.map(pic => `${this.backendDomain}/api/v1/uploads${pic?.toString()}`)
+            ? uploadedFiles.map(pic => toMediaUrl(this.backendDomain, pic))
             : [],
             db: this.getDbName(newUser.adminId), // 🔹 replace with your actual DB name
             admin_id: newUser.adminId?.toString(),
@@ -549,6 +554,11 @@ class AuthUsersService {
         return res
           .status(500)
           .json(Response.errorResp(error.response?.data?.message,"Failed to create authorizedUser."));
+      } finally {
+        // Return the pooled SFTP connection no matter how we exit (early
+        // validation return, success, or error) — otherwise it leaks and the
+        // pool exhausts after 8 registrations, breaking uploads AND downloads.
+        if (sftp) await releaseSFTP(sftp);
       }
     }
 
@@ -785,10 +795,7 @@ async updateAuthUser(req, res, _next) {
       department: updatedUser.departmentId?.departmentName || "",
       branch: updatedUser.branch || "",
       designation: updatedUser.designation || "",
-      profileImages: newProfilePics.map(
-        (pic) =>
-          `${this.backendDomain}/api/v1/uploads${pic?.toString()}`
-      ),
+      profileImages: newProfilePics.map((pic) => toMediaUrl(this.backendDomain, pic)),
       collection_name: this.getDbName(updatedUser.adminId),
       admin_id: updatedUser.adminId?.toString(),
     };
@@ -838,10 +845,7 @@ async updateAuthUser(req, res, _next) {
             department: newUser.departmentId?.departmentName || "",
             branch: newUser.branch || "",
             designation: newUser.designation || "",
-            profileImages:  newProfilePics.map(
-              (pic) =>
-                `${this.backendDomain}/api/v1/uploads${pic?.toString()}`
-            ),
+            profileImages:  newProfilePics.map((pic) => toMediaUrl(this.backendDomain, pic)),
             db: this.getDbName(newUser.adminId), // 🔹 replace with your actual DB name
             admin_id: newUser.adminId?.toString(),
           };
@@ -946,6 +950,9 @@ async updateAuthUser(req, res, _next) {
         "Failed to update authorizedUser."
       )
     );
+  } finally {
+    // Release the pooled SFTP connection on every exit path (see createAuthUser).
+    if (sftp) await releaseSFTP(sftp);
   }
 }
 
@@ -1003,7 +1010,7 @@ async updateAuthUser(req, res, _next) {
   
         // 🌐 Connect to SFTP
         const sftp = await checkSftpConnection();
-  
+
         // Check if remote path exists
         const exists = await sftp.exists(mediaPath);
         console.log("exists:", exists); // '-', 'd', or false
@@ -1421,7 +1428,10 @@ const uploadFilesToSFTP = async ({
 
   for (const file of files) {
     const timestamp = Date.now();
-    const remoteFileName = `${timestamp}-${file.originalname}`;
+    // Sanitize to URL-safe chars so stored paths need no client-side encoding —
+    // spaces/parens/unicode in a filename otherwise break fetch/download URLs.
+    const safeName = String(file.originalname ?? "file").replace(/[^\w.-]+/g, "_");
+    const remoteFileName = `${timestamp}-${safeName}`;
     const remotePath = `${remoteDir}/${remoteFileName}`;
 
     const bufferStream = new stream.PassThrough();

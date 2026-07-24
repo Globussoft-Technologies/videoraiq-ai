@@ -270,6 +270,22 @@ export const withSFTPConnection = async (callback) => {
   }
 };
 
+// Return a raw client (from connectSFTP/checkSftpConnection) back to the pool.
+// Those helpers hand out `conn.sftp` and drop the wrapper, so callers can't
+// call pool.release directly — this maps the client back to its wrapper and
+// releases it. Call it in a finally. Idempotent: a second call (or a client
+// that was never pooled) is a no-op, so it never closes a live pooled conn.
+export const releaseSFTP = async (sftp, key = getConnectionKey()) => {
+  if (!sftp) return;
+  const poolData = pool.getPool(key);
+  for (const conn of poolData.inUse) {
+    if (conn.sftp === sftp) {
+      await pool.release(conn, key);
+      return;
+    }
+  }
+};
+
 export const disconnectSFTP = async (key = getConnectionKey()) => {
   await pool.drainPool(key);
 };

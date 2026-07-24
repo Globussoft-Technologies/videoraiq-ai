@@ -30,7 +30,7 @@ import { getManualMimeType } from "../Uploads/uploads.service.js";
 import { pipeline } from "stream/promises";
 import fs from "fs";
 import { decode } from "js-base64";
-import { connectSFTP } from "../../../utils/newSFTPConnectionCheck.js";
+import { withSFTPConnection } from "../../../utils/newSFTPConnectionCheck.js";
 
 const sftpPool = new Map();
 const SFTP_IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
@@ -989,38 +989,39 @@ class StorageService {
       }
 
       // 1. Check Global SFTP
-      try {
-        const sftp = await connectSFTP();
-
-        if (inputPath.includes("..")) {
-          return res.status(400).json({
-            status: "failed",
-            message: "Invalid media path.",
-          });
-        }
-
-        const fileName = path.basename(inputPath);
-        const contentType = getManualMimeType(fileName);
-
-        const sftpStream = await sftp.createReadStream(inputPath);
-
-        sftpStream.on("error", (err) => {
-          console.error("SFTP stream error:", err);
-          throw new Error("File not found on SFTP");
+      if (inputPath.includes("..")) {
+        return res.status(400).json({
+          status: "failed",
+          message: "Invalid media path.",
         });
+      }
+      try {
+        // withSFTPConnection acquires from the pool and releases it in a
+        // finally — pass or fail — so a failed/aborted stream can't leak the
+        // pooled connection (which used to exhaust the pool after 8 requests).
+        return await withSFTPConnection(async (sftp) => {
+          const fileName = path.basename(inputPath);
+          const contentType = getManualMimeType(fileName);
 
-        // Security + no-cache headers
-        res.setHeader("Content-Type", contentType);
-        res.setHeader("Content-Disposition", "inline");
-        res.setHeader("Accept-Ranges", "bytes");
+          const sftpStream = await sftp.createReadStream(inputPath);
 
-        // ✅ CORS + isolation headers
-        res.setHeader("Access-Control-Allow-Origin", "*");
-        res.setHeader("Cross-Origin-Opener-Policy", "*");
-        res.setHeader("Cross-Origin-Resource-Policy", "*");
+          sftpStream.on("error", (err) => {
+            console.error("SFTP stream error:", err);
+            throw new Error("File not found on SFTP");
+          });
 
-        await pipeline(sftpStream, res);
-        return; // STOP EXECUTION HERE
+          // Security + no-cache headers
+          res.setHeader("Content-Type", contentType);
+          res.setHeader("Content-Disposition", "inline");
+          res.setHeader("Accept-Ranges", "bytes");
+
+          // ✅ CORS + isolation headers
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("Cross-Origin-Opener-Policy", "*");
+          res.setHeader("Cross-Origin-Resource-Policy", "*");
+
+          await pipeline(sftpStream, res);
+        });
       } catch (err) {
         logger.debug(
           "Global SFTP check failed or file not found:",

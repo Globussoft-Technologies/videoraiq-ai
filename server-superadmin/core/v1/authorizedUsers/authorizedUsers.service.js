@@ -42,6 +42,11 @@ if (!fs.existsSync(cacheDir)) {
         recursive: true
     });
 }
+// Percent-encode each path segment so filenames with spaces/#/&/unicode
+// build valid, fetchable URLs; the /api/v1/uploads route decodes them back.
+const toMediaUrl = (domain, p) =>
+  `${domain}/api/v1/uploads${String(p ?? "").split("/").map(encodeURIComponent).join("/")}`;
+
 class AuthUsersService {
   
   constructor() {
@@ -481,7 +486,7 @@ class AuthUsersService {
             branch: newUser.branch || "",
             designation: newUser.designation || "",
             profileImages:  Array.isArray(uploadedFiles)
-            ? uploadedFiles.map(pic => `${this.backendDomain}/api/v1/uploads${pic?.toString()}`)
+            ? uploadedFiles.map(pic => toMediaUrl(this.backendDomain, pic))
             : [],
             db: this.getDbName(newUser.adminId), // 🔹 replace with your actual DB name
             admin_id: newUser.adminId?.toString(),
@@ -781,10 +786,7 @@ async updateAuthUser(req, res, _next) {
       department: updatedUser.departmentId?.departmentName || "",
       branch: updatedUser.branch || "",
       designation: updatedUser.designation || "",
-      profileImages: newProfilePics.map(
-        (pic) =>
-          `${this.backendDomain}/api/v1/uploads${pic?.toString()}`
-      ),
+      profileImages: newProfilePics.map((pic) => toMediaUrl(this.backendDomain, pic)),
       collection_name: this.getDbName(updatedUser.adminId),
       admin_id: updatedUser.adminId?.toString(),
     };
@@ -834,10 +836,7 @@ async updateAuthUser(req, res, _next) {
             department: newUser.departmentId?.departmentName || "",
             branch: newUser.branch || "",
             designation: newUser.designation || "",
-            profileImages:  newProfilePics.map(
-              (pic) =>
-                `${this.backendDomain}/api/v1/uploads${pic?.toString()}`
-            ),
+            profileImages:  newProfilePics.map((pic) => toMediaUrl(this.backendDomain, pic)),
             db: this.getDbName(newUser.adminId), // 🔹 replace with your actual DB name
             admin_id: newUser.adminId?.toString(),
           };

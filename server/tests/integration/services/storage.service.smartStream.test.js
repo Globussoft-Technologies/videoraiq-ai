@@ -60,8 +60,13 @@ const connectSFTPMock = vi.fn().mockResolvedValue({
   exists: vi.fn().mockResolvedValue(false),
   end: vi.fn().mockResolvedValue(undefined),
 });
+// The global-SFTP download path now runs through withSFTPConnection (acquire +
+// auto-release). Mirror it: invoke the callback with the same client connectSFTP
+// would have yielded, so connectSFTPMock call-counts still reflect real usage.
+const withSFTPConnectionMock = vi.fn(async (cb) => cb(await connectSFTPMock()));
 vi.mock("../../../utils/newSFTPConnectionCheck.js", () => ({
   connectSFTP: connectSFTPMock,
+  withSFTPConnection: withSFTPConnectionMock,
 }));
 
 // Quiet module-scope imports for the other storage backends.
@@ -124,6 +129,7 @@ beforeEach(async () => {
   await clearCollections();
   sftpCreateReadStreamMock.mockReset();
   connectSFTPMock.mockClear();
+  withSFTPConnectionMock.mockClear();
   // Default: connectSFTP yields a client whose createReadStream is reset.
   connectSFTPMock.mockResolvedValue({
     createReadStream: sftpCreateReadStreamMock,
@@ -238,7 +244,8 @@ describe("StorageService.smartStreamFile — global SFTP path", () => {
       res,
     );
 
-    expect(connectSFTPMock).toHaveBeenCalledTimes(1);
+    // Traversal is now rejected before any pooled connection is acquired.
+    expect(connectSFTPMock).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(400);
     expect(res._body).toEqual({
       status: "failed",
