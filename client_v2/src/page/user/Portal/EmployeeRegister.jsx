@@ -346,10 +346,11 @@ export default function EmployeeRegister() {
             </svg>
           </div>
           <h2 className="font-['Space_Grotesk',sans-serif] font-bold text-[30px] tracking-[-0.02em] mt-0 mb-2 text-[#0f1729]">
-            Link Expired
+            Registration Link Expired
           </h2>
           <p className="text-[14px] text-[#64748b] mt-0 mb-6">
-            Please generate a new registration link
+            This registration link has expired.
+            Please generate a new registration link or request a new one.
           </p>
         </div>
       </div>

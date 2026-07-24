@@ -15,6 +15,7 @@ import logo from '@/assets/logo2.svg';
 
 const EmployeeRegister = () => {
   const org_id = import.meta.env.VITE_ORGANISATION_ID;
+  const [tokenExpired, setTokenExpired] = useState(false);
   const [step, setStep] = useState(1);
   const [departments, setDepartments] = useState([]);
   const [fetchedLocations, setFetchedLocations] = useState([]);
@@ -38,7 +39,23 @@ const EmployeeRegister = () => {
     if (!encrypted) return getAccessToken();
     // decrypt() returns its input unchanged when it cannot decrypt.
     const decrypted = decrypt(encrypted);
-    return decrypted && decrypted !== encrypted ? decrypted : null;
+    if (!decrypted || decrypted === encrypted) return null;
+
+    // Check if JWT is expired by decoding the payload
+    try {
+      const parts = decrypted.split('.');
+      if (parts.length !== 3) return decrypted; // Invalid JWT format, let backend handle it
+      const payload = JSON.parse(atob(parts[1]));
+      if (payload.exp && Date.now() >= payload.exp * 1000) {
+        setTokenExpired(true);
+        return null;
+      }
+    } catch (e) {
+      // If we can't decode, let the backend validate it
+      console.warn('Failed to decode JWT payload:', e);
+    }
+
+    return decrypted;
   }, []);
 
   const TAG = '[EmployeeRegister]';
@@ -284,6 +301,29 @@ const EmployeeRegister = () => {
       setIsSubmitting(false);
     }
   };
+
+  if (tokenExpired) {
+    return (
+      <section className="w-full min-h-screen flex bg-gradient-to-br from-slate-50 via-blue-50/30 to-cyan-50/20">
+        <div className="w-full flex items-center justify-center p-6">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/60 p-10 max-w-md w-full text-center">
+            <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg shadow-red-500/30">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-3xl font-bold bg-gradient-to-br from-slate-900 via-red-600 to-slate-800 bg-clip-text text-transparent mb-2">
+              Registration Link Expired
+            </h2>
+            <p className="text-slate-600 mb-6">
+              This registration link has expired.
+              Please generate a new registration link or request a new one.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (registered) {
     return (
