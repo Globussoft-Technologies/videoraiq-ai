@@ -24,7 +24,6 @@ const SEVERITIES = [
 
 const STATUSES = [
   { key: 'new',          label: 'New'      },
-  { key: 'acknowledged', label: 'Ack'      },
   { key: 'resolved',     label: 'Resolved' },
 ];
 
@@ -1058,7 +1057,7 @@ export default function IncidentCenter() {
             {STATUSES.map((x) => (
               <button key={x.key}
                 onClick={() => { toggleSet(setStatusSet)(x.key); setPage(0); }}
-                style={chip(statusSet.has(x.key), x.key === 'new' ? 'var(--crit)' : x.key === 'acknowledged' ? 'var(--warn)' : 'var(--ok)')}
+                style={chip(statusSet.has(x.key), x.key === 'new' ? 'var(--crit)' : 'var(--ok)')}
               >
                 {x.label}
               </button>

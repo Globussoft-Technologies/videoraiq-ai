@@ -1,11 +1,11 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Maximize2, X } from 'lucide-react';
 import { Panel, ActionLink, Badge } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { severity, detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
-import { updateIncidentReportStatus } from '../../../helpers/monitoring';
+import { updateIncidentReportStatus, updateIncidentResolved } from '../../../helpers/monitoring';
 
 function btnStyle(variant) {
   const base = { fontSize: 13, fontWeight: 600, borderRadius: 8, padding: '7px 18px', cursor: 'pointer', border: '1px solid transparent', transition: 'all .15s' };
@@ -13,7 +13,7 @@ function btnStyle(variant) {
   return { ...base, background: 'var(--bg2)', color: 'var(--tx2)', border: '1px solid var(--bd)' };
 }
 
-/* ── Report modal — same update-report-status flow used in Incident Center / Alerts ── */
+/* â”€â”€ Report modal â€” same update-report-status flow used in Incident Center / Alerts â”€â”€ */
 function ReportModal({ item, onClose, onSuccess }) {
   const existing = item.report?.status && item.report?.description ? item.report : null;
   const [desc, setDesc]       = useState(existing?.description || '');
@@ -44,7 +44,7 @@ function ReportModal({ item, onClose, onSuccess }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             {existing && !editing && (
               <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ok)', background: 'rgba(34,197,94,.1)', border: '1px solid rgba(34,197,94,.25)', borderRadius: 20, padding: '3px 10px' }}>
-                ✓ Reported
+                âœ“ Reported
               </span>
             )}
             <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid var(--bd)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--tx3)' }}>
@@ -99,7 +99,7 @@ function ReportModal({ item, onClose, onSuccess }) {
                 {editing && existing ? 'Cancel' : 'Close'}
               </button>
               <button onClick={submit} style={btnStyle('primary')} disabled={loading || !desc.trim()}>
-                {loading ? 'Reporting…' : 'Report'}
+                {loading ? 'Reportingâ€¦' : 'Report'}
               </button>
             </div>
           </>
@@ -144,36 +144,37 @@ function Lightbox({ src, alt, onClose }) {
   );
 }
 
-/** Latest incident card with Acknowledge / Dispatch actions wired to incidents API. */
+/** Latest incident card with Resolve / Report actions wired to incidents API. */
 export default function LatestIncident({ incident, loading, error, isEmpty, onRetry, onChanged }) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
-  const [acknowledgedIncidentId, setAcknowledgedIncidentId] = useState(null);
+  const [resolvedIncidentId, setResolvedIncidentId] = useState(null);
 
   const imgSrc = incident?.Image ? mediaUrl(incident.Image) : null;
 
   const activeIncidentId = incident?._id || incident?.id;
-  const activeAcknowledged = !!incident?.report?.status || (!!activeIncidentId && acknowledgedIncidentId === activeIncidentId);
+  const activeResolved = !!incident?.resolved || (!!activeIncidentId && resolvedIncidentId === activeIncidentId);
+  const activeReported = !!incident?.report?.status;
+  const canReportActive = !!activeIncidentId && !activeResolved && !activeReported;
   const sev = severity(incident?.severity);
   const det = detectionLabel(incident?.incidentType || incident?.displayName);
 
-  async function acknowledge() {
-    if (!activeIncidentId || activeAcknowledged) return;
+  async function resolveIncident() {
+    if (!activeIncidentId || activeResolved) return;
     setBusy(true);
     try {
-      await updateIncidentReportStatus({ incidentId: activeIncidentId, status: true, description: '' });
-      setAcknowledgedIncidentId(activeIncidentId);
-      toast.success('Incident acknowledged');
+      await updateIncidentResolved({ incidentId: activeIncidentId, incidentType: incident?.incidentType, resolved: true });
+      setResolvedIncidentId(activeIncidentId);
+      toast.success('Incident resolved');
       onChanged?.();
     } catch (e) {
-      toast.error('Could not acknowledge');
+      toast.error('Could not resolve');
     } finally {
       setBusy(false);
     }
   }
-
   return (
     <Panel style={{ overflow: 'hidden' }}>
       {lightbox && imgSrc && (
@@ -182,7 +183,7 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 15px 11px', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap' }}>
         <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 13.5 }}>Latest Incident</span>
         <ActionLink style={{ marginLeft: 'auto', fontSize: 11, whiteSpace: 'nowrap' }} onClick={() => navigate('/incidents')}>
-          All incidents →
+          All incidents â†’
         </ActionLink>
       </div>
       <AsyncBoundary loading={loading} error={error} isEmpty={isEmpty} onRetry={onRetry} minH={200} emptyLabel="No incidents yet">
@@ -227,19 +228,20 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
                 {incident?.incidentName || det}
               </div>
               <div style={{ fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {[incident?.channelData?.name, incident?.nvrData?.nvrName, incident?.location].filter(Boolean).join(' · ')}
+                {[incident?.channelData?.name, incident?.nvrData?.nvrName, incident?.location].filter(Boolean).join(' Â· ')}
               </div>
               <div style={{ display: 'flex', gap: 7, marginTop: 11, flexWrap: 'wrap' }}>
                 <div
-                  onClick={busy || activeAcknowledged ? undefined : acknowledge}
-                  aria-disabled={busy || activeAcknowledged}
-                  style={{ flex: 1, textAlign: 'center', fontSize: 11.5, fontWeight: 600, color: activeAcknowledged ? 'var(--tx3)' : '#fff', background: activeAcknowledged ? 'var(--bg2)' : 'linear-gradient(135deg,var(--blue),var(--violet))', border: activeAcknowledged ? '1px solid var(--bd)' : '1px solid transparent', borderRadius: 8, padding: 8, cursor: busy ? 'wait' : activeAcknowledged ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}
+                  onClick={busy || activeResolved ? undefined : resolveIncident}
+                  aria-disabled={busy || activeResolved}
+                  style={{ flex: 1, textAlign: 'center', fontSize: 11.5, fontWeight: 600, color: activeResolved ? 'var(--tx3)' : '#fff', background: activeResolved ? 'var(--bg2)' : 'linear-gradient(135deg,var(--blue),var(--violet))', border: activeResolved ? '1px solid var(--bd)' : '1px solid transparent', borderRadius: 8, padding: 8, cursor: busy ? 'wait' : activeResolved ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}
                 >
-                  {busy ? '�' : activeAcknowledged ? 'Acknowledged' : 'Acknowledge'}
+                  {busy ? '…' : activeResolved ? 'Resolved' : 'Resolve'}
                 </div>
                 <div
-                  onClick={() => setReportOpen(true)}
-                  style={{ flex: 1, textAlign: 'center', fontSize: 11.5, fontWeight: 600, color: 'var(--crit)', border: '1px solid rgba(255,77,77,.4)', borderRadius: 8, padding: 8, cursor: 'pointer' }}
+                  onClick={canReportActive ? () => setReportOpen(true) : undefined}
+                  aria-disabled={!canReportActive}
+                  style={{ flex: 1, textAlign: 'center', fontSize: 11.5, fontWeight: 600, color: canReportActive ? 'var(--crit)' : 'var(--tx3)', background: canReportActive ? 'transparent' : 'var(--bg2)', border: canReportActive ? '1px solid rgba(255,77,77,.4)' : '1px solid var(--bd)', borderRadius: 8, padding: 8, cursor: canReportActive ? 'pointer' : 'not-allowed' }}
                 >
                   {incident?.report?.status ? 'Reported' : 'Report'}
                 </div>
@@ -259,3 +261,4 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
     </Panel>
   );
 }
+

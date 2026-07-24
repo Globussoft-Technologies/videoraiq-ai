@@ -78,6 +78,15 @@ export const updateReportStatus = async (payload) => {
   );
   return unwrap(res);
 };
+export const updateIncidentResolved = async ({ incidentId, incidentType, resolved = true }) => {
+  const token = getAccessToken();
+  const res = await axios.put(
+    `${Api_url}/incidents/${incidentId}`,
+    { resolved, incidentType },
+    { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
+  );
+  return unwrap(res);
+};
 
 export const deleteIncidents = async (incidentIds = []) => {
   const token = getAccessToken();

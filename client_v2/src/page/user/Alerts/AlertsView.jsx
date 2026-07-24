@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
 import { X } from 'lucide-react';
@@ -6,13 +6,14 @@ import { Panel, Badge } from '../../../components/primitives';
 import { AsyncBoundary, Loading } from '../../../components/States';
 import DateRangePicker from '../../../components/DateRangePicker';
 import { severity, detectionLabel, shortDateTime, timeAgo, mediaUrl } from '../../../lib/format';
-import { fetchIncidents, fetchIncidentById, updateReportStatus } from '../../../helpers/incidents';
+import { fetchIncidents, fetchIncidentById, updateReportStatus, updateIncidentResolved } from '../../../helpers/incidents';
 
 const PAGE_SIZE = 50;
-// Auto-refresh only while the user is looking at just the first page — once
+// Auto-refresh only while the user is looking at just the first page â€” once
 // they've scrolled to load more, a silent 30s poll would reset/shrink the
 // list out from under them, so polling pauses until they're back on page 1.
 const POLL_MS = 30000;
+const ALL_STATUS_FILTER = ['new', 'resolved', 'reported'];
 
 const TABS = [
   { key: 'all', label: 'All' },
@@ -21,17 +22,16 @@ const TABS = [
   { key: 'low', label: 'Low' },
 ];
 
-// Client-side status filter — the same New/Acknowledged/Resolved states
+// Status filter — New/Resolved; Report is handled separately.
 // statusOf() already derives per row, just relabeled here ("Active" = New).
 const STATUS_TABS = [
-  { key: 'all', label: 'All' },
   { key: 'new', label: 'Active' },
-  { key: 'acknowledged', label: 'Acknowledged' },
+  { key: 'resolved', label: 'Resolved' },
+  { key: 'reported', label: 'Reported' },
 ];
 
 function statusKeyOf(item) {
   if (item.resolved) return 'resolved';
-  if (item.report?.status === true) return 'acknowledged';
   return 'new';
 }
 
@@ -49,14 +49,14 @@ function tab(active) {
 }
 
 function statusOf(item) {
+  if (item?.report?.status) return { label: 'Reported', color: 'var(--crit)' };
   if (item.resolved) return { label: 'Resolved', color: 'var(--ok)' };
-  if (item.report?.status === true) return { label: 'Acknowledged', color: 'var(--blue)' };
   return { label: 'New', color: 'var(--warn)' };
 }
 function countsFromLoadedIncidents(items = [], totalCount = 0) {
   const counts = {
     severity: { all: Number(totalCount) || items.length, high: 0, moderate: 0, low: 0 },
-    status: { all: Number(totalCount) || items.length, new: 0, acknowledged: 0 },
+    status: { all: Number(totalCount) || items.length, new: 0, resolved: 0, reported: 0 },
   };
   items.forEach((item) => {
     const sev = (item?.severity || '').toLowerCase();
@@ -65,7 +65,8 @@ function countsFromLoadedIncidents(items = [], totalCount = 0) {
     if (sev === 'low') counts.severity.low += 1;
     const status = statusKeyOf(item);
     if (status === 'new') counts.status.new += 1;
-    if (status === 'acknowledged') counts.status.acknowledged += 1;
+    if (status === 'resolved') counts.status.resolved += 1;
+    if (item?.report?.status) counts.status.reported += 1;
   });
   return counts;
 }
@@ -85,7 +86,8 @@ function normalizeIncidentCounts(counts, totalCount = 0, fallbackItems = []) {
     status: {
       all: n(counts?.status?.all ?? totalCount),
       new: n(counts?.status?.new),
-      acknowledged: n(counts?.status?.acknowledged),
+      resolved: n(counts?.status?.resolved),
+      reported: n(counts?.status?.reported),
     },
   };
 }
@@ -95,7 +97,7 @@ function btnStyle(variant) {
   return { ...base, background: 'var(--bg2)', color: 'var(--tx2)', border: '1px solid var(--bd)' };
 }
 
-/* ── Report modal — same update-report-status flow used in Incident Center ── */
+/* â”€â”€ Report modal â€” same update-report-status flow used in Incident Center â”€â”€ */
 function ReportModal({ item, onClose, onSuccess }) {
   const existing = item.report?.status && item.report?.description ? item.report : null;
   const [desc, setDesc]       = useState(existing?.description || '');
@@ -107,9 +109,9 @@ function ReportModal({ item, onClose, onSuccess }) {
     if (!desc.trim()) { setErr('Please enter a description'); return; }
     setLoading(true); setErr('');
     try {
-      await updateReportStatus({ incidentId: item._id || item.id, status: true, description: desc.trim() });
+      const updated = await updateReportStatus({ incidentId: item._id || item.id, status: true, description: desc.trim() });
       toast.success('Reported');
-      onSuccess?.();
+      onSuccess?.(updated?.incident || updated?.data?.incident || updated);
       onClose();
     } catch (e) {
       setErr(e?.response?.data?.body?.message || 'Something went wrong');
@@ -126,7 +128,7 @@ function ReportModal({ item, onClose, onSuccess }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {existing && !editing && (
               <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ok)', background: 'rgba(34,197,94,.1)', border: '1px solid rgba(34,197,94,.25)', borderRadius: 20, padding: '3px 10px' }}>
-                ✓ Reported
+                âœ“ Reported
               </span>
             )}
             <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid var(--bd)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--tx3)' }}>
@@ -181,7 +183,7 @@ function ReportModal({ item, onClose, onSuccess }) {
                 {editing && existing ? 'Cancel' : 'Close'}
               </button>
               <button onClick={submit} style={btnStyle('primary')} disabled={loading || !desc.trim()}>
-                {loading ? 'Reporting…' : 'Report'}
+                {loading ? 'Reportingâ€¦' : 'Report'}
               </button>
             </div>
           </>
@@ -199,14 +201,13 @@ export default function AlertsView() {
   // deep-link here with an initial status filter via navigate(..., { state }).
   const initialStatusFilter = routerLocation.state?.statusFilter;
   // A notification click (Header's bell tray) deep-links here with a specific
-  // incident id — fetched directly by id since it may not be in the general
+  // incident id â€” fetched directly by id since it may not be in the general
   // feed's first page (older, or hidden by whatever tab/filter is active).
   const initialAlertId = routerLocation.state?.alertId;
   const [sev, setSev] = useState('all');
   const [statusFilter, setStatusFilter] = useState(() => initialStatusFilter || 'all');
   const [selected, setSelected] = useState(null);
   const [deepLinkedIncident, setDeepLinkedIncident] = useState(null);
-  const [acknowledgedIds, setAcknowledgedIds] = useState(() => new Set());
 
   useEffect(() => {
     if (!initialAlertId) return;
@@ -247,7 +248,14 @@ export default function AlertsView() {
   const listFilter = useMemo(() => {
     const f = { ...filter };
     if (sev !== 'all') f.severity = severityFilterValue(sev);
-    if (statusFilter !== 'all') f.statusFilter = statusFilter;
+    // The v2 API defaults missing statusFilter to unresolved/active only.
+    // Alerts "All" should mean Active + Resolved, so send both explicitly.
+    if (statusFilter === 'reported') {
+      f.statusFilter = ALL_STATUS_FILTER;
+      f.reportStatus = true;
+    } else {
+      f.statusFilter = statusFilter === 'all' ? ALL_STATUS_FILTER : statusFilter;
+    }
     return f;
   }, [filter, sev, statusFilter, severityFilterValue]);
 
@@ -274,7 +282,7 @@ export default function AlertsView() {
   const countsRequestIdRef = useRef(0);
 
   const hasMore = items.length < totalCount;
-  // Polling only resumes once the user is back down to just the first page —
+  // Polling only resumes once the user is back down to just the first page â€”
   // otherwise a background refresh would silently wipe out scrolled-in pages.
   const isFirstPageOnly = items.length <= PAGE_SIZE;
 
@@ -299,36 +307,33 @@ export default function AlertsView() {
   const loadCounts = useCallback(async () => {
     const requestId = ++countsRequestIdRef.current;
     try {
-      const result = await fetchIncidents({ skip: 0, limit: 1 }, filter);
+      const result = await fetchIncidents({ skip: 0, limit: 1 }, { ...filter, statusFilter: ALL_STATUS_FILTER });
       if (requestId !== countsRequestIdRef.current) return;
-
-      if (result.counts) {
-        setCountSummary(normalizeIncidentCounts(result.counts, result.totalCount, result.items));
-        return;
-      }
 
       // Backward-compatible fallback for a running backend that has not been
       // restarted with aggregate `counts` yet: ask the existing paginated API
       // for one row per chip filter and use only each response's totalCount.
-      const [high, moderate, low, active, acknowledged] = await Promise.all([
-        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, severity: severityFilterValue('high') }),
-        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, severity: severityFilterValue('moderate') }),
-        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, severity: severityFilterValue('low') }),
+      const [high, moderate, low, active, resolved, reported] = await Promise.all([
+        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, severity: severityFilterValue('high'), statusFilter: ALL_STATUS_FILTER }),
+        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, severity: severityFilterValue('moderate'), statusFilter: ALL_STATUS_FILTER }),
+        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, severity: severityFilterValue('low'), statusFilter: ALL_STATUS_FILTER }),
         fetchIncidents({ skip: 0, limit: 1 }, { ...filter, statusFilter: 'new' }),
-        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, statusFilter: 'acknowledged' }),
+        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, statusFilter: 'resolved' }),
+        fetchIncidents({ skip: 0, limit: 1 }, { ...filter, statusFilter: ALL_STATUS_FILTER, reportStatus: true }),
       ]);
       if (requestId !== countsRequestIdRef.current) return;
       setCountSummary({
         severity: {
-          all: Number(result.totalCount) || 0,
-          high: Number(high.totalCount) || 0,
-          moderate: Number(moderate.totalCount) || 0,
-          low: Number(low.totalCount) || 0,
+          all: Number(result.counts?.severity?.all ?? result.totalCount) || 0,
+          high: Number(result.counts?.severity?.high ?? high.totalCount) || 0,
+          moderate: Number(result.counts?.severity?.moderate ?? result.counts?.severity?.medium ?? moderate.totalCount) || 0,
+          low: Number(result.counts?.severity?.low ?? low.totalCount) || 0,
         },
         status: {
-          all: Number(result.totalCount) || 0,
-          new: Number(active.totalCount) || 0,
-          acknowledged: Number(acknowledged.totalCount) || 0,
+          all: Number(result.counts?.status?.all ?? result.totalCount) || 0,
+          new: Number(result.counts?.status?.new ?? active.totalCount) || 0,
+          resolved: Number(result.counts?.status?.resolved ?? resolved.totalCount) || 0,
+          reported: Number(result.counts?.status?.reported ?? reported.totalCount) || 0,
         },
       });
     } catch {
@@ -376,35 +381,54 @@ export default function AlertsView() {
 
   const active = selected || rows[0] || null;
   const activeId = active?._id || active?.id;
-  const activeAcknowledged = !!active?.report?.status || (activeId ? acknowledgedIds.has(activeId) : false);
+  const activeResolved = !!active?.resolved;
+  const activeReported = !!active?.report?.status;
+  const canReportActive = !!activeId && !activeResolved && !activeReported;
 
-  async function acknowledge() {
-    if (!activeId || activeAcknowledged) return;
+  async function resolveActive() {
+    if (!activeId || activeResolved) return;
     setBusy(true);
     try {
-      await updateReportStatus({ incidentId: activeId, status: true, description: '' });
-      const markAcknowledged = (incident) => {
+      await updateIncidentResolved({ incidentId: activeId, incidentType: active?.incidentType, resolved: true });
+      const markResolved = (incident) => {
         const id = incident?._id || incident?.id;
         if (id !== activeId) return incident;
-        return { ...incident, report: { ...(incident.report || {}), status: true } };
+        return { ...incident, resolved: true, report: { ...(incident.report || {}), status: false, description: "", resolvedAt: new Date().toISOString(), reportedAt: null } };
       };
-      setAcknowledgedIds((prev) => {
-        const next = new Set(prev);
-        next.add(activeId);
-        return next;
-      });
-      setItems((prev) => prev.map(markAcknowledged));
-      setSelected((prev) => markAcknowledged(prev));
-      setDeepLinkedIncident((prev) => markAcknowledged(prev));
-      toast.success('Acknowledged');
+      setItems((prev) => prev.map(markResolved));
+      setSelected((prev) => markResolved(prev));
+      setDeepLinkedIncident((prev) => markResolved(prev));
+      toast.success('Resolved');
       refetch();
+      loadCounts();
     } catch {
-      toast.error('Could not acknowledge');
+      toast.error('Could not resolve');
     } finally {
       setBusy(false);
     }
   }
 
+  const handleReportSuccess = useCallback((updatedIncident) => {
+    const updatedReport = updatedIncident?.report || {};
+    const idToUpdate = updatedIncident?._id || updatedIncident?.id || activeId;
+    const markReported = (incident) => {
+      const id = incident?._id || incident?.id;
+      if (!incident || id !== idToUpdate) return incident;
+      return {
+        ...incident,
+        report: {
+          ...(incident.report || {}),
+          ...updatedReport,
+          status: true,
+        },
+      };
+    };
+    setItems((prev) => prev.map(markReported));
+    setSelected((prev) => markReported(prev));
+    setDeepLinkedIncident((prev) => markReported(prev));
+    refetch();
+    loadCounts();
+  }, [activeId, refetch, loadCounts]);
   return (
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
       <style>{`
@@ -462,7 +486,7 @@ export default function AlertsView() {
                       <Badge color={s.color}>{s.short}</Badge>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.incidentName || detectionLabel(it.incidentType)}</div>
-                        <div style={{ fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{[it.channelData?.name, it.nvrData?.nvrName].filter(Boolean).join(' · ')}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{[it.channelData?.name, it.nvrData?.nvrName].filter(Boolean).join(' Â· ')}</div>
                       </div>
                       <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{timeAgo(it.timeOfIncident)}</span>
                       <span className="vq-alerts-col-status" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: st.color, fontWeight: 600, minWidth: 0, overflow: 'hidden' }}>
@@ -471,7 +495,7 @@ export default function AlertsView() {
                     </div>
                   );
                 })}
-                {loadingMore && <Loading label="Loading more…" minH={60} />}
+                {loadingMore && <Loading label="Loading moreâ€¦" minH={60} />}
               </div>
             )}
           </AsyncBoundary>
@@ -497,19 +521,19 @@ export default function AlertsView() {
                   <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>{shortDateTime(active.timeOfIncident)}</span>
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, wordBreak: 'break-word' }}>{active.incidentName || detectionLabel(active.incidentType)}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--tx3)', wordBreak: 'break-word' }}>{[active.channelData?.name, active.nvrData?.nvrName, active.location].filter(Boolean).join(' · ')}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--tx3)', wordBreak: 'break-word' }}>{[active.channelData?.name, active.nvrData?.nvrName, active.location].filter(Boolean).join(' Â· ')}</div>
                 {active.description && <div style={{ fontSize: 12, color: 'var(--tx2)', lineHeight: 1.4, wordBreak: 'break-word' }}>{active.description}</div>}
                 <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-                  <div onClick={busy || activeAcknowledged ? undefined : acknowledge} aria-disabled={busy || activeAcknowledged} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: activeAcknowledged ? 'var(--tx3)' : '#fff', background: activeAcknowledged ? 'var(--bg2)' : 'linear-gradient(135deg,var(--blue),var(--violet))', border: activeAcknowledged ? '1px solid var(--bd)' : '1px solid transparent', borderRadius: 8, padding: 9, cursor: busy ? 'wait' : activeAcknowledged ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}>
-                    {busy ? '…' : activeAcknowledged ? 'Acknowledged' : 'Acknowledge'}
+                  <div onClick={busy || activeResolved ? undefined : resolveActive} aria-disabled={busy || activeResolved} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: activeResolved ? 'var(--tx3)' : '#fff', background: activeResolved ? 'var(--bg2)' : 'linear-gradient(135deg,var(--blue),var(--violet))', border: activeResolved ? '1px solid var(--bd)' : '1px solid transparent', borderRadius: 8, padding: 9, cursor: busy ? 'wait' : activeResolved ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+                    {busy ? '…' : activeResolved ? 'Resolved' : 'Resolve'}
                   </div>
-                  <div onClick={() => setReportOpen(true)} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: 'var(--crit)', border: '1px solid rgba(255,77,77,.4)', borderRadius: 8, padding: 9, cursor: 'pointer' }}>
-                    {active.report?.status ? 'Reported' : 'Report'}
+                  <div onClick={canReportActive ? () => setReportOpen(true) : undefined} aria-disabled={!canReportActive} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: canReportActive ? 'var(--crit)' : 'var(--tx3)', background: canReportActive ? 'transparent' : 'var(--bg2)', border: canReportActive ? '1px solid rgba(255,77,77,.4)' : '1px solid var(--bd)', borderRadius: 8, padding: 9, cursor: canReportActive ? 'pointer' : 'not-allowed' }}>
+                    {activeReported ? 'Reported' : 'Report'}
                   </div>
                 </div>
                 {active.videoLink && (
                   <a href={active.videoLink} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: 'var(--blue)', textAlign: 'center', textDecoration: 'none' }}>
-                    Export clip · view full timeline →
+                    Export clip Â· view full timeline â†’
                   </a>
                 )}
               </div>
@@ -522,12 +546,24 @@ export default function AlertsView() {
         <ReportModal
           item={active}
           onClose={() => setReportOpen(false)}
-          onSuccess={refetch}
+          onSuccess={handleReportSuccess}
         />
       )}
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

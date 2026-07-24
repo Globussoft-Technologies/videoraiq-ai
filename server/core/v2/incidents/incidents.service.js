@@ -1,4 +1,4 @@
-import Channel from "./../channels/channels.model.js";
+﻿import Channel from "./../channels/channels.model.js";
 import AppError from "../../../utils/appError.js";
 import logger from "../../../utils/logger.js";
 import nvrModel from "../NVR/nvr.model.js";
@@ -638,7 +638,7 @@ class IncidentsService {
         incidentName: { $not: /Guard Present/i }
       };
 
-      // Filter: status (new / acknowledged / resolved). Defaults to
+      // Filter: status (new / resolved). Defaults to
       // unresolved-only (previous hardcoded behavior) when nothing is selected.
       const statusFilters = Array.isArray(statusFilter)
         ? statusFilter
@@ -646,9 +646,9 @@ class IncidentsService {
         ? [statusFilter]
         : [];
       const STATUS_CONDITIONS = {
-        new: { resolved: false, "report.status": { $ne: true } },
-        acknowledged: { resolved: false, "report.status": true },
+        new: { resolved: false, $or: [{ "report.status": { $exists: false } }, { "report.status": { $ne: true } }] },
         resolved: { resolved: true },
+        reported: { "report.status": true, resolved: { $ne: true } },
       };
       if (statusFilters.length) {
         const statusOr = statusFilters
@@ -878,7 +878,7 @@ class IncidentsService {
         channelIdFilterSets.push(toIdArray(channelId));
       }
 
-      // Filter: by location → constrain to NVRs in those locations
+      // Filter: by location â†’ constrain to NVRs in those locations
       if (hasFilter(location)) {
         const locations = toIdArray(location);
         const nvrs = await nvrModel
@@ -887,7 +887,7 @@ class IncidentsService {
         nvrIdFilterSets.push(nvrs.map((nvr) => toIdStr(nvr._id)));
       }
 
-      // Filter: by department → constrain to channels in those departments
+      // Filter: by department â†’ constrain to channels in those departments
       if (hasFilter(department)) {
         const deptIds = toIdArray(department);
         const channels = await channelsModel
@@ -924,19 +924,37 @@ class IncidentsService {
 
       // Aggregated paginated data
       const data = await Incident.aggregate([
-        // 1️⃣ Match early (uses index)
+        // 1ï¸âƒ£ Match early (uses index)
         {
           $match: {
             ...matchStage,
           },
         },
 
-        // 2️⃣ Sort early (uses index)
+        // 2) Sort by the most relevant action time for the current bucket.
+        // Resolved uses resolution time, Reported uses reported time, Active uses incident/created time.
         {
-          $sort: { createdAt: -1 },
+          $addFields: {
+            sortAt: {
+              $cond: [
+                { $eq: ["$resolved", true] },
+                { $ifNull: ["$report.resolvedAt", "$updatedAt"] },
+                {
+                  $cond: [
+                    { $eq: ["$report.status", true] },
+                    { $ifNull: ["$report.reportedAt", "$updatedAt"] },
+                    { $ifNull: ["$timeOfIncident", "$createdAt"] },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        {
+          $sort: { sortAt: -1, createdAt: -1 },
         },
 
-        // 3️⃣ Pagination BEFORE lookups
+        // 3ï¸âƒ£ Pagination BEFORE lookups
         {
           $skip: Number(skip),
         },
@@ -944,7 +962,7 @@ class IncidentsService {
           $limit: Number(limit),
         },
 
-        // 4️⃣ Lookup NVR (small dataset now)
+        // 4ï¸âƒ£ Lookup NVR (small dataset now)
         {
           $lookup: {
             from: "nvrs",
@@ -960,7 +978,7 @@ class IncidentsService {
           },
         },
 
-        // 5️⃣ Lookup Channel
+        // 5ï¸âƒ£ Lookup Channel
         {
           $lookup: {
             from: "channels",
@@ -1001,16 +1019,12 @@ class IncidentsService {
             new: {
               $sum: {
                 $cond: [
-                  { $and: [{ $ne: ["$resolved", true] }, { $ne: ["$report.status", true] }] },
-                  1,
-                  0,
-                ],
-              },
-            },
-            acknowledged: {
-              $sum: {
-                $cond: [
-                  { $and: [{ $ne: ["$resolved", true] }, { $eq: ["$report.status", true] }] },
+                  {
+                    $and: [
+                      { $ne: ["$resolved", true] },
+                      { $ne: ["$report.status", true] },
+                    ],
+                  },
                   1,
                   0,
                 ],
@@ -1018,6 +1032,20 @@ class IncidentsService {
             },
             resolved: {
               $sum: { $cond: [{ $eq: ["$resolved", true] }, 1, 0] },
+            },
+            reported: {
+              $sum: {
+                $cond: [
+                  {
+                    $and: [
+                      { $eq: ["$report.status", true] },
+                      { $ne: ["$resolved", true] },
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
             },
           },
         },
@@ -1038,8 +1066,8 @@ class IncidentsService {
           status: {
             all: totalCount,
             new: countStats.new || 0,
-            acknowledged: countStats.acknowledged || 0,
             resolved: countStats.resolved || 0,
+            reported: countStats.reported || 0,
           },
         },
         data,
@@ -1053,7 +1081,17 @@ class IncidentsService {
   async updateIncident(req, res, next) {
     try {
       const incidentId = req.params.id;
-      const updates = req.body;
+      const updates = { ...req.body };
+
+      if (updates.resolved === true) {
+        updates["report.status"] = false;
+        updates["report.description"] = "";
+        updates["report.resolvedAt"] = new Date();
+        updates.$unset = {
+          ...(updates.$unset || {}),
+          "report.reportedAt": "",
+        };
+      }
 
       const updatedIncident = await Incident.findByIdAndUpdate(
         incidentId,
@@ -1310,7 +1348,7 @@ class IncidentsService {
         );
       }
 
-      // ✅ Allow only one filter at a time
+      // âœ… Allow only one filter at a time
       const trueFlags = [
         criticalIncidents,
         resolvedIncidents,
@@ -1340,7 +1378,7 @@ class IncidentsService {
         $or: [{ triggerNotification: { $ne: true } }],
       };
 
-      // ✅ Active Channels
+      // âœ… Active Channels
       if (ActiveChannels) {
         let searchMatchStage = {};
 
@@ -1479,7 +1517,7 @@ class IncidentsService {
         );
       }
 
-      // ✅ Critical Incidents
+      // âœ… Critical Incidents
       if (criticalIncidents) {
         let searchMatchStage = {};
 
@@ -1576,7 +1614,7 @@ class IncidentsService {
         );
       }
 
-      // ✅ Resolved Incidents
+      // âœ… Resolved Incidents
       if (resolvedIncidents) {
         let searchMatchStage = {};
 
@@ -1669,7 +1707,7 @@ class IncidentsService {
         );
       }
 
-      // ✅ Total Incidents
+      // âœ… Total Incidents
       if (totalIncidents) {
         let searchMatchStage = {};
         const query = {
@@ -1765,7 +1803,7 @@ class IncidentsService {
         );
       }
 
-      // ❌ None selected
+      // âŒ None selected
       return res.send(
         Response.userFailResp(
           "Invalid Filters provided.",
@@ -2582,7 +2620,7 @@ console.log(result,'result');
     }
 
     // Default path (all callers except the opt-in one): search the incident-doc
-    // fields inside matchStage, before the $lookups — unchanged behavior.
+    // fields inside matchStage, before the $lookups â€” unchanged behavior.
     if (escapedSearch && !postLookupSearch) {
       matchStage.$or = searchFields.map((field) => ({
         [field]: { $regex: escapedSearch, $options: "i" },
@@ -2624,7 +2662,7 @@ console.log(result,'result');
       basePipeline.push(
         {
           $addFields: {
-            // timeOfIncident is a BSON Date — regex can't hit it directly, so
+            // timeOfIncident is a BSON Date â€” regex can't hit it directly, so
             // render it to a string first (Asia/Kolkata, matching the date
             // filter above and the UI). Nulls yield null and safely don't match.
             _searchTime: {
@@ -2649,7 +2687,7 @@ console.log(result,'result');
             ],
           },
         },
-        { $project: { _searchTime: 0 } }, // strip helper — response shape unchanged
+        { $project: { _searchTime: 0 } }, // strip helper â€” response shape unchanged
       );
     }
 
@@ -3253,4 +3291,9 @@ console.log(result,'result');
 }
 
 export default new IncidentsService();
+
+
+
+
+
 
