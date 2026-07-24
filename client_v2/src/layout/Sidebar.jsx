@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
-import { LogOut, ChevronsLeft, ChevronsRight, X } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { LogOut, ChevronsLeft, ChevronsRight, X, ChevronDown } from 'lucide-react';
 import { NAV_GROUPS } from './nav.config';
 import { useOutsideClick } from '../hooks/useOutsideClick';
 import { useAuth } from '@/context/AuthContext';
@@ -55,11 +55,15 @@ function isItemVisible(item, permissions) {
   return permissions?.[item.permissionKey]?.view === true;
 }
 
+const LOGS_GROUP_LABEL = 'LOGS & RECORDS';
+const LOGS_COLLAPSE_KEY = 'vq-sidebar-logs-collapsed';
+
 export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = false, onMobileClose, camHealth = null }) {
   const { user } = useAuth();
   const { permissions } = usePermissions();
   const { theme } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef(null);
   // Close the account menu on an outside click / Escape (replaces the
@@ -77,6 +81,35 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
   // In the mobile drawer the sidebar is always fully expanded (labels visible);
   // the collapse feature only applies to the docked desktop sidebar.
   const collapsed = isMobile ? false : desktopCollapsed;
+
+  const [logsCollapsed, setLogsCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(LOGS_COLLAPSE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  // Landing directly on a logs route (fresh load, or a link from elsewhere)
+  // should reveal its own active link — but only as a one-time nudge, so it
+  // doesn't fight the user's own collapse click on every re-render while they
+  // stay within logs/* pages.
+  const onLogsRoute = location.pathname.includes('/logs/');
+  useEffect(() => {
+    if (onLogsRoute) setLogsCollapsed(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onLogsRoute]);
+  const logsExpanded = !logsCollapsed;
+  const toggleLogsCollapsed = () => {
+    setLogsCollapsed((c) => {
+      const next = !c;
+      try {
+        localStorage.setItem(LOGS_COLLAPSE_KEY, next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
 
   const toggleCollapsed = () => {
     setDesktopCollapsed((c) => {
@@ -102,6 +135,13 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
 
   const name = user?.user_name || user?.name || user?.user_email?.split('@')[0] || 'User';
   const email = user?.user_email || '';
+  // Sub-user tokens always carry a roleId (populated from authorizedUsers'
+  // roleIds ref, even though the backend's populate select currently has a
+  // stale field name and never resolves an actual name); the real admin's own
+  // token has no roleId at all. Use that presence/absence to tell them apart
+  // since neither token carries a real "Admin"/role-name string today.
+  const roleTitle = user?.roleId?.roleName || user?.roleIds?.roleName || user?.role || user?.roleName
+    || (user?.roleId ? 'User' : 'Security Admin');
   const initials =
     name
       .split(' ')
@@ -221,10 +261,49 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
               gi !== 0 && (
                 <div style={{ height: 1, background: 'var(--bd)', margin: '10px 6px 4px' }} />
               )
+            ) : group.label === LOGS_GROUP_LABEL ? (
+              <div
+                onClick={toggleLogsCollapsed}
+                title={logsExpanded ? 'Collapse' : 'Expand'}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.borderColor = 'var(--bd2)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--bd)'; }}
+                style={{
+                  marginTop: gi === 0 ? 2 : 12,
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  padding: '8px 10px 8px 8px', borderRadius: 8,
+                  border: '1px solid var(--bd)', background: 'transparent',
+                  borderLeft: onLogsRoute ? '3px solid var(--blue)' : '3px solid transparent',
+                  cursor: 'pointer', userSelect: 'none', transition: 'background .12s,border-color .12s',
+                }}
+              >
+                <ChevronDown
+                  size={13}
+                  style={{
+                    color: 'var(--tx2)', flexShrink: 0,
+                    transform: logsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                    transition: 'transform .15s',
+                  }}
+                />
+                <span style={{
+                  flex: 1, fontSize: 9.5, letterSpacing: '.14em', fontFamily: 'var(--mono)', fontWeight: 600,
+                  color: 'var(--tx2)',
+                }}>
+                  {group.label}
+                </span>
+                {onLogsRoute && (
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--blue)', flexShrink: 0 }} />
+                )}
+                <span style={{
+                  fontFamily: 'var(--mono)', fontSize: 9.5, fontWeight: 600, color: 'var(--tx3)',
+                  background: 'var(--bg2)', borderRadius: 5, padding: '2px 6px',
+                }}>
+                  {group.items.length}
+                </span>
+              </div>
             ) : (
               <div style={{ ...groupLabelStyle(), paddingTop: gi === 0 ? 2 : 14 }}>{group.label}</div>
             )}
-            {group.items.map((item) => {
+            {(group.label !== LOGS_GROUP_LABEL || logsExpanded || collapsed) && group.items.map((item) => {
               const Icon = item.icon;
               const badge = item.badgeKey ? badges[item.badgeKey] : null;
               return (
@@ -360,7 +439,7 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
                   <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {name}
                   </div>
-                  <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>Security Admin</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{roleTitle}</div>
                 </div>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth="1.7">
                   <path d="M6 9l6 6 6-6" />

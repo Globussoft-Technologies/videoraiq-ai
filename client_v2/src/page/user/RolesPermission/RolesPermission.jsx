@@ -35,10 +35,10 @@ const LOG_SUBMODULES = [
 ];
 
 const MODULE_LABELS = {
-  NVR: 'NVR', channels: 'Channels', LIVE: 'Live', dashboard: 'Dashboard',
-  incidents: 'Incidents', Users: 'Users', permission: 'Permissions', roles: 'Roles',
+  NVR: 'Cameras & NVRs', channels: 'Channels', LIVE: 'Live Wall', dashboard: 'Command Center',
+  incidents: 'Incident Center', Users: 'Users', permission: 'Permissions', roles: 'Roles',
   departments: 'Departments', detectionSettings: 'Detection Settings', profiles: 'Profiles',
-  recipients: 'Recipients', locations: 'Locations', playbacks: 'Playbacks',
+  recipients: 'Alert Recipients', locations: 'Locations', playbacks: 'Playbacks',
   global: 'Global', accessLogs: 'Access Logs', attendanceLogs: 'Attendance Logs',
   taggedUsersLogs: 'Tagged Users', detectedUsersLogs: 'Detected Users',
   personCountLogs: 'Person Count Logs', deskLogs: 'Desk Absence Logs',
@@ -270,6 +270,23 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
     });
   };
 
+  // Is every log sub-module already on for this field? Drives the Logs group
+  // header's own checkbox state, independent of the top table's columns.
+  const isLogsFieldAllOn = (field) =>
+    LOG_SUBMODULES.every(s => config.logs?.[s]?.[field] === true);
+
+  // Logs group header checkbox: applies the field to all 19 sub-modules at
+  // once, so a reviewer doesn't have to expand the list and click each row.
+  const toggleLogsField = (field) => {
+    if (readOnly) return;
+    const turnOn = !isLogsFieldAllOn(field);
+    setConfig(prev => {
+      const logs = { ...(prev.logs || {}) };
+      LOG_SUBMODULES.forEach(s => { logs[s] = { ...(logs[s] || {}), [field]: turnOn }; });
+      return { ...prev, logs };
+    });
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -280,7 +297,7 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
   };
 
   const Row = ({ label, row, onToggleField, disableCreate, disableDelete }) => (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(4,60px)', alignItems: 'center', padding: '8px 4px', borderBottom: '1px solid var(--bd)' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(4,72px)', alignItems: 'center', padding: '9px 4px', borderBottom: '1px solid var(--bd)' }}>
       <span style={{ fontSize: 12.5 }}>{label}</span>
       <span style={{ display: 'flex', justifyContent: 'center' }}>
         <Checkbox checked={!!row.view} disabled={readOnly} onToggle={() => onToggleField('view')} />
@@ -303,10 +320,10 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20,
     }}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, padding: 24, width: '100%', maxWidth: 520, boxSizing: 'border-box',
-        maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 8px 40px rgba(0,0,0,.5)',
+        background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, padding: 24, width: '100%', maxWidth: 580, boxSizing: 'border-box',
+        maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,.5)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flex: '0 0 auto' }}>
           <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>
             {readOnly ? 'View Permissions' : 'Configure Permissions'} — {role.roleName}
           </span>
@@ -318,7 +335,7 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
         {/* Select All / Clear All — bulk-set every module + log sub-module at
             once (ported from V1's PermissionStep). Hidden in read-only view. */}
         {!readOnly && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12, flex: '0 0 auto' }}>
             <button
               type="button"
               onClick={selectAll}
@@ -344,9 +361,9 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
           </div>
         )}
 
-        <div style={{ overflowX: 'auto' }}>
-          <div style={{ minWidth: 420 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(4,60px)', fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.06em', color: 'var(--tx3)', padding: '0 4px 6px', alignItems: 'center' }}>
+        <div className="vq-scroll" style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overflowX: 'auto' }}>
+          <div style={{ minWidth: 480 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(4,72px)', fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.06em', color: 'var(--tx3)', padding: '0 4px 6px', alignItems: 'center' }}>
               <span>MODULE</span>
               {['view', 'create', 'edit', 'delete'].map(field => {
                 const allOn = isColumnAllOn(field);
@@ -377,13 +394,27 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
               />
             ))}
 
-            <div
-              onClick={() => setLogsOpen(v => !v)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 4px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)' }}
-            >
-              {logsOpen ? '▾' : '▸'} Logs ({LOG_SUBMODULES.length} sub-modules)
+            <div style={{
+              display: 'grid', gridTemplateColumns: '1fr repeat(4,72px)', alignItems: 'center',
+              padding: '9px 4px', margin: '4px 0', borderRadius: 8, background: 'var(--bg2)',
+            }}>
+              <span
+                onClick={() => setLogsOpen(v => !v)}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12.5, fontWeight: 700, color: 'var(--tx)' }}
+              >
+                {logsOpen ? '▾' : '▸'} Logs ({LOG_SUBMODULES.length} sub-modules)
+              </span>
+              {['view', 'create', 'edit', 'delete'].map(field => (
+                <span key={field} style={{ display: 'flex', justifyContent: 'center' }}>
+                  <Checkbox
+                    checked={isLogsFieldAllOn(field)}
+                    disabled={readOnly}
+                    onToggle={() => toggleLogsField(field)}
+                  />
+                </span>
+              ))}
             </div>
-            {logsOpen && LOG_SUBMODULES.map(sub => (
+            {logsOpen && LOG_SUBMODULES.filter(sub => sub !== 'global').map(sub => (
               <Row
                 key={sub}
                 label={MODULE_LABELS[sub] || sub}
@@ -395,7 +426,7 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
         </div>
 
         {!readOnly && (
-          <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+          <div style={{ display: 'flex', gap: 8, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--bd)', flex: '0 0 auto' }}>
             <button onClick={onClose} style={{ flex: 1, height: 38, borderRadius: 9, fontSize: 12.5, fontWeight: 600, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)' }}>
               Cancel
             </button>

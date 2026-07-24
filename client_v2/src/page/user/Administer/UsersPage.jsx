@@ -904,11 +904,17 @@ export default function UsersPage() {
   const handleDelete = async (u) => {
     setDeleting(true);
     try {
-      await deleteUser(u._id);
+      const result = await deleteUser(u._id);
+      // Same as create/edit: some failures return HTTP 200 with
+      // body.status: 'failed' rather than a rejected promise.
+      if (result?.status && result.status !== 'success') {
+        sonnerToast.error(result?.message || 'Failed to remove user');
+        return;
+      }
       sonnerToast.success(`${userName(u)} removed`);
       usersApi.refetch();
-    } catch {
-      sonnerToast.error('Failed to remove user');
+    } catch (err) {
+      sonnerToast.error(apiError(err, 'Failed to remove user'));
     } finally {
       setDeleting(false);
       setConfirmDelete(null);
@@ -923,12 +929,16 @@ export default function UsersPage() {
       // Server reports how many documents it actually removed — surface that
       // rather than assuming every selected id matched.
       const result = await bulkDeleteUsers(ids);
+      if (result?.status && result.status !== 'success') {
+        sonnerToast.error(result?.message || 'Failed to remove users');
+        return;
+      }
       const removed = result?.deletedCount ?? ids.length;
       sonnerToast.success(`${removed} user${removed === 1 ? '' : 's'} removed`);
       setSelected({});
       usersApi.refetch();
     } catch (err) {
-      sonnerToast.error(err?.response?.data?.message || 'Failed to remove users');
+      sonnerToast.error(apiError(err, 'Failed to remove users'));
     } finally {
       setDeleting(false);
       setConfirmBulkDelete(false);
