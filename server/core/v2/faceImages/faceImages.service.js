@@ -334,3 +334,4 @@ class FaceImagesService {
 }
 
 export default new FaceImagesService();
+

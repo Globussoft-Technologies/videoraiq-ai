@@ -36,6 +36,7 @@ import {
   delete_all_users,
   bulkUploadUsers,
 } from './Api';
+import { stripPlaceholderEmail } from './displayEmail';
 
 const nasUrl = import.meta.env.VITE_BACKEND;
 const PLACEHOLDER_EMAIL_RE = /^quickcreate\+[a-f0-9]+@placeholder\.local$/i;
@@ -542,3 +543,4 @@ const AddProfile = () => {
 };
 
 export default AddProfile;
+

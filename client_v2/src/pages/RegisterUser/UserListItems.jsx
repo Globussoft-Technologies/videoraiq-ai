@@ -10,6 +10,7 @@ import {
   Check,
   CircleAlert,
 } from 'lucide-react';
+import { displayEmail } from './displayEmail';
 
 const nasUrl = import.meta.env.VITE_BACKEND;
 
@@ -43,7 +44,7 @@ export const UserCard = ({ user, handleEdit, handleDelete, setSelectedUser, setI
   const handle = (user.userName || fullName || '').toLowerCase().replace(/\s+/g, '');
 
   const infoRows = [
-    { icon: Mail, label: 'Email', value: user.email || 'N/A' },
+    { icon: Mail, label: 'Email', value: displayEmail(user.email) || 'N/A' },
     { icon: Briefcase, label: 'Department', value: user.departmentId?.departmentName || 'Default' },
     { icon: MapPin, label: 'Location', value: user.location || 'Default' },
   ];
@@ -223,8 +224,8 @@ export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, hand
         </div>
       </td>
       <td className="px-3 py-3 max-w-0">
-        <span className="block text-xs text-[var(--tx2)] truncate" title={user.email}>
-          {user.email}
+        <span className="block text-xs text-[var(--tx2)] truncate" title={displayEmail(user.email) || 'N/A'}>
+          {displayEmail(user.email) || 'N/A'}
         </span>
       </td>
       <td className="px-3 py-3 max-w-0">
@@ -265,3 +266,5 @@ export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, hand
     </tr>
   );
 };
+
+

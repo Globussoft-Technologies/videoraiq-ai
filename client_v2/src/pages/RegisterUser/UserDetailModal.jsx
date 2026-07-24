@@ -15,6 +15,7 @@ import {
   Home,
   UserCircle,
 } from 'lucide-react';
+import { displayEmail } from './displayEmail';
 
 const getInitialsPlaceholder = (firstName, lastName, size = 200) => {
   const initials = `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase() || '?';
@@ -132,7 +133,7 @@ const UserDetailModal = ({ user, isOpen, onClose, nasUrl }) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                 <DetailItem icon={User} label="First Name" value={user.firstName} />
                 <DetailItem icon={User} label="Last Name" value={user.lastName} />
-                <DetailItem icon={Mail} label="Email" value={user.email} />
+                <DetailItem icon={Mail} label="Email" value={displayEmail(user.email)} />
                 <DetailItem icon={Briefcase} label="Designation" value={user.designation} />
                 <DetailItem icon={MapPin} label="Location" value={user.location} />
                 <DetailItem
@@ -158,3 +159,5 @@ const UserDetailModal = ({ user, isOpen, onClose, nasUrl }) => {
 
 export { UserDetailModal };
 export default UserDetailModal;
+
+
