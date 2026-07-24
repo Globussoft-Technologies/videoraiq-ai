@@ -212,6 +212,7 @@ const AddProfile = () => {
     setDeleting(true);
     const deletedIds = [];
     const failedIds = [];
+    let firstFailureMessage = '';
     for (const id of deleteTargetIds) {
       try {
         await delete_user(id);
@@ -219,6 +220,7 @@ const AddProfile = () => {
       } catch (error) {
         console.error('Failed to delete user', id, error);
         failedIds.push(id);
+        if (!firstFailureMessage) firstFailureMessage = error?.response?.data?.body?.message || '';
       }
     }
     if (deletedIds.length > 0) {
@@ -229,7 +231,7 @@ const AddProfile = () => {
       );
     }
     if (failedIds.length > 0 && deletedIds.length === 0) {
-      toast.error(`Failed to delete ${failedIds.length} user${failedIds.length > 1 ? 's' : ''}`);
+      toast.error(firstFailureMessage || `Failed to delete ${failedIds.length} user${failedIds.length > 1 ? 's' : ''}`);
     }
     setOpenDeleteConfirm(false);
     setDeleteTargetIds([]);
@@ -263,7 +265,7 @@ const AddProfile = () => {
       fetchUsers();
     } catch (error) {
       console.error('Failed to delete all users', error);
-      toast.error('Failed to delete all users');
+      toast.error(error?.response?.data?.body?.message || 'Failed to delete all users');
     } finally {
       setDeletingAll(false);
     }
@@ -299,7 +301,7 @@ const AddProfile = () => {
         }
       } catch (error) {
         console.error(error);
-        toast.error('Failed to upload employees');
+        toast.error(error?.response?.data?.body?.message || 'Failed to upload employees');
       } finally {
         setBulkLoading(false);
         e.target.value = '';

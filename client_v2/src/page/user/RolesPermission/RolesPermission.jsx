@@ -581,8 +581,14 @@ export default function RolesPermission() {
 
   const handleAddRole = async (name) => {
     try {
-      await createRole(name);
-      toast.success('Role created');
+      const body = await createRole(name);
+      // Some failures come back as HTTP 200 with body.status: 'failed'
+      // (no rejected promise) rather than a thrown error.
+      if (body?.status && body.status !== 'success') {
+        toast.error(body?.message || 'Failed to create role');
+        return;
+      }
+      toast.success(body?.message || 'Role created');
       setShowAddModal(false);
       rolesApi.refetch();
     } catch (err) {
@@ -592,8 +598,12 @@ export default function RolesPermission() {
 
   const handleRename = async (name) => {
     try {
-      await renameRole(renameTarget._id, name);
-      toast.success('Role renamed');
+      const body = await renameRole(renameTarget._id, name);
+      if (body?.status && body.status !== 'success') {
+        toast.error(body?.message || 'Failed to rename role');
+        return;
+      }
+      toast.success(body?.message || 'Role renamed');
       setRenameTarget(null);
       rolesApi.refetch();
     } catch (err) {
@@ -603,8 +613,15 @@ export default function RolesPermission() {
 
   const handleDelete = async () => {
     try {
-      await deleteRole(deleteTarget._id);
-      toast.success('Role deleted');
+      const body = await deleteRole(deleteTarget._id);
+      // Some failures come back as HTTP 200 with body.status: 'failed'
+      // (no rejected promise) rather than a thrown error — same contract
+      // Users create/edit already handles.
+      if (body?.status && body.status !== 'success') {
+        toast.error(body?.message || 'Failed to delete role');
+        return;
+      }
+      toast.success(body?.message || 'Role deleted');
       setDeleteTarget(null);
       rolesApi.refetch();
     } catch (err) {
@@ -614,8 +631,12 @@ export default function RolesPermission() {
 
   const handleSaveConfig = async (permissionConfig) => {
     try {
-      await updatePermissionConfig(configureTarget.role.permissionDetails?._id, permissionConfig);
-      toast.success('Permissions updated');
+      const body = await updatePermissionConfig(configureTarget.role.permissionDetails?._id, permissionConfig);
+      if (body?.status && body.status !== 'success') {
+        toast.error(body?.message || 'Failed to update permissions');
+        return;
+      }
+      toast.success(body?.message || 'Permissions updated');
       setConfigureTarget(null);
       rolesApi.refetch();
     } catch (err) {

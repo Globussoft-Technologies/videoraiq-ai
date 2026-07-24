@@ -113,15 +113,17 @@ export async function getRoles({ skip = 0, limit = 50, searchQuery = '' } = {}) 
 
 // Bulk-creates one or more role names in a single call (V1's real contract —
 // POST /roles/create accepts a `roles` array, not a single roleName).
+// Returns the raw body (not unwrap()'d) so callers can show the server's own
+// success message instead of a hardcoded string.
 export async function createRole(roleName) {
   const res = await api.post('/roles/create', { roles: [roleName] });
-  return unwrap(res);
+  return res?.data?.body;
 }
 
 // Rename a role — blocked server-side (400) if the role is_default.
 export async function renameRole(roleId, roleName) {
   const res = await api.put(`/roles/update?roleId=${roleId}`, { roleName });
-  return unwrap(res);
+  return res?.data?.body;
 }
 
 // Toggle one of the 4 flat permission columns. V1 cascades whichever of
@@ -131,19 +133,19 @@ export async function renameRole(roleId, roleName) {
 export async function updateRolePermission(roleId, field, value) {
   const key = { view: 'roleView', create: 'roleCreate', edit: 'roleEdit', delete: 'roleDelete' }[field];
   const res = await api.put(`/roles/update?roleId=${roleId}`, { [key]: value });
-  return unwrap(res);
+  return res?.data?.body;
 }
 
 export async function deleteRole(roleId) {
   const res = await api.delete(`/roles/delete?roleId=${roleId}`);
-  return unwrap(res);
+  return res?.data?.body;
 }
 
 // Granular per-module permission matrix ("Configure") — partial patch, merged
 // module-by-module server-side. permissionConfig: { [module]: {view,create,edit,delete} }.
 export async function updatePermissionConfig(permissionId, permissionConfig) {
   const res = await api.put(`/permissions/update?permissionId=${permissionId}`, { permissionConfig });
-  return unwrap(res);
+  return res?.data?.body;
 }
 
 /* ---- Org / Admin settings ---- */
