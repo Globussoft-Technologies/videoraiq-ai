@@ -30,7 +30,9 @@ function ReportModal({ item, onClose, onSuccess }) {
       onSuccess?.();
       onClose();
     } catch (e) {
-      setErr(e?.response?.data?.body?.message || 'Something went wrong');
+      // Surface the real server reason (e.g. a permission error) as a toast
+      // rather than inline text, matching how Resolve failures are reported.
+      toast.error(e?.response?.data?.body?.message || 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -170,7 +172,7 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
       toast.success('Incident resolved');
       onChanged?.();
     } catch (e) {
-      toast.error('Could not resolve');
+      toast.error(e?.response?.data?.body?.message || 'Could not resolve');
     } finally {
       setBusy(false);
     }

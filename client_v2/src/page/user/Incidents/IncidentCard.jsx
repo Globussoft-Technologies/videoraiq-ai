@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { ImageOff, Maximize2, X, Flag } from 'lucide-react';
 import { detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
 import axios from 'axios';
@@ -218,10 +219,10 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox 
       onRefresh?.();
       setSaveFlash({ text: newVal ? 'Resolved' : 'Unresolved', ok: true });
       flashTimerRef.current = setTimeout(() => setSaveFlash(null), 2500);
-    } catch {
-      // Previously failed silently, leaving the user to assume it worked.
-      setSaveFlash({ text: 'Failed — retry', ok: false });
-      flashTimerRef.current = setTimeout(() => setSaveFlash(null), 3500);
+    } catch (err) {
+      // Previously failed silently, leaving the user to assume it worked;
+      // surface the real reason (e.g. a permission error) as a toast.
+      toast.error(err?.response?.data?.body?.message || 'Failed — retry');
     } finally {
       setResolving(false);
     }

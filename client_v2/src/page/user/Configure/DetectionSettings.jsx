@@ -259,8 +259,9 @@ export default function DetectionSettings() {
     try {
       await updateChannel(camera._id, { checkType });
       channelsApi.refetch();
-    } catch {
-      toast.error('Failed to update camera type.');
+    } catch (err) {
+      const msg = err?.response?.data?.body?.message || 'Failed to update camera type.';
+      toast.error(msg);
     }
   };
 

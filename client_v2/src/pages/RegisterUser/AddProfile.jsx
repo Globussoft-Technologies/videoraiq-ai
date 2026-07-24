@@ -416,7 +416,7 @@ const AddProfile = () => {
               trigger={<span className="hidden" />}
             />
 
-            {selectedUserIds.length > 0 && (
+            {canDeleteUsers && selectedUserIds.length > 0 && (
               <button
                 type="button"
                 onClick={handleBulkDelete}
@@ -427,14 +427,16 @@ const AddProfile = () => {
               </button>
             )}
 
-            <button
-              type="button"
-              onClick={handleDeleteAllClick}
-              className="cursor-pointer flex items-center gap-1.5 px-3 py-2 bg-[var(--crit)] hover:opacity-90 text-white rounded-lg text-xs font-medium"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Delete All</span>
-            </button>
+            {canDeleteUsers && (
+              <button
+                type="button"
+                onClick={handleDeleteAllClick}
+                className="cursor-pointer flex items-center gap-1.5 px-3 py-2 bg-[var(--crit)] hover:opacity-90 text-white rounded-lg text-xs font-medium"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete All</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -454,6 +456,8 @@ const AddProfile = () => {
           handleDelete={handleDelete}
           setSelectedUser={setSelectedUser}
           setIsUserModalOpen={setIsUserModalOpen}
+          canEdit={canEditUsers}
+          canDelete={canDeleteUsers}
         />
 
         <BulkUploadModal

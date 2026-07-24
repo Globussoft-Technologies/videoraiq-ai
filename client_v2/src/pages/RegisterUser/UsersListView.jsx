@@ -18,6 +18,8 @@ const UsersListView = ({
   handleDelete,
   setSelectedUser,
   setIsUserModalOpen,
+  canEdit = true,
+  canDelete = true,
 }) => (
   <SkeletonTheme
     baseColor={theme === 'dark' ? '#171c28' : '#e8edf5'}
@@ -51,6 +53,8 @@ const UsersListView = ({
                   toggleUserSelection={toggleUserSelection}
                   setSelectedUser={setSelectedUser}
                   setIsUserModalOpen={setIsUserModalOpen}
+                  canEdit={canEdit}
+                  canDelete={canDelete}
                 />
               ))}
             </div>
@@ -72,12 +76,14 @@ const UsersListView = ({
             <thead className="sticky top-0 z-10">
               <tr className="bg-[var(--bg2)] text-[var(--tx2)]">
                 <th className="px-3 py-3 text-[11px] font-semibold text-center">
-                  <input
-                    type="checkbox"
-                    checked={allUsersSelected}
-                    onChange={handleSelectAll}
-                    className="accent-[var(--blue)]"
-                  />
+                  {canDelete && (
+                    <input
+                      type="checkbox"
+                      checked={allUsersSelected}
+                      onChange={handleSelectAll}
+                      className="accent-[var(--blue)]"
+                    />
+                  )}
                 </th>
                 <th className="px-3 py-3 text-[11px] font-semibold text-center">#</th>
                 <th className="px-3 py-3 text-[11px] font-semibold">Name</th>
@@ -119,6 +125,8 @@ const UsersListView = ({
                     toggleUserSelection={toggleUserSelection}
                     setSelectedUser={setSelectedUser}
                     setIsUserModalOpen={setIsUserModalOpen}
+                    canEdit={canEdit}
+                    canDelete={canDelete}
                   />
                 ))
               )}

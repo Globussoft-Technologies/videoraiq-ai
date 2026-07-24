@@ -64,6 +64,7 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
   const { theme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const [logsHeaderHover, setLogsHeaderHover] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef(null);
   // Close the account menu on an outside click / Escape (replaces the
@@ -265,14 +266,17 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
               <div
                 onClick={toggleLogsCollapsed}
                 title={logsExpanded ? 'Collapse' : 'Expand'}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.borderColor = 'var(--bd2)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--bd)'; }}
+                onMouseEnter={() => setLogsHeaderHover(true)}
+                onMouseLeave={() => setLogsHeaderHover(false)}
                 style={{
                   marginTop: gi === 0 ? 2 : 12,
                   display: 'flex', alignItems: 'center', gap: 7,
                   padding: '8px 10px 8px 8px', borderRadius: 8,
-                  border: '1px solid var(--bd)', background: 'transparent',
-                  borderLeft: onLogsRoute ? '3px solid var(--blue)' : '3px solid transparent',
+                  borderTop: `1px solid ${logsHeaderHover ? 'var(--bd2)' : 'var(--bd)'}`,
+                  borderRight: `1px solid ${logsHeaderHover ? 'var(--bd2)' : 'var(--bd)'}`,
+                  borderBottom: `1px solid ${logsHeaderHover ? 'var(--bd2)' : 'var(--bd)'}`,
+                  borderLeft: `3px solid ${onLogsRoute ? 'var(--blue)' : (logsHeaderHover ? 'var(--bd2)' : 'var(--bd)')}`,
+                  background: logsHeaderHover ? 'var(--bg2)' : 'transparent',
                   cursor: 'pointer', userSelect: 'none', transition: 'background .12s,border-color .12s',
                 }}
               >

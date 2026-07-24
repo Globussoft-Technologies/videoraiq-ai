@@ -396,8 +396,8 @@ export default function AlertsView() {
       toast.success('Resolved');
       refetch();
       loadCounts();
-    } catch {
-      toast.error('Could not resolve');
+    } catch (e) {
+      toast.error(e?.response?.data?.body?.message || 'Could not resolve');
     } finally {
       setBusy(false);
     }

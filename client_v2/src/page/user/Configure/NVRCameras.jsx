@@ -54,7 +54,19 @@ function FieldLabel({ children, required }) {
   );
 }
 
-function ModalInput({ label, required, ...props }) {
+/** Inline validation message shown under the field it belongs to — names the
+ * specific problem instead of a single toast that doesn't say which of the
+ * several required fields was left blank. */
+function FieldError({ children }) {
+  if (!children) return null;
+  return (
+    <div style={{ fontSize: 10.5, color: 'var(--crit, #ef4444)', marginTop: 5, lineHeight: 1.35 }}>
+      {children}
+    </div>
+  );
+}
+
+function ModalInput({ label, required, invalid, error, ...props }) {
   return (
     <div>
       <FieldLabel required={required}>{label}</FieldLabel>
@@ -62,11 +74,13 @@ function ModalInput({ label, required, ...props }) {
         {...props}
         style={{
           width: '100%', height: 38, padding: '0 12px', boxSizing: 'border-box',
-          borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)',
+          borderRadius: 9, background: 'var(--bg2)',
+          border: `1px solid ${invalid ? 'var(--crit, #ef4444)' : 'var(--bd)'}`,
           fontSize: 12.5, color: 'var(--tx)', outline: 'none',
           ...(props.mono ? { fontFamily: 'var(--mono)' } : {}),
         }}
       />
+      <FieldError>{error}</FieldError>
     </div>
   );
 }
@@ -667,12 +681,18 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   const [newLocation, setNewLocation] = useState('');
   const [creatingLocation, setCreatingLocation] = useState(false);
   const [previewCam, setPreviewCam] = useState(null);
+  // Per-field validation, shown under each input rather than a single toast
+  // that names only one problem at a time and doesn't say which field it means.
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
     getLocations(0, 100).then(data => setLocations(Array.isArray(data) ? data : [])).catch(() => {});
   }, []);
 
-  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+  const set = (k) => (e) => {
+    setForm(f => ({ ...f, [k]: e.target.value }));
+    setErrors(prev => (prev[k] ? { ...prev, [k]: undefined } : prev));
+  };
 
   const applyFetchedCameras = (available) => {
     // registerAndFetchCameras (brand-new NVR) returns raw saved Camera docs
@@ -715,21 +735,23 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   async function handleConnect() {
     const ip = form.ip.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/:\d+$/, '');
 
-    if (!form.name.trim() || !form.location.trim() || !ip || !form.user.trim()) {
-      toast.error('Please fill in all required fields.');
-      return;
-    }
+    // Every required field is checked in one pass so the form surfaces all of
+    // its problems at once, under the fields they actually belong to, instead
+    // of one generic toast that doesn't say which field was left blank.
+    const found = {};
+    if (!form.name.trim()) found.name = 'NVR name is required.';
+    if (!form.location.trim()) found.location = 'Select or create a location.';
+    if (!ip) found.ip = 'Public IP address is required.';
+    if (!form.user.trim()) found.user = 'Username is required.';
+    if (!isEdit && !form.pass) found.pass = 'Password is required.';
+    if (isEdit && !form.oldPass) found.oldPass = 'Old password is required.';
+    if (isEdit && !form.newPass) found.newPass = 'New password is required.';
+    setErrors(found);
+    if (Object.keys(found).length) return;
+
     if (ip !== form.ip.trim()) {
       toast.error('The IP address should not include "http://", "https://", or a port — using the cleaned value.');
       setForm(f => ({ ...f, ip }));
-    }
-    if (!isEdit && !form.pass) {
-      toast.error('Password is required.');
-      return;
-    }
-    if (isEdit && (!form.oldPass || !form.newPass)) {
-      toast.error('Old and new password are required.');
-      return;
     }
 
     setConnecting(true);
@@ -915,14 +937,16 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                   {NVR_BRANDS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
                 </select>
               </div>
-              <ModalInput label="NVR Name" required value={form.name} onChange={set('name')} placeholder="e.g. HQ Core Recorder" />
+              <ModalInput label="NVR Name" required value={form.name} onChange={set('name')} placeholder="e.g. HQ Core Recorder" invalid={!!errors.name} error={errors.name} />
               <div>
                 <FieldLabel required>Location</FieldLabel>
                 <select
-                  value={form.location} onChange={set('location')}
+                  value={form.location}
+                  onChange={e => { set('location')(e); }}
                   style={{
                     width: '100%', height: 38, padding: '0 28px 0 12px', boxSizing: 'border-box',
-                    borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)',
+                    borderRadius: 9, background: 'var(--bg2)',
+                    border: `1px solid ${errors.location ? 'var(--crit, #ef4444)' : 'var(--bd)'}`,
                     fontSize: 12.5, color: 'var(--tx)', cursor: 'pointer', outline: 'none', marginBottom: 6,
                   }}
                 >
@@ -956,20 +980,21 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                     {creatingLocation ? '…' : 'Add'}
                   </button>
                 </div>
+                <FieldError>{errors.location}</FieldError>
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
-                <ModalInput label="Public IP Address" required value={form.ip} onChange={set('ip')} placeholder="e.g. 203.0.113.24 (no http:// or port)" mono />
+                <ModalInput label="Public IP Address" required value={form.ip} onChange={set('ip')} placeholder="e.g. 203.0.113.24 (no http:// or port)" mono invalid={!!errors.ip} error={errors.ip} />
               </div>
-              <ModalInput label="Username" required value={form.user} onChange={set('user')} placeholder="admin" />
+              <ModalInput label="Username" required value={form.user} onChange={set('user')} placeholder="admin" invalid={!!errors.user} error={errors.user} />
               {isEdit ? (
                 <div />
               ) : (
-                <ModalInput label="Password" required type="password" value={form.pass} onChange={set('pass')} placeholder="••••••••" />
+                <ModalInput label="Password" required type="password" value={form.pass} onChange={set('pass')} placeholder="••••••••" invalid={!!errors.pass} error={errors.pass} />
               )}
               {isEdit && (
                 <>
-                  <ModalInput label="Old Password" required type="password" value={form.oldPass} onChange={set('oldPass')} placeholder="••••••••" />
-                  <ModalInput label="New Password" required type="password" value={form.newPass} onChange={set('newPass')} placeholder="••••••••" />
+                  <ModalInput label="Old Password" required type="password" value={form.oldPass} onChange={set('oldPass')} placeholder="••••••••" invalid={!!errors.oldPass} error={errors.oldPass} />
+                  <ModalInput label="New Password" required type="password" value={form.newPass} onChange={set('newPass')} placeholder="••••••••" invalid={!!errors.newPass} error={errors.newPass} />
                 </>
               )}
               <ModalInput label="RTSP Port" value={form.rtsp} onChange={set('rtsp')} placeholder="554" mono />

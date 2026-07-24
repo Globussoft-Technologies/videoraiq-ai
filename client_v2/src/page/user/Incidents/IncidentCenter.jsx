@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useOutletContext } from 'react-router-dom';
 import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2, Flag } from 'lucide-react';
+import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import SharedMultiSelect from '../../../components/MultiSelect';
 import DateRangePicker, { fmt } from '../../../components/DateRangePicker';
@@ -471,11 +472,11 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, pag
       onRefresh?.();
       setSaveFlash({ text: next ? 'Marked as resolved' : 'Marked unresolved', ok: true });
       flashTimerRef.current = setTimeout(() => setSaveFlash(null), 2500);
-    } catch {
-      // Leave the checkbox unchanged so the user sees it didn't take, and say
-      // so — previously a failed save was completely silent.
-      setSaveFlash({ text: 'Could not save — try again', ok: false });
-      flashTimerRef.current = setTimeout(() => setSaveFlash(null), 3500);
+    } catch (e) {
+      // Leave the checkbox unchanged so the user sees it didn't take; surface
+      // the real reason (e.g. a permission error) as a toast rather than the
+      // generic inline flash, which previously hid the actual server message.
+      toast.error(e?.response?.data?.body?.message || 'Could not save — try again');
     } finally {
       setResolving(false);
     }

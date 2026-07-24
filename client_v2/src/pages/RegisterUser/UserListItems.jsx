@@ -36,7 +36,7 @@ export const StatusBadge = ({ verified }) =>
   );
 
 /* ─────────────── Card ─────────────── */
-export const UserCard = ({ user, handleEdit, handleDelete, setSelectedUser, setIsUserModalOpen, selectedUserIds, toggleUserSelection }) => {
+export const UserCard = ({ user, handleEdit, handleDelete, setSelectedUser, setIsUserModalOpen, selectedUserIds, toggleUserSelection, canEdit = true, canDelete = true }) => {
   const [imgIdx, setImgIdx] = useState(0);
   const pics = user.profilePics || [];
   const many = pics.length > 1;
@@ -70,36 +70,42 @@ export const UserCard = ({ user, handleEdit, handleDelete, setSelectedUser, setI
         </div>
 
         <div className="absolute top-3 right-3 flex items-center gap-1 z-30">
-          <input
-            type="checkbox"
-            checked={selectedUserIds.includes(user._id)}
-            onChange={(e) => {
-              e.stopPropagation();
-              toggleUserSelection(user._id);
-            }}
-            onClick={(e) => e.stopPropagation()}
-            className="h-4 w-4 rounded accent-[var(--blue)]"
-          />
-          <button
-            title="Edit User"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleEdit(user);
-            }}
-            className="text-white bg-white/15 hover:bg-white/25 p-1.5 rounded-full transition-colors cursor-pointer"
-          >
-            <PencilLine className="w-4 h-4" />
-          </button>
-          <button
-            title="Delete User"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDelete(user._id);
-            }}
-            className="text-white bg-white/15 hover:bg-[var(--crit)] p-1.5 rounded-full transition-colors cursor-pointer"
-          >
-            <Trash className="w-4 h-4" />
-          </button>
+          {canDelete && (
+            <input
+              type="checkbox"
+              checked={selectedUserIds.includes(user._id)}
+              onChange={(e) => {
+                e.stopPropagation();
+                toggleUserSelection(user._id);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="h-4 w-4 rounded accent-[var(--blue)]"
+            />
+          )}
+          {canEdit && (
+            <button
+              title="Edit User"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEdit(user);
+              }}
+              className="text-white bg-white/15 hover:bg-white/25 p-1.5 rounded-full transition-colors cursor-pointer"
+            >
+              <PencilLine className="w-4 h-4" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              title="Delete User"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete(user._id);
+              }}
+              className="text-white bg-white/15 hover:bg-[var(--crit)] p-1.5 rounded-full transition-colors cursor-pointer"
+            >
+              <Trash className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -177,7 +183,7 @@ export const UserCard = ({ user, handleEdit, handleDelete, setSelectedUser, setI
 };
 
 /* ─────────────── Table row ─────────────── */
-export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, handleDelete, setSelectedUser, setIsUserModalOpen, selectedUserIds, toggleUserSelection }) => {
+export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, handleDelete, setSelectedUser, setIsUserModalOpen, selectedUserIds, toggleUserSelection, canEdit = true, canDelete = true }) => {
   const pics = user.profilePics || [];
   const avatar = pics.length > 0 ? `${nasUrl}/uploads/${pics[0]}` : getInitialsPlaceholder(user.firstName, user.lastName, 40);
 
@@ -190,16 +196,18 @@ export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, hand
       className="border-b border-[var(--bd)] hover:bg-[var(--bg2)] transition-colors cursor-pointer text-[var(--tx)]"
     >
       <td className="px-3 py-3 text-center">
-        <input
-          type="checkbox"
-          checked={selectedUserIds.includes(user._id)}
-          onChange={(e) => {
-            e.stopPropagation();
-            toggleUserSelection(user._id);
-          }}
-          onClick={(e) => e.stopPropagation()}
-          className="h-4 w-4 rounded accent-[var(--blue)]"
-        />
+        {canDelete && (
+          <input
+            type="checkbox"
+            checked={selectedUserIds.includes(user._id)}
+            onChange={(e) => {
+              e.stopPropagation();
+              toggleUserSelection(user._id);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="h-4 w-4 rounded accent-[var(--blue)]"
+          />
+        )}
       </td>
       <td className="px-3 py-3 text-xs text-[var(--tx3)] text-center">
         {(currentPage - 1) * limit + index + 1}
@@ -241,26 +249,31 @@ export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, hand
       </td>
       <td className="px-3 py-3 text-center">
         <div className="flex items-center justify-center gap-2">
-          <button
-            title="Edit User"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleEdit(user);
-            }}
-            className="text-[var(--blue)] hover:bg-[var(--blue)]/10 p-1.5 rounded-full transition-colors cursor-pointer"
-          >
-            <PencilLine className="w-4 h-4" />
-          </button>
-          <button
-            title="Delete User"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDelete(user._id);
-            }}
-            className="text-[var(--crit)] hover:bg-[var(--crit)]/10 p-1.5 rounded-full transition-colors cursor-pointer"
-          >
-            <Trash className="w-4 h-4" />
-          </button>
+          {canEdit && (
+            <button
+              title="Edit User"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEdit(user);
+              }}
+              className="text-[var(--blue)] hover:bg-[var(--blue)]/10 p-1.5 rounded-full transition-colors cursor-pointer"
+            >
+              <PencilLine className="w-4 h-4" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              title="Delete User"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete(user._id);
+              }}
+              className="text-[var(--crit)] hover:bg-[var(--crit)]/10 p-1.5 rounded-full transition-colors cursor-pointer"
+            >
+              <Trash className="w-4 h-4" />
+            </button>
+          )}
+          {!canEdit && !canDelete && <span className="text-[var(--tx3)] text-xs">—</span>}
         </div>
       </td>
     </tr>
