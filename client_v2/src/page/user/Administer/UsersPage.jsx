@@ -33,12 +33,25 @@ function getInitials(name) {
 
 const ROLE_COLORS = {
   'super admin': '#d946ef',
-  'site admin':  '#a855f7',
-  'operator':    '#3b82f6',
-  'viewer':      '#6b7796',
+  'site admin': '#a855f7',
+  'admin': '#8b5cf6',
+  'operator': '#3b82f6',
+  'viewer': '#6b7796',
+  'write': '#7c3aed',
+  'read': '#0ea5e9',
 };
+const ROLE_FALLBACK_COLORS = [
+  '#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981',
+  '#3b82f6', '#ef4444', '#a855f7', '#14b8a6', '#f97316',
+];
 function getRoleColor(roleName) {
-  return ROLE_COLORS[(roleName || '').toLowerCase()] ?? '#6366f1';
+  const normalized = (roleName || '').trim().toLowerCase();
+  if (!normalized) return '#6366f1';
+  if (ROLE_COLORS[normalized]) return ROLE_COLORS[normalized];
+
+  let hash = 0;
+  for (const ch of normalized) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return ROLE_FALLBACK_COLORS[hash % ROLE_FALLBACK_COLORS.length];
 }
 function hexA(hex, a) {
   const n = parseInt(hex.slice(1), 16);
@@ -1209,3 +1222,6 @@ export default function UsersPage() {
     </div>
   );
 }
+
+
+

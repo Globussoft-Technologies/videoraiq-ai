@@ -99,7 +99,18 @@ function GridIcon4x4() {
 const GRID_ICONS = { '1×1': GridIcon1x1, '2×2': GridIcon2x2, '3×3': GridIcon3x3, '4×4': GridIcon4x4 };
 
 /** Plain video-only fullscreen — no sidebar/incidents/timeline, just the live feed. */
-function FullscreenCameraView({ channel, onPrev, onNext, onClose, onExpand, isExpanded }) {
+function FullscreenCameraView({
+  channel,
+  onPrev,
+  onNext,
+  onClose,
+  onExpand,
+  isExpanded,
+  showPrev = !!onPrev,
+  showNext = !!onNext,
+  prevDisabled = false,
+  nextDisabled = false,
+}) {
   const camName = channel?.customName || channel?.name || 'Camera';
   const site    = channel?.location   || channel?.locationName || channel?.site || '';
 
@@ -133,20 +144,40 @@ function FullscreenCameraView({ channel, onPrev, onNext, onClose, onExpand, isEx
       )}
 
       {/* Prev/Next nav */}
-      {onPrev && (
+            {showPrev && (
         <button
           onClick={onPrev}
           className="vq-fs-nav vq-fs-nav-prev"
-          style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 10, width: 40, height: 40, borderRadius: '50%', background: 'rgba(15,23,42,0.65)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          disabled={prevDisabled}
+          aria-disabled={prevDisabled}
+          style={{
+            position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 10,
+            width: 40, height: 40, borderRadius: '50%',
+            background: prevDisabled ? 'rgba(15,23,42,0.35)' : 'rgba(15,23,42,0.65)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            color: prevDisabled ? 'rgba(255,255,255,0.45)' : '#fff',
+            cursor: prevDisabled ? 'not-allowed' : 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}
         >
           <ChevronLeft size={20} />
         </button>
       )}
-      {onNext && (
+      {showNext && (
         <button
           onClick={onNext}
           className="vq-fs-nav vq-fs-nav-next"
-          style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 10, width: 40, height: 40, borderRadius: '50%', background: 'rgba(15,23,42,0.65)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          disabled={nextDisabled}
+          aria-disabled={nextDisabled}
+          style={{
+            position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 10,
+            width: 40, height: 40, borderRadius: '50%',
+            background: nextDisabled ? 'rgba(15,23,42,0.35)' : 'rgba(15,23,42,0.65)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            color: nextDisabled ? 'rgba(255,255,255,0.45)' : '#fff',
+            cursor: nextDisabled ? 'not-allowed' : 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}
         >
           <ChevronRight size={20} />
         </button>
@@ -549,8 +580,12 @@ export default function LiveWallGrid() {
                 <div style={{ flex: 1, minHeight: 0 }}>
                   <FullscreenCameraView
                     channel={visible[0]}
-                    onPrev={pages > 1 ? () => setPage(p => (p - 1 + pages) % pages) : null}
-                    onNext={pages > 1 ? () => setPage(p => (p + 1) % pages) : null}
+                    showPrev={pages > 1}
+                    showNext={pages > 1}
+                    prevDisabled={safePage === 0}
+                    nextDisabled={safePage >= pages - 1}
+                    onPrev={pages > 1 ? () => setPage(p => Math.max(0, p - 1)) : null}
+                    onNext={pages > 1 ? () => setPage(p => Math.min(pages - 1, p + 1)) : null}
                     onExpand={togglePageFullscreen}
                     isExpanded={isPageFS}
                   />
@@ -645,3 +680,5 @@ const CameraStreamTile = memo(function CameraStreamTile({ channel, camLabel, cha
     />
   );
 });
+
+
