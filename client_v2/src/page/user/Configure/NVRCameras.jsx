@@ -38,6 +38,10 @@ function useIsMobile(maxWidth = 640) {
   return isMobile;
 }
 
+// Add/Edit/Delete NVR and Manage Cameras are cloud-only actions — a local
+// setup provisions NVRs outside this UI, so these are hidden there.
+const SHOW_NVR_ACTIONS = import.meta.env.VITE_LOCAL_SETUP === 'false';
+
 function statusColor(status) {
   const s = (status || '').toLowerCase();
   if (s === 'online' || s === 'active') return '#22c55e';
@@ -131,7 +135,6 @@ function NvrCardSkeleton() {
 // ── NVR card ─────────────────────────────────────────────────────────────────
 function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
   const cameraCount = nvr.cameraCount ?? nvr.usedChannels ?? nvr.used ?? 0;
-  const sc          = statusColor(nvr.status);
   const isMobile    = useIsMobile();
 
   // On phones the three actions can't fit beside the title, so they drop to a
@@ -156,30 +159,34 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
       >
         <Cctv size={15} /> Camera Settings
       </button>
-      <button
-        onClick={() => onEdit(nvr)}
-        title="Edit NVR"
-        style={{
-          width: 34, height: 34, borderRadius: 8, flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'var(--bg2)', border: '1px solid var(--bd)',
-          color: 'var(--tx3)', cursor: 'pointer',
-        }}
-      >
-        <Pencil size={15} />
-      </button>
-      <button
-        onClick={() => onDelete(nvr)}
-        title="Delete NVR"
-        style={{
-          width: 34, height: 34, borderRadius: 8, flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'var(--bg2)', border: '1px solid var(--bd)',
-          color: 'var(--crit)', cursor: 'pointer',
-        }}
-      >
-        <Trash2 size={15} />
-      </button>
+      {SHOW_NVR_ACTIONS && (
+        <>
+          <button
+            onClick={() => onEdit(nvr)}
+            title="Edit NVR"
+            style={{
+              width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'var(--bg2)', border: '1px solid var(--bd)',
+              color: 'var(--tx3)', cursor: 'pointer',
+            }}
+          >
+            <Pencil size={15} />
+          </button>
+          <button
+            onClick={() => onDelete(nvr)}
+            title="Delete NVR"
+            style={{
+              width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'var(--bg2)', border: '1px solid var(--bd)',
+              color: 'var(--crit)', cursor: 'pointer',
+            }}
+          >
+            <Trash2 size={15} />
+          </button>
+        </>
+      )}
     </div>
   );
 
@@ -208,10 +215,6 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
             {nvr.name || nvr.nvrName || 'Unknown NVR'}
           </div>
         </div>
-        <span style={{
-          width: 8, height: 8, borderRadius: '50%', background: sc,
-          boxShadow: `0 0 7px ${sc}`, flexShrink: 0,
-        }} />
       </div>
 
       {/* Field list */}
@@ -1224,21 +1227,23 @@ export default function NVRCameras() {
         }}>
           {nvrs.length} NVR{nvrs.length !== 1 ? 's' : ''}
         </span>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7 }}>
-          <button
-            onClick={() => setNvrModal(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              fontSize: 12.5, fontWeight: 600, color: '#fff',
-              background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-              borderRadius: 8, padding: '8px 14px', cursor: 'pointer',
-              border: 'none', whiteSpace: 'nowrap',
-              boxShadow: '0 0 14px rgba(99,102,241,.3)',
-            }}
-          >
-            <Plus size={14} /> Add NVR
-          </button>
-        </div>
+        {SHOW_NVR_ACTIONS && (
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7 }}>
+            <button
+              onClick={() => setNvrModal(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                fontSize: 12.5, fontWeight: 600, color: '#fff',
+                background: 'linear-gradient(135deg,var(--blue),var(--violet))',
+                borderRadius: 8, padding: '8px 14px', cursor: 'pointer',
+                border: 'none', whiteSpace: 'nowrap',
+                boxShadow: '0 0 14px rgba(99,102,241,.3)',
+              }}
+            >
+              <Plus size={14} /> Add NVR
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── NVR cards ─────────────────────────────────────────────────────── */}
@@ -1285,17 +1290,19 @@ export default function NVRCameras() {
             {camFiltered.length} of {channels.length} cameras
           </span>
           <div ref={nvrPickerRef} style={{ marginLeft: 'auto', position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              onClick={handleManageCamerasClick}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)',
-                background: 'var(--bg2)', border: '1px solid var(--bd)',
-                borderRadius: 8, padding: '7px 14px', cursor: 'pointer',
-              }}
-            >
-              <ListVideo size={13} /> Manage Cameras
-            </button>
+            {SHOW_NVR_ACTIONS && (
+              <button
+                onClick={handleManageCamerasClick}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)',
+                  background: 'var(--bg2)', border: '1px solid var(--bd)',
+                  borderRadius: 8, padding: '7px 14px', cursor: 'pointer',
+                }}
+              >
+                <ListVideo size={13} /> Manage Cameras
+              </button>
+            )}
             {nvrPickerOpen && (
               <div style={{
                 position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 50,
