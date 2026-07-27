@@ -335,7 +335,7 @@ export default function AlertRecipients() {
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
 
       {/* Telegram Alerts Menu  */}
-      {/* <TelegramAlerts /> */}
+      <TelegramAlerts />
 
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
