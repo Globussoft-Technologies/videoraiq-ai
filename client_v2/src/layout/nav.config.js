@@ -89,7 +89,7 @@ export const NAV_GROUPS = [
       { key: 'person-count', label: 'Person Count Logs', path: 'logs/person-count', icon: UserCheck },
       { key: 'desk-absence', label: 'Desk Absence Logs', path: 'logs/desk-absence', icon: UserMinus },
       { key: 'anpr', label: 'ANPR Logs', path: 'logs/anpr', icon: Car },
-      { key: 'productivity', label: 'Productivity Logs', path: 'logs/productivity', icon: TrendingUp },
+      // { key: 'productivity', label: 'Productivity Logs', path: 'logs/productivity', icon: TrendingUp },
       { key: 'track', label: 'Track Logs', path: 'logs/track', icon: Activity },
       { key: 'visibility', label: 'Visibility Logs', path: 'logs/visibility', icon: Eye },
       { key: 'guard', label: 'Guard Logs', path: 'logs/guard', icon: Shield },
@@ -140,7 +140,7 @@ export const VIEW_META = {
   'person-count': { title: 'Person Count Logs', sub: 'Zone occupancy & headcount over time' },
   anpr: { title: 'ANPR / Vehicle Logs', sub: 'Vehicle entry / exit & plate matches' },
   'desk-absence': { title: 'Desk Absence Logs', sub: 'Post & seat absence detections' },
-  productivity: { title: 'Productivity Logs', sub: 'Productive vs. non-productive hours by employee' },
+  // productivity: { title: 'Productivity Logs', sub: 'Productive vs. non-productive hours by employee' },
   track: { title: 'Track Logs', sub: 'Live user & vehicle activity tracking' },
   visibility: { title: 'Visibility Logs', sub: 'Per-channel presence/absence timeline' },
   guard: { title: 'Guard Logs', sub: 'Guard presence/absence timeline & export' },
@@ -162,3 +162,5 @@ export const VIEW_META = {
   departments: { title: 'Departments', sub: 'Manage departments and teams' },
   'register-users': { title: 'Register your User', sub: 'Create a new employee profile and capture enrollment images' },
 };
+
+

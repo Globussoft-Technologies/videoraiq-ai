@@ -24,7 +24,9 @@ const PERMISSION_MODULES = [
 // list must stay a superset match of that seed, not just of nav.config.js.
 const LOG_SUBMODULES = [
   'global', 'accessLogs', 'attendanceLogs', 'taggedUsersLogs', 'detectedUsersLogs',
-  'personCountLogs', 'deskLogs', 'ANPRLogs', 'productivityLogs', 'trackLogs',
+  'personCountLogs', 'deskLogs', 'ANPRLogs',
+  // 'productivityLogs',
+  'trackLogs',
   'visibilityLogs', 'guardLogs', 'conveyorLogs', 'vehicleObstructionLogs',
   'vehicleCountLogs', 'crusherLogs', 'lineCrossingLogs', 'waterSpillLogs',
   'unauthorizedAccessLogs',
@@ -38,7 +40,8 @@ const MODULE_LABELS = {
   global: 'Global', accessLogs: 'Access Logs', attendanceLogs: 'Attendance Logs',
   taggedUsersLogs: 'Tagged Users', detectedUsersLogs: 'Detected Users',
   personCountLogs: 'Person Count Logs', deskLogs: 'Desk Absence Logs',
-  productivityLogs: 'Productivity Logs', trackLogs: 'Track Logs',
+  // productivityLogs: 'Productivity Logs',
+  trackLogs: 'Track Logs',
   visibilityLogs: 'Visibility Logs', guardLogs: 'Guard Logs', ANPRLogs: 'ANPR Logs',
   conveyorLogs: 'Conveyor Logs', vehicleObstructionLogs: 'Vehicle Obstruction Logs',
   vehicleCountLogs: 'Vehicle Count Logs', crusherLogs: 'Crusher Logs',
@@ -797,3 +800,5 @@ export default function RolesPermission() {
     </div>
   );
 }
+
+
