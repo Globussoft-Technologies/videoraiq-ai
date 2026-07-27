@@ -3,6 +3,7 @@ import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { Search, X, Maximize2, Minimize2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AsyncBoundary } from './States';
 import CameraStream from './CameraStream';
+import LiveCameraLogsOverlay from './LiveCameraLogsOverlay';
 import MultiSelect from './MultiSelect';
 import { useApi } from '../hooks/useApi';
 import { getChannels, getLocations, getNVRs, getDepartments } from '../helpers/monitoring';
@@ -117,6 +118,7 @@ function FullscreenCameraView({
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000' }}>
       <CameraStream channel={channel} minH={0} rounded={false} showOverlay={false} fit="contain" />
+      <LiveCameraLogsOverlay channel={channel} />
 
       {/* Top-left label */}
       <div className="vq-fs-label" style={{ position: 'absolute', top: 14, left: 14, zIndex: 10, maxWidth: 'calc(100% - 64px)', background: 'rgba(15,23,42,0.75)', border: '1px solid rgba(255,255,255,0.15)', padding: '6px 12px', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, backdropFilter: 'blur(4px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

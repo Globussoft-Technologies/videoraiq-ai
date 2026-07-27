@@ -4,6 +4,7 @@ import { VideoOff } from 'lucide-react';
 import { Panel, ActionLink } from '../../../components/primitives';
 import { Loading, Empty } from '../../../components/States';
 import CameraStream from '../../../components/CameraStream';
+import LiveCameraLogsOverlay from '../../../components/LiveCameraLogsOverlay';
 
 const TAB_LIMIT = 8;    // switchable tabs rendered in the strip
 const PROBE_LIMIT = 32; // cameras stream-probed for the online tally
@@ -146,6 +147,7 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
             minH={220}
           />
         )}
+        {isFullscreen && active && <LiveCameraLogsOverlay channel={active} />}
       </div>
 
       {/* Hidden probes — every filtered camera's stream is connected in the

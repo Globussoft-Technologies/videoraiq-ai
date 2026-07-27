@@ -22,9 +22,11 @@ export function AttendanceSocketProvider({ children }) {
   const { socket } = useSocket();
   const { user } = useAuth();
   const [attendanceLogs, setAttendanceLogs] = useState([]);
+  const [accessAllDetections, setAccessAllDetections] = useState([]);
   const [isMuted, setIsMuted] = useState(true);
   const isMutedRef = useRef(true);
-  const clearTimerRef = useRef(null);
+  const attendanceClearTimerRef = useRef(null);
+  const accessClearTimerRef = useRef(null);
 
   useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
 
@@ -49,16 +51,21 @@ export function AttendanceSocketProvider({ children }) {
     }
   };
 
-  const resetClearTimer = () => {
-    if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
-    clearTimerRef.current = setTimeout(() => setAttendanceLogs([]), TWO_MINUTES);
+  const resetAttendanceClearTimer = () => {
+    if (attendanceClearTimerRef.current) clearTimeout(attendanceClearTimerRef.current);
+    attendanceClearTimerRef.current = setTimeout(() => setAttendanceLogs([]), TWO_MINUTES);
+  };
+
+  const resetAccessClearTimer = () => {
+    if (accessClearTimerRef.current) clearTimeout(accessClearTimerRef.current);
+    accessClearTimerRef.current = setTimeout(() => setAccessAllDetections([]), TWO_MINUTES);
   };
 
   useEffect(() => {
     if (!socket || !user?.adminId) return;
 
     const handleAttendanceLog = (data) => {
-      resetClearTimer();
+      resetAttendanceClearTimer();
       setAttendanceLogs((prev) => {
         const updated = [{ ...data }, ...prev];
         return updated.filter((item, index, self) =>
@@ -70,15 +77,23 @@ export function AttendanceSocketProvider({ children }) {
       });
     };
 
+    const handleAccessLogs = (data) => {
+      resetAccessClearTimer();
+      setAccessAllDetections((prev) => [{ ...data }, ...prev]);
+    };
+
+    socket.on(`accessLogs_${user.adminId}`, handleAccessLogs);
     socket.on(`attendanceLog_${user.adminId}`, handleAttendanceLog);
     return () => {
+      socket.off(`accessLogs_${user.adminId}`, handleAccessLogs);
       socket.off(`attendanceLog_${user.adminId}`, handleAttendanceLog);
-      if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
+      if (accessClearTimerRef.current) clearTimeout(accessClearTimerRef.current);
+      if (attendanceClearTimerRef.current) clearTimeout(attendanceClearTimerRef.current);
     };
   }, [socket, user]);
 
   return (
-    <AttendanceSocketContext.Provider value={{ attendanceLogs, isMuted, toggleMute }}>
+    <AttendanceSocketContext.Provider value={{ attendanceLogs, accessAllDetections, isMuted, toggleMute }}>
       {children}
     </AttendanceSocketContext.Provider>
   );
