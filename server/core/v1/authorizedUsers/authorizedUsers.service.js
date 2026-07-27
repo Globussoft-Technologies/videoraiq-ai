@@ -8,7 +8,7 @@ import rolesModel from "../roles/roles.model.js";
 import departmentsModel from "../departments/departments.model.js";
 import path from "path";
 import axios from "axios";
-import { connectSFTP, releaseSFTP } from "../../../utils/newSFTPConnectionCheck.js";
+import { withSFTPConnection } from "../../../utils/newSFTPConnectionCheck.js";
 import {
   checkSftpConnection
 } from "../../../utils/sftpConnectionCheck.js";
@@ -46,6 +46,10 @@ if (!fs.existsSync(cacheDir)) {
 // build valid, fetchable URLs; the /api/v1/uploads route decodes them back.
 const toMediaUrl = (domain, p) =>
   `${domain}/api/v1/uploads${String(p ?? "").split("/").map(encodeURIComponent).join("/")}`;
+
+// axios defaults to no timeout, so a hung face-recognition service would keep
+// a registration request (and anything it holds) alive forever.
+const FACE_SERVICE_TIMEOUT_MS = 60_000;
 
 class AuthUsersService {
   
@@ -358,13 +362,9 @@ class AuthUsersService {
       
     
     async createAuthUser(req, res, _next) {
-      let sftp;
       try {
         const data = req?.verified?.userData;
         const { firstName, lastName, email ,departmentId,designation,branch,shiftId,numberPlate,location} = req.body;
-
-        // Establish SFTP connection
-        sftp = await connectSFTP();
 
         // const { error ,value} = AuthUsersValidator.createAuthUser(req?.body);
 
@@ -427,12 +427,19 @@ class AuthUsersService {
           );
         }
 
-        const uploadedFiles = await uploadFilesToSFTP({
-          files: req.files,
-          mediaType: "image",
-          folderName: `${firstName}${lastName}`,
-          sftp:sftp,
-        });
+        // Hold a pooled SFTP connection for the upload only. It used to be
+        // acquired at the top of the handler and released in a finally, which
+        // pinned 1 of the 8 pool slots across the Mongo writes and the
+        // unbounded face-service call below — 8 in-flight registrations
+        // exhausted the pool and broke uploads AND downloads process-wide.
+        const uploadedFiles = await withSFTPConnection((sftp) =>
+          uploadFilesToSFTP({
+            files: req.files,
+            mediaType: "image",
+            folderName: `${firstName}${lastName}`,
+            sftp,
+          })
+        );
 
 
 
@@ -498,7 +505,10 @@ class AuthUsersService {
             const response = await axios.post(
               `${await this.getDSAuthUsersAPI(newUser.adminId)}/register`,
               payload,
-              { headers: { "Content-Type": "application/json" } }
+              {
+                headers: { "Content-Type": "application/json" },
+                timeout: FACE_SERVICE_TIMEOUT_MS,
+              }
             );
             console.log("✅ Face Auth Registered in AI service:", response.data);
           } catch (err) {
@@ -554,11 +564,6 @@ class AuthUsersService {
         return res
           .status(500)
           .json(Response.errorResp(error.response?.data?.message,"Failed to create authorizedUser."));
-      } finally {
-        // Return the pooled SFTP connection no matter how we exit (early
-        // validation return, success, or error) — otherwise it leaks and the
-        // pool exhausts after 8 registrations, breaking uploads AND downloads.
-        if (sftp) await releaseSFTP(sftp);
       }
     }
 
@@ -614,8 +619,6 @@ class AuthUsersService {
     }
 
 async updateAuthUser(req, res, _next) {
-  let sftp;
-
   try {
     const data = req?.verified?.userData;
     const { userId } = req.query;
@@ -636,9 +639,6 @@ async updateAuthUser(req, res, _next) {
         .status(400)
         .json(Response.userFailResp("Missing userId in query"));
     }
-
-    // 🔹 Connect SFTP
-    sftp = await connectSFTP();
 
     // 🔹 Validate Shift
     if (shiftId) {
@@ -739,12 +739,15 @@ async updateAuthUser(req, res, _next) {
     // Upload new images
     let uploadedFiles = [];
     if (req.files && req.files.length > 0) {
-      uploadedFiles = await uploadFilesToSFTP({
-        files: req.files,
-        mediaType: "image",
-        folderName: `${existingUser?.firstName}${existingUser?.lastName}`,
-        sftp: sftp,
-      });
+      // Pooled connection held for the upload only — see createAuthUser.
+      uploadedFiles = await withSFTPConnection((sftp) =>
+        uploadFilesToSFTP({
+          files: req.files,
+          mediaType: "image",
+          folderName: `${existingUser?.firstName}${existingUser?.lastName}`,
+          sftp,
+        })
+      );
     }
 
     // Final clean array (retained + new uploads)
@@ -805,7 +808,10 @@ async updateAuthUser(req, res, _next) {
       const response = await axios.put(
         `${await this.getDSAuthUsersAPI(updatedUser.adminId)}/update_user_info`,
         payload,
-        { headers: { "Content-Type": "application/json" } }
+        {
+          headers: { "Content-Type": "application/json" },
+          timeout: FACE_SERVICE_TIMEOUT_MS,
+        }
       );
 
       console.log("✅ Face Auth Updated in AI service:", response.data);
@@ -854,7 +860,10 @@ async updateAuthUser(req, res, _next) {
             const response = await axios.post(
               `${await this.getDSAuthUsersAPI(newUser.adminId)}/register`,
               payload,
-              { headers: { "Content-Type": "application/json" } }
+              {
+                headers: { "Content-Type": "application/json" },
+                timeout: FACE_SERVICE_TIMEOUT_MS,
+              }
             );
             console.log("✅ Face Auth Registered in AI service:", response.data);
             // 🔹 Mark verified true
@@ -950,9 +959,6 @@ async updateAuthUser(req, res, _next) {
         "Failed to update authorizedUser."
       )
     );
-  } finally {
-    // Release the pooled SFTP connection on every exit path (see createAuthUser).
-    if (sftp) await releaseSFTP(sftp);
   }
 }
 
