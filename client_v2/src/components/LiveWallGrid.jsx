@@ -105,7 +105,7 @@ function FullscreenCameraView({ channel, onPrev, onNext, onClose, onExpand, isEx
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000' }}>
-      <CameraStream channel={channel} minH={0} rounded={false} showOverlay={false} />
+      <CameraStream channel={channel} minH={0} rounded={false} showOverlay={false} fit="contain" />
 
       {/* Top-left label */}
       <div className="vq-fs-label" style={{ position: 'absolute', top: 14, left: 14, zIndex: 10, maxWidth: 'calc(100% - 64px)', background: 'rgba(15,23,42,0.75)', border: '1px solid rgba(255,255,255,0.15)', padding: '6px 12px', borderRadius: 8, color: '#fff', fontSize: 12, fontWeight: 600, backdropFilter: 'blur(4px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

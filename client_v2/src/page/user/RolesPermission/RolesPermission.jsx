@@ -4,15 +4,11 @@ import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
 import { usePermissions } from '../../../context/PermissionContext';
+import { useAuth } from '../../../context/AuthContext';
 import AccessDenied from '../../../components/AccessDenied';
 import PageLoader from '../../../components/PageLoader';
 import HScrollHint from '../../../components/HScrollHint';
 import { getRoles, createRole, renameRole, updateRolePermission, deleteRole, updatePermissionConfig } from '../../../api/administer';
-
-// Role names V1 treats as built-in/protected — Edit and Delete are hidden for
-// these (server also 400s a rename attempt on an is_default role; this just
-// avoids offering an action that will fail).
-const PROTECTED_ROLE_NAMES = new Set(['write', 'admin', 'read']);
 
 // Per-module permission matrix module keys, ported 1:1 from V1's
 // server/core/v1/permission/permissions.config.js. `logs` is a nested
@@ -448,9 +444,12 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
   );
 }
 
-function RoleRow({ role, perms, onToggleField, onConfigure, onView, onEdit, onDelete }) {
-  const protectedRole = PROTECTED_ROLE_NAMES.has((role.roleName || '').toLowerCase());
-  const noActions = !perms.canConfigure && !perms.canView && !(perms.canEditRole && !protectedRole) && !(perms.canDeleteRole && !protectedRole);
+function RoleRow({ role, perms, isOwnRole, onToggleField, onConfigure, onView, onEdit, onDelete }) {
+  // Default roles (role.is_default, set server-side — never a hardcoded name
+  // list) can't be renamed server-side (400s) and stay non-deletable here too.
+  const defaultRole = !!role.is_default;
+  const lockedRole = defaultRole || isOwnRole;
+  const noActions = !perms.canConfigure && !perms.canView && !(perms.canEditRole && !lockedRole) && !(perms.canDeleteRole && !lockedRole);
   return (
     <div
       className="vq-row"
@@ -468,19 +467,20 @@ function RoleRow({ role, perms, onToggleField, onConfigure, onView, onEdit, onDe
       </span>
 
       {/* The 4 inline flags are edited through the same roles.edit grant as the
-          Edit action (V1 leaves these always-interactive regardless of the
-          viewer's own permission — an oversight, not something to replicate). */}
+          Edit action. Also disabled for the viewer's own role — otherwise a
+          user could grant themself more permissions via these checkboxes even
+          with the Edit/Delete buttons hidden. */}
       <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <Checkbox checked={!!role.view} disabled={!perms.canEditRole} onToggle={() => onToggleField('view')} />
+        <Checkbox checked={!!role.view} disabled={!perms.canEditRole || isOwnRole} onToggle={() => onToggleField('view')} />
       </span>
       <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <Checkbox checked={!!role.create} disabled={!perms.canEditRole} onToggle={() => onToggleField('create')} />
+        <Checkbox checked={!!role.create} disabled={!perms.canEditRole || isOwnRole} onToggle={() => onToggleField('create')} />
       </span>
       <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <Checkbox checked={!!role.edit} disabled={!perms.canEditRole} onToggle={() => onToggleField('edit')} />
+        <Checkbox checked={!!role.edit} disabled={!perms.canEditRole || isOwnRole} onToggle={() => onToggleField('edit')} />
       </span>
       <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <Checkbox checked={!!role.delete} disabled={!perms.canEditRole} onToggle={() => onToggleField('delete')} />
+        <Checkbox checked={!!role.delete} disabled={!perms.canEditRole || isOwnRole} onToggle={() => onToggleField('delete')} />
       </span>
 
       <span style={{ display: 'flex', gap: 5, justifyContent: 'flex-end', color: 'var(--tx3)' }}>
@@ -503,7 +503,7 @@ function RoleRow({ role, perms, onToggleField, onConfigure, onView, onEdit, onDe
             <Eye size={14} strokeWidth={1.7} />
           </button>
         )}
-        {!protectedRole && perms.canEditRole && (
+        {!lockedRole && perms.canEditRole && (
           <button
             onClick={onEdit}
             title="Edit"
@@ -512,7 +512,7 @@ function RoleRow({ role, perms, onToggleField, onConfigure, onView, onEdit, onDe
             <Pencil size={14} strokeWidth={1.8} />
           </button>
         )}
-        {!protectedRole && perms.canDeleteRole && (
+        {!lockedRole && perms.canDeleteRole && (
           <button
             onClick={onDelete}
             title="Delete"
@@ -520,6 +520,11 @@ function RoleRow({ role, perms, onToggleField, onConfigure, onView, onEdit, onDe
           >
             <Trash2 size={14} strokeWidth={1.8} />
           </button>
+        )}
+        {isOwnRole && !defaultRole && (
+          <span title="You cannot edit or delete your own role" style={{ fontSize: 10.5, color: 'var(--tx3)', display: 'flex', alignItems: 'center' }}>
+            Your role
+          </span>
         )}
       </span>
     </div>
@@ -530,12 +535,20 @@ const LIMIT = 12;
 
 export default function RolesPermission() {
   const { permissions, loading: permissionsLoading } = usePermissions();
+  const { user } = useAuth();
   const canViewRole = permissions?.roles?.view;
   const canCreateRole = permissions?.roles?.create;
   const canEditRole = permissions?.roles?.edit;
   const canDeleteRole = permissions?.roles?.delete;
   const canConfigure = permissions?.permission?.edit;
   const canView = permissions?.permission?.view;
+
+  // A role must never be able to edit/delete itself, even if the admin granted
+  // roles.edit/delete — otherwise a user could unlock further permissions on
+  // their own role or delete it out from under themselves.
+  const myRoleId = String(
+    user?.roleId?._id || user?.roleId || user?.roleIds?._id || user?.roleIds || ''
+  );
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
@@ -560,6 +573,7 @@ export default function RolesPermission() {
   // Configure modal reads — otherwise it opens with the stale pre-cascade config
   // and the checkboxes look empty. Rolls back the row if the request fails.
   const handleToggleField = async (role, field) => {
+    if (myRoleId && String(role._id) === myRoleId) return;
     const next = !role[field];
     rolesApi.setData(prev => ({
       ...prev,
@@ -597,6 +611,11 @@ export default function RolesPermission() {
   };
 
   const handleRename = async (name) => {
+    if (myRoleId && String(renameTarget?._id) === myRoleId) {
+      toast.error('You cannot edit your own role');
+      setRenameTarget(null);
+      return;
+    }
     try {
       const body = await renameRole(renameTarget._id, name);
       if (body?.status && body.status !== 'success') {
@@ -612,6 +631,11 @@ export default function RolesPermission() {
   };
 
   const handleDelete = async () => {
+    if (myRoleId && String(deleteTarget?._id) === myRoleId) {
+      toast.error('You cannot delete your own role');
+      setDeleteTarget(null);
+      return;
+    }
     try {
       const body = await deleteRole(deleteTarget._id);
       // Some failures come back as HTTP 200 with body.status: 'failed'
@@ -630,6 +654,11 @@ export default function RolesPermission() {
   };
 
   const handleSaveConfig = async (permissionConfig) => {
+    if (myRoleId && String(configureTarget?.role?._id) === myRoleId) {
+      toast.error('You cannot edit your own role');
+      setConfigureTarget(null);
+      return;
+    }
     try {
       const body = await updatePermissionConfig(configureTarget.role.permissionDetails?._id, permissionConfig);
       if (body?.status && body.status !== 'success') {
@@ -710,8 +739,9 @@ export default function RolesPermission() {
                   key={role._id}
                   role={role}
                   perms={{ canConfigure, canView, canEditRole, canDeleteRole }}
+                  isOwnRole={!!myRoleId && String(role._id) === myRoleId}
                   onToggleField={(field) => handleToggleField(role, field)}
-                  onConfigure={() => setConfigureTarget({ role, readOnly: false })}
+                  onConfigure={() => setConfigureTarget({ role, readOnly: String(role._id) === myRoleId })}
                   onView={() => setConfigureTarget({ role, readOnly: true })}
                   onEdit={() => setRenameTarget(role)}
                   onDelete={() => setDeleteTarget(role)}

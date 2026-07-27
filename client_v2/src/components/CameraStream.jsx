@@ -54,6 +54,7 @@ export default function CameraStream({
   onLiveChange,      // (isLive: boolean) => void — reports live status up to grid
   rounded = true,
   minH = 200,
+  fit = 'cover',      // 'cover' crops to fill (grid tiles); 'contain' shows the full frame uncropped (fullscreen, so camera-burned OSD text at the edges isn't cut off)
 }) {
   const videoRef = useRef(null);
   const [error,   setError]   = useState(false);
@@ -79,6 +80,7 @@ export default function CameraStream({
 
   return (
     <div
+      onClick={onMaximize}
       style={{
         position: 'relative',
         width: '100%',
@@ -87,6 +89,7 @@ export default function CameraStream({
         background: '#07090c',
         borderRadius: rounded ? 10 : 0,
         overflow: 'hidden',
+        cursor: onMaximize ? 'pointer' : 'default',
       }}
     >
       <video
@@ -96,7 +99,7 @@ export default function CameraStream({
         playsInline
         onPlaying={() => setPlaying(true)}
         onWaiting={() => setPlaying(false)}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: url ? 'block' : 'none' }}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, display: url ? 'block' : 'none' }}
       />
 
       {/* Offline / connecting placeholder */}

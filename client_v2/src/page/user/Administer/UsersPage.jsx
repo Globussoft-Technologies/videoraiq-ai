@@ -3,6 +3,7 @@ import { Search, Plus, X, Eye, EyeOff, Shuffle, Copy, Pencil, Trash2, ChevronDow
 import { toast as sonnerToast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
+import { useAuth } from '../../../context/AuthContext';
 import MultiSelect from '../../../components/MultiSelect';
 import DeleteConfirmation from '../../../components/DeleteConfirmation';
 import HScrollHint from '../../../components/HScrollHint';
@@ -117,15 +118,16 @@ function FieldError({ children }) {
   );
 }
 
-function Checkbox({ checked, onToggle }) {
+function Checkbox({ checked, onToggle, disabled }) {
   return (
     <span
-      onClick={onToggle}
+      onClick={disabled ? undefined : onToggle}
       style={{
         width: 18, height: 18, borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center',
         border: `1.6px solid ${checked ? 'transparent' : 'var(--bd2)'}`,
         background: checked ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg2)',
-        transition: 'all .12s', cursor: 'pointer', flexShrink: 0,
+        transition: 'all .12s', cursor: disabled ? 'not-allowed' : 'pointer', flexShrink: 0,
+        opacity: disabled ? 0.5 : 1,
       }}
     >
       {checked && (
@@ -156,7 +158,7 @@ function ColHeaders({ allChecked, onToggleAll }) {
   );
 }
 
-function UserRow({ u, checked, onToggle, onEdit, onDelete }) {
+function UserRow({ u, checked, onToggle, onEdit, onDelete, isSelf }) {
   const name = userName(u);
   const email = userEmail(u);
   const role = userRoleName(u);
@@ -171,7 +173,7 @@ function UserRow({ u, checked, onToggle, onEdit, onDelete }) {
         alignItems: 'center', fontSize: 13, transition: 'background .12s',
       }}
     >
-      <Checkbox checked={checked} onToggle={onToggle} />
+      <Checkbox checked={checked} onToggle={onToggle} disabled={isSelf} />
 
       <span style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
         <span style={{
@@ -203,21 +205,29 @@ function UserRow({ u, checked, onToggle, onEdit, onDelete }) {
         ) : <span style={{ color: 'var(--tx3)' }}>—</span>}
       </span>
 
-      <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-        <button
-          onClick={() => onEdit(u)}
-          title="Edit"
-          style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', color: 'var(--tx2)', cursor: 'pointer' }}
-        >
-          <Pencil size={15} strokeWidth={1.8} />
-        </button>
-        <button
-          onClick={() => onDelete(u)}
-          title="Delete"
-          style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'var(--bg2)', border: '1px solid rgba(255,77,77,.3)', color: 'var(--crit)', cursor: 'pointer' }}
-        >
-          <Trash2 size={15} strokeWidth={1.8} />
-        </button>
+      <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+        {isSelf ? (
+          <span title="You cannot edit or delete your own account" style={{ fontSize: 10.5, color: 'var(--tx3)' }}>
+            You
+          </span>
+        ) : (
+          <>
+            <button
+              onClick={() => onEdit(u)}
+              title="Edit"
+              style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', color: 'var(--tx2)', cursor: 'pointer' }}
+            >
+              <Pencil size={15} strokeWidth={1.8} />
+            </button>
+            <button
+              onClick={() => onDelete(u)}
+              title="Delete"
+              style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'var(--bg2)', border: '1px solid rgba(255,77,77,.3)', color: 'var(--crit)', cursor: 'pointer' }}
+            >
+              <Trash2 size={15} strokeWidth={1.8} />
+            </button>
+          </>
+        )}
       </span>
     </div>
   );
@@ -838,6 +848,13 @@ function BulkAssignRoleButton({ roles, rolesLoading, disabled, onAssign }) {
 
 // ── main page ─────────────────────────────────────────────────────────────────
 export default function UsersPage() {
+  const { user } = useAuth();
+  // A sub-user must never be able to edit/delete their own account here, even
+  // if their role has Users edit/delete permission — memberId is the
+  // authorizedUsersModel _id baked into their session token at login, which
+  // is the same _id each list row carries.
+  const myUserId = String(user?.memberId || '');
+
   const [search, setSearch]       = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const debounceRef = useRef(null);
@@ -872,16 +889,20 @@ export default function UsersPage() {
   const total     = usersApi.data?.total ?? 0;
   const pages     = Math.max(1, Math.ceil(total / LIMIT));
 
+  const selectableUsers = users.filter(u => String(u._id) !== myUserId);
   const selCount = Object.values(selected).filter(Boolean).length;
-  const allChecked = users.length > 0 && users.every(u => selected[u._id]);
+  const allChecked = selectableUsers.length > 0 && selectableUsers.every(u => selected[u._id]);
 
   const toggleAll = () => {
     const on = !allChecked;
     const next = { ...selected };
-    users.forEach(u => { next[u._id] = on; });
+    selectableUsers.forEach(u => { next[u._id] = on; });
     setSelected(next);
   };
-  const toggleOne = (id) => setSelected(prev => ({ ...prev, [id]: !prev[id] }));
+  const toggleOne = (id) => {
+    if (id === myUserId) return;
+    setSelected(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const handleCreate = async (payload) => {
     try {
@@ -902,6 +923,11 @@ export default function UsersPage() {
   };
 
   const handleDelete = async (u) => {
+    if (myUserId && String(u?._id) === myUserId) {
+      sonnerToast.error('You cannot delete your own account');
+      setConfirmDelete(null);
+      return;
+    }
     setDeleting(true);
     try {
       const result = await deleteUser(u._id);
@@ -922,7 +948,7 @@ export default function UsersPage() {
   };
 
   const handleBulkDelete = async () => {
-    const ids = Object.keys(selected).filter(id => selected[id]);
+    const ids = Object.keys(selected).filter(id => selected[id] && id !== myUserId);
     if (!ids.length) return;
     setDeleting(true);
     try {
@@ -946,7 +972,7 @@ export default function UsersPage() {
   };
 
   const handleBulkAssignRole = async (role) => {
-    const ids = Object.keys(selected).filter(id => selected[id]);
+    const ids = Object.keys(selected).filter(id => selected[id] && id !== myUserId);
     if (!ids.length) return;
     const targets = users.filter(u => ids.includes(u._id));
     if (!targets.length) return;
@@ -1006,6 +1032,11 @@ export default function UsersPage() {
   };
 
   const handleSaveEdit = async (patch) => {
+    if (myUserId && String(editUser?._id) === myUserId) {
+      sonnerToast.error('You cannot edit your own account');
+      setEditUser(null);
+      return;
+    }
     try {
       const result = await updateUser(editUser._id, patch);
       // Same as create: some validation failures return HTTP 200 with
@@ -1101,6 +1132,7 @@ export default function UsersPage() {
                   onToggle={() => toggleOne(u._id)}
                   onEdit={setEditUser}
                   onDelete={setConfirmDelete}
+                  isSelf={!!myUserId && String(u._id) === myUserId}
                 />
               ))}
             </AsyncBoundary>

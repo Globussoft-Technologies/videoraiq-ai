@@ -53,6 +53,7 @@ const AddProfile = () => {
   const token = getAccessToken();
   const decodedtoken = token ? decodeJwt(token) : null;
   const { permissions } = usePermissions();
+  const canCreateUsers = permissions?.Users?.create;
   const canEditUsers = permissions?.Users?.edit;
   const canDeleteUsers = permissions?.Users?.delete;
 
@@ -404,10 +405,12 @@ const AddProfile = () => {
               <span>Register Bulk Employee</span>
             </button>
 
-            <button onClick={() => setShowRegLinkModal(true)} className={actionBtn}>
-              <LinkIcon className="w-4 h-4" />
-              <span>Generate Registration Link</span>
-            </button>
+            {canCreateUsers && (
+              <button onClick={() => setShowRegLinkModal(true)} className={actionBtn}>
+                <LinkIcon className="w-4 h-4" />
+                <span>Generate Registration Link</span>
+              </button>
+            )}
 
             {/* Edit uses the existing modal register form (opens when editUser is set). */}
             <RegisterForm
