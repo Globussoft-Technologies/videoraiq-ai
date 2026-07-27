@@ -130,6 +130,13 @@ class AuthUserController {
         required: false
   } */
 
+  /* #swagger.parameters['userRegistrByLink'] = {
+        in: 'formData',
+        type: 'boolean',
+        required: false,
+        description: 'Set true when the user self-registers through an invite link. On a face-service failure the record is deleted instead of being kept as verified:false.'
+  } */
+
 
     return authorizedUsersService.createAuthUser(req, res, next);
   }

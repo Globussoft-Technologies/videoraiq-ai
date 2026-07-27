@@ -366,6 +366,9 @@ class AuthUsersService {
       try {
         const data = req?.verified?.userData;
         const { firstName, lastName, email ,departmentId,designation,branch,shiftId,numberPlate,location} = req.body;
+        // Self-registration via an invite link. multipart/form-data delivers
+        // every field as a string, so "true" is what actually arrives.
+        const userRegistrByLink = String(req.body.userRegistrByLink) === "true";
 
         // const { error ,value} = AuthUsersValidator.createAuthUser(req?.body);
 
@@ -531,12 +534,22 @@ class AuthUsersService {
 
 
 
-            //Update user as unverified
-            await authorizedUsersModel.findByIdAndUpdate(
-              newUser._id,
-              { verified: false },
-              { new: true }
-            );
+            // A link-registered user has no admin around to review a
+            // half-created record, so a face-service failure must leave
+            // nothing behind rather than an unverified row nobody acts on.
+            // Admin-created users keep the existing verified:false marking.
+            if (userRegistrByLink) {
+              await authorizedUsersModel.findByIdAndDelete(newUser._id);
+              // Drop the images too, or every failed retry orphans 3 more.
+              await deleteFileFromStorage(uploadedFiles, cacheDir).catch(() => {});
+            } else {
+              //Update user as unverified
+              await authorizedUsersModel.findByIdAndUpdate(
+                newUser._id,
+                { verified: false },
+                { new: true }
+              );
+            }
           return res
           .status(500)
           .json(Response.errorResp(err.response?.data?.message,"Failed to create authorizedUser."));
@@ -544,7 +557,7 @@ class AuthUsersService {
         } else {
           console.error("❌ User creation failed. Skipping Face Auth registration.");
         }
-        
+
         return res.status(201).json(
           Response.userSuccessResp("Authorized user created successfully", newUser)
         );

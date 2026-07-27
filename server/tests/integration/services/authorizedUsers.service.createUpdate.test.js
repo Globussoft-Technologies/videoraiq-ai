@@ -286,6 +286,69 @@ describe("AuthUsersService.createAuthUser", () => {
     expect(user.verified).toBe(false);
   });
 
+  it("AI service generic failure + userRegistrByLink → 500 and the user is deleted, never left unverified", async () => {
+    axios.post.mockRejectedValueOnce({
+      response: { data: { message: "AI timeout" } },
+    });
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      body: {
+        firstName: "Link",
+        lastName: "Fail",
+        email: "linkfail@b.com",
+        // multipart/form-data sends this as a string, not a boolean
+        userRegistrByLink: "true",
+      },
+    });
+    req.files = threeFiles();
+    await AuthUsersService.createAuthUser(req, res, next);
+    expect(res.statusCode).toBe(500);
+    // Nothing stored — not even as verified:false
+    const remaining = await AuthorizedUsers.findOne({ email: "linkfail@b.com" });
+    expect(remaining).toBeNull();
+  });
+
+  it("userRegistrByLink still deletes on 'No valid face detected' (unchanged 409 path)", async () => {
+    axios.post.mockRejectedValueOnce({
+      response: { data: { message: "No valid face detected" } },
+    });
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      body: {
+        firstName: "Link",
+        lastName: "NoFace",
+        email: "linknoface@b.com",
+        userRegistrByLink: "true",
+      },
+    });
+    req.files = threeFiles();
+    await AuthUsersService.createAuthUser(req, res, next);
+    expect(res.statusCode).toBe(409);
+    const remaining = await AuthorizedUsers.findOne({ email: "linknoface@b.com" });
+    expect(remaining).toBeNull();
+  });
+
+  it("userRegistrByLink='false' keeps the existing verified:false behaviour", async () => {
+    axios.post.mockRejectedValueOnce({
+      response: { data: { message: "AI timeout" } },
+    });
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      body: {
+        firstName: "Admin",
+        lastName: "Made",
+        email: "adminmade@b.com",
+        userRegistrByLink: "false",
+      },
+    });
+    req.files = threeFiles();
+    await AuthUsersService.createAuthUser(req, res, next);
+    expect(res.statusCode).toBe(500);
+    const user = await AuthorizedUsers.findOne({ email: "adminmade@b.com" });
+    expect(user).not.toBeNull();
+    expect(user.verified).toBe(false);
+  });
+
   it("happy path with valid shiftId + departmentId → 201 with linked refs", async () => {
     axios.post.mockResolvedValueOnce({ data: { status: "ok" } });
     const dept = await Department.create({
