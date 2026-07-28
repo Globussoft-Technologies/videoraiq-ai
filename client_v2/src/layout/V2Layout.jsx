@@ -80,7 +80,10 @@ function Shell() {
     id: a._id || i,
     title: a.incidentName || a.displayName || a.incidentType || 'Detection event',
     cam: a.channelData?.name || a.nvrData?.nvrName || '',
-    time: a.timeAgo || timeAgo(a.timeOfIncident),
+    // Derive relative time from the raw timestamp client-side so the bell
+    // tray matches the incident card's actual time instead of the backend's
+    // floored whole-hour string (e.g. 2h 38m reading as "2 hours ago").
+    time: timeAgo(a.timeOfIncident),
     sevColor: SEV_COLOR[(a.severity || '').toLowerCase()] || 'var(--warn)',
     read: readIds.has(a._id || i),
     // Person-count incidents have no image and are excluded from the Alerts

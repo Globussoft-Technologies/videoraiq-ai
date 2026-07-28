@@ -155,18 +155,6 @@ export const buildColumns = ({ dispatch, sortField, sortOrder, region, convertTo
       ),
     },
     {
-      accessorKey: 'hours',
-      header: 'Hours',
-      cell: ({ row }) => {
-        const { hoursStr } = attendanceMeta(row.original, region, convertToRegionTime);
-        return (
-          <span className="text-[var(--tx2)] text-xs" style={mono}>
-            {hoursStr}
-          </span>
-        );
-      },
-    },
-    {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => {
