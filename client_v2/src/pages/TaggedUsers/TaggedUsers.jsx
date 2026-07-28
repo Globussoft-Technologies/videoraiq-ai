@@ -39,7 +39,7 @@ const convertToUTC = (date, time, region) => {
 const TaggedUsers = () => {
   const nasUrl = import.meta.env.VITE_BACKEND || '';
   const region = moment.tz.guess();
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(12);
 
   const [state, dispatch] = useReducer(reducer, {
     ...initialState,

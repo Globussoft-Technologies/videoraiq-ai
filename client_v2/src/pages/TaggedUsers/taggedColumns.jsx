@@ -24,6 +24,32 @@ const styles = {
 
 const mono = { fontFamily: 'var(--mono)' };
 
+const formatStamp = (value, region) => {
+  if (!value) return '--';
+  const m = moment.utc(value).tz(region);
+  return m.isValid() ? m.format('DD/MM/YYYY hh:mm A') : '--';
+};
+
+const TimelineCell = ({ item, region }) => {
+  const rows = [
+    { label: 'det:', value: formatStamp(item.detectedAt, region) },
+    { label: 'tag:', value: formatStamp(item.taggedAt, region) },
+  ];
+
+  return (
+    <div className="flex flex-col gap-1">
+      {rows.map((row) => (
+        <div key={row.label} className="flex items-start gap-1.5 min-w-0">
+          <span className="uppercase tracking-[0.08em] text-[10px] text-[var(--tx3)] shrink-0" style={mono}>
+            {row.label}
+          </span>
+          <span className="text-[11px] text-[var(--tx)] min-w-0 break-words">{row.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 /** Format an access time range as "in - out (duration)". */
 export const formatAccessTime = (enteredIn, exitTiming, region) => {
   const inMoment = enteredIn ? moment.utc(enteredIn).tz(region) : null;
@@ -87,7 +113,7 @@ export const SessionImageCarousel = ({ images = [], fallback, alt }) => {
   };
 
   return (
-    <div className="relative w-full h-40 sm:h-44 md:h-48 lg:h-52 overflow-hidden">
+    <div className="relative w-full h-28 sm:h-32 md:h-36 lg:h-40 overflow-hidden">
       <ImageWithLoader
         src={list[safeIndex] || fallback}
         alt={alt}
@@ -250,6 +276,11 @@ export const buildColumns = ({
       ),
     },
     {
+      accessorKey: 'timeline',
+      header: 'Detected / Tagged',
+      cell: ({ row }) => <TimelineCell item={row.original} region={region} />,
+    },
+    {
       accessorKey: 'action',
       header: 'Action',
       cell: ({ row }) => {
@@ -305,6 +336,8 @@ export const renderAccessCard = (item, { dispatch, region, untaggingId, handleUn
     : '--/--/----';
   const accessTimeStr = formatAccessTime(item.enteredIn, item.exitTiming, region);
   const inTimeStr = item.enteredIn ? moment.utc(item.enteredIn).tz(region).format('hh:mm A') : '--';
+  const detectedAtStr = formatStamp(item.detectedAt, region);
+  const taggedAtStr = formatStamp(item.taggedAt, region);
 
   return (
     <div
@@ -312,7 +345,7 @@ export const renderAccessCard = (item, { dispatch, region, untaggingId, handleUn
         dispatch({ type: 'SET_SELECTED_LOG', value: item });
         dispatch({ type: 'SET_SHOW_PROFILE', value: true });
       }}
-      className="bg-[var(--bg2)] rounded-[13px] overflow-hidden border border-[var(--bd)] flex flex-col relative group hover:border-[var(--bd2)] transition-colors cursor-pointer h-full w-full min-w-0"
+      className="bg-[var(--bg2)] rounded-[13px] overflow-hidden border border-[var(--bd)] flex flex-col relative group hover:border-[var(--bd2)] transition-colors cursor-pointer h-full w-full min-w-0 max-w-[312px]"
       title="View profile"
     >
       {/* Snapshot — full-bleed carousel with overlay chips */}
@@ -368,42 +401,42 @@ export const renderAccessCard = (item, { dispatch, region, untaggingId, handleUn
       </div>
 
       {/* Content below the image */}
-      <div className="flex flex-col p-3 sm:p-4 md:p-5">
+      <div className="flex flex-col p-2.5 sm:p-3 md:p-3.5">
         {/* Identity — avatar + name */}
-        <div className="flex items-center gap-2.5 mb-3 min-w-0">
+        <div className="flex items-center gap-2 mb-2 min-w-0">
           <span
-            className="w-[30px] h-[30px] shrink-0 rounded-full flex items-center justify-center text-[11px] font-semibold text-white"
+            className="w-6.5 h-6.5 shrink-0 rounded-full flex items-center justify-center text-[9px] font-semibold text-white"
             style={{ background: avatarColor(item.name), fontFamily: 'var(--mono)' }}
           >
             {initials(item.name)}
           </span>
-          <span className="text-[var(--tx)] text-sm font-semibold truncate">{item.name}</span>
+          <span className="text-[var(--tx)] text-[12.5px] font-semibold truncate">{item.name}</span>
         </div>
 
         {/* Divider */}
-        <div className="w-full h-px bg-[var(--bd)] mb-3 md:mb-5"></div>
+        <div className="w-full h-px bg-[var(--bd)] mb-2 md:mb-3"></div>
 
         {/* Info */}
-        <div className="w-full space-y-2.5 md:space-y-3.5">
-          <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm min-w-0">
-            <Calendar className="w-4 h-4 md:w-5 md:h-5 text-[var(--tx2)] shrink-0" />
-            <span className="font-semibold text-[var(--tx)] w-16 md:w-24 shrink-0 text-[10px] md:text-[11px] uppercase tracking-wider">
+        <div className="w-full space-y-1.5 md:space-y-2">
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <Calendar className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <span className="font-semibold text-[var(--tx)] w-12 md:w-16 shrink-0 text-[9.5px] uppercase tracking-wider">
               Date
             </span>
-            <span className="text-[var(--tx2)] truncate flex-1 text-right min-w-0">{dateStr}</span>
+            <span className="text-[var(--tx2)] text-[11.5px] truncate flex-1 text-right min-w-0">{dateStr}</span>
           </div>
-          <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm min-w-0">
-            <MapPin className="w-4 h-4 md:w-5 md:h-5 text-[var(--tx2)] shrink-0" />
-            <span className="font-semibold text-[var(--tx)] w-16 md:w-24 shrink-0 text-[10px] md:text-[11px] uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <MapPin className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <span className="font-semibold text-[var(--tx)] w-12 md:w-16 shrink-0 text-[9.5px] uppercase tracking-wider">
               Location
             </span>
-            <span className="text-[var(--tx2)] truncate flex-1 text-right min-w-0" title={item.location}>
+            <span className="text-[var(--tx2)] text-[11.5px] truncate flex-1 text-right min-w-0" title={item.location}>
               {item.location}
             </span>
           </div>
-          <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm min-w-0">
-            <Clock className="w-4 h-4 md:w-5 md:h-5 text-[var(--tx2)] shrink-0" />
-            <span className="font-semibold text-[var(--tx)] w-16 md:w-24 shrink-0 text-[10px] md:text-[11px] uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <Clock className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <span className="font-semibold text-[var(--tx)] w-12 md:w-16 shrink-0 text-[9.5px] uppercase tracking-wider">
               Access
             </span>
             <span
@@ -413,9 +446,9 @@ export const renderAccessCard = (item, { dispatch, region, untaggingId, handleUn
               {accessTimeStr}
             </span>
           </div>
-          <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm min-w-0">
-            <Video className="w-4 h-4 md:w-5 md:h-5 text-[var(--tx2)] shrink-0" />
-            <span className="font-semibold text-[var(--tx)] w-16 md:w-24 shrink-0 text-[10px] md:text-[11px] uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <Video className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <span className="font-semibold text-[var(--tx)] w-12 md:w-16 shrink-0 text-[9.5px] uppercase tracking-wider">
               Camera
             </span>
             <span
@@ -425,14 +458,32 @@ export const renderAccessCard = (item, { dispatch, region, untaggingId, handleUn
               {item.cameraName}
             </span>
           </div>
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <Tag className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <span className="font-semibold text-[var(--tx)] w-12 md:w-16 shrink-0 text-[9.5px] uppercase tracking-wider">
+              Detected
+            </span>
+            <span className="text-[var(--tx2)] text-[11.5px] truncate flex-1 text-right min-w-0" title={detectedAtStr}>
+              {detectedAtStr}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <Tag className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <span className="font-semibold text-[var(--tx)] w-12 md:w-16 shrink-0 text-[9.5px] uppercase tracking-wider">
+              Tagged
+            </span>
+            <span className="text-[var(--tx2)] text-[11.5px] truncate flex-1 text-right min-w-0" title={taggedAtStr}>
+              {taggedAtStr}
+            </span>
+          </div>
         </div>
 
         {/* Always-on toggle — can only be turned OFF (untag) */}
         <div
-          className="w-full mt-3 md:mt-4 pt-3 border-t border-[var(--bd)] flex items-center justify-between gap-2"
+          className="w-full mt-2 md:mt-2.5 pt-2 border-t border-[var(--bd)] flex items-center justify-between gap-2"
           onClick={(e) => e.stopPropagation()}
         >
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] md:text-xs font-semibold border whitespace-nowrap bg-[var(--brand)]/10 text-[var(--brand)] border-[var(--brand)]/20">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap bg-[var(--brand)]/10 text-[var(--brand)] border-[var(--brand)]/20">
             {untaggingId === item.accessLogId ? (
               <Loader2 className="w-3 h-3 animate-spin" />
             ) : (

@@ -1428,6 +1428,8 @@ async bulkImportAuthUser(req, res, next) {
         return res.status(502).json(Response.errorResp("AI service did not return a success response."));
       }
 
+      const tagTimestamp = tag ? new Date() : null;
+
       const updatedUser = await authorizedUsersModel.findByIdAndUpdate(
         userId,
         { tag },
@@ -1435,8 +1437,10 @@ async bulkImportAuthUser(req, res, next) {
       );
 
       if (accessLogId) {
-        await OptimizedAccessLogs.findByIdAndUpdate(accessLogId, { tag });
+        await OptimizedAccessLogs.findByIdAndUpdate(accessLogId, { tag, taggedAt: tagTimestamp });
       }
+
+      await faceImagesModel.updateMany({ authorizedUserId: userId }, { $set: { tag, taggedAt: tagTimestamp } });
 
       return res.status(200).json(Response.userSuccessResp("User tag updated successfully", updatedUser));
     } catch (error) {
@@ -1470,7 +1474,7 @@ async bulkImportAuthUser(req, res, next) {
       };
 
       const result = await OptimizedAccessLogs.updateMany(cleanupQuery, {
-        $set: { tag: false },
+        $set: { tag: false, taggedAt: null },
       });
 
       return res.status(200).json(

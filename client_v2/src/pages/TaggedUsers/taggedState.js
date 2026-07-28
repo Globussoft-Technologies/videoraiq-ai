@@ -72,6 +72,9 @@ export const mapAccessLog = (log, nasUrl, unknownimg) => {
     })
     .filter(Boolean);
   const timestamp = sessions.map((session) => session.timestamp);
+  const detectedAt = log.detectedAt || sessions[0]?.timestamp || log.date || null;
+  const taggedAt = log.taggedAt || log.updatedAt || null;
+  const lastCaptureAt = log.lastCaptureAt || log.lastCreatedAt || sessions[sessions.length - 1]?.timestamp || detectedAt;
   return {
     name: log.userInfo?.userName || 'Unknown',
     userId: log.userId || log.userInfo?._id || null,
@@ -83,12 +86,16 @@ export const mapAccessLog = (log, nasUrl, unknownimg) => {
     accessLogId: log.logId || log._id || null,
     tag: !!log.tag,
     department: log.department?.departmentName || '--',
-    date: log.date || '--',
+    date: detectedAt || '--',
     location: log.userInfo?.location || '--',
     cameraName: sessions[0]?.channel?.name || '--',
     enteredIn: sessions.length > 0 ? sessions[0].timestamp : null,
     exitTiming: sessions.length > 1 ? sessions[sessions.length - 1].timestamp : null,
     image,
+    sourceType: log.sourceType || 'access_log',
+    detectedAt,
+    taggedAt,
+    lastCaptureAt,
     email: log.userInfo?.email || '--',
     emp_id: log.userInfo?.emp_id || '--',
     imageUrls,

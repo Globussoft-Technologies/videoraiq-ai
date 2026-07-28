@@ -19,9 +19,10 @@ class FaceImagesService {
   // Links every FaceImages doc for a dsId to an authorizedUser and notifies DS.
   // Shared by tagFolder and quickCreateUser, which both perform the same link.
   async _tagFaceImages(dsId, authorizedUser, adminId) {
+    const tagTimestamp = new Date();
     const result = await faceImagesModel.updateMany(
       { dsId },
-      { $set: { authorizedUserId: authorizedUser._id, adminId, tag: true } }
+      { $set: { authorizedUserId: authorizedUser._id, adminId, tag: true, taggedAt: tagTimestamp } }
     );
 
     // Also mark this user's access logs as tagged — the Tagged Users page
@@ -31,7 +32,7 @@ class FaceImagesService {
     // surface there too instead of being invisible to that page.
     await OptimizedAccessLogs.updateMany(
       { userId: authorizedUser._id, tag: { $ne: true } },
-      { $set: { tag: true } }
+      { $set: { tag: true, taggedAt: tagTimestamp } }
     );
 
     // Fire-and-forget: notify DS of the tag without blocking or failing the caller's response.

@@ -10,6 +10,7 @@ const faceImagesSchema = new mongoose.Schema({
   // this person, so this collection needs its own tag state rather than only
   // being inferred from authorizedUserId being set.
   tag: { type: Boolean, default: false },
+  taggedAt: { type: Date, default: null },
 }, {
   timestamps: true,
 });

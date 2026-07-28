@@ -540,7 +540,9 @@ async _getTaggedFaceImageRows({ adminId, searchQuery, departmentIds, startDate, 
         authorizedUserId: { $first: "$authorizedUserId" },
         // "Tagged at" — the moment the folder was linked, not the original
         // detection time, since that's the event Tagged Users is meant to show.
-        taggedAt: { $max: "$updatedAt" },
+        detectedAt: { $min: "$createdAt" },
+        taggedAt: { $max: { $ifNull: ["$taggedAt", "$updatedAt"] } },
+        lastCaptureAt: { $max: "$createdAt" },
         image: { $first: "$image" },
       }
     },
@@ -571,11 +573,15 @@ async _getTaggedFaceImageRows({ adminId, searchQuery, departmentIds, startDate, 
 
   return groups.map((g) => ({
     logId: `faceImages:${g._id}`,
-    date: g.taggedAt,
-    createdAt: g.taggedAt,
+    date: g.detectedAt,
+    createdAt: g.detectedAt,
     updatedAt: g.taggedAt,
     userId: g.userInfo._id,
-    lastCreatedAt: g.taggedAt,
+    detectedAt: g.detectedAt,
+    taggedAt: g.taggedAt,
+    lastCaptureAt: g.lastCaptureAt,
+    lastCreatedAt: g.lastCaptureAt,
+    sourceType: "detected_user",
     tag: true,
     sessions: [{
       // No NVR/channel — this came from a tagged Detected Users folder, not a
@@ -583,7 +589,7 @@ async _getTaggedFaceImageRows({ adminId, searchQuery, departmentIds, startDate, 
       nvr: null,
       channel: null,
       personName: `${g.userInfo.firstName || ""} ${g.userInfo.lastName || ""}`.trim(),
-      timestamp: g.taggedAt,
+      timestamp: g.lastCaptureAt,
       images: { faceImage: "", personImage: g.image || "", frameImage: "" },
     }],
     userInfo: {
@@ -745,7 +751,9 @@ async getLogs(req, res, next) {
           // Add computed fields
           {
             $addFields: {
-              lastCreatedAt: { $max: "$sessions.timestamp" }
+              lastCreatedAt: { $max: "$sessions.timestamp" },
+              detectedAt: { $min: "$sessions.timestamp" },
+              taggedAt: { $ifNull: ["$taggedAt", "$updatedAt"] }
             }
           },
 
@@ -802,7 +810,11 @@ async getLogs(req, res, next) {
             createdAt: 1,
             updatedAt: 1,
             userId: "$userInfo._id",
+            detectedAt: 1,
+            taggedAt: 1,
+            lastCaptureAt: "$lastCreatedAt",
             lastCreatedAt: 1,
+            sourceType: { $literal: "access_log" },
             tag: 1,
             sessions: 1,
             userInfo: {

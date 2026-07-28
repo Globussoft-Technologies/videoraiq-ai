@@ -22,6 +22,8 @@ const accessLogSchema = new mongoose.Schema({
 
   tag: { type: Boolean, default: false },
 
+  taggedAt: { type: Date, default: null },
+
   sessions: { type: [sessionSchema], default: [] }
 
 }, { timestamps: true });
