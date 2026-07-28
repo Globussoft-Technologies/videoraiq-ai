@@ -470,20 +470,21 @@ function RoleRow({ role, perms, isOwnRole, onToggleField, onConfigure, onView, o
       </span>
 
       {/* The 4 inline flags are edited through the same roles.edit grant as the
-          Edit action. Also disabled for the viewer's own role — otherwise a
-          user could grant themself more permissions via these checkboxes even
-          with the Edit/Delete buttons hidden. */}
+          Edit action. Also disabled for the viewer's own role and for default
+          roles (lockedRole) — otherwise a user could grant themself more
+          permissions via these checkboxes even with the Edit/Delete buttons
+          hidden, or rewrite a default role's permissions in place. */}
       <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <Checkbox checked={!!role.view} disabled={!perms.canEditRole || isOwnRole} onToggle={() => onToggleField('view')} />
+        <Checkbox checked={!!role.view} disabled={!perms.canEditRole || lockedRole} onToggle={() => onToggleField('view')} />
       </span>
       <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <Checkbox checked={!!role.create} disabled={!perms.canEditRole || isOwnRole} onToggle={() => onToggleField('create')} />
+        <Checkbox checked={!!role.create} disabled={!perms.canEditRole || lockedRole} onToggle={() => onToggleField('create')} />
       </span>
       <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <Checkbox checked={!!role.edit} disabled={!perms.canEditRole || isOwnRole} onToggle={() => onToggleField('edit')} />
+        <Checkbox checked={!!role.edit} disabled={!perms.canEditRole || lockedRole} onToggle={() => onToggleField('edit')} />
       </span>
       <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <Checkbox checked={!!role.delete} disabled={!perms.canEditRole || isOwnRole} onToggle={() => onToggleField('delete')} />
+        <Checkbox checked={!!role.delete} disabled={!perms.canEditRole || lockedRole} onToggle={() => onToggleField('delete')} />
       </span>
 
       <span style={{ display: 'flex', gap: 5, justifyContent: 'flex-end', color: 'var(--tx3)' }}>
@@ -524,7 +525,7 @@ function RoleRow({ role, perms, isOwnRole, onToggleField, onConfigure, onView, o
             <Trash2 size={14} strokeWidth={1.8} />
           </button>
         )}
-        {isOwnRole && !defaultRole && (
+        {isOwnRole && (
           <span title="You cannot edit or delete your own role" style={{ fontSize: 10.5, color: 'var(--tx3)', display: 'flex', alignItems: 'center' }}>
             Your role
           </span>
@@ -577,6 +578,10 @@ export default function RolesPermission() {
   // and the checkboxes look empty. Rolls back the row if the request fails.
   const handleToggleField = async (role, field) => {
     if (myRoleId && String(role._id) === myRoleId) return;
+    if (role.is_default) {
+      toast.error('Default roles cannot be edited');
+      return;
+    }
     const next = !role[field];
     rolesApi.setData(prev => ({
       ...prev,
@@ -662,6 +667,11 @@ export default function RolesPermission() {
       setConfigureTarget(null);
       return;
     }
+    if (configureTarget?.role?.is_default) {
+      toast.error('Default roles cannot be edited');
+      setConfigureTarget(null);
+      return;
+    }
     try {
       const body = await updatePermissionConfig(configureTarget.role.permissionDetails?._id, permissionConfig);
       if (body?.status && body.status !== 'success') {
@@ -744,7 +754,7 @@ export default function RolesPermission() {
                   perms={{ canConfigure, canView, canEditRole, canDeleteRole }}
                   isOwnRole={!!myRoleId && String(role._id) === myRoleId}
                   onToggleField={(field) => handleToggleField(role, field)}
-                  onConfigure={() => setConfigureTarget({ role, readOnly: String(role._id) === myRoleId })}
+                  onConfigure={() => setConfigureTarget({ role, readOnly: role.is_default || String(role._id) === myRoleId })}
                   onView={() => setConfigureTarget({ role, readOnly: true })}
                   onEdit={() => setRenameTarget(role)}
                   onDelete={() => setDeleteTarget(role)}

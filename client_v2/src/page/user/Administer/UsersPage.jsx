@@ -4,6 +4,9 @@ import { toast as sonnerToast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
 import { useAuth } from '../../../context/AuthContext';
+import { usePermissions } from '../../../context/PermissionContext';
+import AccessDenied from '../../../components/AccessDenied';
+import PageLoader from '../../../components/PageLoader';
 import MultiSelect from '../../../components/MultiSelect';
 import DeleteConfirmation from '../../../components/DeleteConfirmation';
 import HScrollHint from '../../../components/HScrollHint';
@@ -155,14 +158,14 @@ function Checkbox({ checked, onToggle, disabled }) {
 // Matches the mockup exactly: checkbox / User Name (avatar+name) / Email / Role badge / Action.
 const COL = '44px minmax(160px,1.7fr) minmax(0,1.6fr) 150px 90px';
 
-function ColHeaders({ allChecked, onToggleAll }) {
+function ColHeaders({ allChecked, onToggleAll, showSelect }) {
   return (
     <div style={{
       display: 'grid', gridTemplateColumns: COL,
       padding: '12px 18px', borderBottom: '1px solid var(--bd)',
       fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)', alignItems: 'center',
     }}>
-      <Checkbox checked={allChecked} onToggle={onToggleAll} />
+      {showSelect ? <Checkbox checked={allChecked} onToggle={onToggleAll} /> : <span />}
       <span>USER NAME</span>
       <span>EMAIL</span>
       <span>ROLE</span>
@@ -171,7 +174,7 @@ function ColHeaders({ allChecked, onToggleAll }) {
   );
 }
 
-function UserRow({ u, checked, onToggle, onEdit, onDelete, isSelf }) {
+function UserRow({ u, checked, onToggle, onEdit, onDelete, isSelf, canEdit, canDelete, showSelect }) {
   const name = userName(u);
   const email = userEmail(u);
   const role = userRoleName(u);
@@ -186,7 +189,7 @@ function UserRow({ u, checked, onToggle, onEdit, onDelete, isSelf }) {
         alignItems: 'center', fontSize: 13, transition: 'background .12s',
       }}
     >
-      <Checkbox checked={checked} onToggle={onToggle} disabled={isSelf} />
+      {showSelect ? <Checkbox checked={checked} onToggle={onToggle} disabled={isSelf} /> : <span />}
 
       <span style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
         <span style={{
@@ -225,20 +228,24 @@ function UserRow({ u, checked, onToggle, onEdit, onDelete, isSelf }) {
           </span>
         ) : (
           <>
-            <button
-              onClick={() => onEdit(u)}
-              title="Edit"
-              style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', color: 'var(--tx2)', cursor: 'pointer' }}
-            >
-              <Pencil size={15} strokeWidth={1.8} />
-            </button>
-            <button
-              onClick={() => onDelete(u)}
-              title="Delete"
-              style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'var(--bg2)', border: '1px solid rgba(255,77,77,.3)', color: 'var(--crit)', cursor: 'pointer' }}
-            >
-              <Trash2 size={15} strokeWidth={1.8} />
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => onEdit(u)}
+                title="Edit"
+                style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', color: 'var(--tx2)', cursor: 'pointer' }}
+              >
+                <Pencil size={15} strokeWidth={1.8} />
+              </button>
+            )}
+            {canDelete && (
+              <button
+                onClick={() => onDelete(u)}
+                title="Delete"
+                style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'var(--bg2)', border: '1px solid rgba(255,77,77,.3)', color: 'var(--crit)', cursor: 'pointer' }}
+              >
+                <Trash2 size={15} strokeWidth={1.8} />
+              </button>
+            )}
           </>
         )}
       </span>
@@ -868,6 +875,14 @@ export default function UsersPage() {
   // is the same _id each list row carries.
   const myUserId = String(user?.memberId || '');
 
+  const { permissions, loading: permissionsLoading } = usePermissions();
+  const canView   = permissions?.Users?.view;
+  const canCreate = permissions?.Users?.create;
+  const canEdit   = permissions?.Users?.edit;
+  const canDelete = permissions?.Users?.delete;
+  // Bulk-select only makes sense if the user can act on the selection.
+  const canSelect = canEdit || canDelete;
+
   const [search, setSearch]       = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const debounceRef = useRef(null);
@@ -1066,6 +1081,9 @@ export default function UsersPage() {
     }
   };
 
+  if (permissionsLoading) return <PageLoader />;
+  if (!canView) return <AccessDenied />;
+
   return (
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -1085,21 +1103,23 @@ export default function UsersPage() {
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>{total} users</span>
-          <button
-            onClick={() => setShowAddModal(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              height: 40, padding: '0 16px', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#fff',
-              background: 'linear-gradient(135deg,var(--blue),var(--violet))', border: 'none', cursor: 'pointer',
-              boxShadow: '0 4px 16px rgba(99,102,241,.28)',
-            }}
-          >
-            <Plus size={16} /> Add New User
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                height: 40, padding: '0 16px', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#fff',
+                background: 'linear-gradient(135deg,var(--blue),var(--violet))', border: 'none', cursor: 'pointer',
+                boxShadow: '0 4px 16px rgba(99,102,241,.28)',
+              }}
+            >
+              <Plus size={16} /> Add New User
+            </button>
+          )}
         </div>
       </div>
 
-      {selCount > 0 && (
+      {canSelect && selCount > 0 && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderRadius: 11,
           background: 'linear-gradient(90deg,rgba(59,130,246,.14),rgba(168,85,247,.10))',
@@ -1107,18 +1127,22 @@ export default function UsersPage() {
         }}>
           <span style={{ fontSize: 12.5, fontWeight: 600 }}>{selCount} selected</span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <BulkAssignRoleButton
-              roles={roles}
-              rolesLoading={rolesApi.loading}
-              disabled={assigningRole}
-              onAssign={handleBulkAssignRole}
-            />
-            <button
-              onClick={() => setConfirmBulkDelete(true)}
-              style={{ height: 32, padding: '0 12px', display: 'flex', alignItems: 'center', gap: 6, borderRadius: 8, background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.45)', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--crit)' }}
-            >
-              <Trash2 size={13} /> Delete
-            </button>
+            {canEdit && (
+              <BulkAssignRoleButton
+                roles={roles}
+                rolesLoading={rolesApi.loading}
+                disabled={assigningRole}
+                onAssign={handleBulkAssignRole}
+              />
+            )}
+            {canDelete && (
+              <button
+                onClick={() => setConfirmBulkDelete(true)}
+                style={{ height: 32, padding: '0 12px', display: 'flex', alignItems: 'center', gap: 6, borderRadius: 8, background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.45)', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--crit)' }}
+              >
+                <Trash2 size={13} /> Delete
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1127,7 +1151,7 @@ export default function UsersPage() {
         {/* Horizontal scroll on narrow screens, with edge fades hinting swipeability. */}
         <HScrollHint minWidth={660} fadeColor="var(--bg1)">
           <div>
-            <ColHeaders allChecked={allChecked} onToggleAll={toggleAll} />
+            <ColHeaders allChecked={allChecked} onToggleAll={toggleAll} showSelect={canSelect} />
 
             <AsyncBoundary
               loading={usersApi.loading}
@@ -1146,6 +1170,9 @@ export default function UsersPage() {
                   onEdit={setEditUser}
                   onDelete={setConfirmDelete}
                   isSelf={!!myUserId && String(u._id) === myUserId}
+                  canEdit={canEdit}
+                  canDelete={canDelete}
+                  showSelect={canSelect}
                 />
               ))}
             </AsyncBoundary>
