@@ -35,6 +35,11 @@ beforeAll(async () => {
     lastCreatedAt: -1,
     createdAt: 1,
   });
+  await OptimizedAccessLogs.collection.createIndex({
+    admin: 1,
+    createdAt: -1,
+    lastCreatedAt: 1,
+  });
 });
 afterAll(async () => {
   await disconnectMongo();
@@ -74,15 +79,19 @@ describe("OptimizedAccessLogs.lastCreatedAt", () => {
     expect(reread.lastCreatedAt).toEqual(at("2026-05-01T15:00:00Z"));
   });
 
-  it("sorts and paginates from the index without a blocking sort", async () => {
-    // 200 docs spread over the range, seeded via create() so the hook runs
-    // (insertMany would bypass pre-save and leave the field unset).
+  // 200 docs spread over the range, seeded via create() so the hook runs
+  // (insertMany would bypass pre-save and leave the field unset).
+  async function seed200() {
     await OptimizedAccessLogs.create(
       Array.from({ length: 200 }, (_, i) => ({
         admin,
         sessions: [session(new Date(at("2026-05-01T00:00:00Z").getTime() + i * 60000))],
       }))
     );
+  }
+
+  it("sorts and paginates from the index without a blocking sort", async () => {
+    await seed200();
 
     const stats = await mongoose.connection.db.command({
       explain: {
@@ -115,5 +124,40 @@ describe("OptimizedAccessLogs.lastCreatedAt", () => {
     // Only the returned page should be touched, not all 200 docs.
     expect(stats.executionStats.totalKeysExamined).toBeLessThanOrEqual(10);
     expect(stats.executionStats.totalDocsExamined).toBeLessThanOrEqual(10);
+  });
+
+  // The total needs a different index than the page. {admin, lastCreatedAt,
+  // createdAt} puts the sort key ahead of createdAt, so a count can't seek to
+  // the date window — in production that meant scanning all 2.7M keys of a
+  // tenant to count a single day's 1,225 rows, and the endpoint took 3s.
+  // {admin, createdAt, lastCreatedAt} seeks to the window and still answers
+  // "has sessions" from the key, so it fetches nothing.
+  it("counts a narrow window by seeking to it, without fetching documents", async () => {
+    await seed200();
+
+    // A window covering 20 of the 200 seeded docs.
+    const from = at("2026-05-01T00:00:00Z");
+    const to = new Date(from.getTime() + 19 * 60000);
+
+    const stats = await mongoose.connection.db.command({
+      explain: {
+        aggregate: "optimizedaccesslogs",
+        pipeline: [
+          { $match: { admin, createdAt: { $gte: from, $lte: to }, lastCreatedAt: { $ne: null } } },
+          { $count: "total" },
+        ],
+        cursor: {},
+      },
+      verbosity: "executionStats",
+    });
+
+    const qp = stats.queryPlanner || stats.stages?.[0]?.["$cursor"]?.queryPlanner;
+    const x = stats.executionStats || stats.stages?.[0]?.["$cursor"]?.executionStats;
+
+    expect(JSON.stringify(qp.winningPlan)).toContain("admin_1_createdAt_-1_lastCreatedAt_1");
+    // Covered: the count must never crack a document open.
+    expect(x.totalDocsExamined).toBe(0);
+    // And it must not walk the whole tenant to count a slice of it.
+    expect(x.totalKeysExamined).toBeLessThan(200);
   });
 });

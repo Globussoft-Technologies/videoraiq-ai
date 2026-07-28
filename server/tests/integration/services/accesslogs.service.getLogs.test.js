@@ -67,6 +67,7 @@ beforeAll(async () => {
   // Create the indexes that accesslogs service uses
   await OptimizedAccessLogs.collection.createIndex({ admin: 1, createdAt: -1 });
   await OptimizedAccessLogs.collection.createIndex({ admin: 1, lastCreatedAt: -1, createdAt: 1 });
+  await OptimizedAccessLogs.collection.createIndex({ admin: 1, createdAt: -1, lastCreatedAt: 1 });
 });
 afterAll(async () => {
   await disconnectMongo();

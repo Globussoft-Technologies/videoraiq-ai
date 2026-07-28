@@ -65,8 +65,13 @@ async function migrate() {
     }
   }
 
+  // One index serves the page (sort on lastCreatedAt), the other the total
+  // (seek to the createdAt window, with lastCreatedAt in the key so the count
+  // never has to fetch a document). Neither can do the other's job.
   console.log("Building index { admin: 1, lastCreatedAt: -1, createdAt: 1 }...");
   await coll.createIndex({ admin: 1, lastCreatedAt: -1, createdAt: 1 });
+  console.log("Building index { admin: 1, createdAt: -1, lastCreatedAt: 1 }...");
+  await coll.createIndex({ admin: 1, createdAt: -1, lastCreatedAt: 1 });
 
   // Self-check: every doc with sessions must now have a lastCreatedAt.
   const stragglers = await coll.countDocuments({

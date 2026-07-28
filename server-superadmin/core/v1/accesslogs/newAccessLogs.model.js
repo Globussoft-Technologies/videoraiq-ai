@@ -54,5 +54,11 @@ accessLogSchema.index({ userId: 1, createdAt: -1 });
 // list query match, sort, skip and limit entirely from index keys and fetch
 // only the page it returns.
 accessLogSchema.index({ admin: 1, lastCreatedAt: -1, createdAt: 1 });
+// The paired total. The index above can't seek to a createdAt range (the sort
+// key precedes it), so counting one day of a tenant with millions of rows was
+// scanning every one of that tenant's keys. Leading with createdAt lets the
+// count seek straight to the window, and carrying lastCreatedAt in the key
+// keeps the "has sessions" test covered, so it never fetches a document.
+accessLogSchema.index({ admin: 1, createdAt: -1, lastCreatedAt: 1 });
 
 export default mongoose.model("OptimizedAccessLogs", accessLogSchema);
