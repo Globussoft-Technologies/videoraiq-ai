@@ -50,6 +50,8 @@ const FolderDetailView = ({
   confirmDeleteImages,
   setConfirmDeleteImages,
   onConfirmDeleteImages,
+  canCreate,
+  canDelete,
 }) => {
   const folderImageCount = folder?.images.length || 0;
   const pagedImages = folder.images.slice(folderStart, folderStart + folderLimit);
@@ -88,7 +90,7 @@ const FolderDetailView = ({
               {allImagesSelected ? 'Unselect All' : 'Select All'}
             </button>
           )}
-          {selectedImageIds.length > 0 && (
+          {canDelete && selectedImageIds.length > 0 && (
             <button
               type="button"
               onClick={() => setConfirmDeleteImages(true)}
@@ -99,14 +101,16 @@ const FolderDetailView = ({
               Delete ({selectedImageIds.length})
             </button>
           )}
-          <button
-            type="button"
-            onClick={onSaveFolder}
-            className="flex items-center gap-1.5 h-10 bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white rounded-lg px-3 text-sm font-semibold shadow-sm hover:opacity-95 cursor-pointer transition-opacity"
-          >
-            <Save className="w-4 h-4" />
-            Save Folder
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={onSaveFolder}
+              className="flex items-center gap-1.5 h-10 bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white rounded-lg px-3 text-sm font-semibold shadow-sm hover:opacity-95 cursor-pointer transition-opacity"
+            >
+              <Save className="w-4 h-4" />
+              Save Folder
+            </button>
+          )}
           <AutoRefreshComponent
             isActive={autoRefresh}
             onActiveChange={setAutoRefresh}

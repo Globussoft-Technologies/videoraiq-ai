@@ -70,15 +70,14 @@ const ANPRLogs = () => {
   const { permissions, loading: permissionsLoading } = usePermissions();
   const navigate = useNavigate();
 
-  // Logs permissions may be flat ({ view, edit }) or nested per sub-section
-  // (ANPRLogs, global, …). Resolve in order: section-specific → global → flat.
+  // Only this page's own ANPRLogs.<action> flag decides access — a missing
+  // key (role seeded before ANPRLogs existed) or falling back to `global`
+  // let an unrelated broader setting show the Edit control even when ANPR
+  // Logs' own edit permission was explicitly left off.
   const resolveLogPerm = (action) => {
     const logs = permissions?.logs;
     if (!logs) return false;
-    if (typeof logs.ANPRLogs?.[action] === 'boolean') return logs.ANPRLogs[action];
-    if (typeof logs.global?.[action] === 'boolean') return logs.global[action];
-    if (typeof logs[action] === 'boolean') return logs[action];
-    return false;
+    return logs.ANPRLogs?.[action] === true;
   };
   const canView = resolveLogPerm('view');
   const canEdit = resolveLogPerm('edit');

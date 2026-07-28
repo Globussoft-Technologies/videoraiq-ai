@@ -44,6 +44,7 @@ const FolderGridView = ({
   setConfirmDeleteFolders,
   selectedFoldersImageCount,
   onConfirmDeleteFolders,
+  canDelete,
 }) => (
   <div className="flex flex-1 flex-col">
     <div className="flex flex-1 flex-col bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] p-4 sm:p-5 space-y-4">
@@ -89,7 +90,7 @@ const FolderGridView = ({
               {allFoldersSelected ? 'Unselect All' : 'Select All'}
             </button>
           )}
-          {selectedFolderIds.length > 0 && (
+          {canDelete && selectedFolderIds.length > 0 && (
             <button
               type="button"
               onClick={() => setConfirmDeleteFolders(true)}

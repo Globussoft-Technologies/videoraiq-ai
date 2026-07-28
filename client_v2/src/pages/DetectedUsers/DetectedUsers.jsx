@@ -72,6 +72,11 @@ const DetectedUsers = () => {
     return false;
   };
   const canView = resolveLogPerm('view');
+  // "Save Folder" tags/registers a new authorized user — a create action —
+  // and the delete-selected actions need the delete grant, same as any other
+  // module's action buttons.
+  const canCreate = resolveLogPerm('create');
+  const canDelete = resolveLogPerm('delete');
 
   const totalPages = Math.max(1, Math.ceil(totalCount / limit));
 
@@ -174,6 +179,7 @@ const DetectedUsers = () => {
   };
 
   const handleDeleteSelectedImages = async () => {
+    if (!canDelete) return;
     if (deleting || selectedImageIds.length === 0) return;
     setDeleting(true);
     try {
@@ -215,6 +221,7 @@ const DetectedUsers = () => {
   // Delete every image across the selected folders; empty folders drop out of
   // /grouped, so the folders themselves disappear.
   const handleDeleteSelectedFolders = async () => {
+    if (!canDelete) return;
     if (deleting || selectedFolderIds.length === 0) return;
     const imageIds = folders
       .filter((f) => selectedFolderIds.includes(f.dsId))
@@ -261,6 +268,7 @@ const DetectedUsers = () => {
   // been tagged/registered — re-tagging it would just fail or duplicate, so
   // surface a clear message instead of opening the tag modal.
   const handleSaveFolder = (folder) => {
+    if (!canCreate) return;
     if (folder?.authorizedUser) {
       toast.info(
         `This detected user is already ${folder.authorizedUser.name ? `tagged to "${folder.authorizedUser.name}"` : 'tagged'}.`
@@ -289,6 +297,8 @@ const DetectedUsers = () => {
           onDeleteImagesClick={() => setConfirmDeleteImages(true)}
           deleting={deleting}
           onSaveFolder={() => handleSaveFolder(activeFolder)}
+          canCreate={canCreate}
+          canDelete={canDelete}
           autoRefresh={autoRefresh}
           setAutoRefresh={setAutoRefresh}
           refreshInterval={refreshInterval}
@@ -325,6 +335,7 @@ const DetectedUsers = () => {
           toggleSelectAllFolders={toggleSelectAllFolders}
           onDeleteFoldersClick={() => setConfirmDeleteFolders(true)}
           deleting={deleting}
+          canDelete={canDelete}
           autoRefresh={autoRefresh}
           setAutoRefresh={setAutoRefresh}
           refreshInterval={refreshInterval}
