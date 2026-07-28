@@ -71,6 +71,26 @@ class AuthUsersService {
     const { dsAuthUsersAPI } = await resolveAdminEndpoints(adminId);
     return dsAuthUsersAPI;
   }
+  // Resolve the current admin from the verified token payload. Prefer
+  // adminId because it is the canonical app-side identifier; fall back to the
+  // older user_id/email pair for legacy tokens.
+  async resolveAdminFromVerifiedUser(data) {
+    if (data?.adminId) {
+      const admin = await adminModel.findById(data.adminId);
+      if (admin) return admin;
+    }
+
+    const legacyQuery = {};
+    if (data?.user_id !== undefined && data?.user_id !== null) {
+      legacyQuery.user_id = data.user_id.toString();
+    }
+    if (data?.user_email) {
+      legacyQuery.email = data.user_email;
+    }
+
+    if (!Object.keys(legacyQuery).length) return null;
+    return adminModel.findOne(legacyQuery);
+  }
   /**
    * Delete all authorized users for the current admin.
    * Only deletes SFTP/AI data if user is verified.
@@ -1340,10 +1360,7 @@ async bulkImportAuthUser(req, res, next) {
         return res.status(400).json(Response.userFailResp("tag must be a boolean", "Validation Failed!"));
       }
 
-      const isAdminExist = await adminModel.findOne({
-        user_id: data?.user_id?.toString(),
-        email: data?.user_email,
-      });
+      const isAdminExist = await this.resolveAdminFromVerifiedUser(data);
 
       if (!isAdminExist) {
         return res.status(404).json(Response.userFailResp("Admin not found!", "Validation Failed!"));
@@ -1425,6 +1442,47 @@ async bulkImportAuthUser(req, res, next) {
     } catch (error) {
       logger.error(error);
       return res.status(500).json(Response.errorResp("Failed to update user tag.", error.message));
+    }
+  }
+
+  async clearAutoTaggedAccessLogs(req, res, _next) {
+    try {
+      const data = req?.verified?.userData;
+      const isAdminExist = await this.resolveAdminFromVerifiedUser(data);
+
+      if (!isAdminExist) {
+        return res.status(404).json(Response.userFailResp("Admin not found!", "Validation Failed!"));
+      }
+
+      const manuallyTaggedUserIds = await authorizedUsersModel.distinct('_id', {
+        adminId: isAdminExist._id,
+        tag: true,
+      });
+
+      const cleanupQuery = {
+        admin: isAdminExist._id,
+        tag: true,
+        $or: [
+          { userId: { $exists: false } },
+          { userId: null },
+          { userId: { $nin: manuallyTaggedUserIds } },
+        ],
+      };
+
+      const result = await OptimizedAccessLogs.updateMany(cleanupQuery, {
+        $set: { tag: false },
+      });
+
+      return res.status(200).json(
+        Response.userSuccessResp('Auto-tagged access logs cleared successfully', {
+          matchedCount: result?.matchedCount ?? result?.n ?? 0,
+          modifiedCount: result?.modifiedCount ?? result?.nModified ?? 0,
+          preservedManualUsers: manuallyTaggedUserIds.length,
+        })
+      );
+    } catch (error) {
+      logger.error(error);
+      return res.status(500).json(Response.errorResp('Failed to clear auto-tagged access logs.', error.message));
     }
   }
 

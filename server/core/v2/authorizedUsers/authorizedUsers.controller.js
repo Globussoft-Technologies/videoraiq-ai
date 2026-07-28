@@ -354,6 +354,17 @@ class AuthUserController {
     return authorizedUsersService.tagUser(req, res, next);
   }
 
+  async clearAutoTaggedAccessLogs(req, res, next) {
+    /* 
+    #swagger.tags = ['AuthorizedUsers']
+    #swagger.description = 'Clear access-log tags that were auto-set by the legacy access-log flow while preserving currently manual-tagged users.'
+    #swagger.responses[200] = { description: 'Auto-tagged access logs cleared successfully' }
+    #swagger.responses[404] = { description: 'Admin not found' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return authorizedUsersService.clearAutoTaggedAccessLogs(req, res, next);
+  }
+
   async verifyUser(req,res,next){
     /* 
     #swagger.tags = ['AuthorizedUsers']

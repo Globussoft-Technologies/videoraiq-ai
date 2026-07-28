@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import moment from 'moment';
 import KpiRow from './KpiRow';
@@ -123,6 +123,18 @@ export default function CommandCenter() {
   }, [selectedLocations, selectedNvrs, selectedDepts, location, locNameByKey]);
   const filterKey = JSON.stringify(filters);
 
+  useEffect(() => {
+    if (!nvrOptions.length) return;
+    setSelectedNvrs((prev) => {
+      if (prev.length) {
+        const validIds = new Set(nvrOptions.map((nvr) => nvr.id));
+        const next = prev.filter((id) => validIds.has(id));
+        return next.length ? next : [nvrOptions[0].id];
+      }
+      return [nvrOptions[0].id];
+    });
+  }, [nvrOptions]);
+
   // KPI header stats — overall counts (NOT date-restricted; headerStats returns
   // 0 alerts when filtered to a single day, which zeroed the t
   //  iles).
@@ -191,6 +203,13 @@ export default function CommandCenter() {
   );
 
   // All channels (with their location) — used to map alerts -> site for the map.
+  const streamingChannels = useMemo(
+    () => (channels.data || []).filter((channel) =>
+      !!(channel?.streamingUrl || channel?.StreamingUrl || channel?.config?.StreamingUrl)
+    ),
+    [channels.data]
+  );
+
   const allChannels = useApi(() => getChannels({ limit: 500 }), []);
   const sitesEnriched = useMemo(() => {
     // channelId -> site (location) name, lower-cased for matching; tally cams/site
@@ -311,7 +330,7 @@ export default function CommandCenter() {
       {/* Live camera + attendance | latest incident + controls */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 18 }} className="vq-cc-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
-          <LiveCamera channels={channels.data || []} loading={channels.loading} latestByChannel={latestByChannel} onOnlineCountChange={onOnlineCountChange} />
+          <LiveCamera channels={streamingChannels} loading={channels.loading} latestByChannel={latestByChannel} onOnlineCountChange={onOnlineCountChange} />
           <LiveAttendance />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
