@@ -15,10 +15,15 @@ export let completeConfig = {
         global: { view: false, create: false, edit: false, delete: false },
         accessLogs: { view: false, create: false, edit: false, delete: false },
         attendanceLogs: { view: false, create: false, edit: false, delete: false },
-        trackLogs: { view: false, create: false, edit: false, delete: false },
+        taggedUsersLogs: { view: false, create: false, edit: false, delete: false },
+        detectedUsersLogs: { view: false, create: false, edit: false, delete: false },
+        personCountLogs: { view: false, create: false, edit: false, delete: false },
         deskLogs: { view: false, create: false, edit: false, delete: false },
-        guardLogs: { view: false, create: false, edit: false, delete: false },
         ANPRLogs: { view: false, create: false, edit: false, delete: false },
+        productivityLogs: { view: false, create: false, edit: false, delete: false },
+        trackLogs: { view: false, create: false, edit: false, delete: false },
+        visibilityLogs: { view: false, create: false, edit: false, delete: false },
+        guardLogs: { view: false, create: false, edit: false, delete: false },
         conveyorLogs: { view: false, create: false, edit: false, delete: false },
         vehicleObstructionLogs: { view: false, create: false, edit: false, delete: false },
         vehicleCountLogs: { view: false, create: false, edit: false, delete: false },
@@ -28,8 +33,8 @@ export let completeConfig = {
         unauthorizedAccessLogs: { view: false, create: false, edit: false, delete: false }
     },
     locations: { view: false, create: false, edit: false, delete: false },
-    playbacks:{ view: false, create: false, edit: false, delete: false }
-    
+    playbacks: { view: false, create: false, edit: false, delete: false }
+
 };
 
 export let adminConfig = {
@@ -49,10 +54,15 @@ export let adminConfig = {
         global: { view: true, create: true, edit: true, delete: true },
         accessLogs: { view: true, create: true, edit: true, delete: true },
         attendanceLogs: { view: true, create: true, edit: true, delete: true },
-        trackLogs: { view: true, create: true, edit: true, delete: true },
+        taggedUsersLogs: { view: true, create: true, edit: true, delete: true },
+        detectedUsersLogs: { view: true, create: true, edit: true, delete: true },
+        personCountLogs: { view: true, create: true, edit: true, delete: true },
         deskLogs: { view: true, create: true, edit: true, delete: true },
-        guardLogs: { view: true, create: true, edit: true, delete: true },
         ANPRLogs: { view: true, create: true, edit: true, delete: true },
+        productivityLogs: { view: true, create: true, edit: true, delete: true },
+        trackLogs: { view: true, create: true, edit: true, delete: true },
+        visibilityLogs: { view: true, create: true, edit: true, delete: true },
+        guardLogs: { view: true, create: true, edit: true, delete: true },
         conveyorLogs: { view: true, create: true, edit: true, delete: true },
         vehicleObstructionLogs: { view: true, create: true, edit: true, delete: true },
         vehicleCountLogs: { view: true, create: true, edit: true, delete: true },
@@ -62,8 +72,8 @@ export let adminConfig = {
         unauthorizedAccessLogs: { view: true, create: true, edit: true, delete: true }
     },
     locations: { view: true, create: true, edit: true, delete: true },
-    playbacks:{ view: true, create: true, edit: true, delete: true },
-        
+    playbacks: { view: true, create: true, edit: true, delete: true },
+
 };
 
 export let readConfig = {
@@ -83,10 +93,15 @@ export let readConfig = {
         global: { view: true, create: false, edit: false, delete: false },
         accessLogs: { view: true, create: false, edit: false, delete: false },
         attendanceLogs: { view: true, create: false, edit: false, delete: false },
-        trackLogs: { view: true, create: false, edit: false, delete: false },
+        taggedUsersLogs: { view: true, create: false, edit: false, delete: false },
+        detectedUsersLogs: { view: true, create: false, edit: false, delete: false },
+        personCountLogs: { view: true, create: false, edit: false, delete: false },
         deskLogs: { view: true, create: false, edit: false, delete: false },
-        guardLogs: { view: true, create: false, edit: false, delete: false },
         ANPRLogs: { view: true, create: false, edit: false, delete: false },
+        productivityLogs: { view: true, create: false, edit: false, delete: false },
+        trackLogs: { view: true, create: false, edit: false, delete: false },
+        visibilityLogs: { view: true, create: false, edit: false, delete: false },
+        guardLogs: { view: true, create: false, edit: false, delete: false },
         conveyorLogs: { view: true, create: false, edit: false, delete: false },
         vehicleObstructionLogs: { view: true, create: false, edit: false, delete: false },
         vehicleCountLogs: { view: true, create: false, edit: false, delete: false },
@@ -96,7 +111,7 @@ export let readConfig = {
         unauthorizedAccessLogs: { view: true, create: false, edit: false, delete: false }
     },
     locations: { view: true, create: false, edit: false, delete: false },
-    playbacks:{ view: true, create: false, edit: false, delete: false }
+    playbacks: { view: true, create: false, edit: false, delete: false }
 
 };
 
@@ -117,10 +132,15 @@ export let writeConfig = {
         global: { view: true, create: true, edit: true, delete: false },
         accessLogs: { view: true, create: true, edit: true, delete: false },
         attendanceLogs: { view: true, create: true, edit: true, delete: false },
-        trackLogs: { view: true, create: true, edit: true, delete: false },
+        taggedUsersLogs: { view: true, create: true, edit: true, delete: false },
+        detectedUsersLogs: { view: true, create: true, edit: true, delete: false },
+        personCountLogs: { view: true, create: true, edit: true, delete: false },
         deskLogs: { view: true, create: true, edit: true, delete: false },
-        guardLogs: { view: true, create: true, edit: true, delete: false },
         ANPRLogs: { view: true, create: true, edit: true, delete: false },
+        productivityLogs: { view: true, create: true, edit: true, delete: false },
+        trackLogs: { view: true, create: true, edit: true, delete: false },
+        visibilityLogs: { view: true, create: true, edit: true, delete: false },
+        guardLogs: { view: true, create: true, edit: true, delete: false },
         conveyorLogs: { view: true, create: true, edit: true, delete: false },
         vehicleObstructionLogs: { view: true, create: true, edit: true, delete: false },
         vehicleCountLogs: { view: true, create: true, edit: true, delete: false },
@@ -130,7 +150,7 @@ export let writeConfig = {
         unauthorizedAccessLogs: { view: true, create: true, edit: true, delete: false }
     },
     locations: { view: true, create: true, edit: true, delete: false },
-    playbacks:{ view: true, create: true, edit: true, delete: false }
+    playbacks: { view: true, create: true, edit: true, delete: false }
 };
 
 

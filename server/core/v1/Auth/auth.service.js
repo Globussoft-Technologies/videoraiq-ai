@@ -25,6 +25,24 @@ import { autoSyncLocations, syncPermissionLocations, syncStevinrockLogPermission
 const backendToken = config.get("Backend.token");
 const detectionHost = config.get("PythonService.detectionUrl");
 const APP_ENV = config.get("APP_ENV");
+
+// Every logs sub-permission the backfill maintains. Add new log types here and
+// the migration picks them up for existing admins automatically.
+// productivityLogs is intentionally absent — those logs are hidden from the UI.
+const LOG_PERMISSION_KEYS = [
+  "global",
+  "accessLogs",
+  "attendanceLogs",
+  "taggedUsersLogs",
+  "detectedUsersLogs",
+  "personCountLogs",
+  "trackLogs",
+  "visibilityLogs",
+  "deskLogs",
+  "guardLogs",
+  "ANPRLogs",
+];
+
 class AUTHService {
   constructor() {
     // Initialize configuration values
@@ -840,23 +858,25 @@ return bypassUsers.find(
             
 
             let isFlat = typeof logsConfig.view === 'boolean';
-            let isMissingFields = typeof logsConfig.trackLogs === 'undefined' || typeof logsConfig.deskLogs === 'undefined' || typeof logsConfig.guardLogs === 'undefined' || typeof logsConfig.global === 'undefined' || typeof logsConfig.ANPRLogs === 'undefined';
+            // Both the gate and the rebuild below read this one list. They used
+            // to be written out separately, so adding a log type to the rebuild
+            // without also adding it to the gate meant already-migrated admins
+            // never received it — the migration simply never fired for them.
+            let isMissingFields = LOG_PERMISSION_KEYS.some(
+              (key) => typeof logsConfig[key] === 'undefined'
+            );
 
             // Check if it has the old flat structure or is missing the new logs properties
             if (isFlat || isMissingFields) {
-              let basePerms = isFlat 
+              let basePerms = isFlat
                   ? { view: logsConfig.view, create: logsConfig.create, edit: logsConfig.edit, delete: logsConfig.delete }
                   : (logsConfig.global || logsConfig.accessLogs || { view: false, create: false, edit: false, delete: false });
 
-              perm.permissionConfig.logs = {
-                global: logsConfig.global || { ...basePerms },
-                accessLogs: logsConfig.accessLogs || { ...basePerms },
-                attendanceLogs: logsConfig.attendanceLogs || { ...basePerms },
-                trackLogs: logsConfig.trackLogs || { ...basePerms },
-                deskLogs: logsConfig.deskLogs || { ...basePerms },
-                guardLogs: logsConfig.guardLogs || { ...basePerms },
-                ANPRLogs: logsConfig.ANPRLogs || { ...basePerms },
-              };
+              // Idempotent: an existing sub-config is kept as-is, only missing
+              // keys get basePerms.
+              perm.permissionConfig.logs = Object.fromEntries(
+                LOG_PERMISSION_KEYS.map((key) => [key, logsConfig[key] || { ...basePerms }])
+              );
 
               perm.markModified('permissionConfig');
               await perm.save();
