@@ -751,8 +751,22 @@ function GoToPage({ pages, page, onGo }) {
   const [value, setValue] = useState('');
 
   const commit = () => {
-    const n = parseInt(value, 10);
-    if (Number.isFinite(n) && n >= 1 && n <= pages) onGo(n - 1);
+    const raw = String(value).trim();
+    if (!raw) return;
+    if (!/^[1-9]\d*$/.test(raw)) {
+      toast.error('You can only enter positive numbers');
+      setValue('');
+      return;
+    }
+
+    const n = parseInt(raw, 10);
+    if (n > pages) {
+      toast.error(`Enter a page between 1 and ${pages}`);
+      setValue('');
+      return;
+    }
+
+    onGo(n - 1);
     setValue('');
   };
 
@@ -760,9 +774,8 @@ function GoToPage({ pages, page, onGo }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 8, fontSize: 12.5, color: 'var(--tx3)' }}>
       <span>Go to</span>
       <input
-        type="number"
-        min={1}
-        max={pages}
+        type="text"
+        inputMode="numeric"
         value={value}
         placeholder={String(page + 1)}
         onChange={(e) => setValue(e.target.value)}

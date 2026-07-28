@@ -6,7 +6,6 @@ import { Loading, Empty } from '../../../components/States';
 import CameraStream from '../../../components/CameraStream';
 import LiveCameraLogsOverlay from '../../../components/LiveCameraLogsOverlay';
 
-const TAB_LIMIT = 8;    // switchable tabs rendered in the strip
 const PROBE_LIMIT = 32; // cameras stream-probed for the online tally
 
 /**
@@ -23,13 +22,14 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
   //     because each probe opens a real stream; raise/lower PROBE_LIMIT to trade
   //     accuracy on huge sites against connection load.
   //   cams — the handful actually rendered as switchable tabs.
-  const probeCams = useMemo(
-    () => (Array.isArray(channels) ? channels.slice(0, PROBE_LIMIT) : []),
+  const cams = useMemo(
+    () => (Array.isArray(channels) ? channels : []),
     [channels]
   );
-  const cams = useMemo(() => probeCams.slice(0, TAB_LIMIT), [probeCams]);
+  const probeCams = useMemo(() => cams.slice(0, PROBE_LIMIT), [cams]);
   const [activeId, setActiveId] = useState(null);
   const tileRef = useRef(null);
+  const tabsRef = useRef(null);
 
   const active = cams.find((c) => (c._id || c.id) === activeId) || cams[0];
   const activeKey = active?._id || active?.id;
@@ -62,6 +62,19 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
 
   const online = active ? !!liveById[activeKey] : false;
   const liveColor = !active ? 'var(--tx3)' : online ? 'var(--ok)' : 'var(--crit)';
+
+  const handleTabWheel = useCallback((event) => {
+    const node = tabsRef.current;
+    if (!node) return;
+    const hasHorizontalOverflow = node.scrollWidth > node.clientWidth;
+    if (!hasHorizontalOverflow) return;
+
+    const delta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+    if (!delta) return;
+
+    event.preventDefault();
+    node.scrollLeft += delta;
+  }, []);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   useEffect(() => {
@@ -99,7 +112,20 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
       </div>
 
       {/* Tabs */}
-      <div className="vq-scroll" style={{ display: 'flex', gap: 7, overflowX: 'auto', overflowY: 'hidden', padding: '11px 16px', WebkitOverflowScrolling: 'touch' }}>
+      <div
+        ref={tabsRef}
+        className="vq-scroll"
+        onWheel={handleTabWheel}
+        style={{
+          display: 'flex',
+          gap: 7,
+          overflowX: 'auto',
+          overflowY: 'hidden',
+          padding: '11px 16px',
+          WebkitOverflowScrolling: 'touch',
+          scrollBehavior: 'smooth',
+        }}
+      >
         {cams.map((c) => {
           const id = c._id || c.id;
           const isActive = id === activeKey;

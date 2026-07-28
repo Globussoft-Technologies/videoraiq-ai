@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { ROWS_OPTIONS } from '../detectedUtils';
+import { toast } from 'sonner';
+
+const DEFAULT_ROWS_OPTIONS = [35, 60, 100];
 
 // Pagination footer matching the V2 log pages: a "Total" badge, gradient active
 // page buttons, a go-to input and a rows-per-page selector. Theme-aware.
@@ -12,7 +14,7 @@ const PaginationBar = ({
   onLimitChange,
   totalCount = 0,
   totalLabel = 'Total',
-  rowsOptions = ROWS_OPTIONS,
+  rowsOptions = DEFAULT_ROWS_OPTIONS,
 }) => {
   const [pageInput, setPageInput] = useState('');
 
@@ -22,8 +24,14 @@ const PaginationBar = ({
   };
 
   const handleGoToPage = () => {
-    const p = parseInt(pageInput, 10);
-    if (!Number.isFinite(p)) return;
+    const raw = String(pageInput).trim();
+    if (!raw) return;
+    if (!/^[1-9]\d*$/.test(raw)) {
+      toast.error('You can only enter positive numbers');
+      setPageInput('');
+      return;
+    }
+    const p = parseInt(raw, 10);
     handlePageChange(Math.min(Math.max(p, 1), totalPages));
     setPageInput('');
   };
@@ -113,9 +121,9 @@ const PaginationBar = ({
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-[var(--tx2)] whitespace-nowrap">Go to:</span>
           <input
-            type="number"
-            min={1}
-            max={totalPages}
+            type="text"
+            inputMode="numeric"
+            pattern="[1-9][0-9]*"
             value={pageInput}
             onChange={(e) => setPageInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleGoToPage()}
@@ -125,7 +133,7 @@ const PaginationBar = ({
           <button
             type="button"
             onClick={handleGoToPage}
-            disabled={pageInput === ''}
+            disabled={String(pageInput).trim() === ''}
             className="h-9 px-3 rounded-lg text-xs font-medium bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-95 transition-opacity cursor-pointer"
           >
             Go

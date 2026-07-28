@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { toast } from "sonner";
 
 const Pagination = ({ currentPage, totalPages, onPageChange, className = "mt-6 flex justify-center", showGoTo = true }) => {
   const [pageInput, setPageInput] = useState("");
@@ -10,8 +11,14 @@ const Pagination = ({ currentPage, totalPages, onPageChange, className = "mt-6 f
   };
 
   const handleGoToPage = () => {
-    const page = parseInt(pageInput, 10);
-    if (!Number.isFinite(page)) return;
+    const raw = String(pageInput).trim();
+    if (!raw) return;
+    if (!/^[1-9]\d*$/.test(raw)) {
+      toast.error("You can only enter positive numbers");
+      setPageInput("");
+      return;
+    }
+    const page = parseInt(raw, 10);
     goToPage(Math.min(Math.max(page, 1), totalPages));
     setPageInput("");
   };
@@ -127,9 +134,9 @@ const Pagination = ({ currentPage, totalPages, onPageChange, className = "mt-6 f
           <div className="flex items-center gap-1.5 ml-2">
             <span className="text-xs text-[var(--tx3)] whitespace-nowrap">Go to:</span>
             <input
-              type="number"
-              min={1}
-              max={totalPages}
+              type="text"
+              inputMode="numeric"
+              pattern="[1-9][0-9]*"
               value={pageInput}
               onChange={(e) => setPageInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleGoToPage()}
@@ -139,7 +146,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange, className = "mt-6 f
             <button
               type="button"
               onClick={handleGoToPage}
-              disabled={pageInput === ""}
+              disabled={String(pageInput).trim() === ""}
               className="h-8 px-3 rounded text-xs font-medium bg-[var(--blue)] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity cursor-pointer"
             >
               Go

@@ -9,6 +9,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import moment from 'moment';
+import { toast } from 'sonner';
 import ProfilesTable from './ProfilesTable';
 import DateRangePicker from './DateRangePicker';
 import StatCards from './StatCards';
@@ -118,8 +119,14 @@ const ReusableTablePage = ({
   };
 
   const handleGoToPage = () => {
-    const page = parseInt(pageInput, 10);
-    if (!Number.isFinite(page)) return;
+    const raw = String(pageInput).trim();
+    if (!raw) return;
+    if (!/^[1-9]\d*$/.test(raw)) {
+      toast.error('You can only enter positive numbers');
+      setPageInput('');
+      return;
+    }
+    const page = parseInt(raw, 10);
     const clamped = Math.min(Math.max(page, 1), totalPages);
     handlePageChange(clamped);
     setPageInput('');
@@ -330,9 +337,9 @@ const ReusableTablePage = ({
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-[var(--tx2)] whitespace-nowrap">Go to:</span>
               <input
-                type="number"
-                min={1}
-                max={totalPages}
+                type="text"
+                inputMode="numeric"
+                pattern="[1-9][0-9]*"
                 value={pageInput}
                 onChange={(e) => setPageInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleGoToPage()}
@@ -342,7 +349,7 @@ const ReusableTablePage = ({
               <button
                 type="button"
                 onClick={handleGoToPage}
-                disabled={pageInput === ''}
+                disabled={String(pageInput).trim() === ''}
                 className="h-9 px-3 rounded-lg text-xs font-medium bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-95 transition-opacity"
               >
                 Go

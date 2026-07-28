@@ -22,18 +22,31 @@ export const getInitialsPlaceholder = (firstName, lastName, size = 128) => {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 };
 
-export const StatusBadge = ({ verified }) =>
-  verified ? (
-    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/20 text-white backdrop-blur-sm">
+const isUserVerified = (verified) => verified === true || verified === 'true' || verified === 1 || verified === '1';
+
+export const StatusBadge = ({ verified, variant = 'table' }) => {
+  const isVerified = isUserVerified(verified);
+  const styles =
+    variant === 'card'
+      ? isVerified
+        ? 'bg-white/20 text-white backdrop-blur-sm'
+        : 'bg-white/15 text-white/90 backdrop-blur-sm'
+      : isVerified
+        ? 'bg-[var(--ok)]/12 text-[var(--ok)] border border-[var(--ok)]/25'
+        : 'bg-[var(--warn)]/12 text-[var(--warn)] border border-[var(--warn)]/25';
+
+  return isVerified ? (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold ${styles}`}>
       <Check className="w-3 h-3" strokeWidth={3} />
       Verified
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/15 text-white/90 backdrop-blur-sm">
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold ${styles}`}>
       <CircleAlert className="w-3 h-3" strokeWidth={2.5} />
       Not Verified
     </span>
   );
+};
 
 /* ─────────────── Card ─────────────── */
 export const UserCard = ({ user, handleEdit, handleDelete, setSelectedUser, setIsUserModalOpen, selectedUserIds, toggleUserSelection, canEdit = true, canDelete = true }) => {
@@ -66,7 +79,7 @@ export const UserCard = ({ user, handleEdit, handleDelete, setSelectedUser, setI
         }`}
       >
         <div className="absolute top-3 left-3 z-20">
-          <StatusBadge verified={!!user.verified} />
+          <StatusBadge verified={user.verified} variant="card" />
         </div>
 
         <div className="absolute top-3 right-3 flex items-center gap-1 z-30">
@@ -245,7 +258,7 @@ export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, hand
         <span className="block text-xs text-[var(--tx2)] truncate">{user.location || '-'}</span>
       </td>
       <td className="px-3 py-3 text-center">
-        <StatusBadge verified={!!user.verified} />
+        <StatusBadge verified={user.verified} />
       </td>
       <td className="px-3 py-3 text-center">
         <div className="flex items-center justify-center gap-2">
