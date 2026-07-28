@@ -111,6 +111,7 @@ export const buildColumns = ({
   taggingId,
   pickedNames,
   handleToggle,
+  canEdit,
 }) => {
   const sortProps = { sortField, sortOrder, dispatch };
   const openProfile = (row) => {
@@ -233,7 +234,7 @@ export const buildColumns = ({
         const tagged = isTagged(row.original);
         const busy = taggingId === row.original.accessLogId;
         const pickedName = pickedNames[row.original.accessLogId];
-        const disabled = !row.original.accessLogId || busy;
+        const disabled = !canEdit || !row.original.accessLogId || busy;
         return (
           <div className="flex items-center gap-2">
             <button
@@ -288,7 +289,7 @@ export const buildColumns = ({
  */
 export const renderAccessCard = (
   item,
-  { dispatch, region, isTagged, taggingId, pickedNames, handleToggle }
+  { dispatch, region, isTagged, taggingId, pickedNames, handleToggle, canEdit }
 ) => {
   const dateStr = item.date
     ? moment.utc(item.date).tz(region).format('DD/MM/YYYY')
@@ -444,7 +445,7 @@ export const renderAccessCard = (
           </span>
           <button
             type="button"
-            disabled={!item.accessLogId || taggingId === item.accessLogId}
+            disabled={!canEdit || !item.accessLogId || taggingId === item.accessLogId}
             onClick={(e) => handleToggle(item, e)}
             className="disabled:opacity-50 disabled:cursor-not-allowed"
             title={isTagged(item) ? 'Untag user' : 'Tag user'}

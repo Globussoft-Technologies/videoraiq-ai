@@ -314,9 +314,10 @@ const AccessLogs = () => {
         taggingId,
         pickedNames,
         handleToggle,
+        canEdit,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sortField, sortOrder, region, taggingId, tagOverrides, pickedNames]
+    [sortField, sortOrder, region, taggingId, tagOverrides, pickedNames, canEdit]
   );
 
   const gridCard = useCallback(
@@ -328,9 +329,10 @@ const AccessLogs = () => {
         taggingId,
         pickedNames,
         handleToggle,
+        canEdit,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [region, taggingId, tagOverrides, pickedNames]
+    [region, taggingId, tagOverrides, pickedNames, canEdit]
   );
 
   // KPI tiles — derived from the loaded page + server total (no placeholder data).
