@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import getAccessToken from "@/utils/getAccessToken";
 import { useAuth } from "./AuthContext";
@@ -20,16 +20,26 @@ export const PermissionProvider = ({ children }) => {
   const [permissions, setPermissions] = useState({});
   const [loading, setLoading] = useState(true);
   const { user, setUser } = useAuth();
+  // Guards against out-of-order responses: a fetch kicked off for a previous
+  // `user` (e.g. still in flight right as logout->login swaps the user, or
+  // React 18 StrictMode's dev-only double effect invocation) can resolve
+  // AFTER the fetch for the current user and clobber correct, just-loaded
+  // permissions with stale/empty ones — which read as a real (if transient)
+  // permission loss to RequirePermission/Sidebar, not just a loading flicker.
+  // Only the most recently started fetch is allowed to commit state.
+  const requestIdRef = useRef(0);
 
   const fetchPermissions = async () => {
+    const requestId = ++requestIdRef.current;
     if (!user) {
-      setPermissions({});
+      if (requestId === requestIdRef.current) setPermissions({});
       return;
     }
 
     setLoading(true);
     try {
       const response = await getAllUserPermissions();
+      if (requestId !== requestIdRef.current) return;
       if (response?.data?.body?.status === "success") {
         const roleData = response.data.body.data[0];
         setPermissions(roleData?.permissionConfig || {});
@@ -52,10 +62,11 @@ export const PermissionProvider = ({ children }) => {
         }
       }
     } catch (error) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch permissions:", error);
       setPermissions({});
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   };
 
