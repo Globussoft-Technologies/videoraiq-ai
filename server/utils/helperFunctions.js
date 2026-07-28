@@ -250,3 +250,40 @@ export async function syncStevinrockLogPermissions(adminId) {
     logger.error("Error auto-syncing stevinrock log permissions:", err);
   }
 }
+
+// Back-fills the alerts/analytics top-level modules onto permission docs that
+// predate them. Same additive-only shape as syncPermissionLocations — one
+// $exists:false-guarded updateMany per role tier per key, so a role's own
+// customised values (or an already-migrated doc) are never overwritten.
+export async function syncAlertsAnalyticsPermissions(adminId) {
+  try {
+    if (!adminId) return;
+
+    const moduleKeys = ["alerts", "analytics"];
+
+    const tiers = [
+      { match: { $regex: /admin/i }, value: { view: true, create: true, edit: true, delete: true } },
+      { match: { $regex: /read/i }, value: { view: true, create: false, edit: false, delete: false } },
+      { match: { $regex: /write/i }, value: { view: true, create: true, edit: true, delete: false } },
+      { match: { $not: { $regex: /admin|read|write/i } }, value: { view: false, create: false, edit: false, delete: false } },
+    ];
+
+    for (const tier of tiers) {
+      for (const key of moduleKeys) {
+        const path = `permissionConfig.${key}`;
+        await permissionModel.updateMany(
+          {
+            adminId: adminId,
+            permissionName: tier.match,
+            [path]: { $exists: false },
+          },
+          { $set: { [path]: tier.value } }
+        );
+      }
+    }
+
+    logger.info(`Synced alerts/analytics permission config for admin: ${adminId}`);
+  } catch (err) {
+    logger.error("Error auto-syncing alerts/analytics permissions:", err);
+  }
+}

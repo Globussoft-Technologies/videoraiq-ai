@@ -37,7 +37,7 @@ import Channel from "./../channels/channels.model.js";
 import departmentModel from "../departments/departments.model.js";
 import mongoose from "mongoose";
 import AuthService from "../Auth/auth.service.js"
-import { getEmpAuthInfo, syncPermissionLocations, syncStevinrockLogPermissions } from "../../../utils/helperFunctions.js"
+import { getEmpAuthInfo, syncPermissionLocations, syncStevinrockLogPermissions, syncAlertsAnalyticsPermissions } from "../../../utils/helperFunctions.js"
 
 let cacheDir = path.join('/tmp', 'media-cache'); // You can change this to './cache' or any path
 
@@ -918,6 +918,7 @@ class UsersService {
           
           await syncPermissionLocations(user.adminId?._id);
           await syncStevinrockLogPermissions(user.adminId?._id);
+          await syncAlertsAnalyticsPermissions(user.adminId?._id);
 
           return res.status(200).json(
             Response.userSuccessResp("Login successful", {

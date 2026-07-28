@@ -8,6 +8,7 @@ import { getDetectionTypes, updateDetectionSetting, createDetectionSetting, dele
 import { getRecipients } from '../../../api/administer';
 import { Popover, PopoverTrigger, PopoverContent } from '../../../pages/AttendanceLogs/components/Popover';
 import ZoneScheduleFields, { TimezoneField, emptySchedule, scheduleFromConfig, buildScheduleFields, scheduleError } from './ZoneScheduleFields';
+import { usePermissions } from '@/context/PermissionContext';
 
 const DETECTION_FIELD_KEYS = [
   'countPersonsSettings', 'motionDetectionSettings', 'genericObjectDetectionSettings',
@@ -352,7 +353,7 @@ function DetectionTypeDropdown({ types, value, onChange }) {
  * rename+trash panel, generalized here to any detection type rather than
  * just Desk Absence, since one camera+type can hold multiple named zones).
  */
-function ZoneSettingsPanel({ zones, extraFields, activeIndex, onSetActive, onUpdateField, onSave, onDelete, savingIndex }) {
+function ZoneSettingsPanel({ zones, extraFields, activeIndex, onSetActive, onUpdateField, onSave, onDelete, savingIndex, canDelete }) {
   const [expanded, setExpanded] = useState(null);
 
   if (zones.length === 0) return null;
@@ -386,13 +387,15 @@ function ZoneSettingsPanel({ zones, extraFields, activeIndex, onSetActive, onUpd
               >
                 <ChevronDown size={14} style={{ color: 'var(--tx3)', transform: isOpen ? 'none' : 'rotate(-90deg)', transition: 'transform .15s', flexShrink: 0 }} />
                 <span style={{ fontSize: 12.5, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{z.name}</span>
-                <span
-                  onClick={(e) => { e.stopPropagation(); onDelete(i); }}
-                  title="Delete this zone"
-                  style={{ display: 'flex', color: '#ef4444', cursor: 'pointer', opacity: savingIndex === i ? 0.5 : 1 }}
-                >
-                  <Trash2 size={14} />
-                </span>
+                {canDelete && (
+                  <span
+                    onClick={(e) => { e.stopPropagation(); onDelete(i); }}
+                    title="Delete this zone"
+                    style={{ display: 'flex', color: '#ef4444', cursor: 'pointer', opacity: savingIndex === i ? 0.5 : 1 }}
+                  >
+                    <Trash2 size={14} />
+                  </span>
+                )}
               </div>
               {isOpen && (
                 <div style={{ padding: '10px 11px', borderTop: '1px solid var(--bd)', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -467,6 +470,13 @@ function ZoneSettingsPanel({ zones, extraFields, activeIndex, onSetActive, onUpd
 }
 
 export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
+  // Zone/detection-setting deletion (per-zone trash, Clear All, Reset
+  // Detection UI) is gated on detectionSettings.delete — a write-only role
+  // (view+create+edit) can still draw/edit zones but never remove them, and
+  // the delete controls are hidden entirely rather than disabled.
+  const { permissions } = usePermissions();
+  const canDeleteDetection = !!permissions?.detectionSettings?.delete;
+
   const videoRef = useRef(null);
   const stageRef = useRef(null);
   // Single state machine (mirrors PlaybackTimeline.jsx) instead of two
@@ -671,6 +681,13 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
 
   const handleClearAllClick = () => {
     if (points.length === 0 && draftZones.length === 0 && zones.length === 0) return;
+    // Clearing already-saved zones is a delete (persists an empty zone list —
+    // see handleConfirmClearAll); clearing only in-progress/unsaved points is
+    // not, so that path stays open even without detectionSettings.delete.
+    if (zones.length > 0 && activeType?.settingId && !canDeleteDetection) {
+      toast.error("You don't have permission to delete saved zones.");
+      return;
+    }
     setShowClearConfirm(true);
   };
 
@@ -827,7 +844,13 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   // the same confirm-modal pattern as the area reset / clear-all below
   // instead of firing straight off the trash icon click.
   const [zoneDeleteIndex, setZoneDeleteIndex] = useState(null);
-  const requestDeleteZone = (index) => setZoneDeleteIndex(index);
+  const requestDeleteZone = (index) => {
+    if (!canDeleteDetection) {
+      toast.error("You don't have permission to delete zones.");
+      return;
+    }
+    setZoneDeleteIndex(index);
+  };
 
   const handleDeleteZone = async () => {
     const index = zoneDeleteIndex;
@@ -860,7 +883,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   const [deleting, setDeleting] = useState(false);
 
   const handleDeleteArea = async () => {
-    if (!activeType?.settingId) return;
+    if (!activeType?.settingId || !canDeleteDetection) return;
     setDeleting(true);
     try {
       await deleteDetectionSetting(activeType.settingId);
@@ -931,6 +954,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
             {camera.ipAddress || '—'} · Zone Marking
           </div>
         </div>
+        {canDeleteDetection && (
         <button
           onClick={() => setShowDeleteConfirm(true)}
           disabled={!activeType?.settingId}
@@ -945,6 +969,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
         >
           <RotateCcw size={15} /> Reset Detection UI
         </button>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 18, alignItems: 'start' }}>
@@ -1314,6 +1339,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               onSave={handleSaveZoneName}
               onDelete={requestDeleteZone}
               savingIndex={savingZoneIndex}
+              canDelete={canDeleteDetection}
             />
           )}
 

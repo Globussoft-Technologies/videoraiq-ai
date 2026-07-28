@@ -13,8 +13,14 @@ import { getRoles, createRole, renameRole, updateRolePermission, deleteRole, upd
 // Per-module permission matrix module keys, ported 1:1 from V1's
 // server/core/v1/permission/permissions.config.js. `logs` is a nested
 // sub-map of its own {view,create,edit,delete} rows.
+// 'permission' is intentionally excluded from this list — it's hidden from
+// the Configure/View Permissions matrix (product decision). It still exists
+// in the backend's permissionConfig and is still what gates this whole page
+// (see canConfigure/canView below, which read permissions.permission.edit/
+// view directly from the viewer's own permission object) — only the row in
+// this editable matrix is hidden, nothing about the underlying enforcement.
 const PERMISSION_MODULES = [
-  'NVR', 'channels', 'LIVE', 'dashboard', 'incidents', 'Users', 'permission',
+  'NVR', 'channels', 'LIVE', 'dashboard', 'alerts', 'analytics', 'incidents', 'Users',
   'roles', 'departments', 'detectionSettings', 'profiles', 'recipients',
   'locations', 'playbacks',
 ];
@@ -34,6 +40,7 @@ const LOG_SUBMODULES = [
 
 const MODULE_LABELS = {
   NVR: 'Cameras & NVRs', channels: 'Channels', LIVE: 'Live Wall', dashboard: 'Command Center',
+  alerts: 'Alerts', analytics: 'Analytics',
   incidents: 'Incident Center', Users: 'Users', permission: 'Permissions', roles: 'Roles',
   departments: 'Departments', detectionSettings: 'Detection Settings', profiles: 'Profiles',
   recipients: 'Alert Recipients', locations: 'Locations', playbacks: 'Playbacks',
@@ -67,6 +74,51 @@ function Checkbox({ checked, disabled, onToggle }) {
         </svg>
       )}
     </span>
+  );
+}
+
+// Hoisted to module scope (not declared inside ConfigureModal) — a component
+// function redefined on every parent render gets a new identity each time, so
+// React unmounts/remounts this whole subtree on every keystroke/click instead
+// of just updating it. That remount could swallow the very click that
+// triggered it, which was why Create/Edit/Delete looked "stuck" even after
+// View was already checked.
+function ConfigureRow({ label, row, onToggleField, readOnly, requiresLabel, requiresMet }) {
+  // create/edit/delete require view on first. Rather than greying those boxes
+  // out — which read as "broken"/unclickable, since a disabled Checkbox's
+  // onClick is undefined and a click does nothing at all — they stay
+  // clickable and show a toast explaining why instead of silently no-oping.
+  // A row can also declare a cross-module dependency (e.g. Channels needs
+  // Cameras & NVRs' View on first, since channels belong to an NVR) via
+  // requiresLabel/requiresMet — checked before the same-row view rule.
+  const noView = !row.view;
+  const guardedToggle = (field) => {
+    if (requiresLabel && !requiresMet) {
+      toast.error(`Enable "${requiresLabel}" View first — this module depends on it.`);
+      return;
+    }
+    if (field !== 'view' && noView) {
+      toast.error('Enable "View" first — the other permissions depend on it.');
+      return;
+    }
+    onToggleField(field);
+  };
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(4,72px)', alignItems: 'center', padding: '9px 4px', borderBottom: '1px solid var(--bd)' }}>
+      <span style={{ fontSize: 12.5 }}>{label}</span>
+      <span style={{ display: 'flex', justifyContent: 'center' }}>
+        <Checkbox checked={!!row.view} disabled={readOnly} onToggle={() => guardedToggle('view')} />
+      </span>
+      <span style={{ display: 'flex', justifyContent: 'center' }}>
+        <Checkbox checked={!!row.create} disabled={readOnly} onToggle={() => guardedToggle('create')} />
+      </span>
+      <span style={{ display: 'flex', justifyContent: 'center' }}>
+        <Checkbox checked={!!row.edit} disabled={readOnly} onToggle={() => guardedToggle('edit')} />
+      </span>
+      <span style={{ display: 'flex', justifyContent: 'center' }}>
+        <Checkbox checked={!!row.delete} disabled={readOnly} onToggle={() => guardedToggle('delete')} />
+      </span>
+    </div>
   );
 }
 
@@ -180,41 +232,49 @@ function DeleteRoleModal({ role, onClose, onConfirm }) {
 }
 
 // ── Configure — granular per-module permission matrix ───────────────────────
-function ConfigureModal({ role, readOnly, onClose, onSave }) {
+function ConfigureModal({ role, readOnly, onClose, onSave, requireConfig }) {
   const initialConfig = role.permissionDetails?.permissionConfig || {};
   const [config, setConfig] = useState(initialConfig);
   const [logsOpen, setLogsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // create/edit/delete are meaningless without view — you can't create,
+  // edit, or delete something you can't see. So: (a) turning view OFF clears
+  // create/edit/delete on the same row along with it, and (b) create/edit/
+  // delete can't be turned on while view is off (toggle() below no-ops on
+  // that click; the checkboxes are additionally rendered disabled — see Row).
   const toggle = (moduleKey, field, subKey) => {
     if (readOnly) return;
     setConfig(prev => {
+      // Channels belong to an NVR — no NVR access, no channel access either.
+      if (moduleKey === 'channels' && prev.NVR?.view !== true) return prev;
+      const logs = prev.logs || {};
+      const row = subKey ? (logs[subKey] || {}) : (prev[moduleKey] || {});
+      if (field !== 'view' && !row.view) return prev;
+      const nextRow = field === 'view' && row.view
+        ? { view: false, create: false, edit: false, delete: false }
+        : { ...row, [field]: !row[field] };
       if (subKey) {
-        const logs = prev.logs || {};
-        const row = logs[subKey] || {};
-        return { ...prev, logs: { ...logs, [subKey]: { ...row, [field]: !row[field] } } };
+        return { ...prev, logs: { ...logs, [subKey]: nextRow } };
       }
-      const row = prev[moduleKey] || {};
-      return { ...prev, [moduleKey]: { ...row, [field]: !row[field] } };
+      const next = { ...prev, [moduleKey]: nextRow };
+      // Turning off NVR's view removes what Channels depends on — clear it
+      // along with NVR instead of leaving an unreachable Channels grant.
+      if (moduleKey === 'NVR' && field === 'view' && !nextRow.view) {
+        next.channels = { view: false, create: false, edit: false, delete: false };
+      }
+      return next;
     });
   };
 
   // Select All — turn on view/create/edit/delete for every module + every log
-  // sub-module, matching V1's PermissionStep handleSelectAll. `channels`
-  // create/delete stay off (those cells are disabled in the matrix).
+  // sub-module, matching V1's PermissionStep handleSelectAll.
   const selectAll = () => {
     if (readOnly) return;
     setConfig(prev => {
-      const next = { ...prev };
-      PERMISSION_MODULES.forEach(m => {
-        next[m] = {
-          view: true,
-          create: m === 'channels' ? false : true,
-          edit: true,
-          delete: m === 'channels' ? false : true,
-        };
-      });
       const on = { view: true, create: true, edit: true, delete: true };
+      const next = { ...prev };
+      PERMISSION_MODULES.forEach(m => { next[m] = { ...on }; });
       const logs = { ...(prev.logs || {}) };
       LOG_SUBMODULES.forEach(s => { logs[s] = { ...on }; });
       next.logs = logs;
@@ -222,9 +282,12 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
     });
   };
 
-  // Clear All — turn everything off (matches V1 handleClearAll).
+  // Clear All — turn everything off (matches V1 handleClearAll). Saving with
+  // no `view` flag on anywhere is blocked in handleSave, so warn here too
+  // since Clear All is the action that most directly leads there.
   const clearAll = () => {
     if (readOnly) return;
+    toast.warning('All permissions cleared. Select at least one "View" before saving.');
     setConfig(prev => {
       const off = { view: false, create: false, edit: false, delete: false };
       const next = { ...prev };
@@ -236,34 +299,33 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
     });
   };
 
-  // `channels` create/delete are always disabled in the matrix (row-level rule),
-  // so a column toggle must skip those cells to match what the checkboxes allow.
-  const isCellToggleable = (moduleKey, field) =>
-    !(moduleKey === 'channels' && (field === 'create' || field === 'delete'));
-
-  // Is every toggleable cell in this column already on? Drives the header's
-  // checked indicator and whether a click fills (→all on) or clears the column.
+  // Is every cell in this column already on? Drives the header's checked
+  // indicator and whether a click fills (→all on) or clears the column.
   const isColumnAllOn = (field) => {
-    const modsOn = PERMISSION_MODULES.every(
-      m => !isCellToggleable(m, field) || config[m]?.[field] === true
-    );
+    const modsOn = PERMISSION_MODULES.every(m => config[m]?.[field] === true);
     const logsOn = LOG_SUBMODULES.every(s => config.logs?.[s]?.[field] === true);
     return modsOn && logsOn;
   };
 
-  // Column header toggle: if the column isn't fully on, fill every toggleable
-  // cell (modules + log sub-modules) on; if already all on, clear the column.
+  // Column header toggle: if the column isn't fully on, fill every cell
+  // (modules + log sub-modules) on; if already all on, clear the column.
+  // Turning a non-view column on forces that row's view on too (create/edit/
+  // delete require view — see toggle()); turning view off clears the row's
+  // create/edit/delete along with it, same as the single-cell rule.
   const toggleColumn = (field) => {
     if (readOnly) return;
     const turnOn = !isColumnAllOn(field);
+    const applyRow = (row) => {
+      if (field === 'view') {
+        return turnOn ? { ...row, view: true } : { view: false, create: false, edit: false, delete: false };
+      }
+      return turnOn ? { ...row, view: true, [field]: true } : { ...row, [field]: false };
+    };
     setConfig(prev => {
       const next = { ...prev };
-      PERMISSION_MODULES.forEach(m => {
-        if (!isCellToggleable(m, field)) return;
-        next[m] = { ...(prev[m] || {}), [field]: turnOn };
-      });
+      PERMISSION_MODULES.forEach(m => { next[m] = applyRow(prev[m] || {}); });
       const logs = { ...(prev.logs || {}) };
-      LOG_SUBMODULES.forEach(s => { logs[s] = { ...(logs[s] || {}), [field]: turnOn }; });
+      LOG_SUBMODULES.forEach(s => { logs[s] = applyRow(logs[s] || {}); });
       next.logs = logs;
       return next;
     });
@@ -276,17 +338,53 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
 
   // Logs group header checkbox: applies the field to all 19 sub-modules at
   // once, so a reviewer doesn't have to expand the list and click each row.
+  // Same view-required rule as toggleColumn: a non-view field forces view on
+  // too; turning view off clears create/edit/delete on every sub-module.
   const toggleLogsField = (field) => {
     if (readOnly) return;
     const turnOn = !isLogsFieldAllOn(field);
     setConfig(prev => {
       const logs = { ...(prev.logs || {}) };
-      LOG_SUBMODULES.forEach(s => { logs[s] = { ...(logs[s] || {}), [field]: turnOn }; });
+      LOG_SUBMODULES.forEach(s => {
+        const row = logs[s] || {};
+        logs[s] = field === 'view'
+          ? (turnOn ? { ...row, view: true } : { view: false, create: false, edit: false, delete: false })
+          : (turnOn ? { ...row, view: true, [field]: true } : { ...row, [field]: false });
+      });
       return { ...prev, logs };
     });
   };
 
+  // Sidebar.jsx (isItemVisible) gates every nav item purely on a module's
+  // `view` flag — create/edit/delete never make anything visible on their
+  // own. So requiring "any flag anywhere" isn't enough: a role with only
+  // create/edit/delete true and every view false still renders a fully empty
+  // sidebar. Require `view` specifically to be true on at least one module or
+  // log sub-module before allowing Save.
+  const hasAnyViewPermission = () => {
+    const modsHaveView = PERMISSION_MODULES.some(m => config[m]?.view === true);
+    if (modsHaveView) return true;
+    return LOG_SUBMODULES.some(s => config.logs?.[s]?.view === true);
+  };
+
+  // A just-created role starts fully empty (server default) — invisible-app
+  // territory. requireConfig (set only for that auto-opened flow, not the
+  // regular Configure/Edit entry point) keeps this modal from being dismissed
+  // via Cancel/X/backdrop until at least one "View" is picked, instead of
+  // letting the admin walk away from an unusable role by accident.
+  const handleCloseAttempt = () => {
+    if (requireConfig && !hasAnyViewPermission()) {
+      toast.error('Select at least one "View" permission before closing — this role has no access yet.');
+      return;
+    }
+    onClose();
+  };
+
   const handleSave = async () => {
+    if (!hasAnyViewPermission()) {
+      toast.error('Select at least one "View" permission before saving.');
+      return;
+    }
     setSaving(true);
     try {
       await onSave(config);
@@ -295,26 +393,8 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
     }
   };
 
-  const Row = ({ label, row, onToggleField, disableCreate, disableDelete }) => (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(4,72px)', alignItems: 'center', padding: '9px 4px', borderBottom: '1px solid var(--bd)' }}>
-      <span style={{ fontSize: 12.5 }}>{label}</span>
-      <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <Checkbox checked={!!row.view} disabled={readOnly} onToggle={() => onToggleField('view')} />
-      </span>
-      <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <Checkbox checked={!!row.create} disabled={readOnly || disableCreate} onToggle={() => onToggleField('create')} />
-      </span>
-      <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <Checkbox checked={!!row.edit} disabled={readOnly} onToggle={() => onToggleField('edit')} />
-      </span>
-      <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <Checkbox checked={!!row.delete} disabled={readOnly || disableDelete} onToggle={() => onToggleField('delete')} />
-      </span>
-    </div>
-  );
-
   return (
-    <div onClick={onClose} style={{
+    <div onClick={handleCloseAttempt} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20,
     }}>
@@ -326,7 +406,7 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
           <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>
             {readOnly ? 'View Permissions' : 'Configure Permissions'} — {role.roleName}
           </span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx3)', padding: 4 }}>
+          <button onClick={handleCloseAttempt} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx3)', padding: 4 }}>
             <X size={14} />
           </button>
         </div>
@@ -383,13 +463,14 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
             </div>
 
             {PERMISSION_MODULES.map(mod => (
-              <Row
+              <ConfigureRow
                 key={mod}
                 label={MODULE_LABELS[mod] || mod}
                 row={config[mod] || {}}
-                disableCreate={mod === 'channels'}
-                disableDelete={mod === 'channels'}
                 onToggleField={(field) => toggle(mod, field)}
+                readOnly={readOnly}
+                requiresLabel={mod === 'channels' ? MODULE_LABELS.NVR : undefined}
+                requiresMet={mod === 'channels' ? config.NVR?.view === true : true}
               />
             ))}
 
@@ -414,11 +495,12 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
               ))}
             </div>
             {logsOpen && LOG_SUBMODULES.filter(sub => sub !== 'global').map(sub => (
-              <Row
+              <ConfigureRow
                 key={sub}
                 label={MODULE_LABELS[sub] || sub}
                 row={(config.logs || {})[sub] || {}}
                 onToggleField={(field) => toggle('logs', field, sub)}
+                readOnly={readOnly}
               />
             ))}
           </div>
@@ -426,7 +508,7 @@ function ConfigureModal({ role, readOnly, onClose, onSave }) {
 
         {!readOnly && (
           <div style={{ display: 'flex', gap: 8, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--bd)', flex: '0 0 auto' }}>
-            <button onClick={onClose} style={{ flex: 1, height: 38, borderRadius: 9, fontSize: 12.5, fontWeight: 600, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)' }}>
+            <button onClick={handleCloseAttempt} style={{ flex: 1, height: 38, borderRadius: 9, fontSize: 12.5, fontWeight: 600, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)' }}>
               Cancel
             </button>
             <button
@@ -473,7 +555,10 @@ function RoleRow({ role, perms, isOwnRole, onToggleField, onConfigure, onView, o
           Edit action. Also disabled for the viewer's own role and for default
           roles (lockedRole) — otherwise a user could grant themself more
           permissions via these checkboxes even with the Edit/Delete buttons
-          hidden, or rewrite a default role's permissions in place. */}
+          hidden, or rewrite a default role's permissions in place.
+          create/edit/delete additionally require view to already be on —
+          consistent with the Configure modal's per-module rule — but stay
+          clickable (toast instead of a hard disable) so it's not mistaken for broken. */}
       <span style={{ display: 'flex', justifyContent: 'center' }}>
         <Checkbox checked={!!role.view} disabled={!perms.canEditRole || lockedRole} onToggle={() => onToggleField('view')} />
       </span>
@@ -583,6 +668,27 @@ export default function RolesPermission() {
       return;
     }
     const next = !role[field];
+    // This flag cascades to every module + log sub-module server-side (see
+    // roles.service.js update(): updatedPermissionConfig[key].view = roleView
+    // for every key), so turning `view` off here sets EVERY module's view to
+    // false in one shot — Sidebar.jsx gates all visibility on `view`, so that
+    // alone empties the whole sidebar regardless of create/edit/delete.
+    // Block turning view off entirely, and separately block the last
+    // remaining flag of any kind going off.
+    if (field === 'view' && !next) {
+      toast.error('At least one "View" permission must stay selected for this role.');
+      return;
+    }
+    if (field !== 'view' && next && !role.view) {
+      toast.error('Enable "View" first — the other permissions depend on it.');
+      return;
+    }
+    const fields = ['view', 'create', 'edit', 'delete'];
+    const wouldBeAllOff = !next && fields.every(f => (f === field ? next : !role[f]));
+    if (wouldBeAllOff) {
+      toast.error('This role must keep at least one permission enabled.');
+      return;
+    }
     rolesApi.setData(prev => ({
       ...prev,
       roles: (prev?.roles ?? []).map(r => (r._id === role._id ? { ...r, [field]: next } : r)),
@@ -613,6 +719,19 @@ export default function RolesPermission() {
       toast.success(body?.message || 'Role created');
       setShowAddModal(false);
       rolesApi.refetch();
+      // A brand-new role is seeded with every module/log flag off (server
+      // default) — invisible-app territory until someone configures it. Pull
+      // the freshly-created row (with its permissionDetails) and open
+      // Configure immediately so the admin can't leave it fully empty
+      // without at least seeing the matrix.
+      try {
+        const { roles: freshRoles } = await getRoles({ searchQuery: name, limit: 5 });
+        const created = freshRoles.find(r => r.roleName?.toLowerCase() === name.toLowerCase());
+        if (created) setConfigureTarget({ role: created, readOnly: false, requireConfig: true });
+      } catch {
+        // Non-fatal — the role list refetch above already succeeded, the
+        // admin can still open Configure manually from the row.
+      }
     } catch (err) {
       toast.error(err?.response?.data?.body?.message || 'Failed to create role');
     }
@@ -805,6 +924,7 @@ export default function RolesPermission() {
           readOnly={configureTarget.readOnly}
           onClose={() => setConfigureTarget(null)}
           onSave={handleSaveConfig}
+          requireConfig={configureTarget.requireConfig}
         />
       )}
     </div>

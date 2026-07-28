@@ -52,6 +52,9 @@ const STORAGE_KEY = 'vq-sidebar-collapsed';
 function isItemVisible(item, permissions) {
   if (!item.permissionKey) return true;
   if (!permissions || Object.keys(permissions).length === 0) return true;
+  if (item.permissionSubKey) {
+    return permissions?.[item.permissionKey]?.[item.permissionSubKey]?.view === true;
+  }
   return permissions?.[item.permissionKey]?.view === true;
 }
 

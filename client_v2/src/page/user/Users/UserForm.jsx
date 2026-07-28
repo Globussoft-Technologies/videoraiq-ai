@@ -33,7 +33,10 @@ const LoginForm = () => {
   const [authenticating, setAuthenticating] = useState(false);
 
   const isLogin = mode === "login";
-  const redirectTo = location.state?.from?.pathname || "/dashboard";
+  // "/" resolves through routes.jsx's index route (HomeRedirect), which sends
+  // the user to the first sidebar item their role can actually view instead
+  // of a hardcoded /dashboard some roles don't have access to.
+  const redirectTo = location.state?.from?.pathname || "/";
 
   // Prefill from the saved "admin-remember-me" cookie. Namespaced separately
   // from the user login's cookie so "remember me" on one portal never

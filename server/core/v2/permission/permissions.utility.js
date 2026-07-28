@@ -199,6 +199,15 @@ class PermissionService {
                                     ...permissionConfig[moduleKey],           // Update only specified fields
                                 };
                             }
+                        } else if (completeConfig.hasOwnProperty(moduleKey)) {
+                            // New top-level module (e.g. alerts/analytics) added to
+                            // permissions.config.js after this role was seeded — backfill
+                            // from the static default (all-false) then apply the incoming
+                            // change, instead of rejecting the update.
+                            updatedPermissionConfig[moduleKey] = {
+                                ...completeConfig[moduleKey],
+                                ...permissionConfig[moduleKey],
+                            };
                         } else {
                             throw new Error(`Module '${moduleKey}' does not exist in the current permission configuration.`);
                         }
@@ -606,6 +615,14 @@ class PermissionService {
                                 ...permissionConfigUpdates[moduleKey]
                             };
                         }
+                    } else if (completeConfig.hasOwnProperty(moduleKey)) {
+                        // Backfill a newly-added top-level module (e.g. alerts/analytics)
+                        // from the static default for roles seeded before it existed
+                        // (see updatePermissions).
+                        updatedPermissionConfig[moduleKey] = {
+                            ...completeConfig[moduleKey],
+                            ...permissionConfigUpdates[moduleKey]
+                        };
                     }
                 }
 

@@ -1,5 +1,7 @@
-import { Route, Navigate } from 'react-router-dom';
+import { Route } from 'react-router-dom';
 import V2Layout from './layout/V2Layout';
+import HomeRedirect from './layout/HomeRedirect';
+import RequirePermission from './layout/RequirePermission';
 import CommandCenter from './page/user/CommandCenter/CommandCenter';
 import IncidentCenter from './page/user/Incidents/IncidentCenter';
 import Analytics from './page/user/Analytics/Analytics';
@@ -41,50 +43,60 @@ const STUBS = [
   ['profile', 'profile', '/profile'],
 ];
 
+// Wraps a route's element in the permission gate matching its nav.config.js
+// entry — kept as explicit per-route calls (rather than generated from
+// NAV_GROUPS) so each route's guard is visible and auditable right where the
+// route itself is declared.
+const guard = (permissionKey, permissionSubKey, element) => (
+  <RequirePermission permissionKey={permissionKey} permissionSubKey={permissionSubKey}>
+    {element}
+  </RequirePermission>
+);
+
 export const v2Routes = (
   <Route element={<V2Layout />}>
-    <Route index element={<Navigate to="dashboard" replace />} />
-    <Route path="dashboard" element={<CommandCenter />} />
-    <Route path="live" element={<LiveWall />} />
-    <Route path="playback" element={<CameraView />} />
-    <Route path="alerts" element={<AlertsView />} />
-    <Route path="incidents" element={<IncidentCenter />} />
-    <Route path="analytics" element={<Analytics />} />
-    <Route path="roles" element={<RolesPermission />} />
-    <Route path="locations" element={<Locations />} />
-    <Route path="departments" element={<Departments />} />
-    <Route path="register-users" element={<AddProfile />} />
+    <Route index element={<HomeRedirect />} />
+    <Route path="dashboard" element={guard('dashboard', undefined, <CommandCenter />)} />
+    <Route path="live" element={guard('LIVE', undefined, <LiveWall />)} />
+    <Route path="playback" element={guard('playbacks', undefined, <CameraView />)} />
+    <Route path="alerts" element={guard('alerts', undefined, <AlertsView />)} />
+    <Route path="incidents" element={guard('incidents', undefined, <IncidentCenter />)} />
+    <Route path="analytics" element={guard('analytics', undefined, <Analytics />)} />
+    <Route path="roles" element={guard('roles', undefined, <RolesPermission />)} />
+    <Route path="locations" element={guard('locations', undefined, <Locations />)} />
+    <Route path="departments" element={guard('departments', undefined, <Departments />)} />
+    <Route path="register-users" element={guard('Users', undefined, <AddProfile />)} />
     {/* Logs & Records (nested under /logs/*) */}
-    <Route path="logs/attendance" element={<AttendanceLogs />} />
-    <Route path="logs/access" element={<AccessLogs />} />
-    <Route path="logs/tagged-users" element={<TaggedUsers />} />
-    <Route path="logs/detected-users" element={<DetectedUsers />} />
-    <Route path="logs/anpr" element={<ANPRLogs />} />
-    <Route path="logs/desk-absence" element={<DeskAbsenceLogs />} />
-    <Route path="logs/person-count" element={<PersonCountLogs />} />
+    <Route path="logs/attendance" element={guard('logs', 'attendanceLogs', <AttendanceLogs />)} />
+    <Route path="logs/access" element={guard('logs', 'accessLogs', <AccessLogs />)} />
+    <Route path="logs/tagged-users" element={guard('logs', 'taggedUsersLogs', <TaggedUsers />)} />
+    <Route path="logs/detected-users" element={guard('logs', 'detectedUsersLogs', <DetectedUsers />)} />
+    <Route path="logs/anpr" element={guard('logs', 'ANPRLogs', <ANPRLogs />)} />
+    <Route path="logs/desk-absence" element={guard('logs', 'deskLogs', <DeskAbsenceLogs />)} />
+    <Route path="logs/person-count" element={guard('logs', 'personCountLogs', <PersonCountLogs />)} />
     <Route path="logs/productivity" element={<ProductivityLog />} />
-    <Route path="logs/track" element={<TrackLog />} />
-    <Route path="logs/visibility" element={<VisibilityLog />} />
-    <Route path="logs/guard" element={<GuardLog />} />
+    <Route path="logs/track" element={guard('logs', 'trackLogs', <TrackLog />)} />
+    <Route path="logs/visibility" element={guard('logs', 'visibilityLogs', <VisibilityLog />)} />
+    <Route path="logs/guard" element={guard('logs', 'guardLogs', <GuardLog />)} />
 
     {/* Stevinrock incident logs — each is a thin component wrapping the shared
         IncidentLogsPage with its config; Vehicle Count is a chart page. */}
-    <Route path="logs/conveyor" element={<ConveyorLogs />} />
-    <Route path="logs/vehicle-obstruction" element={<VehicleObstructionLogs />} />
-    <Route path="logs/vehicle-count" element={<VehicleCountLogs />} />
-    <Route path="logs/crusher" element={<CrusherLogs />} />
-    <Route path="logs/line-crossing" element={<LineCrossingLogs />} />
-    <Route path="logs/water-spill" element={<WaterSpillLogs />} />
-    <Route path="logs/unauthorized-access" element={<UnauthorizedAccessLogs />} />
+    <Route path="logs/conveyor" element={guard('logs', 'conveyorLogs', <ConveyorLogs />)} />
+    <Route path="logs/vehicle-obstruction" element={guard('logs', 'vehicleObstructionLogs', <VehicleObstructionLogs />)} />
+    <Route path="logs/vehicle-count" element={guard('logs', 'vehicleCountLogs', <VehicleCountLogs />)} />
+    <Route path="logs/crusher" element={guard('logs', 'crusherLogs', <CrusherLogs />)} />
+    <Route path="logs/line-crossing" element={guard('logs', 'lineCrossingLogs', <LineCrossingLogs />)} />
+    <Route path="logs/water-spill" element={guard('logs', 'waterSpillLogs', <WaterSpillLogs />)} />
+    <Route path="logs/unauthorized-access" element={guard('logs', 'unauthorizedAccessLogs', <UnauthorizedAccessLogs />)} />
 
     {/* Configure */}
-    <Route path="cameras" element={<NVRCameras />} />
+    <Route path="cameras" element={guard('NVR', undefined, <NVRCameras />)} />
     <Route path="camera-settings" element={<CameraSettings />} />
-    <Route path="engines" element={<DetectionSettings />} />
-    <Route path="recipients" element={<AlertRecipients />} />
+    <Route path="engines" element={guard('detectionSettings', undefined, <DetectionSettings />)} />
+    <Route path="recipients" element={guard('recipients', undefined, <AlertRecipients />)} />
     {/* Administer */}
-    <Route path="users" element={<UsersPage />} />
-    <Route path="settings" element={<SystemSettings />} />  
+    <Route path="users" element={guard('Users', undefined, <UsersPage />)} />
+    <Route path="settings" element={<SystemSettings />} />
     {STUBS.map(([key, path, legacy]) => (
       <Route key={key} path={path} element={<Placeholder viewKey={key} legacyPath={legacy} />} />
     ))}
