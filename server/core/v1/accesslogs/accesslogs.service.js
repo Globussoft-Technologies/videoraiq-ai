@@ -108,7 +108,7 @@ class AccessLogsService {
             // A recognized detection (userId present) counts as an identity
             // match — surface it in Tagged Users immediately instead of only
             // via the separate manual tag-user/tag-folder flows.
-            tag: !!userId,
+            tag: false,
             date: startOfDay,
             sessions: [newSession]
           });
@@ -135,14 +135,13 @@ class AccessLogsService {
         todaysLog?.sessions?.push(newSession);
         if (userId && !todaysLog.userId) {
           todaysLog.userId = userId;
-          todaysLog.tag = true;
         }
       } else {
         // NEW GROUP → create a NEW document for today
         const newDoc = await OptimizedAccessLogs.create({
           admin: adminId,
           userId: userId || null,
-          tag: !!userId,
+          tag: false,
           // date: startOfDay,
           sessions: [newSession]
         });
@@ -433,7 +432,7 @@ class AccessLogsService {
               userId: userId || null,
               // Reached only inside the isUserExist branch, so userId is a
               // real recognized identity — mark it tagged immediately.
-              tag: true,
+              tag: false,
               // date: startOfDay,
               sessions: [newSession]
             });
@@ -458,13 +457,12 @@ class AccessLogsService {
             // recognized/tagged (started out as Unknown).
             todaysLog?.sessions?.push(newSession);
             if (!todaysLog.userId) todaysLog.userId = userId;
-            todaysLog.tag = true;
           } else {
             // NEW GROUP → create a NEW document for today
             const newDoc = await OptimizedAccessLogs.create({
               admin: adminId,
               userId: userId || null,
-              tag: true,
+              tag: false,
               // date: startOfDay,
               sessions: [newSession]
             });
