@@ -12,6 +12,7 @@ import authorizedUsersRoutes from "../../core/v1/authorizedUsers/authorizedUsers
 import faceImagesRoutes from "../../core/v1/faceImages/faceImages.routes.js";
 import analyticsRoutes from "../../core/v1/analytics/analytics.routes.js";
 import telegramRoutes from "../../core/v1/telegram/telegram.routes.js";
+import clientConfigRoutes from "../../core/v1/clientConfig/clientConfig.routes.js";
 import detectionSettingsRoutes from "../../core/v1/detectionSettings/detectionSettings.routes.js";
 import uploadRoutes from "../../core/v1/Uploads/uploads.routes.js";
 import storageRoutes from "../../core/v1/storage/storage.routes.js";
@@ -72,5 +73,7 @@ router.use("/locations", verifyToken, locationRoutes);
 // Telegram: /link-code + /unlink are authed inside the router; /webhook is
 // public (Telegram calls it), so mount WITHOUT a router-level verifyToken.
 router.use("/telegram", telegramRoutes);
+// clientConfig.routes.js applies verifyToken per-route, so mount plain.
+router.use("/client-config", clientConfigRoutes);
 
 export default router;
