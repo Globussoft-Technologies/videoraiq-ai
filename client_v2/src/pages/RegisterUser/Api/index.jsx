@@ -76,7 +76,7 @@ export const bulkUploadUsers = async (data) => {
 export const generateAdminToken = async ({ adminId, days }) => {
   const response = await axios.post(
     `${Api_url}/auth/generate-admin-token`,
-    { adminId, days },
+    { adminId, days, userRegistrByLink: true },
     { headers: authHeaders({ 'Content-Type': 'application/json' }) }
   );
   return response?.data;
