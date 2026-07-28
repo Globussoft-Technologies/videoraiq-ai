@@ -717,6 +717,58 @@ async getLogs(req, res, next) {
 
         if (!lookupFirst) pipeline.push(...lookupStages);
 
+        // sessions[].channel is stored as a bare ObjectId, but the Access Logs
+        // and Tagged Users tables both read sessions[0].channel.name for the
+        // Camera column. Resolve it to { _id, name } here. Purely presentational
+        // — it feeds no filter and no sort, so it always runs after $skip/$limit
+        // and joins the page being returned rather than the whole range.
+        pipeline.push(
+          {
+            $lookup: {
+              from: "channels",
+              localField: "sessions.channel",
+              foreignField: "_id",
+              as: "channelInfo"
+            }
+          },
+          {
+            $set: {
+              sessions: {
+                $map: {
+                  input: "$sessions",
+                  as: "s",
+                  in: {
+                    $mergeObjects: [
+                      "$$s",
+                      {
+                        channel: {
+                          $let: {
+                            vars: {
+                              ch: {
+                                $arrayElemAt: [
+                                  {
+                                    $filter: {
+                                      input: "$channelInfo",
+                                      as: "c",
+                                      cond: { $eq: ["$$c._id", "$$s.channel"] }
+                                    }
+                                  },
+                                  0
+                                ]
+                              }
+                            },
+                            in: { _id: "$$s.channel", name: "$$ch.name" }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        );
+
         // Add project stage to format response
         pipeline.push({
           $project: {
@@ -735,6 +787,10 @@ async getLogs(req, res, next) {
               email: "$userInfo.email",
               phone: "$userInfo.phone",
               profilePics: "$userInfo.profilePics",
+              // Both tables render these two; they were never projected, so the
+              // Location and Employee ID columns always fell back to '--'.
+              location: "$userInfo.location",
+              emp_id: "$userInfo.emp_id",
               lastCreatedAt: "$lastCreatedAt"
             },
             department: {
