@@ -4,6 +4,7 @@ import { viewAccessCheck } from '../../../middlewares/permissionMiddleware.js';
 
 const router = Router();
 
+router.get("/attendance-summary", viewAccessCheck, analyticsController.attendanceSummary);
 router.get("/detection-volume", viewAccessCheck, analyticsController.detectionVolume);
 router.get("/engine-share", viewAccessCheck, analyticsController.engineShare);
 router.get("/top-cameras", viewAccessCheck, analyticsController.topCameras);

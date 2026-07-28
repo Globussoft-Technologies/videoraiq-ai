@@ -20,6 +20,7 @@ const get = async (path, params = {}) => {
 };
 
 export const getDetectionVolume = (params = {}) => get('detection-volume', params);
+export const getAttendanceAnalytics = (params = {}) => get('attendance-summary', params);
 export const getEngineShare = (params = {}) => get('engine-share', params);
 export const getTopCameras = (params = {}) => get('top-cameras', params);
 export const getActivityHeatmap = (params = {}) => get('activity-heatmap', params);

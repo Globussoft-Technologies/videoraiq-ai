@@ -9,6 +9,7 @@ import PeakActivityCard from './PeakActivityCard';
 import DetectionsByHourCard from './DetectionsByHourCard';
 import SitePerformanceCard from './SitePerformanceCard';
 import ResponseFunnelCard from './ResponseFunnelCard';
+import AttendanceAnalytics from './AttendanceAnalytics';
 
 /**
  * Trends, heatmaps & engine performance. Every widget on this page is backed
@@ -31,6 +32,8 @@ export default function Analytics() {
       <RangeFilter range={range} onChange={setRange} />
 
       <OverviewKpiRow params={params} />
+
+      <AttendanceAnalytics params={params} />
 
       {/* Detection Volume | Share by Engine */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 18 }} className="vq-analytics-row">

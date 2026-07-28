@@ -1,6 +1,24 @@
 import analyticsService from "./analytics.service.js";
 
 class AnalyticsController {
+  async attendanceSummary(req, res, next) {
+    /*
+    #swagger.tags = ['Analytics']
+    #swagger.description = 'Attendance and access analytics for an operational date range: employee roster size, attended employees, currently-present employees, absentees, unauthorized access counts, previous-period trends, daily series, and anomalies.'
+    #swagger.parameters['startDate'] = { in: 'query', description: 'Start of range (YYYY-MM-DD, inclusive)', required: false, type: 'String', example: '2026-07-01' }
+    #swagger.parameters['endDate'] = { in: 'query', description: 'End of range (YYYY-MM-DD, inclusive)', required: false, type: 'String', example: '2026-07-07' }
+    #swagger.parameters['days'] = { in: 'query', description: 'Trailing days to include when startDate/endDate are not provided (default 7, max 90)', required: false, type: 'Number', example: 7 }
+    #swagger.parameters['nvrId'] = { in: 'query', description: 'Filter by one or more NVR ids', required: false, type: 'String' }
+    #swagger.parameters['channelId'] = { in: 'query', description: 'Filter by one or more channel ids', required: false, type: 'String' }
+    #swagger.parameters['location'] = { in: 'query', description: 'Filter event activity by one or more NVR locations', required: false, type: 'String' }
+    #swagger.parameters['department'] = { in: 'query', description: 'Filter roster by employee department and events by camera department', required: false, type: 'String' }
+    #swagger.responses[200] = { description: 'Attendance analytics fetched successfully' }
+    #swagger.responses[400] = { description: 'Validation error' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return analyticsService.attendanceSummary(req, res, next);
+  }
+
   async detectionVolume(req, res, next) {
     /*
     #swagger.tags = ['Analytics']

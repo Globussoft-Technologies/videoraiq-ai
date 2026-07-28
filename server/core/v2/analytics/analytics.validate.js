@@ -115,6 +115,19 @@ class AnalyticsValidator {
 
     return schema.validate(query, { abortEarly: false });
   }
+
+  attendanceSummary(query) {
+    const schema = Joi.object({
+      ...commonRangeFields,
+      department: Joi.alternatives().try(
+        Joi.string().trim(),
+        Joi.array().items(Joi.string().trim())
+      ),
+      days: Joi.number().integer().min(1).max(90),
+    });
+
+    return schema.validate(query, { abortEarly: false });
+  }
 }
 
 export default new AnalyticsValidator();
