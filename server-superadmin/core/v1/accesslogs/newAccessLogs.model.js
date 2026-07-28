@@ -22,14 +22,37 @@ const accessLogSchema = new mongoose.Schema({
 
   tag: { type: Boolean, default: false },
 
+  // Denormalized $max of sessions[].timestamp. The access-logs list sorts on
+  // this; computing it with $max at query time forced a blocking in-memory sort
+  // over every doc in the date range. Stored, the sort comes off an index.
+  // null when there are no sessions, which makes "has sessions" an index-only
+  // check as well. Kept in sync by the pre-save hook below.
+  lastCreatedAt: { type: Date, default: null },
+
   sessions: { type: [sessionSchema], default: [] }
 
 }, { timestamps: true });
 
+// Every writer that touches sessions goes through create() or save() (the
+// updateMany/findByIdAndUpdate callers only ever $set `tag`), so this hook is
+// the single place lastCreatedAt has to be maintained.
+accessLogSchema.pre("save", function (next) {
+  if (this.isModified("sessions")) {
+    this.lastCreatedAt = this.sessions.reduce(
+      (max, s) => (s.timestamp && (!max || s.timestamp > max) ? s.timestamp : max),
+      null
+    );
+  }
+  next();
+});
 
 accessLogSchema.index({ admin: 1, date: 1, userId: 1 });
 accessLogSchema.index({ admin: 1, createdAt: -1 });
 accessLogSchema.index({ admin: 1, userId: 1, createdAt: -1 });
 accessLogSchema.index({ userId: 1, createdAt: -1 });
+// Equality on admin, sort on lastCreatedAt, range on createdAt (ESR) — lets the
+// list query match, sort, skip and limit entirely from index keys and fetch
+// only the page it returns.
+accessLogSchema.index({ admin: 1, lastCreatedAt: -1, createdAt: 1 });
 
 export default mongoose.model("OptimizedAccessLogs", accessLogSchema);

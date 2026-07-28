@@ -64,8 +64,9 @@ let admin, channel, channel2, nvr, nvr2;
 
 beforeAll(async () => {
   await connectMongo();
-  // Create the index that accesslogs service uses
+  // Create the indexes that accesslogs service uses
   await OptimizedAccessLogs.collection.createIndex({ admin: 1, createdAt: -1 });
+  await OptimizedAccessLogs.collection.createIndex({ admin: 1, lastCreatedAt: -1, createdAt: 1 });
 });
 afterAll(async () => {
   await disconnectMongo();

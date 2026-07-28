@@ -320,7 +320,7 @@ class AccessLogsService {
         const total = result.length;
         const paginated = result.slice(skip, skip + limit);
 
-        let accessLogsStartDate = await OptimizedAccessLogs.findOne().sort({ createdAt: 1 }).select("createdAt");
+        let accessLogsStartDate = await OptimizedAccessLogs.findOne({ admin: new ObjectId(adminId) }).sort({ createdAt: 1 }).select("createdAt");
 
         // --------------------------
         // RESPONSE
@@ -678,6 +678,18 @@ async getLogs(req, res, next) {
         const nvrObjectIds = nvrIds?.length ? nvrIds.map(id => new ObjectId(id)) : [];
         const authChannelObjectIds = authorizedChannels.map(id => new ObjectId(id));
 
+        // ponytail: with no nvr/channel filter the session $filter below is a
+        // no-op ($and of all-true) that still rewrites every doc's sessions
+        // array, and the $max after it is what forced a blocking in-memory sort
+        // over the whole range. Without it, the stored lastCreatedAt is already
+        // exact, so match/sort/skip/limit all come off
+        // {admin, lastCreatedAt, createdAt} and only the returned page is read.
+        const sessionFilterActive = Boolean(
+          nvrObjectIds.length ||
+          (memberId !== undefined && authChannelObjectIds.length) ||
+          channelObjectIds.length
+        );
+
         // Build aggregation pipeline with optimized session filtering
         const pipeline = [
           {
@@ -686,14 +698,21 @@ async getLogs(req, res, next) {
               createdAt: {
                 $gte: !startDate ? moment.tz("Asia/Kolkata").startOf("day").toDate() : moment.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
                 $lte: !endDate ? moment.tz("Asia/Kolkata").endOf("day").toDate() : moment.tz(endDate, "Asia/Kolkata").endOf("day").toDate()
-              }
+              },
+              // Both the empty-sessions check and the session-time filter read
+              // the indexed field when sessions aren't being filtered.
+              ...(sessionFilterActive ? {} : {
+                lastCreatedAt: fromDateTime && toDateTime
+                  ? { $gte: fromDateTime, $lte: toDateTime }
+                  : { $ne: null }
+              })
             }
           },
 
           // Remove unknown users if requested
           ...(removeUnknown ? [{ $match: { userId: { $ne: null } } }] : []),
 
-          
+
           // tag: true → tagged only | tag: false → untagged + old docs | tag: null/omitted → all
           ...(tag === null || tag === undefined ? [] : tag ? [{ $match: { tag: true } }] : [{ $match: { $or: [{ tag: false }, { tag: { $exists: false } }] } }]),
 
@@ -701,28 +720,53 @@ async getLogs(req, res, next) {
           ...(authorizedEmployeeIds.length ? [{ $match: { userId: { $in: authorizedEmployeeIds.map(id => new ObjectId(id)) } } }] : []),
 
           // Filter sessions using $filter before unwind
-          {
-            $addFields: {
-              sessions: {
-                $filter: {
-                  input: "$sessions",
-                  as: "session",
-                  cond: {
-                    $and: [
-                      ...(nvrObjectIds.length ? [{ $in: ["$$session.nvr", nvrObjectIds] }] : [true]),
-                      ...(memberId !== undefined && authChannelObjectIds.length ? [{ $in: ["$$session.channel", authChannelObjectIds] }] : [true]),
-                      ...(channelObjectIds.length ? [{ $in: ["$$session.channel", channelObjectIds] }] : [true])
-                    ]
+          ...(sessionFilterActive ? [
+            {
+              $addFields: {
+                sessions: {
+                  $filter: {
+                    input: "$sessions",
+                    as: "session",
+                    cond: {
+                      $and: [
+                        ...(nvrObjectIds.length ? [{ $in: ["$$session.nvr", nvrObjectIds] }] : [true]),
+                        ...(memberId !== undefined && authChannelObjectIds.length ? [{ $in: ["$$session.channel", authChannelObjectIds] }] : [true]),
+                        ...(channelObjectIds.length ? [{ $in: ["$$session.channel", channelObjectIds] }] : [true])
+                      ]
+                    }
                   }
                 }
               }
-            }
-          },
+            },
 
-          // Remove docs with no sessions after filtering
-          { $match: { "sessions.0": { $exists: true } } },
+            // Remove docs with no sessions after filtering
+            { $match: { "sessions.0": { $exists: true } } },
+          ] : []),
+        ];
 
-          // Lookup user and department
+        // Only the filtered path has to recompute lastCreatedAt — filtering
+        // sessions can lower the max, so the stored value no longer applies.
+        if (sessionFilterActive) {
+          pipeline.push({ $addFields: { lastCreatedAt: { $max: "$sessions.timestamp" } } });
+
+          // Time filter
+          if (fromDateTime && toDateTime) {
+            pipeline.push({ $match: { lastCreatedAt: { $gte: fromDateTime, $lte: toDateTime } } });
+          }
+        }
+
+        // Add sorting and pagination
+        const sortMap = {
+          "lastCreatedAt": "lastCreatedAt",
+          "userInfo.userName": "userInfo.userName",
+          "department.departmentName": "departmentInfo.departmentName"
+        };
+
+        const sortField_ = sortMap[sortField] || "lastCreatedAt";
+        const sortDir = sortOrder === "asc" ? 1 : -1;
+
+        // Lookup user and department
+        const lookupStages = [
           {
             $lookup: {
               from: "authorizedusers",
@@ -748,24 +792,6 @@ async getLogs(req, res, next) {
             { $match: { "departmentInfo._id": { $in: deptObjectIds } } }
           ] : []),
 
-          // Add computed fields
-          {
-            $addFields: {
-              lastCreatedAt: { $max: "$sessions.timestamp" },
-              detectedAt: { $min: "$sessions.timestamp" },
-              taggedAt: { $ifNull: ["$taggedAt", "$updatedAt"] }
-            }
-          },
-
-          // Time filter
-          ...(fromDateTime && toDateTime ? [
-            {
-              $match: {
-                lastCreatedAt: { $gte: fromDateTime, $lte: toDateTime }
-              }
-            }
-          ] : []),
-
           // Search filter
           ...(searchQuery ? [
             {
@@ -779,20 +805,24 @@ async getLogs(req, res, next) {
           ] : []),
         ];
 
+        // The joins are only needed up front when they feed a filter or the
+        // sort. Otherwise they run after $skip/$limit, so we join one page of
+        // docs instead of every doc in the date range.
+        const lookupFirst = deptObjectIds.length > 0 || !!searchQuery || sortField_ !== "lastCreatedAt";
+        if (lookupFirst) pipeline.push(...lookupStages);
+
+        // The fast path's $match and $sort line up with
+        // {admin, lastCreatedAt, createdAt}, so the planner picks it unaided.
+        // Deliberately left unhinted: hinting an index that hasn't been built
+        // yet is a hard error, and this query has to stay correct (just slower)
+        // during the window before the backfill migration finishes.
+        const hintFiltered = (agg) =>
+          sessionFilterActive ? agg.hint({ admin: 1, createdAt: -1 }) : agg;
+
         // Get total count before pagination
         const countPipeline = [...pipeline, { $count: "total" }];
-        const countResult = await OptimizedAccessLogs.aggregate(countPipeline).hint({ admin: 1, createdAt: -1 });
+        const countResult = await hintFiltered(OptimizedAccessLogs.aggregate(countPipeline));
         const total = countResult[0]?.total || 0;
-
-        // Add sorting and pagination
-        const sortMap = {
-          "lastCreatedAt": "lastCreatedAt",
-          "userInfo.userName": "userInfo.userName",
-          "department.departmentName": "departmentInfo.departmentName"
-        };
-
-        const sortField_ = sortMap[sortField] || "lastCreatedAt";
-        const sortDir = sortOrder === "asc" ? 1 : -1;
 
         pipeline.push({ $sort: { [sortField_]: sortDir } });
 
@@ -800,6 +830,8 @@ async getLogs(req, res, next) {
           pipeline.push({ $skip: skip });
           pipeline.push({ $limit: limit });
         }
+
+        if (!lookupFirst) pipeline.push(...lookupStages);
 
         // Add project stage to format response
         pipeline.push({
@@ -832,9 +864,9 @@ async getLogs(req, res, next) {
           }
         });
 
-        const logs = await OptimizedAccessLogs.aggregate(pipeline).hint({ admin: 1, createdAt: -1 });
+        const logs = await hintFiltered(OptimizedAccessLogs.aggregate(pipeline));
 
-        let accessLogsStartDate = await OptimizedAccessLogs.findOne().sort({ createdAt: 1 }).select("createdAt");
+        let accessLogsStartDate = await OptimizedAccessLogs.findOne({ admin: new ObjectId(adminId) }).sort({ createdAt: 1 }).select("createdAt");
 
         // Tagged Users only (tag === true): also surface Detected-Users folders
         // tagged via faceImages — see _getTaggedFaceImageRows for why these
