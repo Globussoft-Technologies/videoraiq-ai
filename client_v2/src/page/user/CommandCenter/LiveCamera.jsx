@@ -97,6 +97,21 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
     }
   }
 
+  const frameStyle = isFullscreen
+    ? {
+        position: 'relative',
+        width: '100vw',
+        height: '100vh',
+        margin: 0,
+        background: '#000',
+        overflow: 'hidden',
+      }
+    : {
+        position: 'relative',
+        aspectRatio: '16/9',
+        margin: '0 16px 16px',
+      };
+
   return (
     <Panel style={{ background: 'var(--bg1)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 16px 0', flexWrap: 'wrap', rowGap: 4 }}>
@@ -158,7 +173,7 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
       </div>
 
       {/* Frame — live HLS stream for the selected camera */}
-      <div ref={tileRef} style={{ position: 'relative', aspectRatio: '16/9', margin: '0 16px 16px' }}>
+      <div ref={tileRef} style={frameStyle}>
         {loading ? (
           <Loading minH={220} />
         ) : !active ? (
@@ -170,7 +185,9 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
             onMaximize={toggleTileFullscreen}
             isFullscreen={isFullscreen}
             onLiveChange={(isLive) => { setTabLive(activeKey, isLive); onLiveChange?.(isLive); }}
-            minH={220}
+            minH={isFullscreen ? 0 : 220}
+            rounded={!isFullscreen}
+            fit={isFullscreen ? 'contain' : 'cover'}
           />
         )}
         {isFullscreen && active && <LiveCameraLogsOverlay channel={active} />}

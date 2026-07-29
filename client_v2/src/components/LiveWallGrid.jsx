@@ -316,6 +316,9 @@ export default function LiveWallGrid() {
   const pages    = Math.max(1, Math.ceil(list.length / size.perPage));
   const safePage = Math.min(page, pages - 1);
   const visible  = list.slice(safePage * size.perPage, safePage * size.perPage + size.perPage);
+  const fullscreenIndex = fullscreen
+    ? list.findIndex(c => (c._id || c.channelId) === (fullscreen._id || fullscreen.channelId))
+    : -1;
 
   // Background probes — every candidate camera (not just the ones paginated
   // into view) connects its stream off-screen so liveSet reflects true status
@@ -331,10 +334,16 @@ export default function LiveWallGrid() {
 
   const autoPageFsRef = useRef(false);
 
-  const openFullscreen  = useCallback((ch) => setFullscreen(ch), []);
+  const openFullscreen = useCallback((ch) => {
+    setFullscreen(ch);
+    if (!document.fullscreenElement) {
+      pageRef.current?.requestFullscreen?.();
+      autoPageFsRef.current = true;
+    }
+  }, []);
   const closeFullscreen = useCallback(() => {
     setFullscreen(null);
-    if (autoPageFsRef.current && document.fullscreenElement) {
+    if ((autoPageFsRef.current || document.fullscreenElement === pageRef.current) && document.fullscreenElement) {
       document.exitFullscreen?.();
     }
     autoPageFsRef.current = false;
@@ -382,6 +391,7 @@ export default function LiveWallGrid() {
     border: `1px solid ${active ? 'var(--bd2)' : 'var(--bd)'}`,
     userSelect: 'none', transition: 'all .15s',
   });
+  const hideFullscreenChrome = size.cols === 1 && isPageFS;
 
   return (
     <div
@@ -394,30 +404,29 @@ export default function LiveWallGrid() {
           onClick={closeFullscreen}
           style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(4,6,12,.93)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(6px)' }}
         >
-          <div className="vq-fs-modal" onClick={e => e.stopPropagation()} style={{ width: '95vw', height: '95vh', position: 'relative', borderRadius: 12, overflow: 'hidden', background: 'var(--bg0)' }}>
+          <div className="vq-fs-modal" onClick={e => e.stopPropagation()} style={{ width: '100vw', height: '100vh', position: 'relative', borderRadius: 0, overflow: 'hidden', background: 'var(--bg0)' }}>
             <FullscreenCameraView
               channel={fullscreen}
               onClose={closeFullscreen}
+              showPrev={list.length > 1}
+              showNext={list.length > 1}
+              prevDisabled={fullscreenIndex <= 0}
+              nextDisabled={fullscreenIndex < 0 || fullscreenIndex >= list.length - 1}
               onPrev={() => {
-                const idx = list.findIndex(c => (c._id || c.channelId) === (fullscreen._id || fullscreen.channelId));
-                if (idx >= 0) {
-                  const prev = list[(idx - 1 + list.length) % list.length];
-                  setFullscreen(prev);
-                }
+                if (fullscreenIndex > 0) setFullscreen(list[fullscreenIndex - 1]);
               }}
               onNext={() => {
-                const idx = list.findIndex(c => (c._id || c.channelId) === (fullscreen._id || fullscreen.channelId));
-                if (idx >= 0) {
-                  const next = list[(idx + 1) % list.length];
-                  setFullscreen(next);
-                }
+                if (fullscreenIndex >= 0 && fullscreenIndex < list.length - 1) setFullscreen(list[fullscreenIndex + 1]);
               }}
+              onExpand={togglePageFullscreen}
+              isExpanded={isPageFS}
             />
           </div>
         </div>
       )}
 
       {/* ── Toolbar ──────────────────────────────────────────────── */}
+      {!hideFullscreenChrome && (
       <div className="vq-wall-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: 'var(--bg1solid)', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap', flexShrink: 0 }}>
 
         {/* Grid size toggles */}
@@ -565,6 +574,7 @@ export default function LiveWallGrid() {
           {isPageFS ? 'Exit' : 'Fullscreen'}
         </button>
       </div>
+      )}
 
       {/* ── Grid ─────────────────────────────────────────────────── */}
       <div style={{ flex: 1, minHeight: 0, overflow: size.cols === 1 ? 'hidden' : 'auto', padding: size.cols === 1 ? 0 : 6, display: size.cols === 1 ? 'flex' : 'block', flexDirection: 'column' }}>
@@ -588,6 +598,7 @@ export default function LiveWallGrid() {
                     nextDisabled={safePage >= pages - 1}
                     onPrev={pages > 1 ? () => setPage(p => Math.max(0, p - 1)) : null}
                     onNext={pages > 1 ? () => setPage(p => Math.min(pages - 1, p + 1)) : null}
+                    onClose={hideFullscreenChrome ? () => document.exitFullscreen?.() : null}
                     onExpand={togglePageFullscreen}
                     isExpanded={isPageFS}
                   />
@@ -617,7 +628,7 @@ export default function LiveWallGrid() {
                   big prev/next chevrons on the fullscreen camera view (above)
                   let you step through cameras, but give no sense of position;
                   this "N / total" bar is the only indicator of that. */}
-              {list.length > 0 && (
+              {list.length > 0 && !hideFullscreenChrome && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '14px 8px 4px', flexWrap: 'wrap' }}>
                   <button
                     disabled={safePage === 0}
