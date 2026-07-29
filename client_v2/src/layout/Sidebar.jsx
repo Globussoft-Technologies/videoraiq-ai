@@ -6,6 +6,7 @@ import { useOutsideClick } from '../hooks/useOutsideClick';
 import { useAuth } from '@/context/AuthContext';
 import { usePermissions } from '@/context/PermissionContext';
 import { useTheme } from '@/theme/ThemeContext';
+import { ENGINE_PALETTE } from '@/lib/engineMeta';
 import videoraiqLogoColor from '@/assets/videoraiq-logo-color.png';
 import videoraiqLogoWhite from '@/assets/videoraiq-logo-white.png';
 
@@ -386,10 +387,11 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
                 {onlineCount} of {totalCount} {totalCount === 1 ? 'camera' : 'cameras'} online
               </span>
             </div>
-            {/* One segment per camera; the first `onlineCount` are green. Driven
-                off the same counter as the label above rather than each camera's
-                own flag, so the bar can never disagree with the text. Gap tightens
-                as the camera count grows so 20+ segments still fit the track. */}
+            {/* One segment per camera; the first `onlineCount` are colored (cycling
+                the shared engine palette per segment), the rest grey. Driven off
+                the same counter as the label above rather than each camera's own
+                flag, so the bar can never disagree with the text. Gap tightens as
+                the camera count grows so 20+ segments still fit the track. */}
             <div style={{ display: 'flex', gap: totalCount > 12 ? 2 : 3 }}>
               {Array.from({ length: totalCount }, (_, i) => (
                 <div
@@ -399,7 +401,7 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
                     minWidth: 0,
                     height: 4,
                     borderRadius: 2,
-                    background: i < onlineCount ? healthColor : 'var(--toggleoff)',
+                    background: i < onlineCount ? ENGINE_PALETTE[i % ENGINE_PALETTE.length] : 'var(--toggleoff)',
                     transition: 'background .3s ease',
                   }}
                 />
@@ -496,6 +498,13 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
                       {email}
                     </div>
                   </div>
+                </div>
+                <div
+                  onClick={() => { setAccountOpen(false); navigate('/profile'); }}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: 9, borderRadius: 9, cursor: 'pointer' }}
+                >
+                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>My Profile</span>
+                  <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>View </span>
                 </div>
                 <div
                   onClick={() => navigate('/logout')}

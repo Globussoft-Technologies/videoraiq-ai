@@ -1,7 +1,7 @@
 import axios from 'axios';
 import getAccessToken from '@/utils/getAccessToken';
 
-const ADMIN_HOST = import.meta.env.VITE_ADMIN_BACKEND;
+const HOST = import.meta.env.VITE_BACKEND;
 
 const authHeaders = () => ({
   Accept: 'application/json',
@@ -16,32 +16,32 @@ const unwrap = (res) => {
   return body;
 };
 
-/** 
- * Resolves the logged-in admin's own record by searching the client/admins
- * list by email — there is no single-admin-by-id endpoint, so the current
- * user's email (from AuthContext) is the lookup key.
+/**
+ * Self-service account summary (name, email, plan, camera count, expiry,
+ * status) for whoever is currently logged in. server/core/v1/clientConfig
+ * resolves the tenant from the caller's own token (verifyToken, no :adminId
+ * param) — unlike server-superadmin's /client/admins family, this works for
+ * any admin/member token from this app's own login, not a separate
+ * superAdmin-only login.
  */
-export const fetchMyAdminDetails = async (email) => {
-  const res = await axios.get(`${ADMIN_HOST}/client/admins`, {
-    params: { skip: 0, limit: 1, search: email, sortOrder: 'asc' },
-    headers: authHeaders(),
-  });
-  const data = unwrap(res);
-  const admins = data?.admins ?? data?.data ?? (Array.isArray(data) ? data : []);
-  return admins[0] || null;
-};
-
-/** Client/site configuration for the logged-in user's client id. */
-export const fetchClientConfig = async (clientId) => {
-  const res = await axios.get(`${ADMIN_HOST}/client-config/${clientId}`, {
+export const fetchMyAccount = async () => {
+  const res = await axios.get(`${HOST}/client-config/account`, {
     headers: authHeaders(),
   });
   return unwrap(res);
 };
 
-/** Cameras registered under the logged-in user's client id. */
-export const fetchClientCameras = async (clientId) => {
-  const res = await axios.get(`${ADMIN_HOST}/client/${clientId}/cameras`, {
+/** Self-service stat cards + detection allocation for the logged-in user's client. */
+export const fetchClientConfig = async () => {
+  const res = await axios.get(`${HOST}/client-config`, {
+    headers: authHeaders(),
+  });
+  return unwrap(res);
+};
+
+/** Self-service camera list (with per-camera detection state) for the logged-in user's client. */
+export const fetchClientCameras = async () => {
+  const res = await axios.get(`${HOST}/client-config/cameras`, {
     headers: authHeaders(),
   });
   const data = unwrap(res);

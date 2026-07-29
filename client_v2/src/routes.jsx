@@ -19,6 +19,7 @@ import Departments from './page/user/Departments/Departments';
 import Locations from './page/user/Locations/Locations';
 import RolesPermission from './page/user/RolesPermission/RolesPermission';
 import AddProfile from './pages/RegisterUser/AddProfile';
+import MyProfile from './pages/MyProfile/MyProfile';
 import AttendanceLogs from './pages/AttendanceLogs/AttendanceLogs';
 import AccessLogs from './pages/AccessLogs/AccessLogs';
 import TaggedUsers from './pages/TaggedUsers/TaggedUsers';
@@ -40,7 +41,6 @@ import GuardLog from './pages/GuardLog/GuardLog';
 
 const STUBS = [
   ['faces', 'faces', '/logs/tagged-users'],
-  ['profile', 'profile', '/profile'],
 ];
 
 // Wraps a route's element in the permission gate matching its nav.config.js
@@ -66,6 +66,7 @@ export const v2Routes = (
     <Route path="locations" element={guard('locations', undefined, <Locations />)} />
     <Route path="departments" element={guard('departments', undefined, <Departments />)} />
     <Route path="register-users" element={guard('Users', undefined, <AddProfile />)} />
+    <Route path="profile" element={<MyProfile />} />
     {/* Logs & Records (nested under /logs/*) */}
     <Route path="logs/attendance" element={guard('logs', 'attendanceLogs', <AttendanceLogs />)} />
     <Route path="logs/access" element={guard('logs', 'accessLogs', <AccessLogs />)} />
