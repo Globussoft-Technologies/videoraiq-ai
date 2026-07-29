@@ -104,6 +104,13 @@ const testConfig = {
     googleDrive: { clientId: "", clientSecret: "", redirectUri: "" },
     sftp: { host: "", port: 22, username: "", password: "" },
   },
+  // Email Monitoring dashboard — standalone config credentials + its own
+  // signing secret, deliberately different from token_secret.
+  emailMonitoring: {
+    username: "opsadmin",
+    password: "test-email-pass",
+    jwtSecret: "test-email-monitoring-secret",
+  },
 };
 
 process.env.NODE_CONFIG = JSON.stringify(testConfig);

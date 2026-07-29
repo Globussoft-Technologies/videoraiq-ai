@@ -57,23 +57,28 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
 
         
     // Step 5: Fetch recipient data from respective models
-    const [emailRecipientsFromAlerts, emailRecipientsFromIncidentType] = await Promise.all([
-      RecipientModel.find({ _id: { $in: channelData?.alerts }, type: 'email' })
-        .select('value -_id')
-        .lean(),
-      RecipientModel.find({ adminId, type: 'email', incidentTypes: detectionType})
-        .select('value -_id')
-        .lean(),
-    ]);
+    // ponytail: every channel below is guarded on its own — one provider being
+    // down (e.g. SendGrid 401) must never block the others. Log and carry on.
+    // No retry/queue; add one only if losing a failed alert becomes a problem.
 
-    const emailAddresses = [
-      ...new Set([
-        ...emailRecipientsFromAlerts.map(r => r.value),
-        ...emailRecipientsFromIncidentType.map(r => r.value),
-      ])
-    ];
-    
     // Send Email
+    try {
+      const [emailRecipientsFromAlerts, emailRecipientsFromIncidentType] = await Promise.all([
+        RecipientModel.find({ _id: { $in: channelData?.alerts }, type: 'email' })
+          .select('value -_id')
+          .lean(),
+        RecipientModel.find({ adminId, type: 'email', incidentTypes: detectionType})
+          .select('value -_id')
+          .lean(),
+      ]);
+
+      const emailAddresses = [
+        ...new Set([
+          ...emailRecipientsFromAlerts.map(r => r.value),
+          ...emailRecipientsFromIncidentType.map(r => r.value),
+        ])
+      ];
+
       // if (emailAddresses?.length && channelData?.profile?.notification?.channels?.email===true) {
       if(emailAddresses?.length){
         if(detectionType==="loiteringWithoutAuth"){
@@ -127,33 +132,54 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
         } else if(detectionType==="mobilePhoneDetection"){
           let mailResponse = await MailResponse.mobilePhoneDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
         }
+      }
+    } catch (err) {
+      logger.error(`[ALERT_EMAIL_ERROR] Email alert failed`, {
+        detectionType, channelId, nvrId, adminId, errorMessage: err.message,
+      });
     }
-    const smsRecipients = await RecipientModel.find({ _id: { $in: groupedAlerts} ,type:'phone'})
-          .select('value -_id')
-          .lean();
 
-    const phoneNumbers = smsRecipients.map(recipient => recipient.value);
     // Admin's timezone — used to render incident times in the admin's local zone
     // across all alert channels (WhatsApp/Telegram) instead of the server's zone.
-    const adminTz = (await adminModel.findById(adminId).select("timezone").lean())?.timezone;
-      // Send WhatsApp alert (replaces SMS) to the same phone recipients.
-    if (phoneNumbers?.length) {
+    const adminTz = await adminModel.findById(adminId).select("timezone").lean()
+      .then(a => a?.timezone)
+      .catch(() => undefined);
+
+    // Send WhatsApp alert (replaces SMS) to the same phone recipients.
+    try {
+      const smsRecipients = await RecipientModel.find({ _id: { $in: groupedAlerts} ,type:'phone'})
+            .select('value -_id')
+            .lean();
+
+      const phoneNumbers = smsRecipients.map(recipient => recipient.value);
+      if (phoneNumbers?.length) {
         await sendIncidentWhatsApp(incidentData || saved, phoneNumbers, nvrData, channelData, adminTz);
+      }
+    } catch (err) {
+      logger.error(`[ALERT_WHATSAPP_ERROR] WhatsApp alert failed`, {
+        detectionType, channelId, nvrId, adminId, errorMessage: err.message,
+      });
     }
 
     // Telegram: send to the admin's channel ONLY if the incident's zone has a
     // per-zone time window on this detection setting AND the incident's local
     // time (UTC -> admin's timezone) falls inside it. No matching window -> skip.
-    const telegramIncident = incidentData || saved;
-    const zoneConfigs = matchedDetection?.id?.settings?.zone_configs || [];
-    const windowOpen = isTelegramWindowOpen({
-      incidentZone: telegramIncident?.zone,
-      timeOfIncidentUTC: telegramIncident?.timeOfIncident,
-      zoneConfigs,
-      adminTimezone: adminTz,
-    });
-    if (windowOpen) {
-      await TelegramService.sendIncident(telegramIncident, nvrData, channelData, adminId, adminTz);
+    try {
+      const telegramIncident = incidentData || saved;
+      const zoneConfigs = matchedDetection?.id?.settings?.zone_configs || [];
+      const windowOpen = isTelegramWindowOpen({
+        incidentZone: telegramIncident?.zone,
+        timeOfIncidentUTC: telegramIncident?.timeOfIncident,
+        zoneConfigs,
+        adminTimezone: adminTz,
+      });
+      if (windowOpen) {
+        await TelegramService.sendIncident(telegramIncident, nvrData, channelData, adminId, adminTz);
+      }
+    } catch (err) {
+      logger.error(`[ALERT_TELEGRAM_ERROR] Telegram alert failed`, {
+        detectionType, channelId, nvrId, adminId, errorMessage: err.message,
+      });
     }
   } catch (err) {
     logger.error(`[ALERT_TRIGGER_ERROR] Failed to trigger alert`, {

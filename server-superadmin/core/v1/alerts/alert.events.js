@@ -45,23 +45,28 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
 
         
     // Step 5: Fetch recipient data from respective models
-    const [emailRecipientsFromAlerts, emailRecipientsFromIncidentType] = await Promise.all([
-      RecipientModel.find({ _id: { $in: channelData?.alerts }, type: 'email' })
-        .select('value -_id')
-        .lean(),
-      RecipientModel.find({ adminId, type: 'email', incidentTypes: detectionType})
-        .select('value -_id')
-        .lean(),
-    ]);
+    // ponytail: every channel below is guarded on its own — one provider being
+    // down (e.g. SendGrid 401) must never block the others. Log and carry on.
+    // No retry/queue; add one only if losing a failed alert becomes a problem.
 
-    const emailAddresses = [
-      ...new Set([
-        ...emailRecipientsFromAlerts.map(r => r.value),
-        ...emailRecipientsFromIncidentType.map(r => r.value),
-      ])
-    ];
-    
     // Send Email
+    try {
+      const [emailRecipientsFromAlerts, emailRecipientsFromIncidentType] = await Promise.all([
+        RecipientModel.find({ _id: { $in: channelData?.alerts }, type: 'email' })
+          .select('value -_id')
+          .lean(),
+        RecipientModel.find({ adminId, type: 'email', incidentTypes: detectionType})
+          .select('value -_id')
+          .lean(),
+      ]);
+
+      const emailAddresses = [
+        ...new Set([
+          ...emailRecipientsFromAlerts.map(r => r.value),
+          ...emailRecipientsFromIncidentType.map(r => r.value),
+        ])
+      ];
+
       // if (emailAddresses?.length && channelData?.profile?.notification?.channels?.email===true) {
       if(emailAddresses?.length){
         if(detectionType==="loiteringWithoutAuth"){
@@ -115,15 +120,27 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
         } else if(detectionType==="mobilePhoneDetection"){
           let mailResponse = await MailResponse.mobilePhoneDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
         }
+      }
+    } catch (err) {
+      logger.error(`[ALERT_EMAIL_ERROR] Email alert failed`, {
+        detectionType, channelId, nvrId, adminId, errorMessage: err.message,
+      });
     }
-    const smsRecipients = await RecipientModel.find({ _id: { $in: groupedAlerts} ,type:'phone'})
-          .select('value -_id')
-          .lean();
+
+    // Send SMS
+    try {
+      const smsRecipients = await RecipientModel.find({ _id: { $in: groupedAlerts} ,type:'phone'})
+            .select('value -_id')
+            .lean();
     
-    const phoneNumbers = smsRecipients.map(recipient => recipient.value);
-      // Send SMS
-    if (phoneNumbers?.length) {
+      const phoneNumbers = smsRecipients.map(recipient => recipient.value);
+      if (phoneNumbers?.length) {
         let incidentSMS = await sendIncidentSMS(saved, phoneNumbers);
+      }
+    } catch (err) {
+      logger.error(`[ALERT_SMS_ERROR] SMS alert failed`, {
+        detectionType, channelId, nvrId, adminId, errorMessage: err.message,
+      });
     }
   } catch (err) {
     logger.error(`[ALERT_TRIGGER_ERROR] Failed to trigger alert`, {
