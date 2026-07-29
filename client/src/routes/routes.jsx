@@ -54,6 +54,7 @@ import UnauthorizedAccess from '@/page/user/EmployeeLogs/UnauthorizedAccess';
 import ANPRLogs from '@/page/user/EmployeeLogs/ANPRLogs';
 import PersonCountLogs from '@/page/user/EmployeeLogs/PersonCountLogs';
 import DeskAbsenceLogs from '@/page/user/EmployeeLogs/DeskAbsenceLogs';
+import EmailMonitoringDashboard from '@/page/user/EmailMonitoring/EmailMonitoringDashboard';
 
 
 const { VITE_FRONTEND } = import.meta.env;
@@ -141,6 +142,7 @@ export const routes = createBrowserRouter(
         <Route path="user-details" element={<UserDetails />} />
         <Route path="locations" element={<Locations />} />
         <Route path="departments" element={<Departments />} />
+        <Route path="email-monitoring" element={<EmailMonitoringDashboard />} />
 
         <Route path="roles-permissions" element={<RolesandPermission />} />
         <Route path="register-users" element={<AddProfile />} />
