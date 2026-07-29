@@ -4,10 +4,22 @@ import { formatFromToTimestamps } from '@/utils/UtcConverter';
 import { Checkbox } from '@/components/ui/checkbox';
 import moment from 'moment';
 
-const IncidentCard = ({ item, onClick, resolved, onMarkResolved, canEdit, onReport }) => {
+const IncidentCard = ({
+  item,
+  onClick,
+  resolved,
+  onMarkResolved,
+  canEdit,
+  onReport,
+  deleteMode,
+  selectedForDelete,
+  onToggleDelete,
+}) => {
   return (
     <div
-      className="rounded-[8px] md:rounded-[10px] 2xl:rounded-[14px] overflow-hidden bg-white shadow border border-[#E4E4E4] cursor-pointer hover:shadow-lg transition-shadow"
+      className={`rounded-[8px] md:rounded-[10px] 2xl:rounded-[14px] overflow-hidden bg-white shadow border cursor-pointer hover:shadow-lg transition-shadow ${
+        deleteMode && selectedForDelete ? 'border-[#CE241C] ring-2 ring-[#CE241C]/40' : 'border-[#E4E4E4]'
+      }`}
       onClick={onClick}
     >
       {/* Video + overlays */}
@@ -19,7 +31,22 @@ const IncidentCard = ({ item, onClick, resolved, onMarkResolved, canEdit, onRepo
           maxsize="text-xs md:text-sm 2xl:text-base"
           minsize="text-xs md:text-sm 2xl:text-base"
         />
-        
+
+        {deleteMode && (
+          <div
+            className={`absolute top-1.5 md:top-2 2xl:top-2.5 right-1.5 md:right-1.5 2xl:right-2 z-10 flex items-center justify-center rounded-full w-[26px] h-[26px] md:w-[28px] md:h-[28px] 2xl:w-[30px] 2xl:h-[30px] shadow-md transition-colors ${
+              selectedForDelete ? 'bg-[#CE241C]' : 'bg-white/90 hover:bg-white'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Checkbox
+              checked={selectedForDelete}
+              onCheckedChange={() => onToggleDelete?.()}
+              className="border-2 size-4 md:size-4.5 2xl:size-5 rounded-[5px] border-[#B0B0B0] bg-white data-[state=checked]:bg-[#CE241C] data-[state=checked]:border-white data-[state=checked]:text-white cursor-pointer"
+            />
+          </div>
+        )}
+
         {/* Top left area - Zone and Mark as Resolved */}
         <div className="absolute top-1.5 md:top-2 2xl:top-2.5 left-1.5 md:left-1.5 2xl:left-2 flex items-center gap-2">
           {item?.zone && (

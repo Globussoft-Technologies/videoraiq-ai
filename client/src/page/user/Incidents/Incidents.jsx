@@ -11,12 +11,14 @@ import {
   Search,
   Maximize2,
   Minimize2,
+  Trash2,
 } from 'lucide-react';
 import { ChevronDown } from 'lucide-react';
 import VideoModal from '@/components/VideoModal';
 import IncidentCard from './components/IncidentCard';
 import IncidentPagination from './components/IncidentPagination';
 import ReportIncidentModal from './components/ReportIncidentModal';
+import DeleteConfirmation from '../Detection/components/DeleteConfirmation';
 import { Button } from '@/components/ui/button';
 import { fetchAllIncidents, fetchIncidentsStats, deleteIncidentsByIds } from './Api/post';
 import { useAuth } from '@/context/AuthContext';
@@ -94,6 +96,7 @@ const Incidents = () => {
   const [isIncidentsFullscreen, setIsIncidentsFullscreen] = useState(false);
   const [selectedForDelete, setSelectedForDelete] = useState([]);
   const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // const incidentTypeOptions = [
   //   { id: 'Check -In', label: 'Check -In' },
@@ -378,6 +381,14 @@ const Incidents = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [dateRange, selectedIncidentType, nvrIds, channelIds, selectedDepartment, selectedLocation]);
+
+  // Delete-selection is scoped to whatever page is currently visible (see
+  // handleToggleSelectAll) — carrying selections across a page change would
+  // silently delete incidents the user can no longer see and never re-checked.
+  useEffect(() => {
+    setSelectedForDelete([]);
+  }, [currentPage]);
+
   // Map API data to IncidentCard/VideoModal expected props
   const mappedIncidents = incidents.map((item) => ({
     id: item._id,
@@ -482,14 +493,35 @@ const Incidents = () => {
     );
   };
 
-  const handleDeleteSelected = async () => {
+  // "Select all" only ever covers what's actually loaded on the current page
+  // (mappedIncidents) — deleteIncidentsByIds takes an explicit id list, not a
+  // filter, so selecting incidents that haven't been fetched isn't possible
+  // without a separate bulk-by-filter endpoint.
+  const allOnPageSelected =
+    mappedIncidents.length > 0 &&
+    mappedIncidents.every((item) => selectedForDelete.includes(item.id));
+
+  const handleToggleSelectAll = () => {
+    if (allOnPageSelected) {
+      setSelectedForDelete([]);
+    } else {
+      setSelectedForDelete(mappedIncidents.map((item) => item.id));
+    }
+  };
+
+  const handleDeleteSelected = () => {
     if (selectedForDelete.length === 0) return;
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
     setDeleting(true);
     try {
       const result = await deleteIncidentsByIds(selectedForDelete);
       if (result?.statusCode === 200 || result?.status === 'success' || result?.message?.toLowerCase().includes('success')) {
         toast.success('Incidents deleted successfully');
         setSelectedForDelete([]);
+        setDeleteConfirmOpen(false);
         await loadData();
       } else {
         toast.error(result?.message || 'Failed to delete incidents');
@@ -747,15 +779,26 @@ const Incidents = () => {
       {isDeleteMode && (
         <div className="flex items-center justify-between mb-3 mt-2 px-1">
           <p className="text-sm text-[#5D5D5D]">
-            {selectedForDelete.length} incident{selectedForDelete.length !== 1 ? 's' : ''} selected
+            <span className="font-semibold text-[#333333]">{selectedForDelete.length}</span> incident{selectedForDelete.length !== 1 ? 's' : ''} selected
           </p>
-          <Button
-            onClick={handleDeleteSelected}
-            disabled={selectedForDelete.length === 0 || deleting}
-            className="bg-[#CE241C] hover:bg-[#a81c16] text-white text-sm px-4 py-2 rounded-lg disabled:opacity-50"
-          >
-            {deleting ? 'Deleting...' : 'Delete Selected'}
-          </Button>
+          <div className="flex items-center gap-3">
+            {mappedIncidents.length > 0 && (
+              <button
+                type="button"
+                onClick={handleToggleSelectAll}
+                className="text-sm font-medium text-[#4A90E2] border border-[#4A90E2] rounded-lg px-3 py-1.5 hover:bg-[#4A90E2] hover:text-white transition-colors cursor-pointer"
+              >
+                {allOnPageSelected ? 'Deselect All' : 'Select All'}
+              </button>
+            )}
+            <Button
+              onClick={handleDeleteSelected}
+              disabled={selectedForDelete.length === 0 || deleting}
+              className="bg-[#CE241C] hover:bg-[#a81c16] text-white text-sm px-4 py-2 rounded-lg disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+            >
+              {deleting ? 'Deleting...' : 'Delete Selected'}
+            </Button>
+          </div>
         </div>
       )}
 
@@ -849,6 +892,23 @@ const Incidents = () => {
           fetchStatsData();
           loadData();
         }}
+      />
+
+      {/* Delete confirmation */}
+      <DeleteConfirmation
+        open={deleteConfirmOpen}
+        icon={<Trash2 className="text-[#CE241C] h-8 w-8" />}
+        title="Confirm Delete"
+        message={
+          <>
+            Are you sure you want to delete {selectedForDelete.length} incident{selectedForDelete.length !== 1 ? 's' : ''}?
+          </>
+        }
+        confirmLabel="Delete"
+        confirmClass="bg-[#CE241C] text-white hover:bg-[#a81c16]"
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={handleConfirmDelete}
+        loading={deleting}
       />
 
       {/* Pagination */}
