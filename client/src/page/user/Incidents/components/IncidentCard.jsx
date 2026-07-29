@@ -34,15 +34,15 @@ const IncidentCard = ({
 
         {deleteMode && (
           <div
-            className={`absolute top-1.5 md:top-2 2xl:top-2.5 right-1.5 md:right-1.5 2xl:right-2 z-10 flex items-center justify-center rounded-full w-[26px] h-[26px] md:w-[28px] md:h-[28px] 2xl:w-[30px] 2xl:h-[30px] shadow-md transition-colors ${
-              selectedForDelete ? 'bg-[#CE241C]' : 'bg-white/90 hover:bg-white'
+            className={`absolute top-1.5 md:top-2 2xl:top-2.5 right-1.5 md:right-1.5 2xl:right-2 z-10 flex items-center justify-center rounded-[7px] border-2 w-[26px] h-[26px] md:w-[28px] md:h-[28px] 2xl:w-[30px] 2xl:h-[30px] shadow-md transition-colors ${
+              selectedForDelete ? 'bg-[#CE241C] border-[#CE241C]' : 'bg-black/70 border-[#F5A623] hover:bg-black/85'
             }`}
             onClick={(e) => e.stopPropagation()}
           >
             <Checkbox
               checked={selectedForDelete}
               onCheckedChange={() => onToggleDelete?.()}
-              className="border-2 size-4 md:size-4.5 2xl:size-5 rounded-[5px] border-[#B0B0B0] bg-white data-[state=checked]:bg-[#CE241C] data-[state=checked]:border-white data-[state=checked]:text-white cursor-pointer"
+              className="border-2 size-4 md:size-4.5 2xl:size-5 rounded-[5px] border-white/70 bg-transparent data-[state=checked]:bg-[#CE241C] data-[state=checked]:border-white data-[state=checked]:text-white cursor-pointer"
             />
           </div>
         )}
