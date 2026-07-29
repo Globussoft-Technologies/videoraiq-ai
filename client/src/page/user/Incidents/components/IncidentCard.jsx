@@ -7,6 +7,7 @@ import moment from 'moment';
 const IncidentCard = ({
   item,
   onClick,
+  onExpand,
   resolved,
   onMarkResolved,
   canEdit,
@@ -27,22 +28,33 @@ const IncidentCard = ({
         <CameraCanvas
           src={item.videoSrc}
           thumbnailSrc={item.thumbnailSrc}
-          maxminBtnclass="absolute top-1 md:top-1.5 2xl:top-2 right-1 md:right-1.5 2xl:right-2 bg-[#3f3f3f80] backdrop-blur-md text-white w-[20px] h-[20px] md:w-[22px] md:h-[22px] 2xl:w-[26px] 2xl:h-[26px] rounded-full flex justify-center items-center"
+          // Opens this incident's own detail lightbox instead of
+          // CameraCanvas's default (a global stream-preview modal that's
+          // only ever rendered on the Dashboard page — clicking maximize
+          // here silently did nothing without this). Works in both normal
+          // and delete mode, unlike the whole-card click.
+          onMaximize={onExpand}
+          // Top-right normally. In delete mode it takes the outermost
+          // top-right spot, with the selection checkbox to its left, so the
+          // pair reads left-to-right as [checkbox, expand].
+          maxminBtnclass={
+            deleteMode
+              ? 'absolute top-1.5 md:top-2 2xl:top-2.5 right-1.5 md:right-1.5 2xl:right-2 z-10 bg-[#3f3f3f80] backdrop-blur-md text-white w-[20px] h-[20px] md:w-[22px] md:h-[22px] 2xl:w-[26px] 2xl:h-[26px] rounded-full flex justify-center items-center'
+              : 'absolute top-1 md:top-1.5 2xl:top-2 right-1 md:right-1.5 2xl:right-2 bg-[#3f3f3f80] backdrop-blur-md text-white w-[20px] h-[20px] md:w-[22px] md:h-[22px] 2xl:w-[26px] 2xl:h-[26px] rounded-full flex justify-center items-center'
+          }
           maxsize="text-xs md:text-sm 2xl:text-base"
           minsize="text-xs md:text-sm 2xl:text-base"
         />
 
         {deleteMode && (
           <div
-            className={`absolute top-1.5 md:top-2 2xl:top-2.5 right-1.5 md:right-1.5 2xl:right-2 z-10 flex items-center justify-center rounded-[7px] border-2 w-[26px] h-[26px] md:w-[28px] md:h-[28px] 2xl:w-[30px] 2xl:h-[30px] shadow-md transition-colors ${
-              selectedForDelete ? 'bg-[#CE241C] border-[#CE241C]' : 'bg-black/70 border-[#F5A623] hover:bg-black/85'
-            }`}
+            className="absolute top-1.5 md:top-2 2xl:top-2.5 right-9 md:right-10 2xl:right-11 z-10 flex items-center justify-center w-[26px] h-[26px] md:w-[28px] md:h-[28px] 2xl:w-[30px] 2xl:h-[30px]"
             onClick={(e) => e.stopPropagation()}
           >
             <Checkbox
               checked={selectedForDelete}
               onCheckedChange={() => onToggleDelete?.()}
-              className="border-2 size-4 md:size-4.5 2xl:size-5 rounded-[5px] border-white/70 bg-transparent data-[state=checked]:bg-[#CE241C] data-[state=checked]:border-white data-[state=checked]:text-white cursor-pointer"
+              className="border-2 size-5 md:size-5.5 2xl:size-6 rounded-[6px] border-white bg-transparent shadow-md data-[state=checked]:bg-[#CE241C] data-[state=checked]:border-[#CE241C] data-[state=checked]:text-white cursor-pointer"
             />
           </div>
         )}

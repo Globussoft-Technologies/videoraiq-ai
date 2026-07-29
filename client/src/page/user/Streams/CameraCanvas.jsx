@@ -8,6 +8,12 @@ const CameraCanvas = ({
     maxminBtnclass,
     thumbnailSrc,
     isInModal = false,
+    // Overrides the default maximize behavior (which opens the global
+    // stream-preview modal via UserContext — only ever rendered on the
+    // Dashboard page). Callers that have their own detail/lightbox view
+    // (e.g. IncidentCard) pass this instead so the button actually does
+    // something on pages the stream modal was never wired into.
+    onMaximize,
 }) => {
     // const videoRef = useRef(null);
     // const canvasRef = useRef(null);
@@ -82,7 +88,12 @@ const CameraCanvas = ({
         };
     }, []);
 
-    const handleMaximizeClick = async () => {
+    const handleMaximizeClick = async (e) => {
+        e.stopPropagation();
+        if (onMaximize) {
+            onMaximize();
+            return;
+        }
         if (isInModal) {
             if (containerRef.current.requestFullscreen) {
                 if (document.fullscreenElement) {

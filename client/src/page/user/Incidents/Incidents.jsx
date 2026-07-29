@@ -837,6 +837,11 @@ const Incidents = () => {
                 handleMarkResolved(item.id, item.incidentType, newResolved)
               }
               onClick={() => !isDeleteMode && setSelectedIncident(item)}
+              // Always opens the lightbox, even in delete mode — unlike the
+              // whole-card onClick above (which toggles selection instead
+              // while deleteMode is active), the explicit expand/maximize
+              // button is still meant to view the incident.
+              onExpand={() => setSelectedIncident(item)}
               onReport={() => handleReportIncident(item.id)}
               canEdit={canEdit}
               deleteMode={isDeleteMode}

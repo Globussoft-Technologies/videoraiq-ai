@@ -1024,121 +1024,116 @@ export default function IncidentCenter() {
         {kpis.map((k) => (
           <div key={k.label} style={{
             background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 12,
-            padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 6,
+            padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4,
             boxShadow: '0 1px 3px rgba(0,0,0,.07)', minWidth: 0,
           }}>
-            <div style={{ fontSize: 12, color: 'var(--tx2)', fontWeight: 500 }}>{k.label}</div>
-            <div style={{ fontSize: 36, fontWeight: 700, color: k.color, lineHeight: 1 }}>
+            <div style={{ fontSize: 11.5, color: 'var(--tx2)', fontWeight: 500 }}>{k.label}</div>
+            <div style={{ fontSize: 26, fontWeight: 700, color: k.color, lineHeight: 1 }}>
               {stats.loading ? '—' : k.value}
             </div>
           </div>
         ))}
       </div>
 
-      {/* ── Filter bar ──────────────────────────────────────────────────────── */}
+      {/* ── Filter bar — everything on one wrapping line ─────────────────────── */}
       <div style={{
         background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 12,
-        padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12,
+        padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
         boxShadow: '0 1px 3px rgba(0,0,0,.07)',
       }}>
-        {/* Row 1 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          {/* Detection multi-select */}
-          <MultiSelect
-            options={typeOptions}
-            selected={detTypes}
-            onChange={(next) => { setDetTypes(next); setPage(0); }}
-            placeholder="Select Incident"
-          />
+        {/* Detection multi-select */}
+        <MultiSelect
+          options={typeOptions}
+          selected={detTypes}
+          onChange={(next) => { setDetTypes(next); setPage(0); }}
+          placeholder="Select Incident"
+        />
 
-          {/* Date range */}
-          <DateRangePicker
-            from={dateFrom}
-            to={dateTo}
-            onFrom={(v) => { setDateFrom(v); setPage(0); }}
-            onTo={(v) => { setDateTo(v); setPage(0); }}
-            onClear={() => { setDateFrom(''); setDateTo(''); setPage(0); }}
-          />
+        {/* Date range */}
+        <DateRangePicker
+          from={dateFrom}
+          to={dateTo}
+          onFrom={(v) => { setDateFrom(v); setPage(0); }}
+          onTo={(v) => { setDateTo(v); setPage(0); }}
+          onClear={() => { setDateFrom(''); setDateTo(''); setPage(0); }}
+        />
 
-          {/* Additional filters popover */}
-          <FiltersPopover
-            nvrIds={nvrIds}         setNvrIds={v => { setNvrIds(v); setPage(0); }}
-            channelIds={channelIds} setChannelIds={v => { setChannelIds(v); setPage(0); }}
-            deptIds={deptIds}       setDeptIds={v => { setDeptIds(v); setPage(0); }}
-            locIds={locIds}         setLocIds={v => { setLocIds(v); setPage(0); }}
-          />
+        {/* Additional filters popover */}
+        <FiltersPopover
+          nvrIds={nvrIds}         setNvrIds={v => { setNvrIds(v); setPage(0); }}
+          channelIds={channelIds} setChannelIds={v => { setChannelIds(v); setPage(0); }}
+          deptIds={deptIds}       setDeptIds={v => { setDeptIds(v); setPage(0); }}
+          locIds={locIds}         setLocIds={v => { setLocIds(v); setPage(0); }}
+        />
 
-          {hasFilters && (
-            <button onClick={clearAll} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: '#fff', background: 'var(--crit)', border: '1px solid var(--crit)', borderRadius: 7, cursor: 'pointer', padding: '5px 10px' }}>
-              <X size={13} /> Clear
-            </button>
-          )}
+        {hasFilters && (
+          <button onClick={clearAll} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: '#fff', background: 'var(--crit)', border: '1px solid var(--crit)', borderRadius: 7, cursor: 'pointer', padding: '5px 10px' }}>
+            <X size={13} /> Clear
+          </button>
+        )}
 
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <RefreshControl
-              storageKey="incident_center"
-              onManualRefresh={() => { stats.refetch(); grid.refetch(); }}
-            />
-            <button
-              onClick={togglePageFullscreen}
-              title={isPageFS ? 'Exit fullscreen' : 'Fullscreen'}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)' }}
+        <div style={{ width: 1, height: 20, background: 'var(--bd2)' }} />
+
+        {/* Severity chips */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button
+            onClick={() => { setSevSet(new Set()); setStatusSet(new Set()); setPage(0); }}
+            style={{ ...chip(!sevSet.size && !statusSet.size), padding: '5px 16px' }}
+          >
+            All
+          </button>
+          {SEVERITIES.map((x) => (
+            <button key={x.key}
+              onClick={() => { toggleSet(setSevSet)(x.key); setPage(0); }}
+              style={chip(sevSet.has(x.key), x.key === 'high' ? 'var(--crit)' : x.key === 'moderate' ? 'var(--warn)' : '#6b7796')}
             >
-              {isPageFS ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              {x.label}
             </button>
-          </div>
+          ))}
         </div>
 
-        {/* Row 2: severity + status chips */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <button
-              onClick={() => { setSevSet(new Set()); setStatusSet(new Set()); setPage(0); }}
-              style={{ ...chip(!sevSet.size && !statusSet.size), padding: '5px 16px' }}
+        <div style={{ width: 1, height: 20, background: 'var(--bd2)' }} />
+
+        {/* Status chips */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button onClick={() => { setStatusSet(new Set()); setPage(0); }} style={chip(!statusSet.size)}>All</button>
+          {STATUSES.map((x) => (
+            <button key={x.key}
+              onClick={() => { toggleSet(setStatusSet)(x.key); setPage(0); }}
+              style={chip(statusSet.has(x.key), x.key === 'new' ? 'var(--crit)' : 'var(--ok)')}
             >
-              All
+              {x.label}
             </button>
-            {SEVERITIES.map((x) => (
-              <button key={x.key}
-                onClick={() => { toggleSet(setSevSet)(x.key); setPage(0); }}
-                style={chip(sevSet.has(x.key), x.key === 'high' ? 'var(--crit)' : x.key === 'moderate' ? 'var(--warn)' : '#6b7796')}
-              >
-                {x.label}
-              </button>
-            ))}
-          </div>
+          ))}
+        </div>
 
-          <div style={{ width: 1, height: 20, background: 'var(--bd2)' }} />
-
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <button onClick={() => { setStatusSet(new Set()); setPage(0); }} style={chip(!statusSet.size)}>All</button>
-            {STATUSES.map((x) => (
-              <button key={x.key}
-                onClick={() => { toggleSet(setStatusSet)(x.key); setPage(0); }}
-                style={chip(statusSet.has(x.key), x.key === 'new' ? 'var(--crit)' : 'var(--ok)')}
-              >
-                {x.label}
-              </button>
-            ))}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 12, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>
+            {grid.loading ? 'Loading…' : `Showing ${shownCount} of ${num(totalCount)}`}
           </div>
-
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--tx3)' }}>
-              {grid.loading ? 'Loading…' : `Showing ${shownCount} of ${num(totalCount)}`}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--tx3)' }}>
-              <span>Show</span>
-              <select
-                value={pageSize}
-                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
-                style={{ padding: '5px 8px', borderRadius: 7, border: '1px solid var(--bd)', background: 'var(--bg1solid)', color: 'var(--tx2)', fontSize: 12.5, cursor: 'pointer' }}
-              >
-                {PAGE_SIZE_OPTIONS.map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--tx3)' }}>
+            <span>Show</span>
+            <select
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
+              style={{ padding: '5px 8px', borderRadius: 7, border: '1px solid var(--bd)', background: 'var(--bg1solid)', color: 'var(--tx2)', fontSize: 12.5, cursor: 'pointer' }}
+            >
+              {PAGE_SIZE_OPTIONS.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
           </div>
+          <RefreshControl
+            storageKey="incident_center"
+            onManualRefresh={() => { stats.refetch(); grid.refetch(); }}
+          />
+          <button
+            onClick={togglePageFullscreen}
+            title={isPageFS ? 'Exit fullscreen' : 'Fullscreen'}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)' }}
+          >
+            {isPageFS ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          </button>
         </div>
       </div>
 

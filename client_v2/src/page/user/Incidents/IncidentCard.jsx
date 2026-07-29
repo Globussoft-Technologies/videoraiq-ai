@@ -263,20 +263,23 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox,
           )}
 
           {/* Delete-selection checkbox — replaces normal card interactions
-              (lightbox/resolve/report) while deleteMode is active. */}
+              (lightbox/resolve/report) while deleteMode is active. Kept as a
+              plain outlined square (no filled badge behind it) to match the
+              simplified style used in client's IncidentCard. */}
           {deleteMode && (
             <div
               onClick={(e) => { e.stopPropagation(); onToggleDelete?.(); }}
               style={{
                 position: 'absolute', top: 9, right: 9, zIndex: 10,
-                width: 26, height: 26, borderRadius: 7,
-                background: selectedForDelete ? 'var(--crit)' : 'rgba(0,0,0,.55)',
-                border: `2px solid ${selectedForDelete ? 'var(--crit)' : 'rgba(255,255,255,.6)'}`,
+                width: 22, height: 22, borderRadius: 6,
+                background: selectedForDelete ? 'var(--crit)' : 'transparent',
+                border: `2px solid ${selectedForDelete ? 'var(--crit)' : '#fff'}`,
+                boxShadow: '0 1px 4px rgba(0,0,0,.4)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', backdropFilter: 'blur(4px)', transition: 'background .15s, border-color .15s',
+                cursor: 'pointer', transition: 'background .15s, border-color .15s',
               }}
             >
-              {selectedForDelete && <Check size={15} color="#fff" strokeWidth={3} />}
+              {selectedForDelete && <Check size={14} color="#fff" strokeWidth={3} />}
             </div>
           )}
 
@@ -350,8 +353,10 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox,
             )}
           </div>
 
-          {/* Bottom-right: confidence + Report button + expand (hidden in
-              delete mode — the card's only action there is toggling selection) */}
+          {/* Bottom-right: confidence + Report button + expand. Both stay
+              visible in delete mode; each stops propagation and calls its
+              own handler directly, so they still work instead of the click
+              being caught by the card's delete-mode toggle-selection handler. */}
           <div style={{ position: 'absolute', bottom: 9, right: 9, maxWidth: 'calc(50% - 14px)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5, flexWrap: 'wrap' }}>
             {conf != null && (
               <span style={{ fontFamily: 'monospace', fontSize: 9.5, color: '#fff', background: 'rgba(0,0,0,.55)', padding: '2px 8px', borderRadius: 5, backdropFilter: 'blur(4px)' }}>
@@ -359,37 +364,32 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox,
               </span>
             )}
 
-            {!deleteMode && (
-              <>
-                {/* Report button */}
-                <button
-                  onClick={e => { e.stopPropagation(); setReportOpen(true); }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    background: reported ? 'rgba(34,197,94,.75)' : 'rgba(59,130,246,.8)',
-                    backdropFilter: 'blur(4px)',
-                    border: 'none', borderRadius: 5,
-                    color: '#fff', fontSize: 10, fontWeight: 600,
-                    padding: '3px 8px', cursor: 'pointer',
-                    transition: 'background .15s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = reported ? 'rgba(34,197,94,.95)' : 'rgba(59,130,246,.95)'}
-                  onMouseLeave={e => e.currentTarget.style.background = reported ? 'rgba(34,197,94,.75)' : 'rgba(59,130,246,.8)'}
-                >
-                  <Flag size={10} />
-                  {reported ? 'Reported' : 'Report'}
-                </button>
+            <button
+              onClick={e => { e.stopPropagation(); setReportOpen(true); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                background: reported ? 'rgba(34,197,94,.75)' : 'rgba(59,130,246,.8)',
+                backdropFilter: 'blur(4px)',
+                border: 'none', borderRadius: 5,
+                color: '#fff', fontSize: 10, fontWeight: 600,
+                padding: '3px 8px', cursor: 'pointer',
+                transition: 'background .15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = reported ? 'rgba(34,197,94,.95)' : 'rgba(59,130,246,.95)'}
+              onMouseLeave={e => e.currentTarget.style.background = reported ? 'rgba(34,197,94,.75)' : 'rgba(59,130,246,.8)'}
+            >
+              <Flag size={10} />
+              {reported ? 'Reported' : 'Report'}
+            </button>
 
-                {/* Expand / lightbox */}
-                {imgSrc && (
-                  <span
-                    onClick={e => { e.stopPropagation(); handleCardClick(); }}
-                    style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(0,0,0,.55)', border: '1px solid rgba(255,255,255,.25)', backdropFilter: 'blur(4px)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <Maximize2 size={12} color="#fff" />
-                  </span>
-                )}
-              </>
+            {/* Expand / lightbox */}
+            {imgSrc && (
+              <span
+                onClick={e => { e.stopPropagation(); onOpenLightbox?.(item); }}
+                style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(0,0,0,.55)', border: '1px solid rgba(255,255,255,.25)', backdropFilter: 'blur(4px)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Maximize2 size={12} color="#fff" />
+              </span>
             )}
           </div>
         </div>

@@ -163,7 +163,13 @@ const Locations = () => {
                 mode="create"
                 onSave={loadLocations}
                 trigger={
-                  <button className="flex items-center gap-2 px-4 py-2 bg-[var(--blue)] hover:opacity-95 active:scale-95 text-white rounded-lg text-sm font-medium transition-all cursor-pointer shadow-sm shadow-[var(--blue)]/20">
+                  <button
+                    className="flex items-center gap-2 px-4 py-2 hover:opacity-95 active:scale-95 text-white rounded-lg text-sm font-medium transition-all cursor-pointer"
+                    style={{
+                      background: 'linear-gradient(135deg,var(--blue),var(--violet))',
+                      boxShadow: '0 4px 16px rgba(99,102,241,.28)',
+                    }}
+                  >
                     <CirclePlus className="w-4 h-4 text-white" />
                     <span>Add New Location</span>
                   </button>

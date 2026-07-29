@@ -371,8 +371,10 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
         }
       `}</style>
 
-      {/* Video surface — the only screen in Camera View; shows the recording, never live */}
-      <div className="vq-pbtl-video" style={{ position: 'relative', height: '60vh', minHeight: 360, background: '#000', borderRadius: 10, overflow: 'hidden' }}>
+      {/* Video surface — the only screen in Camera View; shows the recording,
+          never live. Sized larger in true browser fullscreen (no toolbar
+          competing for space anymore) than in the normal in-page layout. */}
+      <div className="vq-pbtl-video" style={{ position: 'relative', height: isExpanded ? '78vh' : '72vh', minHeight: 360, background: '#000', borderRadius: 10, overflow: 'hidden' }}>
         <video ref={videoRef} muted playsInline style={{ width: '100%', height: '100%', objectFit: 'contain', display: videoState === 'ready' ? 'block' : 'none' }} />
         {videoState !== 'ready' && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#2563EB', fontSize: 13, padding: 12, textAlign: 'center' }}>

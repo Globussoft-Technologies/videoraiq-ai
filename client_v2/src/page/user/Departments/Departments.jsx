@@ -16,6 +16,27 @@ const styles = {
   text: 'text-[var(--tx)] text-xs md:text-sm 2xl:text-sm font-normal',
 };
 
+const AVATAR_PALETTE = [
+  { bg: 'bg-[#E8ECFF]', text: 'text-[#4F5DFF]' },
+  { bg: 'bg-[#FCE7F6]', text: 'text-[#D6318C]' },
+  { bg: 'bg-[#E1F6FA]', text: 'text-[#0EA5B7]' },
+  { bg: 'bg-[#FDE8E8]', text: 'text-[#E0524B]' },
+  { bg: 'bg-[#FDF1DC]', text: 'text-[#D28A1E]' },
+  { bg: 'bg-[#E4F7E9]', text: 'text-[#2FA860]' },
+  { bg: 'bg-[#EDE7FE]', text: 'text-[#7C5CE0]' },
+];
+
+const avatarColor = (key) => {
+  const str = String(key || '');
+  let hash = 0;
+  for (let i = 0; i < str.length; i += 1) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+};
+
+const initialsOf = (name) => (String(name || '').trim().slice(0, 2).toUpperCase() || '--');
+
 const Departments = () => {
   const [departments, setDepartments] = useState([]);
   const [searchInput, setSearchInput] = useState('');
@@ -93,7 +114,20 @@ const Departments = () => {
           Department Name
         </button>
       ),
-      cell: ({ row }) => <span className={styles.text}>{row.original.departmentName}</span>,
+      cell: ({ row }) => {
+        const name = row.original.departmentName;
+        const color = avatarColor(row.original._id || name);
+        return (
+          <div className="flex items-center gap-2.5">
+            <span
+              className={`flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-semibold shrink-0 ${color.bg} ${color.text}`}
+            >
+              {initialsOf(name)}
+            </span>
+            <span className={styles.text}>{name}</span>
+          </div>
+        );
+      },
     },
     {
       accessorKey: 'description',
@@ -156,7 +190,13 @@ const Departments = () => {
                 mode="create"
                 onSave={loadDepartments}
                 trigger={
-                  <button className="flex items-center gap-2 px-4 py-2 bg-[var(--blue)] hover:opacity-95 active:scale-95 text-white rounded-lg text-sm font-medium transition-all cursor-pointer shadow-sm shadow-[var(--blue)]/20">
+                  <button
+                    className="flex items-center gap-2 px-4 py-2 hover:opacity-95 active:scale-95 text-white rounded-lg text-sm font-medium transition-all cursor-pointer"
+                    style={{
+                      background: 'linear-gradient(135deg,var(--blue),var(--violet))',
+                      boxShadow: '0 4px 16px rgba(99,102,241,.28)',
+                    }}
+                  >
                     <CirclePlus className="w-4 h-4 text-white" />
                     <span>Add New Department</span>
                   </button>

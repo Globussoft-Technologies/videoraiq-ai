@@ -4,6 +4,7 @@ import { Search, X, Maximize2, Minimize2, Calendar } from 'lucide-react';
 import { AsyncBoundary } from './States';
 import MultiSelect from './MultiSelect';
 import PlaybackTimeline from './PlaybackTimeline';
+import ActiveDetectionsPanel from './ActiveDetectionsPanel';
 import { useApi } from '../hooks/useApi';
 import { getChannels, getLocations, getNVRs, getDepartments } from '../helpers/monitoring';
 
@@ -305,29 +306,39 @@ export default function CameraGrid() {
       {/* ── Single-screen playback ──────────────────────────────────
           One video surface only: PlaybackTimeline owns it end-to-end
           (recording, not the live feed). Prev/next switch which camera's
-          recording is loaded; there is no separate live-view screen. ── */}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 16 }}>
-        <AsyncBoundary
-          loading={channels.loading}
-          error={channels.error}
-          isEmpty={!channels.loading && !channels.error && list.length === 0}
-          onRetry={channels.refetch}
-          minH={360}
-          emptyLabel="No cameras found"
-        >
-          {() => (
-            visible[0] && (
-              <PlaybackTimeline
-                channel={visible[0]}
-                date={playbackDate}
-                onPrev={pages > 1 ? () => setPage(p => (p - 1 + pages) % pages) : null}
-                onNext={pages > 1 ? () => setPage(p => (p + 1) % pages) : null}
-                onExpand={togglePageFullscreen}
-                isExpanded={isPageFS}
-              />
-            )
-          )}
-        </AsyncBoundary>
+          recording is loaded; there is no separate live-view screen.
+          ActiveDetectionsPanel sits alongside it — live detection events for
+          this camera, its enabled engines, and a link into zone config. ── */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 16, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+        <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+          <AsyncBoundary
+            loading={channels.loading}
+            error={channels.error}
+            isEmpty={!channels.loading && !channels.error && list.length === 0}
+            onRetry={channels.refetch}
+            minH={360}
+            emptyLabel="No cameras found"
+          >
+            {() => (
+              visible[0] && (
+                <PlaybackTimeline
+                  channel={visible[0]}
+                  date={playbackDate}
+                  onPrev={pages > 1 ? () => setPage(p => (p - 1 + pages) % pages) : null}
+                  onNext={pages > 1 ? () => setPage(p => (p + 1) % pages) : null}
+                  onExpand={togglePageFullscreen}
+                  isExpanded={isPageFS}
+                />
+              )
+            )}
+          </AsyncBoundary>
+        </div>
+
+        {!isPageFS && visible[0] && (
+          <div style={{ flex: '0 0 280px', width: 280 }}>
+            <ActiveDetectionsPanel channel={visible[0]} />
+          </div>
+        )}
       </div>
     </div>
   );
