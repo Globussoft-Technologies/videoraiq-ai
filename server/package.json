@@ -14,6 +14,7 @@
     "build": "rm -rf dist && rm -rf obf_src && npm run obfuscate && npm run encrypt",
     "obfuscate": "node ./scripts/copy_for_obfuscation.js && javascript-obfuscator obf_src --output dist --config ./obfuscator-strong.json",
     "encrypt": "node scripts/encrypt.js",
+    "clone:incidents": "node scripts/clone-incidents-by-type.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
