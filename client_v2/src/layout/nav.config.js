@@ -130,6 +130,7 @@ export const VIEW_META = {
   alerts: { title: 'Alerts & Events', sub: 'Investigate and respond to detections' },
   incidents: { title: 'Incident Center', sub: 'Visual evidence grid across all detections' },
   analytics: { title: 'Analytics', sub: 'Trends, heatmaps & engine performance' },
+  'email-monitoring': { title: 'Email Monitoring', sub: 'SMTP traffic, delivery health & queue status' },
   faces: { title: 'Face Recognition & Watchlist', sub: 'Identity verification & attendance' },
   cameras: { title: 'Cameras & NVRs', sub: 'Device inventory & recorder health' },
   engines: { title: 'Detection Settings', sub: 'Configure detection types per camera' },

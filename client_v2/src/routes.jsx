@@ -38,6 +38,7 @@ import ProductivityLog from './pages/ProductivityLog/ProductivityLog';
 import TrackLog from './pages/TrackLog/TrackLog';
 import VisibilityLog from './pages/VisibilityLog/VisibilityLog';
 import GuardLog from './pages/GuardLog/GuardLog';
+import EmailMonitoringDashboard from './page/user/EmailMonitoring/EmailMonitoringDashboard';
 
 const STUBS = [
   ['faces', 'faces', '/logs/tagged-users'],
@@ -62,6 +63,7 @@ export const v2Routes = (
     <Route path="alerts" element={guard('alerts', undefined, <AlertsView />)} />
     <Route path="incidents" element={guard('incidents', undefined, <IncidentCenter />)} />
     <Route path="analytics" element={guard('analytics', undefined, <Analytics />)} />
+    <Route path="email-monitoring" element={<EmailMonitoringDashboard />} />
     <Route path="roles" element={guard('roles', undefined, <RolesPermission />)} />
     <Route path="locations" element={guard('locations', undefined, <Locations />)} />
     <Route path="departments" element={guard('departments', undefined, <Departments />)} />
