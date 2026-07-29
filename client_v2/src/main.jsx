@@ -6,6 +6,7 @@ import { AuthProvider } from '@/context/AuthContext';
 import { PermissionProvider } from '@/context/PermissionContext';
 import { SocketProvider } from '@/context/SocketContext';
 import { AttendanceSocketProvider } from '@/context/AttendanceSocketContext';
+import { DetectionNotificationProvider } from '@/context/DetectionNotificationContext';
 import { router } from './App';
 import './index.css';
 
@@ -15,8 +16,10 @@ createRoot(document.getElementById('root')).render(
       <PermissionProvider>
         <SocketProvider>
           <AttendanceSocketProvider>
-            <RouterProvider router={router} />
-            <Toaster position="top-right" richColors closeButton />
+            <DetectionNotificationProvider>
+              <RouterProvider router={router} />
+              <Toaster position="top-right" richColors closeButton />
+            </DetectionNotificationProvider>
           </AttendanceSocketProvider>
         </SocketProvider>
       </PermissionProvider>
