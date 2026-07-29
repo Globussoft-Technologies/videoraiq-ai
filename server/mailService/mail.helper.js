@@ -40,7 +40,34 @@ import {
 import {
     domainTemplate
 } from './IncidentsMailTemplates/mail.domainTemplate.js';
+import {
+    trackFailedEmail,
+    trackOutboundEmail
+} from '../core/v2/emailMonitoring/emailTracker.js';
 class MailHelper {
+    _emailMetadata(args = []) {
+        const data = args[1] || {};
+        const detectionType = args[2];
+        return {
+            adminId: data?.adminId || data?.admin?._id,
+            admin: data?.admin,
+            userId: data?.userId || data?.admin?.user_id,
+            detectionType,
+            category: detectionType || data?.incidentType || data?.message || 'System',
+        };
+    }
+
+    async _sendAndTrack(email, args = []) {
+        try {
+            const sendStatus = await sendGridMail.send(email);
+            await trackOutboundEmail(email, sendStatus, this._emailMetadata(args));
+            return sendStatus;
+        } catch (error) {
+            await trackFailedEmail(email, error, this._emailMetadata(args));
+            throw error;
+        }
+    }
+
     async loiteringWithoutAuth(emailAddresses, data, detectionType, nvrData, channelData) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
@@ -52,7 +79,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: loiteringWithoutAuthTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -67,7 +94,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: LoiteringWithAuthIncident(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -82,7 +109,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: unauthorizedAccessIncident(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -97,7 +124,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: LineCrossingAuthIncident(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -112,7 +139,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: motionDetectionAuthTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -129,7 +156,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: genericObjectDetectionTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -144,7 +171,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: countVehiclesTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -159,7 +186,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: countPersonsTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -174,7 +201,7 @@ class MailHelper {
             subject: `[Incident Alert] Person Detected${data?.count ? ` (${data.count})` : ''} – ${data?.incidentName || 'Person Detection'} | Severity: ${data?.severity || 'low'}`,
             html: personDetectedTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -189,7 +216,7 @@ class MailHelper {
             subject: 'Confirm your alert subscription',
             html: verifyEmailTemplate(verificationLink),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
     async sendForgotPasswordEmail(userEmail, userName, resetLink) {
@@ -203,7 +230,7 @@ class MailHelper {
             subject: 'Password Reset Request',
             html: forgotPasswordTemplate(userName, resetLink),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -218,7 +245,7 @@ class MailHelper {
             subject: 'New Domain Pointing Request',
             html: domainTemplate(domainName, ip, port),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -235,7 +262,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: crowdDetectionTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         console.log(sendStatus, 'sendStatus');
 
         return sendStatus;
@@ -252,7 +279,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: personalProtectiveEquipmentTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -267,7 +294,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: lightDetectionTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -282,7 +309,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: doorDetectionTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -297,7 +324,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: bagDetectionTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -312,7 +339,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: vehicleDetectionTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
 
         return sendStatus;
     }
@@ -328,7 +355,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: vehicleObstructionTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
 
         return sendStatus;
     }
@@ -343,7 +370,7 @@ class MailHelper {
             subject: `[Notification] Entry Log detected for ${data?.user?.firstName} ${data?.user?.lastName}`,
             html: entryLogTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
     async vehicleLog(emailAddresses, data, nvrData, channelData) {
@@ -357,7 +384,7 @@ class MailHelper {
             subject: `[Notification] Vehicle Entry detected: ${data?.vehicle?.vehicleNumber}`,
             html: vehicleLogTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -374,7 +401,7 @@ class MailHelper {
         };
         // console.log(deskAbsenceTemplate(data,nvrData,channelData),'deskAbsenceTemplate(data,nvrData,channelData)');
 
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
 
         return sendStatus;
     }
@@ -392,7 +419,7 @@ class MailHelper {
         };
         // console.log(deskAbsenceTemplate(data,nvrData,channelData),'deskAbsenceTemplate(data,nvrData,channelData)');
 
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
 
         return sendStatus;
     }
@@ -408,7 +435,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: conveyorDetectionTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -423,7 +450,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: crusherDetectionTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -438,7 +465,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: waterSpillageDetectionTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -453,7 +480,7 @@ class MailHelper {
             subject: 'Your Password Has Been Updated',
             html: passwordUpdatedTemplate(userName, email, newPassword, new Date()),
         };
-        let sendStatus = await sendGridMail.send(mailOptions);
+        let sendStatus = await this._sendAndTrack(mailOptions, arguments);
         return sendStatus;
     }
 
@@ -469,7 +496,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: vehicleTypeDetectionTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -484,7 +511,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: loiteringDetectionTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -499,7 +526,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: tableOccupancyDetectionTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
         async vehicleObstruction(emailAddresses, data, detectionType, nvrData, channelData) {
@@ -513,7 +540,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: vehicleObstructionTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
 
         return sendStatus;
     }
@@ -529,7 +556,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: foodServicePPEDetectionTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
@@ -546,7 +573,7 @@ class MailHelper {
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: mobilePhoneDetectionTemplate(data, nvrData, channelData),
         };
-        let sendStatus = await sendGridMail.send(email);
+        let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 }
