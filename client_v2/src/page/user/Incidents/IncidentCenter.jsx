@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useOutletContext } from 'react-router-dom';
-import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2, Flag } from 'lucide-react';
+import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import SharedMultiSelect from '../../../components/MultiSelect';
 import DateRangePicker, { fmt } from '../../../components/DateRangePicker';
 import IncidentCard, { apiMarkResolved, ReportModal } from './IncidentCard';
 import RefreshControl from '../../../components/RefreshControl';
+import DeleteConfirmation from '../../../components/DeleteConfirmation';
 import { useApi } from '../../../hooks/useApi';
 import { num, detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
-import { fetchIncidents, fetchIncidentStats, fetchDetectionTypes } from '../../../helpers/incidents';
+import { fetchIncidents, fetchIncidentStats, fetchDetectionTypes, deleteIncidents } from '../../../helpers/incidents';
 import { getLocations, getChannels } from '../../../helpers/monitoring';
 import { getNvrs } from '../../../helpers/configure';
 import axios from 'axios';
@@ -802,6 +803,9 @@ export default function IncidentCenter() {
   const initialStatusFilter = location.state?.statusFilter;
   const initialDate = location.state?.date;
   const initialSeverityFilter = location.state?.severityFilter;
+  // Same convention as client's Incidents page — visiting with this query
+  // param on the URL turns on bulk-selection/delete mode.
+  const isDeleteMode = useMemo(() => new URLSearchParams(location.search).has('delete-incidents'), [location.search]);
 
   const pageRef = useRef(null);
   const [isPageFS, setIsPageFS] = useState(false);
@@ -837,6 +841,10 @@ export default function IncidentCenter() {
   const [deptIds,    setDeptIds]    = useState([]);
   const [locIds,     setLocIds]     = useState([]);
 
+  const [selectedForDelete, setSelectedForDelete] = useState([]);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
   const serverFilter = useMemo(() => {
     const f = {};
     if (ctxLoc)            f.location           = ctxLoc;
@@ -866,6 +874,42 @@ export default function IncidentCenter() {
   // Running total of everything shown up to and including this page — 10, 20,
   // 30 … — instead of a flat per-page count that reads the same on every page.
   const shownCount = num(page * pageSize + items.length);
+
+  // Delete-selection is scoped to whatever page is currently loaded — same
+  // reasoning as client's Incidents page: deleteIncidents takes an explicit
+  // id list, not a filter, so carrying stale selections across a page change
+  // would silently delete incidents the user can no longer see.
+  useEffect(() => { setSelectedForDelete([]); }, [page]);
+
+  const handleToggleSelectForDelete = useCallback((id) => {
+    setSelectedForDelete((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }, []);
+
+  const allOnPageSelected = items.length > 0 && items.every((item) => selectedForDelete.includes(item._id || item.id));
+
+  const handleToggleSelectAll = () => {
+    setSelectedForDelete(allOnPageSelected ? [] : items.map((item) => item._id || item.id));
+  };
+
+  const handleConfirmDelete = async () => {
+    setDeleting(true);
+    try {
+      const result = await deleteIncidents(selectedForDelete);
+      if (result?.status === 'success' || result?.statusCode === 200 || String(result?.message || '').toLowerCase().includes('success')) {
+        toast.success('Incidents deleted successfully');
+        setSelectedForDelete([]);
+        setDeleteConfirmOpen(false);
+        grid.refetch();
+        stats.refetch();
+      } else {
+        toast.error(result?.message || 'Failed to delete incidents');
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.body?.message || 'Failed to delete incidents');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   // Lightbox navigation past the edge of the loaded page: jump `page` to
   // whichever page holds the requested global index and land the lightbox on
@@ -1098,6 +1142,47 @@ export default function IncidentCenter() {
         </div>
       </div>
 
+      {/* ── Delete mode action bar ──────────────────────────────────────────── */}
+      {isDeleteMode && (
+        <div style={{
+          background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 12,
+          padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          boxShadow: '0 1px 3px rgba(0,0,0,.07)', flexWrap: 'wrap', gap: 10,
+        }}>
+          <span style={{ fontSize: 13, color: 'var(--tx2)' }}>
+            <strong style={{ color: 'var(--tx)' }}>{selectedForDelete.length}</strong> incident{selectedForDelete.length !== 1 ? 's' : ''} selected
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {items.length > 0 && (
+              <button
+                onClick={handleToggleSelectAll}
+                style={{
+                  fontSize: 12.5, fontWeight: 600, color: 'var(--blue)',
+                  border: '1px solid var(--blue)', borderRadius: 8, padding: '7px 14px',
+                  background: 'transparent', cursor: 'pointer', transition: 'background .15s, color .15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--blue)'; e.currentTarget.style.color = '#fff'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--blue)'; }}
+              >
+                {allOnPageSelected ? 'Deselect All' : 'Select All'}
+              </button>
+            )}
+            <button
+              onClick={() => selectedForDelete.length > 0 && setDeleteConfirmOpen(true)}
+              disabled={selectedForDelete.length === 0 || deleting}
+              style={{
+                fontSize: 12.5, fontWeight: 600, color: '#fff',
+                background: 'var(--crit)', border: '1px solid var(--crit)', borderRadius: 8,
+                padding: '7px 16px', cursor: selectedForDelete.length === 0 || deleting ? 'not-allowed' : 'pointer',
+                opacity: selectedForDelete.length === 0 || deleting ? 0.5 : 1,
+              }}
+            >
+              {deleting ? 'Deleting…' : 'Delete Selected'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Grid ────────────────────────────────────────────────────────────── */}
       <div>
         <div style={{ marginBottom: 14, display: 'flex', alignItems: 'baseline', gap: 8 }}>
@@ -1165,6 +1250,9 @@ export default function IncidentCenter() {
                   item={item}
                   onRefresh={() => grid.refetch()}
                   onOpenLightbox={() => setLightboxIndex(i)}
+                  deleteMode={isDeleteMode}
+                  selectedForDelete={selectedForDelete.includes(item._id || item.id)}
+                  onToggleDelete={() => handleToggleSelectForDelete(item._id || item.id)}
                 />
               ))}
             </div>
@@ -1234,6 +1322,17 @@ export default function IncidentCenter() {
           navFailedAt={navFailedAt}
         />
       )}
+
+      <DeleteConfirmation
+        open={deleteConfirmOpen}
+        icon={<Trash2 className="text-[var(--crit)] h-8 w-8" />}
+        title="Confirm Delete"
+        message={`Are you sure you want to delete ${selectedForDelete.length} incident${selectedForDelete.length !== 1 ? 's' : ''}?`}
+        confirmLabel="Delete"
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={handleConfirmDelete}
+        loading={deleting}
+      />
     </div>
   );
 }
