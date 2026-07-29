@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, X, Loader2, ArrowLeft, Pencil, ListVideo, Play, Maximize2, Minimize2, ArrowUpRight, Cctv, Trash2 } from 'lucide-react';
+import { Search, Plus, X, Loader2, ArrowLeft, Pencil, ListVideo, Play, Maximize2, Minimize2, ArrowUpRight, Cctv, Trash2, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
@@ -218,7 +218,15 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
       </div>
 
       {/* Field list */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11 }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        gap: 7,
+        paddingRight: isMobile ? 0 : 175,
+        fontSize: 11,
+        maxWidth: isMobile ? '100%' : 430,
+      }}>
         {[
           { label: 'ID',       val: nvr._id ? nvr._id.slice(-6) : null, mono: true },
           { label: 'IP',       val: nvr._id ? (nvr.ip || nvr.ipAddress || '—') : null, mono: true },
@@ -226,13 +234,13 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
           { label: 'Location', val: (nvr.model || nvr.brand || nvr.location || nvr.locationName || nvr.site) ? (nvr.location || nvr.locationName || nvr.site || '—') : null },
           { label: 'Camera',   val: String(cameraCount), mono: true },
         ].map((f, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ color: 'var(--tx2)', flexShrink: 0 }}>{f.label}:</span>
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '62px minmax(0, 1fr)', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <span style={{ color: 'var(--tx2)', flexShrink: 0, textAlign: 'right' }}>{f.label}:</span>
             {f.val == null ? (
               <SkeletonBlock width={90} height={10} />
             ) : (
               <span style={{
-                display: 'inline-block', maxWidth: '100%',
+                display: 'inline-block', minWidth: 0, maxWidth: '100%',
                 padding: '2px 8px', borderRadius: 5,
                 background: 'var(--bg2)', border: '1px solid var(--bd)',
                 fontWeight: 600, color: 'var(--tx2)', fontFamily: f.mono ? 'var(--mono)' : undefined,
@@ -672,7 +680,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
     http: editingNvr.port || '80',
   } : {
     brand: 'hikvision', name: '', location: '', ip: '',
-    user: 'admin', pass: '', rtsp: '554', http: '80',
+    user: '', pass: '', rtsp: '', http: '',
   });
 
   const [savedNvrId, setSavedNvrId] = useState(isEdit ? editingNvr._id : null);
@@ -684,6 +692,8 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   const [newLocation, setNewLocation] = useState('');
   const [creatingLocation, setCreatingLocation] = useState(false);
   const [previewCam, setPreviewCam] = useState(null);
+  const [locationOpen, setLocationOpen] = useState(false);
+  const locationDropdownRef = useRef(null);
   // Per-field validation, shown under each input rather than a single toast
   // that names only one problem at a time and doesn't say which field it means.
   const [errors, setErrors] = useState({});
@@ -691,6 +701,20 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   useEffect(() => {
     getLocations(0, 100).then(data => setLocations(Array.isArray(data) ? data : [])).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!locationOpen) return undefined;
+    const handleClickOutside = (event) => {
+      if (!locationDropdownRef.current?.contains(event.target)) setLocationOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [locationOpen]);
+
+  const locationOptions = useMemo(
+    () => locations.map((l) => l.locationName || l.name || l).filter(Boolean),
+    [locations],
+  );
 
   const set = (k) => (e) => {
     setForm(f => ({ ...f, [k]: e.target.value }));
@@ -725,6 +749,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
         setLocations(prev => [...prev, { locationName: newLocation.trim() }]);
         setForm(f => ({ ...f, location: newLocation.trim() }));
         setNewLocation('');
+        setLocationOpen(false);
       } else {
         toast.error(resp?.data?.body?.message || 'Failed to create location');
       }
@@ -742,13 +767,13 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
     // its problems at once, under the fields they actually belong to, instead
     // of one generic toast that doesn't say which field was left blank.
     const found = {};
+    if (!form.brand.trim()) found.brand = 'NVR brand is required.';
     if (!form.name.trim()) found.name = 'NVR name is required.';
     if (!form.location.trim()) found.location = 'Select or create a location.';
     if (!ip) found.ip = 'Public IP address is required.';
     if (!form.user.trim()) found.user = 'Username is required.';
-    if (!isEdit && !form.pass) found.pass = 'Password is required.';
-    if (isEdit && !form.oldPass) found.oldPass = 'Old password is required.';
-    if (isEdit && !form.newPass) found.newPass = 'New password is required.';
+    if (!String(form.rtsp || '').trim()) found.rtsp = 'RTSP port is required.';
+    if (!String(form.http || '').trim()) found.http = 'HTTP port is required.';
     setErrors(found);
     if (Object.keys(found).length) return;
 
@@ -765,12 +790,12 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
           port: Number(form.http),
           rtspPort: Number(form.rtsp),
           username: form.user,
-          oldPassword: form.oldPass,
-          newPassword: form.newPass,
           nvrName: form.name,
           location: form.location,
           brand: form.brand,
         };
+        if (form.oldPass) payload.oldPassword = form.oldPass;
+        if (form.newPass) payload.newPassword = form.newPass;
         const resp = await updateNvrById(editingNvr._id, payload);
         const body = resp?.data?.body;
         if (body?.status !== 'success') {
@@ -927,26 +952,114 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
           {step === 1 && (
             <div style={{ padding: isMobile ? '14px 16px 18px' : '14px 20px 20px', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '13px 14px' }}>
               <div style={{ gridColumn: '1 / -1' }}>
-                <FieldLabel>NVR Brand</FieldLabel>
+                <FieldLabel required>NVR Brand</FieldLabel>
                 <select
                   value={form.brand} onChange={set('brand')} disabled={isEdit}
                   style={{
                     width: '100%', height: 38, padding: '0 28px 0 12px', boxSizing: 'border-box',
-                    borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)',
+                    borderRadius: 9, background: 'var(--bg2)',
+                    border: `1px solid ${errors.brand ? 'var(--crit, #ef4444)' : 'var(--bd)'}`,
                     fontSize: 12.5, color: 'var(--tx)', cursor: isEdit ? 'default' : 'pointer', outline: 'none',
                     opacity: isEdit ? 0.6 : 1,
                   }}
                 >
                   {NVR_BRANDS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
                 </select>
+                <FieldError>{errors.brand}</FieldError>
               </div>
               <ModalInput label="NVR Name" required value={form.name} onChange={set('name')} placeholder="e.g. HQ Core Recorder" invalid={!!errors.name} error={errors.name} />
               <div>
                 <FieldLabel required>Location</FieldLabel>
+                <div ref={locationDropdownRef} style={{ position: 'relative', marginBottom: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setLocationOpen(open => !open)}
+                    style={{
+                      width: '100%', height: 38, padding: '0 10px 0 12px', boxSizing: 'border-box',
+                      borderRadius: 9, background: 'var(--bg2)',
+                      border: `1px solid ${errors.location ? 'var(--crit, #ef4444)' : 'var(--bd)'}`,
+                      fontSize: 12.5, color: form.location ? 'var(--tx)' : 'var(--ph)',
+                      cursor: 'pointer', outline: 'none',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {form.location || 'Select location...'}
+                    </span>
+                    <ChevronDown
+                      size={14}
+                      style={{
+                        flexShrink: 0,
+                        color: 'var(--tx3)',
+                        transform: locationOpen ? 'rotate(180deg)' : 'none',
+                        transition: 'transform .15s ease',
+                      }}
+                    />
+                  </button>
+
+                  {locationOpen && (
+                    <div
+                      className="vq-scroll"
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 5px)',
+                        left: 0,
+                        right: 0,
+                        zIndex: 80,
+                        maxHeight: 170,
+                        overflowY: 'auto',
+                        borderRadius: 9,
+                        background: 'var(--bg1solid)',
+                        border: '1px solid var(--bd)',
+                        boxShadow: '0 14px 34px rgba(15,23,42,.24)',
+                        padding: 4,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForm(f => ({ ...f, location: '' }));
+                          setErrors(prev => (prev.location ? { ...prev, location: undefined } : prev));
+                          setLocationOpen(false);
+                        }}
+                        style={{
+                          width: '100%', minHeight: 32, padding: '7px 10px', border: 0, borderRadius: 7,
+                          background: form.location ? 'transparent' : 'var(--bg2)',
+                          color: form.location ? 'var(--tx2)' : 'var(--tx)',
+                          fontSize: 12.5, cursor: 'pointer', textAlign: 'left',
+                        }}
+                      >
+                        Select location...
+                      </button>
+                      {locationOptions.map((name, i) => (
+                        <button
+                          key={`${name}-${i}`}
+                          type="button"
+                          onClick={() => {
+                            setForm(f => ({ ...f, location: name }));
+                            setErrors(prev => (prev.location ? { ...prev, location: undefined } : prev));
+                            setLocationOpen(false);
+                          }}
+                          style={{
+                            width: '100%', minHeight: 32, padding: '7px 10px', border: 0, borderRadius: 7,
+                            background: form.location === name ? 'rgba(99,102,241,.14)' : 'transparent',
+                            color: form.location === name ? 'var(--blue)' : 'var(--tx)',
+                            fontSize: 12.5, cursor: 'pointer', textAlign: 'left',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <select
                   value={form.location}
                   onChange={e => { set('location')(e); }}
                   style={{
+                    display: 'none',
                     width: '100%', height: 38, padding: '0 28px 0 12px', boxSizing: 'border-box',
                     borderRadius: 9, background: 'var(--bg2)',
                     border: `1px solid ${errors.location ? 'var(--crit, #ef4444)' : 'var(--bd)'}`,
@@ -992,16 +1105,16 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
               {isEdit ? (
                 <div />
               ) : (
-                <ModalInput label="Password" required type="password" value={form.pass} onChange={set('pass')} placeholder="••••••••" invalid={!!errors.pass} error={errors.pass} />
+                <ModalInput label="Password" type="password" value={form.pass} onChange={set('pass')} placeholder="••••••••" />
               )}
               {isEdit && (
                 <>
-                  <ModalInput label="Old Password" required type="password" value={form.oldPass} onChange={set('oldPass')} placeholder="••••••••" invalid={!!errors.oldPass} error={errors.oldPass} />
-                  <ModalInput label="New Password" required type="password" value={form.newPass} onChange={set('newPass')} placeholder="••••••••" invalid={!!errors.newPass} error={errors.newPass} />
+                  <ModalInput label="Old Password" type="password" value={form.oldPass} onChange={set('oldPass')} placeholder="••••••••" />
+                  <ModalInput label="New Password" type="password" value={form.newPass} onChange={set('newPass')} placeholder="••••••••" />
                 </>
               )}
-              <ModalInput label="RTSP Port" value={form.rtsp} onChange={set('rtsp')} placeholder="554" mono />
-              <ModalInput label="HTTP Port" value={form.http} onChange={set('http')} placeholder="80" mono />
+              <ModalInput label="RTSP Port" required value={form.rtsp} onChange={set('rtsp')} placeholder="554" mono invalid={!!errors.rtsp} error={errors.rtsp} />
+              <ModalInput label="HTTP Port" required value={form.http} onChange={set('http')} placeholder="80" mono invalid={!!errors.http} error={errors.http} />
             </div>
           )}
           {step === 2 && (
