@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import moment from 'moment';
-import { LogIn, LogOut, Clock, X, Mail, Building2, MapPin, ImageOff } from 'lucide-react';
+import { LogIn, LogOut, Clock, X, Mail, Building2, MapPin, ImageOff, Settings, Check } from 'lucide-react';
 import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useAttendanceSocket } from '../../../context/AttendanceSocketContext';
@@ -8,6 +8,11 @@ import { useAttendanceSocket } from '../../../context/AttendanceSocketContext';
 // Matches v1's AttendanceLogsLive: the Dubai deployment says "golf premise".
 // Unset (the default) falls back to the generic wording.
 const IS_DUBAI = import.meta.env.VITE_ORGANISATION_ID === 'dubai';
+const ANNOUNCEMENT_MODE_KEY = 'vq_live_attendance_announcement_mode';
+const ANNOUNCEMENT_MODES = {
+  department: 'department',
+  person: 'person',
+};
 
 /** Announce an event via the Web Speech API. Silent where unsupported. */
 function speak(text) {
@@ -22,6 +27,27 @@ function speak(text) {
   } catch {
     // speech is best-effort — never break the feed over it
   }
+}
+
+function initialAnnouncementMode() {
+  if (typeof window === 'undefined') return ANNOUNCEMENT_MODES.department;
+  try {
+    const saved = window.localStorage.getItem(ANNOUNCEMENT_MODE_KEY);
+    return saved === ANNOUNCEMENT_MODES.person ? ANNOUNCEMENT_MODES.person : ANNOUNCEMENT_MODES.department;
+  } catch {
+    return ANNOUNCEMENT_MODES.department;
+  }
+}
+
+function buildAnnouncement(item, mode) {
+  const isCheckIn = item.cameraType === 'checkin';
+  const action = isCheckIn ? 'entered' : 'exit';
+  if (mode === ANNOUNCEMENT_MODES.person) {
+    const name = item.fullName || item.name || 'Employee';
+    return `${name} ${action}`;
+  }
+  const dept = item.dept && item.dept !== '--' ? item.dept : 'Employee';
+  return `${dept} ${action}`;
 }
 
 function buildMessage(it) {
@@ -291,6 +317,10 @@ export default function LiveAttendance() {
   const { attendanceLogs, isMuted } = useAttendanceSocket() || {};
   const items = (Array.isArray(attendanceLogs) ? attendanceLogs : []).map(mapSocketItem).slice(0, 12);
   const present = items.length;
+  const [announcementMode, setAnnouncementMode] = useState(initialAnnouncementMode);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef(null);
+  const announcementModeRef = useRef(announcementMode);
 
   const isMutedRef = useRef(isMuted);
   useEffect(() => {
@@ -300,6 +330,31 @@ export default function LiveAttendance() {
       window.speechSynthesis.cancel();
     }
   }, [isMuted]);
+
+  useEffect(() => {
+    announcementModeRef.current = announcementMode;
+    try {
+      window.localStorage.setItem(ANNOUNCEMENT_MODE_KEY, announcementMode);
+    } catch {
+      // Local storage can be unavailable in restricted browser modes.
+    }
+  }, [announcementMode]);
+
+  useEffect(() => {
+    if (!settingsOpen) return undefined;
+    const onPointerDown = (event) => {
+      if (!settingsRef.current?.contains(event.target)) setSettingsOpen(false);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setSettingsOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [settingsOpen]);
 
   const [selected, setSelected] = useState(null);
 
@@ -316,8 +371,7 @@ export default function LiveAttendance() {
     // attendanceLogs is newest-first; announce in arrival order.
     fresh.slice().reverse().forEach((it) => {
       if (!isMutedRef.current) {
-        const dept = it.dept && it.dept !== '--' ? it.dept : 'Employee';
-        speak(`${dept} ${it.cameraType === 'checkin' ? 'entered' : 'exit'}`);
+        speak(buildAnnouncement(it, announcementModeRef.current));
       }
       seen.add(it.key);
     });
@@ -334,7 +388,60 @@ export default function LiveAttendance() {
         <span className="font-[family-name:var(--mono)] text-[10px] text-[var(--tx3)]">
           {IS_DUBAI ? 'live events' : 'face check-in'}
         </span>
-        <span className="ml-auto flex items-center gap-3">
+        <span className="ml-auto flex items-center gap-2">
+          <span ref={settingsRef} style={{ position: 'relative', display: 'inline-flex', flex: '0 0 auto' }}>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen((open) => !open)}
+              aria-label="Attendance announcement settings"
+              title="Attendance announcement settings"
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: 8,
+                border: '1px solid var(--bd)',
+                background: 'var(--bg2)',
+                color: 'var(--tx2)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <Settings size={14} strokeWidth={1.8} />
+            </button>
+            {settingsOpen && (
+              <div
+                className="absolute right-0 top-[34px] z-20 w-[230px] rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-[0_18px_44px_rgba(15,23,42,.22)] p-2"
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <div className="px-2 pt-1 pb-2 font-[family-name:var(--mono)] text-[10px] uppercase tracking-[.08em] text-[var(--tx3)]">
+                  Announcement Mode
+                </div>
+                {[
+                  { key: ANNOUNCEMENT_MODES.department, label: 'Department Based' },
+                  { key: ANNOUNCEMENT_MODES.person, label: 'Person Name Based' },
+                ].map((option) => {
+                  const active = announcementMode === option.key;
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => {
+                        setAnnouncementMode(option.key);
+                        setSettingsOpen(false);
+                      }}
+                      className="w-full h-9 px-2 rounded-lg flex items-center justify-between gap-2 text-left text-[12px] font-semibold transition-colors hover:bg-[var(--bg2)]"
+                      style={{ color: active ? 'var(--blue)' : 'var(--tx2)' }}
+                    >
+                      <span>{option.label}</span>
+                      {active && <Check size={14} strokeWidth={2} />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </span>
           <span className="font-[family-name:var(--mono)] text-[10.5px] text-[var(--tx2)]">
             <span className="text-[var(--ok)] font-semibold">{present}</span> present
           </span>

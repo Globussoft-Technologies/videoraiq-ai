@@ -185,7 +185,7 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 15px 11px', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap' }}>
         <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 13.5 }}>Latest Incident</span>
         <ActionLink style={{ marginLeft: 'auto', fontSize: 11, whiteSpace: 'nowrap' }} onClick={() => navigate('/incidents')}>
-          All incidents â†’
+          All incidents
         </ActionLink>
       </div>
       <AsyncBoundary loading={loading} error={error} isEmpty={isEmpty} onRetry={onRetry} minH={200} emptyLabel="No incidents yet">

@@ -7,6 +7,7 @@ import LiveAttendance from './LiveAttendance';
 import LatestIncident from './LatestIncident';
 import LiveThreatFeed from './LiveThreatFeed';
 import EngineActivity from './EngineActivity';
+import MultiSiteNetwork from './MultiSiteNetwork';
 import SharedMultiSelect from '../../../components/MultiSelect';
 import { useApi } from '../../../hooks/useApi';
 import { getHeaderStats, getDetectionChart, getCriticalityStats, getRecentIncidents } from '../../../helpers/dashboard';
@@ -153,6 +154,15 @@ export default function CommandCenter() {
   // Threat feed (also feeds per-site alert tally for the map)
   const crit = useApi(() => getCriticalityStats(filters, { skip: 0, limit: 50 }), [filterKey], { pollMs: 30000 });
   const alerts = crit.data?.recentAlerts || [];
+  const networkFilters = useMemo(() => {
+    const f = {};
+    const locs = filters.location || (location ? [location] : []);
+    if (locs?.length) f.location = locs;
+    return f;
+  }, [filters.location, location]);
+  const networkFilterKey = JSON.stringify(networkFilters);
+  const networkCrit = useApi(() => getCriticalityStats(networkFilters, { skip: 0, limit: 200 }), [networkFilterKey], { pollMs: 30000 });
+  const networkAlerts = networkCrit.data?.recentAlerts || [];
 
   // Recent incidents — TWO separate fetches:
   //   1. fetchIncidents (same API as Incident Center) → truly most-recent single incident
@@ -211,33 +221,6 @@ export default function CommandCenter() {
   );
 
   const allChannels = useApi(() => getChannels({ limit: 500 }), []);
-  const sitesEnriched = useMemo(() => {
-    // channelId -> site (location) name, lower-cased for matching; tally cams/site
-    const chLoc = {};
-    const camCount = {};
-    (allChannels.data || []).forEach((c) => {
-      const id = c._id || c.id;
-      const loc = (c.location || c.locationName || '').toLowerCase();
-      if (id) chLoc[id] = loc;
-      if (loc) camCount[loc] = (camCount[loc] || 0) + 1;
-    });
-    // tally recent alerts per site
-    const tally = {};
-    alerts.forEach((a) => {
-      const cid = a.channelId?._id || a.channelId;
-      const loc = chLoc[cid];
-      if (!loc) return;
-      if (!tally[loc]) tally[loc] = { alertCount: 0, critCount: 0 };
-      tally[loc].alertCount += 1;
-      const sev = (a.severity || '').toLowerCase();
-      if (sev === 'high' || sev === 'critical') tally[loc].critCount += 1;
-    });
-    return sites.map((s) => {
-      const key = (s.locationName || s.name || '').toLowerCase();
-      const t = tally[key] || { alertCount: 0, critCount: 0 };
-      return { ...s, alertCount: t.alertCount, critCount: t.critCount, cameraCount: camCount[key] || 0 };
-    });
-  }, [allChannels.data, alerts, sites]);
 
   const today = moment().format('YYYY-MM-DD');
 
@@ -352,8 +335,12 @@ export default function CommandCenter() {
         </div>
       </div>
 
-      {/* Map */}
-      {/* <MultiSiteNetwork sites={sitesEnriched} /> */}
+      <MultiSiteNetwork
+        nvrs={nvrsApi.data || []}
+        channels={allChannels.data || []}
+        alerts={networkAlerts}
+        activeLocations={networkFilters.location || []}
+      />
 
       {/* Engine activity + 24h detection events */}
       <EngineActivity

@@ -108,7 +108,7 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
     loadCameras();
   };
 
-  // ⌘K / Ctrl+K focuses the search box (matches the badge hint).
+  // Ctrl+K / Cmd+K focuses the search box.
   useEffect(() => {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -313,9 +313,6 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
               placeholder="Search cameras and pages…"
               style={{ fontSize: 12.5, flex: 1, minWidth: 0, background: 'transparent', border: 0, outline: 'none', color: 'var(--tx)' }}
             />
-            <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', border: '1px solid var(--bd)', borderRadius: 4, padding: '1px 5px', flex: '0 0 auto' }}>
-              ⌘K
-            </span>
           </div>
 
           {searchOpen && trimmed && (
