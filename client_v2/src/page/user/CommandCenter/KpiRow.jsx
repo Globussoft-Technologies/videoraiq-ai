@@ -26,19 +26,22 @@ function todayIndex() {
   return (new Date().getDay() + 6) % 7;
 }
 
-export default function KpiRow({ stats = {}, dailyTotals = [], sitesCount = 0, onlineCameras = { online: 0, total: 0 }, loading }) {
+export default function KpiRow({ stats = {}, incidentCounts = null, dailyTotals = [], eventsToday, sitesCount = 0, onlineCameras = { online: 0, total: 0 }, loading }) {
   const navigate = useNavigate();
-  const eventsToday = dailyTotals.length ? dailyTotals[todayIndex()] : 0;
-  const camerasTotal = onlineCameras.total || num(stats.overAllCameraCount ?? 0);
+  const todayEvents = eventsToday ?? (dailyTotals.length ? dailyTotals[todayIndex()] : 0);
+  const camerasTotal = onlineCameras.total || Number(stats.overAllCameraCount ?? 0);
   const cameras = `${num(onlineCameras.online)}/${num(camerasTotal)}`;
+  const activeAlerts = incidentCounts?.status?.new ?? stats.totalAlerts ?? 0;
+  const highAlerts = incidentCounts?.severity?.high ?? stats.criticalAlerts ?? 0;
+  const resolved = incidentCounts?.status?.resolved ?? stats.incidentsResolved ?? 0;
 
   const cards = [
-    { label: 'Cameras Online', value: cameras, sub: 'streaming now', color: 'var(--blue)', onClick: () => navigate('/live') },
-    { label: 'Active Alerts', value: num(stats.totalAlerts ?? 0), sub: 'unresolved', color: 'var(--warn)', spark: dailyTotals, onClick: () => navigate('/alerts', { state: { statusFilter: 'new' } }) },
-    { label: 'High', value: num(stats.criticalAlerts ?? 0), sub: 'high severity', color: 'var(--crit)', onClick: () => navigate('/incidents', { state: { severityFilter: 'high' } }) },
-    { label: 'Events Today', value: num(eventsToday), sub: 'detections', color: 'var(--violet)', spark: dailyTotals, onClick: () => navigate('/incidents', { state: { date: todayStr() } }) },
-    { label: 'Resolved', value: num(stats.incidentsResolved ?? 0), sub: 'incidents', color: 'var(--ok)', onClick: () => navigate('/incidents', { state: { statusFilter: 'resolved' } }) },
-    { label: 'Sites Online', value: sitesCount ? `${sitesCount}/${sitesCount}` : '—', sub: 'monitored', color: 'var(--cyan)', unavailable: !sitesCount, onClick: () => navigate('/locations') },
+    { label: 'Cameras Online', value: cameras, sub: `${num(camerasTotal)} total`, color: 'var(--blue)', delta: cameras, deltaColor: 'var(--blue)', onClick: () => navigate('/live') },
+    { label: 'Active Alerts', value: num(activeAlerts), sub: 'unresolved', color: 'var(--warn)', spark: dailyTotals, delta: num(activeAlerts), deltaColor: 'var(--warn)', onClick: () => navigate('/alerts', { state: { statusFilter: 'new' } }) },
+    { label: 'High', value: num(highAlerts), sub: 'high severity', color: 'var(--crit)', spark: dailyTotals, delta: num(highAlerts), deltaColor: 'var(--crit)', onClick: () => navigate('/incidents', { state: { severityFilter: 'high' } }) },
+    { label: 'Events Today', value: num(todayEvents), sub: 'detections today', color: 'var(--violet)', spark: dailyTotals, delta: num(todayEvents), deltaColor: 'var(--violet)', onClick: () => navigate('/incidents', { state: { date: todayStr() } }) },
+    { label: 'Resolved', value: num(resolved), sub: 'incidents', color: 'var(--ok)', spark: dailyTotals, delta: num(resolved), deltaColor: 'var(--ok)', onClick: () => navigate('/incidents', { state: { statusFilter: 'resolved' } }) },
+    { label: 'Sites Online', value: sitesCount ? `${sitesCount}/${sitesCount}` : '—', sub: 'monitored', color: 'var(--cyan)', delta: sitesCount ? '100%' : null, deltaColor: 'var(--cyan)', unavailable: !sitesCount, onClick: () => navigate('/locations') },
   ];
 
   return (

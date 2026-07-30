@@ -20,6 +20,59 @@ const CAMERA_TYPE_OPTIONS = [
   { id: 'checkin', label: 'Check In' },
   { id: 'checkout', label: 'Check Out' },
 ];
+const ALL_STATUS_FILTER = ['new', 'resolved', 'reported'];
+
+function severityFilterValue(value) {
+  if (value === 'high') return ['high', 'High', 'HIGH'];
+  if (value === 'moderate') return ['moderate', 'medium', 'Moderate', 'Medium', 'MODERATE', 'MEDIUM'];
+  if (value === 'low') return ['low', 'Low', 'LOW'];
+  return value;
+}
+
+async function getDashboardIncidentCounts(filters = {}) {
+  const baseFilter = { ...filters, statusFilter: ALL_STATUS_FILTER };
+  const result = await fetchIncidents({ skip: 0, limit: 1 }, baseFilter);
+  const counts = result.counts || {};
+
+  if (counts.severity && counts.status) {
+    return {
+      severity: {
+        all: Number(counts.severity.all ?? result.totalCount) || 0,
+        high: Number(counts.severity.high) || 0,
+        moderate: Number(counts.severity.moderate ?? counts.severity.medium) || 0,
+        low: Number(counts.severity.low) || 0,
+      },
+      status: {
+        all: Number(counts.status.all ?? result.totalCount) || 0,
+        new: Number(counts.status.new) || 0,
+        resolved: Number(counts.status.resolved) || 0,
+        reported: Number(counts.status.reported) || 0,
+      },
+    };
+  }
+
+  const [high, active, resolved, reported] = await Promise.all([
+    fetchIncidents({ skip: 0, limit: 1 }, { ...filters, severity: severityFilterValue('high'), statusFilter: ALL_STATUS_FILTER }),
+    fetchIncidents({ skip: 0, limit: 1 }, { ...filters, statusFilter: 'new' }),
+    fetchIncidents({ skip: 0, limit: 1 }, { ...filters, statusFilter: 'resolved' }),
+    fetchIncidents({ skip: 0, limit: 1 }, { ...filters, statusFilter: 'reported' }),
+  ]);
+
+  return {
+    severity: {
+      all: Number(result.totalCount) || 0,
+      high: Number(high.totalCount) || 0,
+      moderate: 0,
+      low: 0,
+    },
+    status: {
+      all: Number(result.totalCount) || 0,
+      new: Number(active.totalCount) || 0,
+      resolved: Number(resolved.totalCount) || 0,
+      reported: Number(reported.totalCount) || 0,
+    },
+  };
+}
 
 function dateFilter(daysAgo = 0) {
   return moment().subtract(daysAgo, 'days').format('YYYY-MM-DD');
@@ -140,6 +193,7 @@ export default function CommandCenter() {
   // 0 alerts when filtered to a single day, which zeroed the t
   //  iles).
   const header = useApi(() => getHeaderStats(filters), [filterKey], { pollMs: 60000 });
+  const incidentCounts = useApi(() => getDashboardIncidentCounts(filters), [filterKey], { pollMs: 60000 });
 
   // Detection chart (engine activity + KPI sparklines)
   const detChart = useApi(() => getDetectionChart(filters), [filterKey], { pollMs: 120000 });
@@ -225,7 +279,7 @@ export default function CommandCenter() {
   const today = moment().format('YYYY-MM-DD');
 
   // Engine activity · Today — aggregate today's incidents by detection type.
-  const todayFilter = { ...filters, startDate: today, endDate: today };
+  const todayFilter = { ...filters, startDate: today, endDate: today, statusFilter: ALL_STATUS_FILTER };
   const todayApi = useApi(
     () => fetchIncidents({ skip: 0, limit: DETECTION_SAMPLE_LIMIT }, todayFilter),
     [filterKey, today],
@@ -235,7 +289,7 @@ export default function CommandCenter() {
 
   // Detection events · 24h — bucket the last 24 hours of incidents by hour.
   const yesterday = dateFilter(1);
-  const dayFilter = { ...filters, startDate: yesterday, endDate: today };
+  const dayFilter = { ...filters, startDate: yesterday, endDate: today, statusFilter: ALL_STATUS_FILTER };
   const dayApi = useApi(
     () => fetchIncidents({ skip: 0, limit: DETECTION_SAMPLE_LIMIT }, dayFilter),
     [filterKey, yesterday, today],
@@ -304,10 +358,12 @@ export default function CommandCenter() {
 
       <KpiRow
         stats={header.data || {}}
+        incidentCounts={incidentCounts.data}
         dailyTotals={dailyTotals}
+        eventsToday={todayApi.data?.totalCount}
         sitesCount={sites.length}
         onlineCameras={onlineCameras}
-        loading={header.loading}
+        loading={header.loading || incidentCounts.loading}
       />
 
       {/* Live camera + attendance | latest incident + controls */}
