@@ -31,29 +31,35 @@ const SortHeader = ({ label, field, sortField, sortOrder, dispatch }) => (
 
 const mono = { fontFamily: 'var(--mono)' };
 
+const validMoment = (value) => {
+  if (!value || value === '--') return null;
+  const parsed = moment(value);
+  return parsed.isValid() ? parsed : null;
+};
+
 /**
  * Derive check-in/out strings, working-hours and status from a mapped
  * attendance row. Shared by the table columns and the grid card so both
  * views stay consistent.
  */
 const attendanceMeta = (item, region, convertToRegionTime) => {
-  const inM = moment(item.login);
-  const outM = item.logout && item.logout !== '--' ? moment(item.logout) : null;
-  const checkInStr = inM.isValid() ? convertToRegionTime(item.login, region) : '--';
-  const checkOutStr = outM && outM.isValid() ? convertToRegionTime(item.logout, region) : '--';
+  const inM = validMoment(item.login);
+  const outM = validMoment(item.logout);
+  const checkInStr = inM ? convertToRegionTime(item.login, region) : '--';
+  const checkOutStr = outM ? convertToRegionTime(item.logout, region) : '--';
 
   let hoursStr = '--';
-  if (inM.isValid() && outM && outM.isValid()) {
+  if (inM && outM) {
     const mins = Math.max(0, outM.diff(inM, 'minutes'));
     hoursStr = `${Math.floor(mins / 60)}h ${mins % 60}m`;
-  } else if (inM.isValid()) {
+  } else if (inM) {
     hoursStr = 'active';
   }
 
-  const checkedOut = !!(outM && outM.isValid());
+  const checkedOut = !!outM;
   // Present only when the person BOTH checked in and checked out. A check-in
   // with no check-out (forgotten / still open) counts as Absent.
-  const present = inM.isValid() && checkedOut;
+  const present = !!inM && checkedOut;
   const statusLabel = present ? 'Present' : 'Absent';
   const statusColor = present ? '#22c55e' : '#ef4444';
 
@@ -153,6 +159,18 @@ export const buildColumns = ({ dispatch, sortField, sortOrder, region, convertTo
           {row.original.logout === '--' ? '--' : convertToRegionTime(row.original.logout, region)}
         </span>
       ),
+    },
+    {
+      accessorKey: 'hours',
+      header: 'Hours',
+      cell: ({ row }) => {
+        const { hoursStr } = attendanceMeta(row.original, region, convertToRegionTime);
+        return (
+          <span className="text-[var(--tx2)] text-xs" style={mono}>
+            {hoursStr}
+          </span>
+        );
+      },
     },
     {
       accessorKey: 'status',
