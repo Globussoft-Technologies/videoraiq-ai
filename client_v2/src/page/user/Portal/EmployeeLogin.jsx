@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import Cookies from "js-cookie";
@@ -7,6 +7,7 @@ import logo from "@/assets/logo.svg";
 import heroShot from "@/assets/21.jpg";
 import { PInput, PEye, PButton } from "./PortalFields";
 import { userLogin, forgotPassword } from "@/page/user/Users/api/post/Index";
+import AuthLoader from "@/page/user/Users/AuthLoader";
 import "./portal.css";
 
 const url = import.meta.env.VITE_ENV;
@@ -40,6 +41,7 @@ export default function EmployeeLogin() {
   const [rememberMe, setRememberMe] = useState(false);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [authenticating, setAuthenticating] = useState(false);
 
   // Forgot-password state (mirrors the client folder's ForgotPassword flow).
   const [fpOpen, setFpOpen] = useState(false);
@@ -131,17 +133,27 @@ export default function EmployeeLogin() {
         }
 
         toast.success(response?.data?.body?.message || "Signed in");
-        navigate("/dashboard");
+        setAuthenticating(true);
       } else {
         toast.error(response?.data?.body?.message || "Failed to Login!");
+        setIsSubmitting(false);
       }
     } catch (error) {
       console.log("Login failed:", error.response?.data || error.message);
       toast.error(error?.response?.data?.body?.message || "Failed to Login!");
-    } finally {
       setIsSubmitting(false);
     }
   };
+
+  // Stable across re-renders so AuthLoader's completion timer (see its effect
+  // deps) never restarts mid-animation — same fix applied to the admin login.
+  const handleAuthComplete = useCallback(() => {
+    navigate("/dashboard");
+  }, [navigate]);
+
+  if (authenticating) {
+    return <AuthLoader onComplete={handleAuthComplete} />;
+  }
 
   return (
     <div className="vqp flex min-h-screen w-full bg-white font-['IBM_Plex_Sans',sans-serif] text-[#0f1729] overflow-hidden">

@@ -57,7 +57,7 @@ const LogEmployeeProfileDialog = ({ open = false, onOpenChange, onClose, profile
                 src={profile.image}
                 alt={name}
                 className="w-full h-full rounded-full"
-                imgClassName="w-full h-full object-cover"
+                imgClassName="w-full h-full object-cover object-top"
               />
             ) : (
               <span

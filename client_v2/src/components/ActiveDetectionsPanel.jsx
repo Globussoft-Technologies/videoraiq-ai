@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Radar, Settings, Map, Monitor, MapPin, HardDrive, Cpu, Globe, Video, Layers, Barcode, Network, Cctv } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { timeAgo, detectionLabel } from '../lib/format';
@@ -107,12 +108,13 @@ function EngineChip({ name, color }) {
   );
 }
 
-function InfoRow({ label, value, mono }) {
+function InfoRow({ icon: Icon, tint, label, value, mono }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 py-[7px] border-b border-[var(--bd)] last:border-b-0 last:pb-0 first:pt-0">
-      <span className="shrink-0 whitespace-nowrap text-[11.5px] text-[var(--tx3)]">{label}</span>
+    <div className="grid grid-cols-[15px_auto_1fr] items-center gap-x-2 py-[10px] border-b border-[var(--bd)] last:border-b-0">
+      {Icon && <Icon size={13} className="flex-none" style={{ color: tint || 'var(--tx3)' }} strokeWidth={2} />}
+      <span className="min-w-[78px] shrink-0 whitespace-nowrap text-[12px] text-[var(--tx3)]">{label}</span>
       <span
-        className={`min-w-0 truncate text-right text-[12px] font-medium text-[var(--tx)] ${mono ? 'font-mono text-[11px]' : ''}`}
+        className={`min-w-0 truncate text-left text-[12.5px] font-medium text-[var(--tx)] ${mono ? 'font-mono text-[11px]' : ''}`}
         title={typeof value === 'string' ? value : undefined}
       >
         {value}
@@ -121,7 +123,19 @@ function InfoRow({ label, value, mono }) {
   );
 }
 
-const cardClass = 'rounded-[13px] border border-[var(--bd)] bg-[var(--bg1)] p-[15px]';
+function SectionIcon({ icon: Icon, tint }) {
+  return (
+    <span
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+      style={{ background: `${tint}1a`, color: tint }}
+    >
+      <Icon size={15} strokeWidth={2} />
+    </span>
+  );
+}
+
+const cardClass = 'rounded-[14px] border border-[var(--bd)] bg-[var(--bg1)] p-4';
+const cardClassFlush = 'rounded-[14px] border border-[var(--bd)] bg-[var(--bg1)] overflow-hidden';
 
 /** Sidebar next to the single-camera playback/live view: real live detection
  * events (from the shared detection socket), the camera's enabled engines,
@@ -143,58 +157,82 @@ export default function ActiveDetectionsPanel({ channel }) {
   const camIp = channel?.ipAddress || '—';
 
   return (
-    <div className="flex flex-col gap-3.5">
+    <div className="flex flex-col gap-4">
       <div className={cardClass}>
-        <div className="mb-[13px] flex items-center justify-between">
-          <span className="font-[var(--disp)] text-[13px] font-semibold text-[var(--tx)]">Active Detections</span>
-          <span className="font-mono text-[10px] text-[var(--cyan)]">{liveDetections.length} TRACKED</span>
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <SectionIcon icon={Radar} tint="var(--blue)" />
+            <div className="min-w-0">
+              <div className="font-[var(--disp)] text-[13.5px] font-semibold leading-tight text-[var(--tx)]">Active Detections</div>
+              {!liveDetections.length && (
+                <div className="text-[11px] leading-tight text-[var(--tx3)]">No detections yet on this camera</div>
+              )}
+            </div>
+          </div>
+          <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-[rgba(34,197,94,.14)] px-2.5 py-1 font-mono text-[10px] font-semibold tracking-wide text-[var(--ok)]">
+            <span className="h-[6px] w-[6px] shrink-0 rounded-full bg-[var(--ok)]" />
+            TRACKED
+          </span>
         </div>
-        {liveDetections.length ? (
+        {liveDetections.length > 0 && (
           <div className="flex flex-col gap-3">
             {liveDetections.map((d) => (
               <DetectionRow key={d.key} detection={d} />
             ))}
           </div>
-        ) : (
-          <div className="text-xs text-[var(--tx3)]">No detections yet on this camera</div>
         )}
       </div>
 
       <div className={cardClass}>
-        <div className="mb-3 font-[var(--disp)] text-[13px] font-semibold text-[var(--tx)]">
-          Engines on this Camera
+        <div className="mb-3 flex items-center gap-2.5">
+          <SectionIcon icon={Settings} tint="var(--violet)" />
+          <div className="min-w-0">
+            <div className="font-[var(--disp)] text-[13.5px] font-semibold leading-tight text-[var(--tx)]">Engines on this Camera</div>
+            {!engines.length && (
+              <div className="text-[11px] leading-tight text-[var(--tx3)]">No detections enabled on this camera</div>
+            )}
+          </div>
         </div>
-        {engines.length ? (
-          <div className="flex flex-wrap gap-[7px]">
+        {engines.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-[7px]">
             {engines.map((name, i) => (
               <EngineChip key={name} name={name} color={ENGINE_PALETTE[i % ENGINE_PALETTE.length]} />
             ))}
           </div>
-        ) : (
-          <div className="text-xs text-[var(--tx3)]">No detections enabled on this camera</div>
         )}
         <button
           type="button"
           onClick={() => navigate('/engines')}
-          className="mt-3.5 w-full rounded-[9px] border border-[rgba(59,130,246,.4)] py-2 text-center text-xs font-medium text-[var(--blue)] cursor-pointer"
+          className="flex w-full items-center justify-center gap-2 rounded-full border border-[rgba(59,130,246,.4)] py-2 text-center text-[12px] font-medium text-[var(--blue)] cursor-pointer"
         >
+          <Map size={13} strokeWidth={2} />
           Configure detection zones →
         </button>
       </div>
 
-      <div className={cardClass}>
-        <div className="mb-1 font-[var(--disp)] text-[13px] font-semibold text-[var(--tx)]">
-          Camera Info
+      <div className={cardClassFlush}>
+        <div
+          className="relative flex items-center gap-2.5 overflow-hidden px-4 py-3.5"
+          style={{ background: 'linear-gradient(120deg, rgba(59,130,246,.12), rgba(168,85,247,.12))' }}
+        >
+          <span
+            className="pointer-events-none absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full"
+            style={{ background: 'rgba(168,85,247,.16)', color: 'var(--violet)' }}
+          >
+            <Cctv size={20} strokeWidth={1.75} />
+          </span>
+          <SectionIcon icon={Monitor} tint="var(--blue)" />
+          <div className="relative font-[var(--disp)] text-[13.5px] font-semibold text-[var(--tx)]">Camera Information</div>
         </div>
-        <div className="flex flex-col">
-          <InfoRow label="Site" value={site} />
-          <InfoRow label="NVR" value={nvrName} />
-          <InfoRow label="NVR Model" value={nvrBrandModel} />
-          <InfoRow label="NVR IP" value={nvrIp} mono />
-          <InfoRow label="Camera" value={channel?.customName || channel?.name || '—'} />
-          {camModel !== '—' && <InfoRow label="Camera Model" value={camModel} />}
-          {camSerial !== '—' && <InfoRow label="Serial No." value={camSerial} mono />}
-          <InfoRow label="Camera IP" value={camIp} mono />
+        <div className="flex flex-col px-4 pb-1 pt-1">
+          <InfoRow icon={MapPin} tint="var(--blue)" label="Site" value={site} />
+          <InfoRow icon={HardDrive} tint="var(--magenta)" label="NVR" value={nvrName} />
+          <InfoRow icon={Cpu} tint="var(--violet)" label="NVR Model" value={nvrBrandModel} />
+          <InfoRow icon={Globe} tint="var(--cyan)" label="NVR IP" value={nvrIp} mono />
+          <InfoRow icon={Video} tint="var(--ok)" label="Camera" value={channel?.customName || channel?.name || '—'} />
+          {camModel !== '—' && <InfoRow icon={Layers} tint="var(--violet)" label="Camera Model" value={camModel} />}
+          {camSerial !== '—' && <InfoRow icon={Barcode} tint="var(--warn)" label="Serial No." value={camSerial} mono />}
+          <InfoRow icon={Network} tint="var(--blue)" label="Camera IP" value={camIp} mono />
         </div>
       </div>
     </div>

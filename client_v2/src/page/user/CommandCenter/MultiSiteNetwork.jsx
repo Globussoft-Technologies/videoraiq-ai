@@ -180,12 +180,13 @@ function buildLines(nodes) {
   return lines;
 }
 
-export default function MultiSiteNetwork({ nvrs = [], channels = [], alerts = [], activeLocations = [] }) {
+export default function MultiSiteNetwork({ nvrs = [], channels = [], alerts = [], activeLocations = [], tall = false }) {
   const nodes = withPositions(buildNodes({ nvrs, channels, alerts, activeLocations }));
   const lines = buildLines(nodes);
   const totalCams = nodes.reduce((sum, node) => sum + node.cameraCount, 0);
   const groups = new Set(nodes.map((node) => node.group));
   const hasLocations = [...groups].some((group) => group !== FALLBACK_GROUP);
+  const baseHeight = tall ? 520 : 390;
 
   return (
     <Panel
@@ -195,12 +196,12 @@ export default function MultiSiteNetwork({ nvrs = [], channels = [], alerts = []
         padding: 0,
         position: 'relative',
         overflow: 'hidden',
-        minHeight: 390,
+        minHeight: baseHeight,
         background: 'linear-gradient(180deg,#101827,#080d18)',
       }}
     >
       <style>{`
-        .vq-msn { min-height: 390px; }
+        .vq-msn { min-height: ${baseHeight}px; }
         .vq-msn .vq-msn-header {
           display: flex;
           flex-wrap: wrap;
@@ -219,10 +220,10 @@ export default function MultiSiteNetwork({ nvrs = [], channels = [], alerts = []
           100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
         }
         @media (max-width: 900px) {
-          .vq-msn { min-height: 430px; }
+          .vq-msn { min-height: ${baseHeight + 40}px; }
         }
         @media (max-width: 640px) {
-          .vq-msn { min-height: 500px; }
+          .vq-msn { min-height: ${baseHeight + 110}px; }
           .vq-msn .vq-msn-node-label {
             max-width: 38vw;
             font-size: 10px !important;
@@ -296,7 +297,7 @@ export default function MultiSiteNetwork({ nvrs = [], channels = [], alerts = []
       </div>
 
       {nodes.length === 0 ? (
-        <Empty label="No NVR connectivity available" minH={360} />
+        <Empty label="No NVR connectivity available" minH={baseHeight - 30} />
       ) : (
         <>
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>

@@ -6,6 +6,7 @@ import LiveCamera from './LiveCamera';
 import LiveAttendance from './LiveAttendance';
 import LatestIncident from './LatestIncident';
 import LiveThreatFeed from './LiveThreatFeed';
+import SystemControls from './SystemControls';
 import EngineActivity from './EngineActivity';
 import MultiSiteNetwork from './MultiSiteNetwork';
 import SharedMultiSelect from '../../../components/MultiSelect';
@@ -13,6 +14,7 @@ import { useApi } from '../../../hooks/useApi';
 import { getHeaderStats, getDetectionChart, getCriticalityStats, getRecentIncidents } from '../../../helpers/dashboard';
 import { getChannels, getLocations, getNVRs, getDepartments } from '../../../helpers/monitoring';
 import { fetchIncidents } from '../../../helpers/incidents';
+import { usePermissions } from '@/context/PermissionContext';
 
 const DETECTION_SAMPLE_LIMIT = 1000;
 
@@ -105,6 +107,12 @@ export default function CommandCenter() {
   const ctx = useOutletContext() || {};
   const location = ctx.location || '';
   const sites = ctx.sites || [];
+
+  // SystemControls renders nothing without this permission — when that's the
+  // case the right column has no card next to NVR Interconnectivity, so it
+  // should break out full-width instead of staying pinned to the left column.
+  const { permissions } = usePermissions();
+  const showSystemControls = !!permissions?.detectionSettings?.view && !!permissions?.detectionSettings?.edit;
 
   // ── Filters (Location · NVR · Department · Camera Type) ──────────────────────
   const [selectedLocations, setSelectedLocations] = useState([]);
@@ -371,6 +379,14 @@ export default function CommandCenter() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
           <LiveCamera channels={streamingChannels} loading={channels.loading} latestByChannel={latestByChannel} onOnlineCountChange={onOnlineCountChange} />
           <LiveAttendance />
+          {showSystemControls && (
+            <MultiSiteNetwork
+              nvrs={nvrsApi.data || []}
+              channels={allChannels.data || []}
+              alerts={networkAlerts}
+              activeLocations={networkFilters.location || []}
+            />
+          )}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
           <LatestIncident
@@ -381,6 +397,7 @@ export default function CommandCenter() {
             onRetry={latestApi.refetch}
             onChanged={refetchHeader}
           />
+          <SystemControls />
           <LiveThreatFeed
             alerts={alerts}
             loading={crit.loading}
@@ -391,12 +408,18 @@ export default function CommandCenter() {
         </div>
       </div>
 
-      <MultiSiteNetwork
-        nvrs={nvrsApi.data || []}
-        channels={allChannels.data || []}
-        alerts={networkAlerts}
-        activeLocations={networkFilters.location || []}
-      />
+      {/* No SystemControls card in the right column at this point — let NVR
+          Interconnectivity break out full-width and taller instead of being
+          squeezed into the left column next to nothing. */}
+      {!showSystemControls && (
+        <MultiSiteNetwork
+          nvrs={nvrsApi.data || []}
+          channels={allChannels.data || []}
+          alerts={networkAlerts}
+          activeLocations={networkFilters.location || []}
+          tall
+        />
+      )}
 
       {/* Engine activity + 24h detection events */}
       <EngineActivity

@@ -35,6 +35,13 @@ export default function KpiRow({ stats = {}, incidentCounts = null, dailyTotals 
   const highAlerts = incidentCounts?.severity?.high ?? stats.criticalAlerts ?? 0;
   const resolved = incidentCounts?.status?.resolved ?? stats.incidentsResolved ?? 0;
 
+  // Only Events Today is backed by a real weekly series (dailyTotals, from
+  // dashboard/detectionChart). Active Alerts (stats.totalAlerts) is an
+  // all-time unresolved-incident count with no date breakdown anywhere in
+  // the backend — deriving a "weekly trend" from criticalityStats' 50-record
+  // preview page was a tiny, non-representative sample of 800+ incidents and
+  // produced a meaningless zig-zag, not a real trend. No spark/delta here
+  // until a real per-day alert-count endpoint exists.
   const cards = [
     { label: 'Cameras Online', value: cameras, sub: `${num(camerasTotal)} total`, color: 'var(--blue)', delta: cameras, deltaColor: 'var(--blue)', onClick: () => navigate('/live') },
     { label: 'Active Alerts', value: num(activeAlerts), sub: 'unresolved', color: 'var(--warn)', spark: dailyTotals, delta: num(activeAlerts), deltaColor: 'var(--warn)', onClick: () => navigate('/alerts', { state: { statusFilter: 'new' } }) },

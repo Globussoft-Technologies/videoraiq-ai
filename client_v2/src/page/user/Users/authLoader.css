@@ -1,65 +1,94 @@
 /* Full-screen "authenticating" loader shown after a successful sign-in,
-   before the dashboard mounts. Theme-aware: the base rules are DARK (the app
-   default) and are overridden for light via [data-theme='light']. The theme is
-   stamped on .vqauth-loader by AuthLoader.jsx (read from localStorage), because
-   this renders before V2ThemeProvider sets data-vq-theme on <body>. */
+   before the dashboard mounts. A 1:1 port of the HTML prototype's
+   "AI BOOT LOADER" (VideoraIQ Command.dc.html, [data-vq-loader]) — same
+   element sizes, same animation names/durations/delays, translated from
+   inline styles + Tailwind-less CSS vars into this stylesheet. Theme-aware:
+   the base rules are DARK (the app default) and are overridden for light via
+   [data-theme='light']. The theme is stamped on .vqauth-loader by
+   AuthLoader.jsx (read from localStorage), because this renders before
+   V2ThemeProvider sets data-vq-theme on <body>. */
 
-/* Dark = default base */
+/* Dark = default base (prototype's [data-vq-theme="dark"] loader vars) */
 .vqauth-loader {
-  --a-bg: #07090c;
-  --a-grid: rgba(255, 255, 255, 0.05);
-  --a-ring: rgba(255, 255, 255, 0.16);
-  --a-ring2: rgba(255, 255, 255, 0.1);
-  --a-ring3: rgba(255, 255, 255, 0.14);
-  --a-bar-track: rgba(255, 255, 255, 0.1);
-  --a-label: #98a2bd;
+  --a-bg:
+    radial-gradient(900px 620px at 50% 36%, rgba(59, 130, 246, 0.16), transparent 60%),
+    radial-gradient(760px 520px at 50% 72%, rgba(168, 85, 247, 0.15), transparent 62%),
+    #06070d;
+  --a-grid: rgba(120, 150, 255, 0.05);
+  --a-ring: rgba(255, 255, 255, 0.07);
+  --a-ring2: rgba(255, 255, 255, 0.05);
+  --a-track: rgba(255, 255, 255, 0.08);
+  --a-label: #8492b2;
+  --a-glow: rgba(99, 102, 241, 0.45);
+  --a-logo-shadow: drop-shadow(0 0 20px rgba(59, 130, 246, 0.55));
 }
 
-/* Light override */
+/* Light override (prototype's [data-vq-theme="light"] loader vars) */
 .vqauth-loader[data-theme="light"] {
-  --a-bg: #e6eaf2;
-  --a-grid: rgba(15, 23, 42, 0.05);
-  --a-ring: rgba(15, 23, 42, 0.16);
-  --a-ring2: rgba(15, 23, 42, 0.1);
-  --a-ring3: rgba(15, 23, 42, 0.14);
-  --a-bar-track: rgba(15, 23, 42, 0.08);
-  --a-label: #52607c;
+  --a-bg:
+    radial-gradient(900px 620px at 50% 36%, rgba(59, 130, 246, 0.14), transparent 60%),
+    radial-gradient(760px 520px at 50% 72%, rgba(168, 85, 247, 0.12), transparent 62%),
+    #eef2f8;
+  --a-grid: rgba(40, 80, 200, 0.05);
+  --a-ring: rgba(15, 23, 42, 0.1);
+  --a-ring2: rgba(15, 23, 42, 0.06);
+  --a-track: rgba(15, 23, 42, 0.1);
+  --a-label: #5b6b86;
+  --a-glow: rgba(99, 102, 241, 0.26);
+  --a-logo-shadow: drop-shadow(0 0 16px rgba(59, 130, 246, 0.32));
 }
 
 .vqauth-loader {
   position: fixed;
   inset: 0;
-  z-index: 2000;
+  z-index: 9999;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 42px;
   overflow: hidden;
-  background:
-    radial-gradient(1100px 600px at 82% -10%, rgba(168, 85, 247, 0.16), transparent 60%),
-    radial-gradient(900px 520px at -8% 112%, rgba(59, 130, 246, 0.16), transparent 55%),
-    var(--a-bg);
+  background: var(--a-bg);
   font-family: "IBM Plex Sans", sans-serif;
-  animation: vqauth-fadein 0.35s ease both;
+  transition: opacity 0.55s ease, visibility 0.55s ease;
 }
 
+/* panning grid */
 .vqauth-grid {
   position: absolute;
   inset: 0;
   background-image:
     linear-gradient(var(--a-grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--a-grid) 1px, transparent 1px);
-  background-size: 46px 46px;
-  animation: vqauth-gridpan 8s linear infinite;
+  background-size: 44px 44px;
+  mask-image: radial-gradient(circle at 50% 42%, #000, transparent 72%);
+  -webkit-mask-image: radial-gradient(circle at 50% 42%, #000, transparent 72%);
+  animation: vqauth-gridpan 3s linear infinite;
 }
 
+/* ambient drifting glows */
 .vqauth-glow {
   position: absolute;
-  inset: 0;
-  background: radial-gradient(420px 420px at 50% 42%, rgba(124, 92, 255, 0.14), transparent 70%);
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.1), transparent 65%);
+  top: 8%;
+  left: 14%;
+  animation: vqauth-float 6s ease-in-out infinite;
+}
+.vqauth-glow--2 {
+  width: 480px;
+  height: 480px;
+  background: radial-gradient(circle, rgba(217, 70, 239, 0.09), transparent 65%);
+  top: auto;
+  left: auto;
+  bottom: 6%;
+  right: 12%;
+  animation-duration: 7s;
+  animation-delay: 1s;
 }
 
+/* HUD radar stack */
 .vqauth-radar {
   position: relative;
   width: 300px;
@@ -67,137 +96,227 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-bottom: 40px;
+  animation: vqauth-loaderin 0.7s cubic-bezier(0.2, 0.7, 0.3, 1) both;
 }
 
 .vqauth-corner {
   position: absolute;
-  width: 26px;
-  height: 26px;
-  border: 1.6px solid;
-  opacity: 0.75;
+  width: 30px;
+  height: 30px;
+  border: 2px solid;
+  animation: vqauth-corner 2s ease-in-out infinite;
 }
-.vqauth-corner--tl { top: -14px; left: -14px; border-right: 0; border-bottom: 0; border-color: #3b82f6; }
-.vqauth-corner--tr { top: -14px; right: -14px; border-left: 0; border-bottom: 0; border-color: #a855f7; }
-.vqauth-corner--bl { bottom: -14px; left: -14px; border-right: 0; border-top: 0; border-color: #3b82f6; }
-.vqauth-corner--br { bottom: -14px; right: -14px; border-left: 0; border-top: 0; border-color: #a855f7; }
+.vqauth-corner--tl { top: 0; left: 0; border-right: 0; border-bottom: 0; border-radius: 4px 0 0 0; border-color: var(--blue, #3b82f6); }
+.vqauth-corner--tr { top: 0; right: 0; border-left: 0; border-bottom: 0; border-radius: 0 4px 0 0; border-color: var(--violet, #a855f7); animation-delay: .5s; }
+.vqauth-corner--br { bottom: 0; right: 0; border-left: 0; border-top: 0; border-radius: 0 0 4px 0; border-color: var(--magenta, #d946ef); animation-delay: 1s; }
+.vqauth-corner--bl { bottom: 0; left: 0; border-right: 0; border-top: 0; border-radius: 0 0 0 4px; border-color: var(--blue, #3b82f6); animation-delay: 1.5s; }
 
+/* static guide rings + crosshair */
 .vqauth-ring {
   position: absolute;
   border-radius: 50%;
-  border: 1px dashed var(--a-ring);
+  border: 1px solid var(--a-ring);
 }
-.vqauth-ring--outer { width: 300px; height: 300px; animation: vqauth-spin 34s linear infinite; }
-.vqauth-ring--mid { width: 226px; height: 226px; border-style: solid; border-color: var(--a-ring2); animation: vqauth-spin-rev 22s linear infinite; }
-.vqauth-ring--inner { width: 156px; height: 156px; border-color: var(--a-ring3); }
+.vqauth-ring--outer { width: 268px; height: 268px; }
+.vqauth-ring--inner { width: 200px; height: 200px; }
+.vqauth-crosshair-h { position: absolute; width: 268px; height: 1px; background: var(--a-ring2); }
+.vqauth-crosshair-v { position: absolute; width: 1px; height: 268px; background: var(--a-ring2); }
+
+/* dashed counter-rotating rings + arc segment + sweep, sized/positioned via inline width/height/viewBox to match the prototype's SVGs exactly */
+.vqauth-dashring--r { position: absolute; animation: vqauth-spin 9s linear infinite; }
+.vqauth-dashring--l { position: absolute; animation: vqauth-spin-rev 7s linear infinite; }
+.vqauth-arcring { position: absolute; animation: vqauth-spin 3.4s linear infinite; }
 
 .vqauth-sweep {
   position: absolute;
-  width: 300px;
-  height: 300px;
+  width: 268px;
+  height: 268px;
   border-radius: 50%;
-  background: conic-gradient(from 0deg, rgba(168, 85, 247, 0.32), transparent 26%);
-  animation: vqauth-spin 3.2s linear infinite;
-  mask-image: radial-gradient(circle, transparent 54%, #000 55%);
-  -webkit-mask-image: radial-gradient(circle, transparent 54%, #000 55%);
+  background: conic-gradient(
+    from 0deg,
+    rgba(59, 130, 246, 0) 0deg,
+    rgba(59, 130, 246, 0.04) 200deg,
+    rgba(99, 140, 255, 0.3) 320deg,
+    rgba(168, 85, 247, 0.42) 355deg,
+    rgba(217, 70, 239, 0) 360deg
+  );
+  animation: vqauth-spin 2.2s linear infinite;
+  mask-image: radial-gradient(circle, transparent 30%, #000 31%);
+  -webkit-mask-image: radial-gradient(circle, transparent 30%, #000 31%);
 }
 
-.vqauth-dot {
+/* expanding pulse rings */
+.vqauth-pulsering {
   position: absolute;
-  width: 7px;
-  height: 7px;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  border: 1px solid rgba(59, 130, 246, 0.55);
+  animation: vqauth-ring 2.8s ease-out infinite;
+}
+.vqauth-pulsering--2 { border-color: rgba(168, 85, 247, 0.55); animation-delay: 1.4s; }
+
+/* orbiting nodes */
+.vqauth-orbit { position: absolute; }
+.vqauth-orbit--1 { width: 240px; height: 240px; animation: vqauth-spin 4s linear infinite; }
+.vqauth-orbit--2 { width: 200px; height: 200px; animation: vqauth-spin-rev 5.5s linear infinite; }
+.vqauth-orbit--3 { width: 268px; height: 268px; animation: vqauth-spin 6s linear infinite 1s; }
+.vqauth-orbit-dot {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  transform: translateX(-50%);
   border-radius: 50%;
   box-shadow: 0 0 10px currentColor;
+  background: currentColor;
 }
-.vqauth-dot--cyan { top: 30%; left: 8%; color: #22d3ee; background: #22d3ee; animation: vqauth-blip 2.4s ease-in-out infinite; }
-.vqauth-dot--blue { top: 22%; right: 14%; color: #3b82f6; background: #3b82f6; animation: vqauth-blip 2.4s ease-in-out infinite .5s; }
-.vqauth-dot--magenta { bottom: 26%; right: 26%; color: #d946ef; background: #d946ef; animation: vqauth-blip 2.4s ease-in-out infinite 1s; }
+.vqauth-orbit--1 .vqauth-orbit-dot { width: 7px; height: 7px; color: var(--cyan, #22d3ee); }
+.vqauth-orbit--2 .vqauth-orbit-dot { width: 6px; height: 6px; top: -2px; color: var(--magenta, #d946ef); box-shadow: 0 0 9px currentColor; }
+.vqauth-orbit--3 .vqauth-orbit-dot { width: 5px; height: 5px; top: -2px; color: var(--blue, #3b82f6); box-shadow: 0 0 8px currentColor; }
 
-.vqauth-core {
+/* radar blips — fixed positions within the 300px stage */
+.vqauth-blip {
+  position: absolute;
+  border-radius: 50%;
+  box-shadow: 0 0 10px currentColor;
+  background: currentColor;
+  animation: vqauth-blip 2.4s ease-out infinite;
+}
+.vqauth-blip--1 { top: 34%; left: 64%; width: 8px; height: 8px; color: var(--cyan, #22d3ee); animation-delay: 0.3s; }
+.vqauth-blip--2 { top: 62%; left: 38%; width: 7px; height: 7px; color: var(--violet, #a855f7); animation-delay: 1.1s; }
+.vqauth-blip--3 { top: 58%; left: 66%; width: 6px; height: 6px; color: var(--blue, #3b82f6); box-shadow: 0 0 9px currentColor; animation-delay: 1.7s; }
+
+/* center logo */
+.vqauth-core-wrap {
   position: relative;
-  width: 112px;
-  height: 112px;
+  z-index: 2;
+  width: 122px;
+  height: 122px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: vqauth-logoin 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.vqauth-core-glow {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--a-glow), transparent 72%);
+  animation: vqauth-glowpulse 2s ease-in-out infinite;
+}
+.vqauth-core-float {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: vqauth-float 3s ease-in-out infinite;
+}
+.vqauth-core {
+  width: 122px;
+  height: 122px;
   border-radius: 50%;
   background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08), 0 18px 46px rgba(99, 102, 241, 0.28);
-  animation: vqauth-corepulse 2.2s ease-in-out infinite;
+  position: relative;
+  overflow: hidden;
 }
 .vqauth-core img {
-  width: 56px;
-  height: 56px;
+  width: 78px;
+  height: 78px;
   object-fit: contain;
-  opacity: 0.82;
+  filter: var(--a-logo-shadow);
 }
+/* Dark mode shows the mark in grayscale rather than its native blue — the
+   source logo is a fixed-color raster (no fill to override), so grayscale
+   is the only reliable recolor without a proper alpha-masked icon asset. */
+.vqauth-loader:not([data-theme="light"]) .vqauth-core img { filter: grayscale(1) var(--a-logo-shadow); }
 
+/* wordmark */
 .vqauth-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  animation: vqauth-fadeup 0.6s ease both 0.15s;
+  margin-bottom: 22px;
+  animation: vqauth-textin 0.9s ease both 0.3s;
 }
-.vqauth-brand-mark { width: 26px; height: 26px; object-fit: contain; }
-.vqauth-brand-name {
-  font-family: "Space Grotesk", sans-serif;
-  font-weight: 700;
-  font-size: 19px;
-  letter-spacing: -0.01em;
-  background: linear-gradient(135deg, #3b82f6, #a855f7);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
+/* videoraiq-logo-*.png is the full lockup (icon + wordmark + tagline) at a
+   ~3.5:1 aspect ratio — sizing it by a small fixed height (as the prototype's
+   dedicated wordmark-only asset would allow) squeezed it into an
+   illegibly thin strip. Size by width instead so the wordmark reads clearly. */
+.vqauth-brand-logo { width: 200px; height: auto; display: block; opacity: .97; }
 
+/* progress */
 .vqauth-progress {
+  width: 280px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  width: 320px;
-  animation: vqauth-fadeup 0.6s ease both 0.25s;
+  gap: 9px;
 }
-
 .vqauth-bar {
+  position: relative;
   width: 100%;
   height: 4px;
-  border-radius: 999px;
-  background: var(--a-bar-track);
+  border-radius: 3px;
+  background: var(--a-track);
   overflow: hidden;
 }
 .vqauth-bar-fill {
+  position: absolute;
+  inset: 0;
   height: 100%;
-  border-radius: 999px;
+  border-radius: 3px;
   background: linear-gradient(90deg, #3b82f6, #a855f7, #d946ef);
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.85);
+  transition: width 0.1s linear;
+}
+.vqauth-bar-shimmer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: vqauth-shimmer 1.3s linear infinite;
 }
 
 .vqauth-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
   font-family: "JetBrains Mono", monospace;
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  letter-spacing: 0.1em;
   color: var(--a-label);
+  text-transform: uppercase;
+}
+.vqauth-label-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .vqauth-label-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: #22c55e;
-  box-shadow: 0 0 6px #22c55e;
-  animation: vqauth-blink 1.1s infinite;
+  box-shadow: 0 0 8px #22c55e;
+  animation: vqauth-glowpulse 1.2s infinite;
   flex: 0 0 auto;
 }
-.vqauth-label-text { flex: 1; text-align: left; }
-.vqauth-label-pct { color: #3b82f6; font-weight: 600; }
+.vqauth-label-pct { font-weight: 600; color: var(--blue, #3b82f6); }
 
-@keyframes vqauth-fadein { from { opacity: 0; } to { opacity: 1; } }
-@keyframes vqauth-fadeup { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-@keyframes vqauth-gridpan { 0% { background-position: 0 0; } 100% { background-position: 46px 46px; } }
+@keyframes vqauth-gridpan { 0% { background-position: 0 0; } 100% { background-position: 44px 44px; } }
+@keyframes vqauth-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
 @keyframes vqauth-spin { to { transform: rotate(360deg); } }
 @keyframes vqauth-spin-rev { to { transform: rotate(-360deg); } }
-@keyframes vqauth-corepulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
-@keyframes vqauth-blip { 0%, 100% { opacity: 0.5; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.15); } }
-@keyframes vqauth-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes vqauth-ring { 0% { transform: scale(0.5); opacity: 0.9; } 100% { transform: scale(1.95); opacity: 0; } }
+@keyframes vqauth-blip { 0% { transform: scale(0); opacity: 0; } 15% { transform: scale(1); opacity: 1; } 60% { opacity: 0.7; } 100% { transform: scale(1.7); opacity: 0; } }
+@keyframes vqauth-corner { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+@keyframes vqauth-logoin { 0% { opacity: 0; transform: scale(0.6); } 60% { opacity: 1; transform: scale(1.06); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes vqauth-textin { 0% { opacity: 0; letter-spacing: 0.5em; } 100% { opacity: 0.97; letter-spacing: normal; } }
+@keyframes vqauth-glowpulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+@keyframes vqauth-shimmer { 0% { transform: translateX(-120%); } 100% { transform: translateX(340%); } }

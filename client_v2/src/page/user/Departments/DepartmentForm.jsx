@@ -107,6 +107,8 @@ const DepartmentForm = ({
                 placeholder="e.g. Human Resources"
                 value={formik.values.departmentName}
                 onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                maxLength={100}
                 className="border border-[var(--bd)] bg-[var(--bg3)] text-[var(--tx)] shadow-none rounded-[10px]"
               />
               {formik.touched.departmentName && formik.errors.departmentName && (
@@ -125,6 +127,8 @@ const DepartmentForm = ({
                 placeholder="e.g. Handles employee relations"
                 value={formik.values.description}
                 onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                maxLength={255}
                 className="border border-[var(--bd)] bg-[var(--bg3)] text-[var(--tx)] shadow-none rounded-[10px]"
               />
               {formik.touched.description && formik.errors.description && (

@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { createLocation, updateLocation } from "./Api";
 
+const EMP_LOCATION_ID_PATTERN = /^[A-Z0-9_-]{3,20}$/;
+
 const LocationForm = ({
   trigger,
   initialValues = null,
@@ -27,7 +29,12 @@ const LocationForm = ({
     locationName: Yup.string()
       .required("Location name is required")
       .max(100, "Location name cannot exceed 100 characters"),
-    empLocationId: Yup.string(),
+    empLocationId: Yup.string()
+      .test(
+        "format",
+        "Must be 3-20 characters: A-Z, 0-9, - or _ only (no spaces)",
+        (value) => !value || EMP_LOCATION_ID_PATTERN.test(value)
+      ),
   });
 
   const formik = useFormik({
@@ -112,7 +119,12 @@ const LocationForm = ({
                 name="empLocationId"
                 placeholder="e.g. BLR001"
                 value={formik.values.empLocationId}
-                onChange={formik.handleChange}
+                onChange={(e) => {
+                  const cleaned = e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+                  formik.setFieldValue("empLocationId", cleaned);
+                }}
+                onBlur={formik.handleBlur}
+                maxLength={20}
                 className="border border-[var(--bd)] bg-[var(--bg3)] text-[var(--tx)] shadow-none rounded-[10px]"
               />
               {formik.touched.empLocationId && formik.errors.empLocationId && (

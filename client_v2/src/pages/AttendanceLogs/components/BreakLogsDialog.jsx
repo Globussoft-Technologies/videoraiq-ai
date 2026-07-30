@@ -202,7 +202,7 @@ const BreakLogsDialog = ({ open, onOpenChange, log, region, selectedDate, canEdi
         {log && (
           <div className="flex items-center gap-3 mt-3 pb-3 border-b border-[var(--bd)]">
             <div className="w-12 h-12 rounded-full overflow-hidden bg-[var(--bg2)] border border-[var(--bd2)] p-[1px] flex items-center justify-center">
-              <img src={log.image} alt={log.name} className="w-12 h-12 object-cover rounded-full" />
+              <img src={log.image} alt={log.name} className="w-12 h-12 object-cover object-top rounded-full" />
             </div>
             <div className="flex flex-col">
               <span className="text-[var(--tx)] text-sm font-medium">{log.name || '--'}</span>

@@ -47,3 +47,21 @@ export const fetchClientCameras = async () => {
   const data = unwrap(res);
   return data?.cameras ?? data?.data ?? (Array.isArray(data) ? data : []);
 };
+
+/**
+ * Fetches the logged-in sub-user's own authorized-user record (role,
+ * department, camera/location access) via the tenant-wide /users/fetch
+ * endpoint, filtered to a single userId. Unlike fetchMyAccount (admin-only
+ * self-service summary), this works for regular members and returns the
+ * same record shape shown on the Administer > Users edit form.
+ */
+export const fetchAuthorizedUserById = async (userId) => {
+  const res = await axios.post(
+    `${HOST}/users/fetch?userId=${userId}&skip=0&limit=1`,
+    {},
+    { headers: authHeaders() },
+  );
+  const data = unwrap(res);
+  const users = data?.users ?? data?.data ?? (Array.isArray(data) ? data : []);
+  return users?.[0] ?? null;
+};

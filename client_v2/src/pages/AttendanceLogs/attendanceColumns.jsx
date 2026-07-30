@@ -92,7 +92,7 @@ export const buildColumns = ({ dispatch, sortField, sortOrder, region, convertTo
             src={row.original.image}
             alt={row.original.name}
             className="w-full h-full rounded-full"
-            imgClassName="w-full h-full object-cover"
+            imgClassName="w-full h-full object-cover object-top"
           />
         </button>
       ),
@@ -260,7 +260,7 @@ export const renderAttendanceCard = (item, { dispatch, region, convertToRegionTi
           src={item.image}
           alt={item.name}
           className="!absolute inset-0 w-full h-full"
-          imgClassName="w-full h-full object-cover"
+          imgClassName="w-full h-full object-cover object-top"
         />
         <div
           className="absolute inset-0 pointer-events-none"

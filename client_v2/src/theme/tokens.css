@@ -106,6 +106,13 @@
   color: var(--tx);
 }
 
+/* SystemControls' custom camera dropdown is portalled to document.body (outside
+   .vq-root) so it can escape clipping ancestors; force one plain label color
+   there regardless of what the portal's own inherited/ambient styles resolve to. */
+.vq-singleselect-label {
+  color: var(--tx) !important;
+}
+
 /* Native date/time controls follow the active theme so the picker indicator
    (calendar icon) stays visible in dark mode. data-vq-theme is set on <body>. */
 [data-vq-theme='dark'] input[type='date'],

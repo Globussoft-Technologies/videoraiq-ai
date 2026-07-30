@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useFormik } from "formik";
 import { useLocation, useNavigate } from "react-router-dom";
 import Cookies from "js-cookie";
@@ -13,8 +13,6 @@ import AuthHero from "./AuthHero";
 import RegisterForm from "./RegisterForm";
 import { Txt, labelStyle, fieldWrap, errStyle, EyeToggle, CtaButton } from "./AuthFields";
 import "./login.css";
-
-const AUTH_LOADER_MS = 2200;
 
 const url = import.meta.env.VITE_ENV;
 
@@ -89,7 +87,6 @@ const LoginForm = () => {
           setUser?.(result.user); // hydrate user context
           toast.success(result.msg || "Signed in");
           setAuthenticating(true);
-          setTimeout(() => navigate(redirectTo, { replace: true }), AUTH_LOADER_MS);
         } else {
           toast.error(result?.msg || "Failed to Login!");
           setSubmitting(false);
@@ -106,7 +103,15 @@ const LoginForm = () => {
 
   const switchTo = (m) => () => setMode(m);
 
-  if (authenticating) return <AuthLoader />;
+  // Stable across re-renders so AuthLoader's completion timer (see its effect
+  // deps) never restarts mid-animation.
+  const handleAuthComplete = useCallback(() => {
+    navigate(redirectTo, { replace: true });
+  }, [navigate, redirectTo]);
+
+  if (authenticating) {
+    return <AuthLoader onComplete={handleAuthComplete} />;
+  }
 
   return (
     <div
@@ -177,11 +182,26 @@ const LoginForm = () => {
                   animation: "vqglow 2.4s ease-in-out infinite",
                 }}
               />
-              <img
-                src={logo}
-                alt="VideoraIQ"
-                style={{ position: "relative", width: 66, height: 66, objectFit: "contain", animation: "vqfloatY 3.4s ease-in-out infinite" }}
-              />
+              <div
+                style={{
+                  position: "relative",
+                  width: 66,
+                  height: 66,
+                  borderRadius: "50%",
+                  background: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 4px 18px rgba(0,0,0,.4)",
+                  animation: "vqfloatY 3.4s ease-in-out infinite",
+                }}
+              >
+                <img
+                  src={logo}
+                  alt="VideoraIQ"
+                  style={{ width: 42, height: 42, objectFit: "contain", filter: "grayscale(1)" }}
+                />
+              </div>
             </div>
             <h2
               style={{
@@ -407,7 +427,24 @@ const LoginForm = () => {
                   animation: "vqspin .8s linear infinite",
                 }}
               />
-              <img src={logo} alt="" style={{ position: "absolute", inset: 14, width: 32, height: 32, objectFit: "contain" }} />
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 6,
+                  borderRadius: "50%",
+                  background: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 4px 14px rgba(0,0,0,.35)",
+                }}
+              >
+                <img
+                  src={logo}
+                  alt=""
+                  style={{ width: 28, height: 28, objectFit: "contain", filter: "grayscale(1) drop-shadow(0 0 8px rgba(59,130,246,.5))" }}
+                />
+              </div>
             </div>
             <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, color: "#cbd4ea", letterSpacing: ".02em" }}>
               Authenticating…

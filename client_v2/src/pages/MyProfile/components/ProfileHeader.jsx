@@ -36,6 +36,7 @@ export default function ProfileHeader({
   status,
   email,
   subtitle,
+  showStats = true,
   totalCameras,
   configured,
   nonConfigured,
@@ -75,7 +76,7 @@ export default function ProfileHeader({
             color: '#fff',
             background: 'linear-gradient(135deg,var(--blue),var(--violet))',
             border: '3px solid var(--bg1)',
-            boxShadow: '0 8px 24px rgba(0,0,0,.4)',
+            boxShadow: '0 8px 24px rgba(99,102,241,.28)',
           }}
         >
           {initials}
@@ -119,12 +120,14 @@ export default function ProfileHeader({
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', borderTop: '1px solid var(--bd)' }}>
-        <StatTile label="Total Cameras" value={totalCameras} color="blue" />
-        <StatTile label="Configured" value={configured} color="ok" />
-        <StatTile label="Non-Configured" value={nonConfigured} color="warn" />
-        <StatTile label="Detections Enabled" value={detectionsEnabled} color="violet" last />
-      </div>
+      {showStats && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', borderTop: '1px solid var(--bd)' }}>
+          <StatTile label="Total Cameras" value={totalCameras} color="blue" />
+          <StatTile label="Configured" value={configured} color="ok" />
+          <StatTile label="Non-Configured" value={nonConfigured} color="warn" />
+          <StatTile label="Detections Enabled" value={detectionsEnabled} color="violet" last />
+        </div>
+      )}
     </div>
   );
 }

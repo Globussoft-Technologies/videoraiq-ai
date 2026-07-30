@@ -158,14 +158,21 @@ export function Sparkline({ values = [], color = 'var(--blue)', width = 64, heig
 
 export function sparkPoints(values = [], width = 64, height = 20) {
   if (!values.length) return `0,${height} ${width},${height}`;
-  const max = Math.max(...values, 1);
-  const min = Math.min(...values, 0);
+  // Auto-scale from the DATA's own min/max only — clamping min to 0 (as a
+  // prior version did) inflates the range for series that never go near
+  // zero (e.g. cameras-online counts in the hundreds), squashing the real
+  // day-to-day variation into a sliver at the top and making a genuinely
+  // wiggly series render as a flat line. Matches the HTML prototype's own
+  // spark() helper (VideoraIQ Command.dc.html), including its 0.85/0.075
+  // padding factors so the line never touches the box edges.
+  const min = Math.min(...values);
+  const max = Math.max(...values);
   const range = max - min || 1;
   const step = width / Math.max(values.length - 1, 1);
   return values
     .map((v, i) => {
       const x = i * step;
-      const y = height - ((v - min) / range) * (height - 2) - 1;
+      const y = height - ((v - min) / range) * height * 0.85 - height * 0.075;
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(' ');
