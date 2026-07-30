@@ -10,18 +10,6 @@ import { Popover, PopoverTrigger, PopoverContent } from '../../../pages/Attendan
 import CameraStream from '../../../components/CameraStream';
 import DetectionZoneMarking from './DetectionZoneMarking';
 
-const DETECTION_FIELD_KEYS = [
-  'countPersonsSettings', 'motionDetectionSettings', 'genericObjectDetectionSettings',
-  'countVehiclesSettings', 'loiteringWithoutAuthSettings', 'fireSmokeDetectionSettings',
-  'weaponDetectionSettings', 'unattendedBaggageDetectionSettings', 'unauthorizedAccessSettings',
-  'lineCrossingSettings', 'loiteringWithAuthSettings', 'personalProtectiveEquipmentSettings',
-  'crowdDetectionSettings', 'lightDetectionSettings', 'doorDetectionSettings',
-  'vehicleDetectionSettings', 'deskAbsenceSettings', 'guardAbsenceSettings',
-  'conveyorDetectionSettings', 'crusherDetectionSettings', 'waterSpillageDetectionSettings',
-  'vehicleTypeDetectionSettings', 'loiteringDetectionSettings', 'vehicleObstructionSettings',
-  'tableOccupancyDetectionSettings', 'foodServicePPEDetectionSettings', 'mobilePhoneDetectionSettings',
-];
-
 const CHECK_TYPES = [
   { value: 'none', label: 'None' },
   { value: 'checkin', label: 'Check-in' },
@@ -29,7 +17,35 @@ const CHECK_TYPES = [
 ];
 
 function isTypeEnabled(camera, key) {
-  return !!(camera?.detections?.[key]?.id && camera.detections[key].enabled);
+  return !!camera?.detections?.[key]?.enabled;
+}
+
+function detectionTypeLabel(value, fallback) {
+  if (typeof value === 'string') return value;
+  return value?.displayName || value?.label || value?.name || fallback;
+}
+
+function appliedTypesFor(camera, typeLabels) {
+  const entries = Array.isArray(typeLabels)
+    ? typeLabels.map((type, index) => [
+        type?.settingType || type?.detectionType || type?.key || type?.id || '',
+        type,
+      ])
+    : Object.entries(typeLabels || {});
+
+  const masterList = entries
+    .map(([key, value], index) => ({
+      key,
+      label: detectionTypeLabel(value, key),
+      enabled: isTypeEnabled(camera, key),
+      order: index,
+    }))
+    .filter(type => type.key && type.label);
+
+  return masterList.sort((a, b) => {
+    if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
+    return a.order - b.order;
+  });
 }
 
 /** Popover: toggle each detection type on/off for this one camera. Rendered in a
@@ -37,14 +53,13 @@ function isTypeEnabled(camera, key) {
 function AppliedTypesPopover({ camera, typeLabels, onToggleRequest }) {
   const [open, setOpen] = useState(false);
 
-  // Only show types with a real, known label — several DETECTION_FIELD_KEYS
-  // are disabled backend-side (no entry in DETECTION_TYPES) and would
-  // otherwise render as raw camelCase keys.
-  const availableTypes = DETECTION_FIELD_KEYS.filter(key => typeLabels[key]);
+  // Detection types API is the master list; merge each type with
+  // camera.detections[key]?.enabled and show enabled items first.
+  const availableTypes = appliedTypesFor(camera, typeLabels);
 
-  const handleToggle = (key, enabled) => {
+  const handleToggle = (type) => {
     setOpen(false);
-    onToggleRequest(camera, key, typeLabels[key], enabled);
+    onToggleRequest(camera, type.key, type.label, type.enabled);
   };
 
   return (
@@ -68,22 +83,20 @@ function AppliedTypesPopover({ camera, typeLabels, onToggleRequest }) {
           </div>
           {/* Capped to ~5 visible rows (34px each incl. gap) so a long type list scrolls instead of pushing the popover off-screen. */}
           <div style={{ maxHeight: 170, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {availableTypes.map(key => {
-              const label = typeLabels[key];
-              const enabled = isTypeEnabled(camera, key);
+            {availableTypes.map(type => {
               return (
-                <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '7px 6px' }}>
-                  <span style={{ fontSize: 12.5, color: 'var(--tx)' }}>{label}</span>
+                <div key={type.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '7px 6px' }}>
+                  <span style={{ fontSize: 12.5, color: 'var(--tx)' }}>{type.label}</span>
                   <button
-                    onClick={() => handleToggle(key, enabled)}
+                    onClick={() => handleToggle(type)}
                     style={{
                       width: 36, height: 20, borderRadius: 10, position: 'relative', flexShrink: 0,
-                      background: enabled ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg3, #2a2d3a)',
+                      background: type.enabled ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg3, #2a2d3a)',
                       border: '1px solid var(--bd)', cursor: 'pointer',
                     }}
                   >
                     <span style={{
-                      position: 'absolute', top: 1.5, left: enabled ? 17 : 1.5, width: 15, height: 15,
+                      position: 'absolute', top: 1.5, left: type.enabled ? 17 : 1.5, width: 15, height: 15,
                       borderRadius: '50%', background: '#fff', transition: 'left .15s',
                       boxShadow: '0 1px 3px rgba(0,0,0,.4)',
                     }} />

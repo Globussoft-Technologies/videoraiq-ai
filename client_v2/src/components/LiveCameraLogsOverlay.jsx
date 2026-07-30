@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import moment from 'moment';
-import { ChevronDown, Move, ShieldAlert, Timer, UserCheck } from 'lucide-react';
+import { ChevronDown, GitBranch, Move, ShieldAlert, Timer, UserCheck } from 'lucide-react';
 import { useAttendanceSocket } from '../context/AttendanceSocketContext';
+import { detectionLabel } from '../lib/format';
 
 const IMAGE_BASE = import.meta.env.VITE_INCIDENT_URL || `${import.meta.env.VITE_BACKEND}/uploads/`;
 const INITIALS_URL = import.meta.env.VITE_INITIALS_URL || '';
@@ -35,6 +36,10 @@ function getAttendanceCameraId(item) {
 }
 
 function getAccessCameraId(item) {
+  return cleanId(item?.cameraId || item?.channelId || item?.channel?._id || item?.channel);
+}
+
+function getDetectionCameraId(item) {
   return cleanId(item?.cameraId || item?.channelId || item?.channel?._id || item?.channel);
 }
 
@@ -80,6 +85,42 @@ function mapAccess(item, index) {
   };
 }
 
+function valueExists(value) {
+  return value !== undefined && value !== null && value !== '';
+}
+
+function detectionDetails(item) {
+  const type = String(item?.incidentType || item?.detectionType || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const details = [];
+
+  if (type === 'linecrossing' || type.includes('linecross')) {
+    if (valueExists(item?.atoB)) details.push({ label: 'Entry', value: item.atoB });
+    if (valueExists(item?.btoA)) details.push({ label: 'Exit', value: item.btoA });
+  } else if (valueExists(item?.count)) {
+    details.push({ label: 'Count', value: item.count });
+  } else if (valueExists(item?.croudCount)) {
+    details.push({ label: 'Crowd', value: item.croudCount });
+  } else if (valueExists(item?.currentStatus)) {
+    details.push({ label: 'Status', value: item.currentStatus });
+  }
+
+  const zone = item?.zoneName || item?.zone_name || item?.zone?.name || item?.detectionZoneName;
+  if (zone) details.push({ label: 'Zone', value: zone });
+
+  return details;
+}
+
+function mapDetection(item, index) {
+  const incidentType = item?.incidentType || item?.detectionType || item?.incidentName || item?.displayName;
+  return {
+    key: item?.key || item?._id || `${incidentType || 'detection'}_${item?.timeOfIncident || item?.timestamp || index}`,
+    title: item?.incidentName || item?.displayName || detectionLabel(incidentType),
+    time: item?.timeOfIncident || item?.timestamp || item?.updatedAt || item?.createdAt,
+    severity: item?.severity,
+    details: detectionDetails(item),
+  };
+}
+
 function LogRow({ item, type }) {
   const Icon = type === 'attendance' ? UserCheck : ShieldAlert;
   const time = item.time && moment(item.time).isValid()
@@ -115,7 +156,50 @@ function LogRow({ item, type }) {
   );
 }
 
-function LogSection({ title, items, type }) {
+function DetectionLogRow({ item }) {
+  const time = item.time && moment(item.time).isValid()
+    ? moment(item.time).format('HH:mm:ss')
+    : '--';
+  const severity = String(item.severity || '').toLowerCase();
+  const color =
+    severity === 'high' || severity === 'critical' ? '#ef4444' :
+      severity === 'moderate' || severity === 'medium' ? '#f59e0b' :
+        '#60a5fa';
+
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: 10, borderRadius: 10, background: 'rgba(15,23,42,.72)', border: '1px solid rgba(255,255,255,.08)' }}>
+      <span style={{ width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto', background: 'rgba(249,115,22,.18)', border: '1px solid rgba(249,115,22,.35)' }}>
+        <GitBranch size={16} color="#fb923c" />
+      </span>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, boxShadow: `0 0 6px ${color}`, flex: '0 0 auto' }} />
+          <span style={{ color: '#fff', fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {item.title}
+          </span>
+        </div>
+        {item.details?.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 7 }}>
+            {item.details.map((detail) => (
+              <span
+                key={`${detail.label}-${detail.value}`}
+                style={{ color: '#fff', fontSize: 10.5, fontWeight: 700, borderRadius: 999, padding: '3px 7px', background: 'rgba(249,115,22,.18)', border: '1px solid rgba(249,115,22,.32)' }}
+              >
+                {detail.label}: {detail.value}
+              </span>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'rgba(255,255,255,.55)', fontFamily: 'var(--mono)', fontSize: 10, marginTop: 7 }}>
+          <Timer size={11} />
+          <span>{time}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LogSection({ title, items, type, renderItem }) {
   const [open, setOpen] = useState(true);
   if (!items.length) return null;
 
@@ -132,7 +216,7 @@ function LogSection({ title, items, type }) {
       </button>
       {open && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto', paddingTop: 8 }}>
-          {items.map((item) => <LogRow key={item.key} item={item} type={type} />)}
+          {items.map((item) => renderItem ? renderItem(item) : <LogRow key={item.key} item={item} type={type} />)}
         </div>
       )}
     </div>
@@ -140,7 +224,7 @@ function LogSection({ title, items, type }) {
 }
 
 export default function LiveCameraLogsOverlay({ channel }) {
-  const { attendanceLogs = [], accessAllDetections = [] } = useAttendanceSocket() || {};
+  const { allDetections = [], attendanceLogs = [], accessAllDetections = [] } = useAttendanceSocket() || {};
   const panelRef = useRef(null);
   const dragRef = useRef(null);
   const [position, setPosition] = useState({ x: 18, y: 68 });
@@ -161,6 +245,13 @@ export default function LiveCameraLogsOverlay({ channel }) {
       .map(mapAccess)
       .slice(0, 5)
   ), [accessAllDetections, cameraId]);
+
+  const detectionItems = useMemo(() => (
+    (Array.isArray(allDetections) ? allDetections : [])
+      .filter((item) => getDetectionCameraId(item) === cameraId)
+      .map(mapDetection)
+      .slice(0, 5)
+  ), [allDetections, cameraId]);
 
   useEffect(() => {
     const onMove = (e) => {
@@ -187,7 +278,7 @@ export default function LiveCameraLogsOverlay({ channel }) {
     };
   }, []);
 
-  if (!cameraId || (!attendanceItems.length && !accessItems.length)) return null;
+  if (!cameraId || (!attendanceItems.length && !accessItems.length && !detectionItems.length)) return null;
 
   const startDrag = (e) => {
     if (e.button !== undefined && e.button !== 0) return;
@@ -221,6 +312,11 @@ export default function LiveCameraLogsOverlay({ channel }) {
         <span>Live Logs</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <LogSection
+          title="Detection Details"
+          items={detectionItems}
+          renderItem={(item) => <DetectionLogRow key={item.key} item={item} />}
+        />
         <LogSection title="Attendance Log" items={attendanceItems} type="attendance" />
         <LogSection title="Access Log" items={accessItems} type="access" />
       </div>

@@ -9,6 +9,12 @@ export const useAttendanceSocket = () => useContext(AttendanceSocketContext);
 
 const TWO_MINUTES = 2 * 60 * 1000;
 
+function cleanId(value) {
+  if (!value) return '';
+  if (typeof value === 'object') return String(value._id || value.id || value.$oid || '');
+  return String(value);
+}
+
 /** Live attendance feed via socket — ported from the attendanceLogs slice of
  * client/src/context/Sockets/AllDetectionContext.jsx. Listens on the
  * per-admin room `attendanceLog_${adminId}`; each event is the raw payload
@@ -21,6 +27,7 @@ const TWO_MINUTES = 2 * 60 * 1000;
 export function AttendanceSocketProvider({ children }) {
   const { socket } = useSocket();
   const { user } = useAuth();
+  const [allDetections, setAllDetections] = useState([]);
   const [attendanceLogs, setAttendanceLogs] = useState([]);
   const [accessAllDetections, setAccessAllDetections] = useState([]);
   const [isMuted, setIsMuted] = useState(true);
@@ -64,6 +71,16 @@ export function AttendanceSocketProvider({ children }) {
   useEffect(() => {
     if (!socket || !user?.adminId) return;
 
+    const handleDetection = (data) => {
+      setAllDetections((prev) => {
+        const cameraId = cleanId(data?.cameraId || data?.channelId || data?.channel);
+        const incidentType = data?.incidentType || data?.incidentName || data?.displayName || 'detection';
+        const key = `${cameraId}_${incidentType}`;
+        const filtered = prev.filter((item) => item.key !== key);
+        return [{ ...data, key }, ...filtered].slice(0, 100);
+      });
+    };
+
     const handleAttendanceLog = (data) => {
       resetAttendanceClearTimer();
       setAttendanceLogs((prev) => {
@@ -82,9 +99,11 @@ export function AttendanceSocketProvider({ children }) {
       setAccessAllDetections((prev) => [{ ...data }, ...prev]);
     };
 
+    socket.on(`cameradetection_${user.adminId}`, handleDetection);
     socket.on(`accessLogs_${user.adminId}`, handleAccessLogs);
     socket.on(`attendanceLog_${user.adminId}`, handleAttendanceLog);
     return () => {
+      socket.off(`cameradetection_${user.adminId}`, handleDetection);
       socket.off(`accessLogs_${user.adminId}`, handleAccessLogs);
       socket.off(`attendanceLog_${user.adminId}`, handleAttendanceLog);
       if (accessClearTimerRef.current) clearTimeout(accessClearTimerRef.current);
@@ -93,7 +112,7 @@ export function AttendanceSocketProvider({ children }) {
   }, [socket, user]);
 
   return (
-    <AttendanceSocketContext.Provider value={{ attendanceLogs, accessAllDetections, isMuted, toggleMute }}>
+    <AttendanceSocketContext.Provider value={{ allDetections, attendanceLogs, accessAllDetections, isMuted, toggleMute }}>
       {children}
     </AttendanceSocketContext.Provider>
   );
