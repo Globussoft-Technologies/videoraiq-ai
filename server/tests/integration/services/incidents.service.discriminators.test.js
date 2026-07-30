@@ -276,3 +276,74 @@ describe("IncidentsService.createIncidents — bagDetection", () => {
     expect(triggerAlertOnIncident).not.toHaveBeenCalled();
   });
 });
+
+describe("IncidentsService.createIncidents — vehicleObstruction", () => {
+  it("accepts the optional vehicleNumber, vehicleType and confidence score", async () => {
+    const { VehicleObstructionDetectionSetting } = await import(
+      "../../../core/v1/detectionSettings/detectionSettings.model.js"
+    );
+    const { admin, nvrId, channel } = await seedScene({
+      SettingModel: VehicleObstructionDetectionSetting,
+      settingType: "vehicleObstructionSettings",
+      channelDetections: (s) => ({
+        vehicleObstructionSettings: { id: s._id, enabled: true },
+      }),
+    });
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "vehicleObstruction",
+        incidentName: "Dispatch blocked",
+        nvrId: nvrId.toString(),
+        channelId: channel._id.toString(),
+        adminId: admin._id.toString(),
+        count: 1,
+        Image: "img/obstruction.jpg",
+        vehicleNumber: "KA01AB1234",
+        vehicleType: "truck",
+        ConfidenceScoreInPercentage: 92.5,
+        dispatchEntryTime: new Date("2026-07-15T14:00:00Z"),
+        timeOfIncident: new Date("2026-07-15T14:26:04Z"),
+      },
+    });
+    await IncidentsService.createIncidents(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    const stored = await Incident.findOne({ channelId: channel._id });
+    expect(stored.incidentType).toBe("vehicleObstruction");
+    expect(stored.vehicleNumber).toBe("KA01AB1234");
+    expect(stored.vehicleType).toBe("truck");
+    expect(stored.ConfidenceScoreInPercentage).toBe(92.5);
+    expect(triggerAlertOnIncident).toHaveBeenCalledTimes(1);
+  });
+
+  it("stores nulls when the optional fields are omitted", async () => {
+    const { VehicleObstructionDetectionSetting } = await import(
+      "../../../core/v1/detectionSettings/detectionSettings.model.js"
+    );
+    const { admin, nvrId, channel } = await seedScene({
+      SettingModel: VehicleObstructionDetectionSetting,
+      settingType: "vehicleObstructionSettings",
+      channelDetections: (s) => ({
+        vehicleObstructionSettings: { id: s._id, enabled: true },
+      }),
+    });
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "vehicleObstruction",
+        incidentName: "Dispatch blocked",
+        nvrId: nvrId.toString(),
+        channelId: channel._id.toString(),
+        adminId: admin._id.toString(),
+        count: 1,
+        timeOfIncident: new Date(),
+      },
+    });
+    await IncidentsService.createIncidents(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    const stored = await Incident.findOne({ channelId: channel._id });
+    expect(stored.vehicleNumber).toBeNull();
+    expect(stored.vehicleType).toBeNull();
+    expect(stored.ConfidenceScoreInPercentage).toBeNull();
+  });
+});

@@ -18,6 +18,10 @@ const incidentSchema = new Schema({
   userId:{type:String,required:true},
   zone: String,
   severity: { type: String, enum: ['low', 'moderate', 'high'] },
+  // Optional model confidence (0-100) sent by the detection trigger. Lives on
+  // the base schema so every incident type accepts it, and every alert channel
+  // can read it, without touching 25 discriminators.
+  ConfidenceScoreInPercentage:{type:Number,default:null},
   resolved:{type:Boolean,default:false},
   report:{
     status:{type:Boolean,default:false},
@@ -355,6 +359,7 @@ const vehicleObstructionSchema = new Schema({
   count: {type:Number,default:0},
   triggerNotification: { type: Boolean, default: true },
   vehicleNumber:{type:String,default:null},
+  vehicleType: {type:String,default:null},
   // When the vehicle entered the dispatch area (sent in the trigger payload).
   // timeOfIncident doubles as the dispatch exit time for this type.
   dispatchEntryTime: {type:Date,default:null}

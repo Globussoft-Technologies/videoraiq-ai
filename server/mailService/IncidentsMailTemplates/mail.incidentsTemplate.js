@@ -4791,9 +4791,26 @@ export const vehicleObstructionTemplate = (
     description,
     Image,
     vehicleNumber,
+    vehicleType,
     currentStatus, // OPENED | CLOSED
     dispatchEntryTime,
   } = incidentData;
+
+  // Both optional on this type — the rows disappear when the payload omits them.
+  const vehicleRows = [
+    vehicleNumber ? ["Vehicle Number", vehicleNumber] : null,
+    vehicleType ? ["Vehicle Type", vehicleType] : null,
+  ]
+    .filter(Boolean)
+    .map(
+      ([label, value]) => `
+                <tr>
+                  <td style="font-size:14px;padding-bottom:6px;">
+                    <strong>${label}:</strong> ${value}
+                  </td>
+                </tr>`,
+    )
+    .join("");
 
   // Dispatch window: entry comes in the trigger payload, exit is timeOfIncident.
   const formattedEntryTime = dispatchEntryTime
@@ -4908,6 +4925,7 @@ export const vehicleObstructionTemplate = (
                     <strong>Dispatch Exit Time:</strong> ${formattedTime}
                   </td>
                 </tr>
+${vehicleRows}
 
                 <tr>
                   <td style="padding-top:10px;">

@@ -57,7 +57,34 @@ class MailHelper {
         };
     }
 
+    // Optional detection confidence, added here (every incident mail funnels
+    // through _sendAndTrack) instead of editing 18 near-identical templates.
+    // Subject always carries it; the body row lands next to "Time of Incident"
+    // in the table-based templates. Non-incident mails have no such field -> no-op.
+    // ponytail: string injection, not a template refactor. Rework the templates
+    // into one shared layout if more fields ever need this treatment.
+    _withConfidence(email, args = []) {
+        const conf = args[1]?.ConfidenceScoreInPercentage;
+        if (conf === null || conf === undefined) return;
+        email.subject = `${email.subject} | Confidence: ${conf}%`;
+        if (typeof email.html === 'string') {
+            // Two row layouts exist across the templates (two-cell label/value
+            // tables, and single-cell "<strong>Label:</strong> value" ones);
+            // colspan=2 renders correctly in both.
+            email.html = email.html.replace(
+                /(<strong>\s*(?:Time of Incident|Dispatch Exit Time):?\s*<\/strong>[\s\S]*?<\/tr>)/i,
+                `$1
+  <tr>
+  <td colspan="2" style="font-size:14px;padding:6px 10px; color: #626262;">
+  <strong style="color:#000;">Confidence:</strong> ${conf}%
+  </td>
+  </tr>`,
+            );
+        }
+    }
+
     async _sendAndTrack(email, args = []) {
+        this._withConfidence(email, args);
         try {
             const sendStatus = await sendGridMail.send(email);
             await trackOutboundEmail(email, sendStatus, this._emailMetadata(args));

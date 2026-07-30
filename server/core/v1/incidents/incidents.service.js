@@ -256,6 +256,12 @@ class IncidentsService {
             });
           }
 
+          // New payloads may carry a fresh confidence for the same-day doc.
+          if (req.body.ConfidenceScoreInPercentage != null) {
+            recentIncident.ConfidenceScoreInPercentage =
+              req.body.ConfidenceScoreInPercentage;
+          }
+
           await recentIncident.save();
 
           delete recentIncident.timeSeries;

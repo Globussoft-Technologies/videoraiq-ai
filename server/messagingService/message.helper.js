@@ -75,6 +75,9 @@ export const buildIncidentWhatsAppMessage = (incident = {}, nvrData = {}, channe
     description,
     Image,
     videoLink,
+    ConfidenceScoreInPercentage,
+    vehicleNumber,
+    vehicleType,
   } = incident;
 
   const cameraName = channelData?.customName || channelData?.name || incident?.cameraId || "N/A";
@@ -88,6 +91,9 @@ export const buildIncidentWhatsAppMessage = (incident = {}, nvrData = {}, channe
     incidentName ? `*Name:* ${incidentName}` : null,
     `*Time:* ${formatIncidentTime(timeOfIncident, timezone)}`,
     severity ? `*Severity:* ${severity}` : null,
+    ConfidenceScoreInPercentage != null ? `*Confidence:* ${ConfidenceScoreInPercentage}%` : null,
+    vehicleNumber ? `*Vehicle Number:* ${vehicleNumber}` : null,
+    vehicleType ? `*Vehicle Type:* ${vehicleType}` : null,
     `*Camera:* ${cameraName}`,
     `*NVR:* ${nvrName}`,
     zone ? `*Zone:* ${zone}` : null,
@@ -120,6 +126,9 @@ export const buildIncidentTelegramMessage = (incident = {}, nvrData = {}, channe
     zone,
     description,
     dispatchEntryTime,
+    ConfidenceScoreInPercentage,
+    vehicleNumber,
+    vehicleType,
   } = incident;
 
   // MarkdownV2 requires escaping these chars in any text/value so that user
@@ -149,6 +158,10 @@ export const buildIncidentTelegramMessage = (incident = {}, nvrData = {}, channe
     `*Day:* ${up(formatIncidentDay(timeOfIncident, timezone))}`,
     ...timeLines,
     severity ? `*Severity:* ${up(severity)}` : null,
+    // up() escapes the decimal point — MarkdownV2 requires it.
+    ConfidenceScoreInPercentage != null ? `*Confidence:* ${up(`${ConfidenceScoreInPercentage}%`)}` : null,
+    vehicleNumber ? `*Vehicle Number:* ${up(vehicleNumber)}` : null,
+    vehicleType ? `*Vehicle Type:* ${up(vehicleType)}` : null,
     `*Camera:* ${up(cameraName)}`,
     `*NVR:* ${up(nvrName)}`,
     zone ? `*Zone:* ${up(zone)}` : null,
