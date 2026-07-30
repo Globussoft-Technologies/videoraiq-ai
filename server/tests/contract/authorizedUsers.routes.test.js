@@ -12,6 +12,7 @@ vi.mock("../../core/v1/authorizedUsers/authorizedUsers.controller.js", () => ({
     deleteAllAuthUsers: vi.fn(async (req, res) => res.status(200).json({ success: true })),
     bulkImportAuthUser: vi.fn(async (req, res) => res.status(200).json({ success: true })),
     tagUser: vi.fn(async (req, res) => res.status(200).json({ success: true })),
+    clearAutoTaggedAccessLogs: vi.fn(async (req, res) => res.status(200).json({ success: true })),
     verifyUser: vi.fn(async (req, res) => res.status(200).json({ success: true, verified: true })),
     fetchUniqueLocations: vi.fn(async (req, res) => res.status(200).json({ success: true, data: [] })),
   },
@@ -101,6 +102,19 @@ describe("POST /api/v1/authorized-users/fetch-unique-locations", () => {
   it("returns 200 with locations", async () => {
     const res = await request(app)
       .post("/api/v1/authorized-users/fetch-unique-locations")
+      .set("x-access-token", token)
+      .send({});
+    expect(res.status).toBe(200);
+  });
+});
+
+// This route registered against an undefined handler for a while: the mock
+// above hand-lists controller methods, and this one was missed when the route
+// landed — Express threw at import and took the whole suite down.
+describe("PATCH /api/v1/authorized-users/clear-auto-access-tags", () => {
+  it("returns 200 when clearing auto-tagged access logs", async () => {
+    const res = await request(app)
+      .patch("/api/v1/authorized-users/clear-auto-access-tags")
       .set("x-access-token", token)
       .send({});
     expect(res.status).toBe(200);
