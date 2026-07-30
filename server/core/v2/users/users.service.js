@@ -90,7 +90,7 @@ class UsersService {
       if (userId) {
         const user = await authorizedUsersModel.findById(userId)
           .populate("roleIds", "roleName empRoleId");
-  
+
         if (!user) {
           return res.status(200).json(
             Response.userSuccessResp("Authorized user not found", {
@@ -104,7 +104,19 @@ class UsersService {
         if (userObj.password) {
           try { userObj.password = decrypt(userObj.password); } catch (_) {}
         }
-  
+
+        // Same authorizedChannels join the list branch below does — without
+        // it, a single-user fetch (used by e.g. MyProfile for the logged-in
+        // user's own record) silently comes back without locations/NVRs/
+        // departments/channels that the list endpoint would have included.
+        const authorizedChannels = await authorizedChannelsModel
+          .findOne({ userId: userObj._id })
+          .populate("channels", "name")
+          .populate("nvrIds", "nvrName")
+          .populate("departmentIds", "departmentName")
+          .lean();
+        userObj.authorizedChannels = authorizedChannels || null;
+
         return res.status(200).json(
           Response.userSuccessResp("Authorized user fetched successfully", {
             totalCount: 1,
