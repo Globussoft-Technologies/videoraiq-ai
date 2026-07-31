@@ -4,6 +4,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  buildIncidentWhatsAppMessage,
   buildIncidentTelegramMessage,
   formatIncidentDay,
 } from "../../../messagingService/message.helper.js";
@@ -58,5 +59,22 @@ describe("buildIncidentTelegramMessage", () => {
       "UTC",
     );
     expect(msg).toContain("*Dispatch Entry Time:* N/A");
+  });
+
+  it("decodes HTML entities and includes a clickable image link", () => {
+    const incident = {
+      ...base,
+      incidentName: "VEHICLE &AMP; OBSTRUCTION DETECTION",
+      incidentType: "vehicleObstruction",
+      Image: "img/obstruction.jpg",
+    };
+
+    const wa = buildIncidentWhatsAppMessage(incident, {}, {}, "UTC");
+    expect(wa).toContain("*Name:* VEHICLE & OBSTRUCTION DETECTION");
+    expect(wa).toContain("*Image Link:* http://imageview.test/img/obstruction.jpg");
+
+    const tg = buildIncidentTelegramMessage(incident, {}, {}, "UTC");
+    expect(tg).toContain("*Name:* VEHICLE & OBSTRUCTION DETECTION");
+    expect(tg).toContain("*Image Link:* [View Image](http://imageview.test/img/obstruction.jpg)");
   });
 });

@@ -13,6 +13,14 @@ export const friendlyType = (incidentType) => {
   );
 };
 
+const decodeHtmlEntities = (value) =>
+  String(value ?? "N/A")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'");
+
 // Format an incident timestamp in the admin's timezone. Falls back to the
 // server's local zone when no valid IANA tz is given. Invalid tz strings are
 // caught so a bad DB value can never throw inside a message builder.
@@ -82,22 +90,23 @@ export const buildIncidentWhatsAppMessage = (incident = {}, nvrData = {}, channe
 
   const cameraName = channelData?.customName || channelData?.name || incident?.cameraId || "N/A";
   const nvrName = nvrData?.nvrName || "N/A";
-  const imageBase = config.has("ImageView") ? config.get("ImageView") : "";
-  const imageUrl = Image ? (Image.startsWith("http") ? Image : `${imageBase}${Image}`) : "";
+  const imageUrl = buildIncidentImageUrl(incident);
+  const text = (value) => decodeHtmlEntities(value);
 
   const lines = [
     `🚨 *Incident Alert*`,
-    `*Type:* ${friendlyType(incidentType)}`,
-    incidentName ? `*Name:* ${incidentName}` : null,
+    `*Type:* ${text(friendlyType(incidentType))}`,
+    incidentName ? `*Name:* ${text(incidentName)}` : null,
     `*Time:* ${formatIncidentTime(timeOfIncident, timezone)}`,
-    severity ? `*Severity:* ${severity}` : null,
+    severity ? `*Severity:* ${text(severity)}` : null,
     ConfidenceScoreInPercentage != null ? `*Confidence:* ${ConfidenceScoreInPercentage}%` : null,
-    vehicleNumber ? `*Vehicle Number:* ${vehicleNumber}` : null,
-    vehicleType ? `*Vehicle Type:* ${vehicleType}` : null,
-    `*Camera:* ${cameraName}`,
-    `*NVR:* ${nvrName}`,
-    zone ? `*Zone:* ${zone}` : null,
-    description ? `*Description:* ${description}` : null,
+    vehicleNumber ? `*Vehicle Number:* ${text(vehicleNumber)}` : null,
+    vehicleType ? `*Vehicle Type:* ${text(vehicleType)}` : null,
+    `*Camera:* ${text(cameraName)}`,
+    `*NVR:* ${text(nvrName)}`,
+    zone ? `*Zone:* ${text(zone)}` : null,
+    imageUrl ? `*Image Link:* ${imageUrl}` : null,
+    description ? `*Description:* ${text(description)}` : null,
     imageUrl ? `📷 Snapshot: ${imageUrl}` : null,
     videoLink ? `📹 Video: ${videoLink}` : null,
   ].filter(Boolean);
@@ -110,9 +119,11 @@ export const buildIncidentWhatsAppMessage = (incident = {}, nvrData = {}, channe
 export const buildIncidentImageUrl = (incident = {}) => {
   const { Image } = incident;
   if (!Image) return "";
-  if (Image.startsWith("http")) return Image;
+  const image = String(Image);
+  if (image.startsWith("http")) return image;
   const imageBase = config.has("ImageView") ? config.get("ImageView") : "";
-  return `${imageBase}${Image}`;
+  if (!imageBase) return image;
+  return `${String(imageBase).replace(/\/$/, "")}/${image.replace(/^\//, "")}`;
 };
 
 // Full incident message for the Telegram channel (Markdown). Mirrors the
@@ -134,11 +145,13 @@ export const buildIncidentTelegramMessage = (incident = {}, nvrData = {}, channe
   // MarkdownV2 requires escaping these chars in any text/value so that user
   // data (names, descriptions) can't break Telegram's parser.
   const escapeMdV2 = (v) =>
-    String(v ?? "N/A").replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, "\\$&");
+    decodeHtmlEntities(v).replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, "\\$&");
+  const escapeMdV2Url = (v) => String(v ?? "").replace(/[)\\]/g, "\\$&");
   // Uppercase, then escape — used for the dynamic values.
   const up = (v) => escapeMdV2(String(v ?? "N/A").toUpperCase());
   const cameraName = channelData?.customName || channelData?.name || incident?.cameraId || "N/A";
   const nvrName = nvrData?.nvrName || "N/A";
+  const imageUrl = buildIncidentImageUrl(incident);
 
   // vehicleObstruction tracks a dispatch window: entry time arrives in the
   // trigger payload, timeOfIncident is the exit. Other types keep plain Time.
@@ -165,6 +178,7 @@ export const buildIncidentTelegramMessage = (incident = {}, nvrData = {}, channe
     `*Camera:* ${up(cameraName)}`,
     `*NVR:* ${up(nvrName)}`,
     zone ? `*Zone:* ${up(zone)}` : null,
+    imageUrl ? `*Image Link:* [View Image](${escapeMdV2Url(imageUrl)})` : null,
     description ? `*Description:* ${up(description)}` : null,
   ].filter(Boolean);
 

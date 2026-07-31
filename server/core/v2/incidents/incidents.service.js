@@ -101,6 +101,20 @@ const DetectionModelMap = {
 };
 import JobsService from "../jobs/jobs.service.js";
 
+const normalizeVehicleObstructionPayload = (body = {}) => {
+  const vehicleNumber = body.vehicleNumber == null ? "" : String(body.vehicleNumber).trim();
+  const incidentName = String(body.incidentName || "");
+  const looksLikeObstruction =
+    body.incidentType === "vehicleDetection" &&
+    !vehicleNumber &&
+    /obstruction/i.test(incidentName);
+
+  if (looksLikeObstruction) {
+    body.incidentType = "vehicleObstruction";
+    body.incidentName = "Vehicle & Obstruction Detection";
+  }
+};
+
 const cacheDir = path.join("/tmp", "media-cache"); // You can change this to './cache' or any path
 if (!fs.existsSync(cacheDir)) {
   fs.mkdirSync(cacheDir, {
@@ -111,6 +125,7 @@ if (!fs.existsSync(cacheDir)) {
 class IncidentsService {
   async createIncidents(req, res, next) {
     try {
+      normalizeVehicleObstructionPayload(req.body);
       const { incidentType, nvrId, channelId, triggerNotification, adminId } =
         req.body;
       // const userId = req?.verified?.userData?.user_id;
@@ -3307,7 +3322,6 @@ console.log(result,'result');
 }
 
 export default new IncidentsService();
-
 
 
 

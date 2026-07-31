@@ -346,4 +346,40 @@ describe("IncidentsService.createIncidents — vehicleObstruction", () => {
     expect(stored.vehicleType).toBeNull();
     expect(stored.ConfidenceScoreInPercentage).toBeNull();
   });
+
+  it("normalizes legacy vehicleDetection obstruction payloads on the server", async () => {
+    const { VehicleObstructionDetectionSetting } = await import(
+      "../../../core/v1/detectionSettings/detectionSettings.model.js"
+    );
+    const { admin, nvrId, channel } = await seedScene({
+      SettingModel: VehicleObstructionDetectionSetting,
+      settingType: "vehicleObstructionSettings",
+      channelDetections: (s) => ({
+        vehicleObstructionSettings: { id: s._id, enabled: true },
+      }),
+    });
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "vehicleDetection",
+        incidentName: "Vehicle and Obstruction detection",
+        nvrId: nvrId.toString(),
+        channelId: channel._id.toString(),
+        adminId: admin._id.toString(),
+        count: 1,
+        vehicleNumber: "",
+        Image: "img/obstruction.jpg",
+        timeOfIncident: new Date("2026-07-15T14:26:04Z"),
+      },
+    });
+    await IncidentsService.createIncidents(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    const stored = await Incident.findOne({ channelId: channel._id });
+    expect(stored.incidentType).toBe("vehicleObstruction");
+    expect(stored.incidentName).toBe("Vehicle & Obstruction Detection");
+    expect(stored.Image).toBe("img/obstruction.jpg");
+    expect(triggerAlertOnIncident).toHaveBeenCalledWith(
+      expect.objectContaining({ detectionType: "vehicleObstruction" }),
+    );
+  });
 });
