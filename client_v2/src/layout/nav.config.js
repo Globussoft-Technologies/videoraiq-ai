@@ -33,6 +33,7 @@ import {
   Shield,
   ScanEye,
   SlidersHorizontal,
+  Settings2,
 } from 'lucide-react';
 
 // Mining incident log tabs (conveyor, crusher, etc.) — shown for every client.
@@ -105,7 +106,7 @@ export const NAV_GROUPS = [
       { key: 'cameras', label: 'Cameras & NVRs', path: 'cameras', icon: Cctv, permissionKey: 'NVR' },
       // Shown to admins and sub-users alike — left ungated (like email-monitoring
       // / assistant) until a `detections` module exists in the permission matrix.
-      { key: 'detections', label: 'Detections', path: 'detections', icon: ScanEye },
+      { key: 'detections-settings', label: 'Detections', path: 'detections-settings', icon: Settings2 },
     ],
   },
   {

@@ -8,7 +8,7 @@ export const DETECTION_CATEGORIES = [
   { key: 'safety', label: 'Safety & PPE', color: 'var(--warn)', tint: 'rgba(245,166,35,.15)', icon: HardHat },
   { key: 'workplace', label: 'Workplace & Retail', color: 'var(--cyan)', tint: 'rgba(34,211,238,.15)', icon: Store },
   { key: 'industrial', label: 'Industrial & Environment', color: 'var(--ok)', tint: 'rgba(34,197,94,.15)', icon: Factory },
-  { key: 'other', label: 'Other Models', color: 'var(--tx3)', tint: 'rgba(148,163,184,.15)', icon: Settings2 },
+  // { key: 'other', label: 'Other Models', color: 'var(--tx3)', tint: 'rgba(148,163,184,.15)', icon: Settings2 },
 ];
 
 export const CATEGORY_BY_KEY = Object.fromEntries(DETECTION_CATEGORIES.map((c) => [c.key, c]));

@@ -326,6 +326,7 @@ export default function Detections() {
     [filtered],
   );
   const allVisibleGroupsCollapsed = groups.length > 0 && groups.every((group) => collapsedGroups[group.key]);
+  const hiddenDetectionCount = groups.reduce((sum, group) => sum + group.items.length, 0);
 
   const toggleGroupCollapsed = (groupKey) => {
     setCollapsedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }));
@@ -575,7 +576,33 @@ export default function Detections() {
                 No detections match this filter
               </div>
             ) : (
-              groups.map((group) => (
+              allVisibleGroupsCollapsed ? (
+                <button
+                  type="button"
+                  onClick={toggleAllGroupsCollapsed}
+                  title="Expand all detection groups"
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 9,
+                    background: 'var(--bg1)',
+                    border: '1px dashed var(--bd)',
+                    borderRadius: 12,
+                    padding: '14px 15px',
+                    fontSize: 12.5,
+                    color: 'var(--tx2)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <ChevronRight size={15} style={{ color: 'var(--tx3)', flex: '0 0 auto' }} />
+                  <span style={{ fontWeight: 600, color: 'var(--tx)' }}>All detections collapsed</span>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>
+                    {hiddenDetectionCount} hidden
+                  </span>
+                </button>
+              ) : groups.map((group) => (
                 <div key={group.key} style={{ minWidth: 0 }}>
                   <button
                     type="button"

@@ -1,8 +1,8 @@
-import { Toggle } from '../../../../components/primitives';
+﻿import { Toggle } from '../../../../components/primitives';
 
 /**
  * One detection model tile in the catalogue grid: coloured category dot, name,
- * sub-type, enable toggle and the 24h incident tally. Clicking the body selects
+ * sub-type and enable toggle. Clicking the body selects
  * the model (which drives the detail panel on the right); the toggle is
  * click-isolated so flipping it never changes the selection.
  */
@@ -61,8 +61,7 @@ export default function DetectionCard({ model, color, selected, onSelect, onTogg
         </span>
       </div>
 
-      {/* Sub-type on the left, 24h tally on the right — one line, flush with the
-          status dot above it. The count itself is accented; the "· 24h" isn't. */}
+      {/* Sub-type line, flush with the status dot above it. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
         <span
           style={{
@@ -77,9 +76,6 @@ export default function DetectionCard({ model, color, selected, onSelect, onTogg
           }}
         >
           {model.subtitle}
-        </span>
-        <span style={{ flex: '0 0 auto', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>
-          <span style={{ color: 'var(--ok)', fontWeight: 600 }}>{model.incidents24h}</span> · 24h
         </span>
       </div>
     </div>

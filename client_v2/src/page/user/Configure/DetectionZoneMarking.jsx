@@ -783,8 +783,8 @@ export default function DetectionZoneMarking({
                   borderRadius: 20, padding: '6px 14px',
                 }}>
                   {isLineCrossing
-                    ? 'â–¶ Press "Draw Line", then click twice to place the line'
-                    : 'â–¶ Press "Start Drawing", then click to place zone points'}
+                    ? 'click "Draw Line", then click twice to place the line'
+                    : 'click "Start Drawing", then click to place zone points'}
                 </span>
               </div>
             )}
