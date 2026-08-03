@@ -336,7 +336,7 @@ export default function CameraGrid() {
 
         {!isPageFS && visible[0] && (
           <div style={{ flex: '0 0 280px', width: 280 }}>
-            <ActiveDetectionsPanel channel={visible[0]} />
+            <ActiveDetectionsPanel channel={visible[0]} showActiveDetections={false} />
           </div>
         )}
       </div>

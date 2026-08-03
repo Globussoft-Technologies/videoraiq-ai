@@ -16,7 +16,7 @@ import { getNvrs } from '../../../helpers/configure';
 import axios from 'axios';
 import getAccessToken from '../../../utils/getAccessToken';
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+const PAGE_SIZE_OPTIONS = [12, 20, 60, 100];
 
 const SEVERITIES = [
   { key: 'high',     label: 'High'   },
@@ -823,7 +823,7 @@ export default function IncidentCenter() {
   }, []);
 
   const [page,       setPage]       = useState(0);
-  const [pageSize,   setPageSize]   = useState(10);
+  const [pageSize,   setPageSize]   = useState(12);
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [navLoading, setNavLoading] = useState(false);
   // Bumped when a cross-page jump is abandoned. The lightbox watches this to
@@ -855,7 +855,11 @@ export default function IncidentCenter() {
     if (deptIds.length)    f.department         = deptIds;
     if (locIds.length)     f.location           = locIds;
     if (sevSet.size)       f.severity           = [...sevSet];
-    if (statusSet.size)    f.statusFilter       = [...statusSet];
+    // The API treats a missing statusFilter as unresolved-only. “All” is an
+    // explicit union so resolved High incidents are not silently omitted.
+    f.statusFilter = statusSet.size
+      ? [...statusSet]
+      : ['new', 'reported', 'resolved'];
     return f;
   }, [ctxLoc, detTypes, dateFrom, dateTo, nvrIds, channelIds, deptIds, locIds, sevSet, statusSet]);
 
@@ -871,8 +875,8 @@ export default function IncidentCenter() {
   const totalCount = grid.data?.totalCount ?? 0;
   const pages      = Math.max(1, Math.ceil(totalCount / pageSize));
 
-  // Running total of everything shown up to and including this page — 10, 20,
-  // 30 … — instead of a flat per-page count that reads the same on every page.
+  // Running total of everything shown up to and including this page — 12, 24,
+  // 36 … — instead of a flat per-page count that reads the same on every page.
   const shownCount = num(page * pageSize + items.length);
 
   // Delete-selection is scoped to whatever page is currently loaded — same

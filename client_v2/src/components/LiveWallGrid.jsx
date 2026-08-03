@@ -576,14 +576,15 @@ export default function LiveWallGrid() {
         )}
 
         {/* Fullscreen page toggle */}
-        <button
-          onClick={togglePageFullscreen}
-          title={isPageFS ? 'Exit fullscreen' : 'Fullscreen'}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)', fontSize: 12, fontWeight: 500, flexShrink: 0, whiteSpace: 'nowrap' }}
-        >
-          {isPageFS ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-          {/* {isPageFS ? 'Exit' : 'Fullscreen'} */}
-        </button>
+        {size.cols !== 1 && (
+          <button
+            onClick={togglePageFullscreen}
+            title={isPageFS ? 'Exit fullscreen' : 'Fullscreen'}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)', fontSize: 12, fontWeight: 500, flexShrink: 0, whiteSpace: 'nowrap' }}
+          >
+            {isPageFS ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+          </button>
+        )}
       </div>
       )}
 

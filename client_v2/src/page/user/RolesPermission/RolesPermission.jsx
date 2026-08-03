@@ -21,7 +21,7 @@ import { getRoles, createRole, renameRole, updateRolePermission, deleteRole, upd
 // this editable matrix is hidden, nothing about the underlying enforcement.
 const PERMISSION_MODULES = [
   'NVR', 'channels', 'LIVE', 'dashboard', 'alerts', 'analytics', 'incidents', 'Users',
-  'roles', 'departments', 'detectionSettings', 'profiles', 'recipients',
+  'roles', 'settings', 'departments', 'detectionSettings', 'profiles', 'recipients',
   'locations', 'playbacks',
 ];
 // Every sub-module the backend seeds under permissionConfig.logs (see
@@ -41,7 +41,7 @@ const LOG_SUBMODULES = [
 const MODULE_LABELS = {
   NVR: 'Cameras & NVRs', channels: 'Channels', LIVE: 'Live Wall', dashboard: 'Command Center',
   alerts: 'Alerts', analytics: 'Analytics',
-  incidents: 'Incident Center', Users: 'Users', permission: 'Permissions', roles: 'Roles',
+  incidents: 'Incident Center', Users: 'Users', permission: 'Permissions', roles: 'Roles', settings: 'Settings',
   departments: 'Departments', detectionSettings: 'Detection Settings', profiles: 'Profiles',
   recipients: 'Alert Recipients', locations: 'Locations', playbacks: 'Playbacks',
   global: 'Global', accessLogs: 'Access Logs', attendanceLogs: 'Attendance Logs',
@@ -55,6 +55,23 @@ const MODULE_LABELS = {
   lineCrossingLogs: 'Line Crossing Logs', waterSpillLogs: 'Water Spill Logs',
   unauthorizedAccessLogs: 'Unauthorized Access Logs',
 };
+
+const LEGACY_SETTINGS_BY_ROLE = {
+  admin: { view: true, create: true, edit: true, delete: true },
+  read: { view: true, create: false, edit: false, delete: false },
+  write: { view: true, create: true, edit: true, delete: false },
+};
+const SETTINGS_DENIED = { view: false, create: false, edit: false, delete: false };
+
+function permissionConfigForRole(role) {
+  const stored = role.permissionDetails?.permissionConfig || {};
+  if (stored.settings) return stored;
+  const roleName = String(role.roleName || '').toLowerCase();
+  return {
+    ...stored,
+    settings: { ...(LEGACY_SETTINGS_BY_ROLE[roleName] || SETTINGS_DENIED) },
+  };
+}
 
 const ROLE_NAME_MAX_LENGTH = 40;
 
@@ -237,7 +254,7 @@ function DeleteRoleModal({ role, onClose, onConfirm }) {
 
 // ── Configure — granular per-module permission matrix ───────────────────────
 function ConfigureModal({ role, readOnly, onClose, onSave, requireConfig }) {
-  const initialConfig = role.permissionDetails?.permissionConfig || {};
+  const initialConfig = permissionConfigForRole(role);
   const [config, setConfig] = useState(initialConfig);
   const [logsOpen, setLogsOpen] = useState(false);
   const [saving, setSaving] = useState(false);

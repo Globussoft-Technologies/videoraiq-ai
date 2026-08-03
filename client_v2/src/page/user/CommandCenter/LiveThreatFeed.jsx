@@ -22,13 +22,25 @@ export default function LiveThreatFeed({ alerts = [], loading, error, isEmpty, o
             {alerts.map((a, i) => {
               const sev = severity(a.severity);
               const det = detectionLabel(a.incidentType || a.displayName);
+              const alertId = a._id || a.id || a.incidentId;
+              const openAlert = () => {
+                const path = alertId
+                  ? `/alerts?alertId=${encodeURIComponent(String(alertId))}`
+                  : '/alerts';
+                navigate(path, { state: { alertId: alertId ? String(alertId) : undefined, alert: a } });
+              };
               return (
                 <div
-                  key={a._id || i}
+                  key={alertId || i}
                   role="button"
                   tabIndex={0}
-                  onClick={() => navigate('/alerts', { state: { alertId: a._id } })}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/alerts', { state: { alertId: a._id } }); }}
+                  onClick={openAlert}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openAlert();
+                    }
+                  }}
                   style={{ display: 'flex', gap: 10, padding: '10px 11px', borderRadius: 11, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer' }}
                 >
                   <span style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, background: sev.color, flex: '0 0 auto' }} />

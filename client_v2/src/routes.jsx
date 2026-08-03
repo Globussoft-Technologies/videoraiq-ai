@@ -110,7 +110,7 @@ export const v2Routes = (
     <Route path="recipients" element={guard('recipients', undefined, <AlertRecipients />)} />
     {/* Administer */}
     <Route path="users" element={guard('Users', undefined, <UsersPage />)} />
-    <Route path="settings" element={<SystemSettings />} />
+    <Route path="settings" element={guard('settings', undefined, <SystemSettings />)} />
     {STUBS.map(([key, path, legacy]) => (
       <Route key={key} path={path} element={<Placeholder viewKey={key} legacyPath={legacy} />} />
     ))}

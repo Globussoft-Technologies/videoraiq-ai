@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useOutletContext } from 'react-router-dom';
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
 import { X } from 'lucide-react';
 import { Panel, Badge } from '../../../components/primitives';
@@ -14,6 +14,10 @@ const PAGE_SIZE = 50;
 // list out from under them, so polling pauses until they're back on page 1.
 const POLL_MS = 30000;
 const ALL_STATUS_FILTER = ['new', 'resolved', 'reported'];
+
+const incidentIdOf = (incident) => String(
+  incident?._id || incident?.id || incident?.incidentId || ''
+);
 
 const TABS = [
   { key: 'all', label: 'All' },
@@ -197,20 +201,34 @@ export default function AlertsView() {
   const ctx = useOutletContext() || {};
   const location = ctx.location || '';
   const routerLocation = useLocation();
+  const navigate = useNavigate();
   // A KPI card elsewhere (Command Center's "Active Alerts" tile) can
   // deep-link here with an initial status filter via navigate(..., { state }).
   const initialStatusFilter = routerLocation.state?.statusFilter;
   // A notification click (Header's bell tray) deep-links here with a specific
   // incident id â€” fetched directly by id since it may not be in the general
   // feed's first page (older, or hidden by whatever tab/filter is active).
-  const initialAlertId = routerLocation.state?.alertId;
+  const routedAlert = routerLocation.state?.alert || null;
+  const initialAlertId = routerLocation.state?.alertId
+    || new URLSearchParams(routerLocation.search).get('alertId')
+    || incidentIdOf(routedAlert);
   const [sev, setSev] = useState('all');
   const [statusFilter, setStatusFilter] = useState(() => initialStatusFilter || 'all');
-  const [selected, setSelected] = useState(null);
-  const [deepLinkedIncident, setDeepLinkedIncident] = useState(null);
+  const [selected, setSelected] = useState(routedAlert);
+  const [deepLinkedIncident, setDeepLinkedIncident] = useState(routedAlert);
+  const suppressAlertFetchRef = useRef('');
+  const preserveInitialSelectionRef = useRef(Boolean(initialAlertId || routedAlert));
 
   useEffect(() => {
-    if (!initialAlertId) return;
+    if (routedAlert) {
+      setDeepLinkedIncident(routedAlert);
+      setSelected(routedAlert);
+    }
+    if (!initialAlertId) return undefined;
+    if (suppressAlertFetchRef.current === String(initialAlertId)) {
+      suppressAlertFetchRef.current = '';
+      return undefined;
+    }
     let cancelled = false;
     fetchIncidentById(initialAlertId)
       .then((incident) => {
@@ -219,11 +237,10 @@ export default function AlertsView() {
         setSelected(incident);
       })
       .catch(() => {
-        if (!cancelled) toast.error('Could not load that alert');
+        if (!cancelled && !routedAlert) toast.error('Could not load that alert');
       });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialAlertId]);
+  }, [initialAlertId, routedAlert]);
   const [busy, setBusy] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
@@ -264,6 +281,23 @@ export default function AlertsView() {
     setDateTo('');
   }, []);
 
+  const handleSelectAlert = useCallback((incident) => {
+    setSelected(incident);
+    const incidentId = incidentIdOf(incident);
+    if (!incidentId || incidentId === String(initialAlertId || '')) return;
+
+    // This row is already loaded, so only synchronize the address bar. The
+    // deep-link fetch effect skips this ID and the old pinned row is released.
+    suppressAlertFetchRef.current = incidentId;
+    setDeepLinkedIncident(null);
+    const params = new URLSearchParams(routerLocation.search);
+    params.set('alertId', incidentId);
+    navigate(
+      { pathname: routerLocation.pathname, search: `?${params.toString()}` },
+      { replace: true, state: null },
+    );
+  }, [initialAlertId, navigate, routerLocation.pathname, routerLocation.search]);
+
   // Manual pagination (not useApi) so pages can accumulate as the user
   // scrolls, instead of each fetch replacing the whole list.
   const [items, setItems] = useState([]);
@@ -273,6 +307,7 @@ export default function AlertsView() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const listRef = useRef(null);
+  const deepLinkedRowRef = useRef(null);
   const requestIdRef = useRef(0);
   const countsRequestIdRef = useRef(0);
 
@@ -338,7 +373,9 @@ export default function AlertsView() {
 
   // Filter change (e.g. site switch or chip click) resets back to page 1.
   useEffect(() => {
-    setSelected(null);
+    // Keep a routed alert selected while the normal first page loads. It may
+    // be much older than PAGE_SIZE and is rendered separately below.
+    if (!preserveInitialSelectionRef.current) setSelected(null);
     loadPage(0, { append: false });
   }, [loadPage]);
 
@@ -367,7 +404,25 @@ export default function AlertsView() {
 
   const refetch = useCallback(() => loadPage(0, { append: false }), [loadPage]);
 
-  const rows = items;
+  const rows = useMemo(() => {
+    if (!deepLinkedIncident) return items;
+    const deepLinkedId = incidentIdOf(deepLinkedIncident);
+    return [
+      deepLinkedIncident,
+      ...items.filter((item) => incidentIdOf(item) !== deepLinkedId),
+    ];
+  }, [items, deepLinkedIncident]);
+
+  // The deep-linked row is deliberately prepended, so bring the internal
+  // table scroller back to its top after the incident has loaded.
+  useEffect(() => {
+    if (!deepLinkedIncident || loading) return undefined;
+    const frame = requestAnimationFrame(() => {
+      listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      deepLinkedRowRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [deepLinkedIncident, loading]);
 
   // Per-tab counts come from the backend aggregate for the full filtered result
   // set, not from the currently loaded pagination page.
@@ -375,7 +430,7 @@ export default function AlertsView() {
   const statusCounts = countSummary.status;
 
   const active = selected || rows[0] || null;
-  const activeId = active?._id || active?.id;
+  const activeId = incidentIdOf(active);
   const activeResolved = !!active?.resolved;
   const activeReported = !!active?.report?.status;
   const canReportActive = !!activeId && !activeResolved && !activeReported;
@@ -386,8 +441,7 @@ export default function AlertsView() {
     try {
       await updateIncidentResolved({ incidentId: activeId, incidentType: active?.incidentType, resolved: true });
       const markResolved = (incident) => {
-        const id = incident?._id || incident?.id;
-        if (id !== activeId) return incident;
+        if (incidentIdOf(incident) !== activeId) return incident;
         return { ...incident, resolved: true, report: { ...(incident.report || {}), status: false, description: "", resolvedAt: new Date().toISOString(), reportedAt: null } };
       };
       setItems((prev) => prev.map(markResolved));
@@ -405,10 +459,9 @@ export default function AlertsView() {
 
   const handleReportSuccess = useCallback((updatedIncident) => {
     const updatedReport = updatedIncident?.report || {};
-    const idToUpdate = updatedIncident?._id || updatedIncident?.id || activeId;
+    const idToUpdate = incidentIdOf(updatedIncident) || activeId;
     const markReported = (incident) => {
-      const id = incident?._id || incident?.id;
-      if (!incident || id !== idToUpdate) return incident;
+      if (!incident || incidentIdOf(incident) !== idToUpdate) return incident;
       return {
         ...incident,
         report: {
@@ -467,16 +520,37 @@ export default function AlertsView() {
           <AsyncBoundary loading={loading} error={error} isEmpty={!loading && !error && rows.length === 0} onRetry={refetch} minH={300} emptyLabel="No alerts">
             {() => (
               <div ref={listRef} onScroll={handleScroll} className="vq-scroll" style={{ maxHeight: '64vh', overflowY: 'auto' }}>
-                {rows.map((it) => {
+                {rows.map((it, index) => {
                   const s = severity(it.severity);
                   const st = statusOf(it);
-                  const isSel = active && active._id === it._id;
+                  const rowId = incidentIdOf(it);
+                  const isSel = !!activeId && activeId === rowId;
+                  const isDeepLinked = !!rowId && rowId === incidentIdOf(deepLinkedIncident);
                   return (
                     <div
-                      key={it._id}
-                      onClick={() => setSelected(it)}
+                      key={rowId || index}
+                      ref={isDeepLinked ? deepLinkedRowRef : undefined}
+                      onClick={() => handleSelectAlert(it)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handleSelectAlert(it);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={isSel ? 0 : -1}
+                      aria-current={isSel ? 'true' : undefined}
                       className="vq-alerts-row"
-                      style={{ display: 'grid', gridTemplateColumns: '80px 1fr 110px 110px', gap: 8, alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid var(--bd)', cursor: 'pointer', background: isSel ? 'var(--bg2)' : 'transparent' }}
+                      style={{
+                        display: 'grid', gridTemplateColumns: '80px 1fr 110px 110px', gap: 8,
+                        alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid var(--bd)',
+                        cursor: 'pointer', outline: 'none',
+                        background: isSel ? 'rgba(59,130,246,.13)' : 'transparent',
+                        boxShadow: isSel
+                          ? 'inset 3px 0 var(--blue), inset 0 0 0 1px rgba(59,130,246,.3)'
+                          : 'none',
+                        transition: 'background .18s, box-shadow .18s',
+                      }}
                     >
                       <Badge color={s.color}>{s.short}</Badge>
                       <div style={{ minWidth: 0 }}>

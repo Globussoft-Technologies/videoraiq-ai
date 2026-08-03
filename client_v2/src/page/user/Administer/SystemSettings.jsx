@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -11,6 +11,7 @@ import {
   Mail,
   MessageSquare,
   Radio,
+  Search,
   ShieldCheck,
   SlidersHorizontal,
   Volume2,
@@ -26,6 +27,7 @@ import {
   updateTimezone,
 } from '../../../helpers/administer';
 import { useAttendanceSocket } from '../../../context/AttendanceSocketContext';
+import { usePermissions } from '../../../context/PermissionContext';
 import { getDetectionSettings, getDetectionTypes } from '../../../helpers/configure';
 import { getRecipients } from '../../../helpers/recipients';
 import { getTelegramLinkCode } from '../../../helpers/telegram';
@@ -173,12 +175,55 @@ function ReadOnlyField({ value, mono = false }) {
 }
 
 function SelectField({ value, options, onChange, disabled }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const wrapperRef = useRef(null);
+  const searchRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setOpen(false);
+        setQuery('');
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    requestAnimationFrame(() => searchRef.current?.focus());
+  }, [open]);
+
+  useEffect(() => {
+    if (disabled) {
+      setOpen(false);
+      setQuery('');
+    }
+  }, [disabled]);
+
+  const filteredOptions = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return options;
+    return options.filter((option) => option.toLowerCase().includes(normalizedQuery));
+  }, [options, query]);
+
+  const selectOption = (option) => {
+    setOpen(false);
+    setQuery('');
+    onChange(option);
+  };
+
   return (
-    <div style={{ position: 'relative' }}>
-      <select
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
+    <div ref={wrapperRef} style={{ position: 'relative', zIndex: open ? 20 : 1 }}>
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen((current) => !current)}
         disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
         style={{
           width: '100%',
           height: 38,
@@ -186,33 +231,129 @@ function SelectField({ value, options, onChange, disabled }) {
           boxSizing: 'border-box',
           borderRadius: 9,
           background: 'var(--bg2)',
-          border: '1px solid var(--bd)',
+          border: `1px solid ${open ? 'var(--brand)' : 'var(--bd)'}`,
           fontSize: 12.5,
           color: 'var(--tx)',
           outline: 'none',
-          appearance: 'none',
-          cursor: disabled ? 'wait' : 'pointer',
+          cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.7 : 1,
+          textAlign: 'left',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
         }}
       >
-        {!value && <option value="">Select timezone</option>}
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
+        {value || 'Select timezone'}
+      </button>
       <ChevronDown
         size={14}
         style={{
           position: 'absolute',
           right: 12,
-          top: '50%',
-          transform: 'translateY(-50%)',
+          top: 19,
+          transform: `translateY(-50%) rotate(${open ? 180 : 0}deg)`,
+          transition: 'transform .18s ease',
           pointerEvents: 'none',
           color: 'var(--tx3)',
         }}
       />
+      {open && (
+        <div
+          role="listbox"
+          aria-label="Timezones"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 5px)',
+            left: 0,
+            right: 0,
+            borderRadius: 10,
+            background: 'var(--bg1solid, var(--bg1))',
+            border: '1px solid var(--bd)',
+            boxShadow: '0 12px 30px rgba(15,23,42,.16)',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ padding: 8, borderBottom: '1px solid var(--bd)' }}>
+            <div style={{ position: 'relative' }}>
+              <Search
+                size={14}
+                style={{
+                  position: 'absolute',
+                  left: 10,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--tx3)',
+                  pointerEvents: 'none',
+                }}
+              />
+              <input
+                ref={searchRef}
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setOpen(false);
+                    setQuery('');
+                  }
+                }}
+                placeholder="Search timezone..."
+                aria-label="Search timezone"
+                style={{
+                  width: '100%',
+                  height: 34,
+                  boxSizing: 'border-box',
+                  padding: '0 10px 0 32px',
+                  borderRadius: 8,
+                  background: 'var(--bg2)',
+                  border: '1px solid var(--bd)',
+                  color: 'var(--tx)',
+                  fontSize: 12,
+                  outline: 'none',
+                }}
+              />
+            </div>
+          </div>
+          <div className="customscrollbar" style={{ maxHeight: 240, overflowY: 'auto', padding: '5px 0' }}>
+            {filteredOptions.length === 0 ? (
+              <div style={{ padding: '12px', color: 'var(--tx3)', fontSize: 12, textAlign: 'center' }}>
+                No timezones found
+              </div>
+            ) : (
+              filteredOptions.map((option) => {
+                const selected = option === value;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    onClick={() => selectOption(option)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 10,
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: 0,
+                      background: selected ? 'rgba(79,105,255,.12)' : 'transparent',
+                      color: selected ? 'var(--brand)' : 'var(--tx)',
+                      fontSize: 12.5,
+                      fontWeight: selected ? 600 : 400,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{option}</span>
+                    {selected && <CheckCircle2 size={14} style={{ flexShrink: 0 }} />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -456,6 +597,13 @@ function ComplianceRow({ label, desc, enabled, last }) {
 export default function SystemSettings() {
   const navigate = useNavigate();
   const audio = useAttendanceSocket() || {};
+  const { permissions } = usePermissions();
+  const settingsPermissions = permissions?.settings || {};
+  const canCreateSettings = settingsPermissions.create === true;
+  const canEditSettings = settingsPermissions.edit === true;
+  const canDeleteSettings = settingsPermissions.delete === true;
+  const canEnableSetting = canCreateSettings || canEditSettings;
+  const canDisableSetting = canDeleteSettings || canEditSettings;
   const adminApi = useApi(() => fetchAdmin(), []);
   const timezoneApi = useApi(() => fetchTimezone(), []);
   const timezonesApi = useApi(() => getTimezones(), []);
@@ -485,13 +633,14 @@ export default function SystemSettings() {
   const storedIncidentRetention = retention.incidents || '';
   const storedAttendanceRetention = retention.attendance || '';
   const storedAccessRetention = retention.accessLogs || '';
+  const storedRetentionSpecs = [storedIncidentRetention, storedAttendanceRetention, storedAccessRetention].filter(Boolean);
+  const storedRetentionEnabled = retention.enabled !== false
+    && !(storedRetentionSpecs.length > 0 && storedRetentionSpecs.every(isNeverRetention));
 
   useEffect(() => {
-    const specs = [storedIncidentRetention, storedAttendanceRetention, storedAccessRetention].filter(Boolean);
-    const allStoredSpecsNever = specs.length > 0 && specs.every(isNeverRetention);
-    setRetentionEnabled(retention.enabled !== false && !allStoredSpecsNever);
+    setRetentionEnabled(storedRetentionEnabled);
     setRetentionDays(storedRetentionDays(storedIncidentRetention, storedAttendanceRetention, storedAccessRetention));
-  }, [retention.enabled, storedIncidentRetention, storedAttendanceRetention, storedAccessRetention]);
+  }, [storedRetentionEnabled, storedIncidentRetention, storedAttendanceRetention, storedAccessRetention]);
 
   const soundEnabled = !!audio.audioEnabled;
   const emailRecipients = Array.isArray(emailRecipientsApi.data) ? emailRecipientsApi.data : [];
@@ -520,15 +669,30 @@ export default function SystemSettings() {
   }, 0);
   const firstEnabledDetection = enabledDetectionRows[0];
 
-  const canSaveRetention = !!admin.user_id && !retentionSaving;
+  const retentionModeChanged = retentionEnabled !== storedRetentionEnabled;
+  const canApplyRetention = retentionModeChanged
+    ? (retentionEnabled ? canEnableSetting : canDisableSetting)
+    : canEditSettings;
+  const canAdjustRetention = canEditSettings
+    || (!storedRetentionEnabled && retentionEnabled && canCreateSettings);
+  const canSaveRetention = !!admin.user_id && !retentionSaving && canApplyRetention;
 
   const handleSoundToggle = async (next) => {
+    const allowed = next ? canEnableSetting : canDisableSetting;
+    if (!allowed) {
+      toast.error(`You don't have permission to ${next ? 'enable' : 'disable'} settings`);
+      return;
+    }
     await audio.setAudioEnabled?.(next, {
       successMessage: `Detection audio alerts ${next ? 'enabled' : 'disabled'}`,
     });
   };
 
   const handleTimezoneChange = async (next) => {
+    if (!canEditSettings) {
+      toast.error("You don't have permission to edit settings");
+      return;
+    }
     if (!next || next === savedTimezone) return;
     setTimezoneSaving(true);
     try {
@@ -544,6 +708,10 @@ export default function SystemSettings() {
   };
 
   const handleRetentionSave = async () => {
+    if (!canApplyRetention) {
+      toast.error("You don't have permission to change retention settings");
+      return;
+    }
     if (!admin.user_id) {
       toast.error('Admin user id is not available yet');
       return;
@@ -605,7 +773,7 @@ export default function SystemSettings() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 11 }}>
               <div>
                 <FieldLabel>Timezone</FieldLabel>
-                <SelectField value={savedTimezone} options={timezoneOptions} onChange={handleTimezoneChange} disabled={timezoneSaving || timezonesApi.loading} />
+                <SelectField value={savedTimezone} options={timezoneOptions} onChange={handleTimezoneChange} disabled={!canEditSettings || timezoneSaving || timezonesApi.loading} />
               </div>
               <div>
                 <FieldLabel>Timezone Preview</FieldLabel>
@@ -649,6 +817,7 @@ export default function SystemSettings() {
             desc="Control audible alert notifications for live attendance"
             value={soundEnabled}
             onChange={handleSoundToggle}
+            disabled={soundEnabled ? !canDisableSetting : !canEnableSetting}
             loading={audio.audioSaving}
           />
           {/* <ToggleRow
@@ -677,16 +846,20 @@ export default function SystemSettings() {
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>Automatic cleanup</div>
               <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2 }}>{retentionEnabled ? `${retentionDays} day policy` : 'Keep data forever'}</div>
             </div>
-            <Toggle value={retentionEnabled} onChange={setRetentionEnabled} disabled={retentionSaving} />
+            <Toggle
+              value={retentionEnabled}
+              onChange={setRetentionEnabled}
+              disabled={retentionSaving || (retentionEnabled ? !canDisableSetting : !canEnableSetting)}
+            />
           </div>
           <input
             type="range"
             min={RETENTION_MIN}
             max={RETENTION_MAX}
             value={retentionDays}
-            disabled={!retentionEnabled || retentionSaving}
+            disabled={!retentionEnabled || retentionSaving || !canAdjustRetention}
             onChange={(e) => setRetentionDays(Number(e.target.value))}
-            style={{ width: '100%', accentColor: 'var(--blue)', height: 5, cursor: retentionEnabled ? 'pointer' : 'default', opacity: retentionEnabled ? 1 : 0.55 }}
+            style={{ width: '100%', accentColor: 'var(--blue)', height: 5, cursor: retentionEnabled && canAdjustRetention ? 'pointer' : 'default', opacity: retentionEnabled && canAdjustRetention ? 1 : 0.55 }}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--tx3)', marginTop: 6 }}>
             <span>7d</span>

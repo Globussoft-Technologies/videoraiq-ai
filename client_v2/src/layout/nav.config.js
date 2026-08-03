@@ -112,7 +112,7 @@ export const NAV_GROUPS = [
     label: 'ADMINISTER',
     items: [
       { key: 'users', label: 'User Role Detail', path: 'users', icon: Users, permissionKey: 'Users' },
-      { key: 'settings', label: 'Settings', path: 'settings', icon: Settings },
+      { key: 'settings', label: 'Settings', path: 'settings', icon: Settings, permissionKey: 'settings' },
       { key: 'roles', label: 'Roles & Permission', path: 'roles', icon: ShieldCheck, permissionKey: 'roles' },
       { key: 'locations', label: 'Locations', path: 'locations', icon: MapPin, permissionKey: 'locations' },
       { key: 'departments', label: 'Departments', path: 'departments', icon: Building2, permissionKey: 'departments' },

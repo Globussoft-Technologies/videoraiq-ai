@@ -5,6 +5,27 @@ import { useAuth } from "./AuthContext";
 
 const PermissionContext = createContext();
 
+const LEGACY_SETTINGS_PERMISSIONS = {
+  admin: { view: true, create: true, edit: true, delete: true },
+  read: { view: true, create: false, edit: false, delete: false },
+  write: { view: true, create: true, edit: true, delete: false },
+};
+const DENY_SETTINGS = { view: false, create: false, edit: false, delete: false };
+
+// Roles stored before the Settings permission was introduced do not have the
+// key yet. Preserve the three built-in role presets; custom roles remain
+// denied until an admin explicitly grants Settings in Roles & Permission.
+function normalizePermissionConfig(roleData) {
+  const config = roleData?.permissionConfig;
+  if (!config) return {};
+  if (config.settings) return config;
+  const roleName = String(roleData?.roleName || '').toLowerCase();
+  return {
+    ...config,
+    settings: { ...(LEGACY_SETTINGS_PERMISSIONS[roleName] || DENY_SETTINGS) },
+  };
+}
+
 const getAllUserPermissions = async () => {
   const token = getAccessToken();
   const HOST = import.meta.env.VITE_BACKEND;
@@ -42,7 +63,7 @@ export const PermissionProvider = ({ children }) => {
       if (requestId !== requestIdRef.current) return;
       if (response?.data?.body?.status === "success") {
         const roleData = response.data.body.data[0];
-        setPermissions(roleData?.permissionConfig || {});
+        setPermissions(normalizePermissionConfig(roleData));
         // /auth/by-login-token only decodes the JWT payload from login time —
         // it never re-checks the DB, so user.roleId in AuthContext goes stale
         // the moment an admin changes this user's role elsewhere, and stays

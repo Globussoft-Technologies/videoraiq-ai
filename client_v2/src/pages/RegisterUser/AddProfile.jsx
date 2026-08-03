@@ -64,7 +64,7 @@ const AddProfile = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(12);
   const [editUser, setEditUser] = useState(null);
   const [viewMode, setViewMode] = useState('grid');
 

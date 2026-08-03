@@ -35,17 +35,17 @@ function detectionMatchesChannel(data, ids) {
  * time), never bounding boxes / confidence / a tracking id, so this shows
  * what's real rather than fabricating those fields.
  */
-function useLiveDetections(channel) {
+function useLiveDetections(channel, enabled = true) {
   const { socket } = useSocket();
   const { user } = useAuth();
   const [detections, setDetections] = useState([]);
 
   useEffect(() => {
     setDetections([]);
-  }, [channel?._id, channel?.channelId]);
+  }, [enabled, channel?._id, channel?.channelId]);
 
   useEffect(() => {
-    if (!socket || !user?.adminId) return undefined;
+    if (!enabled || !socket || !user?.adminId) return undefined;
     const ids = channelIdsOf(channel);
     if (!ids.length) return undefined;
 
@@ -62,7 +62,7 @@ function useLiveDetections(channel) {
 
     socket.on(`cameradetection_${user.adminId}`, handleDetection);
     return () => socket.off(`cameradetection_${user.adminId}`, handleDetection);
-  }, [socket, user?.adminId, channel?._id, channel?.channelId]);
+  }, [enabled, socket, user?.adminId, channel?._id, channel?.channelId]);
 
   return detections;
 }
@@ -143,9 +143,9 @@ const cardClassFlush = 'rounded-[14px] border border-[var(--bd)] bg-[var(--bg1)]
  * actually-known info. No bounding boxes / confidence / tracking id /
  * resolution / fps / protocol / live-status — this app has no data source
  * for any of those today. */
-export default function ActiveDetectionsPanel({ channel }) {
+export default function ActiveDetectionsPanel({ channel, showActiveDetections = true }) {
   const navigate = useNavigate();
-  const liveDetections = useLiveDetections(channel);
+  const liveDetections = useLiveDetections(channel, showActiveDetections);
   const engines = getEnabledEngines(channel);
   const nvr = channel?.nvrId;
   const site = nvr?.location || channel?.location || channel?.locationName || '—';
@@ -158,7 +158,7 @@ export default function ActiveDetectionsPanel({ channel }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className={cardClass}>
+      {showActiveDetections && <div className={cardClass}>
         <div className="mb-3 flex items-start justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0">
             <SectionIcon icon={Radar} tint="var(--blue)" />
@@ -181,7 +181,7 @@ export default function ActiveDetectionsPanel({ channel }) {
             ))}
           </div>
         )}
-      </div>
+      </div>}
 
       <div className={cardClass}>
         <div className="mb-3 flex items-center gap-2.5">
