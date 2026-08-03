@@ -49,6 +49,29 @@ function statusColor(status) {
   return '#6b7796';
 }
 
+function formatBrand(brand) {
+  const value = String(brand || '').trim();
+  if (!value) return '';
+  if (value.toLowerCase() === 'cpplus') return 'CP Plus';
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function inferChannelCapacity(nvr, usedChannels) {
+  const explicit = Number(
+    nvr.channelCapacity ?? nvr.maxChannels ?? nvr.totalChannels ?? nvr.capacity
+  );
+  if (Number.isFinite(explicit) && explicit > 0) return Math.max(explicit, usedChannels);
+
+  // Hikvision models commonly encode capacity in the final two digits before
+  // NI (DS-7116NI -> 16, DS-9664NI -> 64). Keep this as a display fallback;
+  // an explicit API capacity always wins above.
+  const match = String(nvr.model || '').match(/DS-\d{2}(\d{2})(?:NI|$)/i);
+  const inferred = Number(match?.[1]);
+  return Number.isFinite(inferred) && inferred > 0
+    ? Math.max(inferred, usedChannels)
+    : usedChannels;
+}
+
 // Distinct badge colors so adjacent chips (ID/IP/Model/... or table columns)
 // don't all read as one indistinguishable blob — same idea as the role-badge
 // palette in UsersPage.jsx.
@@ -130,17 +153,22 @@ function SkeletonBlock({ width = '100%', height = 12, radius = 5, style = {} }) 
 function NvrCardSkeleton() {
   return (
     <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 14, padding: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 13 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         <span style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--bg2)', flexShrink: 0 }} />
-        <SkeletonBlock width="55%" height={13} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <SkeletonBlock width="42%" height={12} />
+          <SkeletonBlock width="34%" height={9} />
+        </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {['ID', 'IP', 'Model', 'Location', 'Camera'].map((label) => (
-          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 11, color: 'var(--tx2)' }}>{label}:</span>
-            <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 5, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
-              <SkeletonBlock width={90} height={10} />
-            </span>
+      <SkeletonBlock width="48%" height={9} style={{ marginBottom: 13 }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+        {['Channels'].map((label) => (
+          <div key={label}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+              <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{label}</span>
+              <SkeletonBlock width={35} height={8} />
+            </div>
+            <SkeletonBlock width="100%" height={5} radius={3} />
           </div>
         ))}
       </div>
@@ -151,13 +179,25 @@ function NvrCardSkeleton() {
 // ── NVR card ─────────────────────────────────────────────────────────────────
 function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
   const cameraCount = nvr.cameraCount ?? nvr.usedChannels ?? nvr.used ?? 0;
-  const isMobile    = useIsMobile();
+  const channelCapacity = inferChannelCapacity(nvr, cameraCount);
+  const channelPercent = channelCapacity > 0
+    ? Math.min(100, (cameraCount / channelCapacity) * 100)
+    : 0;
+  const isMobile = useIsMobile();
+  const recorderName = nvr.name || nvr.nvrName || nvr.displayName || nvr.deviceName || 'Unknown Recorder';
+  const rawAddress = nvr.ip || nvr.ipAddress || nvr.domain || '';
+  const address = decrypt(rawAddress);
+  const brand = formatBrand(nvr.brand);
+  const location = nvr.location || nvr.locationName || nvr.site || '';
+  const connectivity = nvr.isOnline ?? nvr.online ?? nvr.connected ?? nvr.isActive;
+  const healthStatus = nvr.status || nvr.health || nvr.connectionStatus ||
+    (connectivity === true ? 'online' : connectivity === false ? 'offline' : cameraCount > 0 ? 'online' : '');
 
   // On phones the three actions can't fit beside the title, so they drop to a
   // full-width row below the fields instead of an absolute top-right cluster.
   const actions = (
     <div style={{
-      display: 'flex', gap: 8,
+      display: 'flex', alignItems: 'center', gap: 6,
       ...(isMobile
         ? { marginTop: 14 }
         : { position: 'absolute', top: 14, right: 14 }),
@@ -166,14 +206,14 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
         onClick={() => onCameraSettings(nvr)}
         title="Camera Settings"
         style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 34, padding: '0 14px',
-          borderRadius: 8, fontSize: 12.5, fontWeight: 600,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, height: 30, padding: '0 10px',
+          borderRadius: 7, fontSize: 11.5, fontWeight: 600,
           background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.35)',
           color: 'var(--blue)', cursor: 'pointer', whiteSpace: 'nowrap',
           flex: isMobile ? 1 : undefined, minWidth: 0,
         }}
       >
-        <Cctv size={15} /> Camera Settings
+        <Cctv size={13} /> Camera Settings
       </button>
       {SHOW_NVR_ACTIONS && (
         <>
@@ -181,28 +221,36 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
             onClick={() => onEdit(nvr)}
             title="Edit NVR"
             style={{
-              width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+              width: 30, height: 30, borderRadius: 7, flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: 'rgba(139,92,246,.08)', border: '1px solid rgba(139,92,246,.35)',
               color: '#8b5cf6', cursor: 'pointer',
             }}
           >
-            <Pencil size={15} />
+            <Pencil size={13} />
           </button>
           <button
             onClick={() => onDelete(nvr)}
             title="Delete NVR"
             style={{
-              width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+              width: 30, height: 30, borderRadius: 7, flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.35)',
               color: 'var(--crit)', cursor: 'pointer',
             }}
           >
-            <Trash2 size={15} />
+            <Trash2 size={13} />
           </button>
         </>
       )}
+      <span
+        title={healthStatus || 'Status unavailable'}
+        style={{
+          width: 9, height: 9, borderRadius: '50%', flexShrink: 0, marginLeft: 1,
+          background: statusColor(healthStatus),
+          boxShadow: healthStatus ? `0 0 6px ${statusColor(healthStatus)}` : 'none',
+        }}
+      />
     </div>
   );
 
@@ -214,63 +262,62 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
       {/* Actions (absolute top-right on desktop) */}
       {!isMobile && actions}
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 13, paddingRight: isMobile ? 20 : 175 }}>
+      {/* Recorder identity */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, paddingRight: isMobile ? 0 : (SHOW_NVR_ACTIONS ? 225 : 155) }}>
         <span style={{
-          width: 32, height: 32, borderRadius: 8, background: 'rgba(16,185,129,.08)', border: '1px solid rgba(16,185,129,.35)',
+          width: 32, height: 32, borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="1.7">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--tx2)" strokeWidth="1.7">
             <rect x="3" y="4" width="18" height="7" rx="1.5" />
             <rect x="3" y="13" width="18" height="7" rx="1.5" />
-            <circle cx="7" cy="7.5" r=".9" fill="#10b981" />
+            <circle cx="7" cy="7.5" r=".9" fill="var(--tx2)" />
           </svg>
         </span>
-        <div style={{
-          flex: isMobile ? 1 : '0 1 auto', minWidth: 0, maxWidth: '100%', padding: '5px 10px', borderRadius: 7,
-          background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.35)',
-        }}>
-          <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {nvr.name || nvr.nvrName || 'Unknown NVR'}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div title={recorderName} style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {recorderName}
+          </div>
+          <div style={{ marginTop: 2, fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {[brand, address].filter(Boolean).join(' · ') || 'Recorder details unavailable'}
           </div>
         </div>
       </div>
 
-      {/* Field list */}
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'stretch',
-        gap: 8,
-        paddingRight: isMobile ? 0 : 175,
-        fontSize: 11,
-        maxWidth: isMobile ? '100%' : 430,
+      <div title={[nvr.model, location].filter(Boolean).join(' · ')} style={{
+        marginBottom: 13, fontSize: 11, color: 'var(--tx3)',
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
       }}>
-        {[
-          { label: 'ID',       val: nvr._id ? nvr._id.slice(-6) : null, mono: true },
-          { label: 'IP',       val: nvr._id ? (nvr.ip || nvr.ipAddress || '—') : null, mono: true },
-          { label: 'Model',    val: (nvr.model || nvr.brand || nvr.location || nvr.locationName || nvr.site) ? (nvr.model || nvr.brand || '—') : null },
-          { label: 'Location', val: (nvr.model || nvr.brand || nvr.location || nvr.locationName || nvr.site) ? (nvr.location || nvr.locationName || nvr.site || '—') : null },
-          { label: 'Camera',   val: String(cameraCount), mono: true },
-        ].map((f, i) => {
-          const bc = badgeColor(f.label);
-          return (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '62px minmax(0, 1fr)', alignItems: 'center', gap: 8, minWidth: 0 }}>
-              <span style={{ color: 'var(--tx2)', flexShrink: 0, textAlign: 'right' }}>{f.label}:</span>
-              {f.val == null ? (
-                <SkeletonBlock width={90} height={10} />
-              ) : (
-                <span style={{
-                  display: 'inline-block', minWidth: 0, maxWidth: '100%',
-                  padding: '2px 8px', borderRadius: 5,
-                  background: hexA(bc, 0.1), border: `1px solid ${hexA(bc, 0.35)}`,
-                  fontWeight: 600, color: bc, fontFamily: f.mono ? 'var(--mono)' : undefined,
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>{f.val}</span>
-              )}
+        {[nvr.model, location].filter(Boolean).join(' · ') || 'Model and location not reported'}
+      </div>
+
+      {/* Recorder utilization */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 5, fontSize: 10.5, color: 'var(--tx2)' }}>
+            <span>Channels</span>
+            <span style={{ fontFamily: 'var(--mono)', color: 'var(--tx3)' }}>
+              {channelCapacity > 0 ? `${cameraCount}/${channelCapacity}` : cameraCount}
+            </span>
+          </div>
+          <div style={{ height: 5, borderRadius: 4, overflow: 'hidden', background: 'var(--bd)' }}>
+            <div style={{
+              width: `${channelPercent}%`, height: '100%', borderRadius: 'inherit',
+              position: 'relative', overflow: 'hidden',
+              background: 'linear-gradient(90deg,var(--blue),var(--violet))',
+              transition: 'width .35s ease',
+            }}>
+              <span
+                aria-hidden="true"
+                className="vq-shimmer"
+                style={{
+                  position: 'absolute', inset: 0, width: '42%',
+                  background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.75),transparent)',
+                }}
+              />
             </div>
-          );
-        })}
+          </div>
+        </div>
       </div>
 
       {/* Actions (full-width row below fields on phones) */}

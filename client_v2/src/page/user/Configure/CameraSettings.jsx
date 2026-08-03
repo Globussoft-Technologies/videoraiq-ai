@@ -485,11 +485,30 @@ export default function CameraSettings() {
     }
   }
 
-  const filtered = tableData.filter(c =>
-    !search ||
-    c.cameraName?.toLowerCase().includes(search.toLowerCase()) ||
-    c.aliasName?.toLowerCase().includes(search.toLowerCase())
+  const normalizedSearch = search.trim().toLowerCase();
+  const departmentLabelById = new Map(
+    departmentOptions.map(option => [String(option.value), option.label?.toLowerCase() || ''])
   );
+  const filtered = tableData.filter(c => {
+    if (!normalizedSearch) return true;
+
+    const matchesDepartment = (c.departments || []).some(department => {
+      const isObject = department && typeof department === 'object';
+      const id = isObject
+        ? (department._id || department.id || department.value)
+        : department;
+      const inlineLabel = isObject
+        ? (department.departmentName || department.name || department.label || '')
+        : '';
+      const optionLabel = departmentLabelById.get(String(id)) || '';
+
+      return `${inlineLabel} ${optionLabel}`.toLowerCase().includes(normalizedSearch);
+    });
+
+    return c.cameraName?.toLowerCase().includes(normalizedSearch) ||
+      c.aliasName?.toLowerCase().includes(normalizedSearch) ||
+      matchesDepartment;
+  });
 
   return (
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -538,7 +557,7 @@ export default function CameraSettings() {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search camera or alias..."
+              placeholder="Search camera, alias or department..."
               style={{ flex: 1, background: 'transparent', border: 0, outline: 'none', color: 'var(--tx)', fontSize: 12 }}
             />
           </div>

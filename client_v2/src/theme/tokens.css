@@ -183,6 +183,10 @@
 .vq-shimmer   { animation: vqshimmer 2.6s ease-in-out infinite; }
 .vq-spin      { animation: vq-spin 0.6s linear; }
 
+@media (prefers-reduced-motion: reduce) {
+  .vq-shimmer { animation: none; transform: translateX(80%); }
+}
+
 /* ---- AI Assistant ---- */
 /* "Thinking" dots in the assistant's pending reply bubble. Each dot sets its
    own animation-delay inline to stagger the wave. */
