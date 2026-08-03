@@ -11,6 +11,7 @@ import LiveWall from './page/user/LiveWall/LiveWall';
 import NVRCameras from './page/user/Configure/NVRCameras';
 import CameraSettings from './page/user/Configure/CameraSettings';
 import DetectionSettings from './page/user/Configure/DetectionSettings';
+import Detections from './page/user/Configure/Detections/Detections';
 import UsersPage from './page/user/Administer/UsersPage';
 import SystemSettings from './page/user/Administer/SystemSettings';
 import AlertRecipients from './page/user/Administer/AlertRecipients';
@@ -39,6 +40,7 @@ import TrackLog from './pages/TrackLog/TrackLog';
 import VisibilityLog from './pages/VisibilityLog/VisibilityLog';
 import GuardLog from './pages/GuardLog/GuardLog';
 import EmailMonitoringDashboard from './page/user/EmailMonitoring/EmailMonitoringDashboard';
+import AssistantPage from './page/user/Assistant/AssistantPage';
 
 const STUBS = [
   ['faces', 'faces', '/logs/tagged-users'],
@@ -64,6 +66,11 @@ export const v2Routes = (
     <Route path="incidents" element={guard('incidents', undefined, <IncidentCenter />)} />
     <Route path="analytics" element={guard('analytics', undefined, <Analytics />)} />
     <Route path="email-monitoring" element={<EmailMonitoringDashboard />} />
+    {/* AI Assistant — reached from the floating launcher rather than a sidebar
+        link, but a normal V2 route so the shell's sidebar/header stay put.
+        Ungated for now (same as email-monitoring) until an `assistant`
+        permission module exists server-side. */}
+    <Route path="assistant" element={<AssistantPage />} />
     <Route path="roles" element={guard('roles', undefined, <RolesPermission />)} />
     <Route path="locations" element={guard('locations', undefined, <Locations />)} />
     <Route path="departments" element={guard('departments', undefined, <Departments />)} />
@@ -94,6 +101,10 @@ export const v2Routes = (
 
     {/* Configure */}
     <Route path="cameras" element={guard('NVR', undefined, <NVRCameras />)} />
+    {/* Detections catalogue — ungated for now (same as email-monitoring /
+        assistant) so it's reachable from both the admin and user side until a
+        `detections` permission module exists server-side. */}
+    <Route path="detections" element={<Detections />} />
     <Route path="camera-settings" element={<CameraSettings />} />
     <Route path="engines" element={guard('detectionSettings', undefined, <DetectionSettings />)} />
     <Route path="recipients" element={guard('recipients', undefined, <AlertRecipients />)} />

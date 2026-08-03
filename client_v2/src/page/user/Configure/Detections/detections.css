@@ -1,0 +1,117 @@
+/* ============================================================
+   Detections (Configure) — layout + control styling.
+   Everything is prefixed .vq-det- so it can't collide with the
+   shared V2 styles in theme/tokens.css.
+   ============================================================ */
+
+/* Detection catalogue (left) + selected-detection panel (right). */
+.vq-det-shell {
+  display: grid;
+  /* Catalogue takes the remainder; the detail panel is the wider fixed side
+     (~40% at desktop widths, as in the design) and stops growing at 640px. */
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 640px);
+  gap: 16px;
+  align-items: start;
+}
+
+/* Detection cards inside each category group — always two per row, as in the
+   design (never three, however wide the column gets). Rows breathe a little
+   more than columns. */
+.vq-det-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 12px;
+  row-gap: 16px;
+}
+
+.vq-det-card {
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.vq-det-card:hover {
+  border-color: var(--bd2);
+}
+
+/* Sticky detail column — follows the catalogue as it scrolls. */
+.vq-det-aside {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Sensitivity slider. The filled portion is painted with an inline
+   linear-gradient computed from the current value. */
+.vq-det-range {
+  /* Unfilled part of the track — brighter than --track so it stays visible
+     against the panel, per the design. Consumed by the inline gradient. */
+  --sliderrest: rgba(148, 163, 184, 0.45);
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 5px;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+[data-vq-theme='light'] .vq-det-range {
+  --sliderrest: rgba(15, 23, 42, 0.18);
+}
+.vq-det-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--violet);
+  box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.18);
+  cursor: pointer;
+}
+.vq-det-range::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--violet);
+  box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.18);
+  cursor: pointer;
+}
+.vq-det-range::-moz-range-track {
+  height: 5px;
+  border-radius: 3px;
+  background: transparent;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 1180px) {
+  .vq-det-shell {
+    grid-template-columns: 1fr;
+  }
+  .vq-det-aside {
+    position: static;
+  }
+}
+
+/* Only below phone width does the pair drop to a single column. */
+@media (max-width: 620px) {
+  .vq-det-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .vq-det-toolbar-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .vq-det-search {
+    max-width: none;
+  }
+  .vq-det-statetabs {
+    margin-left: 0;
+  }
+  .vq-det-detail-stats {
+    grid-template-columns: 1fr;
+  }
+}

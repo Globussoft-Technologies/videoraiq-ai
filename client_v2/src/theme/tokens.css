@@ -183,6 +183,21 @@
 .vq-shimmer   { animation: vqshimmer 2.6s ease-in-out infinite; }
 .vq-spin      { animation: vq-spin 0.6s linear; }
 
+/* ---- AI Assistant ---- */
+/* "Thinking" dots in the assistant's pending reply bubble. Each dot sets its
+   own animation-delay inline to stagger the wave. */
+@keyframes vq-typing {
+  0%, 65%, 100% { opacity: .28; transform: translateY(0); }
+  32%           { opacity: 1;   transform: translateY(-3px); }
+}
+.vq-typing-dot { animation: vq-typing 1.25s ease-in-out infinite; }
+
+/* Starter-prompt chips drop to a single column before the two-up grid starts
+   wrapping text mid-question. */
+@media (max-width: 720px) {
+  .vq-ai-suggest-grid { grid-template-columns: 1fr !important; }
+}
+
 /* Gentle sideways nudge for the "scroll for more" chevron on wide tables. */
 @keyframes vq-scrollnudge {
   0%, 100% { transform: translateY(-50%) translateX(0); }

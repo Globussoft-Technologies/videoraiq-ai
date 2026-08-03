@@ -31,6 +31,7 @@ import {
   TrendingUp,
   Eye,
   Shield,
+  ScanEye,
   SlidersHorizontal,
 } from 'lucide-react';
 
@@ -102,6 +103,9 @@ export const NAV_GROUPS = [
     label: 'CONFIGURE',
     items: [
       { key: 'cameras', label: 'Cameras & NVRs', path: 'cameras', icon: Cctv, permissionKey: 'NVR' },
+      // Shown to admins and sub-users alike — left ungated (like email-monitoring
+      // / assistant) until a `detections` module exists in the permission matrix.
+      { key: 'detections', label: 'Detections', path: 'detections', icon: ScanEye },
     ],
   },
   {
@@ -133,8 +137,10 @@ export const VIEW_META = {
   incidents: { title: 'Incident Center', sub: 'Visual evidence grid across all detections' },
   analytics: { title: 'Analytics', sub: 'Trends, heatmaps & engine performance' },
   'email-monitoring': { title: 'Email Monitoring', sub: 'SMTP traffic, delivery health & queue status' },
+  assistant: { title: 'AI Assistant', sub: 'Ask questions about your live operational data' },
   faces: { title: 'Face Recognition & Watchlist', sub: 'Identity verification & attendance' },
   cameras: { title: 'Cameras & NVRs', sub: 'Device inventory & recorder health' },
+  detections: { title: 'Detections', sub: 'AI detections — configure & investigate incidents' },
   engines: { title: 'Detection Settings', sub: 'Configure detection types per camera' },
   attendance: { title: 'Attendance Logs', sub: 'Face-recognition check-in & working hours' },
   access: { title: 'Access Logs', sub: 'Door & zone entry audit trail' },

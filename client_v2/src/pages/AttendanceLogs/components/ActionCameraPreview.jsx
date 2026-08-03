@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dialog';
 import { ChevronLeft, ChevronRight, Zap, Calendar, Clock, Camera, ScanFace } from 'lucide-react';
 import moment from 'moment-timezone';
+import { avatarColor } from './avatarUtils';
 
 /**
  * Image preview + capture details for attendance / access-log rows.
@@ -14,13 +15,15 @@ import moment from 'moment-timezone';
  */
 
 const DetailItem = ({ icon: Icon, label, value }) => (
-  <div className="flex flex-col gap-1 p-3 rounded-xl bg-[var(--bg2)] border border-[var(--bd)] transition-all">
+  <div className="group/detail flex flex-col gap-1.5 p-3.5 rounded-xl bg-[var(--bg2)] border border-[var(--bd)] hover:border-[var(--bd2)] transition-all duration-200 hover:shadow-sm">
     <div className="flex items-center gap-2 text-[var(--tx3)]">
-      <Icon className="w-4 h-4" />
+      <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-[var(--blue)]/10 text-[var(--blue)] group-hover/detail:bg-[var(--blue)]/15 transition-colors">
+        <Icon className="w-3.5 h-3.5" />
+      </div>
       <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
     </div>
     <span
-      className="text-sm font-semibold text-[var(--tx)] break-words line-clamp-2"
+      className="text-sm font-semibold text-[var(--tx)] break-words line-clamp-2 pl-0.5"
       title={value || '—'}
     >
       {value || '—'}
@@ -142,14 +145,24 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
           </DialogTitle>
         </DialogHeader>
 
+        {/* Gradient accent strip — starts with the employee's avatar colour */}
+        <div
+          className="w-full h-1.5 shrink-0"
+          style={{
+            background: `linear-gradient(90deg, ${avatarColor(selectedLog?.name)}, var(--blue), var(--violet))`,
+          }}
+        />
+
         <div className="flex flex-col md:flex-row max-h-[85vh] overflow-y-auto md:overflow-hidden md:h-full">
           {/* Left: capture carousel */}
-          <div className="w-full md:w-1/2 min-w-0 bg-[var(--bg2)] flex flex-col items-center justify-center p-3 sm:p-6 relative">
-            <div className="relative w-full aspect-video sm:aspect-square max-h-[28vh] sm:max-h-none max-w-[260px] sm:max-w-md rounded-2xl overflow-hidden shadow-xl bg-black flex items-center justify-center">
+          <div className="group/carousel w-full md:w-1/2 min-w-0 bg-[var(--bg2)] flex flex-col items-center justify-center p-4 sm:p-6 relative">
+            <div className="relative w-full aspect-[4/3] sm:aspect-square max-h-[32vh] sm:max-h-none max-w-[260px] sm:max-w-sm rounded-2xl overflow-hidden shadow-xl bg-black flex items-center justify-center">
               {fullImageUrls.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 text-[var(--tx3)]">
-                  <Camera className="w-10 h-10" />
-                  <span className="text-sm">No images available</span>
+                  <div className="w-16 h-16 rounded-2xl bg-[var(--bg3)] flex items-center justify-center">
+                    <Camera className="w-8 h-8" />
+                  </div>
+                  <span className="text-sm font-medium">No images available</span>
                 </div>
               ) : (
                 <>
@@ -163,7 +176,7 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
                     alt={`Capture ${currentIndex + 1}`}
                     decoding="async"
                     fetchpriority="high"
-                    className={`w-full h-full object-contain transition-opacity duration-500 ${
+                    className={`w-full h-full object-cover object-top transition-opacity duration-500 ${
                       imageLoaded ? 'opacity-100' : 'opacity-0'
                     }`}
                     onLoad={() => setImageLoaded(true)}
@@ -175,25 +188,26 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
                       <button
                         type="button"
                         onClick={handlePrevious}
-                        className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-[var(--bg1solid)]/90 text-[var(--tx)] shadow-lg hover:scale-110 transition-all cursor-pointer z-30"
+                        className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-[var(--bg1solid)]/90 text-[var(--tx)] shadow-lg hover:scale-110 transition-all cursor-pointer opacity-100 md:opacity-0 md:group-hover/carousel:opacity-100 md:focus-visible:opacity-100 z-30 backdrop-blur-sm"
                         aria-label="Previous image"
                       >
-                        <ChevronLeft className="w-6 h-6" />
+                        <ChevronLeft className="w-5 h-5" />
                       </button>
                       <button
                         type="button"
                         onClick={handleNext}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-[var(--bg1solid)]/90 text-[var(--tx)] shadow-lg hover:scale-110 transition-all cursor-pointer z-30"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-[var(--bg1solid)]/90 text-[var(--tx)] shadow-lg hover:scale-110 transition-all cursor-pointer opacity-100 md:opacity-0 md:group-hover/carousel:opacity-100 md:focus-visible:opacity-100 z-30 backdrop-blur-sm"
                         aria-label="Next image"
                       >
-                        <ChevronRight className="w-6 h-6" />
+                        <ChevronRight className="w-5 h-5" />
                       </button>
-                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-30">
+                      {/* Pill-scrim indicator dots — keeps them legible over any photo */}
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-full bg-black/45 backdrop-blur-sm px-1.5 py-1 shadow-lg z-30">
                         {fullImageUrls.map((_, idx) => (
                           <div
                             key={idx}
-                            className={`h-1.5 rounded-full transition-all ${
-                              idx === currentIndex ? 'w-6 bg-[var(--blue)]' : 'w-1.5 bg-[var(--bd2)]'
+                            className={`h-1 rounded-full transition-all ${
+                              idx === currentIndex ? 'w-3.5 bg-[var(--blue)]' : 'w-1 bg-white/65'
                             }`}
                           />
                         ))}
@@ -204,8 +218,8 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
               )}
             </div>
 
-            <div className="mt-2 sm:mt-6 text-center">
-              <h2 className="text-base sm:text-2xl font-bold text-[var(--tx)] break-words">
+            <div className="mt-3 sm:mt-6 text-center">
+              <h2 className="text-lg sm:text-2xl font-bold text-[var(--tx)] break-words">
                 {selectedLog?.name || 'Employee Name'}
               </h2>
               <p className="text-xs sm:text-sm text-[var(--tx3)] font-medium mt-0.5">
@@ -218,15 +232,23 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
           </div>
 
           {/* Right: capture details */}
-          <div className="w-full md:w-1/2 min-w-0 p-4 sm:p-6 md:p-8 md:overflow-y-auto vq-scroll">
-            <div className="flex justify-between items-center mb-4 sm:mb-6">
+          <div className="w-full md:w-1/2 min-w-0 p-4 sm:p-6 md:p-8 md:overflow-y-auto vq-scroll flex flex-col">
+            <div className="flex justify-between items-center mb-2">
               <h3 className="text-base sm:text-lg font-bold text-[var(--tx)] flex items-center gap-2">
-                <ScanFace className="w-5 h-5 text-[var(--blue)]" />
+                <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-[var(--blue)]/10">
+                  <ScanFace className="w-5 h-5 text-[var(--blue)]" />
+                </div>
                 {isAttendance ? 'Attendance Preview' : 'Access Log Preview'}
               </h3>
             </div>
+            <p className="text-xs text-[var(--tx3)] mb-4 sm:mb-6">
+              Capture details and camera information
+            </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+            {/* Separator */}
+            <div className="h-px bg-[var(--bd)] mb-4 sm:mb-6" />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 flex-1">
               <DetailItem icon={Zap} label="Camera Type" value={cameraType} />
               {isAttendance && (
                 <DetailItem icon={Camera} label="Checkin Cam" value={selectedLog?.checkinCam} />
@@ -237,6 +259,22 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
               <DetailItem icon={Calendar} label="Date" value={dateValue} />
               <DetailItem icon={Clock} label="Time" value={timeValue} />
             </div>
+
+            {/* Image counter footer */}
+            {fullImageUrls.length > 0 && (
+              <div className="mt-4 sm:mt-6 pt-4 border-t border-[var(--bd)]">
+                <div className="flex items-center justify-between text-xs text-[var(--tx3)]">
+                  <span>
+                    Showing capture {currentIndex + 1} of {fullImageUrls.length}
+                  </span>
+                  {fullImageUrls.length > 1 && (
+                    <span className="text-[var(--tx3)]/70">
+                      Use ← → to navigate
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </DialogContent>
