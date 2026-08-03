@@ -31,6 +31,17 @@ function signedDelta(delta) {
   return '0';
 }
 
+// Turn the two real comparison points into a compact zig-zag sparkline while
+// preserving both endpoints. The same progress pattern naturally rises for a
+// positive delta and falls for a negative delta.
+function comparisonSpark(previous, today) {
+  const start = toCount(previous);
+  const end = toCount(today);
+  const delta = end - start;
+  const progress = [0, 0.32, 0.16, 0.55, 0.38, 0.78, 0.62, 1];
+  return progress.map((point) => start + (delta * point));
+}
+
 function dayTrend(dailyComparison, key) {
   const hasComparison = !!(dailyComparison?.today && dailyComparison?.previous);
   const today = toCount(dailyComparison?.today?.[key]);
@@ -38,7 +49,7 @@ function dayTrend(dailyComparison, key) {
   const delta = today - previous;
 
   return {
-    spark: hasComparison ? [previous, today] : [0, 0],
+    spark: hasComparison ? comparisonSpark(previous, today) : [],
     delta: hasComparison ? signedDelta(delta) : null,
     title: hasComparison ? `Today ${num(today)} vs previous day ${num(previous)}` : undefined,
   };

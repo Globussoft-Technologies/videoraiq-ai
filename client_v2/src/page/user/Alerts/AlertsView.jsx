@@ -55,8 +55,41 @@ function tab(active) {
 function statusOf(item) {
   if (item.resolved) return { label: 'Resolved', color: 'var(--ok)' };
   if (item?.report?.status) return { label: 'Reported', color: 'var(--crit)' };
-  return { label: 'New', color: 'var(--warn)' };
+  return { label: 'New', color: 'var(--crit)' };
 }
+
+function confidenceOf(item) {
+  const apiPercentage = item?.ConfidenceScoreInPercentage
+    ?? item?.confidenceScoreInPercentage;
+  const rawConfidence = apiPercentage
+    ?? item?.confidence
+    ?? item?.accuracy
+    ?? item?.score;
+
+  if (rawConfidence == null || rawConfidence === '') return null;
+  const hasPercentageSuffix = typeof rawConfidence === 'string' && rawConfidence.includes('%');
+  const numericConfidence = Number(
+    typeof rawConfidence === 'string' ? rawConfidence.replace('%', '').trim() : rawConfidence,
+  );
+  if (!Number.isFinite(numericConfidence)) return null;
+
+  // The incidents API's named percentage field is already 0-100. Only older
+  // generic confidence fields use a 0-1 ratio.
+  const percentage = apiPercentage == null
+    && !hasPercentageSuffix
+    && numericConfidence >= 0
+    && numericConfidence <= 1
+    ? numericConfidence * 100
+    : numericConfidence;
+  return Math.min(100, Math.max(0, percentage));
+}
+
+function formatConfidence(item) {
+  const confidence = confidenceOf(item);
+  if (confidence == null) return '_';
+  return `${Math.round(confidence * 10) / 10}%`;
+}
+
 function countsFromLoadedIncidents(items = [], totalCount = 0) {
   const counts = {
     severity: { all: Number(totalCount) || items.length, high: 0, moderate: 0, low: 0 },
@@ -433,6 +466,8 @@ export default function AlertsView() {
   const activeId = incidentIdOf(active);
   const activeResolved = !!active?.resolved;
   const activeReported = !!active?.report?.status;
+  const activeStatus = active ? statusOf(active) : null;
+  const activeConfidence = active ? formatConfidence(active) : '_';
   const canReportActive = !!activeId && !activeResolved && !activeReported;
 
   async function resolveActive() {
@@ -477,6 +512,7 @@ export default function AlertsView() {
     refetch();
     loadCounts();
   }, [activeId, refetch, loadCounts]);
+
   return (
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
       <style>{`
@@ -555,7 +591,7 @@ export default function AlertsView() {
                       <Badge color={s.color}>{s.short}</Badge>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.incidentName || detectionLabel(it.incidentType)}</div>
-                        <div style={{ fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{[it.channelData?.name, it.nvrData?.nvrName].filter(Boolean).join(' Â· ')}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.channelData?.name || '_'}</div>
                       </div>
                       <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{timeAgo(it.timeOfIncident)}</span>
                       <span className="vq-alerts-col-status" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: st.color, fontWeight: 600, minWidth: 0, overflow: 'hidden' }}>
@@ -590,8 +626,22 @@ export default function AlertsView() {
                   <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>{shortDateTime(active.timeOfIncident)}</span>
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, wordBreak: 'break-word' }}>{active.incidentName || detectionLabel(active.incidentType)}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--tx3)', wordBreak: 'break-word' }}>{[active.channelData?.name, active.nvrData?.nvrName, active.location].filter(Boolean).join(' Â· ')}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--tx3)', wordBreak: 'break-word' }}>{active.channelData?.name || '_'}</div>
                 {active.description && <div style={{ fontSize: 12, color: 'var(--tx2)', lineHeight: 1.4, wordBreak: 'break-word' }}>{active.description}</div>}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 2 }}>
+                  <div style={{ minWidth: 0, padding: '7px 9px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
+                    <div style={{ fontSize: 9.5, color: 'var(--tx3)', marginBottom: 2 }}>Confidence</div>
+                    <div style={{ fontSize: 13, lineHeight: 1.2, fontWeight: 700, color: confidenceOf(active) == null ? 'var(--tx3)' : '#ff8a00', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      { activeConfidence}
+                    </div>
+                  </div>
+                  <div style={{ minWidth: 0, padding: '7px 9px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
+                    <div style={{ fontSize: 9.5, color: 'var(--tx3)', marginBottom: 2 }}>Status</div>
+                    <div style={{ fontSize: 13, lineHeight: 1.2, fontWeight: 700, color: activeStatus.color, minWidth: 0 }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeStatus.label}</span>
+                    </div>
+                  </div>
+                </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                   <div onClick={busy || activeResolved ? undefined : resolveActive} aria-disabled={busy || activeResolved} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: activeResolved ? 'var(--tx3)' : '#fff', background: activeResolved ? 'var(--bg2)' : 'linear-gradient(135deg,var(--blue),var(--violet))', border: activeResolved ? '1px solid var(--bd)' : '1px solid transparent', borderRadius: 8, padding: 9, cursor: busy ? 'wait' : activeResolved ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}>
                     {busy ? '…' : activeResolved ? 'Resolved' : 'Resolve'}
