@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { VideoOff, Maximize2 } from 'lucide-react';
-import { Panel } from '../../../components/primitives';
+import { VideoOff, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Panel, ActionLink } from '../../../components/primitives';
 import { Loading, Empty } from '../../../components/States';
 import CameraStream from '../../../components/CameraStream';
 import LiveCameraLogsOverlay from '../../../components/LiveCameraLogsOverlay';
@@ -83,6 +83,22 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
 
+  const activeIndex = cams.findIndex((c) => (c._id || c.id) === activeKey);
+  const goToOffset = useCallback((offset) => {
+    if (cams.length < 2) return;
+    const nextIndex = (activeIndex + offset + cams.length) % cams.length;
+    const nextCam = cams[nextIndex];
+    if (nextCam) setActiveId(nextCam._id || nextCam.id);
+  }, [cams, activeIndex]);
+  const goPrev = useCallback(() => goToOffset(-1), [goToOffset]);
+  const goNext = useCallback(() => goToOffset(1), [goToOffset]);
+
+  // Keep the active tab scrolled into view when it changes via the prev/next
+  // arrows rather than a direct tab click.
+  useEffect(() => {
+    tabsRef.current?.querySelector(`[data-cam-id="${activeKey}"]`)?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+  }, [activeKey]);
+
   function openFullView() {
     if (!active) return;
     // Live Wall is mounted at `/live` (see routes.jsx) — not `/v2/wall`.
@@ -118,28 +134,12 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
         <span className="vq-blink" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--crit)', flex: '0 0 auto' }} />
         <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, flex: '0 1 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Live Camera</span>
         <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', flex: '0 0 auto', whiteSpace: 'nowrap' }}>switch feeds ↓</span>
-        <button
-          type="button"
+        <ActionLink
+          style={{ marginLeft: 'auto', flex: '0 0 auto', whiteSpace: 'nowrap', ...(active ? {} : { color: 'var(--tx3)', cursor: 'default' }) }}
           onClick={openFullView}
-          title="Open full view"
-          style={{
-            marginLeft: 'auto',
-            flex: '0 0 auto',
-            width: 32,
-            height: 32,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: 8,
-            border: '1px solid var(--bd)',
-            background: 'var(--bg2)',
-            color: active ? 'var(--tx)' : 'var(--tx3)',
-            cursor: active ? 'pointer' : 'default',
-            padding: 0,
-          }}
         >
-          <Maximize2 size={16} />
-        </button>
+          Open full view →
+        </ActionLink>
       </div>
 
       {/* Tabs */}
@@ -164,6 +164,7 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
           return (
             <div
               key={id}
+              data-cam-id={id}
               onClick={() => setActiveId(id)}
               style={{
                 display: 'flex',
@@ -207,6 +208,45 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
           />
         )}
         {isFullscreen && active && <LiveCameraLogsOverlay channel={active} />}
+
+        {/* Prev/next nav — cycles the active tab so users can step through
+            cameras without reaching for the tab strip above. */}
+        {active && cams.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={goPrev}
+              title="Previous camera"
+              style={{
+                position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', zIndex: 10,
+                width: 34, height: 34, borderRadius: '50%',
+                background: 'rgba(15,23,42,0.55)', border: '1px solid rgba(255,255,255,0.15)',
+                color: '#fff', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(15,23,42,0.8)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(15,23,42,0.55)'; }}
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={goNext}
+              title="Next camera"
+              style={{
+                position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', zIndex: 10,
+                width: 34, height: 34, borderRadius: '50%',
+                background: 'rgba(15,23,42,0.55)', border: '1px solid rgba(255,255,255,0.15)',
+                color: '#fff', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(15,23,42,0.8)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(15,23,42,0.55)'; }}
+            >
+              <ChevronRight size={18} />
+            </button>
+          </>
+        )}
       </div>
 
       {/* Hidden probes — every filtered camera's stream is connected in the
