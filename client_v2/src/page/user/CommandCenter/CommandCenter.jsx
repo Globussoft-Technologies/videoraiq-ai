@@ -76,6 +76,40 @@ async function getDashboardIncidentCounts(filters = {}) {
   };
 }
 
+function toCount(value) {
+  const count = Number(value);
+  return Number.isFinite(count) ? count : 0;
+}
+
+function extractKpiDayCounts(result = {}) {
+  const counts = result.counts || {};
+  return {
+    activeAlerts: toCount(counts.status?.new),
+    highAlerts: toCount(counts.severity?.high),
+    events: toCount(counts.severity?.all ?? counts.status?.all ?? result.totalCount),
+    resolved: toCount(counts.status?.resolved),
+  };
+}
+
+async function getDashboardDailyComparison(filters = {}, today, previousDay) {
+  const dailyFilter = (day) => ({
+    ...filters,
+    startDate: day,
+    endDate: day,
+    statusFilter: ALL_STATUS_FILTER,
+  });
+
+  const [todayResult, previousResult] = await Promise.all([
+    fetchIncidents({ skip: 0, limit: 1 }, dailyFilter(today)),
+    fetchIncidents({ skip: 0, limit: 1 }, dailyFilter(previousDay)),
+  ]);
+
+  return {
+    today: extractKpiDayCounts(todayResult),
+    previous: extractKpiDayCounts(previousResult),
+  };
+}
+
 function dateFilter(daysAgo = 0) {
   return moment().subtract(daysAgo, 'days').format('YYYY-MM-DD');
 }
@@ -285,6 +319,12 @@ export default function CommandCenter() {
   const allChannels = useApi(() => getChannels({ limit: 500 }), []);
 
   const today = moment().format('YYYY-MM-DD');
+  const yesterday = dateFilter(1);
+  const dailyComparison = useApi(
+    () => getDashboardDailyComparison(filters, today, yesterday),
+    [filterKey, today, yesterday],
+    { pollMs: 60000 }
+  );
 
   // Engine activity · Today — aggregate today's incidents by detection type.
   const todayFilter = { ...filters, startDate: today, endDate: today, statusFilter: ALL_STATUS_FILTER };
@@ -296,7 +336,6 @@ export default function CommandCenter() {
   const todayEngines = useMemo(() => aggregateTodayEngines(todayApi.data?.items), [todayApi.data]);
 
   // Detection events · 24h — bucket the last 24 hours of incidents by hour.
-  const yesterday = dateFilter(1);
   const dayFilter = { ...filters, startDate: yesterday, endDate: today, statusFilter: ALL_STATUS_FILTER };
   const dayApi = useApi(
     () => fetchIncidents({ skip: 0, limit: DETECTION_SAMPLE_LIMIT }, dayFilter),
@@ -308,9 +347,11 @@ export default function CommandCenter() {
 
   const refetchHeader = useCallback(() => {
     header.refetch();
+    incidentCounts.refetch();
+    dailyComparison.refetch();
     latestApi.refetch();
     crit.refetch();
-  }, [header, latestApi, crit]);
+  }, [header, incidentCounts, dailyComparison, latestApi, crit]);
 
   const engineLoading = todayApi.loading || dayApi.loading;
   const engineError = todayApi.error || dayApi.error;
@@ -368,7 +409,8 @@ export default function CommandCenter() {
         stats={header.data || {}}
         incidentCounts={incidentCounts.data}
         dailyTotals={dailyTotals}
-        eventsToday={todayApi.data?.totalCount}
+        dailyComparison={dailyComparison.data}
+        eventsToday={dailyComparison.data?.today?.events ?? todayApi.data?.totalCount}
         sitesCount={sites.length}
         onlineCameras={onlineCameras}
         loading={header.loading || incidentCounts.loading}

@@ -7,12 +7,12 @@ const FALLBACK_SPARKS = [
   [5.3, 4.6, 4.2, 3.5, 3.1, 2.6],
 ];
 
-function kpiSpark(values, label) {
+function kpiSpark(values, label, fallbackSpark = true) {
   const nums = (Array.isArray(values) ? values : [])
     .map((value) => Number(value))
     .filter((value) => Number.isFinite(value));
-  const hasShape = nums.length > 1 && nums.some((value) => value !== nums[0]);
-  if (hasShape) return nums;
+  if (nums.length > 1) return nums;
+  if (!fallbackSpark) return [0, 0];
   const index = Math.abs(String(label || '').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)) % FALLBACK_SPARKS.length;
   return FALLBACK_SPARKS[index];
 }
@@ -32,10 +32,11 @@ export default function KpiCard({
   deltaColor,
   unavailable = false,
   loading = false,
+  fallbackSpark = true,
   title,
   onClick,
 }) {
-  const sparkValues = kpiSpark(spark, label);
+  const sparkValues = kpiSpark(spark, label, fallbackSpark);
 
   return (
     <div
