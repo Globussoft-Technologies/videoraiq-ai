@@ -88,6 +88,147 @@ function hexA(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
+const ENGINE_LABELS = {
+  faceRecognitionSettings: 'FACE',
+  faceDetectionSettings: 'FACE',
+  genericObjectDetectionSettings: 'OBJ',
+  objectDetectionSettings: 'OBJ',
+  countPersonsSettings: 'CNT',
+  crowdDetectionSettings: 'CRWD',
+  unauthorizedAccessSettings: 'INTR',
+  intrusionDetectionSettings: 'INTR',
+  anprSettings: 'ANPR',
+  vehicleNumberPlateSettings: 'ANPR',
+  fireSmokeDetectionSettings: 'FIRE',
+  fireDetectionSettings: 'FIRE',
+  lineCrossingSettings: 'LINE',
+  loiteringDetectionSettings: 'LOIT',
+  unattendedBaggageDetectionSettings: 'BAG',
+  baggageDetectionSettings: 'BAG',
+  cashDetectionSettings: 'CASH',
+  personalProtectiveEquipmentSettings: 'PPE',
+  mobilePhoneDetectionSettings: 'MOB',
+};
+
+const ENGINE_NAMES = {
+  faceRecognitionSettings: 'Face Recognition',
+  faceDetectionSettings: 'Face Detection',
+  genericObjectDetectionSettings: 'Object Detection',
+  objectDetectionSettings: 'Object Detection',
+  countPersonsSettings: 'Count Persons Detection',
+  crowdDetectionSettings: 'Crowd Detection',
+  unauthorizedAccessSettings: 'Intrusion Detection',
+  intrusionDetectionSettings: 'Intrusion Detection',
+  anprSettings: 'ANPR Detection',
+  vehicleNumberPlateSettings: 'ANPR Detection',
+  fireSmokeDetectionSettings: 'Fire & Smoke Detection',
+  fireDetectionSettings: 'Fire Detection',
+  lineCrossingSettings: 'Line Crossing Detection',
+  loiteringDetectionSettings: 'Loitering Detection',
+  unattendedBaggageDetectionSettings: 'Unattended Baggage Detection',
+  baggageDetectionSettings: 'Baggage Detection',
+  cashDetectionSettings: 'Cash Detection',
+  personalProtectiveEquipmentSettings: 'Personal Protective Equipment Detection',
+  mobilePhoneDetectionSettings: 'Mobile Phone Detection',
+};
+
+function compactEngineLabel(settingKey, setting) {
+  const key = setting?.settingType || settingKey;
+  if (ENGINE_LABELS[key]) return ENGINE_LABELS[key];
+
+  const readable = String(key || setting?.name || '')
+    .replace(/Settings$/i, '')
+    .replace(/Detection$/i, '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[^a-z0-9 ]/gi, ' ')
+    .trim();
+
+  if (!readable) return 'ENG';
+  return readable
+    .split(/\s+/)
+    .map(word => word[0])
+    .join('')
+    .slice(0, 4)
+    .toUpperCase();
+}
+
+function fullEngineName(settingKey, setting) {
+  const key = setting?.settingType || settingKey;
+  if (ENGINE_NAMES[key]) return ENGINE_NAMES[key];
+  return setting?.name || String(key || 'Detection Engine')
+    .replace(/Settings$/i, '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .trim();
+}
+
+function detectionSettingRecord(entry) {
+  if (!entry || typeof entry !== 'object') return entry;
+  return entry.id && typeof entry.id === 'object' ? entry.id : entry;
+}
+
+function isDetectionEnabled(entry) {
+  if (entry === true) return true;
+  const setting = detectionSettingRecord(entry);
+  if (setting?.enabled === true) return true;
+  if (entry?.enabled === true && setting?.enabled !== false) return true;
+  return false;
+}
+
+function enabledEnginesFor(channel) {
+  const detections = channel?.detections;
+  if (!detections || typeof detections !== 'object') return [];
+
+  const engines = Object.entries(detections)
+    .filter(([, entry]) => isDetectionEnabled(entry))
+    .map(([key, entry]) => {
+      const setting = detectionSettingRecord(entry);
+      return {
+        label: compactEngineLabel(key, setting),
+        title: fullEngineName(key, setting),
+      };
+    });
+
+  return [...new Map(engines.map(engine => [engine.label, engine])).values()];
+}
+
+function EngineChips({ engines }) {
+  if (!engines.length) {
+    return <span style={{ color: 'var(--tx3)', fontFamily: 'var(--mono)', fontSize: 11 }}>-</span>;
+  }
+
+  return (
+    <span style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 5, minWidth: 0 }}>
+      {engines.map(engine => {
+        const label = typeof engine === 'string' ? engine : engine.label;
+        const title = typeof engine === 'string' ? engine : engine.title;
+        const color = badgeColor(label);
+        return (
+          <span
+            key={label}
+            title={title}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              height: 18,
+              padding: '0 5px',
+              borderRadius: 4,
+              border: `1px solid ${color}`,
+              background: hexA(color, 0.08),
+              color,
+              fontFamily: 'var(--mono)',
+              fontSize: 9.5,
+              fontWeight: 700,
+              lineHeight: 1,
+            }}
+          >
+            {label}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 function FieldLabel({ children, required }) {
   return (
     <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>
@@ -387,13 +528,14 @@ function SiteFilterSelect({ options, value, onChange }) {
 }
 
 // ── Camera row ────────────────────────────────────────────────────────────────
-const CAM_COL = '90px 2fr 1.4fr 80px';
+const CAM_COL = '90px minmax(170px, 2fr) minmax(130px, 1.2fr) minmax(150px, 1.4fr) 80px';
 
 function CamRow({ c, site, onView }) {
   const sc = statusColor(c.status);
   const camName = c.name || c.channelName || 'Camera';
   const nameColor = badgeColor(camName);
   const siteColor = badgeColor(site || '—');
+  const engines = enabledEnginesFor(c);
 
   return (
     <div style={{
@@ -423,6 +565,7 @@ function CamRow({ c, site, onView }) {
       }}>
         {site || '—'}
       </span>
+      <EngineChips engines={engines} />
       <span
         onClick={() => onView(c)}
         style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11.5, color: 'var(--blue)', cursor: 'pointer', fontWeight: 500 }}
@@ -1701,14 +1844,14 @@ export default function NVRCameras() {
 
         {/* Column headers + rows share one horizontal scroller so the grid
             columns stay aligned and are swipeable on narrow screens. */}
-        <HScrollHint minWidth={480}>
+        <HScrollHint minWidth={720}>
           {/* Column headers */}
           <div style={{
             display: 'grid', gridTemplateColumns: CAM_COL,
             padding: '10px 16px', borderBottom: '1px solid var(--bd)',
             fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)',
           }}>
-            {['ID', 'NAME', 'SITE', ''].map((h, i) => <span key={i}>{h}</span>)}
+            {['ID', 'NAME', 'SITE', 'ENGINES', ''].map((h, i) => <span key={i}>{h}</span>)}
           </div>
 
           {/* Rows */}

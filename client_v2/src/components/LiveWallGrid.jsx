@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect, useRef, memo } from 'react';
+﻿import { useMemo, useState, useCallback, useEffect, useRef, memo } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { Search, X, Maximize2, Minimize2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AsyncBoundary } from './States';
@@ -14,7 +14,7 @@ const CAM_TYPE_OPTIONS = [
   { id: 'checkout', label: 'Check Out' },
 ];
 
-/* ── Engine key suffix → human-readable label ─────────────────────────── */
+/* â”€â”€ Engine key suffix â†’ human-readable label â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 export const ENGINE_LABEL_MAP = {
   countPersonsSettings:              'Person Count',
   motionDetectionSettings:           'Motion Detection',
@@ -44,7 +44,7 @@ export const ENGINE_LABEL_MAP = {
   vehicleObstructionSettings:        'Vehicle Obstruction',
 };
 
-/* ── Extract enabled engines from channel.detections object ─────────────── */
+/* â”€â”€ Extract enabled engines from channel.detections object â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 export function getEnabledEngines(channel) {
   const detections = channel?.detections;
   if (!detections || typeof detections !== 'object') return [];
@@ -99,7 +99,7 @@ function GridIcon4x4() {
 
 const GRID_ICONS = { '1×1': GridIcon1x1, '2×2': GridIcon2x2, '3×3': GridIcon3x3, '4×4': GridIcon4x4 };
 
-/** Plain video-only fullscreen — no sidebar/incidents/timeline, just the live feed. */
+/** Plain video-only fullscreen â€” no sidebar/incidents/timeline, just the live feed. */
 function FullscreenCameraView({
   channel,
   onPrev,
@@ -205,7 +205,7 @@ export default function LiveWallGrid() {
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkCamId = searchParams.get('cam');
 
-  const [sizeIdx,    setSizeIdx]    = useState(2); // 3×3 default
+  const [sizeIdx,    setSizeIdx]    = useState(2); // 3Ã—3 default
   const [page,       setPage]       = useState(0);
   const [search,     setSearch]     = useState('');
   const [statusFilter, setStatusFilter] = useState(''); // '' | 'live' | 'offline'
@@ -213,7 +213,7 @@ export default function LiveWallGrid() {
   const [isPageFS,   setIsPageFS]   = useState(false); // browser fullscreen
   const pageRef = useRef(null);
 
-  /* ── Multi-select filters (all arrays of ids/values) ────────────── */
+  /* â”€â”€ Multi-select filters (all arrays of ids/values) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   const [selLoc,  setSelLoc]  = useState([]); // location names
   const [selNvr,  setSelNvr]  = useState([]); // nvr ids
   const [selCam,  setSelCam]  = useState([]); // channel ids
@@ -270,8 +270,8 @@ export default function LiveWallGrid() {
 
   /* track which channels are live (updated by CameraStream via onLiveChange).
      Debounced: a status flip only commits after holding steady for 4s, so a
-     brief HLS buffering stall (onWaiting→onPlaying within a second) doesn't
-     bounce a camera between the visible grid and the hidden probe layer —
+     brief HLS buffering stall (onWaitingâ†’onPlaying within a second) doesn't
+     bounce a camera between the visible grid and the hidden probe layer â€”
      that bounce was remounting streams in a loop (continuous reload). */
   const [liveSet, setLiveSet] = useState(() => new Set());
   const liveTimersRef = useRef({});
@@ -294,7 +294,7 @@ export default function LiveWallGrid() {
 
   const activeCount = liveSet.size;
 
-  // Filters other than status — this is the candidate set whose real live/offline
+  // Filters other than status â€” this is the candidate set whose real live/offline
   // status must be known BEFORE the status filter can correctly narrow it down.
   const preStatusList = useMemo(() => {
     let arr = Array.isArray(channels.data) ? channels.data : [];
@@ -320,11 +320,11 @@ export default function LiveWallGrid() {
     ? list.findIndex(c => (c._id || c.channelId) === (fullscreen._id || fullscreen.channelId))
     : -1;
 
-  // Background probes — every candidate camera (not just the ones paginated
+  // Background probes â€” every candidate camera (not just the ones paginated
   // into view) connects its stream off-screen so liveSet reflects true status
   // BEFORE the Live/Offline filter runs. Without this, switching to "Live"
   // can only ever show cameras that happened to be visible earlier (a camera
-  // filtered out by "Live" never mounts, so it can never prove it's live) —
+  // filtered out by "Live" never mounts, so it can never prove it's live) â€”
   // that chicken-and-egg is what made results inconsistent.
   const visibleIds = useMemo(() => new Set(visible.map(c => c._id || c.channelId)), [visible]);
   const probeList = useMemo(
@@ -393,7 +393,7 @@ export default function LiveWallGrid() {
     return () => document.removeEventListener('fullscreenchange', h);
   }, []);
 
-  /* pill — uses CSS vars so it works in both themes */
+  /* pill â€” uses CSS vars so it works in both themes */
   const pill = (active) => ({
     display: 'flex', alignItems: 'center', gap: 6,
     height: 34, padding: '0 16px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 500,
@@ -466,7 +466,7 @@ export default function LiveWallGrid() {
         </div>
 
         {/* Search (placed right after the grid toggles) */}
-        <div className="vq-wall-search" style={{ display: 'flex', alignItems: 'center', gap: 7, height: 40, padding: '0 11px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', minWidth: 180, flex: '1 1 180px' }}>
+        <div className="vq-wall-search" style={{ display: 'flex', alignItems: 'center', gap: 7, height: 40, padding: '0 11px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', width: 210, maxWidth: '100%', flex: '0 0 210px' }}>
           <Search size={13} style={{ color: 'var(--ph)', flexShrink: 0 }} />
           <input
             value={search}
@@ -545,7 +545,17 @@ export default function LiveWallGrid() {
           <svg style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
         </div>
 
-        {/* Clear-all filters — only when a filter is active */}
+        {size.cols !== 1 && (
+          <button
+            onClick={togglePageFullscreen}
+            title={isPageFS ? 'Exit fullscreen' : 'Fullscreen'}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 40, width: 40, borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)', flexShrink: 0 }}
+          >
+            {isPageFS ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          </button>
+        )}
+
+        {/* Clear-all filters â€” only when a filter is active */}
         {hasActiveFilters && (
           <button
             onClick={clearFilters}
@@ -557,7 +567,7 @@ export default function LiveWallGrid() {
           </button>
         )}
 
-        {/* Camera count — denominator is the total under the server-side
+        {/* Camera count â€” denominator is the total under the server-side
             (location/NVR/department/type) filters, not further narrowed by
             the camera-name pick or status filter, so picking a single camera
             still reads e.g. "1 of 4" rather than "1 of 1". */}
@@ -575,20 +585,10 @@ export default function LiveWallGrid() {
           </div>
         )}
 
-        {/* Fullscreen page toggle */}
-        {size.cols !== 1 && (
-          <button
-            onClick={togglePageFullscreen}
-            title={isPageFS ? 'Exit fullscreen' : 'Fullscreen'}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)', fontSize: 12, fontWeight: 500, flexShrink: 0, whiteSpace: 'nowrap' }}
-          >
-            {isPageFS ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-          </button>
-        )}
       </div>
       )}
 
-      {/* ── Grid ─────────────────────────────────────────────────── */}
+      {/* â”€â”€ Grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div style={{ flex: 1, minHeight: 0, overflow: size.cols === 1 ? 'hidden' : 'auto', padding: size.cols === 1 ? 0 : 6, display: size.cols === 1 ? 'flex' : 'block', flexDirection: 'column' }}>
         <AsyncBoundary
           loading={channels.loading}
@@ -636,37 +636,35 @@ export default function LiveWallGrid() {
                 </div>
               )}
 
-              {/* Pagination — shown for every grid size, including 1×1. The
-                  big prev/next chevrons on the fullscreen camera view (above)
-                  let you step through cameras, but give no sense of position;
-                  this "N / total" bar is the only indicator of that. */}
-              {list.length > 0 && !hideFullscreenChrome && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '14px 8px 4px', flexWrap: 'wrap' }}>
-                  <button
-                    disabled={safePage === 0}
-                    onClick={() => setPage(p => Math.max(0, p - 1))}
-                    style={{ height: 32, padding: '0 16px', borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--bd)', color: safePage === 0 ? 'var(--tx3)' : 'var(--tx)', fontSize: 12, cursor: safePage === 0 ? 'default' : 'pointer', flexShrink: 0 }}
-                  >
-                    Prev
-                  </button>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--tx3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                    {safePage + 1} / {pages}
-                  </span>
-                  <button
-                    disabled={safePage + 1 >= pages}
-                    onClick={() => setPage(p => p + 1)}
-                    style={{ height: 32, padding: '0 16px', borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--bd)', color: safePage + 1 >= pages ? 'var(--tx3)' : 'var(--tx)', fontSize: 12, cursor: safePage + 1 >= pages ? 'default' : 'pointer', flexShrink: 0 }}
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
             </>
           )}
         </AsyncBoundary>
       </div>
 
-      {/* Hidden probes — connect every non-visible candidate camera's stream in
+      {/* Pagination - kept outside the scrollable grid so it stays at the bottom. */}
+      {list.length > 0 && !hideFullscreenChrome && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '14px 8px 18px', flexWrap: 'wrap', flexShrink: 0 }}>
+          <button
+            disabled={safePage === 0}
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            style={{ height: 32, padding: '0 16px', borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--bd)', color: safePage === 0 ? 'var(--tx3)' : 'var(--tx)', fontSize: 12, cursor: safePage === 0 ? 'default' : 'pointer', flexShrink: 0 }}
+          >
+            Prev
+          </button>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--tx3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            {safePage + 1} / {pages}
+          </span>
+          <button
+            disabled={safePage + 1 >= pages}
+            onClick={() => setPage(p => p + 1)}
+            style={{ height: 32, padding: '0 16px', borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--bd)', color: safePage + 1 >= pages ? 'var(--tx3)' : 'var(--tx)', fontSize: 12, cursor: safePage + 1 >= pages ? 'default' : 'pointer', flexShrink: 0 }}
+          >
+            Next
+          </button>
+        </div>
+      )}
+
+      {/* Hidden probes â€” connect every non-visible candidate camera's stream in
           the background purely to learn its real live/offline state (see
           probeList comment above). */}
       <div style={{ position: 'fixed', top: 0, left: 0, width: 0, height: 0, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }} aria-hidden="true">
@@ -689,7 +687,7 @@ export default function LiveWallGrid() {
   );
 }
 
-/* ── CameraStreamTile: memoized to prevent infinite re-render from inline callbacks ── */
+/* â”€â”€ CameraStreamTile: memoized to prevent infinite re-render from inline callbacks â”€â”€ */
 const CameraStreamTile = memo(function CameraStreamTile({ channel, camLabel, channelId, onMaximize, setLive, rounded }) {
   const handleMaximize  = useCallback(() => onMaximize(channel),          [onMaximize, channel]);
   const handleLiveChange = useCallback((live) => setLive(channelId, live), [setLive, channelId]);

@@ -3,7 +3,7 @@ import { ArrowLeft, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../../components/States';
 import { useApi } from '../../../../hooks/useApi';
-import { getCamerasByNvr, getDetectionSettings, getDetectionTypes, toggleChannelDetection } from '../../../../helpers/configure';
+import { deleteDetectionSetting, getCamerasByNvr, getDetectionSettings, getDetectionTypes, toggleChannelDetection } from '../../../../helpers/configure';
 import { fetchIncidents } from '../../../../helpers/incidents';
 import { timeOfDay } from '../../../../lib/format';
 import DetectionZoneMarking from '../DetectionZoneMarking';
@@ -17,6 +17,7 @@ import {
 import DetectionCard from './DetectionCard';
 import DetectionDetailPanel from './DetectionDetailPanel';
 import DetectionIncidents from './DetectionIncidents';
+import ConfirmDialog from '../DetectionZoneMarking/dialogs/ConfirmDialog';
 import './detections.css';
 
 const STATE_TABS = [
@@ -197,6 +198,8 @@ export default function Detections() {
   const [incidentLoadingMore, setIncidentLoadingMore] = useState(false);
   const [incidentError, setIncidentError] = useState(null);
   const [collapsedGroups, setCollapsedGroups] = useState({});
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resettingSetting, setResettingSetting] = useState(false);
   const incidentRequestIdRef = useRef(0);
   const typesApi = useApi(() => getDetectionTypes(), [], { initialData: {} });
 
@@ -223,6 +226,10 @@ export default function Detections() {
   const selected = models.find((m) => m.id === selectedId) || models[0];
   const selectedCategory = CATEGORY_BY_KEY[selected?.category];
   const selectedSettingType = selected?.settingType || selected?.id || '';
+  const selectedDetectionEntry = selectedSettingType ? zoneCamera?.detections?.[selectedSettingType] : null;
+  const selectedDetectionSettingId = selectedDetectionEntry?.id && typeof selectedDetectionEntry.id === 'object'
+    ? selectedDetectionEntry.id._id
+    : selectedDetectionEntry?.id;
   const incidentFilter = useMemo(() => {
     if (!enteredDetections) return null;
     const severity = severityFilterValue(incidentSeverity);
@@ -384,6 +391,39 @@ export default function Detections() {
     }
   };
 
+  const handleResetSetting = async () => {
+    if (!selectedSettingType || !selectedDetectionSettingId) {
+      toast.error('No detection settings found to reset.');
+      setShowResetConfirm(false);
+      return;
+    }
+
+    setResettingSetting(true);
+    try {
+      await deleteDetectionSetting(selectedDetectionSettingId);
+      setZoneSettingsOpen(false);
+      setShowResetConfirm(false);
+      setZoneCamera((prev) => {
+        if (!prev) return prev;
+        const nextDetections = { ...(prev.detections || {}) };
+        const currentEntry = nextDetections[selectedSettingType];
+        nextDetections[selectedSettingType] = {
+          ...(typeof currentEntry === 'object' ? currentEntry : {}),
+          enabled: false,
+          id: null,
+        };
+        return { ...prev, detections: nextDetections };
+      });
+      patch(selected.id, { active: false });
+      toast.success('Detection settings reset successfully.');
+      refreshZoneCamera();
+    } catch (err) {
+      toast.error(err?.response?.data?.body?.message || 'Failed to reset detection settings.');
+    } finally {
+      setResettingSetting(false);
+    }
+  };
+
   const enterDetections = (camera) => {
     setZoneCamera(camera);
     setEnteredDetections(true);
@@ -457,7 +497,7 @@ export default function Detections() {
           Cameras
         </button>
         {zoneCamera && (
-          <span style={{ fontSize: 12, color: 'var(--tx3)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#111827', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {cameraLabel(zoneCamera)}
           </span>
         )}
@@ -469,8 +509,8 @@ export default function Detections() {
           value={loadingValue ?? models.length}
           sub={typesApi.loading ? 'loading from API' : `across ${visibleCategoryCount || 0} categories`}
         />
-        <StatCard label="Active Now" value={loadingValue ?? activeCount} sub="catalogue state" color="var(--ok)" />
-        <StatCard label="Incidents - 24h" value={loadingValue ?? incidents24h.toLocaleString()} sub="from detection types API" color="var(--blue)" />
+        <StatCard label="Active Now" value={loadingValue ?? activeCount} sub="running on live streams" color="var(--ok)" />
+        <StatCard label="Incidents" value={loadingValue ?? incidents24h.toLocaleString()} sub="all detections combined" color="var(--blue)" />
         <StatCard
           label="Selected"
           value={selected?.name || (typesApi.loading ? '...' : '-')}
@@ -721,6 +761,14 @@ export default function Detections() {
                   toggleDisabled={detectionToggleLoading === selectedSettingType}
                   onSensitivityChange={(value) => patch(selected.id, { sensitivity: value })}
                   onEditZones={() => setZoneSettingsOpen(true)}
+                  onResetSetting={() => {
+                    if (!selectedDetectionSettingId) {
+                      toast.error('No detection settings found to reset.');
+                      return;
+                    }
+                    setShowResetConfirm(true);
+                  }}
+                  resetDisabled={resettingSetting || !selectedDetectionSettingId}
                 />
                 <DetectionIncidents
                   incidents={incidents}
@@ -747,6 +795,18 @@ export default function Detections() {
           </div>
         </div>
       </AsyncBoundary>
+
+      <ConfirmDialog
+        open={showResetConfirm}
+        title="Reset Detection UI"
+        busy={resettingSetting}
+        busyLabel="Resetting..."
+        confirmLabel="Reset Setting"
+        onCancel={() => setShowResetConfirm(false)}
+        onConfirm={handleResetSetting}
+      >
+        <strong>Warning:</strong> This will reset the selected detection settings to their default values. This action cannot be undone.
+      </ConfirmDialog>
     </div>
   );
 }

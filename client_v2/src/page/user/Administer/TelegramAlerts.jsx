@@ -182,13 +182,13 @@ export default function TelegramAlerts() {
               </div>
 
               <ol style={{ margin: '14px 0 0', paddingLeft: 18, fontSize: 12.5, color: 'var(--tx2)', lineHeight: 2 }}>
-                <li>Create a Telegram channel.</li>
+                <li>1. Create a Telegram channel.</li>
                 <li>
-                  Add our bot as an admin:{' '}
+                  2. Add our bot as an admin:{' '}
                   <span style={{ fontWeight: 600, color: 'var(--blue)' }}>{BOT_USERNAME}</span>{' '}
-                  (grant the “Post Messages” permission).
+                  (grant all the permissions).
                 </li>
-                <li>Post the code below in your channel.</li>
+                <li>3. Copy the below code below and paste in your channel and hit enter</li>
               </ol>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>

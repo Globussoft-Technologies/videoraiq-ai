@@ -1,3 +1,4 @@
+import { ListRestart } from 'lucide-react';
 import { Toggle } from '../../../../components/primitives';
 
 function StatBox({ label, value, color = 'var(--tx)' }) {
@@ -46,6 +47,8 @@ export default function DetectionDetailPanel({
   toggleDisabled,
   onSensitivityChange,
   onEditZones,
+  onResetSetting,
+  resetDisabled = false,
 }) {
   const Icon = category?.icon;
   const color = category?.color || 'var(--blue)';
@@ -164,6 +167,31 @@ export default function DetectionDetailPanel({
           }}
         >
           Edit zones &amp; rules
+        </button>
+        <button
+          type="button"
+          onClick={onResetSetting}
+          disabled={resetDisabled}
+          title={resetDisabled ? 'No saved setting for this detection type' : 'Reset selected detection settings'}
+          style={{
+            flex: 1,
+            height: 36,
+            borderRadius: 8,
+            border: '1px solid var(--bd)',
+            cursor: resetDisabled ? 'not-allowed' : 'pointer',
+            fontSize: 12,
+            fontWeight: 600,
+            color: resetDisabled ? 'var(--tx3)' : 'var(--tx2)',
+            background: 'var(--bg2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 7,
+            opacity: resetDisabled ? 0.65 : 1,
+          }}
+        >
+          <ListRestart size={15} />
+          Reset Setting
         </button>
       </div>
     </div>
