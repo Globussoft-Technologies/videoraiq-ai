@@ -104,7 +104,7 @@ export const v2Routes = (
     {/* Detections catalogue — ungated for now (same as email-monitoring /
         assistant) so it's reachable from both the admin and user side until a
         `detections` permission module exists server-side. */}
-    <Route path="detections-settings" element={<Detections />} />
+    <Route path="detection-settings" element={<Detections />} />
     <Route path="camera-settings" element={<CameraSettings />} />
     {/* <Route path="engines" element={guard('detectionSettings', undefined, <DetectionSettings />)} /> */}
     <Route path="recipients" element={guard('recipients', undefined, <AlertRecipients />)} />

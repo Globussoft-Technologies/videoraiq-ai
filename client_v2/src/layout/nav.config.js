@@ -106,7 +106,7 @@ export const NAV_GROUPS = [
       { key: 'cameras', label: 'Cameras & NVRs', path: 'cameras', icon: Cctv, permissionKey: 'NVR' },
       // Shown to admins and sub-users alike — left ungated (like email-monitoring
       // / assistant) until a `detections` module exists in the permission matrix.
-      { key: 'detections-settings', label: 'Detections', path: 'detections-settings', icon: Settings2 },
+      { key: 'detection-settings', label: 'Detections', path: 'detection-settings', icon: Settings2 },
     ],
   },
   {
@@ -141,6 +141,7 @@ export const VIEW_META = {
   assistant: { title: 'AI Assistant', sub: 'Ask questions about your live operational data' },
   faces: { title: 'Face Recognition & Watchlist', sub: 'Identity verification & attendance' },
   cameras: { title: 'Cameras & NVRs', sub: 'Device inventory & recorder health' },
+  'detection-settings': { title: 'Detections', sub: 'AI detections - configure & investigate incidents' },
   detections: { title: 'Detections', sub: 'AI detections — configure & investigate incidents' },
   engines: { title: 'Detection Settings', sub: 'Configure detection types per camera' },
   attendance: { title: 'Attendance Logs', sub: 'Face-recognition check-in & working hours' },
