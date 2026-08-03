@@ -49,6 +49,22 @@ function statusColor(status) {
   return '#6b7796';
 }
 
+// Distinct badge colors so adjacent chips (ID/IP/Model/... or table columns)
+// don't all read as one indistinguishable blob — same idea as the role-badge
+// palette in UsersPage.jsx.
+const BADGE_COLORS = [
+  '#8b5cf6', '#3b82f6', '#f59e0b', '#10b981', '#ec4899', '#ef4444', '#06b6d4',
+];
+function badgeColor(key) {
+  let hash = 0;
+  for (const ch of String(key)) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return BADGE_COLORS[hash % BADGE_COLORS.length];
+}
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
 function FieldLabel({ children, required }) {
   return (
     <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>
@@ -152,8 +168,8 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 34, padding: '0 14px',
           borderRadius: 8, fontSize: 12.5, fontWeight: 600,
-          background: 'var(--bg2)', border: '1px solid var(--bd)',
-          color: 'var(--tx2)', cursor: 'pointer', whiteSpace: 'nowrap',
+          background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.35)',
+          color: 'var(--blue)', cursor: 'pointer', whiteSpace: 'nowrap',
           flex: isMobile ? 1 : undefined, minWidth: 0,
         }}
       >
@@ -167,8 +183,8 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
             style={{
               width: 34, height: 34, borderRadius: 8, flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'var(--bg2)', border: '1px solid var(--bd)',
-              color: 'var(--tx3)', cursor: 'pointer',
+              background: 'rgba(139,92,246,.08)', border: '1px solid rgba(139,92,246,.35)',
+              color: '#8b5cf6', cursor: 'pointer',
             }}
           >
             <Pencil size={15} />
@@ -179,7 +195,7 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
             style={{
               width: 34, height: 34, borderRadius: 8, flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'var(--bg2)', border: '1px solid var(--bd)',
+              background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.35)',
               color: 'var(--crit)', cursor: 'pointer',
             }}
           >
@@ -201,16 +217,19 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 13, paddingRight: isMobile ? 20 : 175 }}>
         <span style={{
-          width: 32, height: 32, borderRadius: 8, background: 'var(--bg2)',
+          width: 32, height: 32, borderRadius: 8, background: 'rgba(16,185,129,.08)', border: '1px solid rgba(16,185,129,.35)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--tx2)" strokeWidth="1.7">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="1.7">
             <rect x="3" y="4" width="18" height="7" rx="1.5" />
             <rect x="3" y="13" width="18" height="7" rx="1.5" />
-            <circle cx="7" cy="7.5" r=".9" fill="var(--tx2)" />
+            <circle cx="7" cy="7.5" r=".9" fill="#10b981" />
           </svg>
         </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          flex: isMobile ? 1 : '0 1 auto', minWidth: 0, maxWidth: '100%', padding: '5px 10px', borderRadius: 7,
+          background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.35)',
+        }}>
           <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {nvr.name || nvr.nvrName || 'Unknown NVR'}
           </div>
@@ -222,7 +241,7 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'stretch',
-        gap: 7,
+        gap: 8,
         paddingRight: isMobile ? 0 : 175,
         fontSize: 11,
         maxWidth: isMobile ? '100%' : 430,
@@ -233,26 +252,89 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
           { label: 'Model',    val: (nvr.model || nvr.brand || nvr.location || nvr.locationName || nvr.site) ? (nvr.model || nvr.brand || '—') : null },
           { label: 'Location', val: (nvr.model || nvr.brand || nvr.location || nvr.locationName || nvr.site) ? (nvr.location || nvr.locationName || nvr.site || '—') : null },
           { label: 'Camera',   val: String(cameraCount), mono: true },
-        ].map((f, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '62px minmax(0, 1fr)', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <span style={{ color: 'var(--tx2)', flexShrink: 0, textAlign: 'right' }}>{f.label}:</span>
-            {f.val == null ? (
-              <SkeletonBlock width={90} height={10} />
-            ) : (
-              <span style={{
-                display: 'inline-block', minWidth: 0, maxWidth: '100%',
-                padding: '2px 8px', borderRadius: 5,
-                background: 'var(--bg2)', border: '1px solid var(--bd)',
-                fontWeight: 600, color: 'var(--tx2)', fontFamily: f.mono ? 'var(--mono)' : undefined,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>{f.val}</span>
-            )}
-          </div>
-        ))}
+        ].map((f, i) => {
+          const bc = badgeColor(f.label);
+          return (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '62px minmax(0, 1fr)', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <span style={{ color: 'var(--tx2)', flexShrink: 0, textAlign: 'right' }}>{f.label}:</span>
+              {f.val == null ? (
+                <SkeletonBlock width={90} height={10} />
+              ) : (
+                <span style={{
+                  display: 'inline-block', minWidth: 0, maxWidth: '100%',
+                  padding: '2px 8px', borderRadius: 5,
+                  background: hexA(bc, 0.1), border: `1px solid ${hexA(bc, 0.35)}`,
+                  fontWeight: 600, color: bc, fontFamily: f.mono ? 'var(--mono)' : undefined,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>{f.val}</span>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Actions (full-width row below fields on phones) */}
       {isMobile && actions}
+    </div>
+  );
+}
+
+// ── Site filter dropdown (Camera Inventory search bar) ─────────────────────
+// Custom-styled in place of a native <select> so it matches the app's other
+// dropdowns instead of falling back to the OS-themed list.
+function SiteFilterSelect({ options, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef(null);
+  const activeLabel = options.find(o => o.v === value)?.l || 'All Sites';
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => { if (!wrapperRef.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  return (
+    <div style={{ position: 'relative' }} ref={wrapperRef}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        style={{
+          height: 32, padding: '0 10px 0 12px', borderRadius: 8, minWidth: 128,
+          background: value ? 'rgba(59,130,246,.08)' : 'var(--bg2)',
+          border: `1px solid ${value ? 'rgba(59,130,246,.4)' : 'var(--bd)'}`,
+          fontSize: 11.5, fontWeight: 500, color: value ? 'var(--blue)' : 'var(--tx)',
+          cursor: 'pointer', outline: 'none',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeLabel}</span>
+        <ChevronDown size={13} style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 5px)', left: 0, zIndex: 60, minWidth: 160,
+          maxHeight: 220, overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
+          borderRadius: 10, boxShadow: '0 14px 34px rgba(0,0,0,.3)', padding: 5,
+        }}>
+          {options.map(o => (
+            <div
+              key={o.v}
+              onClick={() => { onChange(o.v); setOpen(false); }}
+              style={{
+                padding: '7px 10px', borderRadius: 7, fontSize: 12, cursor: 'pointer',
+                background: value === o.v ? 'var(--blue)' : 'transparent',
+                color: value === o.v ? '#fff' : 'var(--tx)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={(e) => { if (value !== o.v) e.currentTarget.style.background = 'var(--bg2)'; }}
+              onMouseLeave={(e) => { if (value !== o.v) e.currentTarget.style.background = 'transparent'; }}
+            >
+              {o.l}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -262,6 +344,9 @@ const CAM_COL = '90px 2fr 1.4fr 80px';
 
 function CamRow({ c, site, onView }) {
   const sc = statusColor(c.status);
+  const camName = c.name || c.channelName || 'Camera';
+  const nameColor = badgeColor(camName);
+  const siteColor = badgeColor(site || '—');
 
   return (
     <div style={{
@@ -272,11 +357,23 @@ function CamRow({ c, site, onView }) {
       <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx2)' }}>
         {c._id?.slice(-6) || c.channelId || '—'}
       </span>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 8, width: 'fit-content', maxWidth: '100%',
+        padding: '3px 9px', borderRadius: 6,
+        background: hexA(nameColor, 0.1), border: `1px solid ${hexA(nameColor, 0.3)}`,
+      }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: sc, flexShrink: 0 }} />
-        {c.name || c.channelName || 'Camera'}
+        <span style={{ color: nameColor, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {camName}
+        </span>
       </span>
-      <span style={{ color: 'var(--tx2)' }}>
+      <span style={{
+        display: 'inline-block', width: 'fit-content', maxWidth: '100%',
+        padding: '3px 9px', borderRadius: 6,
+        background: hexA(siteColor, 0.1), border: `1px solid ${hexA(siteColor, 0.3)}`,
+        color: siteColor, fontWeight: 600,
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>
         {site || '—'}
       </span>
       <span
@@ -344,6 +441,11 @@ function CameraPreviewModal({ cam, onClose }) {
 
   useHlsPlayer(videoRef, url, {
     autoPlay: true,
+    // Each retry attempt (hls.js retries the 404 every 2s) re-attaches media,
+    // which can fire a spurious canplay/playing on the <video> element before
+    // the next error arrives. Track the attempt so stale events from a
+    // previous attempt can't clear an error that belongs to a newer one.
+    onStarted: () => { setIsLoading(true); setHasError(false); },
     onError: (msg) => { setErrorMsg(msg); setIsLoading(false); setHasError(true); },
   });
 
@@ -410,12 +512,19 @@ function CameraPreviewModal({ cam, onClose }) {
             ref={videoRef}
             autoPlay muted playsInline preload="metadata"
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            onCanPlay={() => { setIsLoading(false); setHasError(false); }}
-            onPlaying={() => { setIsLoading(false); setHasError(false); }}
+            // hls.js retries a 404 by re-attaching media every 2s, which can
+            // fire a spurious canplay/playing on the element before the next
+            // error lands. Only trust genuine advancing playback time (real
+            // decoded frames) to clear the error/loading state.
+            onTimeUpdate={(e) => {
+              if (e.currentTarget.currentTime > 0) { setIsLoading(false); setHasError(false); }
+            }}
           />
-          <span style={{ position: 'absolute', bottom: 10, left: 10, fontSize: 9.5, fontWeight: 700, color: 'var(--crit)', background: 'rgba(0,0,0,.55)', border: '1px solid var(--crit)', borderRadius: 5, padding: '3px 8px', letterSpacing: '.05em' }}>
-            LIVE PREVIEW
-          </span>
+          {!isLoading && !hasError && (
+            <span style={{ position: 'absolute', bottom: 10, left: 10, zIndex: 1, fontSize: 9.5, fontWeight: 700, color: 'var(--crit)', background: 'rgba(0,0,0,.55)', border: '1px solid var(--crit)', borderRadius: 5, padding: '3px 8px', letterSpacing: '.05em' }}>
+              LIVE PREVIEW
+            </span>
+          )}
         </div>
       </div>
     </div>
@@ -689,11 +798,14 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   const [selectedCameras, setSelectedCameras] = useState(new Set());
   const [connecting, setConnecting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [newLocation, setNewLocation] = useState('');
   const [creatingLocation, setCreatingLocation] = useState(false);
   const [previewCam, setPreviewCam] = useState(null);
   const [locationOpen, setLocationOpen] = useState(false);
+  const [locationQuery, setLocationQuery] = useState(isEdit ? (editingNvr.location || editingNvr.locationName || '') : '');
   const locationDropdownRef = useRef(null);
+  const locationInputRef = useRef(null);
+  const [brandOpen, setBrandOpen] = useState(false);
+  const brandDropdownRef = useRef(null);
   // Per-field validation, shown under each input rather than a single toast
   // that names only one problem at a time and doesn't say which field it means.
   const [errors, setErrors] = useState({});
@@ -705,16 +817,44 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   useEffect(() => {
     if (!locationOpen) return undefined;
     const handleClickOutside = (event) => {
-      if (!locationDropdownRef.current?.contains(event.target)) setLocationOpen(false);
+      if (locationDropdownRef.current?.contains(event.target)) return;
+      setLocationOpen(false);
+      // Clicked away without picking/creating a location — snap the visible
+      // text back to whatever is actually selected, so stale search text
+      // can't masquerade as a chosen value.
+      setLocationQuery(form.location || '');
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [locationOpen]);
+  }, [locationOpen, form.location]);
+
+  useEffect(() => {
+    if (!brandOpen) return undefined;
+    const handleClickOutside = (event) => {
+      if (!brandDropdownRef.current?.contains(event.target)) setBrandOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [brandOpen]);
 
   const locationOptions = useMemo(
     () => locations.map((l) => l.locationName || l.name || l).filter(Boolean),
     [locations],
   );
+
+  const filteredLocationOptions = useMemo(() => {
+    const q = locationQuery.trim().toLowerCase();
+    if (!q) return locationOptions;
+    return locationOptions.filter((name) => name.toLowerCase().includes(q));
+  }, [locationOptions, locationQuery]);
+
+  // Only offer "Create" when the typed value isn't already an exact match
+  // (case-insensitive) for an existing location — avoids creating duplicates.
+  const canCreateLocation = useMemo(() => {
+    const q = locationQuery.trim();
+    if (!q) return false;
+    return !locationOptions.some((name) => name.toLowerCase() === q.toLowerCase());
+  }, [locationOptions, locationQuery]);
 
   const set = (k) => (e) => {
     setForm(f => ({ ...f, [k]: e.target.value }));
@@ -740,15 +880,17 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   };
 
   async function handleCreateLocation() {
-    if (!newLocation.trim()) return;
+    const name = locationQuery.trim();
+    if (!name) return;
     setCreatingLocation(true);
     try {
-      const resp = await createLocation({ locationName: newLocation.trim() });
+      const resp = await createLocation({ locationName: name });
       if (resp?.data?.body?.status === 'success') {
         toast.success(resp?.data?.body?.message || 'Location created');
-        setLocations(prev => [...prev, { locationName: newLocation.trim() }]);
-        setForm(f => ({ ...f, location: newLocation.trim() }));
-        setNewLocation('');
+        setLocations(prev => [...prev, { locationName: name }]);
+        setForm(f => ({ ...f, location: name }));
+        setErrors(prev => (prev.location ? { ...prev, location: undefined } : prev));
+        setLocationQuery(name);
         setLocationOpen(false);
       } else {
         toast.error(resp?.data?.body?.message || 'Failed to create location');
@@ -953,50 +1095,123 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
             <div style={{ padding: isMobile ? '14px 16px 18px' : '14px 20px 20px', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '13px 14px' }}>
               <div style={{ gridColumn: '1 / -1' }}>
                 <FieldLabel required>NVR Brand</FieldLabel>
-                <select
-                  value={form.brand} onChange={set('brand')} disabled={isEdit}
-                  style={{
-                    width: '100%', height: 38, padding: '0 28px 0 12px', boxSizing: 'border-box',
-                    borderRadius: 9, background: 'var(--bg2)',
-                    border: `1px solid ${errors.brand ? 'var(--crit, #ef4444)' : 'var(--bd)'}`,
-                    fontSize: 12.5, color: 'var(--tx)', cursor: isEdit ? 'default' : 'pointer', outline: 'none',
-                    opacity: isEdit ? 0.6 : 1,
-                  }}
-                >
-                  {NVR_BRANDS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
-                </select>
+                <div ref={brandDropdownRef} style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    onClick={() => !isEdit && setBrandOpen((open) => !open)}
+                    disabled={isEdit}
+                    style={{
+                      width: '100%', height: 38, padding: '0 10px 0 12px', boxSizing: 'border-box',
+                      borderRadius: 9, background: 'var(--bg2)',
+                      border: `1px solid ${errors.brand ? 'var(--crit, #ef4444)' : 'var(--bd)'}`,
+                      fontSize: 12.5, color: 'var(--tx)', cursor: isEdit ? 'default' : 'pointer', outline: 'none',
+                      opacity: isEdit ? 0.6 : 1,
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span>{NVR_BRANDS.find((b) => b.value === form.brand)?.label || 'Select brand...'}</span>
+                    <ChevronDown
+                      size={14}
+                      style={{
+                        flexShrink: 0, color: 'var(--tx3)',
+                        transform: brandOpen ? 'rotate(180deg)' : 'none',
+                        transition: 'transform .15s ease',
+                      }}
+                    />
+                  </button>
+
+                  {brandOpen && (
+                    <div
+                      className="vq-scroll"
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 5px)',
+                        left: 0,
+                        right: 0,
+                        zIndex: 80,
+                        maxHeight: 200,
+                        overflowY: 'auto',
+                        borderRadius: 9,
+                        background: 'var(--bg1solid)',
+                        border: '1px solid var(--bd)',
+                        boxShadow: '0 14px 34px rgba(15,23,42,.24)',
+                        padding: 4,
+                      }}
+                    >
+                      {NVR_BRANDS.map((b) => (
+                        <button
+                          key={b.value}
+                          type="button"
+                          onClick={() => {
+                            setForm((f) => ({ ...f, brand: b.value }));
+                            setErrors((prev) => (prev.brand ? { ...prev, brand: undefined } : prev));
+                            setBrandOpen(false);
+                          }}
+                          style={{
+                            width: '100%', minHeight: 32, padding: '7px 10px', border: 0, borderRadius: 7,
+                            background: form.brand === b.value ? 'rgba(99,102,241,.14)' : 'transparent',
+                            color: form.brand === b.value ? 'var(--blue)' : 'var(--tx)',
+                            fontSize: 12.5, cursor: 'pointer', textAlign: 'left',
+                          }}
+                        >
+                          {b.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <FieldError>{errors.brand}</FieldError>
               </div>
               <ModalInput label="NVR Name" required value={form.name} onChange={set('name')} placeholder="e.g. HQ Core Recorder" invalid={!!errors.name} error={errors.name} />
               <div>
                 <FieldLabel required>Location</FieldLabel>
                 <div ref={locationDropdownRef} style={{ position: 'relative', marginBottom: 6 }}>
-                  <button
-                    type="button"
-                    onClick={() => setLocationOpen(open => !open)}
+                  <div
                     style={{
                       width: '100%', height: 38, padding: '0 10px 0 12px', boxSizing: 'border-box',
                       borderRadius: 9, background: 'var(--bg2)',
                       border: `1px solid ${errors.location ? 'var(--crit, #ef4444)' : 'var(--bd)'}`,
-                      fontSize: 12.5, color: form.location ? 'var(--tx)' : 'var(--ph)',
-                      cursor: 'pointer', outline: 'none',
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-                      textAlign: 'left',
+                      display: 'flex', alignItems: 'center', gap: 8,
                     }}
                   >
-                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {form.location || 'Select location...'}
-                    </span>
+                    <input
+                      ref={locationInputRef}
+                      value={locationQuery}
+                      onFocus={() => setLocationOpen(true)}
+                      onChange={(e) => {
+                        setLocationOpen(true);
+                        setLocationQuery(e.target.value);
+                        setForm((f) => ({ ...f, location: '' }));
+                        setErrors((prev) => (prev.location ? { ...prev, location: undefined } : prev));
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && canCreateLocation && !filteredLocationOptions.length) {
+                          e.preventDefault();
+                          handleCreateLocation();
+                        }
+                      }}
+                      placeholder="Search or create a location..."
+                      style={{
+                        flex: 1, minWidth: 0, height: '100%', border: 0, background: 'transparent',
+                        fontSize: 12.5, color: 'var(--tx)', outline: 'none', padding: 0,
+                      }}
+                    />
                     <ChevronDown
                       size={14}
+                      onClick={() => {
+                        setLocationOpen((open) => !open);
+                        locationInputRef.current?.focus();
+                      }}
                       style={{
                         flexShrink: 0,
                         color: 'var(--tx3)',
+                        cursor: 'pointer',
                         transform: locationOpen ? 'rotate(180deg)' : 'none',
                         transition: 'transform .15s ease',
                       }}
                     />
-                  </button>
+                  </div>
 
                   {locationOpen && (
                     <div
@@ -1007,7 +1222,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                         left: 0,
                         right: 0,
                         zIndex: 80,
-                        maxHeight: 170,
+                        maxHeight: 200,
                         overflowY: 'auto',
                         borderRadius: 9,
                         background: 'var(--bg1solid)',
@@ -1016,29 +1231,14 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                         padding: 4,
                       }}
                     >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setForm(f => ({ ...f, location: '' }));
-                          setErrors(prev => (prev.location ? { ...prev, location: undefined } : prev));
-                          setLocationOpen(false);
-                        }}
-                        style={{
-                          width: '100%', minHeight: 32, padding: '7px 10px', border: 0, borderRadius: 7,
-                          background: form.location ? 'transparent' : 'var(--bg2)',
-                          color: form.location ? 'var(--tx2)' : 'var(--tx)',
-                          fontSize: 12.5, cursor: 'pointer', textAlign: 'left',
-                        }}
-                      >
-                        Select location...
-                      </button>
-                      {locationOptions.map((name, i) => (
+                      {filteredLocationOptions.map((name, i) => (
                         <button
                           key={`${name}-${i}`}
                           type="button"
                           onClick={() => {
-                            setForm(f => ({ ...f, location: name }));
-                            setErrors(prev => (prev.location ? { ...prev, location: undefined } : prev));
+                            setForm((f) => ({ ...f, location: name }));
+                            setLocationQuery(name);
+                            setErrors((prev) => (prev.location ? { ...prev, location: undefined } : prev));
                             setLocationOpen(false);
                           }}
                           style={{
@@ -1052,49 +1252,32 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                           {name}
                         </button>
                       ))}
+
+                      {canCreateLocation && (
+                        <button
+                          type="button"
+                          onClick={handleCreateLocation}
+                          disabled={creatingLocation}
+                          style={{
+                            width: '100%', minHeight: 32, padding: '7px 10px', border: 0, borderRadius: 7,
+                            background: 'transparent', color: 'var(--blue)',
+                            fontSize: 12.5, fontWeight: 600, cursor: creatingLocation ? 'default' : 'pointer',
+                            textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6,
+                            opacity: creatingLocation ? 0.6 : 1,
+                          }}
+                        >
+                          <Plus size={13} />
+                          {creatingLocation ? 'Creating…' : `Create "${locationQuery.trim()}"`}
+                        </button>
+                      )}
+
+                      {!filteredLocationOptions.length && !canCreateLocation && (
+                        <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--tx3)' }}>
+                          No locations found
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
-                <select
-                  value={form.location}
-                  onChange={e => { set('location')(e); }}
-                  style={{
-                    display: 'none',
-                    width: '100%', height: 38, padding: '0 28px 0 12px', boxSizing: 'border-box',
-                    borderRadius: 9, background: 'var(--bg2)',
-                    border: `1px solid ${errors.location ? 'var(--crit, #ef4444)' : 'var(--bd)'}`,
-                    fontSize: 12.5, color: 'var(--tx)', cursor: 'pointer', outline: 'none', marginBottom: 6,
-                  }}
-                >
-                  <option value="">Select location…</option>
-                  {locations.map((l, i) => {
-                    const name = l.locationName || l.name || l;
-                    return <option key={i} value={name}>{name}</option>;
-                  })}
-                </select>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input
-                    value={newLocation}
-                    onChange={e => setNewLocation(e.target.value)}
-                    placeholder="Or create new location"
-                    style={{
-                      flex: 1, height: 30, padding: '0 10px', boxSizing: 'border-box',
-                      borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--bd)',
-                      fontSize: 11.5, color: 'var(--tx)', outline: 'none',
-                    }}
-                  />
-                  <button
-                    onClick={handleCreateLocation}
-                    disabled={creatingLocation || !newLocation.trim()}
-                    style={{
-                      fontSize: 11, fontWeight: 600, color: 'var(--blue)',
-                      background: 'rgba(59,130,246,.1)', border: '1px solid var(--blue)',
-                      borderRadius: 7, padding: '0 10px', cursor: 'pointer',
-                      opacity: creatingLocation || !newLocation.trim() ? 0.5 : 1,
-                    }}
-                  >
-                    {creatingLocation ? '…' : 'Add'}
-                  </button>
                 </div>
                 <FieldError>{errors.location}</FieldError>
               </div>
@@ -1440,8 +1623,13 @@ export default function NVRCameras() {
 
         {/* Search + filters */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 16px', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, height: 32, padding: '0 11px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', color: 'var(--tx3)' }}>
-            <Search size={13} />
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 7, height: 32, padding: '0 11px', borderRadius: 8,
+            background: camSearch ? 'rgba(59,130,246,.08)' : 'var(--bg2)',
+            border: `1px solid ${camSearch ? 'rgba(59,130,246,.4)' : 'var(--bd)'}`,
+            color: 'var(--tx3)', transition: 'border-color .12s, background .12s',
+          }}>
+            <Search size={13} style={{ color: camSearch ? 'var(--blue)' : 'var(--tx3)', flexShrink: 0 }} />
             <input
               value={camSearch}
               onChange={e => setCamSearch(e.target.value)}
@@ -1449,23 +1637,17 @@ export default function NVRCameras() {
               style={{ background: 'transparent', border: 0, outline: 'none', fontSize: 12, width: 140, color: 'var(--tx)' }}
             />
           </div>
-          <select
-            value={siteFilter}
-            onChange={e => setSiteFilter(e.target.value)}
-            style={{
-              height: 32, padding: '0 26px 0 11px', borderRadius: 8,
-              background: 'var(--bg2)', border: '1px solid var(--bd)',
-              fontSize: 11.5, color: 'var(--tx)', cursor: 'pointer', outline: 'none',
-            }}
-          >
-            {siteOpts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
-          </select>
+          <SiteFilterSelect options={siteOpts} value={siteFilter} onChange={setSiteFilter} />
           {(camSearch || siteFilter) && (
             <button
               onClick={() => { setCamSearch(''); setSiteFilter(''); }}
-              style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--blue)', cursor: 'pointer', background: 'none', border: 'none' }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5, height: 32, padding: '0 11px', borderRadius: 8,
+                fontSize: 11.5, fontWeight: 600, color: 'var(--crit)',
+                background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.3)', cursor: 'pointer',
+              }}
             >
-              Clear filters
+              <X size={12} /> Clear filters
             </button>
           )}
         </div>

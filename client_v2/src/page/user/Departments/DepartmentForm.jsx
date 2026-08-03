@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useRef } from "react";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import {
@@ -40,6 +40,8 @@ const DepartmentForm = ({
       softDelete: initialValues?.softDelete ?? false,
     },
     validationSchema: schema,
+    validateOnBlur: false,
+    validateOnChange: false,
     onSubmit: async (values, helpers) => {
       try {
         const payload = {
@@ -51,7 +53,11 @@ const DepartmentForm = ({
 
           if (response?.data?.statusCode === 200) {
             toast.success(response?.data?.body?.message || "Department created successfully");
-            if (onSave) onSave();
+            // Try to extract created item from response, fall back to payload with no _id
+            const serverData = response?.data?.body?.data || response?.data?.body || response?.data;
+            const item = serverData?.data || serverData || { ...payload };
+            if (initialValues?._id) item._id = initialValues._id;
+            if (onSave) onSave({ local: true, item, mode: 'create' });
             setOpen(false);
           }
           else{
@@ -61,7 +67,9 @@ const DepartmentForm = ({
           const response = await updateDepartment(initialValues._id, payload);
           if (response?.data?.statusCode === 200) {
             toast.success(response?.data?.body?.message || "Department updated successfully");
-            if (onSave) onSave();
+            const serverData = response?.data?.body?.data || response?.data?.body || response?.data;
+            const item = serverData?.data || serverData || { ...payload, _id: initialValues._id };
+            if (onSave) onSave({ local: true, item, mode: 'edit' });
             setOpen(false);
           }
         }
@@ -74,14 +82,61 @@ const DepartmentForm = ({
     enableReinitialize: true,
   });
 
-  useEffect(() => {
-    if (!open) {
-      formik.resetForm();
+  // Close helper: close first, then reset the form on next tick
+  const closeModal = () => {
+    try {
+      formik.setTouched({});
+      if (typeof formik.setErrors === 'function') formik.setErrors({});
+      formik.setSubmitting(false);
+    } catch (e) {
+      // ignore
     }
-  }, [open]);
+    setOpen(false);
+    setTimeout(() => {
+      try {
+        formik.resetForm();
+      } catch (e) {
+        // ignore if formik is not ready
+      }
+    }, 0);
+  };
+
+  const handleOpenChange = (val) => {
+    if (!val) {
+      try {
+        formik.setTouched({});
+        if (typeof formik.setErrors === 'function') formik.setErrors({});
+        formik.setSubmitting(false);
+      } catch (e) {
+        // ignore
+      }
+      closeModal();
+    } else {
+      setOpen(true);
+      // ensure form is reset to current initial values when opening for edit/create
+      setTimeout(() => {
+        try {
+          formik.resetForm();
+          formik.setTouched({});
+        } catch (e) {
+          // ignore
+        }
+      }, 0);
+    }
+  };
+
+  // Suppress validation on blur when closing via buttons (mousedown happens before blur)
+  const suppressValidation = useRef(false);
+  const handleBlur = (e) => {
+    if (suppressValidation.current) {
+      suppressValidation.current = false;
+      return;
+    }
+    formik.handleBlur(e);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent
         className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[18px] p-4 sm:p-5 shadow-xl w-[92vw] max-w-[420px] max-h-[90vh] overflow-y-auto overflow-x-hidden top-1/2 left-1/2 translate-x-[-50%] translate-y-[-50%] hide-scrollbar scrollbar-hide"
@@ -107,7 +162,7 @@ const DepartmentForm = ({
                 placeholder="e.g. Human Resources"
                 value={formik.values.departmentName}
                 onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
+                onBlur={handleBlur}
                 maxLength={100}
                 className="border border-[var(--bd)] bg-[var(--bg3)] text-[var(--tx)] shadow-none rounded-[10px]"
               />
@@ -127,7 +182,7 @@ const DepartmentForm = ({
                 placeholder="e.g. Handles employee relations"
                 value={formik.values.description}
                 onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
+                onBlur={handleBlur}
                 maxLength={255}
                 className="border border-[var(--bd)] bg-[var(--bg3)] text-[var(--tx)] shadow-none rounded-[10px]"
               />
@@ -142,7 +197,10 @@ const DepartmentForm = ({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setOpen(false)}
+                onMouseDown={() => {
+                  suppressValidation.current = true;
+                }}
+                onClick={closeModal}
                 className="rounded-[10px] border-[var(--bd)] text-[var(--tx2)] hover:bg-[var(--bg3)] hover:text-[var(--tx)] bg-transparent transition-colors"
               >
                 Cancel

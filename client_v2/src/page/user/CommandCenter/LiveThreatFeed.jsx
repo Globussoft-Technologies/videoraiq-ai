@@ -1,10 +1,12 @@
 import { Panel, Badge } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { severity, detectionLabel, timeAgo } from '../../../lib/format';
+import { useNavigate } from 'react-router-dom';
 
 /** Real-time threat feed from dashboard/criticalityStats recentAlerts.
  *  Shows exactly 6 items in the visible area; additional items scroll inside. */
 export default function LiveThreatFeed({ alerts = [], loading, error, isEmpty, onRetry }) {
+  const navigate = useNavigate();
   return (
     <Panel style={{ display: 'flex', flexDirection: 'column', minHeight: 380, maxHeight: 420, overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px 16px 11px', borderBottom: '1px solid var(--bd)' }}>
@@ -21,7 +23,14 @@ export default function LiveThreatFeed({ alerts = [], loading, error, isEmpty, o
               const sev = severity(a.severity);
               const det = detectionLabel(a.incidentType || a.displayName);
               return (
-                <div key={a._id || i} style={{ display: 'flex', gap: 10, padding: '10px 11px', borderRadius: 11, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
+                <div
+                  key={a._id || i}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate('/alerts', { state: { alertId: a._id } })}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/alerts', { state: { alertId: a._id } }); }}
+                  style={{ display: 'flex', gap: 10, padding: '10px 11px', borderRadius: 11, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer' }}
+                >
                   <span style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, background: sev.color, flex: '0 0 auto' }} />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>

@@ -24,7 +24,7 @@ export default function DetectionVolumeCard({ params }) {
   const api = useApi(() => getDetectionVolume(params), [paramsKey], { pollMs: 120000 });
   const series = api.data?.series || [];
   const counts = series.map((s) => s.count);
-  const label = rangeLabel(api.data);
+  const label = rangeLabel(params);
 
   const chartW = 720;
   const chartH = 200;

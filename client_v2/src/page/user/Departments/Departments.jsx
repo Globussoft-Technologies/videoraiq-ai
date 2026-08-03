@@ -72,6 +72,27 @@ const Departments = () => {
     }
   }, [currentPage, limit, searchInput]);
 
+  const handleSave = (result) => {
+    // If DepartmentForm called onSave with a result object containing the
+    // newly created/updated item, merge it into local state immediately so
+    // the UI shows the user's casing instead of waiting for a refetch.
+    if (!result) {
+      loadDepartments();
+      return;
+    }
+    const { local, item, mode } = result || {};
+    if (local && item) {
+      if (mode === 'create') {
+        setDepartments((prev) => [item, ...(prev || [])]);
+        setTotal((t) => (typeof t === 'number' ? t + 1 : 1));
+      } else if (mode === 'edit') {
+        setDepartments((prev) => (prev || []).map((d) => (String(d._id) === String(item._id) ? { ...d, ...item } : d)));
+      }
+      return;
+    }
+    loadDepartments();
+  };
+
   useEffect(() => {
     loadDepartments();
   }, [currentPage, sortOrder, loadDepartments]);
@@ -143,7 +164,7 @@ const Departments = () => {
             <DepartmentForm
               mode="edit"
               initialValues={row.original}
-              onSave={loadDepartments}
+              onSave={handleSave}
               trigger={
                 <button className="text-[var(--blue)] hover:opacity-80 cursor-pointer p-1 rounded hover:bg-[var(--bg2)] transition-colors">
                   <FiEdit3 strokeWidth={1.5} className="w-4 h-4 md:w-4 md:h-4 2xl:w-5 2xl:h-5" />
@@ -188,7 +209,7 @@ const Departments = () => {
             {canCreate && (
               <DepartmentForm
                 mode="create"
-                onSave={loadDepartments}
+                onSave={handleSave}
                 trigger={
                   <button
                     className="flex items-center gap-2 px-4 py-2 hover:opacity-95 active:scale-95 text-white rounded-lg text-sm font-medium transition-all cursor-pointer"

@@ -16,7 +16,7 @@ export default function ResponseFunnelCard({ params }) {
   const paramsKey = JSON.stringify(params);
   const api = useApi(() => getResponseFunnel(params), [paramsKey], { pollMs: 120000 });
   const stages = (api.data?.stages || []).map((s, i) => ({ ...s, color: ENGINE_PALETTE[i % ENGINE_PALETTE.length] }));
-  const label = rangeLabel(api.data);
+  const label = rangeLabel(params);
 
   return (
     <Panel style={{ padding: 18 }}>

@@ -1,21 +1,34 @@
 import { useState } from 'react';
-import { ServerCog, Truck, Building2, MapPin, ChevronDown } from 'lucide-react';
+import { ServerCog, Truck, Building2, MapPin, ShieldCheck, ChevronDown } from 'lucide-react';
 
 const CARD_HEIGHT = 440;
 
 function Chip({ icon: Icon, label, color }) {
   return (
     <div
-      className="flex shrink-0 items-center gap-2.5 rounded-xl px-3.5 py-3 text-[13px] font-medium"
+      className="group flex shrink-0 items-center gap-2.5 rounded-xl px-3.5 py-3 text-[13px] font-medium transition-colors"
       style={{
         color: 'var(--tx)',
-        background: `${color}0d`,
-        border: `1.5px solid ${color}40`,
+        background: 'var(--bg2)',
+        border: '1px solid var(--bd)',
         boxSizing: 'border-box',
       }}
       title={label}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = `${color}55`;
+        e.currentTarget.style.background = `${color}0d`;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = 'var(--bd)';
+        e.currentTarget.style.background = 'var(--bg2)';
+      }}
     >
-      <Icon size={14} strokeWidth={2} className="shrink-0" style={{ color }} />
+      <span
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg"
+        style={{ background: `${color}17` }}
+      >
+        <Icon size={12} strokeWidth={2.25} style={{ color }} />
+      </span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
     </div>
   );
@@ -34,37 +47,46 @@ function AccessCard({ icon: Icon, label, items, color, emptyLabel, previewCount 
 
   return (
     <div
-      className="flex min-w-0 flex-col overflow-hidden rounded-2xl"
+      className="flex min-w-0 flex-col overflow-hidden rounded-2xl transition-shadow hover:shadow-lg"
       style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', height: CARD_HEIGHT }}
     >
       <div
-        className="flex shrink-0 items-center gap-2.5 p-5 pb-4"
-        style={{ borderTop: `2.5px solid ${color}` }}
+        className="relative shrink-0 overflow-hidden"
+        style={{ background: `linear-gradient(120deg,${color}1c,${color}08)` }}
       >
-        <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-          style={{ background: `${color}1a` }}
-        >
-          <Icon size={16} color={color} strokeWidth={2.25} />
-        </span>
-        <span className="truncate text-[14px] font-semibold" style={{ color: 'var(--tx)' }}>
-          {label}
-        </span>
-        <span
-          className="ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold"
-          style={{ color, background: `${color}14`, fontVariantNumeric: 'tabular-nums' }}
-        >
-          {list.length}
-        </span>
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{ background: 'repeating-linear-gradient(135deg,rgba(255,255,255,.035) 0 14px,transparent 14px 28px)' }}
+        />
+        <div className="relative flex items-center gap-2.5 p-4">
+          <span
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+            style={{ background: `linear-gradient(135deg,${color},${color}99)`, boxShadow: `0 6px 16px ${color}33` }}
+          >
+            <Icon size={16} color="#fff" strokeWidth={2.25} />
+          </span>
+          <span
+            className="truncate text-[13.5px] font-semibold"
+            style={{ fontFamily: 'var(--disp)', color: 'var(--tx)' }}
+          >
+            {label}
+          </span>
+          <span
+            className="ml-auto shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-bold"
+            style={{ color: '#fff', background: color, fontVariantNumeric: 'tabular-nums' }}
+          >
+            {list.length}
+          </span>
+        </div>
       </div>
 
       {list.length ? (
         <div
-          className="flex min-h-0 flex-1 flex-col px-5 pb-5"
+          className="flex min-h-0 flex-1 flex-col p-4"
           style={list.length <= previewCount ? { justifyContent: 'flex-start' } : undefined}
         >
           <div
-            className="vq-scroll flex min-h-0 flex-col gap-2.5 overflow-y-auto pr-0.5"
+            className="vq-scroll flex min-h-0 flex-col gap-2 overflow-y-auto pr-0.5"
             style={list.length <= previewCount ? { flex: '0 1 auto' } : { flex: '1 1 auto' }}
           >
             {shown.map((item) => (
@@ -75,20 +97,26 @@ function AccessCard({ icon: Icon, label, items, color, emptyLabel, previewCount 
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
-              className="mt-2.5 flex shrink-0 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[12.5px] font-medium cursor-pointer transition-colors hover:opacity-80"
-              style={{ background: 'var(--bg2)', color: 'var(--tx)', border: '1px solid var(--bd)' }}
+              className="mt-2.5 flex shrink-0 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[12.5px] font-semibold cursor-pointer transition-colors"
+              style={{ background: `${color}12`, color, border: `1px solid ${color}35` }}
             >
               {expanded ? 'Show less' : `+ ${hiddenCount} more`}
               <ChevronDown
                 size={13}
-                strokeWidth={2.25}
-                style={{ color, transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
+                strokeWidth={2.5}
+                style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
               />
             </button>
           )}
         </div>
       ) : (
-        <div className="flex flex-1 items-center justify-center px-5 pb-5">
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-5 pb-5 text-center">
+          <span
+            className="flex h-10 w-10 items-center justify-center rounded-full"
+            style={{ background: 'var(--bg2)' }}
+          >
+            <Icon size={16} strokeWidth={1.8} style={{ color: 'var(--tx3)' }} />
+          </span>
           <span className="text-[12.5px] italic" style={{ color: 'var(--tx3)' }}>{emptyLabel}</span>
         </div>
       )}
@@ -108,43 +136,62 @@ export default function AccessScope({ authorizedChannels }) {
   const locations = authorizedChannels?.locations || [];
   const employeeLocations = authorizedChannels?.employeeLocations || [];
 
+  const totalGrants = nvrNames.length + channelNames.length + departmentNames.length + locations.length + employeeLocations.length;
+
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-      <AccessCard
-        icon={ServerCog}
-        label="NVRs"
-        items={nvrNames}
-        color="var(--violet)"
-        emptyLabel="No NVRs assigned"
-      />
-      <AccessCard
-        icon={Truck}
-        label="Channels"
-        items={channelNames}
-        color="var(--ok)"
-        emptyLabel="No channels assigned"
-      />
-      <AccessCard
-        icon={Building2}
-        label="Departments"
-        items={departmentNames}
-        color="var(--magenta)"
-        emptyLabel="No departments assigned"
-      />
-      <AccessCard
-        icon={MapPin}
-        label="Authorized Locations"
-        items={locations}
-        color="var(--blue)"
-        emptyLabel="No authorized locations"
-      />
-      <AccessCard
-        icon={MapPin}
-        label="NVR Locations"
-        items={employeeLocations}
-        color="var(--warn)"
-        emptyLabel="No employee locations"
-      />
+    <div className="rounded-2xl p-5" style={{ border: '1px solid var(--bd)', background: 'var(--bg1)' }}>
+      <div className="mb-4 flex items-center gap-2.5">
+        <span
+          className="flex h-7 w-7 items-center justify-center rounded-lg"
+          style={{ background: 'linear-gradient(135deg,var(--blue),var(--violet))' }}
+        >
+          <ShieldCheck size={14} color="#fff" strokeWidth={2.25} />
+        </span>
+        <h2 className="text-[13.5px] font-semibold tracking-tight" style={{ fontFamily: 'var(--disp)', color: 'var(--tx)' }}>
+          Access Scope
+        </h2>
+        <span className="text-[11.5px]" style={{ color: 'var(--tx3)' }}>
+          {totalGrants} grants across {[nvrNames.length, channelNames.length, departmentNames.length, locations.length, employeeLocations.length].filter(Boolean).length} categories
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <AccessCard
+          icon={ServerCog}
+          label="NVRs"
+          items={nvrNames}
+          color="var(--violet)"
+          emptyLabel="No NVRs assigned"
+        />
+        <AccessCard
+          icon={Truck}
+          label="Channels"
+          items={channelNames}
+          color="var(--ok)"
+          emptyLabel="No channels assigned"
+        />
+        <AccessCard
+          icon={Building2}
+          label="Departments"
+          items={departmentNames}
+          color="var(--magenta)"
+          emptyLabel="No departments assigned"
+        />
+        <AccessCard
+          icon={MapPin}
+          label="Authorized Locations"
+          items={locations}
+          color="var(--blue)"
+          emptyLabel="No authorized locations"
+        />
+        <AccessCard
+          icon={MapPin}
+          label="NVR Locations"
+          items={employeeLocations}
+          color="var(--warn)"
+          emptyLabel="No employee locations"
+        />
+      </div>
     </div>
   );
 }

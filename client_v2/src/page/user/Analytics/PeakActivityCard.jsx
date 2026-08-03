@@ -69,7 +69,7 @@ export default function PeakActivityCard({ params }) {
   const paramsKey = JSON.stringify(params);
   const api = useApi(() => getPeakActivity(params), [paramsKey], { pollMs: 120000 });
   const { peakHour, peakDay } = api.data || {};
-  const label = rangeLabel(api.data);
+  const label = rangeLabel(params);
   const rangeText = label || 'selected range';
 
   return (

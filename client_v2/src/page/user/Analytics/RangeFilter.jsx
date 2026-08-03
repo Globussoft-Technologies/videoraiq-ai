@@ -18,10 +18,18 @@ export function defaultRange() {
 }
 
 export function rangeParams(range) {
+  // For custom ranges, pass explicit start/end. For presets (7d/30d)
+  // compute explicit dates as well — this avoids any server-side
+  // ambiguity when returning `range` in API responses and ensures the
+  // frontend label shows the actual calendar window the user expects.
   if (range.preset === 'custom' && range.startDate && range.endDate) {
     return { startDate: range.startDate, endDate: range.endDate };
   }
-  return { days: range.days };
+  // Preset (7d/30d): return explicit start/end dates (inclusive).
+  const days = Number(range.days) || 0;
+  const endDate = moment().format('YYYY-MM-DD');
+  const startDate = days > 0 ? moment().subtract(days - 1, 'days').format('YYYY-MM-DD') : null;
+  return startDate && endDate ? { startDate, endDate } : { days };
 }
 
 /** Short label from an analytics API response — every endpoint echoes back

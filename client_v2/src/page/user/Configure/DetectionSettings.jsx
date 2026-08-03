@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Search, Video, ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
@@ -229,6 +229,15 @@ export default function DetectionSettings() {
   }, [cameras]);
   const onlineCount = cameras.filter(c => liveById[c._id]).length;
 
+  // Online cameras first, offline after — stable within each group so rows
+  // don't otherwise reshuffle as more of the page's stream probes resolve.
+  // Sorting is scoped to the current (server-paginated) page only; a camera
+  // isn't known online/offline until its background probe connects.
+  const sortedCameras = useMemo(
+    () => [...cameras].sort((a, b) => (liveById[a._id] ? 0 : 1) - (liveById[b._id] ? 0 : 1)),
+    [cameras, liveById],
+  );
+
   // Publish the probed tally to the shared layout state so the Sidebar footer
   // reflects live cameras while this page is open (report only the cameras we
   // actually probe on the page, so online never exceeds total).
@@ -362,7 +371,7 @@ export default function DetectionSettings() {
           minH={160}
           emptyLabel="No cameras found"
         >
-          {() => cameras.map(camera => (
+          {() => sortedCameras.map(camera => (
             <CameraRow
               key={camera._id}
               camera={camera}

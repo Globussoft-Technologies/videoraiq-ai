@@ -237,6 +237,22 @@ export default function CommandCenter() {
   const header = useApi(() => getHeaderStats(filters), [filterKey], { pollMs: 60000 });
   const incidentCounts = useApi(() => getDashboardIncidentCounts(filters), [filterKey], { pollMs: 60000 });
 
+  // Today-vs-yesterday counts for the High/Resolved KPI deltas — same
+  // severity/status filters as incidentCounts above, just scoped to a single
+  // day each, so the tile can show a real +/- change instead of a raw total.
+  const todayDateStr = moment().format('YYYY-MM-DD');
+  const yesterdayDateStr = dateFilter(1);
+  const todayIncidentCounts = useApi(
+    () => getDashboardIncidentCounts({ ...filters, startDate: todayDateStr, endDate: todayDateStr }),
+    [filterKey, todayDateStr],
+    { pollMs: 60000 }
+  );
+  const yesterdayIncidentCounts = useApi(
+    () => getDashboardIncidentCounts({ ...filters, startDate: yesterdayDateStr, endDate: yesterdayDateStr }),
+    [filterKey, yesterdayDateStr],
+    { pollMs: 60000 }
+  );
+
   // Detection chart (engine activity + KPI sparklines)
   const detChart = useApi(() => getDetectionChart(filters), [filterKey], { pollMs: 120000 });
   const dailyTotals = useMemo(() => {
@@ -408,6 +424,8 @@ export default function CommandCenter() {
       <KpiRow
         stats={header.data || {}}
         incidentCounts={incidentCounts.data}
+        todayIncidentCounts={todayIncidentCounts.data}
+        yesterdayIncidentCounts={yesterdayIncidentCounts.data}
         dailyTotals={dailyTotals}
         dailyComparison={dailyComparison.data}
         eventsToday={dailyComparison.data?.today?.events ?? todayApi.data?.totalCount}

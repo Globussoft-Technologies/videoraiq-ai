@@ -130,9 +130,14 @@ export async function renameRole(roleId, roleName) {
 // {roleView,roleCreate,roleEdit,roleDelete} is supplied across every module
 // in the role's linked permission matrix, so this is a full round-trip per
 // click, matching how V1's own table checkboxes behave.
-export async function updateRolePermission(roleId, field, value) {
+// `alsoView` sends roleView:true alongside the requested field in the same
+// request — used when turning create/edit/delete on also needs to auto-enable
+// view, so that doesn't take a second separate round-trip.
+export async function updateRolePermission(roleId, field, value, { alsoView = false } = {}) {
   const key = { view: 'roleView', create: 'roleCreate', edit: 'roleEdit', delete: 'roleDelete' }[field];
-  const res = await api.put(`/roles/update?roleId=${roleId}`, { [key]: value });
+  const body = { [key]: value };
+  if (alsoView && key !== 'roleView') body.roleView = true;
+  const res = await api.put(`/roles/update?roleId=${roleId}`, body);
   return res?.data?.body;
 }
 

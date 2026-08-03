@@ -113,11 +113,23 @@ function TextInput({ style, invalid = false, ...props }) {
     <input
       {...props}
       aria-invalid={invalid || undefined}
+      onFocus={(e) => {
+        e.currentTarget.style.borderColor = invalid ? 'var(--crit)' : 'var(--blue)';
+        e.currentTarget.style.boxShadow = invalid
+          ? '0 0 0 3px rgba(239,68,68,.15)'
+          : '0 0 0 3px rgba(59,130,246,.15)';
+        props.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.borderColor = invalid ? 'var(--crit)' : 'var(--bd)';
+        e.currentTarget.style.boxShadow = 'none';
+        props.onBlur?.(e);
+      }}
       style={{
         width: '100%', height: 38, padding: '0 12px', boxSizing: 'border-box',
-        borderRadius: 9, background: 'var(--bg2)',
+        borderRadius: 9, background: invalid ? 'rgba(239,68,68,.06)' : 'var(--bg2)',
         border: `1px solid ${invalid ? 'var(--crit)' : 'var(--bd)'}`,
-        fontSize: 13, color: 'var(--tx)', outline: 'none',
+        fontSize: 13, color: 'var(--tx)', outline: 'none', transition: 'border-color .12s, box-shadow .12s',
         ...style,
       }}
     />
@@ -209,12 +221,13 @@ function UserRow({ u, checked, onToggle, onEdit, onDelete, isSelf, canEdit, canD
         {email}
       </span>
 
-      <span>
+      <span style={{ minWidth: 0 }}>
         {role ? (
           <span style={{
+            display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             fontFamily: 'var(--mono)', fontSize: 9.5, fontWeight: 600,
             color: rc, background: hexA(rc, 0.12), border: `1px solid ${hexA(rc, 0.34)}`,
-            borderRadius: 6, padding: '3px 8px', whiteSpace: 'nowrap',
+            borderRadius: 6, padding: '3px 8px',
           }}>
             {role}
           </span>
@@ -277,7 +290,8 @@ function RoleSelect({ roles, loading, value, onChange, invalid = false }) {
         onClick={() => setOpen(v => !v)}
         style={{
           width: '100%', boxSizing: 'border-box', height: 38, padding: '0 34px 0 12px', borderRadius: 9,
-          background: 'var(--bg2)', border: `1px solid ${invalid ? 'var(--crit)' : 'var(--bd)'}`,
+          background: value ? 'rgba(99,102,241,.08)' : 'var(--bg2)',
+          border: `1px solid ${invalid ? 'var(--crit)' : (value ? 'rgba(99,102,241,.4)' : 'var(--bd)')}`,
           fontSize: 13, color: value ? 'var(--tx)' : 'var(--tx3)',
           outline: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', textAlign: 'left',
         }}
@@ -566,14 +580,28 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
           system: --bd2 for a border that stays visible against a solid panel,
           and the shared floating-panel shadow. */}
       <div style={{
-        background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
+        position: 'relative', background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
         borderRadius: 14, padding: isMobile ? 16 : 24, width: '100%', maxWidth: 640, maxHeight: '88vh', overflowY: 'auto',
         boxShadow: '0 18px 50px rgba(0,0,0,.35)',
       }}>
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+          background: 'linear-gradient(90deg,var(--blue),var(--violet))',
+          borderRadius: '14px 14px 0 0',
+        }} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-          <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>{isEdit ? 'Edit User' : 'Add New User'}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <span style={{
+              width: 26, height: 26, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'linear-gradient(135deg,rgba(59,130,246,.18),rgba(168,85,247,.18))',
+              border: '1px solid rgba(99,102,241,.35)',
+            }}>
+              <Plus size={13} style={{ color: 'var(--blue)' }} />
+            </span>
+            <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>{isEdit ? 'Edit User' : 'Add New User'}</span>
+          </span>
           <button onClick={onClose}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx3)', padding: 4 }}>
+            style={{ background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 8, cursor: 'pointer', color: 'var(--tx3)', padding: 6, display: 'flex' }}>
             <X size={14} />
           </button>
         </div>
@@ -633,7 +661,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
             </div>
           </div>
 
-          <div style={{ height: 1, background: 'var(--bd)' }} />
+          <div style={{ height: 1, background: 'linear-gradient(90deg,var(--bd),rgba(99,102,241,.35),var(--bd))' }} />
 
           <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 14 }}>
             <div>
@@ -657,14 +685,22 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                 onChange={setEmployeeLocations}
                 placeholder="Select employee access"
                 msg="No employee locations found"
+                tint="#ec4899"
               />
             </div>
           </div>
 
           {/* Camera Access applies to both modes — in edit it arrives prefilled
               from the user's existing authorizedChannels. */}
-              <div style={{ height: 1, background: 'var(--bd)' }} />
-              <div style={{ fontSize: 13, fontWeight: 600 }}>Camera Access</div>
+              <div style={{ height: 1, background: 'linear-gradient(90deg,var(--bd),rgba(99,102,241,.35),var(--bd))' }} />
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 8,
+                background: 'linear-gradient(90deg,rgba(59,130,246,.12),rgba(168,85,247,.08))',
+                border: '1px solid rgba(99,102,241,.25)',
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'linear-gradient(135deg,var(--blue),var(--violet))', flexShrink: 0 }} />
+                <span style={{ fontSize: 13, fontWeight: 600 }}>Camera Access</span>
+              </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 14 }}>
                 <div>
@@ -675,6 +711,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                     onChange={setSelectedLocations}
                     placeholder="Select locations"
                     msg="No locations found"
+                    tint="#3b82f6"
                   />
                 </div>
                 <div>
@@ -685,6 +722,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                     onChange={setSelectedNvrs}
                     placeholder="Select NVRs"
                     msg="No NVRs found"
+                    tint="#8b5cf6"
                   />
                 </div>
               </div>
@@ -700,6 +738,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                     searchPlaceholder="Search cameras..."
                     msg="No channels found"
                     openUp
+                    tint="#10b981"
                   />
                 </div>
                 <div>
@@ -711,11 +750,12 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                     placeholder="Select departments"
                     msg="No departments found"
                     openUp
+                    tint="#f59e0b"
                   />
                 </div>
               </div>
 
-              <div style={{ height: 1, background: 'var(--bd)' }} />
+              <div style={{ height: 1, background: 'linear-gradient(90deg,var(--bd),rgba(99,102,241,.35),var(--bd))' }} />
 
               <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 14 }}>
                 <div>
@@ -766,14 +806,14 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                 <button
                   onClick={handleGeneratePassword}
                   title="Generate strong password"
-                  style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(59,130,246,.1)', border: '1px solid var(--blue)', color: 'var(--blue)', cursor: 'pointer' }}
+                  style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'linear-gradient(135deg,rgba(59,130,246,.16),rgba(168,85,247,.12))', border: '1px solid var(--blue)', color: 'var(--blue)', cursor: 'pointer' }}
                 >
                   <Shuffle size={14} />
                 </button>
                 <button
                   onClick={handleCopyPassword}
                   title="Copy password"
-                  style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', color: 'var(--tx2)', cursor: 'pointer' }}
+                  style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(16,185,129,.1)', border: '1px solid rgba(16,185,129,.4)', color: '#10b981', cursor: 'pointer' }}
                 >
                   <Copy size={14} />
                 </button>
@@ -785,7 +825,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
             onClick={onClose}
             style={{
               flex: 1, height: 38, borderRadius: 9, fontSize: 12.5, fontWeight: 600,
-              background: 'var(--bg2)', border: '1px solid var(--bd)',
+              background: 'var(--bg2)', border: '1px solid var(--bd2)',
               cursor: 'pointer', color: 'var(--tx2)',
             }}
           >
@@ -798,6 +838,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
               flex: 1, height: 38, borderRadius: 9, fontSize: 12.5, fontWeight: 600,
               color: '#fff', background: 'linear-gradient(135deg,var(--blue),var(--violet))',
               border: 'none', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1,
+              boxShadow: saving ? 'none' : '0 4px 16px rgba(99,102,241,.32)',
             }}
           >
             {saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Add User')}

@@ -377,7 +377,18 @@ export default function LiveWallGrid() {
     }, { replace: true });
   }, [deepLinkCamId, channels.data, setSearchParams]);
   useEffect(() => {
-    const h = () => setIsPageFS(!!document.fullscreenElement);
+    const h = () => {
+      const isFs = !!document.fullscreenElement;
+      setIsPageFS(isFs);
+      // ESC (or any other browser-driven exit) leaves the browser's own
+      // fullscreen chrome without ever calling closeFullscreen(), so the
+      // camera preview modal would otherwise stay mounted on top of a
+      // now-windowed page. Close it here so ESC always closes the preview too.
+      if (!isFs) {
+        autoPageFsRef.current = false;
+        setFullscreen(null);
+      }
+    };
     document.addEventListener('fullscreenchange', h);
     return () => document.removeEventListener('fullscreenchange', h);
   }, []);
@@ -571,7 +582,7 @@ export default function LiveWallGrid() {
           style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)', fontSize: 12, fontWeight: 500, flexShrink: 0, whiteSpace: 'nowrap' }}
         >
           {isPageFS ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-          {isPageFS ? 'Exit' : 'Fullscreen'}
+          {/* {isPageFS ? 'Exit' : 'Fullscreen'} */}
         </button>
       </div>
       )}

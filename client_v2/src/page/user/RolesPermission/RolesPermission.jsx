@@ -56,6 +56,8 @@ const MODULE_LABELS = {
   unauthorizedAccessLogs: 'Unauthorized Access Logs',
 };
 
+const ROLE_NAME_MAX_LENGTH = 40;
+
 function Checkbox({ checked, disabled, onToggle }) {
   return (
     <span
@@ -84,21 +86,15 @@ function Checkbox({ checked, disabled, onToggle }) {
 // triggered it, which was why Create/Edit/Delete looked "stuck" even after
 // View was already checked.
 function ConfigureRow({ label, row, onToggleField, readOnly, requiresLabel, requiresMet }) {
-  // create/edit/delete require view on first. Rather than greying those boxes
-  // out — which read as "broken"/unclickable, since a disabled Checkbox's
-  // onClick is undefined and a click does nothing at all — they stay
-  // clickable and show a toast explaining why instead of silently no-oping.
-  // A row can also declare a cross-module dependency (e.g. Channels needs
-  // Cameras & NVRs' View on first, since channels belong to an NVR) via
-  // requiresLabel/requiresMet — checked before the same-row view rule.
-  const noView = !row.view;
+  // create/edit/delete require view. Rather than blocking the click with a
+  // toast, turning one of them on auto-enables view alongside it — the same
+  // outcome the admin was being asked to go do manually. The cross-module
+  // dependency (e.g. Channels needs Cameras & NVRs' View first, since channels
+  // belong to an NVR) still can't be auto-resolved here — that lives on a
+  // different row — so it still blocks with an explanatory toast.
   const guardedToggle = (field) => {
     if (requiresLabel && !requiresMet) {
       toast.error(`Enable "${requiresLabel}" View first — this module depends on it.`);
-      return;
-    }
-    if (field !== 'view' && noView) {
-      toast.error('Enable "View" first — the other permissions depend on it.');
       return;
     }
     onToggleField(field);
@@ -129,10 +125,14 @@ function RoleNameModal({ mode, initialName, onClose, onSubmit }) {
   const isEdit = mode === 'edit';
 
   const handleSubmit = async () => {
-    if (!name.trim()) return toast.error('Role name is required');
+    const trimmedName = name.trim();
+    if (!trimmedName) return toast.error('Role name is required');
+    if (trimmedName.length > ROLE_NAME_MAX_LENGTH) {
+      return toast.error(`Role name cannot exceed ${ROLE_NAME_MAX_LENGTH} characters`);
+    }
     setSaving(true);
     try {
-      await onSubmit(name.trim());
+      await onSubmit(trimmedName);
     } finally {
       setSaving(false);
     }
@@ -158,13 +158,17 @@ function RoleNameModal({ mode, initialName, onClose, onSubmit }) {
           autoFocus
           value={name}
           onChange={e => setName(e.target.value)}
+          maxLength={ROLE_NAME_MAX_LENGTH}
           placeholder="e.g. Security Supervisor"
           style={{
             width: '100%', boxSizing: 'border-box', height: 38, padding: '0 12px', borderRadius: 9,
             background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13, color: 'var(--tx)', outline: 'none',
           }}
         />
-        <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+        <div style={{ marginTop: 5, textAlign: 'right', fontSize: 10.5, color: 'var(--tx3)' }}>
+          {Math.min(name.length, ROLE_NAME_MAX_LENGTH)}/{ROLE_NAME_MAX_LENGTH}
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
           <button
             onClick={onClose}
             style={{ flex: 1, height: 38, borderRadius: 9, fontSize: 12.5, fontWeight: 600, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer', color: 'var(--tx2)' }}
@@ -240,9 +244,9 @@ function ConfigureModal({ role, readOnly, onClose, onSave, requireConfig }) {
 
   // create/edit/delete are meaningless without view — you can't create,
   // edit, or delete something you can't see. So: (a) turning view OFF clears
-  // create/edit/delete on the same row along with it, and (b) create/edit/
-  // delete can't be turned on while view is off (toggle() below no-ops on
-  // that click; the checkboxes are additionally rendered disabled — see Row).
+  // create/edit/delete on the same row along with it, and (b) turning
+  // create/edit/delete ON while view is off auto-enables view alongside it,
+  // instead of requiring the admin to go check View first themselves.
   const toggle = (moduleKey, field, subKey) => {
     if (readOnly) return;
     setConfig(prev => {
@@ -250,10 +254,10 @@ function ConfigureModal({ role, readOnly, onClose, onSave, requireConfig }) {
       if (moduleKey === 'channels' && prev.NVR?.view !== true) return prev;
       const logs = prev.logs || {};
       const row = subKey ? (logs[subKey] || {}) : (prev[moduleKey] || {});
-      if (field !== 'view' && !row.view) return prev;
+      const turningOn = !row[field];
       const nextRow = field === 'view' && row.view
         ? { view: false, create: false, edit: false, delete: false }
-        : { ...row, [field]: !row[field] };
+        : { ...row, [field]: !row[field], ...(field !== 'view' && turningOn ? { view: true } : {}) };
       if (subKey) {
         return { ...prev, logs: { ...logs, [subKey]: nextRow } };
       }
@@ -403,7 +407,7 @@ function ConfigureModal({ role, readOnly, onClose, onSave, requireConfig }) {
         maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,.5)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flex: '0 0 auto' }}>
-          <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>
+          <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {readOnly ? 'View Permissions' : 'Configure Permissions'} — {role.roleName}
           </span>
           <button onClick={handleCloseAttempt} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx3)', padding: 4 }}>
@@ -535,17 +539,24 @@ function RoleRow({ role, perms, isOwnRole, onToggleField, onConfigure, onView, o
   const defaultRole = !!role.is_default;
   const lockedRole = defaultRole || isOwnRole;
   const noActions = !perms.canConfigure && !perms.canView && !(perms.canEditRole && !lockedRole) && !(perms.canDeleteRole && !lockedRole);
+  const roleName = role.roleName || '';
+  const displayedRoleName = roleName.length > ROLE_NAME_MAX_LENGTH
+    ? `${roleName.slice(0, ROLE_NAME_MAX_LENGTH)}\u2026`
+    : roleName;
   return (
     <div
       className="vq-row"
       style={{
-        display: 'grid', gridTemplateColumns: 'minmax(200px,1.7fr) repeat(4,90px) 110px',
+        display: 'grid', gridTemplateColumns: 'minmax(0,1fr) repeat(4,90px) 110px',
         gap: 0, padding: '12px 18px', borderBottom: '1px solid var(--bd)',
         alignItems: 'center', fontSize: 13, transition: 'background .12s',
       }}
     >
-      <span style={{ minWidth: 0 }}>
-        <span style={{ fontWeight: 600, display: 'block' }}>{role.roleName}</span>
+      <span style={{ minWidth: 0, maxWidth: '100%' }}>
+        <span style={{
+          fontWeight: 600, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap', maxWidth: '100%', overflowWrap: 'anywhere', wordBreak: 'break-all'
+        }} title={roleName}>{displayedRoleName}</span>
         {role.is_default && (
           <span style={{ fontSize: 10.5, color: 'var(--tx3)', display: 'block' }}>Default role</span>
         )}
@@ -679,10 +690,10 @@ export default function RolesPermission() {
       toast.error('At least one "View" permission must stay selected for this role.');
       return;
     }
-    if (field !== 'view' && next && !role.view) {
-      toast.error('Enable "View" first — the other permissions depend on it.');
-      return;
-    }
+    // Turning create/edit/delete on while view is off auto-enables view
+    // alongside it (sent in the same request below) instead of blocking the
+    // click until the admin goes and checks View first.
+    const alsoView = field !== 'view' && next && !role.view;
     const fields = ['view', 'create', 'edit', 'delete'];
     const wouldBeAllOff = !next && fields.every(f => (f === field ? next : !role[f]));
     if (wouldBeAllOff) {
@@ -691,17 +702,17 @@ export default function RolesPermission() {
     }
     rolesApi.setData(prev => ({
       ...prev,
-      roles: (prev?.roles ?? []).map(r => (r._id === role._id ? { ...r, [field]: next } : r)),
+      roles: (prev?.roles ?? []).map(r => (r._id === role._id ? { ...r, [field]: next, ...(alsoView ? { view: true } : {}) } : r)),
     }));
     try {
-      await updateRolePermission(role._id, field, next);
+      await updateRolePermission(role._id, field, next, { alsoView });
       // Silent: pull the freshly-cascaded permissionConfig without a full-table
       // spinner (the row already shows the new flag optimistically).
       rolesApi.refetch({ silent: true });
     } catch (err) {
       rolesApi.setData(prev => ({
         ...prev,
-        roles: (prev?.roles ?? []).map(r => (r._id === role._id ? { ...r, [field]: role[field] } : r)),
+        roles: (prev?.roles ?? []).map(r => (r._id === role._id ? { ...r, [field]: role[field], view: role.view } : r)),
       }));
       toast.error(err?.response?.data?.body?.message || 'Failed to update permission');
     }
@@ -709,7 +720,9 @@ export default function RolesPermission() {
 
   const handleAddRole = async (name) => {
     try {
-      const body = await createRole(name);
+      // Defensive: trim and cap role name before sending to server
+      const safeName = (name || '').trim().slice(0, ROLE_NAME_MAX_LENGTH);
+      const body = await createRole(safeName);
       // Some failures come back as HTTP 200 with body.status: 'failed'
       // (no rejected promise) rather than a thrown error.
       if (body?.status && body.status !== 'success') {
@@ -744,7 +757,8 @@ export default function RolesPermission() {
       return;
     }
     try {
-      const body = await renameRole(renameTarget._id, name);
+      const safeName = (name || '').trim().slice(0, ROLE_NAME_MAX_LENGTH);
+      const body = await renameRole(renameTarget._id, safeName);
       if (body?.status && body.status !== 'success') {
         toast.error(body?.message || 'Failed to rename role');
         return;
@@ -846,7 +860,7 @@ export default function RolesPermission() {
         <HScrollHint minWidth={700} fadeColor="var(--bg1)">
           <div>
             <div style={{
-              display: 'grid', gridTemplateColumns: 'minmax(200px,1.7fr) repeat(4,90px) 110px',
+              display: 'grid', gridTemplateColumns: 'minmax(0,1fr) repeat(4,90px) 110px',
               gap: 0, padding: '12px 18px', borderBottom: '1px solid var(--bd)',
               fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)', alignItems: 'center',
             }}>

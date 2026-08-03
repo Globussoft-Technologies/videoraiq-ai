@@ -44,6 +44,25 @@ function dayTrend(dailyComparison, key) {
   };
 }
 
+// Today vs. yesterday's slot in the same Monday-first weekly series used for
+// the sparkline, so the delta badge reflects an actual day-over-day change
+// instead of just repeating the current value.
+function deltaFromValues(todayVal, prevVal) {
+  const diff = (Number(todayVal) || 0) - (Number(prevVal) || 0);
+  if (diff === 0) return { text: '0', color: 'var(--tx2)' };
+  const sign = diff > 0 ? '+' : '-';
+  return { text: `${sign}${Math.abs(diff)}`, color: diff > 0 ? 'var(--ok)' : 'var(--crit)' };
+}
+
+function dayOverDayDelta(series) {
+  if (!Array.isArray(series) || series.length < 7) return null;
+  const idx = todayIndex();
+  const prevIdx = (idx + 6) % 7;
+  const todayVal = Number(series[idx]) || 0;
+  const prevVal = Number(series[prevIdx]) || 0;
+  return deltaFromValues(todayVal, prevVal);
+}
+
 export default function KpiRow({
   stats = {},
   incidentCounts = null,
@@ -53,9 +72,12 @@ export default function KpiRow({
   sitesCount = 0,
   onlineCameras = { online: 0, total: 0 },
   loading,
+  todayIncidentCounts = null,
+  yesterdayIncidentCounts = null,
 }) {
   const navigate = useNavigate();
   const todayEvents = eventsToday ?? (dailyTotals.length ? dailyTotals[todayIndex()] : 0);
+  const eventsDelta = dayOverDayDelta(dailyTotals);
   const camerasTotal = onlineCameras.total || Number(stats.overAllCameraCount ?? 0);
   const cameras = `${num(onlineCameras.online)}/${num(camerasTotal)}`;
   const activeAlerts = incidentCounts?.status?.new ?? stats.totalAlerts ?? 0;
@@ -65,14 +87,20 @@ export default function KpiRow({
   const highTrend = dayTrend(dailyComparison, 'highAlerts');
   const eventsTrend = dayTrend(dailyComparison, 'events');
   const resolvedTrend = dayTrend(dailyComparison, 'resolved');
+  const highDelta = (todayIncidentCounts && yesterdayIncidentCounts)
+    ? deltaFromValues(todayIncidentCounts.severity?.high, yesterdayIncidentCounts.severity?.high)
+    : null;
+  const resolvedDelta = (todayIncidentCounts && yesterdayIncidentCounts)
+    ? deltaFromValues(todayIncidentCounts.status?.resolved, yesterdayIncidentCounts.status?.resolved)
+    : null;
 
   const cards = [
     { label: 'Cameras Online', value: cameras, sub: `${num(camerasTotal)} total`, color: 'var(--blue)', delta: cameras, deltaColor: 'var(--blue)', onClick: () => navigate('/live') },
-    { label: 'Active Alerts', value: num(activeAlerts), sub: 'unresolved', color: 'var(--warn)', spark: activeTrend.spark, delta: activeTrend.delta, title: activeTrend.title, fallbackSpark: false, deltaColor: 'var(--warn)', onClick: () => navigate('/alerts', { state: { statusFilter: 'new' } }) },
-    { label: 'High', value: num(highAlerts), sub: 'high severity', color: 'var(--crit)', spark: highTrend.spark, delta: highTrend.delta, title: highTrend.title, fallbackSpark: false, deltaColor: 'var(--crit)', onClick: () => navigate('/incidents', { state: { severityFilter: 'high' } }) },
-    { label: 'Events Today', value: num(todayEvents), sub: 'detections today', color: 'var(--violet)', spark: eventsTrend.spark, delta: eventsTrend.delta, title: eventsTrend.title, fallbackSpark: false, deltaColor: 'var(--violet)', onClick: () => navigate('/incidents', { state: { date: todayStr() } }) },
-    { label: 'Resolved', value: num(resolved), sub: 'incidents', color: 'var(--ok)', spark: resolvedTrend.spark, delta: resolvedTrend.delta, title: resolvedTrend.title, fallbackSpark: false, deltaColor: 'var(--ok)', onClick: () => navigate('/incidents', { state: { statusFilter: 'resolved' } }) },
-    { label: 'Sites Online', value: sitesCount ? `${sitesCount}/${sitesCount}` : '\u2014', sub: 'monitored', color: 'var(--cyan)', delta: sitesCount ? '100%' : null, deltaColor: 'var(--cyan)', unavailable: !sitesCount, onClick: () => navigate('/locations') },
+    { label: 'Active Alerts', value: num(activeAlerts), sub: 'unresolved', color: 'var(--warn)', spark: activeTrend?.spark ?? dailyTotals, delta: activeTrend?.delta ?? String(num(activeAlerts)), deltaColor: 'var(--warn)', onClick: () => navigate('/alerts', { state: { statusFilter: 'new' } }) },
+    { label: 'High', value: num(highAlerts), sub: 'high severity', color: 'var(--crit)', spark: highTrend?.spark ?? dailyTotals, delta: highTrend?.delta ?? highDelta?.text ?? String(num(highAlerts)), deltaColor: highTrend ? 'var(--crit)' : (highDelta?.color ?? 'var(--crit)'), onClick: () => navigate('/incidents', { state: { severityFilter: 'high' } }) },
+    { label: 'Events Today', value: num(todayEvents), sub: 'detections today', color: 'var(--violet)', spark: eventsTrend?.spark ?? dailyTotals, delta: eventsTrend?.delta ?? eventsDelta?.text ?? String(num(todayEvents)), deltaColor: eventsTrend ? 'var(--violet)' : (eventsDelta?.color ?? 'var(--violet)'), onClick: () => navigate('/incidents', { state: { date: todayStr() } }) },
+    { label: 'Resolved', value: num(resolved), sub: 'incidents', color: 'var(--ok)', spark: resolvedTrend?.spark ?? dailyTotals, delta: resolvedTrend?.delta ?? resolvedDelta?.text ?? String(num(resolved)), deltaColor: resolvedTrend ? 'var(--ok)' : (resolvedDelta?.color ?? 'var(--ok)'), onClick: () => navigate('/incidents', { state: { statusFilter: 'resolved' } }) },
+    { label: 'Sites Online', value: sitesCount ? `${sitesCount}/${sitesCount}` : '—', sub: 'monitored', color: 'var(--cyan)', delta: sitesCount ? '100%' : null, deltaColor: 'var(--cyan)', unavailable: !sitesCount, onClick: () => navigate('/locations') },
   ];
 
   return (

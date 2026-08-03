@@ -27,7 +27,7 @@ export default function OverviewKpiRow({ params }) {
   const paramsKey = JSON.stringify(params);
   const api = useApi(() => getAnalyticsOverview(params), [paramsKey], { pollMs: 120000 });
   const d = api.data || {};
-  const label = rangeLabel(d);
+  const label = rangeLabel(params);
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }} className="vq-analytics-kpis">

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { VideoOff } from 'lucide-react';
-import { Panel, ActionLink } from '../../../components/primitives';
+import { VideoOff, Maximize2 } from 'lucide-react';
+import { Panel } from '../../../components/primitives';
 import { Loading, Empty } from '../../../components/States';
 import CameraStream from '../../../components/CameraStream';
 import LiveCameraLogsOverlay from '../../../components/LiveCameraLogsOverlay';
@@ -118,12 +118,28 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
         <span className="vq-blink" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--crit)', flex: '0 0 auto' }} />
         <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, flex: '0 1 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Live Camera</span>
         <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', flex: '0 0 auto', whiteSpace: 'nowrap' }}>switch feeds ↓</span>
-        <ActionLink
-          style={{ marginLeft: 'auto', flex: '0 0 auto', whiteSpace: 'nowrap', ...(active ? {} : { color: 'var(--tx3)', cursor: 'default' }) }}
+        <button
+          type="button"
           onClick={openFullView}
+          title="Open full view"
+          style={{
+            marginLeft: 'auto',
+            flex: '0 0 auto',
+            width: 32,
+            height: 32,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: 8,
+            border: '1px solid var(--bd)',
+            background: 'var(--bg2)',
+            color: active ? 'var(--tx)' : 'var(--tx3)',
+            cursor: active ? 'pointer' : 'default',
+            padding: 0,
+          }}
         >
-          Open full view →
-        </ActionLink>
+          <Maximize2 size={16} />
+        </button>
       </div>
 
       {/* Tabs */}

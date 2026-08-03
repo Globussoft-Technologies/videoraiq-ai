@@ -21,6 +21,9 @@ import { cn } from '@/lib/utils';
  * - searchPlaceholder
  * - maxHeight: tailwind class for the options list (e.g. 'max-h-40')
  * - msg: empty-state message
+ * - tint: optional hex color (e.g. '#8b5cf6') to accent the trigger's border/
+ *   background once a selection is made — lets callers give sibling fields
+ *   distinct colors instead of every MultiSelect on a page reading identically.
  */
 const MultiSelect = ({
   options = [],
@@ -33,6 +36,7 @@ const MultiSelect = ({
   maxHeight = 'max-h-[220px]',
   msg = 'No options',
   openUp = false,
+  tint = null,
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -138,6 +142,7 @@ const MultiSelect = ({
   const clearAll = () => onChange([]);
 
   const selectedLabels = options.filter((o) => isPickable(o) && value.includes(o.id)).map((o) => o.label);
+  const hasSelection = selectedLabels.length > 0;
 
   return (
     <div className={`relative ${className}`} ref={wrapperRef}>
@@ -145,7 +150,12 @@ const MultiSelect = ({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center justify-between gap-2 w-full h-10 px-3 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx)] text-sm cursor-pointer hover:border-[var(--brand)] transition-colors"
+        className={`flex items-center justify-between gap-2 w-full h-10 px-3 rounded-lg border text-[var(--tx)] text-sm cursor-pointer transition-colors ${
+          tint && hasSelection ? '' : 'border-[var(--bd)] bg-[var(--bg2)] hover:border-[var(--brand)]'
+        }`}
+        style={tint && hasSelection ? {
+          borderColor: `${tint}66`, background: `${tint}14`,
+        } : undefined}
       >
         {/* First selection reads in full; the rest collapse into a "+N more"
             badge, so the trigger still names something concrete instead of a
@@ -156,7 +166,10 @@ const MultiSelect = ({
           <span className="flex items-center gap-1.5 min-w-0" title={selectedLabels.join(', ')}>
             <span className="truncate text-[var(--tx)]">{selectedLabels[0]}</span>
             {selectedLabels.length > 1 && (
-              <span className="shrink-0 rounded-full bg-[var(--brand)] px-2 py-0.5 text-[11px] font-semibold leading-normal text-white">
+              <span
+                className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold leading-normal text-white"
+                style={{ background: tint || 'var(--brand)' }}
+              >
                 +{selectedLabels.length - 1} more
               </span>
             )}
