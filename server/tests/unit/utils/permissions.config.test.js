@@ -35,6 +35,7 @@ const FLAT_SECTIONS = [
   "Users",
   "permission",
   "roles",
+  "settings",
   "departments",
   "detectionSettings",
   "profiles",
