@@ -13,7 +13,8 @@ const unwrap = (res) => {
 export const fetchAdmin = async () => {
   const token = getAccessToken();
   const res = await axios.get(`${Api_url}/admin/fetch`, { headers: { 'x-access-token': token } });
-  return unwrap(res) || {};
+  const data = unwrap(res) || {};
+  return data.adminDetails || data;
 };
 
 export const getUsers = async (skip = 0, limit = 10, search = '') => {
@@ -70,6 +71,45 @@ export const updateLogsSound = async (logsSound) => {
   const res = await axios.put(
     `${Api_url}/admin/update-logs-sound`,
     { logsSound },
+    { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
+  );
+  return unwrap(res);
+};
+
+export const getTimezones = async (search = '') => {
+  const token = getAccessToken();
+  const res = await axios.get(`${Api_url}/admin/timezones`, {
+    params: search ? { search } : undefined,
+    headers: { 'x-access-token': token },
+  });
+  const data = unwrap(res);
+  return data?.timezones ?? (Array.isArray(data) ? data : []);
+};
+
+export const fetchTimezone = async () => {
+  const token = getAccessToken();
+  const res = await axios.get(`${Api_url}/admin/timezone`, {
+    headers: { 'x-access-token': token },
+  });
+  const data = unwrap(res);
+  return data?.timezone ?? '';
+};
+
+export const updateTimezone = async (timezone) => {
+  const token = getAccessToken();
+  const res = await axios.put(
+    `${Api_url}/admin/timezone`,
+    { timezone },
+    { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
+  );
+  return unwrap(res);
+};
+
+export const updateRetention = async ({ userId, ...payload }) => {
+  const token = getAccessToken();
+  const res = await axios.put(
+    `${Api_url}/admin/retention`,
+    { userId, ...payload },
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
   return unwrap(res);

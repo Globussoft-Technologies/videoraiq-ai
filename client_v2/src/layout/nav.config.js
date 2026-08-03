@@ -31,6 +31,7 @@ import {
   TrendingUp,
   Eye,
   Shield,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 // Mining incident log tabs (conveyor, crusher, etc.) — shown for every client.
@@ -104,9 +105,10 @@ export const NAV_GROUPS = [
     ],
   },
   {
-    label: 'USER DETAILS',
+    label: 'ADMINISTER',
     items: [
       { key: 'users', label: 'User Role Detail', path: 'users', icon: Users, permissionKey: 'Users' },
+      { key: 'settings', label: 'Settings', path: 'settings', icon: Settings },
       { key: 'roles', label: 'Roles & Permission', path: 'roles', icon: ShieldCheck, permissionKey: 'roles' },
       { key: 'locations', label: 'Locations', path: 'locations', icon: MapPin, permissionKey: 'locations' },
       { key: 'departments', label: 'Departments', path: 'departments', icon: Building2, permissionKey: 'departments' },
@@ -116,7 +118,7 @@ export const NAV_GROUPS = [
   {
     label: 'SETTINGS',
     items: [
-      { key: 'engines', label: 'Detection Settings', path: 'engines', icon: Settings, permissionKey: 'detectionSettings' },
+      { key: 'engines', label: 'Detection Settings', path: 'engines', icon: SlidersHorizontal, permissionKey: 'detectionSettings' },
       { key: 'recipients', label: 'Alert Recipients', path: 'recipients', icon: Bell, permissionKey: 'recipients' },
     ],
   },

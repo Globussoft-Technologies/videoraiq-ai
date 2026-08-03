@@ -1,8 +1,8 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useSocket } from './SocketContext';
 import { useAuth } from './AuthContext';
-import { fetchLogsSound, updateLogsSound } from '../helpers/admin';
+import { fetchLogsSound, updateLogsSound } from '../helpers/administer';
 
 const AttendanceSocketContext = createContext();
 export const useAttendanceSocket = () => useContext(AttendanceSocketContext);
@@ -31,31 +31,64 @@ export function AttendanceSocketProvider({ children }) {
   const [attendanceLogs, setAttendanceLogs] = useState([]);
   const [accessAllDetections, setAccessAllDetections] = useState([]);
   const [isMuted, setIsMuted] = useState(true);
+  const [audioLoading, setAudioLoading] = useState(true);
+  const [audioSaving, setAudioSaving] = useState(false);
   const isMutedRef = useRef(true);
   const attendanceClearTimerRef = useRef(null);
   const accessClearTimerRef = useRef(null);
 
   useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
 
+  const applyLogsSound = useCallback((logsSound) => {
+    if (typeof logsSound !== 'boolean') return;
+    const nextMuted = !logsSound;
+    isMutedRef.current = nextMuted;
+    setIsMuted(nextMuted);
+  }, []);
+
+  const refreshAudioPreference = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setAudioLoading(true);
+    try {
+      const logsSound = await fetchLogsSound();
+      applyLogsSound(logsSound);
+      return logsSound;
+    } finally {
+      if (!silent) setAudioLoading(false);
+    }
+  }, [applyLogsSound]);
+
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-    fetchLogsSound().then((res) => {
-      const logsSound = res?.data?.body?.data?.logsSound;
-      if (!cancelled && typeof logsSound === 'boolean') setIsMuted(!logsSound);
-    }).catch(() => {});
+    setAudioLoading(true);
+    fetchLogsSound().then((logsSound) => {
+      if (!cancelled) applyLogsSound(logsSound);
+    }).catch(() => {}).finally(() => {
+      if (!cancelled) setAudioLoading(false);
+    });
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, applyLogsSound]);
+
+  const setAudioEnabled = useCallback(async (enabled, { successMessage } = {}) => {
+    const previousMuted = isMutedRef.current;
+    const nextMuted = !enabled;
+    isMutedRef.current = nextMuted;
+    setIsMuted(nextMuted);
+    setAudioSaving(true);
+    try {
+      await updateLogsSound(enabled);
+      if (successMessage) toast.success(successMessage);
+    } catch {
+      isMutedRef.current = previousMuted;
+      setIsMuted(previousMuted);
+      toast.error('Could not update audio alarm preference');
+    } finally {
+      setAudioSaving(false);
+    }
+  }, []);
 
   const toggleMute = async () => {
-    const next = !isMutedRef.current;
-    isMutedRef.current = next;
-    setIsMuted(next);
-    try {
-      await updateLogsSound(!next);
-    } catch {
-      toast.error('Could not update audio alarm preference');
-    }
+    await setAudioEnabled(isMutedRef.current);
   };
 
   const resetAttendanceClearTimer = () => {
@@ -112,7 +145,20 @@ export function AttendanceSocketProvider({ children }) {
   }, [socket, user]);
 
   return (
-    <AttendanceSocketContext.Provider value={{ allDetections, attendanceLogs, accessAllDetections, isMuted, toggleMute }}>
+    <AttendanceSocketContext.Provider
+      value={{
+        allDetections,
+        attendanceLogs,
+        accessAllDetections,
+        isMuted,
+        audioEnabled: !isMuted,
+        audioLoading,
+        audioSaving,
+        setAudioEnabled,
+        refreshAudioPreference,
+        toggleMute,
+      }}
+    >
       {children}
     </AttendanceSocketContext.Provider>
   );
