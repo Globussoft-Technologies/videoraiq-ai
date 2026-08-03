@@ -180,7 +180,7 @@ function CameraRow({ camera, online, typeLabels, onOpen, onToggleDetectionReques
 
 const LIMIT = 12;
 
-export default function DetectionSettings() {
+export function DetectionSettingsCameraList({ onOpenCamera }) {
   // setCamHealth is shared via the layout so the Sidebar footer can show the
   // live camera tally from this page too — otherwise it only ever reflects
   // Command Center's probe and reads blank/stale on every other page.
@@ -188,7 +188,6 @@ export default function DetectionSettings() {
   const [search, setSearch] = useState('');
   const [nvrFilter, setNvrFilter] = useState('');
   const [page, setPage] = useState(0);
-  const [openCamera, setOpenCamera] = useState(null);
   const [detectionConfirm, setDetectionConfirm] = useState(null);
   const [detectionActionLoading, setDetectionActionLoading] = useState(false);
 
@@ -287,34 +286,6 @@ export default function DetectionSettings() {
     }
   };
 
-  // Re-fetch just this camera (with freshly-populated detections/settings) after
-  // a save inside Zone Marking, so a just-created DetectionSetting's id shows up
-  // without the user having to leave and reopen the camera.
-  // GET /channel/nvr/:nvrId (getCamerasByNvr) doesn't populate nvrId — it comes
-  // back as a raw id, not an object — so re-attach the already-populated nvrId
-  // from the current snapshot rather than letting it be overwritten with the
-  // raw id, which would break the stream URL (camera.nvrId._id).
-  const refreshOpenCamera = async () => {
-    if (!openCamera?.nvrId?._id) return;
-    try {
-      const list = await getCamerasByNvr(openCamera.nvrId._id);
-      const fresh = (list || []).find(c => c._id === openCamera._id);
-      if (fresh) setOpenCamera({ ...fresh, nvrId: openCamera.nvrId });
-    } catch {
-      // Keep showing the previous snapshot — not worth surfacing an error for a background refresh.
-    }
-  };
-
-  if (openCamera) {
-    return (
-      <DetectionZoneMarking
-        camera={openCamera}
-        onBack={() => { setOpenCamera(null); channelsApi.refetch(); }}
-        onSaved={refreshOpenCamera}
-      />
-    );
-  }
-
   return (
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -377,7 +348,7 @@ export default function DetectionSettings() {
               camera={camera}
               online={!!liveById[camera._id]}
               typeLabels={typeLabels}
-              onOpen={() => setOpenCamera(camera)}
+              onOpen={() => onOpenCamera?.(camera)}
               onToggleDetectionRequest={handleDetectionToggleRequest}
               onCheckTypeChange={handleCheckTypeChange}
             />
@@ -439,4 +410,39 @@ export default function DetectionSettings() {
       />
     </div>
   );
+}
+
+export default function DetectionSettings() {
+  const [openCamera, setOpenCamera] = useState(null);
+
+  // Re-fetch just this camera (with freshly-populated detections/settings) after
+  // a save inside Zone Marking, so a just-created DetectionSetting's id shows up
+  // without the user having to leave and reopen the camera.
+  // GET /channel/nvr/:nvrId (getCamerasByNvr) doesn't populate nvrId — it comes
+  // back as a raw id, not an object — so re-attach the already-populated nvrId
+  // from the current snapshot rather than letting it be overwritten with the
+  // raw id, which would break the stream URL (camera.nvrId._id).
+  const refreshOpenCamera = async () => {
+    const openCameraNvrId = openCamera?.nvrId?._id || openCamera?.nvrId;
+    if (!openCameraNvrId) return;
+    try {
+      const list = await getCamerasByNvr(openCameraNvrId);
+      const fresh = (list || []).find(c => c._id === openCamera._id);
+      if (fresh) setOpenCamera({ ...fresh, nvrId: openCamera.nvrId });
+    } catch {
+      // Keep showing the previous snapshot — not worth surfacing an error for a background refresh.
+    }
+  };
+
+  if (openCamera) {
+    return (
+      <DetectionZoneMarking
+        camera={openCamera}
+        onBack={() => setOpenCamera(null)}
+        onSaved={refreshOpenCamera}
+      />
+    );
+  }
+
+  return <DetectionSettingsCameraList onOpenCamera={setOpenCamera} />;
 }

@@ -18,10 +18,18 @@ export const fetchIncidents = async ({ skip = 0, limit = 12 } = {}, filter = {})
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
   const d = res?.data || {};
+  const body = d.body || {};
+  const bodyData = body.data || {};
+  const items =
+    (Array.isArray(d.data) && d.data) ||
+    (Array.isArray(body.data) && body.data) ||
+    (Array.isArray(bodyData.result) && bodyData.result) ||
+    (Array.isArray(bodyData.items) && bodyData.items) ||
+    [];
   return {
-    items: Array.isArray(d.data) ? d.data : [],
-    totalCount: d.totalCount ?? 0,
-    counts: d.counts || null,
+    items,
+    totalCount: d.totalCount ?? body.totalCount ?? bodyData.totalCount ?? bodyData.count ?? items.length,
+    counts: d.counts || body.counts || bodyData.counts || null,
   };
 };
 

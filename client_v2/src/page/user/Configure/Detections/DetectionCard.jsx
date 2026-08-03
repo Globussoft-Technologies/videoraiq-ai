@@ -6,7 +6,7 @@ import { Toggle } from '../../../../components/primitives';
  * the model (which drives the detail panel on the right); the toggle is
  * click-isolated so flipping it never changes the selection.
  */
-export default function DetectionCard({ model, color, selected, onSelect, onToggle }) {
+export default function DetectionCard({ model, color, selected, onSelect, onToggle, toggleDisabled = false }) {
   return (
     <div
       className="vq-det-card"
@@ -57,7 +57,7 @@ export default function DetectionCard({ model, color, selected, onSelect, onTogg
           {model.name}
         </span>
         <span onClick={(e) => e.stopPropagation()} style={{ flex: '0 0 auto' }}>
-          <Toggle on={model.active} onChange={onToggle} />
+          <Toggle on={model.active} onChange={onToggle} disabled={toggleDisabled} />
         </span>
       </div>
 

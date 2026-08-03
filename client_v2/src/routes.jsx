@@ -106,7 +106,7 @@ export const v2Routes = (
         `detections` permission module exists server-side. */}
     <Route path="detections" element={<Detections />} />
     <Route path="camera-settings" element={<CameraSettings />} />
-    <Route path="engines" element={guard('detectionSettings', undefined, <DetectionSettings />)} />
+    {/* <Route path="engines" element={guard('detectionSettings', undefined, <DetectionSettings />)} /> */}
     <Route path="recipients" element={guard('recipients', undefined, <AlertRecipients />)} />
     {/* Administer */}
     <Route path="users" element={guard('Users', undefined, <UsersPage />)} />

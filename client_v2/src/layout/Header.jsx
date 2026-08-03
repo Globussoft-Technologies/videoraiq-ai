@@ -195,7 +195,10 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
 
   const themeBtn = (active) => ({
     width: 30,
+    height: '100%',
+    padding: 0,
     borderRadius: 7,
+    border: 0,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -388,12 +391,12 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
       {/* Theme toggle */}
       {!hideTheme && (
         <div style={{ display: 'flex', gap: 3, height: 36, padding: 3, borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)', flex: '0 0 auto' }} title="Theme">
-          <div onClick={() => setTheme('light')} style={themeBtn(theme === 'light')}>
+          <button type="button" aria-label="Light theme" aria-pressed={theme === 'light'} onClick={() => setTheme('light')} style={themeBtn(theme === 'light')}>
             <Sun size={15} strokeWidth={1.8} />
-          </div>
-          <div onClick={() => setTheme('dark')} style={themeBtn(theme === 'dark')}>
+          </button>
+          <button type="button" aria-label="Dark theme" aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')} style={themeBtn(theme === 'dark')}>
             <Moon size={15} strokeWidth={1.8} />
-          </div>
+          </button>
         </div>
       )}
 
@@ -433,12 +436,12 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
                 <div>
                   <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.08em', color: 'var(--tx3)', marginBottom: 6 }}>THEME</div>
                   <div style={{ display: 'flex', gap: 3, height: 36, padding: 3, borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
-                    <div onClick={() => setTheme('light')} style={{ ...themeBtn(theme === 'light'), width: 'auto', flex: 1 }}>
+                    <button type="button" aria-label="Light theme" aria-pressed={theme === 'light'} onClick={() => setTheme('light')} style={{ ...themeBtn(theme === 'light'), width: 'auto', flex: 1 }}>
                       <Sun size={15} strokeWidth={1.8} />
-                    </div>
-                    <div onClick={() => setTheme('dark')} style={{ ...themeBtn(theme === 'dark'), width: 'auto', flex: 1 }}>
+                    </button>
+                    <button type="button" aria-label="Dark theme" aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')} style={{ ...themeBtn(theme === 'dark'), width: 'auto', flex: 1 }}>
                       <Moon size={15} strokeWidth={1.8} />
-                    </div>
+                    </button>
                   </div>
                 </div>
               )}

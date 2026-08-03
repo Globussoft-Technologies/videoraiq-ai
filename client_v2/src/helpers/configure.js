@@ -50,17 +50,32 @@ export const getDetectionTypes = async () => {
   return data?.detectionTypes ?? data ?? {};
 };
 
-export const getDetectionSettings = async ({ skip = 0, limit = 50, nvrIds = '', channelIds = '', name = '' } = {}) => {
+export const getDetectionSettings = async ({
+  skip = 0,
+  limit = 50,
+  nvrIds = '',
+  channelIds = '',
+  name = '',
+  settingType = '',
+} = {}) => {
   const token = getAccessToken();
-  const res = await axios.get(
-    `${Api_url}/detection-settings/?nvrIds=${nvrIds}&channelIds=${channelIds}&name=${name}&skip=${skip}&limit=${limit}`,
-    { headers: { 'x-access-token': token } }
-  );
+  const params = new URLSearchParams({
+    skip: String(skip),
+    limit: String(limit),
+  });
+  if (nvrIds) params.set('nvrIds', nvrIds);
+  if (channelIds) params.set('channelIds', channelIds);
+  if (name) params.set('name', name);
+  if (settingType) params.set('settingType', settingType);
+
+  const res = await axios.get(`${Api_url}/detection-settings/?${params.toString()}`, {
+    headers: { 'x-access-token': token },
+  });
   const data = unwrap(res);
   if (Array.isArray(data)) return { settings: data, total: data.length };
   return {
     settings: data?.detectionSettings ?? data?.settings ?? data?.data ?? [],
-    total: data?.total ?? data?.totalCount ?? 0,
+    total: data?.total ?? data?.totalCount ?? data?.count ?? 0,
   };
 };
 

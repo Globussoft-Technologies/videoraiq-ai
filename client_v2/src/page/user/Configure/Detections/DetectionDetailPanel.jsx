@@ -43,13 +43,15 @@ export default function DetectionDetailPanel({
   model,
   category,
   onToggle,
+  toggleDisabled,
   onSensitivityChange,
   onEditZones,
-  onAssignCameras,
 }) {
   const Icon = category?.icon;
   const color = category?.color || 'var(--blue)';
   const sensitivity = model.sensitivity;
+  const appliedCameras = model.appliedCameras == null ? 'N/A' : model.appliedCameras;
+  const minConfidence = model.minConfidence == null ? 'N/A' : `${model.minConfidence}%`;
 
   return (
     <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12, padding: 16 }}>
@@ -90,7 +92,7 @@ export default function DetectionDetailPanel({
           </span>
         </span>
         <span style={{ flex: '0 0 auto' }}>
-          <Toggle on={model.active} onChange={onToggle} />
+          <Toggle on={model.active} onChange={onToggle} disabled={toggleDisabled} />
         </span>
       </div>
 
@@ -139,8 +141,8 @@ export default function DetectionDetailPanel({
           color={model.active ? 'var(--ok)' : 'var(--tx3)'}
         />
         <StatBox label="Schedule" value={model.schedule} />
-        <StatBox label="Applied Cameras" value={model.appliedCameras} />
-        <StatBox label="Min Confidence" value={`${model.minConfidence}%`} color="var(--blue)" />
+        <StatBox label="Applied Cameras" value={appliedCameras} />
+        <StatBox label="Min Confidence" value={minConfidence} color="var(--blue)" />
       </div>
 
       {/* Actions */}
@@ -162,23 +164,6 @@ export default function DetectionDetailPanel({
           }}
         >
           Edit zones &amp; rules
-        </button>
-        <button
-          type="button"
-          onClick={onAssignCameras}
-          style={{
-            flex: 1,
-            height: 36,
-            borderRadius: 8,
-            cursor: 'pointer',
-            fontSize: 12,
-            fontWeight: 600,
-            color: 'var(--tx2)',
-            background: 'var(--bg2)',
-            border: '1px solid var(--bd)',
-          }}
-        >
-          Assign cameras
         </button>
       </div>
     </div>

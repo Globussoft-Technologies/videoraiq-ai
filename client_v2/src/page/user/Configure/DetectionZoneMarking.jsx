@@ -1,477 +1,38 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Video, Pencil, Undo2, Trash2, Save, Maximize, Minimize, Maximize2, Minimize2, X, Wifi, Minus, Plus, CheckCircle2, ChevronDown, AlertTriangle, RotateCcw } from 'lucide-react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, Video, Pencil, Maximize2, Minimize2, X, Wifi, Minus, Plus, CheckCircle2, ChevronDown, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import useHlsPlayer from '../../../hooks/useHlsPlayer';
 import { streamUrl } from '../../../lib/stream';
 import { useApi } from '../../../hooks/useApi';
-import { getDetectionTypes, updateDetectionSetting, createDetectionSetting, deleteDetectionSetting } from '../../../helpers/configure';
-import { getRecipients } from '../../../api/administer';
-import { Popover, PopoverTrigger, PopoverContent } from '../../../pages/AttendanceLogs/components/Popover';
-import ZoneScheduleFields, { TimezoneField, emptySchedule, scheduleFromConfig, buildScheduleFields, scheduleError } from './ZoneScheduleFields';
+import { emptySchedule, buildScheduleFields, scheduleError } from './ZoneScheduleFields';
 import { usePermissions } from '@/context/PermissionContext';
+import { DEFAULT_MAX_POINTS, MIN_POINTS_TO_CLOSE } from './DetectionZoneMarking/constants';
+import { allTypesFor, extraFieldsFor, polygonPointsAttr, zonesFor } from './DetectionZoneMarking/utils';
+import DetectionTypeDropdown from './DetectionZoneMarking/components/DetectionTypeDropdown';
+import ZoneToolbar from './DetectionZoneMarking/components/ZoneToolbar';
+import ZoneSettingsPanel from './DetectionZoneMarking/components/ZoneSettingsPanel';
+import SaveDetectionAreaModal from './DetectionZoneMarking/dialogs/SaveDetectionAreaModal';
+import ConfirmDialog from './DetectionZoneMarking/dialogs/ConfirmDialog';
+import {
+  createZoneDetectionSetting,
+  deleteZoneDetectionSetting,
+  fetchAlertRecipients,
+  fetchDetectionTypes,
+  updateDetectionAlerts,
+  updateZoneDetectionSetting,
+} from './DetectionZoneMarking/api/detectionZoneApi';
 
-const DETECTION_FIELD_KEYS = [
-  'countPersonsSettings', 'motionDetectionSettings', 'genericObjectDetectionSettings',
-  'countVehiclesSettings', 'loiteringWithoutAuthSettings', 'fireSmokeDetectionSettings',
-  'weaponDetectionSettings', 'unattendedBaggageDetectionSettings', 'unauthorizedAccessSettings',
-  'lineCrossingSettings', 'loiteringWithAuthSettings', 'personalProtectiveEquipmentSettings',
-  'crowdDetectionSettings', 'lightDetectionSettings', 'doorDetectionSettings',
-  'vehicleDetectionSettings', 'deskAbsenceSettings', 'guardAbsenceSettings',
-  'conveyorDetectionSettings', 'crusherDetectionSettings', 'waterSpillageDetectionSettings',
-  'vehicleTypeDetectionSettings', 'loiteringDetectionSettings', 'vehicleObstructionSettings',
-  'tableOccupancyDetectionSettings', 'foodServicePPEDetectionSettings', 'mobilePhoneDetectionSettings',
-];
-
-const DEFAULT_MAX_POINTS = 4; // V1 defaults to 3; bumped to 4 per product request. Floor stays 3 (min to close a polygon).
-const MIN_POINTS_TO_CLOSE = 3;
-
-/**
- * Per-zone extra fields, by detection type — product spec (V1's own schema/UI
- * is inconsistent across these types, so this is the authoritative source,
- * not a port). Both fields reuse Desk Absence's existing per-zone field names
- * (settings.zone_configs[i].capacity / .threshold_sec) generalized to any type
- * that needs them, rather than inventing new field names.
- */
-const ZONE_EXTRA_FIELDS = {
-  vehicleObstructionSettings: ['threshold'],
-  guardAbsenceSettings: ['threshold'],
-  loiteringDetectionSettings: ['threshold'],
-  loiteringWithoutAuthSettings: ['threshold'],
-  loiteringWithAuthSettings: ['threshold'],
-  tableOccupancyDetectionSettings: ['threshold'],
-  deskAbsenceSettings: ['threshold', 'capacity'],
-  crowdDetectionSettings: ['capacity'],
-};
-
-function extraFieldsFor(settingType) {
-  return ZONE_EXTRA_FIELDS[settingType] || [];
-}
-
-/**
- * A camera+type can have multiple named zones (e.g. two separate counting
- * areas in one frame). Points are native video pixel coordinates, tied to
- * the video's resolution: settings.referencePoints[cameraId] = an array of
- * polygons, each a flat [[x,y], [x,y], ...] list. Names are index-aligned in
- * settings.zone_configs = [{ name }, ...] (same field V1 uses for Desk
- * Absence's per-zone metadata, reused here generically for any type).
- */
-function zonesFor(setting, cameraId) {
-  const raw = setting?.settings?.referencePoints?.[cameraId];
-  const configs = setting?.settings?.zone_configs || [];
-  if (!Array.isArray(raw) || !raw.length) return [];
-  // Tolerate a legacy single-polygon shape ([x,y] pairs, no outer nesting) alongside the multi-zone shape.
-  const isMultiZone = Array.isArray(raw[0]?.[0]);
-  const polygons = isMultiZone ? raw : [raw];
-  return polygons.map((poly, i) => ({
-    name: configs[i]?.name || `Zone ${i + 1}`,
-    capacity: configs[i]?.capacity ?? '',
-    threshold: configs[i]?.threshold_sec ?? '',
-    // Restore the saved startTime/endTime into the schedule picker.
-    schedule: scheduleFromConfig(configs[i]),
-    points: (poly || []).map(p => (Array.isArray(p) ? { x: p[0], y: p[1] } : p)),
-  }));
-}
-
-/**
- * All detection types (from the global catalog), each flagged with whether
- * it's already linked to this camera. Matches V1: the dropdown lists every
- * type, not just configured ones — selecting an unconfigured type and saving
- * creates a new DetectionSetting rather than requiring one to exist first.
- *
- * `configured` is derived from actually having ≥1 saved zone for THIS camera,
- * not just from a DetectionSetting reference existing on `camera.detections`.
- * Deleting a camera's last zone updates the DetectionSetting doc (referencePoints
- * becomes an empty array) but doesn't unlink it from the channel server-side —
- * so `entry?.id` alone stayed truthy forever after the last zone was removed,
- * leaving "Already configured for this camera" showing with nothing drawn.
- */
-function allTypesFor(camera, typeLabels) {
-  const detections = camera?.detections || {};
-  return DETECTION_FIELD_KEYS
-    .filter(key => typeLabels[key]) // only types the backend actually supports (has a label)
-    .map(key => {
-      const entry = detections[key];
-      const setting = entry?.id && typeof entry.id === 'object' ? entry.id : null;
-      const settingId = setting?._id || (entry?.id && typeof entry.id !== 'object' ? entry.id : null);
-      const hasZones = zonesFor(setting, camera?._id).length > 0;
-      return {
-        settingType: key,
-        label: typeLabels[key],
-        configured: !!settingId && hasZones,
-        settingId,
-        setting,
-      };
-    });
-}
-
-const PRIORITY_OPTIONS = [
-  { value: 'low', label: 'Low' },
-  { value: 'moderate', label: 'Moderate' },
-  { value: 'high', label: 'High' },
-];
-
-/**
- * V1's "Save Detection Area" modal — collects a Detection Name and Priority
- * (settings.levelOfImportance) before every save, for both create and update.
- * Also collects Zone Name + any type-specific extra fields (Capacity/
- * Threshold) for every zone about to be saved, so a first-time save doesn't
- * create a zone with those required fields blank — matching V1's modal,
- * which expands a per-zone section for types that need it.
- */
-function SaveDetectionAreaModal({ initialName, initialPriority, zones, extraFields, saving, onCancel, onSubmit }) {
-  const [detectionName, setDetectionName] = useState(initialName || '');
-  const [priority, setPriority] = useState(initialPriority || 'moderate');
-  const [zoneDrafts, setZoneDrafts] = useState(zones);
-  const [errors, setErrors] = useState({});
-
-  const updateZoneField = (index, field, value) => {
-    setZoneDrafts(prev => prev.map((z, i) => (i === index ? { ...z, [field]: value } : z)));
-    setErrors(er => ({ ...er, [`zone-${index}-${field}`]: false }));
-  };
-
-  const handleSubmit = () => {
-    const nextErrors = {};
-    if (!detectionName.trim()) nextErrors.detectionName = true;
-    zoneDrafts.forEach((z, i) => {
-      if (!String(z.name || '').trim()) nextErrors[`zone-${i}-name`] = true;
-    });
-    if (Object.keys(nextErrors).length) { setErrors(nextErrors); return; }
-    // Schedule window must be valid (end after start) for every zone.
-    for (let i = 0; i < zoneDrafts.length; i++) {
-      const err = scheduleError(zoneDrafts[i].schedule);
-      if (err) { toast.error(`Zone ${i + 1}: ${err}`); return; }
-    }
-    onSubmit({ detectionName: detectionName.trim(), priority, zones: zoneDrafts });
-  };
-
-  return (
-    <div style={{
-      // Above the sidebar (80) and header (60) — at 50 the dim layer sat under
-      // the chrome, leaving it lit up while the rest of the page dimmed.
-      position: 'fixed', inset: 0, background: 'rgba(6,9,15,.6)', zIndex: 200,
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-    }}>
-      <div style={{
-        width: '100%', maxWidth: 440, maxHeight: '85vh', overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
-        borderRadius: 16, padding: 22, boxShadow: '0 24px 64px rgba(0,0,0,.45)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15.5 }}>Save Detection Area</span>
-          <span onClick={onCancel} style={{ cursor: 'pointer', color: 'var(--tx3)', display: 'flex' }}>
-            <X size={17} />
-          </span>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Detection Name</label>
-            <input
-              autoFocus
-              value={detectionName}
-              onChange={e => { setDetectionName(e.target.value); setErrors(er => ({ ...er, detectionName: false })); }}
-              maxLength={50}
-              placeholder="Enter detection name"
-              style={{
-                width: '100%', height: 40, padding: '0 12px', borderRadius: 9, boxSizing: 'border-box',
-                background: 'var(--bg2)', border: `1px solid ${errors.detectionName ? 'var(--danger, #ef4444)' : 'var(--bd)'}`,
-                fontSize: 13, color: 'var(--tx)', outline: 'none',
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Priority</label>
-            <select
-              value={priority}
-              onChange={e => setPriority(e.target.value)}
-              style={{
-                width: '100%', height: 40, padding: '0 12px', borderRadius: 9, boxSizing: 'border-box',
-                background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13, color: 'var(--tx)',
-                outline: 'none', cursor: 'pointer',
-              }}
-            >
-              {PRIORITY_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
-          </div>
-
-          {/* Global time zone — one setting for all zones' schedules. */}
-          <TimezoneField />
-
-          {zoneDrafts.map((z, i) => (
-            <div key={i} style={{ border: '1px solid var(--bd)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)' }}>Zone {i + 1}</div>
-              <div>
-                <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Zone Name</label>
-                <input
-                  value={z.name}
-                  onChange={e => updateZoneField(i, 'name', e.target.value)}
-                  maxLength={50}
-                  placeholder="Enter zone name"
-                  style={{
-                    width: '100%', height: 36, padding: '0 11px', borderRadius: 8, boxSizing: 'border-box',
-                    background: 'var(--bg2)', border: `1px solid ${errors[`zone-${i}-name`] ? 'var(--danger, #ef4444)' : 'var(--bd)'}`,
-                    fontSize: 12.5, color: 'var(--tx)', outline: 'none',
-                  }}
-                />
-              </div>
-              {extraFields.includes('capacity') && (
-                <div>
-                  <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Capacity</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={z.capacity}
-                    onChange={e => updateZoneField(i, 'capacity', e.target.value)}
-                    placeholder="e.g. 10"
-                    style={{
-                      width: '100%', height: 36, padding: '0 11px', borderRadius: 8, boxSizing: 'border-box',
-                      background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5, color: 'var(--tx)', outline: 'none',
-                    }}
-                  />
-                </div>
-              )}
-              {extraFields.includes('threshold') && (
-                <div>
-                  <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Threshold (sec)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={z.threshold}
-                    onChange={e => updateZoneField(i, 'threshold', e.target.value)}
-                    placeholder="e.g. 30"
-                    style={{
-                      width: '100%', height: 36, padding: '0 11px', borderRadius: 8, boxSizing: 'border-box',
-                      background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5, color: 'var(--tx)', outline: 'none',
-                    }}
-                  />
-                </div>
-              )}
-              {/* Per-zone schedule (Time Range). Timezone is global (below Priority). */}
-              <ZoneScheduleFields
-                value={z.schedule}
-                onChange={schedule => updateZoneField(i, 'schedule', schedule)}
-              />
-            </div>
-          ))}
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
-          <button
-            onClick={onCancel}
-            disabled={saving}
-            style={{
-              height: 38, padding: '0 16px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)',
-              fontSize: 12.5, fontWeight: 500, color: 'var(--tx2)', cursor: 'pointer',
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={saving}
-            style={{
-              height: 38, padding: '0 18px', borderRadius: 9, background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-              border: 'none', fontSize: 12.5, fontWeight: 600, color: '#fff', cursor: saving ? 'not-allowed' : 'pointer',
-              opacity: saving ? 0.7 : 1,
-            }}
-          >
-            {saving ? 'Saving…' : 'Submit'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function polygonPointsAttr(points, videoW, videoH, boxW, boxH) {
-  if (!videoW || !videoH) return '';
-  return points.map(p => `${(p.x / videoW * boxW).toFixed(1)},${(p.y / videoH * boxH).toFixed(1)}`).join(' ');
-}
-
-/**
- * Custom dropdown replacing a native <select> — a native <select>'s options
- * list ignores CSS max-height entirely, so a long detection-type list would
- * always render every option at once. This caps to ~5 visible rows and
- * scrolls the rest, same pattern as the "Applied Types" popover.
- */
-function DetectionTypeDropdown({ types, value, onChange }) {
-  const [open, setOpen] = useState(false);
-  const [triggerWidth, setTriggerWidth] = useState(null);
-  const triggerRef = useRef(null);
-  const activeLabel = types.find(t => t.settingType === value)?.label || 'Select Detection Type';
-
-  return (
-    <Popover
-      open={open}
-      onOpenChange={(v) => { if (v) setTriggerWidth(triggerRef.current?.offsetWidth); setOpen(v); }}
-      className="block w-full"
-    >
-      <PopoverTrigger asChild>
-        <button
-          ref={triggerRef}
-          style={{
-            width: '100%', height: 42, padding: '0 34px 0 13px', borderRadius: 10,
-            background: 'var(--bg2)', border: '1px solid var(--blue)', fontSize: 13,
-            outline: 'none', cursor: 'pointer', color: 'var(--tx)',
-            boxShadow: '0 0 0 3px rgba(59,130,246,.14)',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', textAlign: 'left',
-          }}
-        >
-          {activeLabel}
-          <ChevronDown size={15} style={{ color: 'var(--blue)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" sideOffset={6}>
-        <div style={{ width: triggerWidth || 320, maxHeight: 176, overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, boxShadow: '0 18px 50px rgba(0,0,0,.35)', padding: 5 }}>
-          {types.map(t => {
-            const selected = t.settingType === value;
-            return (
-              <div
-                key={t.settingType}
-                onClick={() => { onChange(t.settingType); setOpen(false); }}
-                style={{
-                  padding: '8px 10px', borderRadius: 7, fontSize: 12.5, cursor: 'pointer',
-                  background: selected ? 'var(--blue)' : 'transparent',
-                  color: selected ? '#fff' : 'var(--tx)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-                }}
-              >
-                <span>{t.label}</span>
-                {t.configured && <CheckCircle2 size={13} style={{ color: selected ? '#fff' : 'var(--ok)', flexShrink: 0 }} />}
-              </div>
-            );
-          })}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-/**
- * Right-rail "Zone Settings" — lists every zone saved for the active
- * detection type, each independently renamable/deletable (V1's per-zone
- * rename+trash panel, generalized here to any detection type rather than
- * just Desk Absence, since one camera+type can hold multiple named zones).
- */
-function ZoneSettingsPanel({ zones, extraFields, activeIndex, onSetActive, onUpdateField, onSave, onDelete, savingIndex, canDelete }) {
-  const [expanded, setExpanded] = useState(null);
-
-  if (zones.length === 0) return null;
-
-  return (
-    <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
-      <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 5 }}>Zone Settings</div>
-      <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 12 }}>
-        {zones.length} zone{zones.length === 1 ? '' : 's'} drawn on this camera for this detection type.
-      </div>
-      {/* Global time zone — schedules for every zone are interpreted against it. */}
-      <div style={{ marginBottom: 12 }}>
-        <TimezoneField />
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {zones.map((z, i) => {
-          const isOpen = expanded === i;
-          return (
-            <div
-              key={i}
-              style={{ border: '1px solid var(--bd)', borderRadius: 10, overflow: 'hidden' }}
-              onMouseEnter={() => onSetActive(i)}
-              onMouseLeave={() => onSetActive(null)}
-            >
-              <div
-                onClick={() => setExpanded(isOpen ? null : i)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8, padding: '9px 11px', cursor: 'pointer',
-                  background: activeIndex === i ? 'rgba(245,158,11,.1)' : 'transparent',
-                }}
-              >
-                <ChevronDown size={14} style={{ color: 'var(--tx3)', transform: isOpen ? 'none' : 'rotate(-90deg)', transition: 'transform .15s', flexShrink: 0 }} />
-                <span style={{ fontSize: 12.5, fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{z.name}</span>
-                {canDelete && (
-                  <span
-                    onClick={(e) => { e.stopPropagation(); onDelete(i); }}
-                    title="Delete this zone"
-                    style={{ display: 'flex', color: '#ef4444', cursor: 'pointer', opacity: savingIndex === i ? 0.5 : 1 }}
-                  >
-                    <Trash2 size={14} />
-                  </span>
-                )}
-              </div>
-              {isOpen && (
-                <div style={{ padding: '10px 11px', borderTop: '1px solid var(--bd)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Zone Name</label>
-                    <input
-                      value={z.name}
-                      onChange={e => onUpdateField(i, 'name', e.target.value)}
-                      maxLength={50}
-                      style={{
-                        width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
-                        background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none',
-                      }}
-                    />
-                  </div>
-                  {extraFields.includes('capacity') && (
-                    <div>
-                      <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Capacity</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={z.capacity}
-                        onChange={e => onUpdateField(i, 'capacity', e.target.value)}
-                        placeholder="e.g. 10"
-                        style={{
-                          width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
-                          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none',
-                        }}
-                      />
-                    </div>
-                  )}
-                  {extraFields.includes('threshold') && (
-                    <div>
-                      <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Threshold (sec)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={z.threshold}
-                        onChange={e => onUpdateField(i, 'threshold', e.target.value)}
-                        placeholder="e.g. 30"
-                        style={{
-                          width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
-                          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none',
-                        }}
-                      />
-                    </div>
-                  )}
-                  {/* Per-zone schedule (Time Range). */}
-                  <ZoneScheduleFields
-                    value={z.schedule}
-                    onChange={schedule => onUpdateField(i, 'schedule', schedule)}
-                  />
-                  <button
-                    onClick={() => onSave(i)}
-                    disabled={savingIndex === i}
-                    style={{
-                      alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: 5, height: 30, padding: '0 12px',
-                      borderRadius: 7, background: 'var(--blue)', border: 'none', fontSize: 11.5, fontWeight: 600, color: '#fff',
-                      cursor: savingIndex === i ? 'not-allowed' : 'pointer', opacity: savingIndex === i ? 0.6 : 1,
-                    }}
-                  >
-                    <Save size={12} /> {savingIndex === i ? 'Saving…' : 'Save'}
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
+export default function DetectionZoneMarking({
+  camera,
+  onBack,
+  onSaved,
+  embedded = false,
+  selectedSettingType = null,
+  zoneSettingsOpen = false,
+  onZoneSettingsClose,
+}) {
   // Zone/detection-setting deletion (per-zone trash, Clear All, Reset
-  // Detection UI) is gated on detectionSettings.delete — a write-only role
+  // Detection UI) is gated on detectionSettings.delete â€” a write-only role
   // (view+create+edit) can still draw/edit zones but never remove them, and
   // the delete controls are hidden entirely rather than disabled.
   const { permissions } = usePermissions();
@@ -480,25 +41,29 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   const videoRef = useRef(null);
   const stageRef = useRef(null);
   // Single state machine (mirrors PlaybackTimeline.jsx) instead of two
-  // independent booleans — those could disagree mid-retry (onStarted firing
+  // independent booleans â€” those could disagree mid-retry (onStarted firing
   // after onError already fired) and leave neither overlay condition true,
   // rendering a blank box instead of buffering/error UI.
   const [videoState, setVideoState] = useState('loading'); // loading | ready | error
   const [videoSize, setVideoSize] = useState({ w: 0, h: 0 });
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const typesApi = useApi(() => getDetectionTypes(), []);
+  const typesApi = useApi(() => fetchDetectionTypes(), []);
   const typeLabels = typesApi.data || {};
 
   const allTypes = useMemo(() => allTypesFor(camera, typeLabels), [camera, typeLabels]);
-  // No auto-select — the dropdown starts on its "Select Detection Type"
+  // No auto-select â€” the dropdown starts on its "Select Detection Type"
   // placeholder so the user explicitly picks one, instead of silently
   // defaulting to whichever type happens to be first in the list.
-  const [selectedType, setSelectedType] = useState(null);
+  const [selectedType, setSelectedType] = useState(selectedSettingType || null);
+
+  useEffect(() => {
+    if (selectedSettingType) setSelectedType(selectedSettingType);
+  }, [selectedSettingType, camera?._id]);
 
   const activeType = allTypes.find(t => t.settingType === selectedType) || null;
   // Line Crossing draws a single straight line (exactly 2 points), not a
-  // closed area — V1 gives it its own toolbar/shape entirely (see
+  // closed area â€” V1 gives it its own toolbar/shape entirely (see
   // AreaMarkingControls.jsx's isLineCrossing), unlike every other type here
   // which draws a filled polygon zone.
   const isLineCrossing = activeType?.settingType === 'lineCrossingSettings';
@@ -506,7 +71,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   // needs MIN_POINTS_TO_CLOSE (3) to form a closed polygon.
   const minPointsToSave = isLineCrossing ? 2 : MIN_POINTS_TO_CLOSE;
 
-  // Saved/committed zones for this camera+type — each { name, points }. Points
+  // Saved/committed zones for this camera+type â€” each { name, points }. Points
   // are native video pixel coordinates, matching V1's saved shape.
   const [zones, setZones] = useState([]);
   // The polygon currently being drawn, not yet committed to `zones`.
@@ -516,7 +81,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   const [drawing, setDrawing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [maxPoints, setMaxPoints] = useState(DEFAULT_MAX_POINTS);
-  // Line Crossing is always exactly 2 points — not adjustable via the +/- stepper.
+  // Line Crossing is always exactly 2 points â€” not adjustable via the +/- stepper.
   const effectiveMaxPoints = isLineCrossing ? 2 : maxPoints;
   const [activeZoneIndex, setActiveZoneIndex] = useState(null); // which saved zone is highlighted/being renamed
 
@@ -529,18 +94,19 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     setDrawing(false);
     setActiveZoneIndex(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedType]);
+  }, [selectedType, activeType?.setting, camera._id]);
 
   // Trim an in-progress polygon if the max-points cap is lowered below what's already placed.
   useEffect(() => {
     setPoints(prev => (prev.length > effectiveMaxPoints ? prev.slice(0, effectiveMaxPoints) : prev));
   }, [effectiveMaxPoints]);
 
-  const url = camera?.nvrId?._id ? `stream/${camera.nvrId._id}-${camera._id}/playlist.m3u8` : '';
+  const cameraNvrId = camera?.nvrId?._id || camera?.nvrId;
+  const url = cameraNvrId ? `stream/${cameraNvrId}-${camera._id}/playlist.m3u8` : '';
   useHlsPlayer(videoRef, streamUrl({ streamingUrl: url }), {
     enabled: !!url,
     onError: () => setVideoState('error'),
-    onStarted: () => setVideoState(s => (s === 'ready' ? s : 'loading')), // retrying after a 404 — stay in loading, don't clear a real error into limbo
+    onStarted: () => setVideoState(s => (s === 'ready' ? s : 'loading')), // retrying after a 404 â€” stay in loading, don't clear a real error into limbo
   });
 
   const handleLoadedMetadata = () => {
@@ -568,11 +134,11 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     }
   };
 
-  // Every shape (polygon zones — including the Max/Min Area presets — and
+  // Every shape (polygon zones â€” including the Max/Min Area presets â€” and
   // Line Crossing) lets you grab any already-placed point and drag it to
   // reposition/resize (V1 parity: CameraStreamWithArea.jsx's corner-drag).
   // Previously this only worked for Line Crossing, so a Min/Max Area
-  // rectangle (or any polygon) had no way to be resized after being placed —
+  // rectangle (or any polygon) had no way to be resized after being placed â€”
   // Undo/Clear All only removed points, they couldn't be repositioned.
   // Kept in a ref (not state) so mousemove doesn't re-render on every pixel;
   // only the resulting point update does.
@@ -587,7 +153,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     };
   };
 
-  // A pointerup that ends a drag also fires a native click right after —
+  // A pointerup that ends a drag also fires a native click right after â€”
   // without this guard that click would immediately place a new point.
   const justDraggedRef = useRef(false);
 
@@ -671,17 +237,17 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     setPoints([]);
   };
 
-  // Clear All doubles as a delete for already-saved zones (V1 parity —
+  // Clear All doubles as a delete for already-saved zones (V1 parity â€”
   // AreaMarkingControls' Clear All confirm persists an empty zone list via
   // the same PUT used elsewhere, not just a local canvas reset). Always
-  // confirm first — losing an in-progress, never-saved polygon is just as
+  // confirm first â€” losing an in-progress, never-saved polygon is just as
   // unrecoverable to the user mid-drawing as losing a saved zone.
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearing, setClearing] = useState(false);
 
   const handleClearAllClick = () => {
     if (points.length === 0 && draftZones.length === 0 && zones.length === 0) return;
-    // Clearing already-saved zones is a delete (persists an empty zone list —
+    // Clearing already-saved zones is a delete (persists an empty zone list â€”
     // see handleConfirmClearAll); clearing only in-progress/unsaved points is
     // not, so that path stays open even without detectionSettings.delete.
     if (zones.length > 0 && activeType?.settingId && !canDeleteDetection) {
@@ -692,7 +258,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   };
 
   const handleConfirmClearAll = async () => {
-    // No saved zones to persist — just drop the in-progress points locally.
+    // No saved zones to persist â€” just drop the in-progress points locally.
     if (!(zones.length > 0 && activeType?.settingId)) {
       setDraftZones([]);
       setPoints([]);
@@ -715,8 +281,8 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     }
   };
 
-  // Quick-start rectangle presets (V1 parity) — full-frame / a small fixed
-  // box — the user then drags points to adjust; these aren't size limits.
+  // Quick-start rectangle presets (V1 parity) â€” full-frame / a small fixed
+  // box â€” the user then drags points to adjust; these aren't size limits.
   const handleMaxArea = () => {
     if (!videoSize.w) return;
     const { w, h } = videoSize;
@@ -747,11 +313,11 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     }));
     if (activeType.settingId) {
       const setting = activeType.setting;
-      await updateDetectionSetting(activeType.settingId, {
+      await updateZoneDetectionSetting(activeType.settingId, {
         name: detectionName ?? setting.name,
         enabled: setting.enabled,
         settingType: setting.settingType,
-        NVRId: camera.nvrId?._id,
+        NVRId: cameraNvrId,
         channelId: [camera._id],
         settings: {
           ...setting.settings,
@@ -762,11 +328,11 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
         },
       });
     } else {
-      await createDetectionSetting({
+      await createZoneDetectionSetting({
         name: detectionName,
         settingType: activeType.settingType,
         channelId: [camera._id],
-        NVRId: camera.nvrId?._id,
+        NVRId: cameraNvrId,
         enabled: true,
         settings: {
           levelOfImportance: priority,
@@ -780,7 +346,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   };
 
   // V1 always collects Detection Name / Priority in a modal before saving,
-  // for both create and update — never a silent save. The zone(s) about to be
+  // for both create and update â€” never a silent save. The zone(s) about to be
   // saved (including the in-progress polygon currently on the canvas) are
   // captured here too, so the modal can collect Capacity/Threshold for types
   // that need them right away, instead of requiring a second trip through the
@@ -819,7 +385,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     }
   };
 
-  // Rename/delete a single already-saved zone — a full save through the same
+  // Rename/delete a single already-saved zone â€” a full save through the same
   // update path (V1's ZoneSettingsPanel does the same: it's a full PUT with
   // that one zone's entry filtered out or edited, not a separate endpoint).
   const [savingZoneIndex, setSavingZoneIndex] = useState(null);
@@ -857,7 +423,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     if (index === null) return;
     const nextZones = zones.filter((_, i) => i !== index);
     if (!activeType?.settingId) {
-      setZones(nextZones); // never saved — just drop it locally
+      setZones(nextZones); // never saved â€” just drop it locally
       setZoneDeleteIndex(null);
       return;
     }
@@ -875,8 +441,8 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     }
   };
 
-  // "Reset Detection UI" — same DELETE /detection-settings/:id V1 uses
-  // under that label (Innersettings.jsx → ResetConfirmationDialog). Removes the
+  // "Reset Detection UI" â€” same DELETE /detection-settings/:id V1 uses
+  // under that label (Innersettings.jsx â†’ ResetConfirmationDialog). Removes the
   // whole DetectionSetting doc and unlinks it from every camera referencing it,
   // not just this one.
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -886,7 +452,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     if (!activeType?.settingId || !canDeleteDetection) return;
     setDeleting(true);
     try {
-      await deleteDetectionSetting(activeType.settingId);
+      await deleteZoneDetectionSetting(activeType.settingId);
       toast.success('Detection settings reset successfully.');
       setZones([]);
       setPoints([]);
@@ -899,8 +465,8 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     }
   };
 
-  // ── Alert Recipients (scoped to the selected detection type) ──────────────
-  const recipientsApi = useApi(() => getRecipients({ limit: 200 }), []);
+  // â”€â”€ Alert Recipients (scoped to the selected detection type) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const recipientsApi = useApi(() => fetchAlertRecipients({ limit: 200 }), []);
   const allRecipients = recipientsApi.data?.recipients ?? [];
   const [pendingAlerts, setPendingAlerts] = useState(null); // null = not yet touched for this type
   const [savingAlerts, setSavingAlerts] = useState(false);
@@ -916,9 +482,9 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
     setPendingAlerts(nextIds);
     setSavingAlerts(true);
     try {
-      await updateDetectionSetting(activeType.settingId, { alerts: nextIds });
+      await updateDetectionAlerts(activeType.settingId, nextIds);
     } catch {
-      // Keep the optimistic local state — a retry (add/remove again) will resend the full list.
+      // Keep the optimistic local state â€” a retry (add/remove again) will resend the full list.
     } finally {
       setSavingAlerts(false);
     }
@@ -928,7 +494,8 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
   const removeRecipient = (id) => persistAlerts(alertIds.filter(x => x !== id));
 
   return (
-    <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ padding: embedded ? 0 : 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {!embedded && (
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <button
           onClick={onBack}
@@ -951,7 +518,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
             {camera.customName || camera.name}
           </div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)' }}>
-            {camera.ipAddress || '—'} · Zone Marking
+            {camera.ipAddress || 'â€”'} Â· Zone Marking
           </div>
         </div>
         {canDeleteDetection && (
@@ -971,8 +538,9 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
         </button>
         )}
       </div>
+      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 18, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: embedded ? '1fr' : '1fr 320px', gap: 18, alignItems: 'start' }}>
         {/* Video + drawing tools */}
         <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -985,7 +553,17 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.08em', color: 'var(--tx3)', marginBottom: 7 }}>
                 DETECTION TYPE
               </div>
-              {allTypes.length === 0 ? (
+              {selectedSettingType ? (
+                <div style={{
+                  height: 42, display: 'flex', alignItems: 'center', padding: '0 13px',
+                  borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--blue)',
+                  fontSize: 12.5, color: 'var(--tx2)',
+                  boxShadow: '0 0 0 3px rgba(59,130,246,.14)',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {typeLabels[selectedSettingType] || activeType?.label || selectedSettingType}
+                </div>
+              ) : allTypes.length === 0 ? (
                 <div style={{
                   height: 42, display: 'flex', alignItems: 'center', padding: '0 13px',
                   borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--bd)',
@@ -998,7 +576,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               )}
             </div>
 
-            {/* Detection Name — read-only, populated once a zone has been saved (V1 parity). Zone names now live per-zone in the Zone Settings panel. */}
+            {/* Detection Name â€” read-only, populated once a zone has been saved (V1 parity). Zone names now live per-zone in the Zone Settings panel. */}
             {activeType?.configured && (
               <div>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.08em', color: 'var(--tx3)', marginBottom: 7 }}>
@@ -1009,7 +587,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
                   background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5, color: 'var(--tx2)',
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>
-                  {activeType.setting?.name || '—'}
+                  {activeType.setting?.name || 'â€”'}
                 </div>
               </div>
             )}
@@ -1019,7 +597,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: -6, marginBottom: 14, fontSize: 10.5, color: activeType.configured ? 'var(--ok)' : 'var(--tx3)' }}>
               {activeType.configured
                 ? <><CheckCircle2 size={12} /> Already configured for this camera</>
-                : 'Not configured yet — saving a zone will create it'}
+                : 'Not configured yet saving a zone will create it'}
             </div>
           )}
 
@@ -1050,12 +628,12 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               }}
             />
 
-            {/* Buffering overlay — shown while the stream connects, instead of a blank box.
+            {/* Buffering overlay â€” shown while the stream connects, instead of a blank box.
                 Same look as PlaybackTimeline.jsx's buffering state (Wifi icon + blink). */}
             {url && videoState === 'loading' && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'rgba(0,0,0,.75)', zIndex: 2, color: '#2563EB', fontSize: 13 }}>
                 <Wifi size={34} className="vq-blink" />
-                <span>Buffering…</span>
+                <span>Bufferingâ€¦</span>
               </div>
             )}
 
@@ -1099,10 +677,10 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               </button>
             </div>
 
-            {/* Zone overlay — points are native video pixels, scaled into a 1000x1000 box.
+            {/* Zone overlay â€” points are native video pixels, scaled into a 1000x1000 box.
                 Committed zones render in amber (matching V1's saved-zone labels); the in-progress
                 shape renders in blue so it's visually distinct while drawing. Line Crossing draws
-                an open line (polyline, no fill) instead of a closed filled polygon — it's a
+                an open line (polyline, no fill) instead of a closed filled polygon â€” it's a
                 crossing line, not an area. */}
             <svg
               viewBox="0 0 1000 1000"
@@ -1169,7 +747,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               )}
               {videoSize.w > 0 && points.map((p, i) => (
                 // Line Crossing's endpoints are draggable, so they render larger
-                // than a regular in-progress polygon vertex — bigger = "grab me".
+                // than a regular in-progress polygon vertex â€” bigger = "grab me".
                 <circle
                   key={i}
                   cx={(p.x / videoSize.w) * 1000}
@@ -1179,7 +757,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
               ))}
             </svg>
 
-            {/* Zone name labels — plain HTML pills positioned over each committed zone's first point, matching V1's on-canvas labels */}
+            {/* Zone name labels â€” plain HTML pills positioned over each committed zone's first point, matching V1's on-canvas labels */}
             {videoSize.w > 0 && zones.map((z, zi) => z.points[0] && (
               <span
                 key={zi}
@@ -1205,126 +783,51 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
                   borderRadius: 20, padding: '6px 14px',
                 }}>
                   {isLineCrossing
-                    ? '▶ Press "Draw Line", then click twice to place the line'
-                    : '▶ Press "Start Drawing", then click to place zone points'}
+                    ? 'â–¶ Press "Draw Line", then click twice to place the line'
+                    : 'â–¶ Press "Start Drawing", then click to place zone points'}
                 </span>
               </div>
             )}
           </div>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 13 }}>
-            {isLineCrossing ? (
-              // Line Crossing places a single straight line (2 clicks), not
-              // an area — Max Area/Min Area presets don't apply to it (V1
-              // parity: AreaMarkingControls.jsx shows only "Draw Line" here).
-              <button
-                onClick={() => setDrawing(d => !d)}
-                disabled={!activeType}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
-                  fontSize: 12, cursor: activeType ? 'pointer' : 'not-allowed', border: '1px solid var(--bd)',
-                  background: drawing ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg2)',
-                  color: drawing ? '#fff' : 'var(--tx2)', opacity: activeType ? 1 : 0.5,
-                }}
-              >
-                <Pencil size={14} /> {drawing ? 'Stop Drawing' : 'Draw Line'}
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={handleMaxArea}
-                  disabled={!activeType || !videoSize.w}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
-                    background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
-                    cursor: (activeType && videoSize.w) ? 'pointer' : 'not-allowed', opacity: (activeType && videoSize.w) ? 1 : 0.5,
-                  }}
-                >
-                  <Maximize size={14} /> Max Area
-                </button>
-                <button
-                  onClick={handleMinArea}
-                  disabled={!activeType || !videoSize.w}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
-                    background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
-                    cursor: (activeType && videoSize.w) ? 'pointer' : 'not-allowed', opacity: (activeType && videoSize.w) ? 1 : 0.5,
-                  }}
-                >
-                  <Minimize size={14} /> Min Area
-                </button>
-                <button
-                  onClick={() => setDrawing(d => !d)}
-                  disabled={!activeType}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
-                    fontSize: 12, cursor: activeType ? 'pointer' : 'not-allowed', border: '1px solid var(--bd)',
-                    background: drawing ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg2)',
-                    color: drawing ? '#fff' : 'var(--tx2)', opacity: activeType ? 1 : 0.5,
-                  }}
-                >
-                  <Pencil size={14} /> {drawing ? 'Stop Drawing' : 'Start Drawing'}
-                </button>
-              </>
-            )}
-            <button
-              onClick={handleUndo}
-              disabled={!drawing || (points.length === 0 && draftZones.length === 0)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
-                background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
-                cursor: (drawing && (points.length || draftZones.length)) ? 'pointer' : 'not-allowed', opacity: (drawing && (points.length || draftZones.length)) ? 1 : 0.5,
-              }}
-            >
-              <Undo2 size={14} /> Undo
-            </button>
-            <button
-              onClick={handleClearAllClick}
-              disabled={points.length === 0 && draftZones.length === 0 && zones.length === 0}
-              title="Clear the in-progress drawing, or delete all saved zones for this detection type"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
-                background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
-                cursor: (points.length || draftZones.length || zones.length) ? 'pointer' : 'not-allowed', opacity: (points.length || draftZones.length || zones.length) ? 1 : 0.5,
-              }}
-            >
-              <Trash2 size={14} /> Clear All
-            </button>
-            <button
-              onClick={handleOpenSaveModal}
-              disabled={!activeType || saving || (zones.length === 0 && draftZones.length === 0 && points.length < minPointsToSave)}
-              style={{
-                marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 16px',
-                borderRadius: 8, fontSize: 12.5, fontWeight: 600, color: '#fff', border: 'none',
-                background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-                cursor: (!activeType || saving || (zones.length === 0 && draftZones.length === 0 && points.length < minPointsToSave)) ? 'not-allowed' : 'pointer',
-                opacity: (!activeType || saving || (zones.length === 0 && draftZones.length === 0 && points.length < minPointsToSave)) ? 0.6 : 1,
-                boxShadow: '0 3px 12px rgba(99,102,241,.3)',
-              }}
-            >
-              <Save size={14} /> {saving ? 'Saving…' : isLineCrossing ? 'Save Line' : 'Save Area'}
-            </button>
-          </div>
+          <ZoneToolbar
+            activeType={activeType}
+            isLineCrossing={isLineCrossing}
+            drawing={drawing}
+            setDrawing={setDrawing}
+            videoSize={videoSize}
+            points={points}
+            draftZones={draftZones}
+            zones={zones}
+            minPointsToSave={minPointsToSave}
+            saving={saving}
+            onMaxArea={handleMaxArea}
+            onMinArea={handleMinArea}
+            onUndo={handleUndo}
+            onClearAll={handleClearAllClick}
+            onSave={handleOpenSaveModal}
+          />
         </div>
 
         {/* Right rail */}
+        {!embedded && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
             <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 14 }}>Device Detail</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                 <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>MODEL</span>
-                <span style={{ fontSize: 12.5, fontWeight: 500, textAlign: 'right' }}>{camera.model || '—'}</span>
+                <span style={{ fontSize: 12.5, fontWeight: 500, textAlign: 'right' }}>{camera.model || 'â€”'}</span>
               </div>
               <div style={{ height: 1, background: 'var(--bd)' }} />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                 <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>NVR</span>
-                <span style={{ fontSize: 12.5, fontWeight: 500 }}>{camera.nvrId?.nvrName || '—'}</span>
+                <span style={{ fontSize: 12.5, fontWeight: 500 }}>{camera.nvrId?.nvrName || 'â€”'}</span>
               </div>
               <div style={{ height: 1, background: 'var(--bd)' }} />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                 <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>IP ADDRESS</span>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 500, color: 'var(--cyan)' }}>{camera.ipAddress || '—'}</span>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 500, color: 'var(--cyan)' }}>{camera.ipAddress || 'â€”'}</span>
               </div>
             </div>
           </div>
@@ -1372,11 +875,11 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
                     )}
                   </div>
                   {recipientsApi.loading ? (
-                    <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Loading recipients…</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Loading recipientsâ€¦</div>
                   ) : recipientsApi.error ? (
                     <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Couldn't load recipients.</div>
                   ) : addableRecipients.length === 0 && allRecipients.length === 0 ? (
-                    <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>No verified recipients yet — add one under Alert Recipients.</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>No verified recipients yet â€” add one under Alert Recipients.</div>
                   ) : addableRecipients.length === 0 ? (
                     <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>All recipients already assigned.</div>
                   ) : (
@@ -1391,7 +894,7 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
                           outline: 'none', cursor: 'pointer', color: 'var(--tx3)', appearance: 'none',
                         }}
                       >
-                        <option value="__add">+ Add recipient…</option>
+                        <option value="__add">+ Add recipientâ€¦</option>
                         {addableRecipients.map(r => (
                           <option key={r._id} value={r._id}>{r.fullName} ({r.value})</option>
                         ))}
@@ -1406,7 +909,67 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
             </div>
           )}
         </div>
+        )}
       </div>
+
+      {embedded && zoneSettingsOpen && activeType && (
+        <div
+          onClick={onZoneSettingsClose}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 220, background: 'rgba(6,9,15,.62)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 720, maxHeight: '85vh', overflowY: 'auto',
+              background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 16,
+              padding: 18, boxShadow: '0 24px 64px rgba(0,0,0,.45)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15.5, color: 'var(--tx)' }}>
+                  Zone Settings
+                </div>
+                <div style={{ marginTop: 3, fontSize: 11.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {activeType.label}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onZoneSettingsClose}
+                style={{
+                  marginLeft: 'auto', width: 30, height: 30, borderRadius: 8, border: '1px solid var(--bd)',
+                  background: 'var(--bg2)', color: 'var(--tx2)', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {zones.length > 0 ? (
+              <ZoneSettingsPanel
+                zones={zones}
+                extraFields={extraFieldsFor(activeType.settingType)}
+                activeIndex={activeZoneIndex}
+                onSetActive={setActiveZoneIndex}
+                onUpdateField={handleUpdateZoneField}
+                onSave={handleSaveZoneName}
+                onDelete={requestDeleteZone}
+                savingIndex={savingZoneIndex}
+                canDelete={canDeleteDetection}
+              />
+            ) : (
+              <div style={{ border: '1px solid var(--bd)', borderRadius: 12, padding: '30px 18px', textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5 }}>
+                No zones saved for this camera and detection type.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {showSaveModal && activeType && (
         <SaveDetectionAreaModal
@@ -1420,159 +983,46 @@ export default function DetectionZoneMarking({ camera, onBack, onSaved }) {
         />
       )}
 
-      {showDeleteConfirm && activeType && (
-        <div style={{
-          // Above the sidebar (80) and header (60) — at 50 the dim layer sat under
-      // the chrome, leaving it lit up while the rest of the page dimmed.
-      position: 'fixed', inset: 0, background: 'rgba(6,9,15,.6)', zIndex: 200,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-        }}>
-          <div style={{
-            width: '100%', maxWidth: 400, background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
-            borderRadius: 16, padding: 22, boxShadow: '0 24px 64px rgba(0,0,0,.45)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <span style={{
-                width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'rgba(239,68,68,.13)', color: '#ef4444', flexShrink: 0,
-              }}>
-                <AlertTriangle size={18} />
-              </span>
-              <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Reset Detection UI?</span>
-            </div>
-            <div style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.5, marginBottom: 20 }}>
-              <strong>Warning:</strong> This will reset all detection settings to their default values. This action cannot be undone.
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={deleting}
-                style={{
-                  height: 38, padding: '0 16px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)',
-                  fontSize: 12.5, fontWeight: 500, color: 'var(--tx2)', cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteArea}
-                disabled={deleting}
-                style={{
-                  height: 38, padding: '0 18px', borderRadius: 9, background: '#ef4444',
-                  border: 'none', fontSize: 12.5, fontWeight: 600, color: '#fff', cursor: deleting ? 'not-allowed' : 'pointer',
-                  opacity: deleting ? 0.7 : 1,
-                }}
-              >
-                {deleting ? 'Resetting…' : 'Reset Anyway'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={showDeleteConfirm && !!activeType}
+        title="Reset Detection UI?"
+        busy={deleting}
+        busyLabel="Resetting..."
+        confirmLabel="Reset Anyway"
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteArea}
+      >
+        <strong>Warning:</strong> This will reset all detection settings to their default values. This action cannot be undone.
+      </ConfirmDialog>
 
-      {showClearConfirm && activeType && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(6,9,15,.6)', zIndex: 200,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-        }}>
-          <div style={{
-            width: '100%', maxWidth: 400, background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
-            borderRadius: 16, padding: 22, boxShadow: '0 24px 64px rgba(0,0,0,.45)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <span style={{
-                width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'rgba(239,68,68,.13)', color: '#ef4444', flexShrink: 0,
-              }}>
-                <AlertTriangle size={18} />
-              </span>
-              <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Clear Detection Area</span>
-            </div>
-            <div style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.5, marginBottom: 20 }}>
-              {zones.length > 0 && activeType?.settingId ? (
-                <>Are you sure you want to clear all marked points?<br /><strong>This will remove the entire detection area. This action cannot be undone.</strong></>
-              ) : (
-                <>Are you sure you want to clear the in-progress drawing? <strong>Any points you've marked so far will be lost and this action cannot be undone.</strong></>
-              )}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button
-                onClick={() => setShowClearConfirm(false)}
-                disabled={clearing}
-                style={{
-                  height: 38, padding: '0 16px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)',
-                  fontSize: 12.5, fontWeight: 500, color: 'var(--tx2)', cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmClearAll}
-                disabled={clearing}
-                style={{
-                  height: 38, padding: '0 18px', borderRadius: 9, background: '#ef4444',
-                  border: 'none', fontSize: 12.5, fontWeight: 600, color: '#fff', cursor: clearing ? 'not-allowed' : 'pointer',
-                  opacity: clearing ? 0.7 : 1,
-                }}
-              >
-                {clearing ? 'Clearing…' : 'Clear All'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={showClearConfirm && !!activeType}
+        title="Clear Detection Area"
+        busy={clearing}
+        busyLabel="Clearing..."
+        confirmLabel="Clear All"
+        onCancel={() => setShowClearConfirm(false)}
+        onConfirm={handleConfirmClearAll}
+      >
+        {zones.length > 0 && activeType?.settingId ? (
+          <>Are you sure you want to clear all marked points?<br /><strong>This will remove the entire detection area. This action cannot be undone.</strong></>
+        ) : (
+          <>Are you sure you want to clear the in-progress drawing? <strong>Any points you've marked so far will be lost and this action cannot be undone.</strong></>
+        )}
+      </ConfirmDialog>
 
-      {zoneDeleteIndex !== null && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(6,9,15,.6)', zIndex: 200,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-        }}>
-          <div style={{
-            width: '100%', maxWidth: 400, background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
-            borderRadius: 16, padding: 22, boxShadow: '0 24px 64px rgba(0,0,0,.45)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <span style={{
-                width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'rgba(239,68,68,.13)', color: '#ef4444', flexShrink: 0,
-              }}>
-                <AlertTriangle size={18} />
-              </span>
-              <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15 }}>Delete Zone?</span>
-            </div>
-            <div style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.5, marginBottom: 20 }}>
-              Are you sure you want to delete <strong>{zones[zoneDeleteIndex]?.name || 'this zone'}</strong>? <strong>This action cannot be undone.</strong>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button
-                onClick={() => setZoneDeleteIndex(null)}
-                disabled={savingZoneIndex === zoneDeleteIndex}
-                style={{
-                  height: 38, padding: '0 16px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)',
-                  fontSize: 12.5, fontWeight: 500, color: 'var(--tx2)', cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteZone}
-                disabled={savingZoneIndex === zoneDeleteIndex}
-                style={{
-                  height: 38, padding: '0 18px', borderRadius: 9, background: '#ef4444',
-                  border: 'none', fontSize: 12.5, fontWeight: 600, color: '#fff',
-                  cursor: savingZoneIndex === zoneDeleteIndex ? 'not-allowed' : 'pointer',
-                  opacity: savingZoneIndex === zoneDeleteIndex ? 0.7 : 1,
-                }}
-              >
-                {savingZoneIndex === zoneDeleteIndex ? 'Deleting…' : 'Delete Zone'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={zoneDeleteIndex !== null}
+        title="Delete Zone?"
+        busy={savingZoneIndex === zoneDeleteIndex}
+        busyLabel="Deleting..."
+        confirmLabel="Delete Zone"
+        onCancel={() => setZoneDeleteIndex(null)}
+        onConfirm={handleDeleteZone}
+      >
+        Are you sure you want to delete <strong>{zones[zoneDeleteIndex]?.name || 'this zone'}</strong>? <strong>This action cannot be undone.</strong>
+      </ConfirmDialog>
     </div>
   );
 }
-
-
 
