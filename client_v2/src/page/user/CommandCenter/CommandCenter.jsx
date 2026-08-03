@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import moment from 'moment';
 import KpiRow from './KpiRow';
@@ -147,6 +147,54 @@ export default function CommandCenter() {
   // should break out full-width instead of staying pinned to the left column.
   const { permissions } = usePermissions();
   const showSystemControls = !!permissions?.detectionSettings?.view && !!permissions?.detectionSettings?.edit;
+  const dashboardGridRef = useRef(null);
+  const networkSlotRef = useRef(null);
+  const rightColumnRef = useRef(null);
+  const [networkExpandedWidth, setNetworkExpandedWidth] = useState(null);
+
+  useEffect(() => {
+    if (!showSystemControls) {
+      setNetworkExpandedWidth(null);
+      return undefined;
+    }
+
+    const grid = dashboardGridRef.current;
+    const networkSlot = networkSlotRef.current;
+    const rightColumn = rightColumnRef.current;
+    if (!grid || !networkSlot || !rightColumn || typeof ResizeObserver === 'undefined') return undefined;
+
+    const updateNetworkWidth = () => {
+      const gridRect = grid.getBoundingClientRect();
+      const networkRect = networkSlot.getBoundingClientRect();
+      const rightRect = rightColumn.getBoundingClientRect();
+      const visibleRightChildren = [...rightColumn.children].filter((child) => child.getClientRects().length > 0);
+      const lastRightChild = visibleRightChildren.at(-1);
+      const lastRightBottom = lastRightChild?.getBoundingClientRect().bottom ?? rightRect.top;
+      const isTwoColumnLayout = rightRect.left > networkRect.left + 1;
+      const hasFreeSpaceOnRight = lastRightBottom <= networkRect.top + 1;
+      const nextWidth = isTwoColumnLayout && hasFreeSpaceOnRight
+        ? Math.round(gridRect.right - networkRect.left)
+        : null;
+
+      setNetworkExpandedWidth((currentWidth) => (
+        currentWidth === nextWidth ? currentWidth : nextWidth
+      ));
+    };
+
+    const resizeObserver = new ResizeObserver(updateNetworkWidth);
+    resizeObserver.observe(grid);
+    resizeObserver.observe(networkSlot);
+    resizeObserver.observe(rightColumn);
+    [...rightColumn.children].forEach((child) => resizeObserver.observe(child));
+    window.addEventListener('resize', updateNetworkWidth);
+    const animationFrame = window.requestAnimationFrame(updateNetworkWidth);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener('resize', updateNetworkWidth);
+      resizeObserver.disconnect();
+    };
+  }, [showSystemControls]);
 
   // ── Filters (Location · NVR · Department · Camera Type) ──────────────────────
   const [selectedLocations, setSelectedLocations] = useState([]);
@@ -435,20 +483,34 @@ export default function CommandCenter() {
       />
 
       {/* Live camera + attendance | latest incident + controls */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 18 }} className="vq-cc-grid">
+      <div ref={dashboardGridRef} style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 18 }} className="vq-cc-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
           <LiveCamera channels={streamingChannels} loading={channels.loading} latestByChannel={latestByChannel} onOnlineCountChange={onOnlineCountChange} />
           <LiveAttendance />
           {showSystemControls && (
-            <MultiSiteNetwork
-              nvrs={nvrsApi.data || []}
-              channels={allChannels.data || []}
-              alerts={networkAlerts}
-              activeLocations={networkFilters.location || []}
-            />
+            <div
+              ref={networkSlotRef}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                flex: '1 1 auto',
+                minWidth: 0,
+                width: networkExpandedWidth ? `${networkExpandedWidth}px` : '100%',
+                position: 'relative',
+                zIndex: networkExpandedWidth ? 1 : 'auto',
+              }}
+            >
+              <MultiSiteNetwork
+                nvrs={nvrsApi.data || []}
+                channels={allChannels.data || []}
+                alerts={networkAlerts}
+                activeLocations={networkFilters.location || []}
+                fillAvailable
+              />
+            </div>
           )}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
+        <div ref={rightColumnRef} style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
           <LatestIncident
             incident={latestIncident}
             loading={latestApi.loading}

@@ -180,7 +180,14 @@ function buildLines(nodes) {
   return lines;
 }
 
-export default function MultiSiteNetwork({ nvrs = [], channels = [], alerts = [], activeLocations = [], tall = false }) {
+export default function MultiSiteNetwork({
+  nvrs = [],
+  channels = [],
+  alerts = [],
+  activeLocations = [],
+  tall = false,
+  fillAvailable = false,
+}) {
   const nodes = withPositions(buildNodes({ nvrs, channels, alerts, activeLocations }));
   const lines = buildLines(nodes);
   const totalCams = nodes.reduce((sum, node) => sum + node.cameraCount, 0);
@@ -197,6 +204,7 @@ export default function MultiSiteNetwork({ nvrs = [], channels = [], alerts = []
         position: 'relative',
         overflow: 'hidden',
         minHeight: baseHeight,
+        flex: fillAvailable ? '1 1 auto' : undefined,
         background: 'linear-gradient(180deg,#101827,#080d18)',
       }}
     >

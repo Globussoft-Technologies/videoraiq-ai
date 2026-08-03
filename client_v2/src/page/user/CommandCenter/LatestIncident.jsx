@@ -13,6 +13,36 @@ function btnStyle(variant) {
   return { ...base, background: 'var(--bg2)', color: 'var(--tx2)', border: '1px solid var(--bd)' };
 }
 
+function confidenceOf(item) {
+  const apiPercentage = item?.ConfidenceScoreInPercentage
+    ?? item?.confidenceScoreInPercentage;
+  const rawConfidence = apiPercentage
+    ?? item?.confidence
+    ?? item?.accuracy
+    ?? item?.score;
+
+  if (rawConfidence == null || rawConfidence === '') return null;
+  const hasPercentageSuffix = typeof rawConfidence === 'string' && rawConfidence.includes('%');
+  const numericConfidence = Number(
+    typeof rawConfidence === 'string' ? rawConfidence.replace('%', '').trim() : rawConfidence,
+  );
+  if (!Number.isFinite(numericConfidence)) return null;
+
+  const percentage = apiPercentage == null
+    && !hasPercentageSuffix
+    && numericConfidence >= 0
+    && numericConfidence <= 1
+    ? numericConfidence * 100
+    : numericConfidence;
+  return Math.min(100, Math.max(0, percentage));
+}
+
+function formatConfidence(item) {
+  const confidence = confidenceOf(item);
+  if (confidence == null) return '_';
+  return `${Math.round(confidence * 10) / 10}%`;
+}
+
 /* â”€â”€ Report modal â€” same update-report-status flow used in Incident Center / Alerts â”€â”€ */
 function ReportModal({ item, onClose, onSuccess }) {
   const existing = item.report?.status && item.report?.description ? item.report : null;
@@ -162,6 +192,12 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
   const canReportActive = !!activeIncidentId && !activeResolved && !activeReported;
   const sev = severity(incident?.severity);
   const det = detectionLabel(incident?.incidentType || incident?.displayName);
+  const confidence = formatConfidence(incident);
+  const status = activeResolved
+    ? { label: 'Resolved', color: 'var(--ok)' }
+    : activeReported
+      ? { label: 'Reported', color: 'var(--crit)' }
+      : { label: 'New', color: 'var(--crit)' };
 
   async function resolveIncident() {
     if (!activeIncidentId || activeResolved) return;
@@ -230,7 +266,26 @@ export default function LatestIncident({ incident, loading, error, isEmpty, onRe
                 {incident?.incidentName || det}
               </div>
               <div style={{ fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {[incident?.channelData?.name, incident?.nvrData?.nvrName, incident?.location].filter(Boolean).join(' Â· ')}
+                {incident?.channelData?.name || '_'}
+              </div>
+              {incident?.description && (
+                <div style={{ marginTop: 7, fontSize: 10.5, lineHeight: 1.35, color: 'var(--tx2)', wordBreak: 'break-word' }}>
+                  {incident.description}
+                </div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 9 }}>
+                <div style={{ minWidth: 0, padding: '7px 9px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
+                  <div style={{ fontSize: 9.5, color: 'var(--tx3)', marginBottom: 2 }}>Confidence</div>
+                  <div style={{ fontSize: 13, lineHeight: 1.2, fontWeight: 700, color: confidenceOf(incident) == null ? 'var(--tx3)' : '#ff8a00', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {confidence}
+                  </div>
+                </div>
+                <div style={{ minWidth: 0, padding: '7px 9px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
+                  <div style={{ fontSize: 9.5, color: 'var(--tx3)', marginBottom: 2 }}>Status</div>
+                  <div style={{ fontSize: 13, lineHeight: 1.2, fontWeight: 700, color: status.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {status.label}
+                  </div>
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 7, marginTop: 11, flexWrap: 'wrap' }}>
                 <div

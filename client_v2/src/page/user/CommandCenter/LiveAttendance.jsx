@@ -378,7 +378,7 @@ export default function LiveAttendance() {
   }, [items]);
 
   return (
-    <Panel className="overflow-hidden flex-1 flex flex-col">
+    <Panel className="overflow-hidden flex flex-col">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 pt-[13px] pb-[11px] border-b border-[var(--bd)]">
         <span className="vq-glowpulse w-[7px] h-[7px] rounded-full bg-[var(--ok)] shadow-[0_0_8px_var(--ok)]" />
