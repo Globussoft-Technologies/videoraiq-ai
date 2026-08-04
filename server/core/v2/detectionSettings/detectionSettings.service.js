@@ -96,6 +96,85 @@ const modelMap = {
   foodServicePPEDetectionSettings: FoodServicePPEDetectionSetting
 };
 
+const DEFAULT_DETECTION_SCHEDULE = { mode: "always" };
+const DEFAULT_SCHEDULE_TIMEZONE = "Asia/Kolkata";
+const SCHEDULE_TOGGLE_RETRY_ATTEMPTS = 4;
+const SCHEDULE_TOGGLE_RETRY_DELAY_MS = 10000;
+
+const getDetectionSchedule = (channel, settingType) =>
+  channel?.detections?.[settingType]?.schedule || DEFAULT_DETECTION_SCHEDULE;
+
+const buildSchedulePayload = (channel, settingType) => ({
+  channelId: channel?._id,
+  channelName: channel?.customName || channel?.name,
+  enabled: channel?.detections?.[settingType]?.enabled || false,
+  schedule: getDetectionSchedule(channel, settingType),
+});
+
+const getAdminScheduleTimezone = async (adminId) => {
+  if (!adminId) return DEFAULT_SCHEDULE_TIMEZONE;
+
+  const admin = await Admin.findById(adminId).select("timezone").lean();
+  return admin?.timezone || DEFAULT_SCHEDULE_TIMEZONE;
+};
+
+const timeToMinutes = (time) => {
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+};
+
+const getNowInScheduleTimezone = (timezone) => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+
+  const getPart = (type) => parts.find((part) => part.type === type)?.value;
+
+  return {
+    day: getPart("weekday")?.toLowerCase(),
+    minutes: Number(getPart("hour")) * 60 + Number(getPart("minute")),
+  };
+};
+
+const isScheduleActiveNow = (schedule) => {
+  if (!schedule || schedule.mode === "always") return true;
+  if (schedule.mode !== "custom") return true;
+
+  const { day, minutes } = getNowInScheduleTimezone(
+    schedule.timezone || DEFAULT_SCHEDULE_TIMEZONE,
+  );
+  const windows = schedule.days?.[day] || [];
+
+  return windows.some(
+    (window) =>
+      minutes >= timeToMinutes(window.start) &&
+      minutes < timeToMinutes(window.end),
+  );
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const handleDetectionStartStopWithRetry = async (args) => {
+  let lastError;
+
+  for (let attempt = 1; attempt <= SCHEDULE_TOGGLE_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await pythonService.handleDetectionStartStop(...args);
+    } catch (error) {
+      lastError = error;
+      if (attempt < SCHEDULE_TOGGLE_RETRY_ATTEMPTS) {
+        await sleep(SCHEDULE_TOGGLE_RETRY_DELAY_MS * attempt);
+      }
+    }
+  }
+
+  throw lastError;
+};
+
 class DetectionSettingService {
   async getDetectionTypes(req, res, _next) {
     try {
@@ -486,6 +565,293 @@ class DetectionSettingService {
             error.message,
           ),
         );
+    }
+  }
+
+  async getDetectionSchedule(req, res, _next) {
+    try {
+      const { id } = req.params;
+      const user_id = req?.verified?.userData?.user_id;
+
+      const detectionSetting = await DetectionSetting.findOne({
+        _id: id,
+        userId: user_id,
+      });
+
+      if (!detectionSetting) {
+        return res
+          .status(404)
+          .json(Response.userFailResp("Detection setting not found"));
+      }
+
+      const settingType = detectionSetting.settingType;
+      const linkedCameras = await Channel.find({
+        [`detections.${settingType}.id`]: id,
+      }).lean();
+
+      return res.status(200).json(
+        Response.userSuccessResp("Detection schedules fetched successfully", {
+          detectionSettingId: id,
+          settingType,
+          schedules: linkedCameras.map((channel) =>
+            buildSchedulePayload(channel, settingType),
+          ),
+        }),
+      );
+    } catch (error) {
+      logger.error("Error fetching detection schedules:", error);
+      return res
+        .status(500)
+        .json(
+          Response.errorResp(
+            "Failed to fetch detection schedules",
+            error.message,
+          ),
+        );
+    }
+  }
+
+  async getCameraDetectionSchedule(req, res, _next) {
+    try {
+      const { id, channelId } = req.params;
+      const user_id = req?.verified?.userData?.user_id;
+
+      const detectionSetting = await DetectionSetting.findOne({
+        _id: id,
+        userId: user_id,
+      });
+
+      if (!detectionSetting) {
+        return res
+          .status(404)
+          .json(Response.userFailResp("Detection setting not found"));
+      }
+
+      const settingType = detectionSetting.settingType;
+      const channel = await Channel.findOne({
+        _id: channelId,
+        userId: user_id,
+        [`detections.${settingType}.id`]: id,
+      }).lean();
+
+      if (!channel) {
+        return res
+          .status(404)
+          .json(
+            Response.userFailResp(
+              "Camera is not linked to this detection setting",
+            ),
+          );
+      }
+
+      return res.status(200).json(
+        Response.userSuccessResp("Detection schedule fetched successfully", {
+          detectionSettingId: id,
+          settingType,
+          ...buildSchedulePayload(channel, settingType),
+        }),
+      );
+    } catch (error) {
+      logger.error("Error fetching camera detection schedule:", error);
+      return res
+        .status(500)
+        .json(
+          Response.errorResp(
+            "Failed to fetch camera detection schedule",
+            error.message,
+          ),
+        );
+    }
+  }
+
+  async updateCameraDetectionSchedule(req, res, _next) {
+    try {
+      const { id, channelId } = req.params;
+      const user_id = req?.verified?.userData?.user_id;
+      const adminId = req?.verified?.userData?.adminId;
+      const { timezone: _timezone, ...clientSchedulePayload } = req.body;
+      const schedulePayload = { ...clientSchedulePayload };
+
+      if (schedulePayload.mode === "custom") {
+        schedulePayload.timezone = await getAdminScheduleTimezone(adminId);
+      }
+
+      const { error, value } =
+        DetectionSettingsValidation.updateDetectionScheduleValidation(
+          schedulePayload,
+        );
+
+      if (error) {
+        return res
+          .status(400)
+          .json(Response.userFailResp("Validation Failed", error.message));
+      }
+
+      const detectionSetting = await DetectionSetting.findOne({
+        _id: id,
+        userId: user_id,
+      });
+
+      if (!detectionSetting) {
+        return res
+          .status(404)
+          .json(Response.userFailResp("Detection setting not found"));
+      }
+
+      const settingType = detectionSetting.settingType;
+      const channel = await Channel.findOne({
+        _id: channelId,
+        userId: user_id,
+        [`detections.${settingType}.id`]: id,
+      });
+
+      if (!channel) {
+        return res
+          .status(404)
+          .json(
+            Response.userFailResp(
+              "Camera is not linked to this detection setting",
+            ),
+          );
+      }
+
+      channel.detections[settingType].schedule = value;
+      channel.control = 1;
+      channel.markModified(`detections.${settingType}.schedule`);
+      await channel.save();
+
+      const populatedChannel = await Channel.findById(channel._id)
+        .populate("nvrId")
+        .populate(toPopulateDetections);
+
+      await this.applyDetectionScheduleState(req, populatedChannel, detectionSetting);
+
+      return res.status(200).json(
+        Response.userSuccessResp("Detection schedule updated successfully", {
+          detectionSettingId: id,
+          settingType,
+          ...buildSchedulePayload(populatedChannel || channel, settingType),
+        }),
+      );
+    } catch (error) {
+      logger.error("Error updating camera detection schedule:", error);
+      return res
+        .status(500)
+        .json(
+          Response.errorResp(
+            "Failed to update camera detection schedule",
+            error.message,
+          ),
+        );
+    }
+  }
+
+  async resetCameraDetectionSchedule(req, res, _next) {
+    try {
+      const { id, channelId } = req.params;
+      const user_id = req?.verified?.userData?.user_id;
+
+      const detectionSetting = await DetectionSetting.findOne({
+        _id: id,
+        userId: user_id,
+      });
+
+      if (!detectionSetting) {
+        return res
+          .status(404)
+          .json(Response.userFailResp("Detection setting not found"));
+      }
+
+      const settingType = detectionSetting.settingType;
+      const channel = await Channel.findOne({
+        _id: channelId,
+        userId: user_id,
+        [`detections.${settingType}.id`]: id,
+      });
+
+      if (!channel) {
+        return res
+          .status(404)
+          .json(
+            Response.userFailResp(
+              "Camera is not linked to this detection setting",
+            ),
+          );
+      }
+
+      channel.detections[settingType].schedule = undefined;
+      channel.control = 1;
+      channel.markModified(`detections.${settingType}.schedule`);
+      await channel.save();
+
+      const populatedChannel = await Channel.findById(channel._id)
+        .populate("nvrId")
+        .populate(toPopulateDetections);
+
+      await this.applyDetectionScheduleState(req, populatedChannel, detectionSetting);
+
+      return res.status(200).json(
+        Response.userSuccessResp("Detection schedule reset successfully", {
+          detectionSettingId: id,
+          settingType,
+          ...buildSchedulePayload(populatedChannel || channel, settingType),
+        }),
+      );
+    } catch (error) {
+      logger.error("Error resetting camera detection schedule:", error);
+      return res
+        .status(500)
+        .json(
+          Response.errorResp(
+            "Failed to reset camera detection schedule",
+            error.message,
+          ),
+        );
+    }
+  }
+
+  async applyDetectionScheduleState(req, channel, detectionSetting) {
+    try {
+      if (!channel || !detectionSetting) return;
+
+      const adminId = req?.verified?.userData?.adminId;
+      const settingType = detectionSetting.settingType;
+      const link = channel?.detections?.[settingType];
+      if (!link?.id) return;
+
+      const shouldEnable = isScheduleActiveNow(link.schedule);
+      const currentStatus = link.enabled === true;
+      if (currentStatus === shouldEnable) return;
+
+      const cameraId = channel._id.toString();
+      const zones = detectionSetting?.settings?.referencePoints?.[cameraId] || [];
+      const obstruction_threshold_sec =
+        detectionSetting?.settings?.obstruction_threshold_sec || 0;
+      const videoResolution = detectionSetting?.settings?.videoResolution || [];
+      const severity = detectionSetting?.settings?.levelOfImportance;
+      const zone_configs = detectionSetting?.settings?.zone_configs || [];
+      const zoneName = detectionSetting?.settings?.zoneName || [];
+
+      await handleDetectionStartStopWithRetry([
+        channel,
+        adminId,
+        shouldEnable,
+        settingType,
+        zones,
+        zone_configs,
+        videoResolution,
+        obstruction_threshold_sec,
+        severity,
+      ]);
+
+      link.enabled = shouldEnable;
+      channel.markModified(`detections.${settingType}.enabled`);
+      await channel.save();
+    } catch (error) {
+      logger.error(
+        `Failed to apply scheduled detection state for channel ${channel?._id}:`,
+        error,
+      );
     }
   }
 

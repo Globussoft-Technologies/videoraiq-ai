@@ -10,6 +10,10 @@ vi.mock("../../core/v1/detectionSettings/detectionSettings.controller.js", () =>
     getDetectionSettings: vi.fn(async (req, res) => res.status(200).json({ success: true, data: { _id: req.params.id } })),
     updateDetectionSettings: vi.fn(async (req, res) => res.status(200).json({ success: true })),
     deleteDetectionSettings: vi.fn(async (req, res) => res.status(200).json({ success: true })),
+    getDetectionSchedule: vi.fn(async (req, res) => res.status(200).json({ success: true, data: { detectionSettingId: req.params.id, schedules: [] } })),
+    getCameraDetectionSchedule: vi.fn(async (req, res) => res.status(200).json({ success: true, data: { detectionSettingId: req.params.id, channelId: req.params.channelId, schedule: { mode: "always" } } })),
+    updateCameraDetectionSchedule: vi.fn(async (req, res) => res.status(200).json({ success: true, data: { detectionSettingId: req.params.id, channelId: req.params.channelId, schedule: req.body } })),
+    resetCameraDetectionSchedule: vi.fn(async (req, res) => res.status(200).json({ success: true, data: { detectionSettingId: req.params.id, channelId: req.params.channelId, schedule: { mode: "always" } } })),
     attachDetectionSetting: vi.fn(async (req, res) => res.status(200).json({ success: true })),
     detachDetectionSetting: vi.fn(async (req, res) => res.status(200).json({ success: true })),
   },
@@ -67,6 +71,40 @@ describe("GET /api/v1/detection-settings/:id", () => {
     const res = await request(app).get("/api/v1/detection-settings/ds123");
     expect(res.status).toBe(200);
     expect(res.body.data._id).toBe("ds123");
+  });
+});
+
+describe("GET /api/v1/detection-settings/:id/schedule", () => {
+  it("returns 200 with schedules for linked cameras", async () => {
+    const res = await request(app).get("/api/v1/detection-settings/ds123/schedule");
+    expect(res.status).toBe(200);
+    expect(res.body.data.detectionSettingId).toBe("ds123");
+  });
+});
+
+describe("GET /api/v1/detection-settings/:id/schedule/:channelId", () => {
+  it("returns 200 with schedule for one linked camera", async () => {
+    const res = await request(app).get("/api/v1/detection-settings/ds123/schedule/ch123");
+    expect(res.status).toBe(200);
+    expect(res.body.data.channelId).toBe("ch123");
+  });
+});
+
+describe("PUT /api/v1/detection-settings/:id/schedule/:channelId", () => {
+  it("returns 200 when updating one linked camera schedule", async () => {
+    const res = await request(app)
+      .put("/api/v1/detection-settings/ds123/schedule/ch123")
+      .send({ mode: "always" });
+    expect(res.status).toBe(200);
+    expect(res.body.data.schedule).toEqual({ mode: "always" });
+  });
+});
+
+describe("DELETE /api/v1/detection-settings/:id/schedule/:channelId", () => {
+  it("returns 200 when resetting one linked camera schedule", async () => {
+    const res = await request(app).delete("/api/v1/detection-settings/ds123/schedule/ch123");
+    expect(res.status).toBe(200);
+    expect(res.body.data.schedule).toEqual({ mode: "always" });
   });
 });
 

@@ -13,6 +13,8 @@ import departmentModel from "../departments/departments.model.js"
 import { deleteAuthorizedUserById } from "../users/users.service.js";
 import users from "./../users/users.model.js"
 import { retentionCutoff } from "../../../services/retention.service.js";
+import Channel from "../channels/channels.model.js";
+import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
 
 async function runWithConcurrency(tasks, limit) {
   const executing = new Set();
@@ -28,6 +30,28 @@ async function runWithConcurrency(tasks, limit) {
     }
   }
   return Promise.all(results);
+}
+
+async function syncDetectionScheduleTimezone(userId, timezone) {
+  if (!userId || !timezone) return 0;
+
+  const results = await Promise.all(
+    Object.keys(DETECTION_TYPES).map((settingType) =>
+      Channel.updateMany(
+        {
+          userId,
+          [`detections.${settingType}.schedule.mode`]: "custom",
+        },
+        {
+          $set: {
+            [`detections.${settingType}.schedule.timezone`]: timezone,
+          },
+        },
+      ),
+    ),
+  );
+
+  return results.reduce((total, result) => total + (result.modifiedCount || 0), 0);
 }
 
 export const deletionJobs = new Map();
@@ -793,9 +817,14 @@ class AdminService {
       if (!updatedAdmin) {
         return res.send(Response.userFailResp("Admin not found!", "Validation Failed!"));
       }
+      const schedulesUpdated = await syncDetectionScheduleTimezone(
+        updatedAdmin.user_id,
+        updatedAdmin.timezone,
+      );
       return res.send(
         Response.userSuccessResp("Timezone updated successfully.", {
           timezone: updatedAdmin.timezone,
+          schedulesUpdated,
         }),
       );
     } catch (error) {

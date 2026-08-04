@@ -13,6 +13,32 @@ const detectionSettingSchema = new mongoose.Schema(
       default: null,
     },
     enabled: Boolean,
+    schedule: {
+      type: new mongoose.Schema(
+        {
+          mode: {
+            type: String,
+            enum: ["always", "custom"],
+            default: "always",
+          },
+          timezone: {
+            type: String,
+            default: null,
+          },
+          days: {
+            monday: [{ start: String, end: String, _id: false }],
+            tuesday: [{ start: String, end: String, _id: false }],
+            wednesday: [{ start: String, end: String, _id: false }],
+            thursday: [{ start: String, end: String, _id: false }],
+            friday: [{ start: String, end: String, _id: false }],
+            saturday: [{ start: String, end: String, _id: false }],
+            sunday: [{ start: String, end: String, _id: false }],
+          },
+        },
+        { _id: false },
+      ),
+      default: undefined,
+    },
   },
   { _id: false }, // prevent nested _id creation
 );

@@ -96,6 +96,34 @@ class DetectionSettingsController {
     */
     return DetectionSettingService.updateDetectionSettings(req, res, next);
   }
+  async getDetectionSchedule(req, res, next) {
+    /* #swagger.tags = ['Detection Settings']
+       #swagger.description = 'Get schedules for all cameras linked to a detection setting'
+       #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return DetectionSettingService.getDetectionSchedule(req, res, next);
+  }
+  async getCameraDetectionSchedule(req, res, next) {
+    /* #swagger.tags = ['Detection Settings']
+       #swagger.description = 'Get schedule for one camera linked to a detection setting'
+       #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return DetectionSettingService.getCameraDetectionSchedule(req, res, next);
+  }
+  async updateCameraDetectionSchedule(req, res, next) {
+    /* #swagger.tags = ['Detection Settings']
+       #swagger.description = 'Update schedule for one camera linked to a detection setting'
+       #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return DetectionSettingService.updateCameraDetectionSchedule(req, res, next);
+  }
+  async resetCameraDetectionSchedule(req, res, next) {
+    /* #swagger.tags = ['Detection Settings']
+       #swagger.description = 'Reset one camera detection schedule back to always active'
+       #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return DetectionSettingService.resetCameraDetectionSchedule(req, res, next);
+  }
 
   async getDetectionSettings(req, res, next) {
     /* #swagger.tags = ['Detection Settings']
