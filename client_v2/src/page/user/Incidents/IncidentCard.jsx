@@ -337,7 +337,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox,
             {sevLabel}
           </div>
 
-          {/* Bottom-left: detection type badge + timestamp + camera name */}
+          {/* Bottom-left: detection type badge + timestamp */}
           <div style={{ position: 'absolute', bottom: 9, left: 9, maxWidth: 'calc(60% - 14px)', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
             {/* Detection type badge (moved here to avoid the baked-in count/ID labels up top) */}
             <div style={{ background: sevColor, color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5, letterSpacing: '.3px', whiteSpace: 'nowrap', boxShadow: '0 1px 6px rgba(0,0,0,.55)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -346,11 +346,6 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox,
             <span style={{ fontFamily: 'monospace', fontSize: 9.5, color: '#fff', background: 'rgba(0,0,0,.55)', padding: '2px 8px', borderRadius: 5, backdropFilter: 'blur(4px)', maxWidth: '100%', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', boxSizing: 'border-box' }}>
               {shortDateTime(item.timeOfIncident)}
             </span>
-            {cam && (
-              <span style={{ fontFamily: 'monospace', fontSize: 9.5, color: 'rgba(255,255,255,.8)', background: 'rgba(0,0,0,.45)', padding: '2px 8px', borderRadius: 5, backdropFilter: 'blur(4px)', maxWidth: '100%', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', boxSizing: 'border-box' }}>
-                {cam}
-              </span>
-            )}
           </div>
 
           {/* Bottom-right: confidence + Report button + expand. Both stay
@@ -401,7 +396,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox,
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
             <span style={{ fontSize: 11, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: '1 1 auto' }}>
-              {[cam, site].filter(Boolean).join(' · ')}
+              {cam}
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: '0 0 auto', fontSize: 10.5, color: st.color, fontWeight: 600 }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: st.color }} />
