@@ -32,8 +32,16 @@ import { getDetectionSettings, getDetectionTypes } from '../../../helpers/config
 import { getRecipients } from '../../../helpers/recipients';
 import { getTelegramLinkCode } from '../../../helpers/telegram';
 
-const RETENTION_MIN = 7;
-const RETENTION_MAX = 365;
+const RETENTION_MIN = 1;
+const RETENTION_YEAR_DAYS = 365;
+const RETENTION_MAX = RETENTION_YEAR_DAYS * 4;
+const RETENTION_TICKS = [
+  { value: 1, label: '1d' },
+  { value: RETENTION_YEAR_DAYS, label: '1y' },
+  { value: RETENTION_YEAR_DAYS * 2, label: '2y' },
+  { value: RETENTION_YEAR_DAYS * 3, label: '3y' },
+  { value: RETENTION_YEAR_DAYS * 4, label: '4y' },
+];
 
 function boolText(value) {
   return value ? 'Enabled' : 'Disabled';
@@ -59,10 +67,29 @@ function storedRetentionDays(...specs) {
   return Math.min(RETENTION_MAX, Math.max(RETENTION_MIN, parseRetentionDays(configured)));
 }
 
+function formatRetentionDuration(days) {
+  const totalDays = Math.max(RETENTION_MIN, Number(days) || RETENTION_MIN);
+  const years = Math.floor(totalDays / RETENTION_YEAR_DAYS);
+  const remainingAfterYears = totalDays % RETENTION_YEAR_DAYS;
+  const months = Math.floor(remainingAfterYears / 30);
+  const remainingDays = remainingAfterYears % 30;
+  const parts = [];
+
+  if (years) parts.push(`${years} year${years === 1 ? '' : 's'}`);
+  if (months) parts.push(`${months} month${months === 1 ? '' : 's'}`);
+  if (!years && (!months || remainingDays)) {
+    parts.push(`${remainingDays || totalDays} day${(remainingDays || totalDays) === 1 ? '' : 's'}`);
+  } else if (remainingDays) {
+    parts.push(`${remainingDays} day${remainingDays === 1 ? '' : 's'}`);
+  }
+
+  return parts.join(' ');
+}
+
 function retentionLabel(spec, fallbackDays) {
-  if (!spec) return `${fallbackDays} days`;
+  if (!spec) return formatRetentionDuration(fallbackDays);
   if (isNeverRetention(spec)) return 'Never purge';
-  return `${parseRetentionDays(spec)} days`;
+  return formatRetentionDuration(parseRetentionDays(spec));
 }
 
 function formatTimezone(timezone) {
@@ -617,6 +644,7 @@ export default function SystemSettings() {
   const [retentionSaving, setRetentionSaving] = useState(false);
   const [retentionEnabled, setRetentionEnabled] = useState(true);
   const [retentionDays, setRetentionDays] = useState(30);
+  const [retentionTooltipVisible, setRetentionTooltipVisible] = useState(false);
 
   const admin = adminApi.data || {};
   const adminName = [admin.name_f, admin.name_l].filter(Boolean).join(' ') || admin.login || 'Admin account';
@@ -668,6 +696,8 @@ export default function SystemSettings() {
     return sum + (Array.isArray(setting?.alerts) ? setting.alerts.length : 0);
   }, 0);
   const firstEnabledDetection = enabledDetectionRows[0];
+  const selectedRetentionLabel = formatRetentionDuration(retentionDays);
+  const retentionSliderPercent = ((retentionDays - RETENTION_MIN) / (RETENTION_MAX - RETENTION_MIN)) * 100;
 
   const retentionModeChanged = retentionEnabled !== storedRetentionEnabled;
   const canApplyRetention = retentionModeChanged
@@ -705,6 +735,22 @@ export default function SystemSettings() {
     } finally {
       setTimezoneSaving(false);
     }
+  };
+
+  const notifyRetentionPendingSave = () => {
+    toast.warning('Not saved yet. Click Save to apply the data retention change.', {
+      id: 'retention-pending-save',
+    });
+  };
+
+  const handleRetentionToggle = (next) => {
+    setRetentionEnabled(next);
+    notifyRetentionPendingSave();
+  };
+
+  const handleRetentionDaysChange = (next) => {
+    setRetentionDays(next);
+    notifyRetentionPendingSave();
   };
 
   const handleRetentionSave = async () => {
@@ -844,28 +890,61 @@ export default function SystemSettings() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>Automatic cleanup</div>
-              <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2 }}>{retentionEnabled ? `${retentionDays} day policy` : 'Keep data forever'}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2 }}>{retentionEnabled ? `${selectedRetentionLabel} policy` : 'Keep data forever'}</div>
             </div>
             <Toggle
               value={retentionEnabled}
-              onChange={setRetentionEnabled}
+              onChange={handleRetentionToggle}
               disabled={retentionSaving || (retentionEnabled ? !canDisableSetting : !canEnableSetting)}
             />
           </div>
-          <input
-            type="range"
-            min={RETENTION_MIN}
-            max={RETENTION_MAX}
-            value={retentionDays}
-            disabled={!retentionEnabled || retentionSaving || !canAdjustRetention}
-            onChange={(e) => setRetentionDays(Number(e.target.value))}
-            style={{ width: '100%', accentColor: 'var(--blue)', height: 5, cursor: retentionEnabled && canAdjustRetention ? 'pointer' : 'default', opacity: retentionEnabled && canAdjustRetention ? 1 : 0.55 }}
-          />
+          <div
+            style={{ position: 'relative', paddingTop: 22 }}
+            onMouseEnter={() => setRetentionTooltipVisible(true)}
+            onMouseLeave={() => setRetentionTooltipVisible(false)}
+          >
+            {retentionEnabled && retentionTooltipVisible && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: `clamp(48px, ${retentionSliderPercent}%, calc(100% - 48px))`,
+                  top: 0,
+                  transform: 'translateX(-50%)',
+                  padding: '4px 8px',
+                  borderRadius: 7,
+                  background: 'var(--tx)',
+                  color: 'var(--bg1)',
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  pointerEvents: 'none',
+                  zIndex: 2,
+                }}
+              >
+                {selectedRetentionLabel}
+              </div>
+            )}
+            <input
+              type="range"
+              min={RETENTION_MIN}
+              max={RETENTION_MAX}
+              value={retentionDays}
+              title={selectedRetentionLabel}
+              disabled={!retentionEnabled || retentionSaving || !canAdjustRetention}
+              onFocus={() => setRetentionTooltipVisible(true)}
+              onBlur={() => setRetentionTooltipVisible(false)}
+              onMouseDown={() => setRetentionTooltipVisible(true)}
+              onMouseUp={() => setRetentionTooltipVisible(false)}
+              onTouchStart={() => setRetentionTooltipVisible(true)}
+              onTouchEnd={() => setRetentionTooltipVisible(false)}
+              onChange={(e) => handleRetentionDaysChange(Number(e.target.value))}
+              style={{ width: '100%', accentColor: 'var(--blue)', height: 5, cursor: retentionEnabled && canAdjustRetention ? 'pointer' : 'default', opacity: retentionEnabled && canAdjustRetention ? 1 : 0.55 }}
+            />
+          </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--tx3)', marginTop: 6 }}>
-            <span>7d</span>
-            <span>90d</span>
-            <span>180d</span>
-            <span>365d</span>
+            {RETENTION_TICKS.map((tick) => (
+              <span key={tick.value}>{tick.label}</span>
+            ))}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 9, marginTop: 14 }}>
             <Metric label="Incidents" value={retentionLabel(storedIncidentRetention, retentionDays)} icon={Database} />
@@ -916,7 +995,7 @@ export default function SystemSettings() {
           />
           <ComplianceRow
             label="Data retention policy"
-            desc={retentionEnabled ? `Automatic cleanup after ${retentionDays} days.` : 'Automatic cleanup is disabled.'}
+            desc={retentionEnabled ? `Automatic cleanup after ${selectedRetentionLabel}.` : 'Automatic cleanup is disabled.'}
             enabled={retentionEnabled}
           />
           <ComplianceRow
@@ -974,7 +1053,7 @@ export default function SystemSettings() {
           <IntegrationRow
             icon={Database}
             title="Retention Service"
-            desc={retentionEnabled ? `Incidents, attendance, and access logs set to ${retentionDays} days` : 'Retention sweep disabled for this admin'}
+            desc={retentionEnabled ? `Incidents, attendance, and access logs set to ${selectedRetentionLabel}` : 'Retention sweep disabled for this admin'}
             status={retentionEnabled ? 'Active' : 'Paused'}
             tone={retentionEnabled ? 'ok' : 'warn'}
             last
