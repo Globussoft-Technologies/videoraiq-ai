@@ -99,6 +99,34 @@ class DetectionSettingsController {
   async getDetectionSchedule(req, res, next) {
     /* #swagger.tags = ['Detection Settings']
        #swagger.description = 'Get schedules for all cameras linked to a detection setting'
+       #swagger.parameters['id'] = {
+           in: 'path',
+           description: 'Detection setting ID',
+           required: true,
+           type: 'string',
+           example: '68493b15b176a495112b6524'
+       }
+       #swagger.responses[200] = {
+           description: 'Detection schedules fetched successfully',
+           schema: {
+             success: true,
+             message: 'Detection schedules fetched successfully',
+             data: {
+               detectionSettingId: '68493b15b176a495112b6524',
+               settingType: 'personalProtectiveEquipmentSettings',
+               schedules: [
+                 {
+                   channelId: '68493b15b176a495112b6524',
+                   channelName: 'Entrance Camera',
+                   enabled: true,
+                   schedule: { mode: 'always' }
+                 }
+               ]
+             }
+           }
+       }
+       #swagger.responses[404] = { description: 'Detection setting not found' }
+       #swagger.responses[500] = { description: 'Internal server error' }
        #swagger.security = [{ "EncryptedAuthToken": [] }]
     */
     return DetectionSettingService.getDetectionSchedule(req, res, next);
@@ -106,6 +134,37 @@ class DetectionSettingsController {
   async getCameraDetectionSchedule(req, res, next) {
     /* #swagger.tags = ['Detection Settings']
        #swagger.description = 'Get schedule for one camera linked to a detection setting'
+       #swagger.parameters['id'] = {
+           in: 'path',
+           description: 'Detection setting ID',
+           required: true,
+           type: 'string',
+           example: '68493b15b176a495112b6524'
+       }
+       #swagger.parameters['channelId'] = {
+           in: 'path',
+           description: 'Camera/channel ID linked to this detection setting',
+           required: true,
+           type: 'string',
+           example: '684954f488ba3228238e466f'
+       }
+       #swagger.responses[200] = {
+           description: 'Detection schedule fetched successfully',
+           schema: {
+             success: true,
+             message: 'Detection schedule fetched successfully',
+             data: {
+               detectionSettingId: '68493b15b176a495112b6524',
+               settingType: 'personalProtectiveEquipmentSettings',
+               channelId: '684954f488ba3228238e466f',
+               channelName: 'Entrance Camera',
+               enabled: true,
+               schedule: { mode: 'always' }
+             }
+           }
+       }
+       #swagger.responses[404] = { description: 'Detection setting or linked camera not found' }
+       #swagger.responses[500] = { description: 'Internal server error' }
        #swagger.security = [{ "EncryptedAuthToken": [] }]
     */
     return DetectionSettingService.getCameraDetectionSchedule(req, res, next);
@@ -113,6 +172,48 @@ class DetectionSettingsController {
   async updateCameraDetectionSchedule(req, res, next) {
     /* #swagger.tags = ['Detection Settings']
        #swagger.description = 'Update schedule for one camera linked to a detection setting'
+       #swagger.parameters['id'] = {
+           in: 'path',
+           description: 'Detection setting ID',
+           required: true,
+           type: 'string',
+           example: '68493b15b176a495112b6524'
+       }
+       #swagger.parameters['channelId'] = {
+           in: 'path',
+           description: 'Camera/channel ID linked to this detection setting',
+           required: true,
+           type: 'string',
+           example: '684954f488ba3228238e466f'
+       }
+       #swagger.parameters['data'] = {
+           in: 'body',
+           description: 'Schedule payload. Do not send timezone; backend uses admin.timezone or Asia/Kolkata.',
+           required: true,
+           schema: { $ref: '#/definitions/updateDetectionSchedule' }
+       }
+       #swagger.responses[200] = {
+           description: 'Detection schedule updated successfully',
+           schema: {
+             success: true,
+             message: 'Detection schedule updated successfully',
+             data: {
+               detectionSettingId: '68493b15b176a495112b6524',
+               settingType: 'personalProtectiveEquipmentSettings',
+               channelId: '684954f488ba3228238e466f',
+               channelName: 'Entrance Camera',
+               enabled: true,
+               schedule: {
+                 mode: 'custom',
+                 timezone: 'Asia/Kolkata',
+                 days: { monday: [{ start: '09:00', end: '18:00' }] }
+               }
+             }
+           }
+       }
+       #swagger.responses[400] = { description: 'Validation error' }
+       #swagger.responses[404] = { description: 'Detection setting or linked camera not found' }
+       #swagger.responses[500] = { description: 'Internal server error' }
        #swagger.security = [{ "EncryptedAuthToken": [] }]
     */
     return DetectionSettingService.updateCameraDetectionSchedule(req, res, next);
@@ -120,6 +221,37 @@ class DetectionSettingsController {
   async resetCameraDetectionSchedule(req, res, next) {
     /* #swagger.tags = ['Detection Settings']
        #swagger.description = 'Reset one camera detection schedule back to always active'
+       #swagger.parameters['id'] = {
+           in: 'path',
+           description: 'Detection setting ID',
+           required: true,
+           type: 'string',
+           example: '68493b15b176a495112b6524'
+       }
+       #swagger.parameters['channelId'] = {
+           in: 'path',
+           description: 'Camera/channel ID linked to this detection setting',
+           required: true,
+           type: 'string',
+           example: '684954f488ba3228238e466f'
+       }
+       #swagger.responses[200] = {
+           description: 'Detection schedule reset successfully',
+           schema: {
+             success: true,
+             message: 'Detection schedule reset successfully',
+             data: {
+               detectionSettingId: '68493b15b176a495112b6524',
+               settingType: 'personalProtectiveEquipmentSettings',
+               channelId: '684954f488ba3228238e466f',
+               channelName: 'Entrance Camera',
+               enabled: true,
+               schedule: { mode: 'always' }
+             }
+           }
+       }
+       #swagger.responses[404] = { description: 'Detection setting or linked camera not found' }
+       #swagger.responses[500] = { description: 'Internal server error' }
        #swagger.security = [{ "EncryptedAuthToken": [] }]
     */
     return DetectionSettingService.resetCameraDetectionSchedule(req, res, next);

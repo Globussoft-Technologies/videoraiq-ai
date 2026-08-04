@@ -5,7 +5,7 @@
     "title": "EMP Surveillance API's — v2",
     "description": "API Documentation for v2 endpoints"
   },
-  "host": "activity-smithsonian-forecasts-neighbors.trycloudflare.com",
+  "host": "s5z0fxb8-5001.inc1.devtunnels.ms",
   "basePath": "/",
   "schemes": [
     "http",
@@ -108,6 +108,39 @@
           }
         },
         "security": []
+      }
+    },
+    "/api/v2/auth/generate-admin-token": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "description": "Generate an encrypted admin token valid for N days (max 5). Body: { adminId, days }. Requires an authenticated token.",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "adminId": {
+                  "type": "string",
+                  "example": "507f1f77bcf86cd799439011"
+                },
+                "days": {
+                  "type": "number",
+                  "example": 5
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
       }
     },
     "/api/v2/uploads/debug/pool-stats": {
@@ -777,6 +810,33 @@
         }
       }
     },
+    "/api/v2/admin/retention": {
+      "put": {
+        "tags": [
+          "Admin"
+        ],
+        "description": "Set or clear a target admin data retention overrides. Only keys present in the body change; pass null to revert a key to the global DataRetention config.",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "description": "Target admin user_id and any of enabled, incidents, attendance, accessLogs, batchSize, maxRunMinutes, intervalHours",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/updateRetention"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Retention config updated successfully"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/api/v2/authorizedUsers/fetch": {
       "post": {
         "tags": [
@@ -905,6 +965,13 @@
             "in": "formData",
             "type": "string",
             "required": false
+          },
+          {
+            "name": "userRegistrByLink",
+            "in": "formData",
+            "type": "boolean",
+            "required": false,
+            "description": "Set true when the user self-registers through an invite link. On a face-service failure the record is deleted instead of being kept as verified:false."
           }
         ],
         "responses": {
@@ -1155,6 +1222,28 @@
           },
           "502": {
             "description": "AI service error"
+          }
+        }
+      }
+    },
+    "/api/v2/authorizedUsers/clear-auto-access-tags": {
+      "patch": {
+        "tags": [
+          "AuthorizedUsers"
+        ],
+        "description": "Clear access-log tags that were auto-set by the legacy access-log flow while preserving currently manual-tagged users.",
+        "responses": {
+          "200": {
+            "description": "Auto-tagged access logs cleared successfully"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "404": {
+            "description": "Admin not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       }
@@ -3832,6 +3921,96 @@
         ]
       }
     },
+    "/api/v2/incidents/logs/unauthorized-access": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Get Unauthorized Access logs (tabular). Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, search. Paginated via skip/limit.",
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "nvrId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "nvrIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "channelId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "channelIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "type": "string",
+            "enum": [
+              "low",
+              "moderate",
+              "high"
+            ]
+          },
+          {
+            "name": "resolved",
+            "in": "query",
+            "type": "boolean"
+          },
+          {
+            "name": "reportStatus",
+            "in": "query",
+            "type": "boolean"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unauthorized access logs fetched successfully"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
     "/api/v2/incidents/logs/vehicle-count": {
       "get": {
         "tags": [
@@ -5379,6 +5558,410 @@
         "responses": {
           "200": {
             "description": "Detection types fetched successfully"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/detection-settings/{id}/schedule": {
+      "get": {
+        "tags": [
+          "Detection Settings"
+        ],
+        "description": "Get schedules for all cameras linked to a detection setting",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "Detection setting ID",
+            "example": "68493b15b176a495112b6524"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detection schedules fetched successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Detection schedules fetched successfully"
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "detectionSettingId": {
+                      "type": "string",
+                      "example": "68493b15b176a495112b6524"
+                    },
+                    "settingType": {
+                      "type": "string",
+                      "example": "personalProtectiveEquipmentSettings"
+                    },
+                    "schedules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "channelId": {
+                            "type": "string",
+                            "example": "68493b15b176a495112b6524"
+                          },
+                          "channelName": {
+                            "type": "string",
+                            "example": "Entrance Camera"
+                          },
+                          "enabled": {
+                            "type": "boolean",
+                            "example": true
+                          },
+                          "schedule": {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "example": "always"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "404": {
+            "description": "Detection setting not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      }
+    },
+    "/api/v2/detection-settings/{id}/schedule/{channelId}": {
+      "get": {
+        "tags": [
+          "Detection Settings"
+        ],
+        "description": "Get schedule for one camera linked to a detection setting",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "Detection setting ID",
+            "example": "68493b15b176a495112b6524"
+          },
+          {
+            "name": "channelId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "Camera/channel ID linked to this detection setting",
+            "example": "684954f488ba3228238e466f"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detection schedule fetched successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Detection schedule fetched successfully"
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "detectionSettingId": {
+                      "type": "string",
+                      "example": "68493b15b176a495112b6524"
+                    },
+                    "settingType": {
+                      "type": "string",
+                      "example": "personalProtectiveEquipmentSettings"
+                    },
+                    "channelId": {
+                      "type": "string",
+                      "example": "684954f488ba3228238e466f"
+                    },
+                    "channelName": {
+                      "type": "string",
+                      "example": "Entrance Camera"
+                    },
+                    "enabled": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "schedule": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "example": "always"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "404": {
+            "description": "Detection setting or linked camera not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Detection Settings"
+        ],
+        "description": "Update schedule for one camera linked to a detection setting",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "Detection setting ID",
+            "example": "68493b15b176a495112b6524"
+          },
+          {
+            "name": "channelId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "Camera/channel ID linked to this detection setting",
+            "example": "684954f488ba3228238e466f"
+          },
+          {
+            "name": "data",
+            "in": "body",
+            "description": "Schedule payload. Do not send timezone; backend uses admin.timezone or Asia/Kolkata.",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/updateDetectionSchedule"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detection schedule updated successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Detection schedule updated successfully"
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "detectionSettingId": {
+                      "type": "string",
+                      "example": "68493b15b176a495112b6524"
+                    },
+                    "settingType": {
+                      "type": "string",
+                      "example": "personalProtectiveEquipmentSettings"
+                    },
+                    "channelId": {
+                      "type": "string",
+                      "example": "684954f488ba3228238e466f"
+                    },
+                    "channelName": {
+                      "type": "string",
+                      "example": "Entrance Camera"
+                    },
+                    "enabled": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "schedule": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "example": "custom"
+                        },
+                        "timezone": {
+                          "type": "string",
+                          "example": "Asia/Kolkata"
+                        },
+                        "days": {
+                          "type": "object",
+                          "properties": {
+                            "monday": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "start": {
+                                    "type": "string",
+                                    "example": "09:00"
+                                  },
+                                  "end": {
+                                    "type": "string",
+                                    "example": "18:00"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Detection setting or linked camera not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Detection Settings"
+        ],
+        "description": "Reset one camera detection schedule back to always active",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "Detection setting ID",
+            "example": "68493b15b176a495112b6524"
+          },
+          {
+            "name": "channelId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "Camera/channel ID linked to this detection setting",
+            "example": "684954f488ba3228238e466f"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detection schedule reset successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Detection schedule reset successfully"
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "detectionSettingId": {
+                      "type": "string",
+                      "example": "68493b15b176a495112b6524"
+                    },
+                    "settingType": {
+                      "type": "string",
+                      "example": "personalProtectiveEquipmentSettings"
+                    },
+                    "channelId": {
+                      "type": "string",
+                      "example": "684954f488ba3228238e466f"
+                    },
+                    "channelName": {
+                      "type": "string",
+                      "example": "Entrance Camera"
+                    },
+                    "enabled": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "schedule": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "example": "always"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "404": {
+            "description": "Detection setting or linked camera not found"
           },
           "500": {
             "description": "Internal server error"
@@ -8468,6 +9051,79 @@
         }
       }
     },
+    "/api/v2/analytics/attendance-summary": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "description": "Attendance and access analytics for an operational date range: employee roster size, attended employees, currently-present employees, absentees, unauthorized access counts, previous-period trends, daily series, and anomalies.",
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "description": "Start of range (YYYY-MM-DD, inclusive)",
+            "required": false,
+            "type": "String",
+            "example": "2026-07-01"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "description": "End of range (YYYY-MM-DD, inclusive)",
+            "required": false,
+            "type": "String",
+            "example": "2026-07-07"
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "description": "Trailing days to include when startDate/endDate are not provided (default 7, max 90)",
+            "required": false,
+            "type": "Number",
+            "example": 7
+          },
+          {
+            "name": "nvrId",
+            "in": "query",
+            "description": "Filter by one or more NVR ids",
+            "required": false,
+            "type": "String"
+          },
+          {
+            "name": "channelId",
+            "in": "query",
+            "description": "Filter by one or more channel ids",
+            "required": false,
+            "type": "String"
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "description": "Filter event activity by one or more NVR locations",
+            "required": false,
+            "type": "String"
+          },
+          {
+            "name": "department",
+            "in": "query",
+            "description": "Filter roster by employee department and events by camera department",
+            "required": false,
+            "type": "String"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Attendance analytics fetched successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/api/v2/analytics/detection-volume": {
       "get": {
         "tags": [
@@ -9896,6 +10552,22 @@
                             "count": {
                               "type": "number",
                               "example": 1420
+                            },
+                            "dates": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "date": {
+                                    "type": "string",
+                                    "example": "2026-07-03"
+                                  },
+                                  "count": {
+                                    "type": "number",
+                                    "example": 280
+                                  }
+                                }
+                              }
                             }
                           }
                         },
@@ -9909,6 +10581,22 @@
                             "count": {
                               "type": "number",
                               "example": 4210
+                            },
+                            "dates": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "date": {
+                                    "type": "string",
+                                    "example": "2026-07-10"
+                                  },
+                                  "count": {
+                                    "type": "number",
+                                    "example": 1042
+                                  }
+                                }
+                              }
                             }
                           }
                         }
@@ -10458,7 +11146,7 @@
         "tags": [
           "FaceImages"
         ],
-        "description": "Create an Authorized User and immediately tag the given dsId folder with it. Accepts the full authorizedUsers schema (minus password). Only firstName, lastName and dsId are required; every other field (email, departmentId, designation, branch, shiftId, numberPlate, orgId, emp_id, empRoleId, permission, location, locationId, phoneNumber, address1, timezone, profilePics) is optional. If email is omitted a placeholder is auto-generated. verified is set to false since no face data exists yet. Notifies the DS onfly_registration API.",
+        "description": "Create an Authorized User and immediately tag the given dsId folder with it. Accepts the full authorizedUsers schema (minus password). Only firstName, lastName and dsId are required; every other field (email, departmentId, designation, branch, shiftId, numberPlate, orgId, emp_id, empRoleId, permission, location, locationId, phoneNumber, address1, timezone, profilePics) is optional. If email is omitted it remains blank. verified is set to false since no face data exists yet. Notifies the DS onfly_registration API.",
         "parameters": [
           {
             "name": "data",
@@ -10519,7 +11207,7 @@
                         },
                         "email": {
                           "type": "string",
-                          "example": "quickcreate+665f2b1c8e4a9d0012ab34ce@placeholder.local"
+                          "example": ""
                         },
                         "verified": {
                           "type": "boolean",
@@ -10806,6 +11494,161 @@
                 "name": "main"
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v2/telegram/link-code": {
+      "get": {
+        "tags": [
+          "Telegram"
+        ],
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/api/v2/telegram/unlink": {
+      "post": {
+        "tags": [
+          "Telegram"
+        ],
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/api/v2/email-monitoring/auth/login": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "username": {
+                  "example": "any"
+                },
+                "password": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/api/v2/email-monitoring/webhook/sendgrid": {
+      "post": {
+        "description": "",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v2/email-monitoring/auth/me": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v2/email-monitoring/organizations": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v2/email-monitoring/dashboard": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v2/email-monitoring/activity": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized"
           }
         }
       }
@@ -12521,6 +13364,110 @@
         }
       }
     },
+    "updateDetectionSchedule": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "example": "custom"
+        },
+        "days": {
+          "type": "object",
+          "properties": {
+            "monday": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "example": "09:00"
+                  },
+                  "end": {
+                    "type": "string",
+                    "example": "18:00"
+                  }
+                }
+              }
+            },
+            "tuesday": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "example": "09:00"
+                  },
+                  "end": {
+                    "type": "string",
+                    "example": "18:00"
+                  }
+                }
+              }
+            },
+            "wednesday": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "example": "09:00"
+                  },
+                  "end": {
+                    "type": "string",
+                    "example": "18:00"
+                  }
+                }
+              }
+            },
+            "thursday": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "example": "09:00"
+                  },
+                  "end": {
+                    "type": "string",
+                    "example": "18:00"
+                  }
+                }
+              }
+            },
+            "friday": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "example": "09:00"
+                  },
+                  "end": {
+                    "type": "string",
+                    "example": "18:00"
+                  }
+                }
+              }
+            },
+            "saturday": {
+              "type": "array",
+              "example": [],
+              "items": {}
+            },
+            "sunday": {
+              "type": "array",
+              "example": [],
+              "items": {}
+            }
+          }
+        }
+      }
+    },
     "getIncidentsDetails": {
       "type": "object",
       "properties": {
@@ -13465,6 +14412,43 @@
         "logsSound": {
           "type": "boolean",
           "example": true
+        }
+      }
+    },
+    "updateRetention": {
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "example": "22"
+        },
+        "enabled": {
+          "type": "boolean",
+          "example": true
+        },
+        "incidents": {
+          "type": "string",
+          "example": "1y"
+        },
+        "attendance": {
+          "type": "string",
+          "example": "6m"
+        },
+        "accessLogs": {
+          "type": "string",
+          "example": "never"
+        },
+        "batchSize": {
+          "type": "number",
+          "example": 200
+        },
+        "maxRunMinutes": {
+          "type": "number",
+          "example": 60
+        },
+        "intervalHours": {
+          "type": "number",
+          "example": 24
         }
       }
     },

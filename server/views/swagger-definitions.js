@@ -411,6 +411,18 @@ export const definitions = {
         metricType: "gauge",
       },
     },
+    updateDetectionSchedule: {
+      mode: "custom",
+      days: {
+        monday: [{ start: "09:00", end: "18:00" }],
+        tuesday: [{ start: "09:00", end: "18:00" }],
+        wednesday: [{ start: "09:00", end: "18:00" }],
+        thursday: [{ start: "09:00", end: "18:00" }],
+        friday: [{ start: "09:00", end: "18:00" }],
+        saturday: [],
+        sunday: [],
+      },
+    },
     getIncidentsDetails: {
       ActiveChannels: true,
       criticalIncidents: true,
