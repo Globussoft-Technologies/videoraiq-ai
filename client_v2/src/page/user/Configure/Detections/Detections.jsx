@@ -593,7 +593,7 @@ export default function Detections() {
           Cameras
         </button>
         {zoneCamera && (
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#111827', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--tx)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {cameraLabel(zoneCamera)}
           </span>
         )}

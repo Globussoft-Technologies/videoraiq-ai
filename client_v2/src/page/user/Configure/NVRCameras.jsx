@@ -722,7 +722,7 @@ function CameraPreviewModal({ cam, onClose }) {
 }
 
 // ── Manage Cameras modal (existing NVR) ─────────────────────────────────────
-function ManageCamerasModal({ nvr, onClose, onSaved }) {
+export function ManageCamerasModal({ nvr, onClose, onSaved, zIndex = 200 }) {
   const [cameras, setCameras] = useState([]);
   const [selected, setSelected] = useState(new Set());
   const [initialAdded, setInitialAdded] = useState(new Map());
@@ -813,7 +813,7 @@ function ManageCamerasModal({ nvr, onClose, onSaved }) {
     <div
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, zIndex: 200,
+        position: 'fixed', inset: 0, zIndex,
         background: 'rgba(6,8,13,.62)', backdropFilter: 'blur(4px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? 12 : 24,
       }}
@@ -1611,6 +1611,17 @@ export default function NVRCameras() {
 
   const nvrsApi     = useApi(() => getNvrs(0, 100), []);
   const channelsApi = useApi(() => getChannels({ limit: 200 }), []);
+  const refetchNvrs = nvrsApi.refetch;
+  const refetchChannels = channelsApi.refetch;
+
+  useEffect(() => {
+    const onCamerasChanged = () => {
+      refetchNvrs();
+      refetchChannels();
+    };
+    window.addEventListener('nvr-cameras-changed', onCamerasChanged);
+    return () => window.removeEventListener('nvr-cameras-changed', onCamerasChanged);
+  }, [refetchNvrs, refetchChannels]);
 
   /* Only show the NVR skeleton once loading has actually taken a moment,
      so a fast response never flashes placeholder cards. */

@@ -30,6 +30,11 @@ export function AttendanceSocketProvider({ children }) {
   const [allDetections, setAllDetections] = useState([]);
   const [attendanceLogs, setAttendanceLogs] = useState([]);
   const [accessAllDetections, setAccessAllDetections] = useState([]);
+  const [cameraLimit, setCameraLimit] = useState({
+    purchasedCameras: 0,
+    added: 0,
+    remaining: null,
+  });
   const [isMuted, setIsMuted] = useState(true);
   const [audioLoading, setAudioLoading] = useState(true);
   const [audioSaving, setAudioSaving] = useState(false);
@@ -132,13 +137,23 @@ export function AttendanceSocketProvider({ children }) {
       setAccessAllDetections((prev) => [{ ...data }, ...prev]);
     };
 
+    const handleCameraLimit = (data) => {
+      setCameraLimit({
+        purchasedCameras: Number(data?.purchasedCameras) || 0,
+        added: Number(data?.added) || 0,
+        remaining: data?.remaining ?? null,
+      });
+    };
+
     socket.on(`cameradetection_${user.adminId}`, handleDetection);
     socket.on(`accessLogs_${user.adminId}`, handleAccessLogs);
     socket.on(`attendanceLog_${user.adminId}`, handleAttendanceLog);
+    socket.on(`purchasedCameras_${user.adminId}`, handleCameraLimit);
     return () => {
       socket.off(`cameradetection_${user.adminId}`, handleDetection);
       socket.off(`accessLogs_${user.adminId}`, handleAccessLogs);
       socket.off(`attendanceLog_${user.adminId}`, handleAttendanceLog);
+      socket.off(`purchasedCameras_${user.adminId}`, handleCameraLimit);
       if (accessClearTimerRef.current) clearTimeout(accessClearTimerRef.current);
       if (attendanceClearTimerRef.current) clearTimeout(attendanceClearTimerRef.current);
     };
@@ -150,6 +165,7 @@ export function AttendanceSocketProvider({ children }) {
         allDetections,
         attendanceLogs,
         accessAllDetections,
+        cameraLimit,
         isMuted,
         audioEnabled: !isMuted,
         audioLoading,

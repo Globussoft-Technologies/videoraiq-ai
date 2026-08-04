@@ -4,6 +4,7 @@ import { V2ThemeProvider, useTheme } from '../theme/ThemeContext';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import AssistantLauncher from '../components/AssistantLauncher';
+import CameraLimitLock from '../components/CameraLimitLock';
 import { VIEW_META } from './nav.config';
 import { getLocations } from '../helpers/monitoring';
 import { getCriticalityStats } from '../helpers/dashboard';
@@ -170,6 +171,7 @@ function Shell() {
         onMobileClose={() => setNavOpen(false)}
         camHealth={camHealth}
       />
+      <CameraLimitLock />
       {/* Drawer backdrop (mobile only) */}
       {isMobile && navOpen && (
         <div
