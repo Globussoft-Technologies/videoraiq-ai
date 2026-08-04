@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../../components/States';
 import { useApi } from '../../../../hooks/useApi';
 import { deleteDetectionSetting, getCamerasByNvr, getDetectionSettings, getDetectionTypes, toggleChannelDetection } from '../../../../helpers/configure';
-import { fetchIncidents } from '../../../../helpers/incidents';
+import { fetchDetectionTypes as fetchIncidentFilterTypes, fetchIncidents, fetchIncidentStats } from '../../../../helpers/incidents';
 import { timeOfDay } from '../../../../lib/format';
 import DetectionZoneMarking from '../DetectionZoneMarking';
 import { DetectionSettingsCameraList } from '../DetectionSettings';
@@ -26,7 +26,43 @@ const STATE_TABS = [
   { key: 'paused', label: 'Paused' },
 ];
 
-const INCIDENT_PAGE_SIZE = 50;
+const INCIDENT_PAGE_SIZE = 12;
+
+function normalizeIncidentKey(value) {
+  return String(value || '')
+    .replace(/settings$/i, '')
+    .replace(/detection$/i, '')
+    .replace(/[^a-z0-9]/gi, '')
+    .toLowerCase();
+}
+
+function compactIncidentType(value) {
+  return String(value || '').replace(/Settings$/, '');
+}
+
+function incidentTypeForDetection(model, incidentFilterTypes = []) {
+  if (!model) return '';
+  const candidates = [
+    compactIncidentType(model.settingType || model.id),
+    model.id,
+    model.name,
+    model.subtitle,
+  ].filter(Boolean);
+  const candidateKeys = new Set(candidates.map(normalizeIncidentKey));
+
+  const match = incidentFilterTypes.find((item) => {
+    const values = [
+      item?.incidentType,
+      item?.formattedIncidentType,
+      item?.incidentName,
+      item?.displayName,
+      item?.name,
+    ];
+    return values.some((value) => candidateKeys.has(normalizeIncidentKey(value)));
+  });
+
+  return match?.incidentType || '';
+}
 
 /** One chip style for every filter in the toolbar (category + state). */
 const chipStyle = (active, hasDot) => ({
@@ -202,6 +238,11 @@ export default function Detections() {
   const [resettingSetting, setResettingSetting] = useState(false);
   const incidentRequestIdRef = useRef(0);
   const typesApi = useApi(() => getDetectionTypes(), [], { initialData: {} });
+  const incidentFilterTypesApi = useApi(
+    () => fetchIncidentFilterTypes({ skip: 0, limit: 100 }),
+    [],
+    { initialData: [] },
+  );
 
   const models = useMemo(
     () => buildDetectionModels(typesApi.data).map((m) => {
@@ -226,19 +267,52 @@ export default function Detections() {
   const selected = models.find((m) => m.id === selectedId) || models[0];
   const selectedCategory = CATEGORY_BY_KEY[selected?.category];
   const selectedSettingType = selected?.settingType || selected?.id || '';
+  const selectedIncidentType = incidentTypeForDetection(selected, incidentFilterTypesApi.data);
   const selectedDetectionEntry = selectedSettingType ? zoneCamera?.detections?.[selectedSettingType] : null;
   const selectedDetectionSettingId = selectedDetectionEntry?.id && typeof selectedDetectionEntry.id === 'object'
     ? selectedDetectionEntry.id._id
     : selectedDetectionEntry?.id;
   const incidentFilter = useMemo(() => {
-    if (!enteredDetections) return null;
+    if (!enteredDetections || incidentFilterTypesApi.loading || !selectedIncidentType) return null;
     const severity = severityFilterValue(incidentSeverity);
     return {
+      incidentTypeFilter: [selectedIncidentType],
+      statusFilter: ['new', 'reported', 'resolved'],
+      ...(zoneCamera?._id ? { channelId: [String(zoneCamera._id)] } : {}),
       ...(severity ? { severity } : {}),
       ...(incidentDateFrom && incidentDateTo ? { startDate: incidentDateFrom, endDate: incidentDateTo } : {}),
     };
-  }, [enteredDetections, incidentDateFrom, incidentDateTo, incidentSeverity]);
-  const incidentFilterKey = useMemo(() => JSON.stringify(incidentFilter || {}), [incidentFilter]);
+  }, [
+    enteredDetections,
+    incidentDateFrom,
+    incidentDateTo,
+    incidentSeverity,
+    incidentFilterTypesApi.loading,
+    selectedIncidentType,
+    zoneCamera?._id,
+  ]);
+  // Keep the inactive camera-list state distinct from the active "All"
+  // filter. Both previously serialized to "{}", so entering a camera did not
+  // change this dependency and the initial incidents request was skipped.
+  const incidentFilterKey = useMemo(
+    () => (incidentFilter === null ? null : JSON.stringify(incidentFilter)),
+    [incidentFilter],
+  );
+  const incidentStatsApi = useApi(
+    () => fetchIncidentStats(incidentFilter),
+    [incidentFilterKey],
+    { enabled: Boolean(incidentFilter), initialData: {} },
+  );
+
+  useEffect(() => {
+    if (!enteredDetections || incidentFilterTypesApi.loading || selectedIncidentType) return;
+    incidentRequestIdRef.current += 1;
+    setIncidentItems([]);
+    setIncidentTotalCount(0);
+    setIncidentLoading(false);
+    setIncidentLoadingMore(false);
+    setIncidentError(null);
+  }, [enteredDetections, incidentFilterTypesApi.loading, selectedIncidentType, selectedId, incidentSeverity, incidentDateFrom, incidentDateTo]);
 
   const loadIncidents = useCallback(async ({ skip = 0, append = false } = {}) => {
     if (!incidentFilter) {
@@ -308,8 +382,12 @@ export default function Detections() {
     () => alertIncidentRows(incidentItems ?? emptyIncidents(), selected, zoneCamera),
     [incidentItems, selected, zoneCamera],
   );
+  const incidentPanelLoading = incidentFilterTypesApi.loading || (Boolean(incidentFilter) && incidentLoading);
   const activeCount = models.filter((m) => m.active).length;
-  const incidents24h = incidentFilter ? incidentTotalCount : models.reduce((sum, m) => sum + m.incidents24h, 0);
+  const incidentStats = incidentStatsApi.data || {};
+  const selectedIncidentCount = incidentFilter
+    ? Number(incidentStats.totalAlerts || 0) + Number(incidentStats.incidentsResolved || 0)
+    : models.reduce((sum, m) => sum + m.incidents24h, 0);
   const visibleCategoryCount = new Set(models.map((m) => m.category)).size;
   const loadingValue = typesApi.loading ? '...' : null;
 
@@ -337,6 +415,20 @@ export default function Detections() {
 
   const toggleGroupCollapsed = (groupKey) => {
     setCollapsedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }));
+  };
+
+  const selectDetection = (modelId) => {
+    if (!modelId || modelId === selectedId) return;
+    // Immediately remove the previous detection's rows and invalidate its
+    // request. The filter effect refreshes the v2 incident list while the
+    // header-stat request uses the same selected detection filter.
+    incidentRequestIdRef.current += 1;
+    setIncidentItems([]);
+    setIncidentTotalCount(0);
+    setIncidentError(null);
+    setIncidentLoadingMore(false);
+    setIncidentLoading(true);
+    setSelectedId(modelId);
   };
 
   const toggleAllGroupsCollapsed = () => {
@@ -426,6 +518,10 @@ export default function Detections() {
 
   const enterDetections = (camera) => {
     setZoneCamera(camera);
+    // Show the loader in the first rendered frame; the filter effect below
+    // performs the request once enteredDetections becomes active.
+    setIncidentLoading(true);
+    setIncidentError(null);
     setEnteredDetections(true);
   };
 
@@ -510,7 +606,14 @@ export default function Detections() {
           sub={typesApi.loading ? 'loading from API' : `across ${visibleCategoryCount || 0} categories`}
         />
         <StatCard label="Active Now" value={loadingValue ?? activeCount} sub="running on live streams" color="var(--ok)" />
-        <StatCard label="Incidents" value={loadingValue ?? incidents24h.toLocaleString()} sub="all detections combined" color="var(--blue)" />
+        <StatCard
+          label="Incidents"
+          value={incidentFilter && incidentStatsApi.loading
+            ? '...'
+            : (loadingValue ?? selectedIncidentCount.toLocaleString())}
+          sub={incidentFilter ? `${selected?.name || 'Selected detection'} total` : 'all detections combined'}
+          color="var(--blue)"
+        />
         <StatCard
           label="Selected"
           value={selected?.name || (typesApi.loading ? '...' : '-')}
@@ -705,7 +808,7 @@ export default function Detections() {
                           model={model}
                           color={group.color}
                           selected={model.id === selected?.id}
-                          onSelect={() => setSelectedId(model.id)}
+                          onSelect={() => selectDetection(model.id)}
                           onToggle={() => toggleModel(model)}
                           toggleDisabled={detectionToggleLoading === (model.settingType || model.id)}
                         />
@@ -771,8 +874,9 @@ export default function Detections() {
                   resetDisabled={resettingSetting || !selectedDetectionSettingId}
                 />
                 <DetectionIncidents
+                  detectionName={selected.name}
                   incidents={incidents}
-                  loading={incidentLoading}
+                  loading={incidentPanelLoading}
                   loadingMore={incidentLoadingMore}
                   error={incidentError}
                   onRetry={() => loadIncidents({ skip: 0, append: false })}
@@ -788,7 +892,12 @@ export default function Detections() {
                     setIncidentDateTo('');
                   }}
                   severity={incidentSeverity}
-                  onSeverityChange={setIncidentSeverity}
+                  onSeverityChange={(value) => {
+                    if (value === incidentSeverity || incidentLoading) return;
+                    if (selectedIncidentType) setIncidentLoading(true);
+                    setIncidentError(null);
+                    setIncidentSeverity(value);
+                  }}
                 />
               </>
             )}

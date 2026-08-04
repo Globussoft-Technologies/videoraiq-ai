@@ -969,7 +969,7 @@ export default function SystemSettings() {
             desc={`${linkedCameraCount} camera${linkedCameraCount === 1 ? '' : 's'} connected to detection configs`}
             status={`${enabledDetectionRows.length} enabled`}
             tone={enabledDetectionRows.length > 0 ? 'ok' : 'off'}
-            onManage={() => navigate('/engines')}
+            onManage={() => navigate('/detection-settings')}
           />
           <IntegrationRow
             icon={Database}
