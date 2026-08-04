@@ -225,3 +225,30 @@ export const toggleChannelDetection = async ({ channelId, detectionType, enable 
     headers: { 'Content-Type': 'application/json', 'x-access-token': token },
   });
 };
+
+/** Get schedule for one camera linked to a detection setting */
+export const getDetectionSchedule = async (settingId, channelId) => {
+  const token = getAccessToken();
+  const res = await axios.get(`${Api_url}/detection-settings/${settingId}/schedule/${channelId}`, {
+    headers: { 'x-access-token': token },
+  });
+  return unwrap(res);
+};
+
+/** Update schedule for one camera linked to a detection setting */
+export const updateDetectionSchedule = async (settingId, channelId, data) => {
+  const token = getAccessToken();
+  const res = await axios.put(`${Api_url}/detection-settings/${settingId}/schedule/${channelId}`, data, {
+    headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+  });
+  return unwrap(res);
+};
+
+/** Delete schedule for one camera linked to a detection setting */
+export const deleteDetectionSchedule = async (settingId, channelId) => {
+  const token = getAccessToken();
+  const res = await axios.delete(`${Api_url}/detection-settings/${settingId}/schedule/${channelId}`, {
+    headers: { 'x-access-token': token },
+  });
+  return unwrap(res);
+};

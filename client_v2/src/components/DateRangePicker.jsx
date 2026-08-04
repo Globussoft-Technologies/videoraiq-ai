@@ -8,7 +8,7 @@ const filterInput = {
   height: 36,
   padding: '0 12px',
   borderRadius: 8,
-  background: 'var(--bg1solid)',
+  background: 'var(--bg2)',
   border: '1px solid var(--bd2)',
   fontSize: 12.5,
   color: 'var(--tx)',
@@ -131,7 +131,7 @@ export default function DateRangePicker({ from, to, onFrom, onTo, onClear }) {
           display: 'flex', alignItems: 'center', gap: 7,
           paddingRight: 10, minWidth: 155,
           border: open || hasRange ? '1px solid var(--blue)' : '1px solid var(--bd2)',
-          background: hasRange ? 'rgba(59,130,246,.08)' : 'var(--bg1solid)',
+          background: hasRange ? 'rgba(59,130,246,.08)' : 'var(--bg2)',
           boxShadow: open ? '0 0 0 3px rgba(59,130,246,.15)' : 'none',
         }}
       >

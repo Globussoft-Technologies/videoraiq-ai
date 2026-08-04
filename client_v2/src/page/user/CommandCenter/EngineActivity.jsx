@@ -117,12 +117,11 @@ export default function EngineActivity({ todayEngines = [], events24h = [], tota
                 <Empty label="No detections today" minH={120} />
               ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-                {todayEngines.map((e) => {
+                {todayEngines.map((e, i) => {
                   const meta = engineMeta(e.type);
-                  // Single color for every engine's bar (not PALETTE[i % ...]) — a
-                  // rotating rainbow per row reads as decorative noise here, where
-                  // the bars are stacked and compared by length, not by category.
-                  const color = 'var(--blue)';
+                  // Use the shared ENGINE_PALETTE so each engine gets a stable,
+                  // distinct color rather than a single monotone blue.
+                  const color = PALETTE[i % PALETTE.length] || 'var(--blue)';
                   return (
                     <div key={e.type} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <span style={{ width: 54, fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx2)', flex: '0 0 auto' }}>{meta.short}</span>

@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
 import { X } from 'lucide-react';
@@ -22,7 +22,7 @@ const incidentIdOf = (incident) => String(
 const TABS = [
   { key: 'all', label: 'All' },
   { key: 'high', label: 'High' },
-  { key: 'moderate', label: 'Medium' },
+  { key: 'moderate', label: 'Med' },
   { key: 'low', label: 'Low' },
 ];
 
@@ -90,6 +90,63 @@ function formatConfidence(item) {
   return `${Math.round(confidence * 10) / 10}%`;
 }
 
+function alertSeverityMeta(rawSeverity) {
+  const raw = String(rawSeverity || '').toLowerCase();
+  if (raw === 'critical') return { label: 'CRIT', color: 'var(--crit)', accent: 'var(--crit)', bg: 'transparent', border: 'var(--crit)', minWidth: 34 };
+  if (raw === 'high') return { label: 'HIGH', color: 'var(--crit)', accent: 'var(--crit)', bg: 'transparent', border: 'var(--crit)', minWidth: 36 };
+  if (raw === 'moderate' || raw === 'medium') return { label: 'MED', color: 'var(--warn)', accent: 'var(--warn)', bg: 'transparent', border: 'var(--warn)', minWidth: 32 };
+  if (raw === 'low') return { label: 'LOW', color: 'var(--tx3)', accent: 'var(--tx3)', bg: 'transparent', border: 'var(--tx3)', minWidth: 32 };
+  return { label: String(rawSeverity || 'INFO').toUpperCase(), color: 'var(--blue)', accent: 'var(--blue)', bg: 'transparent', border: 'var(--blue)', minWidth: 34 };
+}
+
+function incidentTypeCode(item) {
+  const raw = item?.incidentCode || item?.eventCode || item?.code || item?.incidentType || item?.type || '';
+  const label = detectionLabel(raw);
+  const words = label.split(/\s+/).filter(Boolean);
+  const code = words.length > 1 ? words.map((word) => word[0]).join('') : label.replace(/[^a-z0-9]/gi, '').slice(0, 4);
+  return (code || 'EVT').toUpperCase().slice(0, 5);
+}
+
+function shortIncidentName(item) {
+  const title = detectionLabel(item?.incidentType);
+  if (/^ppe\s+compliant$/i.test(title)) return 'PPE';
+  return title;
+}
+
+// Map certain incident types to colors that match severity levels used
+// elsewhere in the app. Falls back to the incident's severity accent.
+function typeAccentFor(item, sevMeta) {
+  const title = (shortIncidentName(item) || detectionLabel(item?.incidentType || '') || '').toString().toLowerCase();
+  const code = (incidentTypeCode(item) || '').toUpperCase();
+  if (code === 'PPE' || title.includes('ppe')) return '#ff6b00';
+  if (code === 'CD' || title.includes('crowd')) return 'var(--warn)';
+  if (code === 'UA' || title.includes('unauthoriz')) return 'var(--crit)';
+  // default: use the severity accent if present
+  return (sevMeta && (sevMeta.accent || sevMeta.color)) || 'var(--blue)';
+}
+
+function incidentDescription(item) {
+  return item?.description || item?.message || item?.alertDescription || item?.eventDescription || '';
+}
+
+function cameraNameOf(item) {
+  return item?.channelData?.customName || item?.channelData?.name || item?.cameraName || item?.camera || item?.channelName || '';
+}
+
+function locationNameOf(item) {
+  return item?.locationData?.locationName || item?.locationData?.name || item?.channelData?.location || item?.nvrData?.location || item?.location || '';
+}
+
+function alertDetailParts(item) {
+  const parts = [];
+  const camera = cameraNameOf(item);
+  const location = locationNameOf(item);
+  const confidence = confidenceOf(item);
+  if (camera) parts.push(camera);
+  if (location) parts.push(location);
+  if (confidence != null) parts.push(`${Math.round(confidence * 10) / 10}% conf`);
+  return parts;
+}
 function countsFromLoadedIncidents(items = [], totalCount = 0) {
   const counts = {
     severity: { all: Number(totalCount) || items.length, high: 0, moderate: 0, low: 0 },
@@ -521,14 +578,14 @@ export default function AlertsView() {
           .vq-alerts-detail { position: static !important; }
         }
         @media (max-width: 640px) {
-          .vq-alerts-row-head { grid-template-columns: 46px 1fr 72px !important; }
+          .vq-alerts-row-head { grid-template-columns: 42px 1fr 72px !important; }
           .vq-alerts-row-head .vq-alerts-col-status { display: none !important; }
-          .vq-alerts-row { grid-template-columns: 46px 1fr 72px !important; }
+          .vq-alerts-row { grid-template-columns: 42px 1fr 72px !important; }
           .vq-alerts-row .vq-alerts-col-status { display: none !important; }
         }
         @media (max-width: 420px) {
-          .vq-alerts-row-head { grid-template-columns: 40px 1fr 60px !important; }
-          .vq-alerts-row { grid-template-columns: 40px 1fr 60px !important; }
+          .vq-alerts-row-head { grid-template-columns: 38px 1fr 60px !important; }
+          .vq-alerts-row { grid-template-columns: 38px 1fr 60px !important; }
         }
       `}</style>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -550,15 +607,34 @@ export default function AlertsView() {
       <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16, minWidth: 0 }} className="vq-cc-grid vq-alerts-grid">
         {/* Table */}
         <Panel style={{ overflow: 'hidden', minWidth: 0 }}>
-          <div className="vq-alerts-row-head" style={{ display: 'grid', gridTemplateColumns: '80px 1fr 110px 110px', gap: 8, padding: '11px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>
-            <span>SEVERITY</span><span>EVENT</span><span>TIME</span><span className="vq-alerts-col-status">STATUS</span>
+          <div className="vq-alerts-row-head" style={{ display: 'grid', gridTemplateColumns: '64px minmax(0,1fr) 110px 100px', gap: 8, padding: '11px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>
+            <span>SEV</span><span>EVENT</span><span>TIME</span><span className="vq-alerts-col-status">STATUS</span>
           </div>
           <AsyncBoundary loading={loading} error={error} isEmpty={!loading && !error && rows.length === 0} onRetry={refetch} minH={300} emptyLabel="No alerts">
             {() => (
               <div ref={listRef} onScroll={handleScroll} className="vq-scroll" style={{ maxHeight: '64vh', overflowY: 'auto' }}>
                 {rows.map((it, index) => {
                   const s = severity(it.severity);
+                  const sevMeta = alertSeverityMeta(it.severity);
                   const st = statusOf(it);
+                  const eventTitle = shortIncidentName(it) || detectionLabel(it?.incidentType);
+                  const typeCode = incidentTypeCode(it);
+                  // Remove a leading type code from the full title (e.g. "PPE PPE compliance...")
+                  let rawTitle = String(eventTitle || '').trim();
+                  if (typeCode && new RegExp('^' + typeCode + '\\b', 'i').test(rawTitle)) {
+                    rawTitle = rawTitle.replace(new RegExp('^' + typeCode + '\\b\s*-?\s*', 'i'), '');
+                  }
+                  // Truncate long titles for the list view but keep the full title on hover
+                  const displayTitle = rawTitle.length > 42 ? rawTitle.slice(0, 42).trim() + '…' : rawTitle;
+                  // Hide the title when it's essentially the same as the incident type label
+                  const typeLabel = detectionLabel(it?.incidentType || it?.incidentCode || it?.eventCode || it?.code || it?.type || '');
+                  const norm = (s = '') => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                  const displayNorm = norm(displayTitle);
+                  const typeNorm = norm(typeLabel) || norm(typeCode);
+                  const hideDuplicateTitle = !displayTitle || (typeNorm && (displayNorm === typeNorm || displayNorm.startsWith(typeNorm) || displayNorm.includes(typeNorm)));
+                  const typeColor = typeAccentFor(it, sevMeta);
+                  const eventDescription = incidentDescription(it);
+                  const detailParts = alertDetailParts(it);
                   const rowId = incidentIdOf(it);
                   const isSel = !!activeId && activeId === rowId;
                   const isDeepLinked = !!rowId && rowId === incidentIdOf(deepLinkedIncident);
@@ -578,20 +654,38 @@ export default function AlertsView() {
                       aria-current={isSel ? 'true' : undefined}
                       className="vq-alerts-row"
                       style={{
-                        display: 'grid', gridTemplateColumns: '80px 1fr 110px 110px', gap: 8,
-                        alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid var(--bd)',
+                        display: 'grid', gridTemplateColumns: '64px minmax(0,1fr) 110px 100px', gap: 8,
+                        alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(148,163,184,.16)',
                         cursor: 'pointer', outline: 'none',
                         background: isSel ? 'rgba(59,130,246,.13)' : 'transparent',
                         boxShadow: isSel
-                          ? 'inset 3px 0 var(--blue), inset 0 0 0 1px rgba(59,130,246,.3)'
+                          ? 'inset 3px 0 var(--blue)'
                           : 'none',
                         transition: 'background .18s, box-shadow .18s',
                       }}
                     >
-                      <Badge color={s.color}>{s.short}</Badge>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.incidentName || detectionLabel(it.incidentType)}</div>
-                        <div style={{ fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.channelData?.name || '_'}</div>
+                      <span style={{ justifySelf: 'start', minWidth: sevMeta.minWidth, textAlign: 'center', fontFamily: 'var(--mono)', fontSize: 9.5, fontWeight: 700, lineHeight: 1, color: sevMeta.color, background: sevMeta.bg, border: '1px solid ' + sevMeta.border, borderRadius: 4, padding: '3px 5px' }}>{sevMeta.label}</span>
+                      <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                          <span style={{
+                            fontFamily: 'var(--disp)',
+                            fontSize: 11,
+                            fontWeight: 800,
+                            letterSpacing: '.04em',
+                            color: typeColor,
+                            background: 'transparent',
+                            border: 'none',
+                            borderRadius: 4,
+                            padding: '0 6px',
+                            flex: '0 0 auto',
+                            display: 'inline-block',
+                          }}>{typeCode}</span>
+                          {!hideDuplicateTitle && (
+                            <span title={eventTitle} style={{ fontFamily: 'var(--disp)', fontSize: 14, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: '0 1 auto', marginLeft: 8 }}>{displayTitle}</span>
+                          )}
+                          {eventDescription && <span style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, marginLeft: 8 }}>{eventDescription}</span>}
+                        </div>
+                        {detailParts.length > 0 && <div style={{ fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detailParts.join(' - ')}</div>}
                       </div>
                       <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{timeAgo(it.timeOfIncident)}</span>
                       <span className="vq-alerts-col-status" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: st.color, fontWeight: 600, minWidth: 0, overflow: 'hidden' }}>
@@ -622,7 +716,7 @@ export default function AlertsView() {
               <div style={{ padding: 15, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
                 <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' }}>
                   <Badge color={severity(active.severity).color} solid>{detectionLabel(active.incidentType)}</Badge>
-                  <Badge color={severity(active.severity).color}>{severity(active.severity).short}</Badge>
+                  <Badge color={severity(active.severity).color}>{alertSeverityMeta(active.severity).label}</Badge>
                   <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>{shortDateTime(active.timeOfIncident)}</span>
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, wordBreak: 'break-word' }}>{active.incidentName || detectionLabel(active.incidentType)}</div>

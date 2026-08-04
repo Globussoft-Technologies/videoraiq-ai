@@ -860,6 +860,8 @@ export default function Detections() {
                 <DetectionDetailPanel
                   model={selected}
                   category={selectedCategory}
+                  settingId={selectedDetectionSettingId}
+                  channel={zoneCamera}
                   onToggle={() => toggleModel(selected)}
                   toggleDisabled={detectionToggleLoading === selectedSettingType}
                   onSensitivityChange={(value) => patch(selected.id, { sensitivity: value })}

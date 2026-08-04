@@ -9,12 +9,16 @@ export default function ZoneSettingsPanel({ zones, extraFields, activeIndex, onS
 
   return (
     <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
-      <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 5 }}>Zone Settings</div>
-      <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 12 }}>
-        {zones.length} zone{zones.length === 1 ? '' : 's'} drawn on this camera for this detection type.
-      </div>
-      <div style={{ marginBottom: 12 }}>
-        <TimezoneField />
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Zone Settings</div>
+          <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 4 }}>
+            {zones.length} zone{zones.length === 1 ? '' : 's'} drawn on this camera for this detection type.
+          </div>
+        </div>
+        <div style={{ minWidth: 280, width: '100%', maxWidth: 320 }}>
+          <TimezoneField />
+        </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {zones.map((z, i) => {
@@ -46,66 +50,76 @@ export default function ZoneSettingsPanel({ zones, extraFields, activeIndex, onS
                 )}
               </div>
               {isOpen && (
-                <div style={{ padding: '10px 11px', borderTop: '1px solid var(--bd)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Zone Name</label>
-                    <input
-                      value={z.name}
-                      onChange={e => onUpdateField(i, 'name', e.target.value)}
-                      maxLength={50}
-                      style={{
-                        width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
-                        background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none',
-                      }}
-                    />
+                <div style={{ padding: '12px 11px', borderTop: '1px solid var(--bd)', display: 'grid', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Zone Name</label>
+                      <input
+                        value={z.name}
+                        onChange={e => onUpdateField(i, 'name', e.target.value)}
+                        maxLength={50}
+                        style={{
+                          width: '100%', height: 36, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
+                          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none',
+                        }}
+                      />
+                    </div>
+                    <div style={{ display: 'grid', gap: 10 }}>
+                      {extraFields.includes('capacity') && (
+                        <div>
+                          <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Capacity</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={z.capacity}
+                            onChange={e => onUpdateField(i, 'capacity', e.target.value)}
+                            placeholder="e.g. 10"
+                            style={{
+                              width: '100%', height: 36, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
+                              background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none',
+                            }}
+                          />
+                        </div>
+                      )}
+                      {extraFields.includes('threshold') && (
+                        <div>
+                          <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Threshold (sec)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={z.threshold}
+                            onChange={e => onUpdateField(i, 'threshold', e.target.value)}
+                            placeholder="e.g. 30"
+                            style={{
+                              width: '100%', height: 36, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
+                              background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none',
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  {extraFields.includes('capacity') && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Capacity</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={z.capacity}
-                        onChange={e => onUpdateField(i, 'capacity', e.target.value)}
-                        placeholder="e.g. 10"
-                        style={{
-                          width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
-                          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none',
-                        }}
-                      />
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--tx3)', marginBottom: 4 }}>Zone schedule</div>
+                      <div style={{ fontSize: 12, color: 'var(--tx2)' }}>Set the active time window for this zone.</div>
                     </div>
-                  )}
-                  {extraFields.includes('threshold') && (
-                    <div>
-                      <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Threshold (sec)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={z.threshold}
-                        onChange={e => onUpdateField(i, 'threshold', e.target.value)}
-                        placeholder="e.g. 30"
-                        style={{
-                          width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
-                          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none',
-                        }}
-                      />
-                    </div>
-                  )}
+                    <button
+                      onClick={() => onSave(i)}
+                      disabled={savingIndex === i}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 5, height: 34, padding: '0 14px',
+                        borderRadius: 8, background: 'var(--blue)', border: 'none', fontSize: 11.5, fontWeight: 600, color: '#fff',
+                        cursor: savingIndex === i ? 'not-allowed' : 'pointer', opacity: savingIndex === i ? 0.6 : 1,
+                      }}
+                    >
+                      <Save size={12} /> {savingIndex === i ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
                   <ZoneScheduleFields
                     value={z.schedule}
                     onChange={schedule => onUpdateField(i, 'schedule', schedule)}
                   />
-                  <button
-                    onClick={() => onSave(i)}
-                    disabled={savingIndex === i}
-                    style={{
-                      alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: 5, height: 30, padding: '0 12px',
-                      borderRadius: 7, background: 'var(--blue)', border: 'none', fontSize: 11.5, fontWeight: 600, color: '#fff',
-                      cursor: savingIndex === i ? 'not-allowed' : 'pointer', opacity: savingIndex === i ? 0.6 : 1,
-                    }}
-                  >
-                    <Save size={12} /> {savingIndex === i ? 'Saving...' : 'Save'}
-                  </button>
                 </div>
               )}
             </div>

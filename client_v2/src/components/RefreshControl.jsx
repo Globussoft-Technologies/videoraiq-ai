@@ -140,7 +140,7 @@ export default function RefreshControl({ onManualRefresh, storageKey }) {
       <div style={{
         display: 'flex', alignItems: 'stretch', height: 36,
         border: '1px solid var(--bd2)', borderRadius: 9,
-        background: 'var(--bg1solid)', overflow: 'hidden',
+        background: 'var(--bg2)', overflow: 'hidden',
       }}>
         {/* Manual refresh */}
         <div

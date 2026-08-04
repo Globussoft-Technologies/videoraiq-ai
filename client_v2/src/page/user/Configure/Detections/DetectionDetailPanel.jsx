@@ -1,5 +1,11 @@
-import { ListRestart } from 'lucide-react';
+import { AlertCircle, ListRestart, Calendar, Clock, Globe, Plus, X, ChevronDown, Trash2, CalendarCheck } from 'lucide-react';
 import { Toggle } from '../../../../components/primitives';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { toast } from 'sonner';
+import ConfirmationModal from '../../../../components/DeleteConfirmation';
+import { getDetectionSchedule, updateDetectionSchedule, deleteDetectionSchedule } from '../../../../helpers/configure';
+import { useTimezones } from '../ZoneScheduleFields';
 
 function StatBox({ label, value, color = 'var(--tx)' }) {
   return (
@@ -32,6 +38,197 @@ function StatBox({ label, value, color = 'var(--tx)' }) {
   );
 }
 
+function ScheduleFieldDropdown({
+  label,
+  value,
+  options,
+  placeholder,
+  onChange,
+  disabled,
+  icon: Icon,
+  searchable = false,
+  minMenuWidth = 260
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0, openUp: false });
+  const triggerRef = useRef(null);
+  const listRef = useRef(null);
+  const searchRef = useRef(null);
+
+  const filtered = searchable && query
+    ? options.filter((o) => o.toLowerCase().includes(query.toLowerCase()))
+    : options;
+
+  const place = () => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const menuW = Math.max(r.width, minMenuWidth);
+    const menuH = 168 + (searchable ? 44 : 0);
+    const spaceBelow = window.innerHeight - r.bottom;
+    const openUp = spaceBelow < menuH + 8 && r.top > spaceBelow;
+    const left = Math.min(r.left, window.innerWidth - menuW - 8);
+    setCoords({ top: openUp ? r.top : r.bottom, left: Math.max(8, left), width: menuW, openUp });
+  };
+
+  useLayoutEffect(() => {
+    if (open) place();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => {
+      if (
+        triggerRef.current && !triggerRef.current.contains(e.target) &&
+        listRef.current && !listRef.current.contains(e.target)
+      ) setOpen(false);
+    };
+    const onKey = (e) => e.key === 'Escape' && setOpen(false);
+    const onResize = () => place();
+    const onScroll = (e) => {
+      if (listRef.current && listRef.current.contains(e.target)) return;
+      const el = triggerRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > window.innerHeight) setOpen(false);
+      else place();
+    };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', onResize);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) { setQuery(''); return; }
+    if (listRef.current) {
+      const sel = listRef.current.querySelector('[data-selected="true"]');
+      if (sel) sel.scrollIntoView({ block: 'center' });
+    }
+    if (searchable && searchRef.current) searchRef.current.focus();
+  }, [open, searchable]);
+
+  const list = open && !disabled && createPortal(
+    <div
+      ref={listRef}
+      style={{
+        position: 'fixed', top: coords.top, left: coords.left, width: coords.width,
+        transform: coords.openUp ? 'translateY(-100%)' : 'none', zIndex: 10000,
+        borderRadius: 12, border: '1px solid #e2e8f0', background: '#ffffff',
+        boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)', overflow: 'hidden',
+      }}
+    >
+      {searchable && (
+        <div style={{ padding: 6, borderBottom: '1px solid #f1f5f9' }}>
+          <input
+            ref={searchRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search..."
+            style={{
+              width: '100%', height: 32, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
+              background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: 12.5, color: '#0f172a', outline: 'none',
+            }}
+          />
+        </div>
+      )}
+      <ul className="vq-scroll" style={{ maxHeight: 168, overflowY: 'auto', margin: 0, padding: 4, listStyle: 'none' }}>
+        {filtered.length === 0 && (
+          <li style={{ padding: '8px 10px', fontSize: 12.5, color: '#64748b' }}>No matches</li>
+        )}
+        {filtered.map((opt) => {
+          const selected = opt === value;
+          return (
+            <li key={opt} data-selected={selected}>
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); onChange(opt); setOpen(false); }}
+                style={{
+                  width: '100%', textAlign: 'left', padding: '7px 10px', borderRadius: 7, border: 'none',
+                  cursor: 'pointer', fontSize: 13, fontWeight: selected ? 600 : 400,
+                  background: selected ? '#7c3aed' : 'transparent',
+                  color: selected ? '#fff' : '#334155',
+                }}
+                onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = '#f1f5f9'; }}
+                onMouseLeave={(e) => { if (!selected) e.currentTarget.style.background = 'transparent'; }}
+              >
+                {opt}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>,
+    document.body
+  );
+
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      {/* Border container that acts as trigger */}
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && setOpen((o) => !o)}
+        style={{
+          width: '100%',
+          height: 48,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
+          padding: '0 16px',
+          borderRadius: 12,
+          boxSizing: 'border-box',
+          fontSize: 14,
+          textAlign: 'left',
+          background: '#fff',
+          border: `1px solid ${open ? '#7c3aed' : '#dbeafe'}`,
+          color: disabled ? '#94a3b8' : '#0f172a',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          {Icon && <Icon size={18} style={{ color: '#475569', flexShrink: 0 }} />}
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }}>
+            {value || placeholder}
+          </span>
+        </div>
+        <ChevronDown size={16} style={{ flexShrink: 0, color: '#64748b', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+      </button>
+
+      {/* Floating label positioned on the top border */}
+      <span
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 14,
+          transform: 'translateY(-50%)',
+          background: '#fff',
+          padding: '0 6px',
+          fontSize: 11,
+          fontWeight: 600,
+          color: '#64748b',
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        {label}
+      </span>
+
+      {list}
+    </div>
+  );
+}
+
 /**
  * Detail card for the selected detection: identity + enable toggle, sensitivity
  * slider, the four config stats and the two configure actions.
@@ -49,12 +246,174 @@ export default function DetectionDetailPanel({
   onEditZones,
   onResetSetting,
   resetDisabled = false,
+  settingId,
+  channel,
+  onScheduleSaved,
 }) {
   const Icon = category?.icon;
   const color = category?.color || 'var(--blue)';
   const sensitivity = model.sensitivity;
   const appliedCameras = model.appliedCameras == null ? 'N/A' : model.appliedCameras;
   const minConfidence = model.minConfidence == null ? 'N/A' : `${model.minConfidence}%`;
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
+  const [scheduleForm, setScheduleForm] = useState(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [actualScheduleMode, setActualScheduleMode] = useState('Loading...');
+
+  const channelId = channel?._id || channel?.channelId || channel?.id;
+  const timezones = useTimezones();
+
+  useEffect(() => {
+    let alive = true;
+    if (!settingId || !channelId) {
+      setActualScheduleMode('N/A');
+      return;
+    }
+    setActualScheduleMode('Loading...');
+    getDetectionSchedule(settingId, channelId)
+      .then((res) => {
+        if (!alive) return;
+        const mode = res?.schedule?.mode || 'always';
+        setActualScheduleMode(mode.charAt(0).toUpperCase() + mode.slice(1));
+      })
+      .catch(() => {
+        if (alive) setActualScheduleMode('Always');
+      });
+    return () => { alive = false; };
+  }, [settingId, channelId]);
+
+  async function openSchedule() {
+    if (!settingId || !channelId) return;
+    setScheduleOpen(true);
+    setScheduleLoading(true);
+    setScheduleError('');
+    try {
+      const res = await getDetectionSchedule(settingId, channelId);
+      const defaultPayload = res?.schedule
+        ? { mode: res.schedule.mode, timezone: res.schedule.timezone || 'Asia/Kolkata', days: res.schedule.days || {} }
+        : { mode: 'always', timezone: 'Asia/Kolkata', days: { monday: [], tuesday: [], wednesday: [], thursday: [], friday: [], saturday: [], sunday: [] } };
+      setScheduleForm(defaultPayload);
+    } catch (e) {
+      setScheduleError(e?.response?.data?.message || e?.message || 'Failed to load schedule');
+    } finally {
+      setScheduleLoading(false);
+    }
+  }
+
+  function closeSchedule() {
+    if (scheduleLoading) return;
+    setScheduleOpen(false);
+    setScheduleForm(null);
+    setScheduleError('');
+  }
+
+  function validateScheduleForm() {
+    if (!scheduleForm) return 'Missing schedule data.';
+    if (!scheduleForm.timezone) return 'Please select a timezone.';
+
+    const mode = scheduleForm.mode || 'always';
+    if (mode === 'custom') {
+      const days = ensureDays(scheduleForm.days);
+      const ranges = Object.values(days).flat();
+      if (!ranges.length) return 'Please add at least one active time range.';
+
+      for (const { start, end } of ranges) {
+        if (!start || !end) return 'Please fill both start and end times for all ranges.';
+        if (start >= end) return 'Please make sure start time is before end time.';
+      }
+    }
+
+    return '';
+  }
+
+  function ensureDays(d) {
+    const base = { monday: [], tuesday: [], wednesday: [], thursday: [], friday: [], saturday: [], sunday: [] };
+    const formatted = {};
+    for (const day of Object.keys(base)) {
+      const list = d?.[day] || [];
+      formatted[day] = list.slice(0, 1);
+    }
+    return formatted;
+  }
+
+  function addInterval(day) {
+    setScheduleForm((s) => {
+      const days = ensureDays(s.days);
+      return { ...s, days: { ...days, [day]: [{ start: '09:00', end: '18:00' }] } };
+    });
+  }
+
+  function removeInterval(day, idx) {
+    setScheduleForm((s) => {
+      const days = ensureDays(s.days);
+      return { ...s, days: { ...days, [day]: [] } };
+    });
+  }
+
+  function updateInterval(day, idx, field, value) {
+    setScheduleForm((s) => {
+      const days = ensureDays(s.days);
+      const next = (days[day] || []).map((it, i) => (i === idx ? { ...it, [field]: value } : it));
+      return { ...s, days: { ...days, [day]: next } };
+    });
+  }
+
+  async function submitSchedule() {
+    if (!settingId || !channelId) return setScheduleError('Missing setting or channel id');
+    const validationError = validateScheduleForm();
+    if (validationError) {
+      setScheduleError(validationError);
+      toast.error(validationError);
+      return;
+    }
+    if (!scheduleForm) return setScheduleError('Missing schedule data');
+    setScheduleLoading(true);
+    setScheduleError('');
+    try {
+      const payload = { mode: scheduleForm.mode, timezone: scheduleForm.timezone || 'Asia/Kolkata', days: ensureDays(scheduleForm.days) };
+      const response = await updateDetectionSchedule(settingId, channelId, payload);
+      const message = response?.message || 'Schedule saved successfully';
+      toast.success(message);
+      const newMode = scheduleForm.mode || 'always';
+      setActualScheduleMode(newMode.charAt(0).toUpperCase() + newMode.slice(1));
+      if (typeof onScheduleSaved === 'function') onScheduleSaved();
+      closeSchedule();
+    } catch (e) {
+      const message = e?.response?.data?.message || e?.message || 'Failed to update schedule';
+      setScheduleError(message);
+      toast.error(message);
+    } finally {
+      setScheduleLoading(false);
+    }
+  }
+
+  function requestDeleteSchedule() {
+    setScheduleError('');
+    setConfirmDeleteOpen(true);
+  }
+
+  async function confirmDeleteSchedule() {
+    if (!settingId || !channelId) return setScheduleError('Missing setting or channel id');
+    setScheduleLoading(true);
+    setScheduleError('');
+    try {
+      const response = await deleteDetectionSchedule(settingId, channelId);
+      const message = response?.message || 'Schedule deleted successfully';
+      toast.success(message);
+      setActualScheduleMode('Always');
+      if (typeof onScheduleSaved === 'function') onScheduleSaved();
+      setConfirmDeleteOpen(false);
+      closeSchedule();
+    } catch (e) {
+      const message = e?.response?.data?.message || e?.message || 'Failed to delete schedule';
+      setScheduleError(message);
+      toast.error(message);
+    } finally {
+      setScheduleLoading(false);
+    }
+  }
 
   return (
     <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12, padding: 16 }}>
@@ -114,7 +473,7 @@ export default function DetectionDetailPanel({
           style={{
             flex: 1,
             minWidth: 0,
-            background: `linear-gradient(90deg, var(--blue) 0%, var(--violet) ${sensitivity}%, var(--sliderrest) ${sensitivity}%, var(--sliderrest) 100%)`,
+            background: '#dbeafe',
             opacity: model.active ? 1 : 0.5,
           }}
         />
@@ -143,7 +502,7 @@ export default function DetectionDetailPanel({
           value={model.active ? 'Active' : 'Paused'}
           color={model.active ? 'var(--ok)' : 'var(--tx3)'}
         />
-        <StatBox label="Schedule" value={model.schedule} />
+        <StatBox label="Schedule" value={actualScheduleMode} />
         <StatBox label="Applied Cameras" value={appliedCameras} />
         <StatBox label="Min Confidence" value={minConfidence} color="var(--blue)" />
       </div>
@@ -167,6 +526,30 @@ export default function DetectionDetailPanel({
           }}
         >
           Edit zones &amp; rules
+        </button>
+        <button
+          type="button"
+          onClick={openSchedule}
+          disabled={!settingId || !channel}
+          title={!settingId || !channel ? 'Select a camera with a saved setting to edit schedule' : 'Edit schedule for this camera'}
+          style={{
+            flex: 1,
+            height: 36,
+            borderRadius: 8,
+            border: '1px solid var(--bd)',
+            cursor: !settingId || !channel ? 'not-allowed' : 'pointer',
+            fontSize: 12,
+            fontWeight: 600,
+            color: !settingId || !channel ? 'var(--tx3)' : 'var(--tx2)',
+            background: 'var(--bg2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 7,
+            opacity: !settingId || !channel ? 0.65 : 1,
+          }}
+        >
+          Edit Schedule
         </button>
         <button
           type="button"
@@ -194,6 +577,377 @@ export default function DetectionDetailPanel({
           Reset Setting
         </button>
       </div>
+        {scheduleOpen && createPortal(
+          <div
+            onClick={() => { if (!scheduleLoading) closeSchedule(); }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9999,
+              background: 'rgba(15, 23, 42, 0.4)',
+              backdropFilter: 'blur(4px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 20,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: 'min(640px, 94vw)',
+                maxHeight: '90vh',
+                display: 'flex',
+                flexDirection: 'column',
+                background: '#ffffff',
+                border: '1px solid #f1f0fb',
+                borderRadius: '20px',
+                boxShadow: '0 20px 40px -15px rgba(124, 58, 237, 0.12), 0 0 0 1px rgba(124, 58, 237, 0.04)',
+                overflow: 'hidden',
+              }}
+            >
+              {/* Header */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: 16,
+                  padding: '24px 28px 18px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}>
+                  <div
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 12,
+                      display: 'grid',
+                      placeItems: 'center',
+                      background: '#7c3aed',
+                      color: '#ffffff',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Calendar size={22} strokeWidth={2} />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', fontFamily: 'var(--disp, sans-serif)' }}>
+                      Edit Schedule for {model.name}
+                    </div>
+                    <div style={{ marginTop: 4, fontSize: 13, color: '#64748b', lineHeight: 1.5 }}>
+                      Set the timezone, mode and daily time ranges for the schedule.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { if (!scheduleLoading) closeSchedule(); }}
+                  aria-label="Close schedule editor"
+                  disabled={scheduleLoading}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: scheduleLoading ? '#cbd5e1' : '#94a3b8',
+                    cursor: scheduleLoading ? 'not-allowed' : 'pointer',
+                    padding: 6,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '50%',
+                    transition: 'color 0.15s, background-color 0.15s',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!scheduleLoading) {
+                      e.currentTarget.style.color = '#475569';
+                      e.currentTarget.style.backgroundColor = '#f1f5f9';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!scheduleLoading) {
+                      e.currentTarget.style.color = '#94a3b8';
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }
+                  }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div style={{ overflowY: 'auto', padding: '0 28px 24px', display: 'grid', gap: 20 }}>
+                {/* Schedule Settings Header */}
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: '.05em',
+                      color: '#7c3aed',
+                      textTransform: 'uppercase',
+                      marginTop: 4,
+                    }}
+                  >
+                    Schedule Settings
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <ScheduleFieldDropdown
+                      label="Time zone"
+                      value={scheduleForm?.timezone || 'Asia/Kolkata'}
+                      options={timezones}
+                      placeholder={timezones.length ? 'Select time zone' : 'Loading time zones…'}
+                      disabled={scheduleLoading || !timezones.length}
+                      onChange={(tz) => setScheduleForm((s) => ({ ...(s || {}), timezone: tz }))}
+                      icon={Globe}
+                      searchable
+                    />
+
+                    <ScheduleFieldDropdown
+                      label="Mode"
+                      value={scheduleForm?.mode === 'always' ? 'Always' : 'Custom'}
+                      options={['Always', 'Custom']}
+                      disabled={scheduleLoading}
+                      onChange={(val) => setScheduleForm((s) => ({ ...(s || {}), mode: val.toLowerCase() }))}
+                      icon={Clock}
+                    />
+                  </div>
+                </div>
+
+                {/* Weekly Schedule Days List */}
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {scheduleForm?.mode === 'always' ? (
+                    <div
+                      style={{
+                        padding: '18px 20px',
+                        borderRadius: '16px',
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        color: '#334155',
+                      }}
+                    >
+                      <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Always mode</div>
+                      <div style={{ fontSize: 13, lineHeight: 1.7, color: '#475569' }}>
+                        This detection is active continuously. Daily time ranges are not required when the schedule mode is Always.
+                        Switch to Custom if you want to define specific active days and times.
+                      </div>
+                    </div>
+                  ) : (
+                    ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => {
+                      const ranges = scheduleForm?.days?.[day] || [];
+                      const hasRange = ranges.length > 0;
+                      return (
+                        <div
+                          key={day}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 16,
+                            padding: '12px 16px',
+                            background: '#ffffff',
+                            border: '1px solid #f1f5f9',
+                            borderRadius: '12px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: '8px',
+                                display: 'grid',
+                                placeItems: 'center',
+                                background: '#f5f3ff',
+                                color: '#7c3aed',
+                                flexShrink: 0,
+                              }}
+                            >
+                              <Calendar size={16} />
+                            </div>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: '#1e293b', width: 90, flexShrink: 0 }}>
+                              {day.charAt(0).toUpperCase() + day.slice(1)}
+                            </span>
+                            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
+                              {!hasRange ? (
+                                <span style={{ fontSize: 13, color: '#94a3b8' }}>No ranges</span>
+                              ) : (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <input
+                                    type="time"
+                                    value={ranges[0].start || '09:00'}
+                                    onChange={(e) => updateInterval(day, 0, 'start', e.target.value)}
+                                    style={{
+                                      border: '1px solid #dbeafe',
+                                      borderRadius: '8px',
+                                      padding: '4px 8px',
+                                      fontSize: '13px',
+                                      fontWeight: 500,
+                                      color: '#1e293b',
+                                      background: '#fff',
+                                      outline: 'none',
+                                    }}
+                                  />
+                                  <span style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>to</span>
+                                  <input
+                                    type="time"
+                                    value={ranges[0].end || '18:00'}
+                                    onChange={(e) => updateInterval(day, 0, 'end', e.target.value)}
+                                    style={{
+                                      border: '1px solid #dbeafe',
+                                      borderRadius: '8px',
+                                      padding: '4px 8px',
+                                      fontSize: '13px',
+                                      fontWeight: 500,
+                                      color: '#1e293b',
+                                      background: '#fff',
+                                      outline: 'none',
+                                    }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {hasRange ? (
+                            <button
+                              onClick={() => removeInterval(day, 0)}
+                              type="button"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: 32,
+                                height: 32,
+                                borderRadius: '8px',
+                                border: 'none',
+                                background: '#fef2f2',
+                                color: '#ef4444',
+                                cursor: 'pointer',
+                                transition: 'background-color 0.15s',
+                                flexShrink: 0,
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = '#fee2e2'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = '#fef2f2'}
+                              title="Remove time range"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => addInterval(day)}
+                              type="button"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                height: 32,
+                                padding: '0 12px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                background: '#f5f3ff',
+                                color: '#7c3aed',
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                                fontSize: '13px',
+                                transition: 'background-color 0.15s',
+                                flexShrink: 0,
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = '#ede9fe'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = '#f5f3ff'}
+                            >
+                              <Plus size={14} strokeWidth={2.5} />
+                              Add
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Footer buttons */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, gap: 16, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  
+                    {scheduleForm?.mode === 'custom' && (
+                      <button
+                        onClick={requestDeleteSchedule}
+                        type="button"
+                        style={{
+                          height: 44,
+                          padding: '0 20px',
+                          borderRadius: '10px',
+                          border: '1px solid #fee2e2',
+                          background: '#fff1f2',
+                          color: '#b91c1c',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          fontWeight: 600,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          transition: 'background-color 0.15s',
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#fee2e2'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = '#fff1f2'}
+                      >
+                        <Trash2 size={15} />
+                        Delete schedule
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    onClick={submitSchedule}
+                    disabled={scheduleLoading}
+                    type="button"
+                    style={{
+                      height: 44,
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                      color: '#fff',
+                      fontWeight: 600,
+                      fontSize: '14px',
+                      cursor: scheduleLoading ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      padding: '0 32px',
+                      boxShadow: '0 4px 12px rgba(124, 58, 237, 0.2)',
+                      transition: 'opacity 0.15s',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!scheduleLoading) e.currentTarget.style.opacity = 0.95;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.opacity = 1;
+                    }}
+                  >
+                    {scheduleLoading ? (
+                      'Saving...'
+                    ) : (
+                      <>
+                        <CalendarCheck size={16} />
+                        Save Schedule
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+        <ConfirmationModal
+          open={confirmDeleteOpen}
+          title="Delete schedule"
+          message="Delete this custom schedule? This will remove the current schedule and revert the detection to Always mode."
+          icon={<AlertCircle size={20} />}
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          loading={scheduleLoading}
+          onClose={() => setConfirmDeleteOpen(false)}
+          onConfirm={confirmDeleteSchedule}
+        />
     </div>
   );
 }

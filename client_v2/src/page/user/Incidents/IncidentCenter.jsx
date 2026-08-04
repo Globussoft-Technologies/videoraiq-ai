@@ -32,7 +32,7 @@ const STATUSES = [
 const chip = (active, color = 'var(--blue)') => ({
   fontSize: 12, fontWeight: 500,
   padding: '5px 14px', borderRadius: 7, cursor: 'pointer',
-  background: active ? color : 'transparent',
+  background: active ? color : 'var(--bg2)',
   color: active ? '#fff' : 'var(--tx2)',
   border: `1px solid ${active ? color : 'var(--bd2)'}`,
   transition: 'all .15s',
@@ -43,7 +43,7 @@ const filterInput = {
   height: 36,
   padding: '0 12px',
   borderRadius: 8,
-  background: 'var(--bg1solid)',
+  background: 'var(--bg2)',
   border: '1px solid var(--bd2)',
   fontSize: 12.5,
   color: 'var(--tx)',
@@ -248,7 +248,7 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
         style={{
           display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 14px',
           border: `1px solid ${activeCount > 0 ? 'var(--blue)' : 'var(--bd2)'}`,
-          background: activeCount > 0 ? 'rgba(59,130,246,.08)' : 'var(--bg1solid)',
+          background: activeCount > 0 ? 'rgba(59,130,246,.08)' : 'var(--bg2)',
           borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 600,
           color: activeCount > 0 ? 'var(--blue)' : 'var(--tx2)',
           boxShadow: open ? '0 0 0 3px rgba(59,130,246,.15)' : 'none',
@@ -1027,7 +1027,7 @@ export default function IncidentCenter() {
       <div className="vq-inc-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
         {kpis.map((k) => (
           <div key={k.label} style={{
-            background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 12,
+            background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12,
             padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4,
             boxShadow: '0 1px 3px rgba(0,0,0,.07)', minWidth: 0,
           }}>
@@ -1041,7 +1041,7 @@ export default function IncidentCenter() {
 
       {/* ── Filter bar — everything on one wrapping line ─────────────────────── */}
       <div style={{
-        background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 12,
+        background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12,
         padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
         boxShadow: '0 1px 3px rgba(0,0,0,.07)',
       }}>
@@ -1120,7 +1120,7 @@ export default function IncidentCenter() {
             <select
               value={pageSize}
               onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
-              style={{ padding: '5px 8px', borderRadius: 7, border: '1px solid var(--bd)', background: 'var(--bg1solid)', color: 'var(--tx2)', fontSize: 12.5, cursor: 'pointer' }}
+              style={{ padding: '5px 8px', borderRadius: 7, border: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx2)', fontSize: 12.5, cursor: 'pointer' }}
             >
               {PAGE_SIZE_OPTIONS.map((n) => (
                 <option key={n} value={n}>{n}</option>

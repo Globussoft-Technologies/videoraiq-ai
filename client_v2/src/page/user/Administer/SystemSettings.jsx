@@ -657,6 +657,7 @@ export default function SystemSettings() {
     return Array.from(set);
   }, [savedTimezone, timezones]);
 
+  const adminUserId = admin.user_id;
   const retention = admin.retention || {};
   const storedIncidentRetention = retention.incidents || '';
   const storedAttendanceRetention = retention.attendance || '';
@@ -697,6 +698,11 @@ export default function SystemSettings() {
   }, 0);
   const firstEnabledDetection = enabledDetectionRows[0];
   const selectedRetentionLabel = formatRetentionDuration(retentionDays);
+  const savedRetentionDays = storedRetentionDays(storedIncidentRetention, storedAttendanceRetention, storedAccessRetention);
+  const savedRetentionLabel = formatRetentionDuration(savedRetentionDays);
+
+  const retentionSummaryLabel = (spec) => (spec ? String(spec) : '-');
+
   const retentionSliderPercent = ((retentionDays - RETENTION_MIN) / (RETENTION_MAX - RETENTION_MIN)) * 100;
 
   const retentionModeChanged = retentionEnabled !== storedRetentionEnabled;
@@ -705,7 +711,7 @@ export default function SystemSettings() {
     : canEditSettings;
   const canAdjustRetention = canEditSettings
     || (!storedRetentionEnabled && retentionEnabled && canCreateSettings);
-  const canSaveRetention = !!admin.user_id && !retentionSaving && canApplyRetention;
+  const canSaveRetention = !!adminUserId && !retentionSaving && canApplyRetention;
 
   const handleSoundToggle = async (next) => {
     const allowed = next ? canEnableSetting : canDisableSetting;
@@ -758,7 +764,7 @@ export default function SystemSettings() {
       toast.error("You don't have permission to change retention settings");
       return;
     }
-    if (!admin.user_id) {
+    if (!adminUserId) {
       toast.error('Admin user id is not available yet');
       return;
     }
@@ -766,7 +772,7 @@ export default function SystemSettings() {
     try {
       const spec = retentionEnabled ? `${retentionDays}d` : 'never';
       await updateRetention({
-        userId: admin.user_id,
+        userId: adminUserId,
         enabled: retentionEnabled,
         incidents: spec,
         attendance: spec,
@@ -947,9 +953,9 @@ export default function SystemSettings() {
             ))}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 9, marginTop: 14 }}>
-            <Metric label="Incidents" value={retentionLabel(storedIncidentRetention, retentionDays)} icon={Database} />
-            <Metric label="Attendance" value={retentionLabel(storedAttendanceRetention, retentionDays)} icon={Clock} tone="ok" />
-            <Metric label="Access Logs" value={retentionLabel(storedAccessRetention, retentionDays)} icon={ShieldCheck} tone="warn" />
+            <Metric label="Incidents" value={retentionSummaryLabel(storedIncidentRetention)} icon={Database} />
+            <Metric label="Attendance" value={retentionSummaryLabel(storedAttendanceRetention)} icon={Clock} tone="ok" />
+            <Metric label="Access Logs" value={retentionSummaryLabel(storedAccessRetention)} icon={ShieldCheck} tone="warn" />
           </div>
         </Panel>
       </div>
@@ -995,8 +1001,8 @@ export default function SystemSettings() {
           />
           <ComplianceRow
             label="Data retention policy"
-            desc={retentionEnabled ? `Automatic cleanup after ${selectedRetentionLabel}.` : 'Automatic cleanup is disabled.'}
-            enabled={retentionEnabled}
+            desc={storedRetentionEnabled ? `Automatic cleanup after ${savedRetentionLabel}.` : 'Automatic cleanup is disabled.'}
+            enabled={storedRetentionEnabled}
           />
           <ComplianceRow
             label="Verified notification recipients"
@@ -1053,9 +1059,9 @@ export default function SystemSettings() {
           <IntegrationRow
             icon={Database}
             title="Retention Service"
-            desc={retentionEnabled ? `Incidents, attendance, and access logs set to ${selectedRetentionLabel}` : 'Retention sweep disabled for this admin'}
-            status={retentionEnabled ? 'Active' : 'Paused'}
-            tone={retentionEnabled ? 'ok' : 'warn'}
+            desc={storedRetentionEnabled ? `Incidents, attendance, and access logs set to ${savedRetentionLabel}` : 'Retention sweep disabled for this admin'}
+            status={storedRetentionEnabled ? 'Active' : 'Paused'}
+            tone={storedRetentionEnabled ? 'ok' : 'warn'}
             last
           />
         </Panel>

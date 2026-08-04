@@ -46,38 +46,49 @@ export default function SaveDetectionAreaModal({ initialName, initialPriority, z
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Detection Name</label>
-            <input
-              autoFocus
-              value={detectionName}
-              onChange={e => { setDetectionName(e.target.value); setErrors(er => ({ ...er, detectionName: false })); }}
-              maxLength={50}
-              placeholder="Enter detection name"
-              style={{
-                width: '100%', height: 40, padding: '0 12px', borderRadius: 9, boxSizing: 'border-box',
-                background: 'var(--bg2)', border: `1px solid ${errors.detectionName ? 'var(--danger, #ef4444)' : 'var(--bd)'}`,
-                fontSize: 13, color: 'var(--tx)', outline: 'none',
-              }}
-            />
-          </div>
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Detection Name</label>
+              <input
+                autoFocus
+                value={detectionName}
+                onChange={e => { setDetectionName(e.target.value); setErrors(er => ({ ...er, detectionName: false })); }}
+                maxLength={50}
+                placeholder="Enter detection name"
+                style={{
+                  width: '100%', height: 40, padding: '0 12px', borderRadius: 9, boxSizing: 'border-box',
+                  background: 'var(--bg2)', border: `1px solid ${errors.detectionName ? 'var(--danger, #ef4444)' : 'var(--bd)'}`,
+                  fontSize: 13, color: 'var(--tx)', outline: 'none',
+                }}
+              />
+            </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Priority</label>
-            <select
-              value={priority}
-              onChange={e => setPriority(e.target.value)}
-              style={{
-                width: '100%', height: 40, padding: '0 12px', borderRadius: 9, boxSizing: 'border-box',
-                background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13, color: 'var(--tx)',
-                outline: 'none', cursor: 'pointer',
-              }}
-            >
-              {PRIORITY_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
-          </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Priority</label>
+                <select
+                  value={priority}
+                  onChange={e => setPriority(e.target.value)}
+                  style={{
+                    width: '100%', height: 40, padding: '0 12px', borderRadius: 9, boxSizing: 'border-box',
+                    background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13, color: 'var(--tx)',
+                    outline: 'none', cursor: 'pointer',
+                  }}
+                >
+                  {PRIORITY_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </div>
 
-          <TimezoneField />
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--tx2)' }}>Time zone</label>
+                </div>
+                <div style={{ padding: 0 }}>
+                  <TimezoneField />
+                </div>
+              </div>
+            </div>
+          </div>
 
           {zoneDrafts.map((z, i) => (
             <div key={i} style={{ border: '1px solid var(--bd)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
