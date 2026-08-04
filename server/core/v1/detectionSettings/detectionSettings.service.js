@@ -175,6 +175,25 @@ const handleDetectionStartStopWithRetry = async (args) => {
   throw lastError;
 };
 
+const updateSettingsWithModelThresholds = async (detectionSetting, backendResponse) => {
+  const thresholds = DetectionSettingsValidation.extractModelThresholds(
+    detectionSetting?.settingType,
+    backendResponse?.model_thresholds,
+  );
+
+  if (!Object.keys(thresholds).length) return;
+
+  const currentSettings =
+    detectionSetting.settings?.toObject?.() || detectionSetting.settings || {};
+
+  detectionSetting.settings = {
+    ...currentSettings,
+    ...thresholds,
+  };
+  detectionSetting.markModified("settings");
+  await detectionSetting.save();
+};
+
 class DetectionSettingService {
   async getDetectionTypes(req, res, _next) {
     try {
@@ -205,6 +224,23 @@ class DetectionSettingService {
         return res
           .status(400)
           .json(Response.userFailResp("Validation Failed", error.message));
+      }
+
+      const thresholdValidation =
+        DetectionSettingsValidation.validateConfidenceThresholds(
+          value.settingType,
+          value.settings,
+        );
+
+      if (thresholdValidation.error) {
+        return res
+          .status(400)
+          .json(
+            Response.userFailResp(
+              "Validation Failed",
+              thresholdValidation.error.message,
+            ),
+          );
       }
 
       // 2. Check if admin is allowed to use this detection type
@@ -406,6 +442,25 @@ class DetectionSettingService {
 
       const settingType = detectionSetting.settingType;
 
+      if (value.settings && typeof value.settings === "object") {
+        const thresholdValidation =
+          DetectionSettingsValidation.validateConfidenceThresholds(
+            settingType,
+            value.settings,
+          );
+
+        if (thresholdValidation.error) {
+          return res
+            .status(400)
+            .json(
+              Response.userFailResp(
+                "Validation Failed",
+                thresholdValidation.error.message,
+              ),
+            );
+        }
+      }
+
       // Update base fields
       ["name", "enabled", "alerts"].forEach((field) => {
         if (value[field] !== undefined) {
@@ -527,10 +582,11 @@ class DetectionSettingService {
           const zone_configs =
             detectionSetting?.settings?.zone_configs || [];
           const zoneName = detectionSetting?.settings?.zoneName || [];
+          const confidence_thresholds = detectionSetting?.settings || {};
 
 
 
-          await pythonService.handleDetectionUpdate(
+          const backendResponse = await pythonService.handleDetectionUpdate(
             channel,
             adminId,
             settingType,
@@ -539,8 +595,10 @@ class DetectionSettingService {
             zone_configs,
             obstruction_threshold_sec,
             severity,
-            zoneName
+            zoneName,
+            confidence_thresholds,
           );
+          await updateSettingsWithModelThresholds(detectionSetting, backendResponse);
         } catch (error) {
           logger.error(
             `Failed to notify python for channel ${channel?._id}:`,
@@ -831,8 +889,9 @@ class DetectionSettingService {
       const severity = detectionSetting?.settings?.levelOfImportance;
       const zone_configs = detectionSetting?.settings?.zone_configs || [];
       const zoneName = detectionSetting?.settings?.zoneName || [];
+      const confidence_thresholds = detectionSetting?.settings || {};
 
-      await handleDetectionStartStopWithRetry([
+      const backendResponse = await handleDetectionStartStopWithRetry([
         channel,
         adminId,
         shouldEnable,
@@ -842,7 +901,9 @@ class DetectionSettingService {
         videoResolution,
         obstruction_threshold_sec,
         severity,
+        confidence_thresholds,
       ]);
+      await updateSettingsWithModelThresholds(detectionSetting, backendResponse);
 
       link.enabled = shouldEnable;
       channel.markModified(`detections.${settingType}.enabled`);

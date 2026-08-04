@@ -13248,6 +13248,10 @@
               "type": "number",
               "example": 15
             },
+            "person_threshold": {
+              "type": "number",
+              "example": 0.7
+            },
             "referencePoints": {
               "type": "object",
               "properties": {
@@ -13337,6 +13341,10 @@
             "detectionTimeGap": {
               "type": "number",
               "example": 0
+            },
+            "person_threshold": {
+              "type": "number",
+              "example": 0.7
             },
             "referencePoints": {
               "type": "object",

@@ -12,6 +12,45 @@ import { resolveAdminEndpoints } from "../utils/adminEndpoints.js";
 const detectionHost = config.get("PythonService.detectionUrl");
 const APP_ENV = config.get("APP_ENV");
 
+const THRESHOLD_FIELDS_BY_DETECTOR = {
+  faceAuth: ["person_threshold"],
+  personalProtectiveEquipmentSettings: [
+    "person_threshold",
+    "vest_threshold",
+    "helmet_threshold",
+  ],
+  foodServicePPEDetection: [
+    "person_threshold",
+    "emp_floor",
+    "glove_floor",
+    "apron_floor",
+  ],
+  crowdDetectionSettings: ["person_threshold"],
+  lineCrossingSettings: ["person_threshold"],
+  countPersonsSettings: ["person_threshold"],
+  zoneIntrusionSettings: ["person_threshold"],
+  deskAbsenceDetection: ["person_threshold"],
+  tableOccupancySettings: ["person_threshold"],
+  loiteringDetectionSettings: ["person_threshold"],
+  countVehiclesSettings: ["vehicle_threshold"],
+  vehicleObstructionSettings: ["vehicle_threshold"],
+  vehicleTypeDetectionSettings: ["vehicle_threshold", "forklift_threshold"],
+  numberPlateDetectionSettings: ["plate_confidence", "ocr_min_confidence"],
+  mobilePhoneDetectionSettings: ["mobile_phone_confidence"],
+  conveyorDetectionSettings: [],
+  crusherDetectionSettings: [],
+  waterSpillageDetectionSettings: [],
+};
+
+const pickDetectorThresholds = (detectorName, settings = {}) => {
+  const fields = THRESHOLD_FIELDS_BY_DETECTOR[detectorName] || [];
+
+  return fields.reduce((thresholds, field) => {
+    if (settings[field] !== undefined) thresholds[field] = settings[field];
+    return thresholds;
+  }, {});
+};
+
 class PythonService {
   // attendance
   async registerChannel(channel, type, admin_id) {
@@ -63,6 +102,7 @@ class PythonService {
     videoResolution,
     obstruction_threshold_sec,
     severity,
+    confidence_thresholds = {},
   ) {
     if (enable) {
       // ! old
@@ -108,6 +148,7 @@ class PythonService {
         videoResolution,
         obstruction_threshold_sec,
         severity,
+        confidence_thresholds,
       };
       return await this.startNewDetection(payload);
     } else {
@@ -131,6 +172,7 @@ class PythonService {
         zone_configs,
         obstruction_threshold_sec,
         severity,
+        confidence_thresholds = {},
       } = payload;
 
       // 🔹 Convert detection_modes → detectors
@@ -305,11 +347,16 @@ class PythonService {
       }
 
       // 🔹 New payload (ONLY required fields)
+      const detectorsWithThresholds = detectors.map((detector) => ({
+        ...detector,
+        ...pickDetectorThresholds(detector.name, confidence_thresholds),
+      }));
+
       const newPayload = {
         camera_id,
         nvr_id,
         admin_id,
-        detectors,
+        detectors: detectorsWithThresholds,
       };      
       console.log('newPayload', JSON.stringify(newPayload, null, 2));
 
@@ -352,6 +399,7 @@ class PythonService {
         obstruction_threshold_sec,
         severity,
         zone_name,
+        confidence_thresholds = {},
       } = payload;
 
       // 🔹 Convert detection_modes → detectors
@@ -504,11 +552,16 @@ class PythonService {
       }
 
       // 🔹 New payload (ONLY required fields)
+      const detectorsWithThresholds = detectors.map((detector) => ({
+        ...detector,
+        ...pickDetectorThresholds(detector.name, confidence_thresholds),
+      }));
+
       const newPayload = {
         camera_id,
         nvr_id,
         admin_id,
-        detectors,
+        detectors: detectorsWithThresholds,
       };
       
       // include stream_url only if present
@@ -546,7 +599,8 @@ class PythonService {
     zone_configs,
     obstruction_threshold_sec,
     severity,
-    zoneName
+    zoneName,
+    confidence_thresholds = {},
   ) {
     const nvr = await NVR.findById(channel?.nvrId?._id);
     if (!nvr) throw new Error("NVR not found");
@@ -571,7 +625,8 @@ class PythonService {
       videoResolution,
       obstruction_threshold_sec,
       severity,
-      zoneName
+      zoneName,
+      confidence_thresholds,
     };
     return await this.updateNewDetection(payload);
   }

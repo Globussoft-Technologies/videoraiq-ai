@@ -22,6 +22,20 @@ const zoneConfigsField = {
   ],
 };
 
+const confidenceThresholdFields = {
+  person_threshold: { type: Number, min: 0, max: 1 },
+  vest_threshold: { type: Number, min: 0, max: 1 },
+  helmet_threshold: { type: Number, min: 0, max: 1 },
+  vehicle_threshold: { type: Number, min: 0, max: 1 },
+  forklift_threshold: { type: Number, min: 0, max: 1 },
+  plate_confidence: { type: Number, min: 0, max: 1 },
+  ocr_min_confidence: { type: Number, min: 0, max: 1 },
+  mobile_phone_confidence: { type: Number, min: 0, max: 1 },
+  emp_floor: { type: Number, min: 0, max: 1 },
+  glove_floor: { type: Number, min: 0, max: 1 },
+  apron_floor: { type: Number, min: 0, max: 1 },
+};
+
 const DetectionSettingBaseSchema = new mongoose.Schema(
   {
     userId: {
@@ -69,6 +83,7 @@ const DetectionSetting = mongoose.model(
 
 const CountPersonsDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  person_threshold: confidenceThresholdFields.person_threshold,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -177,6 +192,7 @@ const MotionDetectionSetting = DetectionSetting.discriminator(
 
 const CountVehiclesSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  vehicle_threshold: confidenceThresholdFields.vehicle_threshold,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -292,6 +308,7 @@ const LoiteringWithAuthSetting = DetectionSetting.discriminator(
 
 const UnAuthorisedAccessSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  person_threshold: confidenceThresholdFields.person_threshold,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -332,6 +349,7 @@ const UnAuthorisedAccessSetting = DetectionSetting.discriminator(
 
 const LineCrossingSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  person_threshold: confidenceThresholdFields.person_threshold,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -483,6 +501,7 @@ const UnattendedBaggageDetectionSetting = DetectionSetting.discriminator(
 
 const CrowdDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  person_threshold: confidenceThresholdFields.person_threshold,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -516,6 +535,9 @@ const CrowdDetectionSetting = DetectionSetting.discriminator(
 
 const PersonalProtectiveEquipmentSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  person_threshold: confidenceThresholdFields.person_threshold,
+  vest_threshold: confidenceThresholdFields.vest_threshold,
+  helmet_threshold: confidenceThresholdFields.helmet_threshold,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -615,6 +637,8 @@ const LightDetectionSetting = DetectionSetting.discriminator(
 
 const VehicleDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  plate_confidence: confidenceThresholdFields.plate_confidence,
+  ocr_min_confidence: confidenceThresholdFields.ocr_min_confidence,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -649,6 +673,7 @@ const VehiclDetectionSetting = DetectionSetting.discriminator(
 
 const DeskAbsenceDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  person_threshold: confidenceThresholdFields.person_threshold,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -822,6 +847,8 @@ const WaterSpillageDetectionSetting = DetectionSetting.discriminator(
 
 const VehicleTypeDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  vehicle_threshold: confidenceThresholdFields.vehicle_threshold,
+  forklift_threshold: confidenceThresholdFields.forklift_threshold,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -856,6 +883,7 @@ const VehicleTypeDetectionSetting = DetectionSetting.discriminator(
 
 const LoiteringDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  person_threshold: confidenceThresholdFields.person_threshold,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -891,6 +919,7 @@ const LoiteringDetectionSetting = DetectionSetting.discriminator(
 
 const TableOccupancyDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  person_threshold: confidenceThresholdFields.person_threshold,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -925,6 +954,7 @@ const TableOccupancyDetectionSetting = DetectionSetting.discriminator(
 
 const VehicleObstructionDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  vehicle_threshold: confidenceThresholdFields.vehicle_threshold,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -959,6 +989,10 @@ const VehicleObstructionDetectionSetting = DetectionSetting.discriminator(
 
 const FoodServicePPEDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  person_threshold: confidenceThresholdFields.person_threshold,
+  emp_floor: confidenceThresholdFields.emp_floor,
+  glove_floor: confidenceThresholdFields.glove_floor,
+  apron_floor: confidenceThresholdFields.apron_floor,
   imageRequired: {
     type: Boolean,
     default: false,
@@ -993,6 +1027,7 @@ const FoodServicePPEDetectionSetting = DetectionSetting.discriminator(
 
 const MobilePhoneDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  mobile_phone_confidence: confidenceThresholdFields.mobile_phone_confidence,
   imageRequired: {
     type: Boolean,
     default: false,

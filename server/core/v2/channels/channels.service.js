@@ -25,11 +25,30 @@ import adminModel from "../admin/admin.model.js";
 import departmentsModel from "../departments/departments.model.js";
 import pythonService from "../../../services/python.service.js";
 import DetectionSettingService from "../detectionSettings/detectionSettings.service.js";
+import DetectionSettingsValidation from "../detectionSettings/detectionSettings.validate.js";
 import Recipient from "../verifyRecipients/recipients.model.js";
 import config from "config"
 const APP_ENV = config.get("APP_ENV");
 const rtsp_host = config.get("RTSPStream.host");
 
+const updateSettingsWithModelThresholds = async (detectionSetting, backendResponse) => {
+  const thresholds = DetectionSettingsValidation.extractModelThresholds(
+    detectionSetting?.settingType,
+    backendResponse?.model_thresholds,
+  );
+
+  if (!Object.keys(thresholds).length) return;
+
+  const currentSettings =
+    detectionSetting.settings?.toObject?.() || detectionSetting.settings || {};
+
+  detectionSetting.settings = {
+    ...currentSettings,
+    ...thresholds,
+  };
+  detectionSetting.markModified("settings");
+  await detectionSetting.save();
+};
 
 class ChannelService {
   async updateChannel(req, res, _next) {
@@ -1293,7 +1312,8 @@ class ChannelService {
         const zone_configs = detectionSettingDoc?.settings?.zone_configs || [];
         const obstruction_threshold_sec = detectionSettingDoc?.settings?.obstruction_threshold_sec || 0;
         const videoResolution = detectionSettingDoc?.settings?.videoResolution || [];
-        const severity = detectionSetting?.settings?.levelOfImportance;
+        const severity = detectionSettingDoc?.settings?.levelOfImportance;
+        const confidence_thresholds = detectionSettingDoc?.settings || {};
         if (String(channel.userId) === "32") {
           return res
             .status(403)
@@ -1310,7 +1330,9 @@ class ChannelService {
           videoResolution,
           obstruction_threshold_sec,
           severity,
+          confidence_thresholds,
         );
+        await updateSettingsWithModelThresholds(detectionSettingDoc, beResponse);
 
         await channel.save();
         return res.status(200).json(

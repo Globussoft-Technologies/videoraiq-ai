@@ -375,6 +375,7 @@ export const definitions = {
         levelOfImportance: "moderate",
         videoResolution: [1280, 720],
         detectionTimeGap: 15,
+        person_threshold: 0.7,
         referencePoints: {
           1: [
             [10, 10],
@@ -400,6 +401,7 @@ export const definitions = {
         levelOfImportance: "low",
         videoResolution: [1280],
         detectionTimeGap: 0,
+        person_threshold: 0.7,
         referencePoints: {
           2: [
             [10, 10],
