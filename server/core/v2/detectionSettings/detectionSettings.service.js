@@ -111,6 +111,35 @@ const buildSchedulePayload = (channel, settingType) => ({
   schedule: getDetectionSchedule(channel, settingType),
 });
 
+const buildFetchUiData = (detectionSetting, linkedCameras = []) => {
+  const settings = detectionSetting?.settings?.toObject?.()
+    || detectionSetting?.settings
+    || {};
+
+  const {
+    ocr_min_confidence: _ocrMinConfidence,
+    ...displaySettings
+  } = settings;
+
+  const activeCameraCount = linkedCameras.filter(
+    (channel) => channel?.detections?.[detectionSetting?.settingType]?.enabled === true,
+  ).length;
+
+  const primarySchedule =
+    linkedCameras.find(
+      (channel) => channel?.detections?.[detectionSetting?.settingType]?.schedule,
+    )?.detections?.[detectionSetting?.settingType]?.schedule || DEFAULT_DETECTION_SCHEDULE;
+
+  return {
+    detectionName: DETECTION_TYPES[detectionSetting?.settingType],
+    status: activeCameraCount > 0 ? "Active" : "Paused",
+    schedule: primarySchedule,
+    appliedCameras: linkedCameras.length,
+    activeCameras: activeCameraCount,
+    settings: displaySettings,
+  };
+};
+
 const getAdminScheduleTimezone = async (adminId) => {
   if (!adminId) return DEFAULT_SCHEDULE_TIMEZONE;
 
@@ -948,6 +977,7 @@ class DetectionSettingService {
             detectionName: DETECTION_TYPES[detectionSetting.settingType],
           },
           linkedCameras: linkedChannels || null,
+          uiData: buildFetchUiData(detectionSetting, linkedChannels || []),
         }),
       );
     } catch (error) {
@@ -1055,6 +1085,7 @@ class DetectionSettingService {
             detectionName: DETECTION_TYPES[setting.settingType],
           },
           linkedCameras,
+          uiData: buildFetchUiData(setting, linkedCameras),
         });
       }
 
