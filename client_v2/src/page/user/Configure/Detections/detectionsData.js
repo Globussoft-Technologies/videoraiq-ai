@@ -36,18 +36,28 @@ export const INCIDENT_STATUS = {
  */
 export const DETECTION_THRESHOLDS = {
   faceAuth: ['person_threshold'],
+  faceRecognitionSettings: ['person_threshold'],
+  faceDetectionSettings: ['person_threshold'],
   personalProtectiveEquipmentSettings: ['person_threshold', 'vest_threshold', 'helmet_threshold'],
   foodServicePPEDetection: ['person_threshold', 'emp_floor', 'glove_floor', 'apron_floor'],
+  foodServicePPEDetectionSettings: ['person_threshold', 'emp_floor', 'glove_floor', 'apron_floor'],
   crowdDetectionSettings: ['person_threshold'],
   lineCrossingSettings: ['person_threshold'],
   countPersonsSettings: ['person_threshold'],
+  unauthorizedAccessSettings: ['person_threshold'],
+  intrusionDetectionSettings: ['person_threshold'],
   zoneIntrusionSettings: ['person_threshold'],
+  deskAbsenceSettings: ['person_threshold'],
   deskAbsenceDetection: ['person_threshold'],
+  tableOccupancyDetectionSettings: ['person_threshold'],
   tableOccupancySettings: ['person_threshold'],
   loiteringDetectionSettings: ['person_threshold'],
   countVehiclesSettings: ['vehicle_threshold'],
   vehicleObstructionSettings: ['vehicle_threshold'],
   vehicleTypeDetectionSettings: ['vehicle_threshold', 'forklift_threshold'],
+  vehicleDetectionSettings: ['plate_confidence', 'ocr_min_confidence'],
+  anprSettings: ['plate_confidence', 'ocr_min_confidence'],
+  vehicleNumberPlateSettings: ['plate_confidence', 'ocr_min_confidence'],
   numberPlateDetectionSettings: ['plate_confidence', 'ocr_min_confidence'],
   mobilePhoneDetectionSettings: ['mobile_phone_confidence'],
   conveyorDetectionSettings: [],
@@ -114,7 +124,7 @@ function numberFrom(...values) {
 }
 
 /** Normalize a threshold value to the 0-100 slider range (0.7 → 70). */
-function toPercent(value) {
+export function toPercent(value) {
   if (value == null) return null;
   const num = Number(value);
   if (!Number.isFinite(num)) return null;

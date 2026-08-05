@@ -3,7 +3,7 @@ import { ArrowLeft, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../../components/States';
 import { useApi } from '../../../../hooks/useApi';
-import { deleteDetectionSetting, getCamerasByNvr, getDetectionSettings, getDetectionTypes, toggleChannelDetection } from '../../../../helpers/configure';
+import { deleteDetectionSetting, getCamerasByNvr, getDetectionSettings, getDetectionTypes, toggleChannelDetection, updateDetectionSetting } from '../../../../helpers/configure';
 import { fetchDetectionTypes as fetchIncidentFilterTypes, fetchIncidents, fetchIncidentStats } from '../../../../helpers/incidents';
 import { timeOfDay } from '../../../../lib/format';
 import DetectionZoneMarking from '../DetectionZoneMarking';
@@ -11,8 +11,10 @@ import { DetectionSettingsCameraList } from '../DetectionSettings';
 import {
   DETECTION_CATEGORIES,
   CATEGORY_BY_KEY,
+  DETECTION_THRESHOLDS,
   buildDetectionModels,
   emptyIncidents,
+  toPercent,
 } from './detectionsData';
 import DetectionCard from './DetectionCard';
 import DetectionDetailPanel from './DetectionDetailPanel';
@@ -176,6 +178,10 @@ function getLinkedCameras(item) {
   return Array.isArray(linked) ? linked : [];
 }
 
+function getSettingUiData(item, setting) {
+  return item?.uiData || setting?.uiData || null;
+}
+
 function findSettingForCamera(settingsResult, settingType, cameraId) {
   const items = Array.isArray(settingsResult?.settings) ? settingsResult.settings : [];
   return items.find((item) => {
@@ -194,6 +200,10 @@ function mergeDetectionSetting(camera, nvr, settingType, settingsResult) {
   const base = cameraWithNvr(linkedCamera || camera, linkedCamera?.nvrId || nvr);
   const setting = getDetectionSetting(item);
   if (!base || !setting?._id) return base;
+  const uiData = getSettingUiData(item, setting);
+  const hydratedSetting = uiData && setting.uiData !== uiData
+    ? { ...setting, uiData }
+    : setting;
 
   const existingEntry = base.detections?.[settingType] || camera?.detections?.[settingType] || {};
   const existingEnabled = typeof existingEntry === 'object' ? existingEntry.enabled : existingEntry;
@@ -204,10 +214,39 @@ function mergeDetectionSetting(camera, nvr, settingType, settingsResult) {
       [settingType]: {
         ...(typeof existingEntry === 'object' ? existingEntry : {}),
         enabled: existingEnabled ?? setting.enabled ?? true,
-        id: setting,
+        id: hydratedSetting,
       },
     },
   };
+}
+
+function settingFromEntry(entry) {
+  return entry?.id && typeof entry.id === 'object' ? entry.id : null;
+}
+
+function scheduleModeFrom(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  return value.mode || '';
+}
+
+function thresholdsFromSettings(settingType, baseThresholds, settings) {
+  const next = { ...(baseThresholds || {}) };
+  const keys = DETECTION_THRESHOLDS[settingType] || Object.keys(next);
+  for (const key of keys) {
+    if (settings && Object.prototype.hasOwnProperty.call(settings, key)) {
+      next[key] = toPercent(settings[key]) ?? next[key] ?? 70;
+    } else if (!Object.prototype.hasOwnProperty.call(next, key)) {
+      next[key] = 70;
+    }
+  }
+  return next;
+}
+
+function percentToApiValue(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 0;
+  return Math.max(0, Math.min(1, num / 100));
 }
 
 /**
@@ -249,9 +288,30 @@ export default function Detections() {
       const edited = edits[m.id] || {};
       const settingType = m.settingType || m.id;
       const cameraEntry = zoneCamera?.detections?.[settingType];
+      const setting = settingFromEntry(cameraEntry);
+      const uiData = setting?.uiData || {};
+      const apiSettings = uiData.settings || setting?.settings || {};
       const cameraEnabled = typeof cameraEntry === 'object' ? cameraEntry?.enabled : cameraEntry;
       const cameraScopedActive = zoneCamera?._id ? !!cameraEnabled : m.active;
-      return { ...m, ...edited, active: cameraScopedActive };
+      const apiThresholds = thresholdsFromSettings(settingType, m.thresholds, apiSettings);
+      const editedThresholds = edited.thresholds || {};
+      const thresholds = { ...apiThresholds, ...editedThresholds };
+      const firstThreshold = Object.values(thresholds)[0];
+      const scheduleMode = scheduleModeFrom(uiData.schedule);
+      return {
+        ...m,
+        ...edited,
+        name: uiData.detectionName || m.name,
+        status: uiData.status || edited.status || m.status,
+        scheduleMode: scheduleMode || edited.scheduleMode || m.scheduleMode,
+        schedule: scheduleMode || edited.schedule || m.schedule,
+        appliedCameras: uiData.appliedCameras ?? edited.appliedCameras ?? m.appliedCameras,
+        activeCameras: uiData.activeCameras ?? edited.activeCameras ?? m.activeCameras,
+        settings: { ...(m.settings || {}), ...apiSettings, ...(edited.settings || {}) },
+        thresholds,
+        sensitivity: edited.sensitivity ?? firstThreshold ?? m.sensitivity,
+        active: cameraScopedActive,
+      };
     }),
     [edits, typesApi.data, zoneCamera],
   );
@@ -445,6 +505,63 @@ export default function Detections() {
   const zoneCameraNvrId = nvrIdOf(zoneCamera?.nvrId);
 
   const patch = (id, changes) => setEdits((prev) => ({ ...prev, [id]: { ...prev[id], ...changes } }));
+
+  const updateSelectedThreshold = async (key, value) => {
+    if (!selected?.id) return;
+    const nextThresholds = {
+      ...(selected.thresholds || {}),
+      [key]: value,
+    };
+    patch(selected.id, {
+      thresholds: nextThresholds,
+      ...(key === Object.keys(selected.thresholds || {})[0] ? { sensitivity: value } : {}),
+    });
+
+    if (!selectedDetectionSettingId || !selectedSettingType) {
+      toast.error('Select a saved detection setting before changing thresholds.');
+      return;
+    }
+
+    const apiValue = percentToApiValue(value);
+    try {
+      await updateDetectionSetting(selectedDetectionSettingId, {
+        settings: { [key]: apiValue },
+      });
+      setZoneCamera((prev) => {
+        if (!prev) return prev;
+        const currentEntry = prev.detections?.[selectedSettingType] || {};
+        const currentSetting = settingFromEntry(currentEntry);
+        const nextSetting = currentSetting
+          ? {
+              ...currentSetting,
+              settings: {
+                ...(currentSetting.settings || {}),
+                [key]: apiValue,
+              },
+              uiData: {
+                ...(currentSetting.uiData || {}),
+                settings: {
+                  ...(currentSetting.uiData?.settings || {}),
+                  [key]: apiValue,
+                },
+              },
+            }
+          : currentSetting;
+        return {
+          ...prev,
+          detections: {
+            ...(prev.detections || {}),
+            [selectedSettingType]: {
+              ...(typeof currentEntry === 'object' ? currentEntry : {}),
+              id: nextSetting || currentEntry?.id,
+            },
+          },
+        };
+      });
+    } catch (err) {
+      toast.error(err?.response?.data?.body?.message || err?.response?.data?.message || 'Failed to update threshold.');
+    }
+  };
 
   const setCameraDetectionEnabled = (settingType, enabled) => {
     setZoneCamera((prev) => {
@@ -866,15 +983,7 @@ export default function Detections() {
                   onToggle={() => toggleModel(selected)}
                   toggleDisabled={detectionToggleLoading === selectedSettingType}
                   onSensitivityChange={(value) => patch(selected.id, { sensitivity: value })}
-                  onThresholdChange={(key, value) =>
-                    patch(selected.id, {
-                      thresholds: {
-                        ...(selected.thresholds || {}),
-                        [key]: value,
-                      },
-                      ...(key === Object.keys(selected.thresholds || {})[0] ? { sensitivity: value } : {}),
-                    })
-                  }
+                  onThresholdChange={updateSelectedThreshold}
                   onEditZones={() => setZoneSettingsOpen(true)}
                   onResetSetting={() => {
                     if (!selectedDetectionSettingId) {

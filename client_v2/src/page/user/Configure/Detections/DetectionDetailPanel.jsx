@@ -96,6 +96,13 @@ function StatBox({ label, value, color = 'var(--tx)' }) {
   );
 }
 
+function formatScheduleMode(value, fallback = 'N/A') {
+  const raw = typeof value === 'string' ? value : value?.mode;
+  if (!raw) return fallback;
+  const text = String(raw);
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function ScheduleFieldDropdown({
   label,
   value,
@@ -314,6 +321,8 @@ export default function DetectionDetailPanel({
   const sensitivity = model.sensitivity;
   const appliedCameras = model.appliedCameras == null ? 'N/A' : model.appliedCameras;
   const minConfidence = model.minConfidence == null ? 'N/A' : `${model.minConfidence}%`;
+  const statusValue = model.status || (model.active ? 'Active' : 'Paused');
+  const scheduleFallback = formatScheduleMode(model.scheduleMode || model.schedule, 'N/A');
   const thresholdKeys = model.thresholds ? Object.keys(model.thresholds) : [];
   const usesThresholds = thresholdKeys.length > 0;
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -329,7 +338,7 @@ export default function DetectionDetailPanel({
   useEffect(() => {
     let alive = true;
     if (!settingId || !channelId) {
-      setActualScheduleMode('N/A');
+      setActualScheduleMode(scheduleFallback);
       return;
     }
     setActualScheduleMode('Loading...');
@@ -337,13 +346,13 @@ export default function DetectionDetailPanel({
       .then((res) => {
         if (!alive) return;
         const mode = res?.schedule?.mode || 'always';
-        setActualScheduleMode(mode.charAt(0).toUpperCase() + mode.slice(1));
+        setActualScheduleMode(formatScheduleMode(mode, scheduleFallback));
       })
       .catch(() => {
-        if (alive) setActualScheduleMode('Always');
+        if (alive) setActualScheduleMode(scheduleFallback);
       });
     return () => { alive = false; };
-  }, [settingId, channelId]);
+  }, [settingId, channelId, scheduleFallback]);
 
   async function openSchedule() {
     if (!settingId || !channelId) return;
@@ -580,8 +589,8 @@ export default function DetectionDetailPanel({
       >
         <StatBox
           label="Status"
-          value={model.active ? 'Active' : 'Paused'}
-          color={model.active ? 'var(--ok)' : 'var(--tx3)'}
+          value={statusValue}
+          color={String(statusValue).toLowerCase() === 'active' ? 'var(--ok)' : 'var(--tx3)'}
         />
         <StatBox label="Schedule" value={actualScheduleMode} />
         <StatBox label="Applied Cameras" value={appliedCameras} />
