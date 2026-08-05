@@ -679,7 +679,7 @@ export default function AlertsView() {
                           {!hideDuplicateTitle && (
                             <span title={eventTitle} style={{ fontFamily: 'var(--disp)', fontSize: 14, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: '0 1 auto' }}>{displayTitle}</span>
                           )}
-                          {eventDescription && <span style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{eventDescription}</span>}
+                        {eventDescription && <span style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{eventDescription}</span>}
                         </div>
                         {detailParts.length > 0 && <div style={{ gridColumn: '1 / -1', fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detailParts.join(' - ')}</div>}
                       </div>

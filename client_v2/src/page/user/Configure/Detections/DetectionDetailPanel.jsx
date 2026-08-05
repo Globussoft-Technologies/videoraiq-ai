@@ -485,7 +485,11 @@ export default function DetectionDetailPanel({
     }
   }
 
-
+  const hasSelectedRange =
+    scheduleForm?.mode === 'custom' &&
+    Object.values(scheduleForm?.days || {}).some(
+      (ranges) => Array.isArray(ranges) && ranges.length > 0
+    );
   return (
     <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12, padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -952,7 +956,7 @@ export default function DetectionDetailPanel({
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, gap: 16, flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   
-                    {scheduleForm?.mode === 'custom' && (
+                  {hasSelectedRange && (
                       <button
                         onClick={requestDeleteSchedule}
                         type="button"
