@@ -1,4 +1,5 @@
 import { AlertTriangle } from 'lucide-react';
+import { createPortal } from 'react-dom';
 
 export default function ConfirmDialog({
   open,
@@ -12,10 +13,12 @@ export default function ConfirmDialog({
 }) {
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(6,9,15,.6)', zIndex: 200,
+      position: 'fixed', inset: 0, background: 'rgba(6,9,15,.68)', zIndex: 10000,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+      backdropFilter: 'blur(3px)',
+      pointerEvents: 'auto',
     }}>
       <div style={{
         width: '100%', maxWidth: 400, background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
@@ -57,6 +60,7 @@ export default function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

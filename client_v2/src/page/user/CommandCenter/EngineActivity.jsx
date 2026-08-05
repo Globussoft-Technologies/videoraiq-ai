@@ -114,7 +114,7 @@ export default function EngineActivity({ todayEngines = [], events24h = [], tota
             {/* Engine Activity Â· Today */}
             <div>
               <div style={{ marginBottom: 14 }}>
-                <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Engine Activity · Today</div>
+                <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Engine Activity Today</div>
                 <AnalyticsBlurb>Shows which AI engines are generating detections today and how active each one is compared with the others.</AnalyticsBlurb>
               </div>
               {todayEngines.length === 0 ? (

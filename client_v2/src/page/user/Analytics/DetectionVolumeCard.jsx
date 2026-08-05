@@ -55,7 +55,7 @@ export default function DetectionVolumeCard({ params }) {
   return (
     <Panel style={{ padding: 18 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Detection Volume{label ? ` Â· ${label}` : ''}</div>
+        <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Detection Volume{label ? `  ${label}` : ''}</div>
         <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>alerts / day</span>
       </div>
       <AnalyticsBlurb style={{ marginBottom: 14 }}>
