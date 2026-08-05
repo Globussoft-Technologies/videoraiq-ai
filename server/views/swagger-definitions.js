@@ -402,6 +402,8 @@ export const definitions = {
         videoResolution: [1280],
         detectionTimeGap: 0,
         person_threshold: 0.7,
+        inside_reference_point: [900, 300],
+        count_mode: "entry",
         referencePoints: {
           2: [
             [10, 10],

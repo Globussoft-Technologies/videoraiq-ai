@@ -350,6 +350,15 @@ const UnAuthorisedAccessSetting = DetectionSetting.discriminator(
 const LineCrossingSchema = new mongoose.Schema({
   ...zoneConfigsField,
   person_threshold: confidenceThresholdFields.person_threshold,
+  inside_reference_point: {
+    type: [Number],
+    default: undefined,
+  },
+  count_mode: {
+    type: String,
+    enum: ["entry", "exit", "all"],
+    default: "entry",
+  },
   imageRequired: {
     type: Boolean,
     default: false,

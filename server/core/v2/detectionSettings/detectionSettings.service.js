@@ -272,6 +272,23 @@ class DetectionSettingService {
           );
       }
 
+      const lineCrossingValidation =
+        DetectionSettingsValidation.validateLineCrossingSettings(
+          value.settingType,
+          value.settings,
+        );
+
+      if (lineCrossingValidation.error) {
+        return res
+          .status(400)
+          .json(
+            Response.userFailResp(
+              "Validation Failed",
+              lineCrossingValidation.error.message,
+            ),
+          );
+      }
+
       // 2. Check if admin is allowed to use this detection type
       const adminId = req?.verified?.userData?.adminId;
       const admin = await Admin.findById(adminId).select("detectionConfig").lean();
@@ -612,6 +629,7 @@ class DetectionSettingService {
             detectionSetting?.settings?.zone_configs || [];
           const zoneName = detectionSetting?.settings?.zoneName || [];
           const confidence_thresholds = detectionSetting?.settings || {};
+          const line_crossing_settings = detectionSetting?.settings || {};
 
 
 
@@ -626,6 +644,7 @@ class DetectionSettingService {
             severity,
             zoneName,
             confidence_thresholds,
+            line_crossing_settings,
           );
           await updateSettingsWithModelThresholds(detectionSetting, backendResponse);
         } catch (error) {
@@ -919,6 +938,7 @@ class DetectionSettingService {
       const zone_configs = detectionSetting?.settings?.zone_configs || [];
       const zoneName = detectionSetting?.settings?.zoneName || [];
       const confidence_thresholds = detectionSetting?.settings || {};
+      const line_crossing_settings = detectionSetting?.settings || {};
 
       const backendResponse = await handleDetectionStartStopWithRetry([
         channel,
@@ -931,6 +951,7 @@ class DetectionSettingService {
         obstruction_threshold_sec,
         severity,
         confidence_thresholds,
+        line_crossing_settings,
       ]);
       await updateSettingsWithModelThresholds(detectionSetting, backendResponse);
 

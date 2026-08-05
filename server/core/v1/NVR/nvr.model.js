@@ -21,7 +21,7 @@ const localSchema = new mongoose.Schema(
     brand: {
       type: String,
       required: true,
-      enum: ["hikvision", "dahua", "prama", "cpplus", "camera", "tiandy", "securus"],
+      enum: ["hikvision", "dahua", "prama", "cpplus", "camera", "tiandy", "securus", "hanwha"],
     },
     cameraCount: {
       type: Number,
@@ -79,7 +79,7 @@ const cloudSchema = new mongoose.Schema(
     brand: {
       type: String,
       required: true,
-      enum: ["hikvision", "dahua", "prama", "cpplus", "camera", "tiandy", "securus"],
+      enum: ["hikvision", "dahua", "prama", "cpplus", "camera", "tiandy", "securus", "hanwha"],
     },
     cameraCount: {
       type: Number,

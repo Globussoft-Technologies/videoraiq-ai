@@ -144,43 +144,39 @@ const UnauthorizedAccessSchema = new Schema({
 const UnauthorizedAccessIncident = Incident.discriminator('unauthorizedAccess', UnauthorizedAccessSchema);
 
 const LineCrossingAuthAuthSchema = new Schema({
-  atoB: {
-    type: Number,
-    min: [0, 'atoB cannot be less than 0'],
-    validate: {
-      validator: Number.isInteger,
-      message: 'atoB must be an integer',
-    },
+  type: {
+    type: String,
+    default: "all",
   },
-  btoA: {
-    type: Number,
-    min: [0, 'bToA cannot be less than 0'],
-    validate: {
-      validator: Number.isInteger,
-      message: 'bToA must be an integer',
-    },
-  },
+  totalEntry: { type: Number, default: 0, min: 0 },
+  totalExit: { type: Number, default: 0, min: 0 },
   timeSeries: [
     {
       timestamp: {
         type: Date,
         default: Date.now,
       },
-      atoB: {
-        type: Number,
-        min: [0, 'atoB cannot be less than 0'],
-        validate: {
-          validator: Number.isInteger,
-          message: 'atoB must be an integer',
-        },
+      type: {
+        type: String,
+        default: "all",
       },
-      btoA: {
+      entry: {
         type: Number,
-        min: [0, 'bToA cannot be less than 0'],
+        min: 0,
         validate: {
           validator: Number.isInteger,
-          message: 'bToA must be an integer',
+          message: "entry must be an integer",
         },
+        default: 0,
+      },
+      exit: {
+        type: Number,
+        min: 0,
+        validate: {
+          validator: Number.isInteger,
+          message: "exit must be an integer",
+        },
+        default: 0,
       },
     }
   ],

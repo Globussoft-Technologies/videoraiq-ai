@@ -1792,6 +1792,11 @@ class NVRService {
         });
 
         return { deviceInfo, cameras };
+      } else if (brand.toLowerCase() === "hanwha") {
+        return {
+          error:
+            "Hanwha Vision discovery is not yet implemented. Please provide a real device response or enable ONVIF-based discovery for this brand.",
+        };
       } else {
         return { error: "This brand is not yet supported for camera discovery" };
       }

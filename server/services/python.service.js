@@ -51,6 +51,20 @@ const pickDetectorThresholds = (detectorName, settings = {}) => {
   }, {});
 };
 
+const pickLineCrossingSettings = (settings = {}) => {
+  const payload = {};
+
+  if (Array.isArray(settings.inside_reference_point)) {
+    payload.inside_reference_point = settings.inside_reference_point;
+  }
+
+  if (settings.count_mode) {
+    payload.count_mode = settings.count_mode;
+  }
+
+  return payload;
+};
+
 class PythonService {
   // attendance
   async registerChannel(channel, type, admin_id) {
@@ -103,6 +117,7 @@ class PythonService {
     obstruction_threshold_sec,
     severity,
     confidence_thresholds = {},
+    line_crossing_settings = {},
   ) {
     if (enable) {
       // ! old
@@ -149,6 +164,7 @@ class PythonService {
         obstruction_threshold_sec,
         severity,
         confidence_thresholds,
+        line_crossing_settings,
       };
       return await this.startNewDetection(payload);
     } else {
@@ -173,6 +189,7 @@ class PythonService {
         obstruction_threshold_sec,
         severity,
         confidence_thresholds = {},
+        line_crossing_settings = {},
       } = payload;
 
       // 🔹 Convert detection_modes → detectors
@@ -202,6 +219,7 @@ class PythonService {
           zone_configs,
           line_coordinates: zones || [],
           severity,
+          ...pickLineCrossingSettings(line_crossing_settings),
         });
       }
 
@@ -350,6 +368,9 @@ class PythonService {
       const detectorsWithThresholds = detectors.map((detector) => ({
         ...detector,
         ...pickDetectorThresholds(detector.name, confidence_thresholds),
+        ...(detector.name === "lineCrossingSettings"
+          ? pickLineCrossingSettings(line_crossing_settings)
+          : {}),
       }));
 
       const newPayload = {
@@ -400,6 +421,7 @@ class PythonService {
         severity,
         zone_name,
         confidence_thresholds = {},
+        line_crossing_settings = {},
       } = payload;
 
       // 🔹 Convert detection_modes → detectors
@@ -429,6 +451,7 @@ class PythonService {
           zone_configs,
           line_coordinates: zones || [],
           severity,
+          ...pickLineCrossingSettings(line_crossing_settings),
         });
       }
 
@@ -555,6 +578,9 @@ class PythonService {
       const detectorsWithThresholds = detectors.map((detector) => ({
         ...detector,
         ...pickDetectorThresholds(detector.name, confidence_thresholds),
+        ...(detector.name === "lineCrossingSettings"
+          ? pickLineCrossingSettings(line_crossing_settings)
+          : {}),
       }));
 
       const newPayload = {
@@ -601,6 +627,7 @@ class PythonService {
     severity,
     zoneName,
     confidence_thresholds = {},
+    line_crossing_settings = {},
   ) {
     const nvr = await NVR.findById(channel?.nvrId?._id);
     if (!nvr) throw new Error("NVR not found");
@@ -627,6 +654,7 @@ class PythonService {
       severity,
       zoneName,
       confidence_thresholds,
+      line_crossing_settings,
     };
     return await this.updateNewDetection(payload);
   }

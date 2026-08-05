@@ -121,6 +121,8 @@ const detectorThresholdAliasesBySettingType = {
   vehicleDetectionSettings: ["numberPlateDetectionSettings"],
 };
 
+const lineCrossingCountModes = new Set(["entry", "exit", "all"]);
+
 class DetectionSettingsValidation {
   createDetectionSettingsValidation(body) {
     const schema = Joi.object().keys({
@@ -161,6 +163,39 @@ class DetectionSettingsValidation {
           },
         };
       }
+    }
+
+    return { error: null };
+  }
+
+  validateLineCrossingSettings(settingType, settings = {}) {
+    if (settingType !== "lineCrossingSettings") {
+      return { error: null };
+    }
+
+    if (settings.inside_reference_point !== undefined) {
+      const point = settings.inside_reference_point;
+      const isValidPoint =
+        Array.isArray(point) &&
+        point.length === 2 &&
+        point.every((value) => typeof value === "number" && Number.isFinite(value));
+
+      if (!isValidPoint) {
+        return {
+          error: {
+            message:
+              "inside_reference_point must be an array of exactly two numbers",
+          },
+        };
+      }
+    }
+
+    if (settings.count_mode !== undefined && !lineCrossingCountModes.has(settings.count_mode)) {
+      return {
+        error: {
+          message: "count_mode must be entry, exit, or all",
+        },
+      };
     }
 
     return { error: null };

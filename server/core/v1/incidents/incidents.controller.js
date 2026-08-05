@@ -556,7 +556,7 @@ class IncidentsController {
 
   async getLineCrossingLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
-    #swagger.description = 'Get Line Crossing logs (tabular). Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, minAtoB, maxAtoB, minBtoA, maxBtoA, search. Paginated via skip/limit.'
+    #swagger.description = 'Get Line Crossing logs (tabular). Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, type, minEntry, maxEntry, minExit, maxExit, search. Paginated via skip/limit.'
     #swagger.parameters['skip'] = { in: 'query', type: 'integer' }
     #swagger.parameters['limit'] = { in: 'query', type: 'integer' }
     #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
@@ -568,10 +568,15 @@ class IncidentsController {
     #swagger.parameters['severity'] = { in: 'query', type: 'string', enum: ['low','moderate','high'] }
     #swagger.parameters['resolved'] = { in: 'query', type: 'boolean' }
     #swagger.parameters['reportStatus'] = { in: 'query', type: 'boolean' }
-    #swagger.parameters['minAtoB'] = { in: 'query', type: 'integer' }
-    #swagger.parameters['maxAtoB'] = { in: 'query', type: 'integer' }
-    #swagger.parameters['minBtoA'] = { in: 'query', type: 'integer' }
-    #swagger.parameters['maxBtoA'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['type'] = { in: 'query', type: 'string', description: 'Filter by line-crossing direction bucket: entry, exit, or all' }
+    #swagger.parameters['minEntry'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['maxEntry'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['minExit'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['maxExit'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['minAtoB'] = { in: 'query', type: 'integer', deprecated: true }
+    #swagger.parameters['maxAtoB'] = { in: 'query', type: 'integer', deprecated: true }
+    #swagger.parameters['minBtoA'] = { in: 'query', type: 'integer', deprecated: true }
+    #swagger.parameters['maxBtoA'] = { in: 'query', type: 'integer', deprecated: true }
     #swagger.parameters['search'] = { in: 'query', type: 'string' }
     #swagger.responses[200] = { description: 'Line crossing logs fetched successfully' }
     #swagger.responses[500] = { description: 'Internal server error' }

@@ -1411,6 +1411,24 @@ async function updatePramaChannels(_nvr, _plainPassword, res) {
     );
 }
 
+async function handleHanwhaRegistration(_req, res) {
+  return res.status(501).json(
+    Response.errorResp(
+      "Hanwha Vision support is not yet implemented",
+      "Hanwha Vision discovery needs a real device sample before it can be enabled safely",
+    ),
+  );
+}
+
+async function updateHanwhaChannels(_nvr, _plainPassword, res) {
+  return res.status(501).json(
+    Response.errorResp(
+      "Hanwha Vision support is not yet implemented",
+      "Hanwha Vision channel refresh needs a real device sample before it can be enabled safely",
+    ),
+  );
+}
+
 export const registrationHandlers = {
   hikvision: handleHikvisionRegistration,
   cpplus: handleCPPlusRegistration,
@@ -1418,6 +1436,7 @@ export const registrationHandlers = {
   dahua: handleDahuaRegistration,
   prama: handlePramaRegistration,
   securus: handleSecurusRegistration,
+  hanwha: handleHanwhaRegistration,
   camera: handleSingleCameraRegistration,
 };
 
@@ -1428,6 +1447,7 @@ export const updateHandlers = {
   dahua: updateDahuaChannels,
   prama: updatePramaChannels,
   securus: updateSecurusChannels,
+  hanwha: updateHanwhaChannels,
 };
 
 export default registrationHandlers;

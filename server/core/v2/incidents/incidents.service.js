@@ -215,11 +215,17 @@ class IncidentsService {
             });
           } else if (incidentType === "lineCrossing") {
             recentIncident.timeOfIncident = req?.body?.timeOfIncident;
-            recentIncident.atoB = req.body.atoB;
-            recentIncident.btoA = req.body.btoA;
+            const type = req.body.type || "all";
+            const entry = Number(req.body.entry ?? 0);
+            const exit = Number(req.body.exit ?? 0);
+            recentIncident.type = type;
+            recentIncident.totalEntry = (recentIncident.totalEntry || 0) + entry;
+            recentIncident.totalExit = (recentIncident.totalExit || 0) + exit;
             recentIncident.timeSeries.push({
-              atoB: req.body.atoB,
-              btoA: req.body.btoA,
+              timestamp: req?.body?.timeOfIncident || new Date(),
+              type,
+              entry,
+              exit,
             });
           } else if (incidentType === "crowdDetection") {
             recentIncident.timeOfIncident = req?.body?.timeOfIncident;
@@ -345,9 +351,17 @@ class IncidentsService {
         });
       } else if (incidentType === "lineCrossing") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
+        const type = req.body.type || "all";
+        const entry = Number(req.body.entry ?? 0);
+        const exit = Number(req.body.exit ?? 0);
+        newIncident.type = type;
+        newIncident.totalEntry = entry;
+        newIncident.totalExit = exit;
         newIncident.timeSeries.push({
-          atoB: req.body.atoB,
-          btoA: req.body.btoA,
+          timestamp: req?.body?.timeOfIncident || new Date(),
+          type,
+          entry,
+          exit,
         });
       } else if (incidentType === "crowdDetection") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
@@ -2909,17 +2923,35 @@ console.log(result,'result');
 
   async getLineCrossingLogs(req, res, next) {
     try {
-      const { minAtoB, maxAtoB, minBtoA, maxBtoA } = req.query;
+      const {
+        type,
+        minEntry,
+        maxEntry,
+        minExit,
+        maxExit,
+        minAtoB,
+        maxAtoB,
+        minBtoA,
+        maxBtoA,
+      } = req.query;
       const extraMatch = {};
-      if (minAtoB !== undefined || maxAtoB !== undefined) {
-        extraMatch.atoB = {};
-        if (minAtoB !== undefined) extraMatch.atoB.$gte = Number(minAtoB);
-        if (maxAtoB !== undefined) extraMatch.atoB.$lte = Number(maxAtoB);
+      const entryMin = minEntry ?? minAtoB;
+      const entryMax = maxEntry ?? maxAtoB;
+      const exitMin = minExit ?? minBtoA;
+      const exitMax = maxExit ?? maxBtoA;
+
+      if (entryMin !== undefined || entryMax !== undefined) {
+        extraMatch.totalEntry = {};
+        if (entryMin !== undefined) extraMatch.totalEntry.$gte = Number(entryMin);
+        if (entryMax !== undefined) extraMatch.totalEntry.$lte = Number(entryMax);
       }
-      if (minBtoA !== undefined || maxBtoA !== undefined) {
-        extraMatch.btoA = {};
-        if (minBtoA !== undefined) extraMatch.btoA.$gte = Number(minBtoA);
-        if (maxBtoA !== undefined) extraMatch.btoA.$lte = Number(maxBtoA);
+      if (exitMin !== undefined || exitMax !== undefined) {
+        extraMatch.totalExit = {};
+        if (exitMin !== undefined) extraMatch.totalExit.$gte = Number(exitMin);
+        if (exitMax !== undefined) extraMatch.totalExit.$lte = Number(exitMax);
+      }
+      if (type) {
+        extraMatch.type = type;
       }
       return await this._fetchIncidentLogs({
         req,

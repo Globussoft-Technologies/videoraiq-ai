@@ -1660,9 +1660,8 @@ async getDetections(req, res, _next) {
               incidentType: "$incidentType"
             },
             objectsDetected: "$timeSeries.objectsDetected",
-            count: "$timeSeries.count",
-            atoB: "$timeSeries.atoB",
-            btoA: "$timeSeries.btoA",
+            entry: "$timeSeries.entry",
+            exit: "$timeSeries.exit",
             timeOfIncident: "$timeSeries.timestamp",
             createdAt: 1,
             updatedAt: 1,
