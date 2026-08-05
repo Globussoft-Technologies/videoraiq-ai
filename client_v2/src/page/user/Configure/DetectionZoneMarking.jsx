@@ -1,4 +1,5 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, Video, Pencil, Maximize2, Minimize2, X, Wifi, Minus, Plus, CheckCircle2, ChevronDown, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import useHlsPlayer from '../../../hooks/useHlsPlayer';
@@ -912,11 +913,11 @@ export default function DetectionZoneMarking({
         )}
       </div>
 
-      {embedded && zoneSettingsOpen && activeType && (
+      {embedded && zoneSettingsOpen && activeType && createPortal(
         <div
           onClick={onZoneSettingsClose}
           style={{
-            position: 'fixed', inset: 0, zIndex: 220, background: 'rgba(6,9,15,.62)',
+            position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(6,9,15,.62)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
           }}
         >
@@ -968,7 +969,8 @@ export default function DetectionZoneMarking({
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {showSaveModal && activeType && (

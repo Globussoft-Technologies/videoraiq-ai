@@ -319,9 +319,17 @@ const TaggedUsers = () => {
     const departments = new Set(
       list.map((r) => r.department).filter((d) => d && d !== '--')
     ).size;
+    const cameras = new Set(
+      list.map((r) => r.cameraName).filter((camera) => camera && camera !== '--')
+    ).size;
+    const locations = new Set(
+      list.map((r) => r.location).filter((location) => location && location !== '--')
+    ).size;
     return [
       { label: 'Tagged Records', value: totalCount ?? 0, color: 'var(--blue)' },
-      { label: 'Departments (page)', value: departments, color: 'var(--violet)' },
+      { label: 'Cameras ', value: cameras, color: 'var(--cyan)' },
+      { label: 'Departments ', value: departments, color: 'var(--violet)' },
+      { label: 'Locations ', value: locations, color: 'var(--ok)' },
     ];
   }, [rows, totalCount]);
 

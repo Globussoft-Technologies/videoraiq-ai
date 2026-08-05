@@ -108,7 +108,7 @@ const LIST_MAX_H = 168; // ~5 rows, then scroll
  * the Save modal's overflow clipping. Fixed-positioned from the trigger's rect;
  * flips above when there's no room below. Closes on outside-click / Esc / scroll.
  */
-export function Dropdown({ value, options, placeholder, onChange, disabled, width = 62, searchable = false, minMenuWidth = 0 }) {
+export function Dropdown({ value, options, placeholder, onChange, disabled, width = 62, height = 34, searchable = false, minMenuWidth = 0 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0, openUp: false });
@@ -239,12 +239,13 @@ export function Dropdown({ value, options, placeholder, onChange, disabled, widt
         disabled={disabled}
         onClick={() => !disabled && setOpen((o) => !o)}
         style={{
-          width: '100%', height: 34, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
+          width: '100%', height, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
           padding: '0 8px', borderRadius: 8, boxSizing: 'border-box', fontSize: 12.5, textAlign: 'left',
           background: disabled ? 'var(--bg1)' : 'var(--bg2)',
           border: `1px solid ${open ? 'var(--blue)' : 'var(--bd)'}`,
           color: disabled ? 'var(--tx3)' : 'var(--tx)',
           cursor: disabled ? 'not-allowed' : 'pointer',
+          outline: 'none',
         }}
       >
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: value ? 'var(--tx)' : 'var(--tx3)' }}>
@@ -341,7 +342,7 @@ export default function ZoneScheduleFields({ value = emptySchedule(), onChange, 
  * pre-select, saves the new choice (PUT) on change. Shown once per Zone Settings
  * panel / Save modal, NOT per-zone.
  */
-export function TimezoneField({ disabled }) {
+export function TimezoneField({ disabled, controlHeight = 34 }) {
   const timezones = useTimezones();
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
@@ -391,6 +392,7 @@ export function TimezoneField({ disabled }) {
         disabled={disabled || saving || !timezones.length}
         onChange={handleChange}
         width="100%"
+        height={controlHeight}
         searchable
         minMenuWidth={260}
       />

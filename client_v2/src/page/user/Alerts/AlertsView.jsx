@@ -665,27 +665,23 @@ export default function AlertsView() {
                       }}
                     >
                       <span style={{ justifySelf: 'start', minWidth: sevMeta.minWidth, textAlign: 'center', fontFamily: 'var(--mono)', fontSize: 9.5, fontWeight: 700, lineHeight: 1, color: sevMeta.color, background: sevMeta.bg, border: '1px solid ' + sevMeta.border, borderRadius: 4, padding: '3px 5px' }}>{sevMeta.label}</span>
-                      <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                          <span style={{
-                            fontFamily: 'var(--disp)',
-                            fontSize: 11,
-                            fontWeight: 800,
-                            letterSpacing: '.04em',
-                            color: typeColor,
-                            background: 'transparent',
-                            border: 'none',
-                            borderRadius: 4,
-                            padding: '0 6px',
-                            flex: '0 0 auto',
-                            display: 'inline-block',
-                          }}>{typeCode}</span>
+                      <div style={{ minWidth: 0, display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', columnGap: 8, rowGap: 3, alignItems: 'start' }}>
+                        <span style={{
+                          fontFamily: 'var(--disp)',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          lineHeight: 1.35,
+                          letterSpacing: '.04em',
+                          color: typeColor,
+                          whiteSpace: 'nowrap',
+                        }}>{typeCode}</span>
+                        <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
                           {!hideDuplicateTitle && (
-                            <span title={eventTitle} style={{ fontFamily: 'var(--disp)', fontSize: 14, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: '0 1 auto', marginLeft: 8 }}>{displayTitle}</span>
+                            <span title={eventTitle} style={{ fontFamily: 'var(--disp)', fontSize: 14, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: '0 1 auto' }}>{displayTitle}</span>
                           )}
-                          {eventDescription && <span style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, marginLeft: 8 }}>{eventDescription}</span>}
+                          {eventDescription && <span style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{eventDescription}</span>}
                         </div>
-                        {detailParts.length > 0 && <div style={{ fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detailParts.join(' - ')}</div>}
+                        {detailParts.length > 0 && <div style={{ gridColumn: '1 / -1', fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detailParts.join(' - ')}</div>}
                       </div>
                       <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{timeAgo(it.timeOfIncident)}</span>
                       <span className="vq-alerts-col-status" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: st.color, fontWeight: 600, minWidth: 0, overflow: 'hidden' }}>

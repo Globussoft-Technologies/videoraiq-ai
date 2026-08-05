@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import ZoneScheduleFields, { TimezoneField, scheduleError } from '../../ZoneScheduleFields';
@@ -29,9 +30,9 @@ export default function SaveDetectionAreaModal({ initialName, initialPriority, z
     onSubmit({ detectionName: detectionName.trim(), priority, zones: zoneDrafts });
   };
 
-  return (
+  return createPortal(
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(6,9,15,.6)', zIndex: 200,
+      position: 'fixed', inset: 0, background: 'rgba(6,9,15,.6)', zIndex: 1000,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
       <div style={{
@@ -80,11 +81,9 @@ export default function SaveDetectionAreaModal({ initialName, initialPriority, z
               </div>
 
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--tx2)' }}>Time zone</label>
-                </div>
+               
                 <div style={{ padding: 0 }}>
-                  <TimezoneField />
+                  <TimezoneField controlHeight={40} />
                 </div>
               </div>
             </div>
@@ -171,6 +170,7 @@ export default function SaveDetectionAreaModal({ initialName, initialPriority, z
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -337,13 +337,24 @@ const AccessLogs = () => {
 
   // KPI tiles — derived from the loaded page + server total (no placeholder data).
   const stats = useMemo(() => {
-    const list = rows || [];
-    const tagged = list.filter((r) => r.tag).length;
-    return [
-      { label: 'Access Events', value: totalCount ?? 0, color: 'var(--blue)' },
-      { label: 'Tagged (page)', value: tagged, color: 'var(--ok)' },
-    ];
-  }, [rows, totalCount]);
+  const list = rows || [];
+  const tagged = list.filter((r) => r.tag).length;
+
+  const locationKeys = new Set(
+    list.map((r) => r.location).filter((l) => l && l !== '--')
+  );
+
+  const cameraKeys = new Set(
+    list.map((r) => r.cameraName).filter((c) => c && c !== '--')
+  );
+
+  return [
+    { label: 'Access Events', value: totalCount ?? 0, color: 'var(--blue)' },
+    { label: 'Tagged', value: tagged, color: 'var(--cyan)' },
+    { label: 'Locations ', value: locationKeys.size,  color: 'var(--violet)'  },
+    { label: 'Cameras', value: cameraKeys.size,  color: 'var(--ok)' },
+  ];
+}, [rows, totalCount]);
 
   const handleExport = (format) =>
     handleAccessExport(format, {

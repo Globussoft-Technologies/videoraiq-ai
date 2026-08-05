@@ -113,7 +113,7 @@ export const SessionImageCarousel = ({ images = [], fallback, alt }) => {
   };
 
   return (
-    <div className="relative w-full h-28 sm:h-32 md:h-36 lg:h-40 overflow-hidden">
+    <div className="relative w-full h-32 sm:h-36 md:h-44 lg:h-48 overflow-hidden">
       <ImageWithLoader
         src={list[safeIndex] || fallback}
         alt={alt}
@@ -147,7 +147,6 @@ export const SessionImageCarousel = ({ images = [], fallback, alt }) => {
     </div>
   );
 };
-
 /**
  * Build TanStack column definitions for the tagged-users table.
  * `ctx` = { dispatch, sortField, sortOrder, region, untaggingId, handleUntag }.
@@ -345,7 +344,7 @@ export const renderAccessCard = (item, { dispatch, region, untaggingId, handleUn
         dispatch({ type: 'SET_SELECTED_LOG', value: item });
         dispatch({ type: 'SET_SHOW_PROFILE', value: true });
       }}
-      className="bg-[var(--bg2)] rounded-[13px] overflow-hidden border border-[var(--bd)] flex flex-col relative group hover:border-[var(--bd2)] transition-colors cursor-pointer h-full w-full min-w-0 max-w-[312px]"
+      className="bg-[var(--bg2)] rounded-[13px] overflow-hidden border border-[var(--bd)] flex flex-col relative group hover:border-[var(--bd2)] transition-colors cursor-pointer h-full w-full min-w-0"
       title="View profile"
     >
       {/* Snapshot — full-bleed carousel with overlay chips */}
@@ -355,7 +354,7 @@ export const renderAccessCard = (item, { dispatch, region, untaggingId, handleUn
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              'repeating-linear-gradient(135deg,rgba(255,255,255,.012) 0 12px,transparent 12px 24px)',
+              'repeating-linear-gradient(135deg,rgba(255,255,255,.0120 12px,transparent 12px 24px)',
           }}
         />
 
