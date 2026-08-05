@@ -17,13 +17,8 @@ const styles = {
 };
 
 const AVATAR_PALETTE = [
-  { bg: 'bg-[#E8ECFF]', text: 'text-[#4F5DFF]' },
-  { bg: 'bg-[#FCE7F6]', text: 'text-[#D6318C]' },
-  { bg: 'bg-[#E1F6FA]', text: 'text-[#0EA5B7]' },
-  { bg: 'bg-[#FDE8E8]', text: 'text-[#E0524B]' },
-  { bg: 'bg-[#FDF1DC]', text: 'text-[#D28A1E]' },
-  { bg: 'bg-[#E4F7E9]', text: 'text-[#2FA860]' },
-  { bg: 'bg-[#EDE7FE]', text: 'text-[#7C5CE0]' },
+  '#6366f1', '#8b5cf6', '#ec4899', '#f59e0b',
+  '#10b981', '#3b82f6', '#ef4444', '#a855f7',
 ];
 
 const avatarColor = (key) => {
@@ -141,7 +136,8 @@ const Departments = () => {
         return (
           <div className="flex items-center gap-2.5">
             <span
-              className={`flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-semibold shrink-0 ${color.bg} ${color.text}`}
+              className="flex items-center justify-center w-[34px] h-[34px] rounded-full text-[11px] font-semibold shrink-0 text-white"
+              style={{ background: color }}
             >
               {initialsOf(name)}
             </span>

@@ -28,7 +28,7 @@ import {
 } from '../../../helpers/administer';
 import { useAttendanceSocket } from '../../../context/AttendanceSocketContext';
 import { usePermissions } from '../../../context/PermissionContext';
-import { getDetectionSettings, getDetectionTypes } from '../../../helpers/configure';
+import { getChannels, getDetectionSettings, getDetectionTypes } from '../../../helpers/configure';
 import { getRecipients } from '../../../helpers/recipients';
 import { getTelegramLinkCode } from '../../../helpers/telegram';
 
@@ -116,6 +116,15 @@ function normalizeDetectionRows(payload) {
 function detectionName(row, typeLabels) {
   const setting = row?.detectionSetting || row;
   return setting?.detectionName || typeLabels?.[setting?.settingType] || setting?.name || setting?.settingType || 'Detection';
+}
+
+function countEnabledDetectionToggles(channels) {
+  if (!Array.isArray(channels)) return 0;
+  return channels.reduce((sum, channel) => {
+    const detections = channel?.detections;
+    if (!detections || typeof detections !== 'object') return sum;
+    return sum + Object.values(detections).filter((entry) => entry?.enabled === true).length;
+  }, 0);
 }
 
 function getRecipientValue(recipient) {
@@ -639,6 +648,7 @@ export default function SystemSettings() {
   const telegramApi = useApi(() => getTelegramLinkCode(), [], { pollMs: 10000 });
   const detectionTypesApi = useApi(() => getDetectionTypes(), []);
   const detectionSettingsApi = useApi(() => getDetectionSettings({ skip: 0, limit: 500 }), []);
+  const channelsApi = useApi(() => getChannels({ skip: 0, limit: 1000 }), []);
 
   const [timezoneSaving, setTimezoneSaving] = useState(false);
   const [retentionSaving, setRetentionSaving] = useState(false);
@@ -681,7 +691,9 @@ export default function SystemSettings() {
 
   const typeLabels = detectionTypesApi.data || {};
   const detectionRows = normalizeDetectionRows(detectionSettingsApi.data);
-  const enabledDetectionRows = detectionRows.filter((row) => (row?.detectionSetting || row)?.enabled !== false);
+  const enabledDetectionRows = detectionRows.filter((row) => (row?.detectionSetting || row)?.enabled === true);
+  const channels = Array.isArray(channelsApi.data?.channels) ? channelsApi.data.channels : [];
+  const enabledDetectionToggleCount = countEnabledDetectionToggles(channels);
   const linkedCameraCount = useMemo(() => {
     const ids = new Set();
     detectionRows.forEach((row) => {
@@ -804,7 +816,7 @@ export default function SystemSettings() {
           <PanelHeader
             icon={ShieldCheck}
             title="General"
-            sub={loadingMain ? 'Loading admin settings...' : 'Admin profile and platform defaults from /admin APIs.'}
+            sub={loadingMain ? 'Loading admin settings...' : ''}
             action={loadingMain ? <Loader2 size={16} className="animate-spin" style={{ color: 'var(--blue)' }} /> : null}
           />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
@@ -839,7 +851,7 @@ export default function SystemSettings() {
           <PanelHeader
             icon={Bell}
             title="Alert Channels"
-            sub="Configured from recipients, Telegram link status, and logs sound APIs."
+            sub="Configured from recipients, Telegram link status, and Detection audio."
             action={<ActionButton onClick={() => navigate('/recipients')}>Recipients</ActionButton>}
           />
           <ToggleRow
@@ -849,13 +861,13 @@ export default function SystemSettings() {
             value={emailRecipients.length > 0}
             disabled
           />
-          <ToggleRow
+          {/* <ToggleRow
             icon={MessageSquare}
             label="SMS Alerts"
             desc={`${verifiedPhones}/${phoneRecipients.length} verified phone recipient${phoneRecipients.length === 1 ? '' : 's'}`}
             value={phoneRecipients.length > 0}
             disabled
-          />
+          /> */}
           <ToggleRow
             icon={Radio}
             label="Telegram Alerts"
@@ -886,7 +898,7 @@ export default function SystemSettings() {
           <PanelHeader
             icon={Database}
             title="Data Retention"
-            sub="Saved through the existing /admin/retention endpoint for incidents, attendance, and access logs."
+            sub="Summary from the incident, attendance, and access logs retention settings"
             action={
               <ActionButton onClick={handleRetentionSave} disabled={!canSaveRetention} icon={retentionSaving ? Loader2 : null} variant="primary">
                 Save
@@ -965,18 +977,18 @@ export default function SystemSettings() {
           <PanelHeader
             icon={SlidersHorizontal}
             title="AI Detection Defaults"
-            sub="Summary from the detection settings and detection types APIs."
+            // sub="Summary from the detection settings and detection types APIs."
             action={<ActionButton onClick={() => navigate('/engines')}>Manage</ActionButton>}
           />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 9 }}>
             <Metric label="Types Available" value={Object.keys(typeLabels || {}).length || '-'} icon={SlidersHorizontal} />
-            <Metric label="Enabled Configs" value={enabledDetectionRows.length} icon={CheckCircle2} tone="ok" />
+            <Metric label="Enabled Configs" value={enabledDetectionToggleCount} icon={CheckCircle2} tone="ok" />
             <Metric label="Linked Cameras" value={linkedCameraCount} icon={Radio} tone="warn" />
           </div>
           <div style={{ marginTop: 13, padding: 12, borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
               <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--tx)' }}>Primary active detection</span>
-              {detectionSettingsApi.loading && <Loader2 size={14} className="animate-spin" style={{ color: 'var(--blue)' }} />}
+              {(detectionSettingsApi.loading || channelsApi.loading) && <Loader2 size={14} className="animate-spin" style={{ color: 'var(--blue)' }} />}
             </div>
             <div style={{ fontSize: 12, color: 'var(--tx2)', lineHeight: 1.4 }}>
               {firstEnabledDetection ? detectionName(firstEnabledDetection, typeLabels) : 'No enabled detection configuration found'}
@@ -1023,7 +1035,7 @@ export default function SystemSettings() {
         </Panel>
 
         <Panel>
-          <PanelHeader icon={Webhook} title="Integrations" sub="Existing integrations detected from configured APIs." />
+          <PanelHeader icon={Webhook} title="Integrations" sub="Existing integrations which are configured." />
           <IntegrationRow
             icon={Mail}
             title="Email Recipients"
@@ -1032,14 +1044,14 @@ export default function SystemSettings() {
             tone={emailRecipients.length > 0 ? 'ok' : 'off'}
             onManage={() => navigate('/recipients')}
           />
-          <IntegrationRow
+          {/* <IntegrationRow
             icon={MessageSquare}
             title="SMS Recipients"
             desc={phoneRecipients[0] ? `First recipient: ${getRecipientValue(phoneRecipients[0])}` : 'No phone recipients configured'}
             status={`${phoneRecipients.length} configured`}
             tone={phoneRecipients.length > 0 ? 'ok' : 'off'}
             onManage={() => navigate('/recipients')}
-          />
+          /> */}
           <IntegrationRow
             icon={Radio}
             title="Telegram"
@@ -1052,8 +1064,8 @@ export default function SystemSettings() {
             icon={SlidersHorizontal}
             title="Detection Settings"
             desc={`${linkedCameraCount} camera${linkedCameraCount === 1 ? '' : 's'} connected to detection configs`}
-            status={`${enabledDetectionRows.length} enabled`}
-            tone={enabledDetectionRows.length > 0 ? 'ok' : 'off'}
+            status={`${enabledDetectionToggleCount} enabled`}
+            tone={enabledDetectionToggleCount > 0 ? 'ok' : 'off'}
             onManage={() => navigate('/detection-settings')}
           />
           <IntegrationRow

@@ -207,16 +207,31 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
         }}
       >
         {!collapsed && (
-          <img
-            src={theme === 'dark' ? videoraiqLogoWhite : videoraiqLogoColor}
-            alt="VideoraIQ"
-            style={{
-              maxWidth: '100%',
-              height: 34,
-              objectFit: 'contain',
-              objectPosition: 'left center',
-            }}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0 }}>
+            <img
+              src={theme === 'dark' ? videoraiqLogoWhite : videoraiqLogoColor}
+              alt="VideoraIQ"
+              style={{
+                maxWidth: '100%',
+                height: 34,
+                objectFit: 'contain',
+                objectPosition: 'left center',
+              }}
+            />
+            <span
+              style={{
+                marginTop: 7,
+                fontFamily: 'var(--mono)',
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: '.08em',
+                color: 'var(--tx3)',
+                lineHeight: 1,
+              }}
+            >
+              Version 2.0.0
+            </span>
+          </div>
         )}
         <button
           type="button"
