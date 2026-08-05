@@ -70,7 +70,7 @@ export default function DetectionZoneMarking({
   const isLineCrossing = activeType?.settingType === 'lineCrossingSettings';
   // A line only needs its 2 endpoints to be savable; every other type still
   // needs MIN_POINTS_TO_CLOSE (3) to form a closed polygon.
-  const minPointsToSave = isLineCrossing ? 2 : MIN_POINTS_TO_CLOSE;
+  const minPointsToSave = isLineCrossing ? 3 : MIN_POINTS_TO_CLOSE;
 
   // Saved/committed zones for this camera+type â€” each { name, points }. Points
   // are native video pixel coordinates, matching V1's saved shape.
@@ -83,7 +83,7 @@ export default function DetectionZoneMarking({
   const [saving, setSaving] = useState(false);
   const [maxPoints, setMaxPoints] = useState(DEFAULT_MAX_POINTS);
   // Line Crossing is always exactly 2 points â€” not adjustable via the +/- stepper.
-  const effectiveMaxPoints = isLineCrossing ? 2 : maxPoints;
+  const effectiveMaxPoints = isLineCrossing ? 3 : maxPoints;
   const [activeZoneIndex, setActiveZoneIndex] = useState(null); // which saved zone is highlighted/being renamed
 
   // Load this type's saved zones whenever the selected detection type changes.
@@ -191,8 +191,10 @@ export default function DetectionZoneMarking({
     name: `Zone ${index + 1}`,
     capacity: '',
     threshold: '',
+    countMode: isLineCrossing ? 'entry' : '',
     schedule: emptySchedule(),
-    points: zonePoints,
+    insideReferencePoint: isLineCrossing && zonePoints[2] ? zonePoints[2] : null,
+    points: isLineCrossing ? zonePoints.slice(0, 2) : zonePoints,
   });
 
   const handleStageClick = (e) => {
@@ -300,11 +302,28 @@ export default function DetectionZoneMarking({
 
   const handleUpdateZoneField = (index, field, value) => {
     setZones(prev => prev.map((z, i) => (i === index ? { ...z, [field]: value } : z)));
+    setZoneFieldErrors(prev => ({ ...prev, [`zone-${index}-${field}`]: '' }));
+  };
+
+  const validateZoneRequiredFields = (zone, index) => {
+    const nextErrors = {};
+    const fields = extraFieldsFor(activeType?.settingType);
+    const nameLabel = activeType?.settingType === 'lineCrossingSettings' ? 'Line Name' : 'Zone Name';
+    if (!String(zone?.name || '').trim()) nextErrors[`zone-${index}-name`] = `${nameLabel} is required.`;
+    if (fields.includes('capacity') && String(zone?.capacity ?? '').trim() === '') nextErrors[`zone-${index}-capacity`] = 'Capacity is required.';
+    if (fields.includes('threshold') && String(zone?.threshold ?? '').trim() === '') nextErrors[`zone-${index}-threshold`] = 'Threshold is required.';
+    return nextErrors;
   };
 
   const persistZones = async ({ detectionName, priority, nextZones }) => {
     const polygons = nextZones.map(z => z.points.map(p => [p.x, p.y]));
     const fields = extraFieldsFor(activeType.settingType);
+    const lineInsideReferencePoint = activeType.settingType === 'lineCrossingSettings' && nextZones[0]?.insideReferencePoint
+      ? [Number(nextZones[0].insideReferencePoint.x), Number(nextZones[0].insideReferencePoint.y)]
+      : null;
+    const lineCountMode = activeType.settingType === 'lineCrossingSettings'
+      ? ((nextZones[0]?.countMode || 'entry') === 'both' ? 'all' : (nextZones[0]?.countMode || 'entry'))
+      : null;
     const zoneConfigs = nextZones.map(z => ({
       name: z.name,
       ...(fields.includes('capacity') ? { capacity: z.capacity === '' ? undefined : Number(z.capacity) } : {}),
@@ -325,6 +344,8 @@ export default function DetectionZoneMarking({
           levelOfImportance: priority ?? setting.settings?.levelOfImportance,
           referencePoints: { ...setting.settings?.referencePoints, [camera._id]: polygons },
           zone_configs: zoneConfigs,
+          ...(lineInsideReferencePoint ? { inside_reference_point: lineInsideReferencePoint } : {}),
+          ...(lineCountMode ? { count_mode: lineCountMode } : {}),
           videoResolution: [videoSize.w, videoSize.h],
         },
       });
@@ -339,6 +360,8 @@ export default function DetectionZoneMarking({
           levelOfImportance: priority,
           referencePoints: { [camera._id]: polygons },
           zone_configs: zoneConfigs,
+          ...(lineInsideReferencePoint ? { inside_reference_point: lineInsideReferencePoint } : {}),
+          ...(lineCountMode ? { count_mode: lineCountMode } : {}),
           videoResolution: [videoSize.w, videoSize.h],
         },
         alerts: [],
@@ -390,9 +413,15 @@ export default function DetectionZoneMarking({
   // update path (V1's ZoneSettingsPanel does the same: it's a full PUT with
   // that one zone's entry filtered out or edited, not a separate endpoint).
   const [savingZoneIndex, setSavingZoneIndex] = useState(null);
+  const [zoneFieldErrors, setZoneFieldErrors] = useState({});
 
   const handleSaveZoneName = async (index) => {
     if (!activeType?.settingId) return;
+    const requiredErrors = validateZoneRequiredFields(zones[index], index);
+    if (Object.keys(requiredErrors).length) {
+      setZoneFieldErrors(prev => ({ ...prev, ...requiredErrors }));
+      return;
+    }
     const err = scheduleError(zones[index]?.schedule);
     if (err) { toast.error(err); return; }
     setSavingZoneIndex(index);
@@ -693,7 +722,7 @@ export default function DetectionZoneMarking({
                   {z.points.length > 1 && (
                     isLineCrossing ? (
                       <polyline
-                        points={polygonPointsAttr(z.points, videoSize.w, videoSize.h, 1000, 1000)}
+                        points={polygonPointsAttr(z.points.slice(0, 2), videoSize.w, videoSize.h, 1000, 1000)}
                         fill="none"
                         stroke="#f59e0b"
                         strokeWidth="4"
@@ -711,6 +740,27 @@ export default function DetectionZoneMarking({
                   {z.points.map((p, i) => (
                     <circle key={i} cx={(p.x / videoSize.w) * 1000} cy={(p.y / videoSize.h) * 1000} r="6" fill="#f59e0b" stroke="#fff" strokeWidth="2" />
                   ))}
+                  {isLineCrossing && z.insideReferencePoint && (
+                    <>
+                      <circle
+                        cx={(z.insideReferencePoint.x / videoSize.w) * 1000}
+                        cy={(z.insideReferencePoint.y / videoSize.h) * 1000}
+                        r="9"
+                        fill="#22c55e"
+                        stroke="#fff"
+                        strokeWidth="2.5"
+                      />
+                      <text
+                        x={(z.insideReferencePoint.x / videoSize.w) * 1000 + 12}
+                        y={(z.insideReferencePoint.y / videoSize.h) * 1000 - 12}
+                        fill="#22c55e"
+                        fontSize="24"
+                        fontWeight="700"
+                      >
+                        Inside Reference Point
+                      </text>
+                    </>
+                  )}
                 </g>
               ))}
               {draftZones.map((z, zi) => (
@@ -731,7 +781,7 @@ export default function DetectionZoneMarking({
               {points.length > 1 && (
                 isLineCrossing ? (
                   <polyline
-                    points={polygonPointsAttr(points, videoSize.w, videoSize.h, 1000, 1000)}
+                    points={polygonPointsAttr(points.slice(0, 2), videoSize.w, videoSize.h, 1000, 1000)}
                     fill="none"
                     stroke="var(--blue)"
                     strokeWidth="4.5"
@@ -749,12 +799,27 @@ export default function DetectionZoneMarking({
               {videoSize.w > 0 && points.map((p, i) => (
                 // Line Crossing's endpoints are draggable, so they render larger
                 // than a regular in-progress polygon vertex â€” bigger = "grab me".
-                <circle
-                  key={i}
-                  cx={(p.x / videoSize.w) * 1000}
-                  cy={(p.y / videoSize.h) * 1000}
-                  r={isLineCrossing ? 12 : 8} fill="var(--blue)" stroke="#fff" strokeWidth={isLineCrossing ? 3 : 2.5}
-                />
+                <g key={i}>
+                  <circle
+                    cx={(p.x / videoSize.w) * 1000}
+                    cy={(p.y / videoSize.h) * 1000}
+                    r={isLineCrossing ? (i === 2 ? 10 : 12) : 8}
+                    fill={isLineCrossing && i === 2 ? '#22c55e' : 'var(--blue)'}
+                    stroke="#fff"
+                    strokeWidth={isLineCrossing ? 3 : 2.5}
+                  />
+                  {isLineCrossing && i === 2 && (
+                    <text
+                      x={(p.x / videoSize.w) * 1000 + 12}
+                      y={(p.y / videoSize.h) * 1000 - 12}
+                      fill="#22c55e"
+                      fontSize="24"
+                      fontWeight="700"
+                    >
+                      Inside Reference Point
+                    </text>
+                  )}
+                </g>
               ))}
             </svg>
 
@@ -784,7 +849,7 @@ export default function DetectionZoneMarking({
                   borderRadius: 20, padding: '6px 14px',
                 }}>
                   {isLineCrossing
-                    ? 'click "Draw Line", then click twice to place the line'
+                    ? 'click "Draw Line", then click two line endpoints and one inside reference point'
                     : 'click "Start Drawing", then click to place zone points'}
                 </span>
               </div>
@@ -844,6 +909,8 @@ export default function DetectionZoneMarking({
                 onDelete={requestDeleteZone}
                 savingIndex={savingZoneIndex}
                 canDelete={canDeleteDetection}
+                errors={zoneFieldErrors}
+                isLineCrossing={isLineCrossing}
               />
             )}
 
@@ -932,7 +999,7 @@ export default function DetectionZoneMarking({
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15.5, color: 'var(--tx)' }}>
-                  Zone Settings
+                  {isLineCrossing ? 'Line Settings' : 'Zone Settings'}
                 </div>
                 <div style={{ marginTop: 3, fontSize: 11.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {activeType.label}
@@ -962,6 +1029,8 @@ export default function DetectionZoneMarking({
                 onDelete={requestDeleteZone}
                 savingIndex={savingZoneIndex}
                 canDelete={canDeleteDetection}
+                errors={zoneFieldErrors}
+                isLineCrossing={isLineCrossing}
               />
             ) : (
               <div style={{ border: '1px solid var(--bd)', borderRadius: 12, padding: '30px 18px', textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5 }}>
@@ -979,6 +1048,7 @@ export default function DetectionZoneMarking({
           initialPriority={activeType.setting?.settings?.levelOfImportance || 'moderate'}
           zones={pendingZones}
           extraFields={extraFieldsFor(activeType.settingType)}
+          isLineCrossing={isLineCrossing}
           saving={saving}
           onCancel={() => setShowSaveModal(false)}
           onSubmit={handleSubmitSave}

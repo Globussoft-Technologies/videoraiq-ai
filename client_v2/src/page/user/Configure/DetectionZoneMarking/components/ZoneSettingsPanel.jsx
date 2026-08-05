@@ -2,16 +2,19 @@ import { useState } from 'react';
 import { ChevronDown, Save, Trash2 } from 'lucide-react';
 import ZoneScheduleFields, { TimezoneField } from '../../ZoneScheduleFields';
 
-export default function ZoneSettingsPanel({ zones, extraFields, activeIndex, onSetActive, onUpdateField, onSave, onDelete, savingIndex, canDelete }) {
+export default function ZoneSettingsPanel({ zones, extraFields, isLineCrossing = false, activeIndex, onSetActive, onUpdateField, onSave, onDelete, savingIndex, canDelete, errors = {} }) {
   const [expanded, setExpanded] = useState(null);
+  const areaLabel = isLineCrossing ? 'line' : 'zone';
+  const areaTitle = isLineCrossing ? 'Line Settings' : 'Zone Settings';
+  const nameLabel = isLineCrossing ? 'Line Name' : 'Zone Name';
 
   if (zones.length === 0) return null;
 
   return (
     <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
-      <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 5 }}>Zone Settings</div>
+      <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 5 }}>{areaTitle}</div>
       <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 12 }}>
-        {zones.length} zone{zones.length === 1 ? '' : 's'} drawn on this camera for this detection type.
+        {zones.length} {areaLabel}{zones.length === 1 ? '' : 's'} drawn on this camera for this detection type.
       </div>
       <div style={{ marginBottom: 12 }}>
         <TimezoneField />
@@ -48,20 +51,40 @@ export default function ZoneSettingsPanel({ zones, extraFields, activeIndex, onS
               {isOpen && (
                 <div style={{ padding: '10px 11px', borderTop: '1px solid var(--bd)', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Zone Name</label>
+                    <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>{nameLabel} *</label>
                     <input
                       value={z.name}
                       onChange={e => onUpdateField(i, 'name', e.target.value)}
                       maxLength={50}
                       style={{
                         width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
-                        background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none',
+                        background: 'var(--bg2)', border: `1px solid ${errors[`zone-${i}-name`] ? '#ef4444' : 'var(--bd)'}`, fontSize: 12, color: 'var(--tx)', outline: 'none',
                       }}
                     />
+                    {errors[`zone-${i}-name`] && (
+                      <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{errors[`zone-${i}-name`]}</div>
+                    )}
                   </div>
+                  {isLineCrossing && (
+                    <div>
+                      <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Mode</label>
+                      <select
+                        value={z.countMode || 'entry'}
+                        onChange={e => onUpdateField(i, 'countMode', e.target.value)}
+                        style={{
+                          width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
+                          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none', cursor: 'pointer',
+                        }}
+                      >
+                        <option value="entry">Entry</option>
+                        <option value="exit">Exit</option>
+                        <option value="both">Both</option>
+                      </select>
+                    </div>
+                  )}
                   {extraFields.includes('capacity') && (
                     <div>
-                      <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Capacity</label>
+                      <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Capacity *</label>
                       <input
                         type="number"
                         min={0}
@@ -70,14 +93,17 @@ export default function ZoneSettingsPanel({ zones, extraFields, activeIndex, onS
                         placeholder="e.g. 10"
                         style={{
                           width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
-                          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none',
+                          background: 'var(--bg2)', border: `1px solid ${errors[`zone-${i}-capacity`] ? '#ef4444' : 'var(--bd)'}`, fontSize: 12, color: 'var(--tx)', outline: 'none',
                         }}
                       />
+                      {errors[`zone-${i}-capacity`] && (
+                        <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{errors[`zone-${i}-capacity`]}</div>
+                      )}
                     </div>
                   )}
                   {extraFields.includes('threshold') && (
                     <div>
-                      <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Threshold (sec)</label>
+                      <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Threshold (sec) *</label>
                       <input
                         type="number"
                         min={0}
@@ -86,9 +112,12 @@ export default function ZoneSettingsPanel({ zones, extraFields, activeIndex, onS
                         placeholder="e.g. 30"
                         style={{
                           width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
-                          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)', outline: 'none',
+                          background: 'var(--bg2)', border: `1px solid ${errors[`zone-${i}-threshold`] ? '#ef4444' : 'var(--bd)'}`, fontSize: 12, color: 'var(--tx)', outline: 'none',
                         }}
                       />
+                      {errors[`zone-${i}-threshold`] && (
+                        <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{errors[`zone-${i}-threshold`]}</div>
+                      )}
                     </div>
                   )}
                   <ZoneScheduleFields

@@ -16,7 +16,14 @@ export function zonesFor(setting, cameraId) {
     name: configs[i]?.name || `Zone ${i + 1}`,
     capacity: configs[i]?.capacity ?? '',
     threshold: configs[i]?.threshold_sec ?? '',
+    countMode: setting?.settings?.count_mode === 'all' ? 'both' : (setting?.settings?.count_mode || 'entry'),
     schedule: scheduleFromConfig(configs[i]),
+    insideReferencePoint: Array.isArray(setting?.settings?.inside_reference_point)
+      ? {
+          x: setting.settings.inside_reference_point[0],
+          y: setting.settings.inside_reference_point[1],
+        }
+      : null,
     points: (poly || []).map(p => (Array.isArray(p) ? { x: p[0], y: p[1] } : p)),
   }));
 }

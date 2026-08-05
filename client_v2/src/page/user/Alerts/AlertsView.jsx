@@ -526,6 +526,37 @@ export default function AlertsView() {
   const activeStatus = active ? statusOf(active) : null;
   const activeConfidence = active ? formatConfidence(active) : '_';
   const canReportActive = !!activeId && !activeResolved && !activeReported;
+  const activeImageUrl = active?.Image ? mediaUrl(active.Image) : '';
+
+  async function exportActiveClipImage() {
+    if (!activeImageUrl) {
+      toast.error('No alert snapshot available to export.');
+      return;
+    }
+    const filename = `alert-${activeId || Date.now()}.jpg`;
+    try {
+      const response = await fetch(activeImageUrl);
+      if (!response.ok) throw new Error('Download failed');
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      const link = document.createElement('a');
+      link.href = activeImageUrl;
+      link.download = filename;
+      link.target = '_blank';
+      link.rel = 'noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+  }
 
   async function resolveActive() {
     if (!activeId || activeResolved) return;
@@ -738,6 +769,9 @@ export default function AlertsView() {
                   </div>
                   <div onClick={canReportActive ? () => setReportOpen(true) : undefined} aria-disabled={!canReportActive} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: canReportActive ? 'var(--crit)' : 'var(--tx3)', background: canReportActive ? 'transparent' : 'var(--bg2)', border: canReportActive ? '1px solid rgba(255,77,77,.4)' : '1px solid var(--bd)', borderRadius: 8, padding: 9, cursor: canReportActive ? 'pointer' : 'not-allowed' }}>
                     {activeReported ? 'Reported' : 'Report'}
+                  </div>
+                  <div onClick={exportActiveClipImage} aria-disabled={!activeImageUrl} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: activeImageUrl ? 'var(--blue)' : 'var(--tx3)', background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 8, padding: 9, cursor: activeImageUrl ? 'pointer' : 'not-allowed' }}>
+                    Export Clip
                   </div>
                 </div>
                 {active.videoLink && (
