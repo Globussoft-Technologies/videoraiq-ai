@@ -292,9 +292,9 @@ const TaggedUsers = () => {
         console.error('Failed to untag user', error);
         toast.error(
           error?.response?.data?.body?.message ||
-            error?.response?.data?.body?.error ||
-            error?.response?.data?.message ||
-            'Failed to untag user'
+          error?.response?.data?.body?.error ||
+          error?.response?.data?.message ||
+          'Failed to untag user'
         );
       } finally {
         setUntaggingId(null);
@@ -316,16 +316,12 @@ const TaggedUsers = () => {
   // KPI tiles — derived from the loaded page + server total (no placeholder data).
   const stats = useMemo(() => {
     const list = rows || [];
-    const uniqueUsers = new Set(list.map((r) => r.userId || r.name).filter(Boolean)).size;
     const departments = new Set(
       list.map((r) => r.department).filter((d) => d && d !== '--')
     ).size;
-    const withExit = list.filter((r) => r.exitTiming).length;
     return [
       { label: 'Tagged Records', value: totalCount ?? 0, color: 'var(--blue)' },
-      { label: 'Unique Users (page)', value: uniqueUsers, color: 'var(--ok)' },
       { label: 'Departments (page)', value: departments, color: 'var(--violet)' },
-      { label: 'Completed Exit (page)', value: withExit, color: 'var(--cyan)' },
     ];
   }, [rows, totalCount]);
 

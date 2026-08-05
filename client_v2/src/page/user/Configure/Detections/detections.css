@@ -1,5 +1,5 @@
 /* ============================================================
-   Detections (Configure) — layout + control styling.
+   Detections (Configure) Ã¢â‚¬â€ layout + control styling.
    Everything is prefixed .vq-det- so it can't collide with the
    shared V2 styles in theme/tokens.css.
    ============================================================ */
@@ -9,19 +9,28 @@
   display: grid;
   /* Catalogue takes the remainder; the detail panel is the wider fixed side
      (~40% at desktop widths, as in the design) and stops growing at 640px. */
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 640px);
-  gap: 16px;
+  grid-template-columns: minmax(360px, 0.9fr) minmax(420px, 1.1fr);
+  gap: 20px;
   align-items: start;
 }
 
-/* Detection cards inside each category group — always two per row, as in the
+.vq-det-catalogue { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.vq-det-zone-card, .vq-det-sensitivity-card { background: var(--bg1); border: 1px solid var(--bd); border-radius: 14px; padding: 18px; box-shadow: 0 8px 24px rgba(15, 23, 42, .04); transition: border-color .15s ease, box-shadow .15s ease; }
+.vq-det-zone-card:hover, .vq-det-sensitivity-card:hover { border-color: var(--bd2); box-shadow: 0 12px 28px rgba(15, 23, 42, .07); }
+.vq-det-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.vq-det-section-title { font-family: var(--disp); font-size: 14px; font-weight: 650; color: var(--tx); }
+.vq-det-section-subtitle { margin-top: 4px; font-size: 11.5px; color: var(--tx3); }
+.vq-det-zone-empty { min-height: 180px; display: grid; place-items: center; padding: 20px; border: 1px dashed var(--bd); border-radius: 10px; color: var(--tx3); font-size: 12px; text-align: center; }
+.vq-det-sensitivity-value { flex: 0 0 auto; padding: 5px 8px; border-radius: 7px; background: color-mix(in srgb, var(--blue) 10%, transparent); color: var(--blue); font-family: var(--mono); font-size: 11px; font-weight: 700; }
+.vq-det-sensitivity-scale { display: flex; justify-content: space-between; margin-top: 8px; font-size: 10.5px; color: var(--tx3); }
+/* Detection cards inside each category group Ã¢â‚¬â€ always two per row, as in the
    design (never three, however wide the column gets). Rows breathe a little
    more than columns. */
 .vq-det-cards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: 12px;
-  row-gap: 16px;
+  row-gap: 20px;
 }
 
 .vq-det-card {
@@ -31,19 +40,42 @@
   border-color: var(--bd2);
 }
 
-/* Sticky detail column — follows the catalogue as it scrolls. */
+/* Sticky detail column Ã¢â‚¬â€ follows the catalogue as it scrolls. */
 .vq-det-aside {
   position: sticky;
   top: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
+/* Destructive schedule action: subtle danger treatment in each theme. */
+.vq-det-delete-schedule {
+  border: 1px solid rgba(244, 63, 94, 0.2);
+  background: rgba(244, 63, 94, 0.06);
+  color: #e11d48;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+}
+.vq-det-delete-schedule:hover {
+  background: rgba(244, 63, 94, 0.1);
+  border-color: rgba(244, 63, 94, 0.35);
+  color: #be123c;
+  transform: translateY(-1px);
+}
+[data-vq-theme='dark'] .vq-det-delete-schedule {
+  border-color: rgba(255, 77, 77, .22);
+  background: rgba(255, 77, 77, .07);
+  color: #fb7185;
+}
+[data-vq-theme='dark'] .vq-det-delete-schedule:hover {
+  background: rgba(255, 77, 77, .14);
+  border-color: rgba(255, 127, 127, .38);
+  color: #fda4af;
+}
 /* Sensitivity slider. The filled portion is painted with an inline
    linear-gradient computed from the current value. */
 .vq-det-range {
-  /* Unfilled part of the track — brighter than --track so it stays visible
+  /* Unfilled part of the track Ã¢â‚¬â€ brighter than --track so it stays visible
      against the panel, per the design. Consumed by the inline gradient. */
   --sliderrest: rgba(148, 163, 184, 0.45);
   -webkit-appearance: none;
@@ -84,7 +116,7 @@
 }
 
 /* ---- Responsive ---- */
-@media (max-width: 1180px) {
+@media (max-width: 960px) {
   .vq-det-shell {
     grid-template-columns: 1fr;
   }

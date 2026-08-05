@@ -28,6 +28,54 @@ export const INCIDENT_STATUS = {
   resolved: { label: 'Resolved', color: 'var(--ok)' },
 };
 
+/**
+ * Dummy threshold-key lists keyed by detection setting type. These will come
+ * from the API response eventually. Each key in the array is rendered as its
+ * own labelled slider/toggle row in the detail panel - one label → one row,
+ * two labels → two rows, and so on.
+ */
+export const DETECTION_THRESHOLDS = {
+  faceAuth: ['person_threshold'],
+  personalProtectiveEquipmentSettings: ['person_threshold', 'vest_threshold', 'helmet_threshold'],
+  foodServicePPEDetection: ['person_threshold', 'emp_floor', 'glove_floor', 'apron_floor'],
+  crowdDetectionSettings: ['person_threshold'],
+  lineCrossingSettings: ['person_threshold'],
+  countPersonsSettings: ['person_threshold'],
+  zoneIntrusionSettings: ['person_threshold'],
+  deskAbsenceDetection: ['person_threshold'],
+  tableOccupancySettings: ['person_threshold'],
+  loiteringDetectionSettings: ['person_threshold'],
+  countVehiclesSettings: ['vehicle_threshold'],
+  vehicleObstructionSettings: ['vehicle_threshold'],
+  vehicleTypeDetectionSettings: ['vehicle_threshold', 'forklift_threshold'],
+  numberPlateDetectionSettings: ['plate_confidence', 'ocr_min_confidence'],
+  mobilePhoneDetectionSettings: ['mobile_phone_confidence'],
+  conveyorDetectionSettings: [],
+  crusherDetectionSettings: [],
+  waterSpillageDetectionSettings: [],
+};
+
+/** Human-friendly label for a threshold key; falls back to a title-cased key. */
+export const THRESHOLD_LABELS = {
+  person_threshold: 'Person',
+  vest_threshold: 'Vest',
+  helmet_threshold: 'Helmet',
+  emp_floor: 'Employee',
+  glove_floor: 'Glove',
+  apron_floor: 'Apron',
+  vehicle_threshold: 'Vehicle',
+  forklift_threshold: 'Forklift',
+  plate_confidence: 'Plate Confidence',
+  ocr_min_confidence: 'OCR Min Confidence',
+  mobile_phone_confidence: 'Mobile Phone Confidence',
+};
+
+export function thresholdLabel(key) {
+  return THRESHOLD_LABELS[key] || String(key || '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 const CATEGORY_MATCHERS = [
   ['safety', ['ppe', 'protective', 'safety', 'helmet', 'vest', 'fire', 'smoke', 'weapon']],
   ['vehicles', ['vehicle', 'traffic', 'anpr', 'plate']],
@@ -65,6 +113,14 @@ function numberFrom(...values) {
   return value == null ? null : Number(value);
 }
 
+/** Normalize a threshold value to the 0-100 slider range (0.7 → 70). */
+function toPercent(value) {
+  if (value == null) return null;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  return num > 0 && num <= 1 ? Math.round(num * 100) : Math.round(num);
+}
+
 function boolFrom(value, fallback) {
   if (typeof value === 'boolean') return value;
   return fallback;
@@ -84,6 +140,10 @@ function subtitleFor(key, label) {
   return cleaned || key;
 }
 
+function camelize(key) {
+  return String(key || '').replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+}
+
 export function buildDetectionModels(detectionTypes) {
   return detectionEntries(detectionTypes).map(([key, value]) => {
     const label = detectionLabel(value, key);
@@ -99,6 +159,32 @@ export function buildDetectionModels(detectionTypes) {
       settings.alertThreshold,
     );
 
+    // Threshold rows come from the API when available (`data.thresholds`),
+    // otherwise fall back to the dummy config for this setting type.
+    // `data.thresholds` can be an array of keys (`['person_threshold', ...]`)
+    // or an object (`{ person_threshold: 0.75, vest_threshold: 80 }`).
+    let thresholdKeys = [];
+    let thresholdValues = {};
+    if (Array.isArray(data.thresholds)) {
+      thresholdKeys = data.thresholds;
+    } else if (data.thresholds && typeof data.thresholds === 'object') {
+      thresholdKeys = Object.keys(data.thresholds);
+      thresholdValues = data.thresholds;
+    } else {
+      thresholdKeys = DETECTION_THRESHOLDS[key] || [];
+    }
+
+    const thresholds = {};
+    for (const tk of thresholdKeys) {
+      const raw = numberFrom(thresholdValues[tk], data[tk], settings[tk], settings[camelize(tk)]);
+      thresholds[tk] = toPercent(raw) ?? 70;
+    }
+
+    const firstThreshold = Object.values(thresholds)[0];
+    const sensitivity = firstThreshold
+      ?? toPercent(numberFrom(data.sensitivity, settings.sensitivity, minConfidence))
+      ?? 70;
+
     return {
       id: key,
       settingType: key,
@@ -107,7 +193,8 @@ export function buildDetectionModels(detectionTypes) {
       category: data.category || categoryFor(key, label),
       active: boolFrom(data.active, boolFrom(data.enabled, true)),
       incidents24h: numberFrom(data.incidents24h, data.incidentCount24h, data.last24Hours, data.count24h) ?? 0,
-      sensitivity: numberFrom(data.sensitivity, settings.sensitivity, minConfidence) ?? 70,
+      sensitivity,
+      thresholds,
       schedule: data.schedule || settings.schedule || 'Set per camera',
       appliedCameras: numberFrom(
         data.appliedCameras,

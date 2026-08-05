@@ -496,48 +496,48 @@ export default function DetectionZoneMarking({
   return (
     <div style={{ padding: embedded ? 0 : 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
       {!embedded && (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button
-          onClick={onBack}
-          style={{
-            width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--bd)',
-            color: 'var(--tx2)', cursor: 'pointer',
-          }}
-        >
-          <ArrowLeft size={17} />
-        </button>
-        <span style={{
-          width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(59,130,246,.13)', color: 'var(--blue)',
-        }}>
-          <Video size={20} strokeWidth={1.7} />
-        </span>
-        <div>
-          <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 16 }}>
-            {camera.customName || camera.name}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            onClick={onBack}
+            style={{
+              width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--bd)',
+              color: 'var(--tx2)', cursor: 'pointer',
+            }}
+          >
+            <ArrowLeft size={17} />
+          </button>
+          <span style={{
+            width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(59,130,246,.13)', color: 'var(--blue)',
+          }}>
+            <Video size={20} strokeWidth={1.7} />
+          </span>
+          <div>
+            <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 16 }}>
+              {camera.customName || camera.name}
+            </div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)' }}>
+              {camera.ipAddress || 'â€”'} Â· Zone Marking
+            </div>
           </div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)' }}>
-            {camera.ipAddress || 'â€”'} Â· Zone Marking
-          </div>
+          {canDeleteDetection && (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={!activeType?.settingId}
+              title={activeType?.settingId ? 'Reset all detection settings for this detection type' : 'Nothing saved yet for this detection type'}
+              style={{
+                marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7,
+                height: 36, padding: '0 14px', borderRadius: 9,
+                background: 'var(--bg2)', border: '1px solid var(--bd)',
+                fontSize: 12.5, fontWeight: 500, color: activeType?.settingId ? '#ef4444' : 'var(--tx3)',
+                cursor: activeType?.settingId ? 'pointer' : 'not-allowed', opacity: activeType?.settingId ? 1 : 0.5,
+              }}
+            >
+              <RotateCcw size={15} /> Reset Detection UI
+            </button>
+          )}
         </div>
-        {canDeleteDetection && (
-        <button
-          onClick={() => setShowDeleteConfirm(true)}
-          disabled={!activeType?.settingId}
-          title={activeType?.settingId ? 'Reset all detection settings for this detection type' : 'Nothing saved yet for this detection type'}
-          style={{
-            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7,
-            height: 36, padding: '0 14px', borderRadius: 9,
-            background: 'var(--bg2)', border: '1px solid var(--bd)',
-            fontSize: 12.5, fontWeight: 500, color: activeType?.settingId ? '#ef4444' : 'var(--tx3)',
-            cursor: activeType?.settingId ? 'pointer' : 'not-allowed', opacity: activeType?.settingId ? 1 : 0.5,
-          }}
-        >
-          <RotateCcw size={15} /> Reset Detection UI
-        </button>
-        )}
-      </div>
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: embedded ? '1fr' : '1fr 320px', gap: 18, alignItems: 'start' }}>
@@ -811,104 +811,104 @@ export default function DetectionZoneMarking({
 
         {/* Right rail */}
         {!embedded && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
-            <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 14 }}>Device Detail</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>MODEL</span>
-                <span style={{ fontSize: 12.5, fontWeight: 500, textAlign: 'right' }}>{camera.model || 'â€”'}</span>
-              </div>
-              <div style={{ height: 1, background: 'var(--bd)' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>NVR</span>
-                <span style={{ fontSize: 12.5, fontWeight: 500 }}>{camera.nvrId?.nvrName || 'â€”'}</span>
-              </div>
-              <div style={{ height: 1, background: 'var(--bd)' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>IP ADDRESS</span>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 500, color: 'var(--cyan)' }}>{camera.ipAddress || 'â€”'}</span>
-              </div>
-            </div>
-          </div>
-
-          {activeType && (
-            <ZoneSettingsPanel
-              zones={zones}
-              extraFields={extraFieldsFor(activeType.settingType)}
-              activeIndex={activeZoneIndex}
-              onSetActive={setActiveZoneIndex}
-              onUpdateField={handleUpdateZoneField}
-              onSave={handleSaveZoneName}
-              onDelete={requestDeleteZone}
-              savingIndex={savingZoneIndex}
-              canDelete={canDeleteDetection}
-            />
-          )}
-
-          {activeType && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
-              <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 5 }}>Alert Recipients</div>
-              <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 12 }}>
-                Who gets notified on a {activeType.label} event.
+              <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 14 }}>Device Detail</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>MODEL</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 500, textAlign: 'right' }}>{camera.model || 'â€”'}</span>
+                </div>
+                <div style={{ height: 1, background: 'var(--bd)' }} />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>NVR</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 500 }}>{camera.nvrId?.nvrName || 'â€”'}</span>
+                </div>
+                <div style={{ height: 1, background: 'var(--bd)' }} />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>IP ADDRESS</span>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 500, color: 'var(--cyan)' }}>{camera.ipAddress || 'â€”'}</span>
+                </div>
               </div>
-              {activeType.settingId ? (
-                <>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 11 }}>
-                    {selectedRecipients.map(r => (
-                      <span
-                        key={r._id}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 500,
-                          background: 'rgba(59,130,246,.13)', border: '1px solid rgba(59,130,246,.32)',
-                          color: 'var(--blue)', borderRadius: 20, padding: '4px 6px 4px 11px',
-                        }}
-                      >
-                        {r.fullName}
-                        <span onClick={() => removeRecipient(String(r._id))} style={{ cursor: 'pointer', display: 'flex', opacity: 0.7 }}>
-                          <X size={12} />
-                        </span>
-                      </span>
-                    ))}
-                    {selectedRecipients.length === 0 && !recipientsApi.loading && (
-                      <span style={{ fontSize: 11.5, color: 'var(--tx3)' }}>No recipients assigned yet.</span>
-                    )}
-                  </div>
-                  {recipientsApi.loading ? (
-                    <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Loading recipientsâ€¦</div>
-                  ) : recipientsApi.error ? (
-                    <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Couldn't load recipients.</div>
-                  ) : addableRecipients.length === 0 && allRecipients.length === 0 ? (
-                    <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>No verified recipients yet â€” add one under Alert Recipients.</div>
-                  ) : addableRecipients.length === 0 ? (
-                    <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>All recipients already assigned.</div>
-                  ) : (
-                    <div style={{ position: 'relative' }}>
-                      <select
-                        value="__add"
-                        onChange={e => addRecipient(e.target.value === '__add' ? null : e.target.value)}
-                        disabled={savingAlerts}
-                        style={{
-                          width: '100%', height: 40, padding: '0 34px 0 13px', borderRadius: 10, boxSizing: 'border-box',
-                          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5,
-                          outline: 'none', cursor: 'pointer', color: 'var(--tx3)', appearance: 'none',
-                        }}
-                      >
-                        <option value="__add">+ Add recipientâ€¦</option>
-                        {addableRecipients.map(r => (
-                          <option key={r._id} value={r._id}>{r.fullName} ({r.value})</option>
-                        ))}
-                      </select>
-                      <ChevronDown size={14} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx3)', pointerEvents: 'none' }} />
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Save a zone first to assign recipients.</div>
-              )}
             </div>
-          )}
-        </div>
+
+            {activeType && (
+              <ZoneSettingsPanel
+                zones={zones}
+                extraFields={extraFieldsFor(activeType.settingType)}
+                activeIndex={activeZoneIndex}
+                onSetActive={setActiveZoneIndex}
+                onUpdateField={handleUpdateZoneField}
+                onSave={handleSaveZoneName}
+                onDelete={requestDeleteZone}
+                savingIndex={savingZoneIndex}
+                canDelete={canDeleteDetection}
+              />
+            )}
+
+            {activeType && (
+              <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, padding: 16 }}>
+                <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 5 }}>Alert Recipients</div>
+                <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 12 }}>
+                  Who gets notified on a {activeType.label} event.
+                </div>
+                {activeType.settingId ? (
+                  <>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 11 }}>
+                      {selectedRecipients.map(r => (
+                        <span
+                          key={r._id}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 500,
+                            background: 'rgba(59,130,246,.13)', border: '1px solid rgba(59,130,246,.32)',
+                            color: 'var(--blue)', borderRadius: 20, padding: '4px 6px 4px 11px',
+                          }}
+                        >
+                          {r.fullName}
+                          <span onClick={() => removeRecipient(String(r._id))} style={{ cursor: 'pointer', display: 'flex', opacity: 0.7 }}>
+                            <X size={12} />
+                          </span>
+                        </span>
+                      ))}
+                      {selectedRecipients.length === 0 && !recipientsApi.loading && (
+                        <span style={{ fontSize: 11.5, color: 'var(--tx3)' }}>No recipients assigned yet.</span>
+                      )}
+                    </div>
+                    {recipientsApi.loading ? (
+                      <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Loading recipientsâ€¦</div>
+                    ) : recipientsApi.error ? (
+                      <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Couldn't load recipients.</div>
+                    ) : addableRecipients.length === 0 && allRecipients.length === 0 ? (
+                      <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>No verified recipients yet â€” add one under Alert Recipients.</div>
+                    ) : addableRecipients.length === 0 ? (
+                      <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>All recipients already assigned.</div>
+                    ) : (
+                      <div style={{ position: 'relative' }}>
+                        <select
+                          value="__add"
+                          onChange={e => addRecipient(e.target.value === '__add' ? null : e.target.value)}
+                          disabled={savingAlerts}
+                          style={{
+                            width: '100%', height: 40, padding: '0 34px 0 13px', borderRadius: 10, boxSizing: 'border-box',
+                            background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5,
+                            outline: 'none', cursor: 'pointer', color: 'var(--tx3)', appearance: 'none',
+                          }}
+                        >
+                          <option value="__add">+ Add recipientâ€¦</option>
+                          {addableRecipients.map(r => (
+                            <option key={r._id} value={r._id}>{r.fullName} ({r.value})</option>
+                          ))}
+                        </select>
+                        <ChevronDown size={14} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx3)', pointerEvents: 'none' }} />
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Save a zone first to assign recipients.</div>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
 

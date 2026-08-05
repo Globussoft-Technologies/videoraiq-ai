@@ -1,4 +1,10 @@
-import { AlertCircle, ListRestart, Calendar, Clock, Globe, Plus, X, ChevronDown, Trash2, CalendarCheck } from 'lucide-react';
+import {
+  Activity, AlertCircle, Armchair, Box, Briefcase, Calendar, CalendarCheck,
+  Car, CarFront, CircleOff, Clock, Clock3, DoorOpen, Factory, Flame,
+  GitCommitHorizontal, Globe, Hammer, HardHat, Lightbulb, ListRestart, Plus,
+  ScanFace, ScanLine, ShieldAlert, ShieldOff, Smartphone, Table2, Trash2,
+  Users, UtensilsCrossed, Waves, X, ChevronDown,
+} from 'lucide-react';
 import { Toggle } from '../../../../components/primitives';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -6,6 +12,58 @@ import { toast } from 'sonner';
 import ConfirmationModal from '../../../../components/DeleteConfirmation';
 import { getDetectionSchedule, updateDetectionSchedule, deleteDetectionSchedule } from '../../../../helpers/configure';
 import { useTimezones } from '../ZoneScheduleFields';
+import { thresholdLabel } from './detectionsData';
+
+// Detection types are API-driven, so use their stable setting type rather than
+// the category icon. Aliases cover the setting-type variants returned by the
+// camera and detection-settings APIs.
+const DETECTION_ICONS = {
+  faceAuth: ScanFace,
+  faceRecognitionSettings: ScanFace,
+  faceDetectionSettings: ScanFace,
+  genericObjectDetectionSettings: Box,
+  objectDetectionSettings: Box,
+  countPersonsSettings: Users,
+  crowdDetectionSettings: Users,
+  motionDetectionSettings: Activity,
+  unauthorizedAccessSettings: ShieldAlert,
+  intrusionDetectionSettings: ShieldAlert,
+  zoneIntrusionSettings: ShieldAlert,
+  lineCrossingSettings: GitCommitHorizontal,
+  loiteringDetectionSettings: Clock3,
+  loiteringWithAuthSettings: Clock3,
+  loiteringWithoutAuthSettings: Clock3,
+  unattendedBaggageDetectionSettings: Briefcase,
+  baggageDetectionSettings: Briefcase,
+  fireSmokeDetectionSettings: Flame,
+  fireDetectionSettings: Flame,
+  weaponDetectionSettings: ShieldAlert,
+  lightDetectionSettings: Lightbulb,
+  personalProtectiveEquipmentSettings: HardHat,
+  foodServicePPEDetection: UtensilsCrossed,
+  foodServicePPEDetectionSettings: UtensilsCrossed,
+  countVehiclesSettings: CarFront,
+  vehicleDetectionSettings: Car,
+  vehicleTypeDetectionSettings: CarFront,
+  vehicleObstructionSettings: CircleOff,
+  numberPlateDetectionSettings: ScanLine,
+  anprSettings: ScanLine,
+  vehicleNumberPlateSettings: ScanLine,
+  doorDetectionSettings: DoorOpen,
+  deskAbsenceDetection: Armchair,
+  deskAbsenceSettings: Armchair,
+  guardAbsenceSettings: ShieldOff,
+  tableOccupancySettings: Table2,
+  tableOccupancyDetectionSettings: Table2,
+  mobilePhoneDetectionSettings: Smartphone,
+  conveyorDetectionSettings: Factory,
+  crusherDetectionSettings: Hammer,
+  waterSpillageDetectionSettings: Waves,
+};
+
+function detectionIconFor(model, fallbackIcon) {
+  return DETECTION_ICONS[model?.settingType || model?.id] || fallbackIcon;
+}
 
 function StatBox({ label, value, color = 'var(--tx)' }) {
   return (
@@ -121,12 +179,12 @@ function ScheduleFieldDropdown({
       style={{
         position: 'fixed', top: coords.top, left: coords.left, width: coords.width,
         transform: coords.openUp ? 'translateY(-100%)' : 'none', zIndex: 10000,
-        borderRadius: 12, border: '1px solid #e2e8f0', background: '#ffffff',
+        borderRadius: 12, border: '1px solid var(--bd)', background: 'var(--bg1solid)',
         boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)', overflow: 'hidden',
       }}
     >
       {searchable && (
-        <div style={{ padding: 6, borderBottom: '1px solid #f1f5f9' }}>
+        <div style={{ padding: 6, borderBottom: '1px solid var(--bd)' }}>
           <input
             ref={searchRef}
             type="text"
@@ -135,14 +193,14 @@ function ScheduleFieldDropdown({
             placeholder="Search..."
             style={{
               width: '100%', height: 32, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
-              background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: 12.5, color: '#0f172a', outline: 'none',
+              background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5, color: 'var(--tx)', outline: 'none',
             }}
           />
         </div>
       )}
       <ul className="vq-scroll" style={{ maxHeight: 168, overflowY: 'auto', margin: 0, padding: 4, listStyle: 'none' }}>
         {filtered.length === 0 && (
-          <li style={{ padding: '8px 10px', fontSize: 12.5, color: '#64748b' }}>No matches</li>
+          <li style={{ padding: '8px 10px', fontSize: 12.5, color: 'var(--tx2)' }}>No matches</li>
         )}
         {filtered.map((opt) => {
           const selected = opt === value;
@@ -155,9 +213,9 @@ function ScheduleFieldDropdown({
                   width: '100%', textAlign: 'left', padding: '7px 10px', borderRadius: 7, border: 'none',
                   cursor: 'pointer', fontSize: 13, fontWeight: selected ? 600 : 400,
                   background: selected ? '#7c3aed' : 'transparent',
-                  color: selected ? '#fff' : '#334155',
+                  color: selected ? '#fff' : 'var(--tx)',
                 }}
-                onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = '#f1f5f9'; }}
+                onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = 'var(--bg3)'; }}
                 onMouseLeave={(e) => { if (!selected) e.currentTarget.style.background = 'transparent'; }}
               >
                 {opt}
@@ -190,19 +248,19 @@ function ScheduleFieldDropdown({
           boxSizing: 'border-box',
           fontSize: 14,
           textAlign: 'left',
-          background: '#fff',
-          border: `1px solid ${open ? '#7c3aed' : '#dbeafe'}`,
-          color: disabled ? '#94a3b8' : '#0f172a',
+          background: 'var(--bg1solid)',
+          border: `1px solid ${open ? 'var(--violet)' : 'var(--bd2)'}`,
+          color: disabled ? 'var(--tx3)' : 'var(--tx)',
           cursor: disabled ? 'not-allowed' : 'pointer',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-          {Icon && <Icon size={18} style={{ color: '#475569', flexShrink: 0 }} />}
+          {Icon && <Icon size={18} style={{ color: 'var(--tx2)', flexShrink: 0 }} />}
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }}>
             {value || placeholder}
           </span>
         </div>
-        <ChevronDown size={16} style={{ flexShrink: 0, color: '#64748b', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+        <ChevronDown size={16} style={{ flexShrink: 0, color: 'var(--tx2)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
       </button>
 
       {/* Floating label positioned on the top border */}
@@ -212,11 +270,11 @@ function ScheduleFieldDropdown({
           top: 0,
           left: 14,
           transform: 'translateY(-50%)',
-          background: '#fff',
+          background: 'var(--bg1solid)',
           padding: '0 6px',
           fontSize: 11,
           fontWeight: 600,
-          color: '#64748b',
+          color: 'var(--tx2)',
           pointerEvents: 'none',
           whiteSpace: 'nowrap'
         }}
@@ -243,6 +301,7 @@ export default function DetectionDetailPanel({
   onToggle,
   toggleDisabled,
   onSensitivityChange,
+  onThresholdChange,
   onEditZones,
   onResetSetting,
   resetDisabled = false,
@@ -250,11 +309,13 @@ export default function DetectionDetailPanel({
   channel,
   onScheduleSaved,
 }) {
-  const Icon = category?.icon;
+  const Icon = detectionIconFor(model, category?.icon);
   const color = category?.color || 'var(--blue)';
   const sensitivity = model.sensitivity;
   const appliedCameras = model.appliedCameras == null ? 'N/A' : model.appliedCameras;
   const minConfidence = model.minConfidence == null ? 'N/A' : `${model.minConfidence}%`;
+  const thresholdKeys = model.thresholds ? Object.keys(model.thresholds) : [];
+  const usesThresholds = thresholdKeys.length > 0;
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleError, setScheduleError] = useState('');
@@ -415,6 +476,7 @@ export default function DetectionDetailPanel({
     }
   }
 
+
   return (
     <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12, padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -458,39 +520,58 @@ export default function DetectionDetailPanel({
         </span>
       </div>
 
-      {/* Sensitivity — label, track and value on one row (as in the design). */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
-        <span style={{ fontSize: 11.5, color: 'var(--tx2)', flex: '0 0 auto' }}>Sensitivity</span>
-        <input
-          type="range"
-          className="vq-det-range"
-          min={0}
-          max={100}
-          value={sensitivity}
-          disabled={!model.active}
-          onChange={(e) => onSensitivityChange(Number(e.target.value))}
-          aria-label={`${model.name} sensitivity`}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            background: '#dbeafe',
-            opacity: model.active ? 1 : 0.5,
-          }}
-        />
-        <span
-          style={{
-            flex: '0 0 auto',
-            minWidth: 22,
-            textAlign: 'right',
-            fontFamily: 'var(--mono)',
-            fontSize: 11.5,
-            fontWeight: 600,
-            color: 'var(--blue)',
-          }}
-        >
-          {sensitivity}
-        </span>
-      </div>
+      {/* Dynamic threshold rows: one slider per key from the API. */}
+      {usesThresholds && (
+        <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
+          {thresholdKeys.map((key) => {
+            const value = model.thresholds[key] ?? 70;
+            const label = thresholdLabel(key);
+            return (
+              <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span
+                  style={{
+                    fontSize: 11.5,
+                    color: 'var(--tx2)',
+                    flex: '0 0 auto',
+                  }}
+                  title={label}
+                >
+                  {label}
+                </span>
+                <input
+                  type="range"
+                  className="vq-det-range"
+                  min={0}
+                  max={100}
+                  value={value}
+                  disabled={!model.active}
+                  onChange={(e) => onThresholdChange(key, Number(e.target.value))}
+                  aria-label={`${model.name} ${label}`}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    background: `linear-gradient(to right, #7c3aed ${value}%, var(--sliderrest, rgba(148,163,184,0.45)) ${value}%)`,
+                    opacity: model.active ? 1 : 0.5,
+                  }}
+                />
+                <span
+                  style={{
+                    flex: '0 0 auto',
+                    minWidth: 22,
+                    textAlign: 'right',
+                    fontFamily: 'var(--mono)',
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    color: 'var(--blue)',
+                  }}
+                >
+                  {value}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Config stats */}
       <div
@@ -599,8 +680,8 @@ export default function DetectionDetailPanel({
                 maxHeight: '90vh',
                 display: 'flex',
                 flexDirection: 'column',
-                background: '#ffffff',
-                border: '1px solid #f1f0fb',
+                background: 'var(--bg1solid)',
+                border: '1px solid var(--bd)',
                 borderRadius: '20px',
                 boxShadow: '0 20px 40px -15px rgba(124, 58, 237, 0.12), 0 0 0 1px rgba(124, 58, 237, 0.04)',
                 overflow: 'hidden',
@@ -632,10 +713,10 @@ export default function DetectionDetailPanel({
                     <Calendar size={22} strokeWidth={2} />
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', fontFamily: 'var(--disp, sans-serif)' }}>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#7c3aed', fontFamily: 'var(--disp, sans-serif)' }}>
                       Edit Schedule for {model.name}
                     </div>
-                    <div style={{ marginTop: 4, fontSize: 13, color: '#64748b', lineHeight: 1.5 }}>
+                    <div style={{ marginTop: 4, fontSize: 13, color: 'var(--tx2)', lineHeight: 1.5 }}>
                       Set the timezone, mode and daily time ranges for the schedule.
                     </div>
                   </div>
@@ -647,7 +728,7 @@ export default function DetectionDetailPanel({
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: scheduleLoading ? '#cbd5e1' : '#94a3b8',
+                    color: scheduleLoading ? 'var(--tx3)' : 'var(--tx3)',
                     cursor: scheduleLoading ? 'not-allowed' : 'pointer',
                     padding: 6,
                     display: 'flex',
@@ -658,13 +739,13 @@ export default function DetectionDetailPanel({
                   }}
                   onMouseEnter={(e) => {
                     if (!scheduleLoading) {
-                      e.currentTarget.style.color = '#475569';
-                      e.currentTarget.style.backgroundColor = '#f1f5f9';
+                      e.currentTarget.style.color = 'var(--tx)';
+                      e.currentTarget.style.backgroundColor = 'var(--bg3)';
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!scheduleLoading) {
-                      e.currentTarget.style.color = '#94a3b8';
+                      e.currentTarget.style.color = 'var(--tx3)';
                       e.currentTarget.style.backgroundColor = 'transparent';
                     }
                   }}
@@ -694,7 +775,7 @@ export default function DetectionDetailPanel({
                       label="Time zone"
                       value={scheduleForm?.timezone || 'Asia/Kolkata'}
                       options={timezones}
-                      placeholder={timezones.length ? 'Select time zone' : 'Loading time zones…'}
+                      placeholder={timezones.length ? 'Select time zone' : 'Loading time zonesÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦'}
                       disabled={scheduleLoading || !timezones.length}
                       onChange={(tz) => setScheduleForm((s) => ({ ...(s || {}), timezone: tz }))}
                       icon={Globe}
@@ -719,13 +800,13 @@ export default function DetectionDetailPanel({
                       style={{
                         padding: '18px 20px',
                         borderRadius: '16px',
-                        background: '#f8fafc',
-                        border: '1px solid #e2e8f0',
-                        color: '#334155',
+                        background: 'var(--bg2)',
+                        border: '1px solid var(--bd)',
+                        color: 'var(--tx)',
                       }}
                     >
                       <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Always mode</div>
-                      <div style={{ fontSize: 13, lineHeight: 1.7, color: '#475569' }}>
+                      <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--tx2)' }}>
                         This detection is active continuously. Daily time ranges are not required when the schedule mode is Always.
                         Switch to Custom if you want to define specific active days and times.
                       </div>
@@ -743,8 +824,8 @@ export default function DetectionDetailPanel({
                             justifyContent: 'space-between',
                             gap: 16,
                             padding: '12px 16px',
-                            background: '#ffffff',
-                            border: '1px solid #f1f5f9',
+                            background: 'var(--bg1solid)',
+                            border: '1px solid var(--bd)',
                             borderRadius: '12px',
                           }}
                         >
@@ -756,19 +837,19 @@ export default function DetectionDetailPanel({
                                 borderRadius: '8px',
                                 display: 'grid',
                                 placeItems: 'center',
-                                background: '#f5f3ff',
+                                background: 'color-mix(in srgb, var(--violet) 12%, var(--bg2))',
                                 color: '#7c3aed',
                                 flexShrink: 0,
                               }}
                             >
                               <Calendar size={16} />
                             </div>
-                            <span style={{ fontSize: 14, fontWeight: 600, color: '#1e293b', width: 90, flexShrink: 0 }}>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--tx)', width: 90, flexShrink: 0 }}>
                               {day.charAt(0).toUpperCase() + day.slice(1)}
                             </span>
                             <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
                               {!hasRange ? (
-                                <span style={{ fontSize: 13, color: '#94a3b8' }}>No ranges</span>
+                                <span style={{ fontSize: 13, color: 'var(--tx3)' }}>No ranges</span>
                               ) : (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                   <input
@@ -776,29 +857,29 @@ export default function DetectionDetailPanel({
                                     value={ranges[0].start || '09:00'}
                                     onChange={(e) => updateInterval(day, 0, 'start', e.target.value)}
                                     style={{
-                                      border: '1px solid #dbeafe',
+                                      border: '1px solid var(--bd2)',
                                       borderRadius: '8px',
                                       padding: '4px 8px',
                                       fontSize: '13px',
                                       fontWeight: 500,
-                                      color: '#1e293b',
-                                      background: '#fff',
+                                      color: 'var(--tx)',
+                                      background: 'var(--bg1solid)',
                                       outline: 'none',
                                     }}
                                   />
-                                  <span style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>to</span>
+                                  <span style={{ fontSize: 13, color: 'var(--tx2)', fontWeight: 500 }}>to</span>
                                   <input
                                     type="time"
                                     value={ranges[0].end || '18:00'}
                                     onChange={(e) => updateInterval(day, 0, 'end', e.target.value)}
                                     style={{
-                                      border: '1px solid #dbeafe',
+                                      border: '1px solid var(--bd2)',
                                       borderRadius: '8px',
                                       padding: '4px 8px',
                                       fontSize: '13px',
                                       fontWeight: 500,
-                                      color: '#1e293b',
-                                      background: '#fff',
+                                      color: 'var(--tx)',
+                                      background: 'var(--bg1solid)',
                                       outline: 'none',
                                     }}
                                   />
@@ -818,14 +899,10 @@ export default function DetectionDetailPanel({
                                 height: 32,
                                 borderRadius: '8px',
                                 border: 'none',
-                                background: '#fef2f2',
-                                color: '#ef4444',
+                                      color: '#ef4444',
                                 cursor: 'pointer',
-                                transition: 'background-color 0.15s',
-                                flexShrink: 0,
+                                      flexShrink: 0,
                               }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = '#fee2e2'}
-                              onMouseLeave={(e) => e.currentTarget.style.background = '#fef2f2'}
                               title="Remove time range"
                             >
                               <Trash2 size={15} />
@@ -842,16 +919,15 @@ export default function DetectionDetailPanel({
                                 padding: '0 12px',
                                 borderRadius: '8px',
                                 border: 'none',
-                                background: '#f5f3ff',
+                                background: 'color-mix(in srgb, var(--violet) 12%, var(--bg2))',
                                 color: '#7c3aed',
                                 cursor: 'pointer',
                                 fontWeight: 600,
                                 fontSize: '13px',
-                                transition: 'background-color 0.15s',
-                                flexShrink: 0,
+                                      flexShrink: 0,
                               }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = '#ede9fe'}
-                              onMouseLeave={(e) => e.currentTarget.style.background = '#f5f3ff'}
+                              onMouseEnter={(e) => e.currentTarget.style.background = 'color-mix(in srgb, var(--violet) 20%, var(--bg2))'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = 'color-mix(in srgb, var(--violet) 12%, var(--bg2))'}
                             >
                               <Plus size={14} strokeWidth={2.5} />
                               Add
@@ -871,23 +947,18 @@ export default function DetectionDetailPanel({
                       <button
                         onClick={requestDeleteSchedule}
                         type="button"
+                        className="vq-det-delete-schedule"
                         style={{
                           height: 44,
                           padding: '0 20px',
                           borderRadius: '10px',
-                          border: '1px solid #fee2e2',
-                          background: '#fff1f2',
-                          color: '#b91c1c',
                           cursor: 'pointer',
                           fontSize: '14px',
                           fontWeight: 600,
                           display: 'flex',
                           alignItems: 'center',
                           gap: 8,
-                          transition: 'background-color 0.15s',
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = '#fee2e2'}
-                        onMouseLeave={(e) => e.currentTarget.style.background = '#fff1f2'}
                       >
                         <Trash2 size={15} />
                         Delete schedule

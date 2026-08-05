@@ -819,44 +819,45 @@ export default function Detections() {
               ))
             )}
 
-            <div
-              style={{
-                background: 'var(--bg1)',
-                border: '1px solid var(--bd)',
-                borderRadius: 13,
-                padding: zoneCamera ? 16 : '38px 20px',
-                minHeight: zoneCamera ? 0 : 420,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: zoneCamera ? 'flex-start' : 'center',
-              }}
-            >
-              {zoneCamera && selectedSettingType ? (
-                <DetectionZoneMarking
-                  key={`${zoneCamera._id}-${selectedSettingType}`}
-                  camera={zoneCamera}
-                  embedded
-                  selectedSettingType={selectedSettingType}
-                  onSaved={refreshZoneCamera}
-                  zoneSettingsOpen={zoneSettingsOpen}
-                  onZoneSettingsClose={() => setZoneSettingsOpen(false)}
-                />
-              ) : (
-                <div style={{ textAlign: 'center', color: 'var(--tx3)' }}>
-                  <div style={{ fontFamily: 'var(--disp)', fontSize: 15, fontWeight: 600, color: 'var(--tx)', marginBottom: 7 }}>
-                    Zone Editor
-                  </div>
-                  <div style={{ fontSize: 12 }}>
-                    {selectedSettingType ? 'Select a camera from the list to load the editor.' : 'Loading detection types...'}
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Incidents moved to aside */}
           </div>
 
           <div className="vq-det-aside">
             {selected && (
               <>
+                <div
+                  style={{
+                    background: 'var(--bg1)',
+                    border: '1px solid var(--bd)',
+                    borderRadius: 13,
+                    padding: zoneCamera ? 16 : '38px 20px',
+                    minHeight: zoneCamera ? 0 : 420,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: zoneCamera ? 'flex-start' : 'center',
+                  }}
+                >
+                  {zoneCamera && selectedSettingType ? (
+                    <DetectionZoneMarking
+                      key={`${zoneCamera._id}-${selectedSettingType}`}
+                      camera={zoneCamera}
+                      embedded
+                      selectedSettingType={selectedSettingType}
+                      onSaved={refreshZoneCamera}
+                      zoneSettingsOpen={zoneSettingsOpen}
+                      onZoneSettingsClose={() => setZoneSettingsOpen(false)}
+                    />
+                  ) : (
+                    <div style={{ textAlign: 'center', color: 'var(--tx3)' }}>
+                      <div style={{ fontFamily: 'var(--disp)', fontSize: 15, fontWeight: 600, color: 'var(--tx)', marginBottom: 7 }}>
+                        Zone Editor
+                      </div>
+                      <div style={{ fontSize: 12 }}>
+                        {selectedSettingType ? 'Select a camera from the list to load the editor.' : 'Loading detection types...'}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <DetectionDetailPanel
                   model={selected}
                   category={selectedCategory}
@@ -865,6 +866,15 @@ export default function Detections() {
                   onToggle={() => toggleModel(selected)}
                   toggleDisabled={detectionToggleLoading === selectedSettingType}
                   onSensitivityChange={(value) => patch(selected.id, { sensitivity: value })}
+                  onThresholdChange={(key, value) =>
+                    patch(selected.id, {
+                      thresholds: {
+                        ...(selected.thresholds || {}),
+                        [key]: value,
+                      },
+                      ...(key === Object.keys(selected.thresholds || {})[0] ? { sensitivity: value } : {}),
+                    })
+                  }
                   onEditZones={() => setZoneSettingsOpen(true)}
                   onResetSetting={() => {
                     if (!selectedDetectionSettingId) {

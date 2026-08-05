@@ -338,14 +338,10 @@ const AccessLogs = () => {
   // KPI tiles — derived from the loaded page + server total (no placeholder data).
   const stats = useMemo(() => {
     const list = rows || [];
-    const uniqueUsers = new Set(list.map((r) => r.userId || r.name).filter(Boolean)).size;
     const tagged = list.filter((r) => r.tag).length;
-    const stillInside = list.filter((r) => r.enteredIn && !r.exitTiming).length;
     return [
       { label: 'Access Events', value: totalCount ?? 0, color: 'var(--blue)' },
-      { label: 'Unique Users (page)', value: uniqueUsers, color: 'var(--violet)' },
       { label: 'Tagged (page)', value: tagged, color: 'var(--ok)' },
-      { label: 'Still Inside (page)', value: stillInside, color: 'var(--cyan)' },
     ];
   }, [rows, totalCount]);
 

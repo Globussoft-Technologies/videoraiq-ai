@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Search, Plus, Settings2, Eye, Pencil, Trash2, X, CheckCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
@@ -551,6 +551,13 @@ function ConfigureModal({ role, readOnly, onClose, onSave, requireConfig }) {
 }
 
 function RoleRow({ role, perms, isOwnRole, onToggleField, onConfigure, onView, onEdit, onDelete }) {
+  const config = useMemo(() => permissionConfigForRole(role), [role]);
+  
+  const hasView = PERMISSION_MODULES.some(m => config[m]?.view) || LOG_SUBMODULES.some(s => config.logs?.[s]?.view);
+  const hasCreate = PERMISSION_MODULES.some(m => config[m]?.create) || LOG_SUBMODULES.some(s => config.logs?.[s]?.create);
+  const hasEdit = PERMISSION_MODULES.some(m => config[m]?.edit) || LOG_SUBMODULES.some(s => config.logs?.[s]?.edit);
+  const hasDelete = PERMISSION_MODULES.some(m => config[m]?.delete) || LOG_SUBMODULES.some(s => config.logs?.[s]?.delete);
+
   // Default roles (role.is_default, set server-side — never a hardcoded name
   // list) can't be renamed server-side (400s) and stay non-deletable here too.
   const defaultRole = !!role.is_default;
@@ -588,16 +595,16 @@ function RoleRow({ role, perms, isOwnRole, onToggleField, onConfigure, onView, o
           consistent with the Configure modal's per-module rule — but stay
           clickable (toast instead of a hard disable) so it's not mistaken for broken. */}
       <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <Checkbox checked={!!role.view} disabled={!perms.canEditRole || lockedRole} onToggle={() => onToggleField('view')} />
+        <Checkbox checked={hasView} disabled={!perms.canEditRole || lockedRole} onToggle={() => onToggleField('view', hasView)} />
       </span>
       <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <Checkbox checked={!!role.create} disabled={!perms.canEditRole || lockedRole} onToggle={() => onToggleField('create')} />
+        <Checkbox checked={hasCreate} disabled={!perms.canEditRole || lockedRole} onToggle={() => onToggleField('create', hasCreate)} />
       </span>
       <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <Checkbox checked={!!role.edit} disabled={!perms.canEditRole || lockedRole} onToggle={() => onToggleField('edit')} />
+        <Checkbox checked={hasEdit} disabled={!perms.canEditRole || lockedRole} onToggle={() => onToggleField('edit', hasEdit)} />
       </span>
       <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <Checkbox checked={!!role.delete} disabled={!perms.canEditRole || lockedRole} onToggle={() => onToggleField('delete')} />
+        <Checkbox checked={hasDelete} disabled={!perms.canEditRole || lockedRole} onToggle={() => onToggleField('delete', hasDelete)} />
       </span>
 
       <span style={{ display: 'flex', gap: 5, justifyContent: 'flex-end', color: 'var(--tx3)' }}>
@@ -689,13 +696,13 @@ export default function RolesPermission() {
   // feedback, then refetch so the freshly-cascaded permissionConfig is what the
   // Configure modal reads — otherwise it opens with the stale pre-cascade config
   // and the checkboxes look empty. Rolls back the row if the request fails.
-  const handleToggleField = async (role, field) => {
+  const handleToggleField = async (role, field, currentDerivedValue) => {
     if (myRoleId && String(role._id) === myRoleId) return;
     if (role.is_default) {
       toast.error('Default roles cannot be edited');
       return;
     }
-    const next = !role[field];
+    const next = currentDerivedValue !== undefined ? !currentDerivedValue : !role[field];
     // This flag cascades to every module + log sub-module server-side (see
     // roles.service.js update(): updatedPermissionConfig[key].view = roleView
     // for every key), so turning `view` off here sets EVERY module's view to
@@ -903,7 +910,7 @@ export default function RolesPermission() {
                   role={role}
                   perms={{ canConfigure, canView, canEditRole, canDeleteRole }}
                   isOwnRole={!!myRoleId && String(role._id) === myRoleId}
-                  onToggleField={(field) => handleToggleField(role, field)}
+                  onToggleField={(field, currentVal) => handleToggleField(role, field, currentVal)}
                   onConfigure={() => setConfigureTarget({ role, readOnly: role.is_default || String(role._id) === myRoleId })}
                   onView={() => setConfigureTarget({ role, readOnly: true })}
                   onEdit={() => setRenameTarget(role)}
