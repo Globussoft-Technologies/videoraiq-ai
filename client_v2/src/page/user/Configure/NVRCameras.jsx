@@ -347,14 +347,14 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
         onClick={() => onCameraSettings(nvr)}
         title="Camera Settings"
         style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, height: 30, padding: '0 10px',
-          borderRadius: 7, fontSize: 11.5, fontWeight: 600,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, height: 26, padding: '0 8px',
+          borderRadius: 6, fontSize: 10.5, fontWeight: 600,
           background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.35)',
           color: 'var(--blue)', cursor: 'pointer', whiteSpace: 'nowrap',
           flex: isMobile ? 1 : undefined, minWidth: 0,
         }}
       >
-        <Cctv size={13} /> Camera Settings
+        <Cctv size={12} /> Camera Settings
       </button>
       {SHOW_NVR_ACTIONS && (
         <>
@@ -362,25 +362,25 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
             onClick={() => onEdit(nvr)}
             title="Edit NVR"
             style={{
-              width: 30, height: 30, borderRadius: 7, flexShrink: 0,
+              width: 26, height: 26, borderRadius: 6, flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: 'rgba(139,92,246,.08)', border: '1px solid rgba(139,92,246,.35)',
               color: '#8b5cf6', cursor: 'pointer',
             }}
           >
-            <Pencil size={13} />
+            <Pencil size={12} />
           </button>
           <button
             onClick={() => onDelete(nvr)}
             title="Delete NVR"
             style={{
-              width: 30, height: 30, borderRadius: 7, flexShrink: 0,
+              width: 26, height: 26, borderRadius: 6, flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.35)',
               color: 'var(--crit)', cursor: 'pointer',
             }}
           >
-            <Trash2 size={13} />
+            <Trash2 size={12} />
           </button>
         </>
       )}
@@ -529,12 +529,15 @@ function SiteFilterSelect({ options, value, onChange }) {
 
 // ── Camera row ────────────────────────────────────────────────────────────────
 const CAM_COL = '90px minmax(170px, 2fr) minmax(130px, 1.2fr) minmax(150px, 1.4fr) 80px';
+const NVR_GRID_STYLE = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 420px))',
+  gap: 14,
+};
 
 function CamRow({ c, site, onView }) {
-  const sc = statusColor(c.status);
+  const sc = '#22c55e';
   const camName = c.name || c.channelName || 'Camera';
-  const nameColor = badgeColor(camName);
-  const siteColor = badgeColor(site || '—');
   const engines = enabledEnginesFor(c);
 
   return (
@@ -549,21 +552,21 @@ function CamRow({ c, site, onView }) {
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: 8, width: 'fit-content', maxWidth: '100%',
         padding: '3px 9px', borderRadius: 6,
-        background: hexA(nameColor, 0.1), border: `1px solid ${hexA(nameColor, 0.3)}`,
+        background: 'var(--bg1)', border: '1px solid var(--bd)',
       }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: sc, flexShrink: 0 }} />
-        <span style={{ color: nameColor, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ color: 'var(--tx)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {camName}
         </span>
       </span>
       <span style={{
         display: 'inline-block', width: 'fit-content', maxWidth: '100%',
         padding: '3px 9px', borderRadius: 6,
-        background: hexA(siteColor, 0.1), border: `1px solid ${hexA(siteColor, 0.3)}`,
-        color: siteColor, fontWeight: 600,
+        background: 'var(--bg1)', border: '1px solid var(--bd)',
+        color: 'var(--tx)', fontWeight: 600,
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }}>
-        {site || '—'}
+        {site || '-'}
       </span>
       <EngineChips engines={engines} />
       <span
@@ -1746,7 +1749,7 @@ export default function NVRCameras() {
       {/* ── NVR cards ─────────────────────────────────────────────────────── */}
       {nvrsApi.loading ? (
         showNvrSkeleton ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }} className="vq-nvr-grid">
+          <div style={NVR_GRID_STYLE} className="vq-nvr-grid">
             {Array.from({ length: 2 }, (_, i) => <NvrCardSkeleton key={i} />)}
           </div>
         ) : (
@@ -1762,7 +1765,7 @@ export default function NVRCameras() {
           emptyLabel="No NVRs found"
         >
           {() => (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }} className="vq-nvr-grid">
+            <div style={NVR_GRID_STYLE} className="vq-nvr-grid">
               {nvrs.map(n => (
                 <NvrCard
                   key={n._id || n.id}
