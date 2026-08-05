@@ -193,7 +193,7 @@ export default function MultiSiteNetwork({
   const totalCams = nodes.reduce((sum, node) => sum + node.cameraCount, 0);
   const groups = new Set(nodes.map((node) => node.group));
   const hasLocations = [...groups].some((group) => group !== FALLBACK_GROUP);
-  const baseHeight = tall ? 520 : 390;
+  const baseHeight = tall ? 520 : 580;
 
   return (
     <Panel

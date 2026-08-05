@@ -204,7 +204,7 @@ function Shell() {
               color: 'var(--tx3)',
             }}
           >
-            © 2026 Globussoft Technologies. All rights reserved.
+           © 2026 VideoraIQ. All rights reserved.
           </footer>
         </div>
         {/* Hidden on the assistant's own page — nothing to launch from there. */}

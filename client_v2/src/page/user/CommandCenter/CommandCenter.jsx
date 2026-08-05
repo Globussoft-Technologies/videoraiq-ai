@@ -493,7 +493,6 @@ export default function CommandCenter() {
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                flex: '1 1 auto',
                 minWidth: 0,
                 width: networkExpandedWidth ? `${networkExpandedWidth}px` : '100%',
                 position: 'relative',
@@ -505,7 +504,6 @@ export default function CommandCenter() {
                 channels={allChannels.data || []}
                 alerts={networkAlerts}
                 activeLocations={networkFilters.location || []}
-                fillAvailable
               />
             </div>
           )}

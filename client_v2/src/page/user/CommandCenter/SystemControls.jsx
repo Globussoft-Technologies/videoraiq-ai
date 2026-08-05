@@ -151,7 +151,7 @@ function DetectionTypeRow({ label, color, enabled, onToggle }) {
       style={{
         display: 'flex', alignItems: 'center', gap: 9,
         background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 10,
-        padding: '9px 10px',
+        padding: '7px 9px',
       }}
     >
       <span
@@ -259,16 +259,16 @@ export default function SystemControls() {
   if (!canViewControls) return null;
 
   return (
-    <Panel style={{ padding: 15 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 13 }}>
+    <Panel style={{ padding: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <ShieldCheck size={15} color="var(--tx2)" strokeWidth={1.7} />
         <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 13.5 }}>System Controls</span>
       </div>
 
-      <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx)', marginBottom: 9 }}>
+      <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx)', marginBottom: 7 }}>
         Cameras &amp; Detection
       </div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 13 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
         <MultiSelect
           options={nvrOptions}
           value={nvrFilter}
@@ -290,7 +290,7 @@ export default function SystemControls() {
           Select a camera to view and apply detection types.
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, maxHeight: 380, overflowY: 'auto' }} className="vq-scroll">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 245, overflowY: 'auto' }} className="vq-scroll">
           {detectionKeys.filter((key) => typeLabels[key]).map((key, i) => {
             const label = typeLabels[key];
             const enabled = isTypeEnabled(selectedCamera, key);
