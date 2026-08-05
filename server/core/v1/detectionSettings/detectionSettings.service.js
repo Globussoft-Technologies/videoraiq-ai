@@ -969,7 +969,6 @@ class DetectionSettingService {
         [`detections.${settingType}.id`]: id,
         // [`detections.${settingType}.enabled`]: true,
       }).populate("nvrId");
-
       return res.status(200).json(
         Response.userSuccessResp("Detection settings fetched successfully", {
           detectionSetting: {
