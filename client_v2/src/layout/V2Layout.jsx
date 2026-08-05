@@ -195,17 +195,20 @@ function Shell() {
           onMenuClick={isMobile ? () => setNavOpen(true) : undefined}
         />
         <div className="vq-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-          <Outlet context={outletCtx} />
-          <footer
-            style={{
-              padding: '16px 24px 18px',
-              textAlign: 'center',
-              fontSize: 11.5,
-              color: 'var(--tx3)',
-            }}
-          >
-           © 2026 VideoraIQ. All rights reserved.
-          </footer>
+          <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+            <Outlet context={outletCtx} />
+            <footer
+              style={{
+                marginTop: 'auto',
+                padding: '16px 24px 18px',
+                textAlign: 'center',
+                fontSize: 11.5,
+                color: 'var(--tx3)',
+              }}
+            >
+              © 2026 VideoraIQ. All rights reserved.
+            </footer>
+          </div>
         </div>
         {/* Hidden on the assistant's own page — nothing to launch from there. */}
         {viewKey !== 'assistant' && <AssistantLauncher />}
