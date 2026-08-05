@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+﻿import { useMemo, useRef, useState } from 'react';
 import moment from 'moment';
 import {
   Activity,
@@ -15,19 +15,20 @@ import { Panel, PanelHeader, Badge } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
 import { getAttendanceAnalytics } from '../../../helpers/analytics';
+import AnalyticsBlurb from './AnalyticsBlurb';
 
 /**
  * Attendance Analytics.
  *
  * Two sources, kept strictly apart:
- *   Attendance logs → employees, present, checked out, absentees, check-in and
+ *   Attendance logs â†’ employees, present, checked out, absentees, check-in and
  *                     check-out counts, the bars in Daily Activity, and every
  *                     attendance insight.
- *   Access logs     → unauthorized access and the security insights only. It is
+ *   Access logs     â†’ unauthorized access and the security insights only. It is
  *                     never mixed into an attendance figure.
  *
- * The two are also different units — headcount vs detection events, which for a
- * busy site differ by four orders of magnitude — so Daily Activity gives each
+ * The two are also different units â€” headcount vs detection events, which for a
+ * busy site differ by four orders of magnitude â€” so Daily Activity gives each
  * its own axis instead of stacking them into one unreadable bar.
  */
 
@@ -44,7 +45,7 @@ const COLORS = {
   checkedOut: 'var(--blue)',
   // --warn resolves to the same hex in both themes, so a literal alpha of it
   // reads correctly in light and dark. Absent is deliberately the quietest of
-  // the three — it's the remainder of the roster, not an event.
+  // the three â€” it's the remainder of the roster, not an event.
   absent: 'rgba(245, 166, 35, 0.34)',
   unauthorized: 'var(--crit)',
 };
@@ -58,7 +59,7 @@ const compactFormatter = new Intl.NumberFormat('en-IN', {
   maximumFractionDigits: 1,
 });
 
-/** Axis-tick formatting — 4,23,180 as "4.2L" keeps the gutter narrow. */
+/** Axis-tick formatting â€” 4,23,180 as "4.2L" keeps the gutter narrow. */
 function compactFmt(value) {
   const number = Number(value || 0);
   if (!number) return '0';
@@ -70,7 +71,7 @@ function compactFmt(value) {
 }
 
 /**
- * Rounded axis bounds: a step of 1, 2, 2.5 or 5 × 10ⁿ so ticks land on numbers
+ * Rounded axis bounds: a step of 1, 2, 2.5 or 5 Ã— 10â¿ so ticks land on numbers
  * a reader can actually use. The old axis divided the raw maximum into
  * quarters, which produced labels like "3,17,325".
  */
@@ -91,9 +92,9 @@ function niceScale(maxValue, tickCount = 4) {
 }
 
 /**
- * A period-over-period change of several orders of magnitude — unauthorized
- * access going from 52 to 5,61,307 — is unreadable as a percentage, so past
- * ×10 it's shown as a multiple instead.
+ * A period-over-period change of several orders of magnitude â€” unauthorized
+ * access going from 52 to 5,61,307 â€” is unreadable as a percentage, so past
+ * Ã—10 it's shown as a multiple instead.
  */
 function trendLabel(trend) {
   if (!trend) return '0%';
@@ -101,7 +102,7 @@ function trendLabel(trend) {
   if (delta === 0) return 'No change';
   if (trend.pct == null) return `${delta > 0 ? '+' : ''}${numberFmt(delta)} new`;
   if (Math.abs(trend.pct) >= 900 && trend.multiple) {
-    return `×${trend.multiple >= 10 ? numberFmt(Math.round(trend.multiple)) : Math.round(trend.multiple * 10) / 10}`;
+    return `Ã—${trend.multiple >= 10 ? numberFmt(Math.round(trend.multiple)) : Math.round(trend.multiple * 10) / 10}`;
   }
   return `${delta > 0 ? '+' : ''}${trend.pct}%`;
 }
@@ -235,12 +236,12 @@ function TooltipRow({ color, label, value, strong = false }) {
 }
 
 /**
- * Daily Activity — attendance and unauthorized access on one timeline but two
+ * Daily Activity â€” attendance and unauthorized access on one timeline but two
  * scales.
  *
  * Bars (left axis, headcount) stack to the full roster: present + checked out +
  * absent, so each bar's coloured share reads directly as "who turned up".
- * Unauthorized access is a line on the right axis with its own scale — stacking
+ * Unauthorized access is a line on the right axis with its own scale â€” stacking
  * it into the bars, as this chart used to, made the attendance segments
  * sub-pixel whenever a site had more than a few hundred detections.
  */
@@ -284,7 +285,7 @@ function DailyActivity({ series = [], employees = 0 }) {
   return (
     <div ref={wrapRef} style={{ position: 'relative' }} onMouseLeave={() => setHover(null)}>
       <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 8 }}>
-        {/* Left axis — employees */}
+        {/* Left axis â€” employees */}
         <div style={{ position: 'relative', height: PLOT_H }}>
           {left.ticks.map((tick) => (
             <span
@@ -343,7 +344,7 @@ function DailyActivity({ series = [], employees = 0 }) {
             />
           )}
 
-          {/* Attendance bars — left axis */}
+          {/* Attendance bars â€” left axis */}
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end' }}>
             {rows.map((row) => {
               const present = Number(row.present || 0);
@@ -378,7 +379,7 @@ function DailyActivity({ series = [], employees = 0 }) {
             })}
           </div>
 
-          {/* Unauthorized access — right axis */}
+          {/* Unauthorized access â€” right axis */}
           {showUnauthorized && (
             <>
               <svg
@@ -419,7 +420,7 @@ function DailyActivity({ series = [], employees = 0 }) {
             </>
           )}
 
-          {/* Hit areas — one per day, covering the full column height */}
+          {/* Hit areas â€” one per day, covering the full column height */}
           <div style={{ position: 'absolute', inset: 0, display: 'flex' }}>
             {rows.map((row, index) => (
               <div
@@ -434,7 +435,7 @@ function DailyActivity({ series = [], employees = 0 }) {
           </div>
         </div>
 
-        {/* Right axis — unauthorized access events */}
+        {/* Right axis â€” unauthorized access events */}
         {showUnauthorized && (
           <div style={{ position: 'relative', height: PLOT_H }}>
             {right.ticks.map((tick) => (
@@ -666,6 +667,11 @@ export default function AttendanceAnalytics({ params = {} }) {
   return (
     <Panel>
       <PanelHeader title="Attendance Analytics" dot dotColor="var(--blue)" action={rangeAction} />
+      <div style={{ padding: '0 14px 0' }}>
+        <AnalyticsBlurb>
+          Combines attendance logs and access logs for the selected range to show workforce presence, absentee patterns, and unauthorized access anomalies.
+        </AnalyticsBlurb>
+      </div>
       <AsyncBoundary
         loading={analytics.loading}
         error={analytics.error}
@@ -731,3 +737,6 @@ export default function AttendanceAnalytics({ params = {} }) {
     </Panel>
   );
 }
+
+
+

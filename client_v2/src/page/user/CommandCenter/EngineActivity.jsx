@@ -3,6 +3,7 @@ import { Panel } from '../../../components/primitives';
 import { AsyncBoundary, Empty } from '../../../components/States';
 import { num } from '../../../lib/format';
 import { ENGINE_PALETTE as PALETTE, engineMeta } from '../../../lib/engineMeta';
+import AnalyticsBlurb from '../Analytics/AnalyticsBlurb';
 
 function formatCount(n) {
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
@@ -112,7 +113,10 @@ export default function EngineActivity({ todayEngines = [], events24h = [], tota
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr', gap: 22 }} className="vq-engine-grid">
             {/* Engine Activity · Today */}
             <div>
-              <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 14 }}>Engine Activity · Today</div>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Engine Activity � Today</div>
+                <AnalyticsBlurb>Shows which AI engines are generating detections today and how active each one is compared with the others.</AnalyticsBlurb>
+              </div>
               {todayEngines.length === 0 ? (
                 <Empty label="No detections today" minH={120} />
               ) : (
@@ -165,6 +169,7 @@ export default function EngineActivity({ todayEngines = [], events24h = [], tota
                 <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Detection Events · 24h</div>
                 <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>{num(total24h)} total</span>
               </div>
+              <AnalyticsBlurb style={{ marginBottom: 10 }}>Shows how detection events changed hour by hour over the last 24 hours so spikes and busy periods are easy to spot.</AnalyticsBlurb>
               {total24h === 0 ? (
                 <Empty label="No detection events in the last 24h" minH={170} />
               ) : (
@@ -225,3 +230,4 @@ export default function EngineActivity({ todayEngines = [], events24h = [], tota
     </Panel>
   );
 }
+

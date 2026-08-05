@@ -1,7 +1,8 @@
-import { Panel } from '../../../components/primitives';
+﻿import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
 import { getActivityHeatmap } from '../../../helpers/analytics';
+import AnalyticsBlurb from './AnalyticsBlurb';
 
 function heatCellColor(v, max) {
   const ratio = max > 0 ? v / max : 0;
@@ -20,8 +21,11 @@ export default function ActivityHeatmapCard({ params }) {
     <Panel style={{ padding: 18 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Activity Heatmap</div>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>day × hour</span>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>day Ã— hour</span>
       </div>
+      <AnalyticsBlurb style={{ marginBottom: 14 }}>
+        A 7 by 24 view of when incidents happen most often, with darker cells marking busier day and hour combinations.
+      </AnalyticsBlurb>
       <AsyncBoundary loading={api.loading} error={api.error} isEmpty={!api.loading && !api.error && max === 0} onRetry={api.refetch} minH={160} emptyLabel="No detections in range">
         {() => (
           <>
@@ -35,7 +39,7 @@ export default function ActivityHeatmapCard({ params }) {
                     {row.map((v, ci) => (
                       <div
                         key={ci}
-                        title={`${dayLabels[ri] || ''} ${String(ci).padStart(2, '0')}:00 — ${v} alert${v === 1 ? '' : 's'}`}
+                        title={`${dayLabels[ri] || ''} ${String(ci).padStart(2, '0')}:00 â€” ${v} alert${v === 1 ? '' : 's'}`}
                         style={{ flex: 1, aspectRatio: '1', borderRadius: 2, background: heatCellColor(v, max) }}
                       />
                     ))}
@@ -46,7 +50,7 @@ export default function ActivityHeatmapCard({ params }) {
                 </div>
               </div>
             </div>
-            {/* Legend — cell color = alert volume in that hour, relative to the
+            {/* Legend â€” cell color = alert volume in that hour, relative to the
                 busiest hour/day cell in range (`max`); darker/pinker = busier. */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 10 }}>
               <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--tx3)' }}>Fewer alerts</span>
@@ -63,3 +67,5 @@ export default function ActivityHeatmapCard({ params }) {
     </Panel>
   );
 }
+
+

@@ -1,14 +1,15 @@
-import { Panel } from '../../../components/primitives';
+﻿import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
 import { getSitePerformance } from '../../../helpers/analytics';
 import { ENGINE_PALETTE } from '../../../lib/engineMeta';
 import { num } from '../../../lib/format';
+import AnalyticsBlurb from './AnalyticsBlurb';
 
 const COLS = 'minmax(110px,1.3fr) 1fr';
 
 /**
- * Accuracy/uptime columns from the original mockup are intentionally omitted —
+ * Accuracy/uptime columns from the original mockup are intentionally omitted â€”
  * nothing in the system tracks per-site detection accuracy or NVR uptime
  * history, so there's no real data to back them. Events is the only column
  * with a genuine backend aggregation today.
@@ -21,6 +22,9 @@ export default function SitePerformanceCard({ params }) {
   return (
     <Panel style={{ padding: 18 }}>
       <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 15 }}>Site Performance</div>
+      <AnalyticsBlurb style={{ marginBottom: 15 }}>
+        Compares sites by total incident volume for the selected range, based on NVR location rollups from detection events.
+      </AnalyticsBlurb>
       <AsyncBoundary loading={api.loading} error={api.error} isEmpty={!api.loading && !api.error && sites.length === 0} onRetry={api.refetch} minH={160} emptyLabel="No detections in range">
         {() => (
           <>
@@ -44,3 +48,5 @@ export default function SitePerformanceCard({ params }) {
     </Panel>
   );
 }
+
+

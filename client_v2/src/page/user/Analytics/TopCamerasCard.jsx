@@ -1,9 +1,10 @@
-import { Panel } from '../../../components/primitives';
+﻿import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
 import { getTopCameras } from '../../../helpers/analytics';
 import { ENGINE_PALETTE } from '../../../lib/engineMeta';
 import { num } from '../../../lib/format';
+import AnalyticsBlurb from './AnalyticsBlurb';
 
 export default function TopCamerasCard({ params, limit = 5 }) {
   const paramsKey = JSON.stringify(params);
@@ -13,6 +14,9 @@ export default function TopCamerasCard({ params, limit = 5 }) {
   return (
     <Panel style={{ padding: 18 }}>
       <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 16 }}>Top Cameras by Detections</div>
+      <AnalyticsBlurb style={{ marginBottom: 16 }}>
+        Ranks the busiest cameras by incident count so you can quickly see where most detections are being generated.
+      </AnalyticsBlurb>
       <AsyncBoundary loading={api.loading} error={api.error} isEmpty={!api.loading && !api.error && cameras.length === 0} onRetry={api.refetch} minH={160} emptyLabel="No detections in range">
         {() => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -41,3 +45,5 @@ export default function TopCamerasCard({ params, limit = 5 }) {
     </Panel>
   );
 }
+
+

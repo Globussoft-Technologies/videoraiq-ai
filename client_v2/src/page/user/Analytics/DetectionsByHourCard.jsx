@@ -1,8 +1,9 @@
-import { Panel } from '../../../components/primitives';
+﻿import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
 import { getDetectionsByHour } from '../../../helpers/analytics';
 import { num } from '../../../lib/format';
+import AnalyticsBlurb from './AnalyticsBlurb';
 
 function barGradient(v, max) {
   if (v >= max * 0.7) return 'linear-gradient(180deg,#a855f7,#6d28d9)';
@@ -33,13 +34,16 @@ export default function DetectionsByHourCard() {
     <Panel style={{ padding: 18 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Detections by Hour</div>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>today · UTC</span>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>today Â· UTC</span>
       </div>
+      <AnalyticsBlurb style={{ marginBottom: 16 }}>
+        Intraday distribution of today's detections, grouped into hourly buckets to show which part of the day is busiest.
+      </AnalyticsBlurb>
       <AsyncBoundary loading={api.loading} error={api.error} isEmpty={!api.loading && !api.error && (api.data?.total || 0) === 0} onRetry={api.refetch} minH={150} emptyLabel="No detections today">
         {() => (
           <>
             <div style={{ display: 'flex', gap: 8 }}>
-              {/* Y-axis — detection count scale, top (max) to bottom (0) */}
+              {/* Y-axis â€” detection count scale, top (max) to bottom (0) */}
               <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: 150, fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--tx3)', textAlign: 'right' }}>
                 {[...yTicks].reverse().map((t) => <span key={t}>{num(t)}</span>)}
                 <span>0</span>
@@ -55,7 +59,7 @@ export default function DetectionsByHourCard() {
                   {hours.map((v, i) => (
                     <div
                       key={i}
-                      title={`${String(i).padStart(2, '0')}:00 — ${v} detection${v === 1 ? '' : 's'}`}
+                      title={`${String(i).padStart(2, '0')}:00 â€” ${v} detection${v === 1 ? '' : 's'}`}
                       style={{
                         flex: 1, minWidth: 0,
                         height: `${Math.round((v / max) * 100)}%`,
@@ -78,3 +82,5 @@ export default function DetectionsByHourCard() {
     </Panel>
   );
 }
+
+

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
 import { getEngineShare } from '../../../helpers/analytics';
 import { num } from '../../../lib/format';
 import { ENGINE_PALETTE, engineMeta } from '../../../lib/engineMeta';
+import AnalyticsBlurb from './AnalyticsBlurb';
 
 function conicGradient(entries) {
   let acc = 0;
@@ -25,7 +26,7 @@ function sliceAt(entries, clientX, clientY, rect) {
   const dy = clientY - cy;
   const r = Math.sqrt(dx * dx + dy * dy);
   if (r > rect.width / 2 || r < rect.width * 0.32) return null; // outside ring or inside the hole
-  // atan2 gives 0deg at 3 o'clock, going counter-clockwise negative — convert
+  // atan2 gives 0deg at 3 o'clock, going counter-clockwise negative â€” convert
   // to clockwise-from-12-o'clock degrees to match conicGradient's stops.
   let deg = (Math.atan2(dy, dx) * 180) / Math.PI + 90;
   if (deg < 0) deg += 360;
@@ -59,6 +60,9 @@ export default function EngineShareCard({ params }) {
   return (
     <Panel style={{ padding: 18, display: 'flex', flexDirection: 'column', position: 'relative' }}>
       <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, marginBottom: 14 }}>Detection Percentage</div>
+      <AnalyticsBlurb style={{ marginBottom: 14 }}>
+        Breakdown of incidents by detection engine, showing which AI modules contribute the largest share of total events.
+      </AnalyticsBlurb>
       <AsyncBoundary loading={api.loading} error={api.error} isEmpty={!api.loading && !api.error && engines.length === 0} onRetry={api.refetch} minH={160} emptyLabel="No detections in range">
         {() => (
           <div style={{ display: 'flex', alignItems: 'center', gap: 18, flex: 1 }}>
@@ -120,3 +124,5 @@ export default function EngineShareCard({ params }) {
     </Panel>
   );
 }
+
+

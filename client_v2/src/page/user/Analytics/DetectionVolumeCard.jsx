@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+﻿import { useRef, useState } from 'react';
 import moment from 'moment';
 import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
@@ -6,6 +6,7 @@ import { useApi } from '../../../hooks/useApi';
 import { getDetectionVolume } from '../../../helpers/analytics';
 import { num } from '../../../lib/format';
 import { rangeLabel } from './RangeFilter';
+import AnalyticsBlurb from './AnalyticsBlurb';
 
 function areaChartPoints(values, width, height) {
   if (!values.length) return { area: '', line: '', points: [] };
@@ -54,9 +55,12 @@ export default function DetectionVolumeCard({ params }) {
   return (
     <Panel style={{ padding: 18 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Detection Volume{label ? ` · ${label}` : ''}</div>
+        <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Detection Volume{label ? ` Â· ${label}` : ''}</div>
         <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>alerts / day</span>
       </div>
+      <AnalyticsBlurb style={{ marginBottom: 14 }}>
+        Daily incident counts across the selected range, shown as a trend line so spikes and quiet periods are easy to spot.
+      </AnalyticsBlurb>
       <AsyncBoundary loading={api.loading} error={api.error} isEmpty={!api.loading && !api.error && counts.every((c) => c === 0)} onRetry={api.refetch} minH={220} emptyLabel="No detections in range">
         {() => (
           <div
@@ -108,3 +112,5 @@ export default function DetectionVolumeCard({ params }) {
     </Panel>
   );
 }
+
+

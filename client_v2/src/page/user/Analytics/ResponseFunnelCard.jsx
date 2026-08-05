@@ -1,10 +1,11 @@
-import { Panel } from '../../../components/primitives';
+﻿import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
 import { getResponseFunnel } from '../../../helpers/analytics';
 import { ENGINE_PALETTE } from '../../../lib/engineMeta';
 import { num } from '../../../lib/format';
 import { rangeLabel } from './RangeFilter';
+import AnalyticsBlurb from './AnalyticsBlurb';
 
 /**
  * Detected -> Reported -> Resolved, using only fields that exist on the
@@ -24,6 +25,9 @@ export default function ResponseFunnelCard({ params }) {
         <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Response Funnel</span>
         <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>{label}</span>
       </div>
+      <AnalyticsBlurb style={{ marginBottom: 16 }}>
+        Shows how many incidents were detected, then reported, then resolved, using the actual states available on the incident records.
+      </AnalyticsBlurb>
       <AsyncBoundary loading={api.loading} error={api.error} isEmpty={!api.loading && !api.error && stages.length === 0} onRetry={api.refetch} minH={160} emptyLabel="No detections in range">
         {() => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -50,3 +54,5 @@ export default function ResponseFunnelCard({ params }) {
     </Panel>
   );
 }
+
+
