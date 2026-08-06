@@ -61,15 +61,19 @@ export default function DetectionCard({ model, color, selected, onSelect, onTogg
         </span>
       </div>
 
-      {/* Sub-type line, flush with the status dot above it. */}
+      {/* Sub-type line, flush with the status dot above it. --tx (full
+          text color, not the dim --tx2/--tx3 secondary tones) at a larger
+          size so this label is clearly legible against the card
+          background in both themes. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
         <span
           style={{
             flex: 1,
             minWidth: 0,
             fontFamily: 'var(--mono)',
-            fontSize: 10,
-            color: 'var(--tx3)',
+            fontSize: 11.5,
+            fontWeight: 500,
+            color: 'var(--tx)',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',

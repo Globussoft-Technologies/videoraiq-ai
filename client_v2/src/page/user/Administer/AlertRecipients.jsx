@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Search, Plus, X, Trash2, Loader2, BellRing } from 'lucide-react';
 import { AsyncBoundary } from '../../../components/States';
+import HScrollHint from '../../../components/HScrollHint';
 import { useApi } from '../../../hooks/useApi';
 import { usePermissions } from '../../../context/PermissionContext';
 import DeleteConfirmation from '../../../components/DeleteConfirmation';
@@ -393,34 +394,41 @@ export default function AlertRecipients() {
           </span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.6fr 1.2fr 44px', padding: '10px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)' }}>
-          <span>NAME</span>
-          <span>EMAIL ID</span>
-          <span>STATUS &amp; DETECTIONS</span>
-          <span />
-        </div>
+        {/* Horizontal scroll on narrow screens (e.g. after restoring/un-maximizing
+            the window), with edge fades hinting swipeability, instead of letting
+            the status/detections column squish into the delete button. */}
+        <HScrollHint minWidth={660} fadeColor="var(--bg1)">
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.6fr 1.2fr 44px', padding: '10px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)' }}>
+              <span>NAME</span>
+              <span>EMAIL ID</span>
+              <span>STATUS &amp; DETECTIONS</span>
+              <span />
+            </div>
 
-        <AsyncBoundary
-          loading={recipientsApi.loading}
-          error={recipientsApi.error}
-          isEmpty={!recipientsApi.loading && !recipientsApi.error && recipients.length === 0}
-          onRetry={recipientsApi.refetch}
-          minH={160}
-          emptyLabel={search ? `No results found for "${search}"` : 'No recipients added yet'}
-        >
-          {() => recipients.map(r => (
-            <RecipientRow
-              key={r._id}
-              recipient={r}
-              detectionTypes={detectionTypes}
-              canEdit={canEdit}
-              canDelete={canDelete}
-              onVerify={() => handleVerify(r)}
-              onDelete={() => setDeleteTarget(r)}
-              onSaved={recipientsApi.refetch}
-            />
-          ))}
-        </AsyncBoundary>
+            <AsyncBoundary
+              loading={recipientsApi.loading}
+              error={recipientsApi.error}
+              isEmpty={!recipientsApi.loading && !recipientsApi.error && recipients.length === 0}
+              onRetry={recipientsApi.refetch}
+              minH={160}
+              emptyLabel={search ? `No results found for "${search}"` : 'No recipients added yet'}
+            >
+              {() => recipients.map(r => (
+                <RecipientRow
+                  key={r._id}
+                  recipient={r}
+                  detectionTypes={detectionTypes}
+                  canEdit={canEdit}
+                  canDelete={canDelete}
+                  onVerify={() => handleVerify(r)}
+                  onDelete={() => setDeleteTarget(r)}
+                  onSaved={recipientsApi.refetch}
+                />
+              ))}
+            </AsyncBoundary>
+          </div>
+        </HScrollHint>
       </div>
 
       {showAddModal && (

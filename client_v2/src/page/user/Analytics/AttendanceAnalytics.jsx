@@ -4,7 +4,6 @@ import {
   Activity,
   AlertTriangle,
   CalendarDays,
-  ShieldAlert,
   TrendingDown,
   TrendingUp,
   UserCheck,
@@ -15,21 +14,26 @@ import { Panel, PanelHeader, Badge } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
 import { getAttendanceAnalytics } from '../../../helpers/analytics';
+import { getAttendanceLogs } from '../../../pages/AttendanceLogs/Api';
+import { authorizedUsers } from '../../../pages/RegisterUser/Api';
 import AnalyticsBlurb from './AnalyticsBlurb';
+
+// Same page size Attendance Logs' own KPI tiles are counted from, reused
+// here so "Currently Present" / "Absentees" match Attendance Logs exactly
+// for the same range instead of the range-wide server aggregate.
+const LOGS_STATS_LIMIT = 200;
 
 /**
  * Attendance Analytics.
  *
- * Two sources, kept strictly apart:
- *   Attendance logs â†’ employees, present, checked out, absentees, check-in and
- *                     check-out counts, the bars in Daily Activity, and every
- *                     attendance insight.
- *   Access logs     â†’ unauthorized access and the security insights only. It is
- *                     never mixed into an attendance figure.
+ * Sourced from attendance logs only: employees, present, checked out,
+ * absentees, check-in and check-out counts, the Daily Activity bars, and
+ * attendance anomalies.
  *
- * The two are also different units â€” headcount vs detection events, which for a
- * busy site differ by four orders of magnitude â€” so Daily Activity gives each
- * its own axis instead of stacking them into one unreadable bar.
+ * Access-log-derived "unauthorized access" figures were removed â€” the
+ * underlying detection-to-roster matching isn't reliable enough yet for
+ * testers to verify against, so surfacing it here was misleading rather
+ * than useful.
  */
 
 const severityColor = {
@@ -47,27 +51,10 @@ const COLORS = {
   // reads correctly in light and dark. Absent is deliberately the quietest of
   // the three â€” it's the remainder of the roster, not an event.
   absent: 'rgba(245, 166, 35, 0.34)',
-  unauthorized: 'var(--crit)',
 };
 
 function numberFmt(value) {
   return Number(value || 0).toLocaleString('en-IN');
-}
-
-const compactFormatter = new Intl.NumberFormat('en-IN', {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-});
-
-/** Axis-tick formatting â€” 4,23,180 as "4.2L" keeps the gutter narrow. */
-function compactFmt(value) {
-  const number = Number(value || 0);
-  if (!number) return '0';
-  try {
-    return compactFormatter.format(number);
-  } catch {
-    return numberFmt(number);
-  }
 }
 
 /**
@@ -92,9 +79,8 @@ function niceScale(maxValue, tickCount = 4) {
 }
 
 /**
- * A period-over-period change of several orders of magnitude â€” unauthorized
- * access going from 52 to 5,61,307 â€” is unreadable as a percentage, so past
- * Ã—10 it's shown as a multiple instead.
+ * A period-over-period change of several orders of magnitude is unreadable
+ * as a percentage, so past Ã—10 it's shown as a multiple instead.
  */
 function trendLabel(trend) {
   if (!trend) return '0%';
@@ -236,14 +222,10 @@ function TooltipRow({ color, label, value, strong = false }) {
 }
 
 /**
- * Daily Activity â€” attendance and unauthorized access on one timeline but two
- * scales.
+ * Daily Activity â€” attendance headcount per day.
  *
  * Bars (left axis, headcount) stack to the full roster: present + checked out +
  * absent, so each bar's coloured share reads directly as "who turned up".
- * Unauthorized access is a line on the right axis with its own scale â€” stacking
- * it into the bars, as this chart used to, made the attendance segments
- * sub-pixel whenever a site had more than a few hundred detections.
  */
 function DailyActivity({ series = [], employees = 0 }) {
   const wrapRef = useRef(null);
@@ -251,19 +233,10 @@ function DailyActivity({ series = [], employees = 0 }) {
 
   const rows = Array.isArray(series) ? series : [];
   const roster = Math.max(Number(employees) || 0, ...rows.map((row) => Number(row.attended || 0)), 0);
-  const maxUnauthorized = Math.max(0, ...rows.map((row) => Number(row.unauthorizedAccess || 0)));
-  const showUnauthorized = maxUnauthorized > 0;
 
   const left = niceScale(roster, 4);
-  const right = niceScale(maxUnauthorized, 4);
 
-  const points = rows.map((row, index) => ({
-    x: rows.length > 1 ? ((index + 0.5) / rows.length) * 100 : 50,
-    y: 100 - (Number(row.unauthorizedAccess || 0) / right.max) * 100,
-    value: Number(row.unauthorizedAccess || 0),
-  }));
-
-  const gridCols = `38px minmax(0, 1fr) ${showUnauthorized ? '46px' : '0px'}`;
+  const gridCols = `38px minmax(0, 1fr)`;
   const labelEvery = rows.length > 31 ? Math.ceil(rows.length / 31) : 1;
 
   const onHover = (event, row, index) => {
@@ -379,47 +352,6 @@ function DailyActivity({ series = [], employees = 0 }) {
             })}
           </div>
 
-          {/* Unauthorized access â€” right axis */}
-          {showUnauthorized && (
-            <>
-              <svg
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}
-              >
-                <polyline
-                  points={points.map((point) => `${point.x},${point.y}`).join(' ')}
-                  fill="none"
-                  stroke={COLORS.unauthorized}
-                  strokeWidth="1.6"
-                  strokeLinejoin="round"
-                  strokeLinecap="round"
-                  vectorEffect="non-scaling-stroke"
-                />
-              </svg>
-              {points.map((point, index) => (
-                point.value > 0 ? (
-                  <span
-                    key={rows[index].date}
-                    style={{
-                      position: 'absolute',
-                      left: `${point.x}%`,
-                      top: `${point.y}%`,
-                      width: hover?.index === index ? 8 : 5,
-                      height: hover?.index === index ? 8 : 5,
-                      marginLeft: hover?.index === index ? -4 : -2.5,
-                      marginTop: hover?.index === index ? -4 : -2.5,
-                      borderRadius: '50%',
-                      background: COLORS.unauthorized,
-                      border: '1px solid var(--bg2)',
-                      pointerEvents: 'none',
-                    }}
-                  />
-                ) : null
-              ))}
-            </>
-          )}
-
           {/* Hit areas â€” one per day, covering the full column height */}
           <div style={{ position: 'absolute', inset: 0, display: 'flex' }}>
             {rows.map((row, index) => (
@@ -428,35 +360,12 @@ function DailyActivity({ series = [], employees = 0 }) {
                 tabIndex={0}
                 onMouseMove={(event) => onHover(event, row, index)}
                 onFocus={(event) => onHover(event, row, index)}
-                aria-label={`${moment(row.date).format('D MMM')}: ${row.present} present, ${row.absentees} absent, ${row.unauthorizedAccess} unauthorized`}
+                aria-label={`${moment(row.date).format('D MMM')}: ${row.present} present, ${row.absentees} absent`}
                 style={{ flex: '1 1 0', minWidth: 0, outline: 'none', cursor: 'default' }}
               />
             ))}
           </div>
         </div>
-
-        {/* Right axis â€” unauthorized access events */}
-        {showUnauthorized && (
-          <div style={{ position: 'relative', height: PLOT_H }}>
-            {right.ticks.map((tick) => (
-              <span
-                key={tick}
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  top: `${(1 - tick / right.max) * 100}%`,
-                  transform: 'translateY(-50%)',
-                  fontFamily: 'var(--mono)',
-                  fontSize: 9.5,
-                  color: COLORS.unauthorized,
-                  opacity: 0.75,
-                }}
-              >
-                {compactFmt(tick)}
-              </span>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* X axis */}
@@ -526,12 +435,6 @@ function DailyActivity({ series = [], employees = 0 }) {
 
             <TooltipRow label="Check-in logs" value={numberFmt(hover.row.checkins)} />
             <TooltipRow label="Check-out logs" value={numberFmt(hover.row.checkouts)} />
-            <TooltipRow
-              color={COLORS.unauthorized}
-              label="Unauthorized"
-              value={numberFmt(hover.row.unauthorizedAccess)}
-              strong
-            />
           </div>
         </div>
       )}
@@ -565,24 +468,14 @@ function CountStrip({ title, items = [] }) {
 
 function EventCounts({ counts = {} }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }} className="vq-att-strip-grid">
-      <CountStrip
-        title="From attendance logs"
-        items={[
-          ['Attendance logs', counts.attendanceLogs, 'Employee-day rows, same unit as the Attendance Logs page'],
-          ['Check-in logs', counts.checkinLogs, 'Attendance logs containing at least one check-in'],
-          ['Check-out logs', counts.checkoutLogs, 'Attendance logs containing at least one check-out'],
-        ]}
-      />
-      <CountStrip
-        title="From access logs"
-        items={[
-          ['Access events', counts.accessEvents, 'Individual detections recorded across all access logs'],
-          ['Unauthorized', counts.unauthorizedAccessLogs, 'Detections not matched to anyone on the roster'],
-          ['After-hours unknown', counts.afterHoursUnknownLogs, 'Unauthorized detections outside 07:00-21:00'],
-        ]}
-      />
-    </div>
+    <CountStrip
+      title="From attendance logs"
+      items={[
+        ['Attendance logs', counts.attendanceLogs, 'Employee-day rows, same unit as the Attendance Logs page'],
+        ['Check-in logs', counts.checkinLogs, 'Attendance logs containing at least one check-in'],
+        ['Check-out logs', counts.checkoutLogs, 'Attendance logs containing at least one check-out'],
+      ]}
+    />
   );
 }
 
@@ -603,7 +496,7 @@ function Anomalies({ items = [] }) {
           textAlign: 'center',
         }}
       >
-        No attendance or security anomalies detected
+        No attendance anomalies detected
       </div>
     );
   }
@@ -646,16 +539,70 @@ function Anomalies({ items = [] }) {
   );
 }
 
+/**
+ * Total Employees / Currently Present / Absentees counted the same way
+ * Attendance Logs counts its own tiles: from raw attendance-log rows for
+ * the selected range, not the attendance-summary server aggregate. Present
+ * = checked in AND checked out; Absent = every other loaded row (mirrors
+ * AttendanceLogs.jsx's `stats` exactly, including that a row which checked
+ * in but hasn't checked out yet counts as Absent here too).
+ */
+function useLogsStyleTotals(params) {
+  const paramsKey = useMemo(() => JSON.stringify(params), [params]);
+
+  const rosterApi = useApi(
+    () => authorizedUsers(0, 1, '', {}),
+    [paramsKey],
+    { pollMs: 60000 }
+  );
+  const logsApi = useApi(
+    () =>
+      getAttendanceLogs(
+        '',
+        '',
+        '',
+        params.startDate || '',
+        params.endDate || '',
+        1,
+        LOGS_STATS_LIMIT,
+        'name',
+        'asc',
+        '',
+        '',
+        '',
+        '',
+        false,
+        []
+      ),
+    [paramsKey],
+    { pollMs: 60000 }
+  );
+
+  const totalEmployees = rosterApi.data?.body?.data?.totalCount || 0;
+  const rows = logsApi.data?.data?.body?.data?.attendanceLogs || [];
+  const present = rows.filter((r) => r.logInTime && r.logOutTime).length;
+  const absent = rows.length - present;
+
+  return {
+    loading: rosterApi.loading || logsApi.loading,
+    error: rosterApi.error || logsApi.error,
+    refetch: () => {
+      rosterApi.refetch();
+      logsApi.refetch();
+    },
+    totalEmployees,
+    present,
+    absent,
+  };
+}
+
 export default function AttendanceAnalytics({ params = {} }) {
   const paramsKey = useMemo(() => JSON.stringify(params), [params]);
   const analytics = useApi(() => getAttendanceAnalytics(params), [paramsKey], { pollMs: 60000 });
+  const logsStyle = useLogsStyleTotals(params);
   const data = analytics.data || {};
-  const totals = data.totals || {};
   const counts = data.eventCounts || {};
   const activeRangeLabel = formatRangeLabel(data.range);
-
-  const presentAsOf = totals.present?.asOf;
-  const accessEvents = Number(counts.accessEvents || 0);
 
   const rangeAction = (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--tx3)', fontSize: 11, fontWeight: 700 }}>
@@ -669,40 +616,41 @@ export default function AttendanceAnalytics({ params = {} }) {
       <PanelHeader title="Attendance Analytics" dot dotColor="var(--blue)" action={rangeAction} />
       <div style={{ padding: '0 14px 0' }}>
         <AnalyticsBlurb>
-          Combines attendance logs and access logs for the selected range to show workforce presence, absentee patterns, and unauthorized access anomalies.
+          Attendance logs for the selected range: workforce presence, absentee patterns, and attendance anomalies.
         </AnalyticsBlurb>
       </div>
       <AsyncBoundary
-        loading={analytics.loading}
-        error={analytics.error}
-        onRetry={analytics.refetch}
+        loading={analytics.loading || logsStyle.loading}
+        error={analytics.error || logsStyle.error}
+        onRetry={() => {
+          analytics.refetch();
+          logsStyle.refetch();
+        }}
         minH={220}
         emptyLabel="No attendance analytics available"
       >
         <div style={{ padding: 14, display: 'grid', gap: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(160px, 1fr))', gap: 12 }} className="vq-att-kpi-grid">
-            <MetricTile icon={Users} label="Total Employees" metric={totals.employees} color="var(--blue)" subLabel="Roster" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(160px, 1fr))', gap: 12 }} className="vq-att-kpi-grid">
+            <MetricTile
+              icon={Users}
+              label="Total Employees"
+              metric={{ count: logsStyle.totalEmployees }}
+              color="var(--blue)"
+              subLabel="Registered users"
+            />
             <MetricTile
               icon={UserCheck}
               label="Currently Present"
-              metric={totals.present}
+              metric={{ count: logsStyle.present }}
               color="var(--ok)"
-              subLabel={presentAsOf ? `As of ${moment(presentAsOf).format('D MMM')}` : 'No attendance yet'}
+              subLabel="From attendance logs"
             />
             <MetricTile
               icon={UserX}
               label="Absentees"
-              metric={totals.absentees}
+              metric={{ count: logsStyle.absent }}
               color="var(--warn)"
-              subLabel="No attendance log"
-              positiveUp={false}
-            />
-            <MetricTile
-              icon={ShieldAlert}
-              label="Unauthorized Access"
-              metric={totals.unauthorizedAccess}
-              color="var(--crit)"
-              subLabel={accessEvents ? `Of ${numberFmt(accessEvents)} access events` : 'Of access events'}
+              subLabel="From attendance logs"
               positiveUp={false}
             />
           </div>
@@ -717,19 +665,17 @@ export default function AttendanceAnalytics({ params = {} }) {
                   <LegendItem color={COLORS.present} label="Present" />
                   <LegendItem color={COLORS.checkedOut} label="Checked out" />
                   <LegendItem color={COLORS.absent} label="Absent" />
-                  <LegendItem color={COLORS.unauthorized} label="Unauthorized" note="(right axis)" line />
                 </div>
               </div>
 
-              <DailyActivity series={data.series || []} employees={totals.employees?.count || 0} />
+              <DailyActivity series={data.series || []} employees={logsStyle.totalEmployees} />
 
               <div style={{ marginTop: 8, fontSize: 10, color: 'var(--tx3)' }}>
-                Bars: employees per day, stacked to the full roster (attendance logs). Line: unauthorized access
-                events on its own scale (access logs).
+                Bars: employees per day, stacked to the full roster (attendance logs).
               </div>
             </div>
             <div style={{ minWidth: 0 }}>
-              <Anomalies items={data.anomalies || []} />
+              <Anomalies items={(data.anomalies || []).filter((item) => item.group === 'attendance')} />
             </div>
           </div>
         </div>

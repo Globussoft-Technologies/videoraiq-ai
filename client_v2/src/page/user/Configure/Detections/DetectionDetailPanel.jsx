@@ -524,7 +524,7 @@ export default function DetectionDetailPanel({
           >
             {model.name}
           </span>
-          <span style={{ display: 'block', fontSize: 11.5, color: 'var(--tx3)', marginTop: 3 }}>
+          <span style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--tx2)', marginTop: 3 }}>
             {category?.label} · {model.subtitle}
           </span>
         </span>

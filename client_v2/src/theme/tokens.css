@@ -218,9 +218,6 @@
   .vq-cc-grid { grid-template-columns: 1fr !important; }
   .vq-engine-grid { grid-template-columns: 1fr !important; }
   .vq-att-detail-grid { grid-template-columns: 1fr !important; }
-  /* Attendance-sourced and access-sourced count strips stack rather than
-     squeeze — each keeps its three tiles side by side for longer. */
-  .vq-att-strip-grid { grid-template-columns: 1fr !important; }
 }
 @media (max-width: 640px) {
   .vq-kpi-row { grid-template-columns: repeat(2, 1fr) !important; }
