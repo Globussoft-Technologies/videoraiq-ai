@@ -221,9 +221,13 @@ export const updateChannel = async (channelId, data) => {
  */
 export const toggleChannelDetection = async ({ channelId, detectionType, enable }) => {
   const token = getAccessToken();
-  return axios.put(`${Api_url}/channel/detection/toggle`, { channelId, detectionType, enable }, {
+  const res = await axios.put(`${Api_url}/channel/detection/toggle`, { channelId, detectionType, enable }, {
     headers: { 'Content-Type': 'application/json', 'x-access-token': token },
   });
+  window.dispatchEvent(new CustomEvent('vq-detection-toggle-change', {
+    detail: { channelId, detectionType, enable },
+  }));
+  return res;
 };
 
 /** Get schedule for one camera linked to a detection setting */

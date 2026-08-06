@@ -431,7 +431,7 @@ export default function LiveWallGrid() {
   return (
     <div
       ref={pageRef}
-      style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg0)', overflow: 'hidden' }}
+      style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 72px)', minHeight: 520, background: 'var(--bg0)', overflow: 'hidden' }}
     >
       {/* ── Fullscreen camera modal ───────────────────────────────── */}
       {fullscreen && (
@@ -613,7 +613,7 @@ export default function LiveWallGrid() {
       )}
 
       {/* â”€â”€ Grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <div style={{ flex: 1, minHeight: 0, overflow: size.cols === 1 ? 'hidden' : 'auto', padding: size.cols === 1 ? 0 : 6, display: size.cols === 1 ? 'flex' : 'block', flexDirection: 'column' }}>
+      <div style={{ flex: '1 1 auto', minHeight: size.cols === 1 ? 320 : 0, overflow: size.cols === 1 ? 'hidden' : 'auto', padding: size.cols === 1 ? 0 : 6, display: size.cols === 1 ? 'flex' : 'block', flexDirection: 'column' }}>
         <AsyncBoundary
           loading={channels.loading}
           error={channels.error}
@@ -628,7 +628,7 @@ export default function LiveWallGrid() {
                 <div style={{
                   flex: '1 1 auto',
                   width: '100%',
-                  height: 'clamp(280px, calc(100vh - 190px), 760px)',
+                  height: 'clamp(320px, calc(100vh - 190px), 760px)',
                   minHeight: 280,
                 }}>
                   <FullscreenCameraView

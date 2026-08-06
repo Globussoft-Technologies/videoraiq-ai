@@ -642,7 +642,7 @@ export default function LineCrossingLogs() {
     const totalEntry = filteredRecords.reduce((sum, item) => sum + recordEntry(item), 0);
     const totalExit = filteredRecords.reduce((sum, item) => sum + recordExit(item), 0);
     const activeZones = new Set(filteredRecords.map((item) => item.zone).filter(Boolean)).size;
-    return { totalEntry, totalExit, net: totalEntry - totalExit, activeZones };
+    return { totalEntry, totalExit, net: Math.max(totalEntry - totalExit, 0), activeZones };
   }, [filteredRecords]);
 
   const chartSeries = useMemo(() => ([
@@ -797,7 +797,10 @@ export default function LineCrossingLogs() {
           <MultiSelect
             options={nvrOptions}
             value={analyticsNvrIds}
-            onChange={setAnalyticsNvrIds}
+            onChange={(next) => {
+              setAnalyticsNvrIds(next);
+              if (!next.length) setAnalyticsCameraIds([]);
+            }}
             placeholder="All NVRs"
             searchPlaceholder="Search NVR..."
             msg="No NVRs found"
@@ -1359,7 +1362,7 @@ export default function LineCrossingLogs() {
                 </div>
                 <div style={{ background: 'rgba(15,23,42,.55)', borderRadius: 8, padding: '8px 9px' }}>
                   <div style={{ fontSize: 9.5, color: 'rgba(226,232,240,.58)', fontWeight: 800, textTransform: 'uppercase' }}>Total Present</div>
-                  <div style={{ marginTop: 3, color: '#60a5fa', fontSize: 16, fontWeight: 900 }}>{recordEntry(fullscreenOverlay) - recordExit(fullscreenOverlay)}</div>
+                  <div style={{ marginTop: 3, color: '#60a5fa', fontSize: 16, fontWeight: 900 }}>{Math.max(recordEntry(fullscreenOverlay) - recordExit(fullscreenOverlay), 0)}</div>
                 </div>
               </div>
             </div>
@@ -1425,7 +1428,7 @@ export default function LineCrossingLogs() {
                     <MultiSelect
                       options={nvrOptions}
                       value={resetDraft.nvrIds}
-                      onChange={(next) => setResetDraft((prev) => ({ ...prev, nvrIds: next }))}
+                      onChange={(next) => setResetDraft((prev) => ({ ...prev, nvrIds: next, cameraIds: next.length ? prev.cameraIds : [] }))}
                       placeholder="Select NVR"
                       searchPlaceholder="Search NVR..."
                       msg="No NVRs found"
