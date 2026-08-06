@@ -672,6 +672,9 @@ async getLogs(req, res, next) {
         if(employeeLocations?.length){
           authorizedEmployeeIds = await userModel.find({employeeLocationId:{$in:employeeLocations},adminId:new ObjectId(adminId)}).distinct("_id");
         }
+        const authorizedUserIds = shouldRemoveUnknown
+          ? await userModel.distinct("_id", { adminId: new ObjectId(adminId) })
+          : [];
 
         // Convert department IDs to ObjectIds
         const deptObjectIds = departmentIds?.length ? departmentIds.map(id => new ObjectId(id)) : [];
@@ -712,7 +715,7 @@ async getLogs(req, res, next) {
 
           // Remove unknown users if requested
           ...(shouldRemoveUnknown
-            ? [{ $match: { userId: { $exists: true, $ne: null } } }]
+            ? [{ $match: { userId: { $in: authorizedUserIds.map((id) => new ObjectId(id)) } } }]
             : []),
 
 
