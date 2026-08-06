@@ -607,6 +607,26 @@ class IncidentsController {
     return await incidentsService.getLineCrossingLogs(req, res, next);
   }
 
+  async deleteLineCrossingLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Delete Line Crossing logs using the same filters as the logs endpoint. Set all=true to delete all line crossing logs for the authenticated admin.'
+    #swagger.parameters['all'] = { in: 'query', type: 'boolean', description: 'When true, delete all line crossing logs for the authenticated admin' }
+    #swagger.parameters['type'] = { in: 'query', type: 'string', description: 'Filter by line-crossing direction bucket: entry, exit, or all' }
+    #swagger.parameters['minEntry'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['maxEntry'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['minExit'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['maxExit'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['minAtoB'] = { in: 'query', type: 'integer', deprecated: true }
+    #swagger.parameters['maxAtoB'] = { in: 'query', type: 'integer', deprecated: true }
+    #swagger.parameters['minBtoA'] = { in: 'query', type: 'integer', deprecated: true }
+    #swagger.parameters['maxBtoA'] = { in: 'query', type: 'integer', deprecated: true }
+    #swagger.responses[200] = { description: 'Line crossing logs deleted successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.deleteLineCrossingLogs(req, res, next);
+  }
+
   async getDeskAbsenceLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get Desk Absence (deskAbsence) time-series logs for graphing. Each record is a per-camera/per-day incident with a timeSeries array of { timestamp, personCount, zoneName } points, plus nvrData and channelData.'

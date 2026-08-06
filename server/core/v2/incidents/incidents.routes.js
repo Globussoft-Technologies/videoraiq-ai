@@ -102,6 +102,11 @@ router.get(
   viewAccessCheck,
   incidentsController.getLineCrossingLogs,
 );
+router.delete(
+  "/logs/line-crossing",
+  deleteAccessCheck,
+  incidentsController.deleteLineCrossingLogs,
+);
 router.post(
   "/logs/desk-absence",
   viewAccessCheck,

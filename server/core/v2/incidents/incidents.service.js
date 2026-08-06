@@ -2965,6 +2965,71 @@ console.log(result,'result');
     }
   }
 
+  async deleteLineCrossingLogs(req, res, next) {
+    try {
+      const deleteAll = ["true", "1", "yes"].includes(
+        String(req.query.all ?? req.query.deleteAll ?? "").toLowerCase(),
+      );
+      const {
+        type,
+        minEntry,
+        maxEntry,
+        minExit,
+        maxExit,
+        minAtoB,
+        maxAtoB,
+        minBtoA,
+        maxBtoA,
+      } = req.query;
+      const extraMatch = {};
+      const entryMin = minEntry ?? minAtoB;
+      const entryMax = maxEntry ?? maxAtoB;
+      const exitMin = minExit ?? minBtoA;
+      const exitMax = maxExit ?? maxBtoA;
+
+      if (entryMin !== undefined || entryMax !== undefined) {
+        extraMatch.totalEntry = {};
+        if (entryMin !== undefined) extraMatch.totalEntry.$gte = Number(entryMin);
+        if (entryMax !== undefined) extraMatch.totalEntry.$lte = Number(entryMax);
+      }
+      if (exitMin !== undefined || exitMax !== undefined) {
+        extraMatch.totalExit = {};
+        if (exitMin !== undefined) extraMatch.totalExit.$gte = Number(exitMin);
+        if (exitMax !== undefined) extraMatch.totalExit.$lte = Number(exitMax);
+      }
+      if (type) {
+        extraMatch.type = type;
+      }
+
+      const data = req?.verified?.userData;
+      if (!data?.user_id) {
+        return res.send(
+          Response.userFailResp("User authentication failed.", "Unauthorized"),
+        );
+      }
+
+      const match = {
+        userId: data.user_id.toString(),
+        incidentType: "lineCrossing",
+      };
+      if (!deleteAll) {
+        Object.assign(match, extraMatch);
+      }
+
+      const result = await Incident.deleteMany(match);
+
+      return res.status(200).json(
+        Response.userSuccessResp("Line crossing logs deleted successfully", {
+          deletedCount: result.deletedCount || 0,
+          deletedAll: deleteAll,
+        }),
+      );
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to delete line crossing logs", 500));
+    }
+  }
+
   async getDeskAbsenceLogs(req, res, next) {
     try {
       const data = req?.verified?.userData;

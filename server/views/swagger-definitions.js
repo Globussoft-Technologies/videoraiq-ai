@@ -695,6 +695,7 @@ export const definitions = {
       channelIds: ["664fa3901df2e03469c36a25", "665abbeab80991a2a4b278f5"],
       departmentIds: ["664fa3901df2e03469c36a25", "665abbeab80991a2a4b278f5"],
       employeeLocations:["bangalore","hyderabad"],
+      removeUnknown: false,
       getAccessLogs: false,
       isExport: false,
       tag: null,

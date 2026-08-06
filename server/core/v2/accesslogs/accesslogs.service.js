@@ -619,6 +619,7 @@ async getLogs(req, res, next) {
         }
 
         let { skip = 0, limit = 10, startDate, endDate, searchQuery, departmentIds, channelIds, nvrIds ,removeUnknown, fromTime, toTime,isExport=false,employeeLocations=[],tag} = req.body;
+        const shouldRemoveUnknown = ["true", true, 1, "1", "yes"].includes(removeUnknown);
         skip = Number(skip);
         limit = Number(limit);
 
@@ -710,7 +711,9 @@ async getLogs(req, res, next) {
           },
 
           // Remove unknown users if requested
-          ...(removeUnknown ? [{ $match: { userId: { $ne: null } } }] : []),
+          ...(shouldRemoveUnknown
+            ? [{ $match: { userId: { $exists: true, $ne: null } } }]
+            : []),
 
 
           // tag: true → tagged only | tag: false → untagged + old docs | tag: null/omitted → all

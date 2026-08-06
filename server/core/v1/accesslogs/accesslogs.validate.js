@@ -50,6 +50,7 @@ class AccessLogsValidation {
         Joi.string().regex(/^[0-9a-fA-F]{24}$/), // ObjectId as string
         Joi.object().instance(mongoose.Types.ObjectId)
       ).allow(null).optional(),
+      removeUnknown: Joi.boolean().optional(),
       images: Joi.object({
         face: nonEmptyString.optional(),
         person: nonEmptyString.optional(),
