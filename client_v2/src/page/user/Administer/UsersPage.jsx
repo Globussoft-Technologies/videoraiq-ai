@@ -771,10 +771,13 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                       autoComplete="new-password"
                     />
                     <button
+                      type="button"
+                      aria-label={showPass ? 'Hide password' : 'Show password'}
+                      title={showPass ? 'Hide password' : 'Show password'}
                       onClick={() => setShowPass(v => !v)}
                       style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx3)', padding: 2 }}
                     >
-                      {showPass ? <EyeOff size={13} /> : <Eye size={13} />}
+                      {showPass ? <Eye size={13} /> : <EyeOff size={13} />}
                     </button>
                   </div>
                   <FieldError>{errors.password}</FieldError>
@@ -792,10 +795,13 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
                       autoComplete="new-password"
                     />
                     <button
+                      type="button"
+                      aria-label={showConfirmPass ? 'Hide password' : 'Show password'}
+                      title={showConfirmPass ? 'Hide password' : 'Show password'}
                       onClick={() => setShowConfirmPass(v => !v)}
                       style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx3)', padding: 2 }}
                     >
-                      {showConfirmPass ? <EyeOff size={13} /> : <Eye size={13} />}
+                      {showConfirmPass ? <Eye size={13} /> : <EyeOff size={13} />}
                     </button>
                   </div>
                   <FieldError>{errors.confirmPassword}</FieldError>

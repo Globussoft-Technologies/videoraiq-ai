@@ -52,7 +52,7 @@ export default function AdminProfile() {
   const accessSince = user?.createdAt || (user?.iat ? moment.unix(user.iat).toISOString() : '');
   const location = user?.location || user?.orgId || user?.created_from ;
   return <div className="flex flex-col gap-5 p-5">
-    <ProfileHeader initials={initialsOf(name)} name={name} role={role} status={status} email={email} subtitle="Detection profile" totalCameras={value(profile.stats.totalCameras)} configured={value(profile.stats.configured)} nonConfigured={value(profile.stats.nonConfigured)} detectionsEnabled={value(profile.stats.detectionsEnabled)} />
+    <ProfileHeader initials={initialsOf(name)} name={name} role={role} status={status} email={email} subtitle="profile" totalCameras={value(profile.stats.totalCameras)} configured={value(profile.stats.configured)} nonConfigured={value(profile.stats.nonConfigured)} detectionsEnabled={value(profile.stats.detectionsEnabled)} />
     <AccountDetails fullName={name} email={email} role={role} status={status} showTenantFields={false} accessLevel={role} showLocation={false} memberSince={accessSince ? moment(accessSince).format('MMM D, YYYY') : '—'} adminId={user?.adminId} />
     <DetectionAllocation detections={profile.detections} />
     <CamerasList cameras={profile.cameras} stats={profile.stats} />

@@ -12,7 +12,7 @@ function Field({ icon: Icon, label, value, tint = 'var(--tx3)', valueColor, mono
           style={{ color: valueColor || 'var(--tx)', fontVariantNumeric: 'tabular-nums' }}
           title={typeof value === 'string' ? value : undefined}
         >
-          {value || 'Ã¢â‚¬â€'}
+          {value || '-'}
         </div>
       </div>
     </div>

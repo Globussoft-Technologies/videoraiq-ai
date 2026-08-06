@@ -34,7 +34,7 @@ export default function DetectionsByHourCard() {
     <Panel style={{ padding: 18 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Detections by Hour</div>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>today Â· UTC</span>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>today UTC</span>
       </div>
       <AnalyticsBlurb style={{ marginBottom: 16 }}>
         Intraday distribution of today's detections, grouped into hourly buckets to show which part of the day is busiest.
@@ -59,7 +59,7 @@ export default function DetectionsByHourCard() {
                   {hours.map((v, i) => (
                     <div
                       key={i}
-                      title={`${String(i).padStart(2, '0')}:00 â€” ${v} detection${v === 1 ? '' : 's'}`}
+                      title={`${String(i).padStart(2, '0')}:00 ${v} detection${v === 1 ? '' : 's'}`}
                       style={{
                         flex: 1, minWidth: 0,
                         height: `${Math.round((v / max) * 100)}%`,

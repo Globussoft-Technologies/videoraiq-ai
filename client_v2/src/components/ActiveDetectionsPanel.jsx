@@ -202,7 +202,7 @@ export default function ActiveDetectionsPanel({ channel, showActiveDetections = 
         )}
         <button
           type="button"
-          onClick={() => navigate('/engines')}
+          onClick={() => navigate('/detection-settings')}
           className="flex w-full items-center justify-center gap-2 rounded-full border border-[rgba(59,130,246,.4)] py-2 text-center text-[12px] font-medium text-[var(--blue)] cursor-pointer"
         >
           <Map size={13} strokeWidth={2} />

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
 import { Search, Video, ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
@@ -196,10 +195,6 @@ function CameraRow({ camera, online, typeLabels, onOpen, onToggleDetectionReques
 const LIMIT = 12;
 
 export function DetectionSettingsCameraList({ onOpenCamera }) {
-  // setCamHealth is shared via the layout so the Sidebar footer can show the
-  // live camera tally from this page too — otherwise it only ever reflects
-  // Command Center's probe and reads blank/stale on every other page.
-  const { setCamHealth } = useOutletContext() || {};
   const [search, setSearch] = useState('');
   const [nvrFilter, setNvrFilter] = useState('');
   const [page, setPage] = useState(0);
@@ -251,13 +246,6 @@ export function DetectionSettingsCameraList({ onOpenCamera }) {
     () => [...cameras].sort((a, b) => (liveById[a._id] ? 0 : 1) - (liveById[b._id] ? 0 : 1)),
     [cameras, liveById],
   );
-
-  // Publish the probed tally to the shared layout state so the Sidebar footer
-  // reflects live cameras while this page is open (report only the cameras we
-  // actually probe on the page, so online never exceeds total).
-  useEffect(() => {
-    setCamHealth?.({ online: onlineCount, total: cameras.length });
-  }, [onlineCount, cameras.length, setCamHealth]);
 
   // Matches V1: a single toggle endpoint for on/off; 404s if the type was
   // never linked to this camera (no auto-create — same as V1's real behavior).

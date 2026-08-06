@@ -170,7 +170,7 @@ const exportToExcel = async (params) => {
   const data = allLogs.map((item, index) => ({
     ID: index + 1,
     Name: item.employee ? `${item.employee.firstName} ${item.employee.lastName}` : '--',
-    Department: item.employee?.departmentId?.departmentName || 'Unknown',
+    Department: item.employee?.departmentId?.departmentName || '--',
     Date: rowDate(item),
     Location: item.employee?.location || '--',
     'Check in': convertToRegionTime(item.logInTime, region),

@@ -56,9 +56,14 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
     });
   }, [probeCams]);
   const onlineCount = probeCams.filter((c) => liveById[c._id || c.id]).length;
+  const probedCount = probeCams.filter((c) => Object.prototype.hasOwnProperty.call(liveById, c._id || c.id)).length;
+  const probeComplete = probeCams.length > 0 && probedCount === probeCams.length;
   useEffect(() => {
+    // Keep the last known Sidebar tally while streams are connecting. Publishing
+    // the initial 0/0 or 0/N would make navigation appear to reset the count.
+    if (!probeComplete) return;
     onOnlineCountChange?.(onlineCount, probeCams.length);
-  }, [onlineCount, probeCams.length, onOnlineCountChange]);
+  }, [onlineCount, probeCams.length, onOnlineCountChange, probeComplete]);
 
   const online = active ? !!liveById[activeKey] : false;
   const liveColor = !active ? 'var(--tx3)' : online ? 'var(--ok)' : 'var(--crit)';

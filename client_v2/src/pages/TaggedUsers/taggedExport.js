@@ -110,7 +110,7 @@ const exportToExcel = async (params) => {
     return {
       ID: index + 1,
       Name: log.userInfo?.userName || 'Unknown',
-      Department: log.department?.departmentName || 'unknown',
+      Department: log.department?.departmentName || '--',
       Date: log.date ? moment.utc(log.date).tz(region).format('DD/MM/YYYY') : '--',
       Location: log.userInfo?.location || '--',
       'Access Time': formatAccessTime(enteredIn, exitTiming, region),

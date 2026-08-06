@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { LogOut, ChevronsLeft, ChevronsRight, X, ChevronDown } from 'lucide-react';
 import { NAV_GROUPS } from './nav.config';
 import { useOutsideClick } from '../hooks/useOutsideClick';
@@ -70,6 +71,7 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
   const location = useLocation();
   const [logsHeaderHover, setLogsHeaderHover] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const accountRef = useRef(null);
   // Close the account menu on an outside click / Escape (replaces the
   // fixed-overlay backdrop, which is trapped inside the sidebar's
@@ -336,7 +338,13 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
                   to={item.path}
                   end={item.end}
                   title={collapsed ? item.label : undefined}
-                  onClick={() => isMobile && onMobileClose?.()}
+                  onClick={(event) => {
+                    if (item.path === 'detection-settings') {
+                      event.preventDefault();
+                      navigate('/detection-settings');
+                    }
+                    if (isMobile) onMobileClose?.();
+                  }}
                   style={({ isActive }) => navItemStyle(isActive, collapsed)}
                 >
                   <Icon size={18} strokeWidth={1.7} />
@@ -526,11 +534,11 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
                   onClick={() => { setAccountOpen(false); navigate('/admin-profile'); }}
                   style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: 9, borderRadius: 9, cursor: 'pointer' }}
                 >
-                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>Detection Profile</span>
-                  <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>View detection details</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>My Profile</span>
+                  <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>View profile   details</span>
                 </div>}
                 <div
-                  onClick={() => navigate('/logout')}
+                  onClick={() => { setAccountOpen(false); setShowLogoutConfirm(true); }}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -550,6 +558,65 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
           )}
         </div>
       </div>
+
+      {showLogoutConfirm && createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="logout-confirm-title"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+            background: 'rgba(2, 6, 23, .62)',
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <div
+            style={{
+              width: 'min(100%, 380px)',
+              padding: 24,
+              borderRadius: 16,
+              background: 'var(--bg1solid)',
+              border: '1px solid var(--bd2)',
+              boxShadow: '0 20px 60px rgba(0,0,0,.35)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <span style={{ display: 'grid', placeItems: 'center', width: 36, height: 36, borderRadius: '50%', background: 'rgba(239,68,68,.12)', color: 'var(--crit)' }}>
+                <LogOut size={18} />
+              </span>
+              <h2 id="logout-confirm-title" style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--tx)' }}>
+                Confirm sign out
+              </h2>
+            </div>
+            <p style={{ margin: '0 0 22px', fontSize: 13, lineHeight: 1.5, color: 'var(--tx2)' }}>
+              Are you sure you want to sign out of your account?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx2)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowLogoutConfirm(false); navigate('/logout'); }}
+                style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid var(--crit)', background: 'var(--crit)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </aside>
   );
 }

@@ -274,8 +274,12 @@ export default function LiveWallGrid() {
      bounce a camera between the visible grid and the hidden probe layer â€”
      that bounce was remounting streams in a loop (continuous reload). */
   const [liveSet, setLiveSet] = useState(() => new Set());
+  const [liveStatus, setLiveStatus] = useState({});
   const liveTimersRef = useRef({});
   const setLive = useCallback((id, isLive) => {
+    // Keep an immediate status map for shared health reporting. The separate
+    // liveSet below remains debounced to avoid grid remounts during buffering.
+    setLiveStatus(prev => (prev[id] === isLive ? prev : { ...prev, [id]: isLive }));
     const timers = liveTimersRef.current;
     if (timers[id]) { clearTimeout(timers[id]); delete timers[id]; }
     timers[id] = setTimeout(() => {
@@ -293,6 +297,26 @@ export default function LiveWallGrid() {
   }, []);
 
   const activeCount = liveSet.size;
+  const inventoryCameras = Array.isArray(channels.data) ? channels.data : [];
+  const probedCameras = inventoryCameras.filter((camera) => (
+    Object.prototype.hasOwnProperty.call(liveStatus, camera._id || camera.channelId)
+  ));
+  const sidebarOnlineCount = probedCameras.filter((camera) => (
+    liveStatus[camera._id || camera.channelId]
+  )).length;
+
+  // Publish only real probe results to the Sidebar. Do not publish an initial
+  // 0 while streams are still connecting; deleting every camera must still
+  // publish 0/0 immediately.
+  useEffect(() => {
+    if (channels.loading || !Array.isArray(channels.data)) return;
+    if (inventoryCameras.length === 0) {
+      ctx.setCamHealth?.({ online: 0, total: 0 });
+      return;
+    }
+    if (probedCameras.length === 0) return;
+    ctx.setCamHealth?.({ online: sidebarOnlineCount, total: inventoryCameras.length });
+  }, [channels.data, channels.loading, ctx.setCamHealth, inventoryCameras.length, probedCameras.length, sidebarOnlineCount]);
 
   // Filters other than status â€” this is the candidate set whose real live/offline
   // status must be known BEFORE the status filter can correctly narrow it down.

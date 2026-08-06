@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Search, Plus, X, Loader2, ArrowLeft, Pencil, ListVideo, Play, Maximize2, Minimize2, ArrowUpRight, Cctv, Trash2, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
@@ -197,7 +197,7 @@ function EngineChips({ engines }) {
   }
 
   return (
-    <span style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 5, minWidth: 0 }}>
+    <span style={{ display: 'flex', alignItems: 'flex-start', alignContent: 'flex-start', flexWrap: 'wrap', gap: 5, minWidth: 0, maxWidth: '90%', width: '100%', overflow: 'hidden', boxSizing: 'border-box' }}>
       {engines.map(engine => {
         const label = typeof engine === 'string' ? engine : engine.label;
         const title = typeof engine === 'string' ? engine : engine.title;
@@ -528,7 +528,7 @@ function SiteFilterSelect({ options, value, onChange }) {
 }
 
 // ── Camera row ────────────────────────────────────────────────────────────────
-const CAM_COL = '90px minmax(170px, 2fr) minmax(130px, 1.2fr) minmax(150px, 1.4fr) 80px';
+const CAM_COL = '90px minmax(170px, 2fr) minmax(130px, 1.2fr) minmax(0, 1.4fr) 80px';
 const NVR_GRID_STYLE = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 420px))',
@@ -568,10 +568,12 @@ function CamRow({ c, site, onView }) {
       }}>
         {site || '-'}
       </span>
-      <EngineChips engines={engines} />
+      <span style={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box' }}>
+        <EngineChips engines={engines} />
+      </span>
       <span
         onClick={() => onView(c)}
-        style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11.5, color: 'var(--blue)', cursor: 'pointer', fontWeight: 500 }}
+        style={{ display: 'flex', alignItems: 'center', justifySelf: 'end', gap: 3, minWidth: 80, paddingLeft: 10, background: 'var(--bg1)', position: 'relative', zIndex: 1, whiteSpace: 'nowrap', fontSize: 11.5, color: 'var(--blue)', cursor: 'pointer', fontWeight: 500 }}
       >
         View <ArrowUpRight size={12} />
       </span>
@@ -1594,6 +1596,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
 // ── main page ─────────────────────────────────────────────────────────────────
 export default function NVRCameras() {
   const navigate = useNavigate();
+  const { setCamHealth } = useOutletContext() || {};
   const isMobile = useIsMobile();
   const [nvrModal, setNvrModal] = useState(false);
   const [editingNvr, setEditingNvr] = useState(null);
@@ -1637,6 +1640,21 @@ export default function NVRCameras() {
 
   const nvrs      = nvrsApi.data?.nvrs ?? (Array.isArray(nvrsApi.data) ? nvrsApi.data : []);
   const channels  = channelsApi.data ?? [];
+
+  // Manage Cameras updates the channel list, but the Sidebar health footer is
+  // owned by the layout and is otherwise only refreshed by stream-probing
+  // pages. Publish the latest inventory total here so add/remove changes are
+  // reflected immediately without requiring a dashboard visit or full reload.
+  useEffect(() => {
+    if (channelsApi.loading || channelsApi.error || !Array.isArray(channelsApi.data)) return;
+    setCamHealth?.((previous) => {
+      const previousOnline = Number(previous?.online) || 0;
+      return {
+        online: Math.min(previousOnline, channels.length),
+        total: channels.length,
+      };
+    });
+  }, [channelsApi.data, channelsApi.error, channelsApi.loading, channels.length, setCamHealth]);
 
   /* Channels don't carry their own location — it lives on the parent NVR.
      Only one NVR is registered on most installs, so also fall back to it

@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useMemo, useReducer, useState } from 'react';
+import React, { useEffect, useCallback, useMemo, useReducer, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { usePermissions } from '@/context/PermissionContext';
@@ -38,6 +38,15 @@ const convertToUTC = (date, time, region) => {
   return moment.tz(`${date} ${time}`, format, region).utc().format('HH:mm');
 };
 
+const cameraNamesForAttendance = (item) => {
+  const names = [
+    item?.checkinCam,
+    item?.checkoutCam,
+    ...(Array.isArray(item?.imageUrls) ? item.imageUrls.map((capture) => capture?.cameraName) : []),
+  ].filter((name) => name && String(name).trim() && String(name).toLowerCase() !== 'unknown');
+  return [...new Set(names.map((name) => String(name).trim()))].join(', ');
+};
+
 const AttendanceLogs = () => {
   const [state, dispatch] = useReducer(reducer, {
     ...initialState,
@@ -54,6 +63,7 @@ const AttendanceLogs = () => {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
   });
   const [manualTrigger, setManualTrigger] = useState(0);
+  const attendanceRequestRef = useRef(0);
   // Default to grid; a saved 'table' choice is still remembered.
   const [viewMode, setViewMode] = useState(() =>
     localStorage.getItem(ATTENDANCE_VIEW_MODE_KEY) === 'table' ? 'table' : 'grid'
@@ -172,6 +182,7 @@ const AttendanceLogs = () => {
 
   /* ─────────────── Data fetch ─────────────── */
   const fetchAttendanceLogs = useCallback(async () => {
+    const requestId = ++attendanceRequestRef.current;
     dispatch({ type: 'SET_LOADING', value: true });
     const departmentIds = selectedDepartments.join(',');
     const utcFromTime = convertToUTC(startDate, fromTime, region);
@@ -197,6 +208,7 @@ const AttendanceLogs = () => {
         false,
         employeeLocations
       );
+      if (requestId !== attendanceRequestRef.current) return;
       if (
         response?.data?.statusCode === 500 &&
         response?.data?.body?.status === 'failed' &&
@@ -214,11 +226,12 @@ const AttendanceLogs = () => {
         dispatch({ type: 'SET_MIN_DATE', value: minDateValue ? new Date(minDateValue) : null });
       }
     } catch (error) {
+      if (requestId !== attendanceRequestRef.current) return;
       console.error('Error fetching attendance logs:', error);
       dispatch({ type: 'SET_ATTENDANCE_LOGS', value: [] });
       dispatch({ type: 'SET_ATTENDANCE_COUNT', value: 0 });
     } finally {
-      dispatch({ type: 'SET_LOADING', value: false });
+      if (requestId === attendanceRequestRef.current) dispatch({ type: 'SET_LOADING', value: false });
     }
   }, [
     searchInput,
@@ -266,15 +279,17 @@ const AttendanceLogs = () => {
         location: item.employee?.location || '--',
         login: item.logInTime,
         logout: item.logOutTime || '--',
+        cameraNames: cameraNamesForAttendance(item),
         imageUrls: Array.isArray(item?.imageUrls)
           ? item.imageUrls.map((img) => ({
               url: img?.images?.frame || img?.images?.person || img?.images?.face,
               timestamp: img?.timestamp,
               cameraType: img?.cameraType,
+              cameraName: img?.cameraName,
             }))
           : [],
         email: item.employee?.email || '',
-        checkinCam: item.checkinCam || '-',
+        checkinCam: cameraNamesForAttendance(item) || item.checkinCam || '-',
         checkoutCam: item.checkoutCam || '-',
       })),
     [attendanceLogs, BASE_URL, USER_AVTAR_INITIALS]

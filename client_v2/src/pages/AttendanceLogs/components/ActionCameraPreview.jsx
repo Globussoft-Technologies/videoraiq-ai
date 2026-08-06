@@ -73,6 +73,10 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
     () => validCaptures.map((obj) => obj?.cameraType || null),
     [validCaptures]
   );
+  const fullCameraNames = useMemo(
+    () => validCaptures.map((obj) => obj?.cameraName || null),
+    [validCaptures]
+  );
 
   const handleNext = useCallback(() => {
     setCurrentIndex((prev) => (prev + 1) % fullImageUrls.length);
@@ -121,6 +125,12 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
   const cameraType = module === 'accesslogs'
     ? selectedLog?.channelInfo?.name || 'checkin'
     : fullCameraTypes[currentIndex] || '—';
+
+  const cameraName = fullCameraNames[currentIndex]
+    || (fullCameraTypes[currentIndex] === 'checkout' ? selectedLog?.checkoutCam : selectedLog?.checkinCam)
+    || selectedLog?.checkinCam
+    || selectedLog?.checkoutCam
+    || '—';
 
   const dateValue = module === 'accesslogs' && selectedLog?.date
     ? moment.utc(selectedLog.date).tz(region).format('DD/MM/YYYY')
@@ -251,7 +261,7 @@ const ActionCameraPreview = ({ module = '', selectedLog = {}, isOpen = false, on
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 flex-1">
               <DetailItem icon={Zap} label="Camera Type" value={cameraType} />
               {isAttendance && (
-                <DetailItem icon={Camera} label="Checkin Cam" value={selectedLog?.checkinCam} />
+                <DetailItem icon={Camera} label="Camera" value={cameraName} />
               )}
               {isAttendance && (
                 <DetailItem icon={Camera} label="Checkout Cam" value={selectedLog?.checkoutCam} />

@@ -147,9 +147,10 @@ function Shell() {
       location: siteRaw?.locationName || siteRaw?.name || (siteFilter !== 'All Sites' ? siteFilter : ''),
       sites,
       refreshSites,
+      camHealth,
       setCamHealth,
     }),
-    [siteFilter, siteRaw, sites, refreshSites]
+    [siteFilter, siteRaw, sites, refreshSites, camHealth]
   );
 
   return (

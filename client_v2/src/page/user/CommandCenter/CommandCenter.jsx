@@ -205,12 +205,17 @@ export default function CommandCenter() {
   // Real "N of the filtered cameras are actually streaming" tally — LiveCamera
   // probes every tab's stream in the background (not just the active one) since
   // there's no backend field for per-camera online status.
-  const [onlineCameras, setOnlineCameras] = useState({ online: 0, total: 0 });
+  const [onlineCameras, setOnlineCameras] = useState(() => ctx.camHealth || { online: 0, total: 0 });
   // Also hand it to the layout so the Sidebar footer can show the same number.
   const onOnlineCountChange = useCallback((online, total) => {
     setOnlineCameras({ online, total });
-    ctx.setCamHealth?.({ online, total });
-  }, [ctx]);
+    ctx.setCamHealth?.((previous) => {
+      // The Sidebar total is the current inventory total, not the dashboard's
+      // filtered stream list. Keep it stable while the dashboard re-probes.
+      const inventoryTotal = Number(previous?.total) || total;
+      return { online: Math.min(online, inventoryTotal), total: inventoryTotal };
+    });
+  }, [ctx.setCamHealth]);
 
 
  

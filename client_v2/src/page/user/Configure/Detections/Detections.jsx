@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../../components/States';
 import { useApi } from '../../../../hooks/useApi';
@@ -292,6 +293,8 @@ export default function Detections() {
   const [incidentError, setIncidentError] = useState(null);
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const detailCameraId = searchParams.get('camera');
   const [resettingSetting, setResettingSetting] = useState(false);
   const incidentRequestIdRef = useRef(0);
   const typesApi = useApi(() => getDetectionTypes(), [], { initialData: {} });
@@ -651,7 +654,23 @@ export default function Detections() {
     }
   };
 
+  useEffect(() => {
+    if (!detailCameraId && enteredDetections) {
+      setEnteredDetections(false);
+      setZoneCamera(null);
+      setZoneSettingsOpen(false);
+    }
+  // Only react to URL changes. Running this effect when `enteredDetections`
+  // changes as part of the same click sees the previous search params and
+  // immediately closes the detail view, forcing users to click twice.
+  }, [detailCameraId]);
+
   const enterDetections = (camera) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set('camera', String(camera?._id || ''));
+      return next;
+    });
     setZoneCamera(camera);
     // Show the loader in the first rendered frame; the filter effect below
     // performs the request once enteredDetections becomes active.
@@ -661,6 +680,11 @@ export default function Detections() {
   };
 
   const backToCameraList = () => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete('camera');
+      return next;
+    }, { replace: true });
     setEnteredDetections(false);
     setZoneCamera(null);
     setZoneSettingsOpen(false);
