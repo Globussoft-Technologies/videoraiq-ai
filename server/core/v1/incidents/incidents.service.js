@@ -296,7 +296,7 @@ class IncidentsService {
           }
 
           // await sendPayloadToUser(userId, `cameradetection_${recentIncident.nvrId}_${recentIncident.channelId}`, incidentObj);
-          await sendPayloadToUser(
+          void sendPayloadToUser(
             userId,
             `cameradetection_${isAdminExist?._id}`,
             incidentObj,
@@ -312,13 +312,13 @@ class IncidentsService {
           //   ))
           // ) {
             if (req.body.incidentName !== "Guard Present" && req.body.incidentType !== "countPersons" && req.body.incidentType !== "countVehicles") {
-              await triggerAlertOnIncident({
+              void triggerAlertOnIncident({
                 detectionType: incidentType,
                 nvrId,
                 channelId,
                 saved: recentIncident,
                 adminId
-              });
+              }).catch((err) => logger.error(err));
             }
           // }
           delete incidentObj.timeSeries;
@@ -496,7 +496,7 @@ class IncidentsService {
       }
       saved.push = channelData?.profile?.notification?.channels?.push;
       // await sendPayloadToUser(userId, `cameradetection_${saved.nvrId}_${saved.channelId}`, saved);
-      await sendPayloadToUser(
+      void sendPayloadToUser(
         userId,
         `cameradetection_${isAdminExist?._id}`,
         saved,
@@ -513,13 +513,13 @@ class IncidentsService {
       //   ))
       // ) {
         if (req.body.incidentName !== "Guard Present" && req.body.incidentType !== "countPersons" && req.body.incidentType !== "countVehicles") {
-          await triggerAlertOnIncident({
+          void triggerAlertOnIncident({
             detectionType: incidentType,
             nvrId,
             channelId,
             saved,
             adminId
-          });
+          }).catch((err) => logger.error(err));
         }
       // }
 
