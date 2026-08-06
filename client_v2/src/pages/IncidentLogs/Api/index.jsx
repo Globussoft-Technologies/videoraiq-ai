@@ -70,3 +70,22 @@ export const fetchIncidentLogs = async ({
     headers: getHeaders(),
   });
 };
+
+export const deleteLineCrossingLogs = async ({
+  startDate,
+  endDate,
+  nvrIds,
+  channelIds,
+  all,
+}) => {
+  return axios.delete(`${HOST}/incidents/logs/line-crossing`, {
+    params: {
+      ...(all && { all: true }),
+      ...(startDate && { startDate }),
+      ...(endDate && { endDate }),
+      ...(nvrIds?.length && { nvrIds: nvrIds.join(',') }),
+      ...(channelIds?.length && { channelIds: channelIds.join(',') }),
+    },
+    headers: getHeaders(),
+  });
+};

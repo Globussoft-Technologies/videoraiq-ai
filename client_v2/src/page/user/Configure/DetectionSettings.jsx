@@ -192,7 +192,7 @@ function CameraRow({ camera, online, typeLabels, onOpen, onToggleDetectionReques
   );
 }
 
-const LIMIT = 12;
+const LIMIT = 100;
 
 export function DetectionSettingsCameraList({ onOpenCamera }) {
   const [search, setSearch] = useState('');
