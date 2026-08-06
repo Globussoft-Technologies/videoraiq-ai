@@ -194,7 +194,7 @@ const MultiSelect = ({
           ref={panelRef}
           data-vq-portal-panel
           style={pos}
-          className="z-[10000] rounded-[10px] border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg overflow-hidden"
+          className="z-[10030] rounded-[10px] border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg overflow-hidden"
         >
           <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--bd)]">
             <button

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ReactApexChart from 'react-apexcharts';
 import moment from 'moment-timezone';
-import { Activity, ArrowDownRight, ArrowUpRight, BarChart3, Camera, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, GitBranch, Maximize2, Move, PieChart, RefreshCw, Sigma, Trophy, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { Activity, ArrowDownRight, ArrowUpRight, BarChart3, Camera, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, GitBranch, Maximize2, Move, PieChart, RefreshCw, Sigma, Trophy, X } from 'lucide-react';
 import AccessDenied from '@/components/AccessDenied';
 import CameraStream from '@/components/CameraStream';
 import { useAuth } from '@/context/AuthContext';
@@ -11,14 +11,17 @@ import { useSocket } from '@/context/SocketContext';
 import { getChannels } from '@/helpers/configure';
 import { fetchIncidentLogs } from '@/pages/IncidentLogs/Api';
 import DateRangePicker from '@/pages/AttendanceLogs/components/DateRangePicker';
+import SystemControls from '@/page/user/CommandCenter/SystemControls';
+import MultiSelect from '@/components/MultiSelect';
 
 const IST_ZONE = 'Asia/Kolkata';
 const ENDPOINT = '/incidents/logs/line-crossing';
 const LOG_PANEL_WIDTH = 315;
-const STREAMS_PER_PAGE = 1;
 const CHART_COLORS = ['#0b3b8f', '#ff7a1a', '#2563eb', '#ec4899', '#00b8d4', '#7c3aed', '#14b8a6'];
 const STAT_COLOR = '#0b3b8f';
 const GRAPH_CARD_ACCENT = '#0b3b8f';
+const LINE_AUDIO_STORAGE_KEY = 'lineCrossingAudioMuted';
+const GRID_OPTIONS = [1, 2, 3, 4];
 
 function canViewLineCrossing(permissions) {
   const logs = permissions?.logs;
@@ -50,24 +53,40 @@ function channelName(channel) {
   return channel?.customName || channel?.name || channel?.channelName || channel?.channelId || 'Camera';
 }
 
-function statCard(label, value, sub, Icon) {
+function statCard(label, value, sub, Icon, color = STAT_COLOR) {
   const valueIsText = Number.isNaN(Number(value));
   return (
-    <div style={{ background: STAT_COLOR, border: '1px solid rgba(255,255,255,.18)', borderRadius: 12, padding: 16, minWidth: 0, boxShadow: '0 12px 28px rgba(11,59,143,.18)' }}>
+    <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderLeft: `4px solid ${color}`, borderRadius: 12, padding: 16, minWidth: 0, boxShadow: '0 12px 28px rgba(15,23,42,.06)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <span style={{ fontSize: 11, color: 'rgba(255,255,255,.68)', fontWeight: 700 }}>{label}</span>
-        <span style={{ width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,.12)', border: '1px solid rgba(255,255,255,.36)', color: '#fff' }}>
+        <span style={{ fontSize: 11, color: 'var(--tx3)', fontWeight: 700 }}>{label}</span>
+        <span style={{ width: 30, height: 30, borderRadius: 8, display: 'grid', placeItems: 'center', background: `${color}18`, border: `1px solid ${color}44`, color }}>
           <Icon size={15} />
         </span>
       </div>
-      <div style={{ marginTop: 10, fontFamily: 'var(--disp)', fontSize: valueIsText ? 15 : 26, lineHeight: 1.15, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
-      <div style={{ marginTop: 5, fontSize: 11, color: 'rgba(255,255,255,.66)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
+      <div style={{ marginTop: 10, fontFamily: 'var(--disp)', fontSize: valueIsText ? 15 : 26, lineHeight: 1.15, fontWeight: 800, color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+      <div style={{ marginTop: 5, fontSize: 11, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
     </div>
   );
 }
 
 function recordCameraName(record) {
   return record?.channelData?.name || record?.channelName || record?.cameraName || record?.channelId?.name || '--';
+}
+
+function recordCameraId(record) {
+  return String(record?.channelData?._id || record?.channelId?._id || record?.channelId || record?.cameraId?._id || record?.cameraId || '');
+}
+
+function recordNvrId(record) {
+  return String(record?.nvrData?._id || record?.nvrId?._id || record?.nvrId || record?.channelData?.nvrId?._id || record?.channelData?.nvrId || '');
+}
+
+function recordNvrName(record) {
+  return record?.nvrData?.nvrName || record?.nvrData?.name || record?.nvrName || '--';
+}
+
+function channelNvrName(channel) {
+  return channel?.nvrId?.nvrName || channel?.nvrId?.name || channel?.nvrName || channel?.nvr?.nvrName || 'NVR';
 }
 
 function recordTimestamp(record) {
@@ -208,17 +227,28 @@ function buildHeatmapOptions(categories) {
   };
 }
 
-function chartShell(title, sub, Icon, children) {
+function chartShell(title, sub, Icon, children, onFullscreen) {
   return (
     <section style={{ background: 'var(--bg1)', border: '1px solid rgba(11,59,143,.24)', borderTop: `3px solid ${GRAPH_CARD_ACCENT}`, borderRadius: 12, padding: 14, minWidth: 0, boxShadow: '0 12px 28px rgba(11,59,143,.05)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
         <span style={{ width: 28, height: 28, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'rgba(11,59,143,.1)', color: GRAPH_CARD_ACCENT }}>
           <Icon size={15} />
         </span>
-        <div>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--tx)' }}>{title}</div>
           <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>{sub}</div>
         </div>
+        {onFullscreen && (
+          <button
+            type="button"
+            onClick={onFullscreen}
+            aria-label={`Open ${title} fullscreen`}
+            title="Open fullscreen"
+            style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg2)', color: GRAPH_CARD_ACCENT, display: 'grid', placeItems: 'center', cursor: 'pointer' }}
+          >
+            <Maximize2 size={14} />
+          </button>
+        )}
       </div>
       {children}
     </section>
@@ -245,10 +275,22 @@ export default function LineCrossingLogs() {
   const [lastRefresh, setLastRefresh] = useState(null);
   const [fullscreenCamera, setFullscreenCamera] = useState(null);
   const [socketEventsByChannel, setSocketEventsByChannel] = useState({});
-  const [lineAudioMuted, setLineAudioMuted] = useState(true);
+  const [lineAudioMuted, setLineAudioMuted] = useState(() => {
+    try { return localStorage.getItem(LINE_AUDIO_STORAGE_KEY) !== 'false'; } catch { return true; }
+  });
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [logPanelPosition, setLogPanelPosition] = useState({ x: 18, y: 18 });
   const [streamPage, setStreamPage] = useState(0);
+  const [streamGridSize, setStreamGridSize] = useState(1);
+  const [chartModal, setChartModal] = useState(null);
+  const [analyticsNvrIds, setAnalyticsNvrIds] = useState([]);
+  const [analyticsCameraIds, setAnalyticsCameraIds] = useState([]);
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resetTarget, setResetTarget] = useState('date');
+  const [resetDraft, setResetDraft] = useState(() => {
+    const today = moment().tz(IST_ZONE).format('YYYY-MM-DD');
+    return { startDate: today, endDate: today, nvrIds: [], cameraIds: [] };
+  });
   const [dateFilter, setDateFilter] = useState(() => {
     const today = moment().tz(IST_ZONE).format('YYYY-MM-DD');
     return { startDate: today, endDate: today };
@@ -262,6 +304,17 @@ export default function LineCrossingLogs() {
   useEffect(() => {
     lineAudioMutedRef.current = lineAudioMuted;
   }, [lineAudioMuted]);
+
+  useEffect(() => {
+    const handleLineAudio = (event) => {
+      if (typeof event.detail?.muted === 'boolean') {
+        lineAudioMutedRef.current = event.detail.muted;
+        setLineAudioMuted(event.detail.muted);
+      }
+    };
+    window.addEventListener('line-crossing-audio-change', handleLineAudio);
+    return () => window.removeEventListener('line-crossing-audio-change', handleLineAudio);
+  }, []);
 
   const playLineCrossingSound = useCallback((direction) => {
     if (lineAudioMutedRef.current) return;
@@ -288,18 +341,6 @@ export default function LineCrossingLogs() {
       gain.connect(ctx.destination);
       oscillator.start(start);
       oscillator.stop(start + 0.18);
-    });
-  }, []);
-
-  const handleToggleLineAudio = useCallback(() => {
-    setLineAudioMuted((prev) => {
-      const next = !prev;
-      if (!next) {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        if (AudioContext && !audioContextRef.current) audioContextRef.current = new AudioContext();
-        audioContextRef.current?.resume?.().catch(() => {});
-      }
-      return next;
     });
   }, []);
 
@@ -342,6 +383,8 @@ export default function LineCrossingLogs() {
           limit: 500,
           startDate: dateFilter.startDate,
           endDate: dateFilter.endDate,
+          nvrIds: analyticsNvrIds,
+          channelIds: analyticsCameraIds,
         }),
         getChannels({ skip: 0, limit: 1000 }),
       ]);
@@ -353,7 +396,7 @@ export default function LineCrossingLogs() {
     } finally {
       setLoading(false);
     }
-  }, [canView, dateFilter.endDate, dateFilter.startDate]);
+  }, [analyticsCameraIds, analyticsNvrIds, canView, dateFilter.endDate, dateFilter.startDate]);
 
   useEffect(() => {
     fetchAll();
@@ -365,10 +408,12 @@ export default function LineCrossingLogs() {
     }
   }, [dateFilter.endDate, dateFilter.startDate]);
 
+  const streamsPerPage = streamGridSize * streamGridSize;
+
   useEffect(() => {
-    const maxPage = Math.max(0, Math.ceil(enabledCameras.length / STREAMS_PER_PAGE) - 1);
+    const maxPage = Math.max(0, Math.ceil(enabledCameras.length / streamsPerPage) - 1);
     setStreamPage((page) => Math.min(page, maxPage));
-  }, [enabledCameras.length]);
+  }, [enabledCameras.length, streamsPerPage]);
 
   useEffect(() => {
     if (!socket || !user?.adminId || !canView) return undefined;
@@ -389,13 +434,86 @@ export default function LineCrossingLogs() {
     return () => socket.off(eventName, handleDetection);
   }, [socket, user?.adminId, canView, fetchAll, playLineCrossingSound]);
 
-  const seriesPoints = useMemo(() => flattenSeries(records), [records]);
+  const nvrOptions = useMemo(() => {
+    const map = new Map();
+    enabledCameras.forEach((camera) => {
+      const id = String(nvrIdOf(camera) || '');
+      if (id) map.set(id, channelNvrName(camera));
+    });
+    records.forEach((record) => {
+      const id = recordNvrId(record);
+      if (id) map.set(id, recordNvrName(record));
+    });
+    return [...map.entries()].map(([id, label]) => ({ id, label }));
+  }, [enabledCameras, records]);
+
+  const cameraOptions = useMemo(() => {
+    const scoped = analyticsNvrIds.length
+      ? enabledCameras.filter((camera) => analyticsNvrIds.includes(String(nvrIdOf(camera) || '')))
+      : enabledCameras;
+    return scoped.map((camera) => ({ id: String(camera._id || camera.id || camera.channelId || ''), label: channelName(camera) })).filter((item) => item.id);
+  }, [analyticsNvrIds, enabledCameras]);
+
+  const resetCameraOptions = useMemo(() => {
+    const scoped = resetDraft.nvrIds.length
+      ? enabledCameras.filter((camera) => resetDraft.nvrIds.includes(String(nvrIdOf(camera) || '')))
+      : enabledCameras;
+    return scoped.map((camera) => ({ id: String(camera._id || camera.id || camera.channelId || ''), label: channelName(camera) })).filter((item) => item.id);
+  }, [enabledCameras, resetDraft.nvrIds]);
+
+  useEffect(() => {
+    setAnalyticsCameraIds((prev) => prev.filter((id) => cameraOptions.some((camera) => camera.id === id)));
+  }, [cameraOptions]);
+
+  useEffect(() => {
+    setResetDraft((prev) => ({
+      ...prev,
+      cameraIds: prev.cameraIds.filter((id) => resetCameraOptions.some((camera) => camera.id === id)),
+    }));
+  }, [resetCameraOptions]);
+
+  const filteredRecords = useMemo(() => records.filter((record) => {
+    if (analyticsNvrIds.length && !analyticsNvrIds.includes(recordNvrId(record))) return false;
+    if (analyticsCameraIds.length && !analyticsCameraIds.includes(recordCameraId(record))) return false;
+    return true;
+  }), [analyticsCameraIds, analyticsNvrIds, records]);
+
+  const filteredEnabledCameras = useMemo(() => enabledCameras.filter((camera) => {
+    const cameraId = String(camera._id || camera.id || camera.channelId || '');
+    if (analyticsNvrIds.length && !analyticsNvrIds.includes(String(nvrIdOf(camera) || ''))) return false;
+    if (analyticsCameraIds.length && !analyticsCameraIds.includes(cameraId)) return false;
+    return true;
+  }), [analyticsCameraIds, analyticsNvrIds, enabledCameras]);
+
+  const resetAnalytics = (mode) => {
+    if (mode === 'date') {
+      setDateFilter({ startDate: resetDraft.startDate, endDate: resetDraft.endDate });
+    } else {
+      setDateFilter({ startDate: resetDraft.startDate, endDate: resetDraft.endDate });
+      setAnalyticsNvrIds(resetDraft.nvrIds);
+      setAnalyticsCameraIds(resetDraft.cameraIds);
+    }
+    setResetModalOpen(false);
+  };
+
+  const openResetModal = () => {
+    setResetTarget(analyticsNvrIds.length || analyticsCameraIds.length ? 'camera' : 'date');
+    setResetDraft({
+      startDate: dateFilter.startDate,
+      endDate: dateFilter.endDate,
+      nvrIds: analyticsNvrIds,
+      cameraIds: analyticsCameraIds,
+    });
+    setResetModalOpen(true);
+  };
+
+  const seriesPoints = useMemo(() => flattenSeries(filteredRecords), [filteredRecords]);
   const stats = useMemo(() => {
-    const totalEntry = records.reduce((sum, item) => sum + recordEntry(item), 0);
-    const totalExit = records.reduce((sum, item) => sum + recordExit(item), 0);
-    const activeZones = new Set(records.map((item) => item.zone).filter(Boolean)).size;
+    const totalEntry = filteredRecords.reduce((sum, item) => sum + recordEntry(item), 0);
+    const totalExit = filteredRecords.reduce((sum, item) => sum + recordExit(item), 0);
+    const activeZones = new Set(filteredRecords.map((item) => item.zone).filter(Boolean)).size;
     return { totalEntry, totalExit, net: totalEntry - totalExit, activeZones };
-  }, [records]);
+  }, [filteredRecords]);
 
   const chartSeries = useMemo(() => ([
     { name: 'Entry', data: seriesPoints.map((point) => [new Date(point.timestamp).getTime(), point.entry]) },
@@ -403,13 +521,13 @@ export default function LineCrossingLogs() {
   ]), [seriesPoints]);
 
   const latestRecords = useMemo(
-    () => [...records].sort((a, b) => new Date(b.timeOfIncident || b.updatedAt) - new Date(a.timeOfIncident || a.updatedAt)).slice(0, 10),
-    [records],
+    () => [...filteredRecords].sort((a, b) => new Date(b.timeOfIncident || b.updatedAt) - new Date(a.timeOfIncident || a.updatedAt)).slice(0, 10),
+    [filteredRecords],
   );
 
   const cameraMetrics = useMemo(() => {
     const grouped = new Map();
-    records.forEach((record) => {
+    filteredRecords.forEach((record) => {
       const camera = recordCameraName(record);
       const current = grouped.get(camera) || { camera, entry: 0, exit: 0, total: 0 };
       current.entry += recordEntry(record);
@@ -418,7 +536,7 @@ export default function LineCrossingLogs() {
       grouped.set(camera, current);
     });
     return [...grouped.values()].sort((a, b) => b.total - a.total);
-  }, [records]);
+  }, [filteredRecords]);
 
   const hourlyTraffic = useMemo(() => {
     const grouped = new Map();
@@ -430,7 +548,7 @@ export default function LineCrossingLogs() {
       current.exit += Number(exit || 0);
       grouped.set(hour, current);
     };
-    records.forEach((record) => {
+    filteredRecords.forEach((record) => {
       if (record?.timeSeries?.length) {
         record.timeSeries.forEach((point) => addPoint(point.timestamp || recordTimestamp(record), point.entry, point.exit));
       } else {
@@ -438,7 +556,7 @@ export default function LineCrossingLogs() {
       }
     });
     return [...grouped.values()].sort((a, b) => a.hour.localeCompare(b.hour));
-  }, [records]);
+  }, [filteredRecords]);
 
   const heatmap = useMemo(() => {
     const hours = Array.from(new Set(hourlyTraffic.map((item) => item.hour))).sort();
@@ -450,7 +568,7 @@ export default function LineCrossingLogs() {
       const key = `${camera}::${hour}`;
       matrix.set(key, (matrix.get(key) || 0) + Number(entry || 0) + Number(exit || 0));
     };
-    records.forEach((record) => {
+    filteredRecords.forEach((record) => {
       const camera = recordCameraName(record);
       if (record?.timeSeries?.length) {
         record.timeSeries.forEach((point) => addPoint(camera, point.timestamp || recordTimestamp(record), point.entry, point.exit));
@@ -465,24 +583,30 @@ export default function LineCrossingLogs() {
         data: hours.map((hour) => ({ x: hour, y: matrix.get(`${camera}::${hour}`) || 0 })),
       })),
     };
-  }, [cameraMetrics, hourlyTraffic, records]);
+  }, [cameraMetrics, hourlyTraffic, filteredRecords]);
 
-  const streamPageCount = Math.max(1, Math.ceil(enabledCameras.length / STREAMS_PER_PAGE));
-  const visibleCameras = enabledCameras.slice(streamPage * STREAMS_PER_PAGE, (streamPage + 1) * STREAMS_PER_PAGE);
+  const streamPageCount = Math.max(1, Math.ceil(filteredEnabledCameras.length / streamsPerPage));
+  const visibleCameras = filteredEnabledCameras.slice(streamPage * streamsPerPage, (streamPage + 1) * streamsPerPage);
   const cameraCategories = cameraMetrics.map((item) => item.camera);
   const hourlyCategories = hourlyTraffic.map((item) => item.hour);
   const topCameras = cameraMetrics.slice(0, 5);
   const highestCamera = cameraMetrics[0] || null;
   const lowestCamera = cameraMetrics.length ? cameraMetrics[cameraMetrics.length - 1] : null;
+  const filteredModeActive = Boolean(analyticsNvrIds.length || analyticsCameraIds.length);
+  const displayedTotalLogs = filteredModeActive ? filteredRecords.length : totalCount;
   const pieLabels = stats.totalEntry || stats.totalExit ? ['Entry', 'Exit'] : ['No crossings'];
   const pieSeries = stats.totalEntry || stats.totalExit ? [stats.totalEntry, stats.totalExit] : [1];
 
   const fullscreenChannelId = fullscreenCamera?._id || fullscreenCamera?.id || fullscreenCamera?.channelId;
   const fullscreenSocketEvent = fullscreenChannelId ? socketEventsByChannel[String(fullscreenChannelId)] : null;
   const fullscreenApiRecord = fullscreenChannelId
-    ? records.find((record) => String(record.channelId || record.channelData?._id || record.cameraId) === String(fullscreenChannelId))
+    ? filteredRecords.find((record) => String(record.channelId || record.channelData?._id || record.cameraId) === String(fullscreenChannelId))
     : null;
   const fullscreenOverlay = fullscreenSocketEvent || fullscreenApiRecord;
+
+  useEffect(() => {
+    if (streamPage > streamPageCount - 1) setStreamPage(0);
+  }, [streamPage, streamPageCount]);
 
   if (permissionsLoading) return null;
   if (!canView) return <AccessDenied message="You don't have permission to view Line Crossing Logs." />;
@@ -497,6 +621,28 @@ export default function LineCrossingLogs() {
           </div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <MultiSelect
+            options={nvrOptions}
+            value={analyticsNvrIds}
+            onChange={setAnalyticsNvrIds}
+            placeholder="All NVRs"
+            searchPlaceholder="Search NVR..."
+            msg="No NVRs found"
+            className="w-[170px]"
+            maxHeight="max-h-[210px]"
+            tint="#0b3b8f"
+          />
+          <MultiSelect
+            options={cameraOptions}
+            value={analyticsCameraIds}
+            onChange={setAnalyticsCameraIds}
+            placeholder="All Cameras"
+            searchPlaceholder="Search camera..."
+            msg="No cameras found"
+            className="w-[190px]"
+            maxHeight="max-h-[210px]"
+            tint="#2563eb"
+          />
           <div style={{ width: 250 }}>
             <DateRangePicker
               startDate={dateFilter.startDate ? moment.tz(dateFilter.startDate, IST_ZONE).toDate() : null}
@@ -509,13 +655,10 @@ export default function LineCrossingLogs() {
           </div>
           <button
             type="button"
-            onClick={handleToggleLineAudio}
-            aria-label={lineAudioMuted ? 'Unmute line crossing detection audio' : 'Mute line crossing detection audio'}
-            title={lineAudioMuted ? 'Unmute line crossing detection audio' : 'Mute line crossing detection audio'}
-            style={{ height: 34, padding: '0 13px', borderRadius: 8, border: `1px solid ${lineAudioMuted ? '#ef4444' : '#22c55e'}`, background: lineAudioMuted ? '#ef4444' : '#22c55e', color: '#fff', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 800, cursor: 'pointer', boxShadow: lineAudioMuted ? '0 8px 18px rgba(239,68,68,.18)' : '0 8px 18px rgba(34,197,94,.18)' }}
+            onClick={openResetModal}
+            style={{ height: 34, padding: '0 13px', borderRadius: 8, border: '1px solid rgba(124,58,237,.35)', background: 'rgba(124,58,237,.1)', color: '#7c3aed', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
           >
-            {lineAudioMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-            {lineAudioMuted ? 'Muted' : 'Unmuted'}
+            Reset Analytics
           </button>
           <button
             type="button"
@@ -529,46 +672,68 @@ export default function LineCrossingLogs() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 12 }}>
-        {statCard('Total Logs', totalCount, 'Events returned for the selected date range', Activity)}
-        {statCard('Enabled Cameras', enabledCameras.length, 'Cameras configured for line crossing', Camera)}
-        {statCard('Entries', stats.totalEntry, 'People counted entering across all lines', ArrowUpRight)}
-        {statCard('Exits', stats.totalExit, 'People counted exiting across all lines', ArrowDownRight)}
-        {statCard('Highest Camera Count', highestCamera?.camera || '--', highestCamera ? `${highestCamera.entry} entry / ${highestCamera.exit} exit` : 'No camera activity in this range', Trophy)}
-        {statCard('Lowest Camera Count', lowestCamera?.camera || '--', lowestCamera ? `${lowestCamera.entry} entry / ${lowestCamera.exit} exit` : 'No camera activity in this range', Sigma)}
-      </div>
+      <section style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12, padding: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--tx)', marginBottom: 10 }}>People Movement</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+          {statCard('Entries', stats.totalEntry, 'People counted entering across all lines', ArrowUpRight, '#22c55e')}
+          {statCard('Exits', stats.totalExit, 'People counted exiting across all lines', ArrowDownRight, '#ef4444')}
+          {statCard('Total Present', stats.net, 'Entries minus exits for the selected period', Sigma, '#2563eb')}
+        </div>
+      </section>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(520px, 1.08fr) minmax(420px, .92fr)', gap: 14, alignItems: 'stretch' }}>
+      <section style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12, padding: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--tx)', marginBottom: 10 }}>Other Metrics</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
+          {statCard('Total Logs', displayedTotalLogs, 'Events returned for the selected date range', Activity, '#7c3aed')}
+          {statCard('Enabled Cameras', filteredEnabledCameras.length, 'Cameras configured for line crossing', Camera, '#06b6d4')}
+          {statCard('Highest Camera Count', highestCamera?.camera || '--', highestCamera ? `${highestCamera.entry} entry / ${highestCamera.exit} exit` : 'No camera activity in this range', Trophy, '#f59e0b')}
+          {statCard('Lowest Camera Count', lowestCamera?.camera || '--', lowestCamera ? `${lowestCamera.entry} entry / ${lowestCamera.exit} exit` : 'No camera activity in this range', Sigma, '#64748b')}
+        </div>
+      </section>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(620px, 1.18fr) minmax(360px, .82fr)', gap: 14, alignItems: 'stretch' }}>
         <section style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12, padding: 16, boxShadow: '0 14px 34px rgba(15,23,42,.06)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff5b5b', boxShadow: '0 0 10px rgba(255,91,91,.7)' }} />
             <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--tx)' }}>Live Camera</div>
             <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', letterSpacing: 1 }}>switch feeds ↓</span>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5 }}>
+              {GRID_OPTIONS.map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => { setStreamGridSize(size); setStreamPage(0); }}
+                  style={{ height: 26, minWidth: 36, borderRadius: 7, border: `1px solid ${streamGridSize === size ? 'rgba(37,99,235,.55)' : 'var(--bd)'}`, background: streamGridSize === size ? 'rgba(37,99,235,.12)' : 'var(--bg2)', color: streamGridSize === size ? '#2563eb' : 'var(--tx2)', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
+                >
+                  {size}x{size}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
               onClick={() => visibleCameras[0] && setFullscreenCamera(visibleCameras[0])}
               disabled={!visibleCameras[0]}
-              style={{ marginLeft: 'auto', border: 0, background: 'transparent', color: CHART_COLORS[2], fontSize: 12, fontWeight: 800, cursor: visibleCameras[0] ? 'pointer' : 'not-allowed', opacity: visibleCameras[0] ? 1 : 0.45 }}
+              style={{ border: 0, background: 'transparent', color: CHART_COLORS[2], fontSize: 12, fontWeight: 800, cursor: visibleCameras[0] ? 'pointer' : 'not-allowed', opacity: visibleCameras[0] ? 1 : 0.45 }}
             >
               Open full view →
             </button>
           </div>
 
-          {enabledCameras.length > 0 && (
+          {filteredEnabledCameras.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', paddingBottom: 12 }}>
-              {enabledCameras.map((camera, index) => (
+              {filteredEnabledCameras.map((camera, index) => (
                 <button
                   key={camera._id || camera.id || index}
                   type="button"
-                  onClick={() => setStreamPage(index)}
+                  onClick={() => setStreamPage(Math.floor(index / streamsPerPage))}
                   style={{
                     flex: '0 0 auto',
                     height: 30,
                     padding: '0 12px',
                     borderRadius: 8,
-                    border: `1px solid ${streamPage === index ? 'rgba(37,99,235,.55)' : 'var(--bd)'}`,
-                    background: streamPage === index ? 'linear-gradient(135deg,rgba(11,59,143,.12),rgba(0,184,212,.08))' : 'var(--bg2)',
-                    color: streamPage === index ? CHART_COLORS[0] : 'var(--tx2)',
+                    border: `1px solid ${streamPage === Math.floor(index / streamsPerPage) ? 'rgba(37,99,235,.55)' : 'var(--bd)'}`,
+                    background: streamPage === Math.floor(index / streamsPerPage) ? 'linear-gradient(135deg,rgba(11,59,143,.12),rgba(0,184,212,.08))' : 'var(--bg2)',
+                    color: streamPage === Math.floor(index / streamsPerPage) ? CHART_COLORS[0] : 'var(--tx2)',
                     display: 'flex',
                     alignItems: 'center',
                     gap: 7,
@@ -585,15 +750,19 @@ export default function LineCrossingLogs() {
             </div>
           )}
 
-          {visibleCameras[0] ? (
-            <div style={{ position: 'relative', height: 430, borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(11,59,143,.35)', background: '#071a3d' }}>
-              <CameraStream
-                channel={visibleCameras[0]}
-                camLabel={`LC-${streamPage + 1}`}
-                minH={430}
-                onMaximize={() => setFullscreenCamera(visibleCameras[0])}
-              />
-              {enabledCameras.length > 1 && (
+          {visibleCameras.length ? (
+            <div style={{ position: 'relative', height: 430, borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(11,59,143,.35)', background: '#071a3d', display: 'grid', gridTemplateColumns: `repeat(${streamGridSize}, minmax(0, 1fr))`, gap: streamGridSize === 1 ? 0 : 6, padding: streamGridSize === 1 ? 0 : 6 }}>
+              {visibleCameras.map((camera, index) => (
+                <div key={camera._id || camera.id || index} style={{ minWidth: 0, minHeight: 0, borderRadius: streamGridSize === 1 ? 0 : 8, overflow: 'hidden', background: '#071a3d' }}>
+                  <CameraStream
+                    channel={camera}
+                    camLabel={`LC-${streamPage * streamsPerPage + index + 1}`}
+                    minH={0}
+                    onMaximize={() => setFullscreenCamera(camera)}
+                  />
+                </div>
+              ))}
+              {filteredEnabledCameras.length > 1 && (
                 <>
                   <button
                     type="button"
@@ -629,14 +798,31 @@ export default function LineCrossingLogs() {
           )}
         </section>
 
+        <SystemControls />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(560px, 1.08fr) minmax(420px, .92fr)', gap: 14, alignItems: 'stretch' }}>
         <section style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12, padding: 14, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--tx)' }}>Cumulative Crossings Over Time</div>
               <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>Shows how entry and exit totals build up through the selected period</div>
             </div>
-            <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>
-              {lastRefresh ? `Updated ${moment(lastRefresh).format('HH:mm:ss')}` : 'Not refreshed'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>
+                {lastRefresh ? `Updated ${moment(lastRefresh).format('HH:mm:ss')}` : 'Not refreshed'}
+              </div>
+              <button
+                type="button"
+                onClick={() => setChartModal({
+                  title: 'Cumulative Crossings Over Time',
+                  sub: 'Shows how entry and exit totals build up through the selected period',
+                  children: seriesPoints.length ? <ReactApexChart options={buildChartOptions()} series={chartSeries} type="area" height={560} /> : <div style={{ height: 560, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 12 }}>No line crossing time-series data.</div>,
+                })}
+                style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg2)', color: GRAPH_CARD_ACCENT, display: 'grid', placeItems: 'center', cursor: 'pointer' }}
+              >
+                <Maximize2 size={14} />
+              </button>
             </div>
           </div>
           {seriesPoints.length ? (
@@ -647,6 +833,30 @@ export default function LineCrossingLogs() {
             </div>
           )}
         </section>
+
+        {chartShell('Line Crossing Heatmap', 'Darker blocks identify the busiest camera-hour combinations', BarChart3,
+          heatmap.series.length && heatmap.hours.length ? (
+            <ReactApexChart
+              options={buildHeatmapOptions(heatmap.hours)}
+              series={heatmap.series}
+              type="heatmap"
+              height={430}
+            />
+          ) : (
+            <div style={{ height: 430, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 12 }}>No heatmap data for the selected dates.</div>
+          ),
+          () => setChartModal({
+            title: 'Line Crossing Heatmap',
+            sub: 'Darker blocks identify the busiest camera-hour combinations',
+            children: heatmap.series.length && heatmap.hours.length ? (
+              <ReactApexChart
+                options={buildHeatmapOptions(heatmap.hours)}
+                series={heatmap.series}
+                type="heatmap"
+                height={560}
+              />
+            ) : <div style={{ height: 560, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 12 }}>No heatmap data for the selected dates.</div>,
+          }))}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14 }}>
@@ -663,7 +873,22 @@ export default function LineCrossingLogs() {
             />
           ) : (
             <div style={{ height: 280, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 12 }}>No camera-wise crossing data.</div>
-          ))}
+          ),
+          () => setChartModal({
+            title: 'Camera Wise Crossing Graph',
+            sub: 'Compare which cameras recorded the most entry and exit movement',
+            children: cameraMetrics.length ? (
+              <ReactApexChart
+                options={buildBarOptions(cameraCategories)}
+                series={[
+                  { name: 'Entry', data: cameraMetrics.map((item) => item.entry) },
+                  { name: 'Exit', data: cameraMetrics.map((item) => item.exit) },
+                ]}
+                type="bar"
+                height={560}
+              />
+            ) : <div style={{ height: 560, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 12 }}>No camera-wise crossing data.</div>,
+          }))}
 
         {chartShell('Hourly Traffic', 'Shows the busiest hours for line-crossing activity in the selected range', Activity,
           hourlyTraffic.length ? (
@@ -678,20 +903,23 @@ export default function LineCrossingLogs() {
             />
           ) : (
             <div style={{ height: 280, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 12 }}>No hourly traffic data.</div>
-          ))}
+          ),
+          () => setChartModal({
+            title: 'Hourly Traffic',
+            sub: 'Shows the busiest hours for line-crossing activity in the selected range',
+            children: hourlyTraffic.length ? (
+              <ReactApexChart
+                options={buildBarOptions(hourlyCategories, { stacked: true })}
+                series={[
+                  { name: 'Entry', data: hourlyTraffic.map((item) => item.entry) },
+                  { name: 'Exit', data: hourlyTraffic.map((item) => item.exit) },
+                ]}
+                type="bar"
+                height={560}
+              />
+            ) : <div style={{ height: 560, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 12 }}>No hourly traffic data.</div>,
+          }))}
       </div>
-
-      {chartShell('Line Crossing Heatmap', 'Darker blocks identify the busiest camera-hour combinations', BarChart3,
-        heatmap.series.length && heatmap.hours.length ? (
-          <ReactApexChart
-            options={buildHeatmapOptions(heatmap.hours)}
-            series={heatmap.series}
-            type="heatmap"
-            height={300}
-          />
-        ) : (
-          <div style={{ height: 300, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 12 }}>No heatmap data for the selected dates.</div>
-        ))}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(280px, .85fr)', gap: 14 }}>
         {chartShell('Top Cameras', 'Ranks cameras by total crossings so busy feeds stand out quickly', Trophy,
@@ -704,7 +932,19 @@ export default function LineCrossingLogs() {
             />
           ) : (
             <div style={{ height: 270, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 12 }}>No top camera data.</div>
-          ))}
+          ),
+          () => setChartModal({
+            title: 'Top Cameras',
+            sub: 'Ranks cameras by total crossings so busy feeds stand out quickly',
+            children: topCameras.length ? (
+              <ReactApexChart
+                options={buildBarOptions(topCameras.map((item) => item.camera), { horizontal: true })}
+                series={[{ name: 'Crossings', data: topCameras.map((item) => item.total) }]}
+                type="bar"
+                height={560}
+              />
+            ) : <div style={{ height: 560, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 12 }}>No top camera data.</div>,
+          }))}
 
         {chartShell('Entry / Exit Split', 'Shows the percentage balance between entry and exit crossings', PieChart,
           <ReactApexChart
@@ -712,7 +952,19 @@ export default function LineCrossingLogs() {
             series={pieSeries}
             type="donut"
             height={270}
-          />)}
+          />,
+          () => setChartModal({
+            title: 'Entry / Exit Split',
+            sub: 'Shows the percentage balance between entry and exit crossings',
+            children: (
+              <ReactApexChart
+                options={buildPieOptions(pieLabels)}
+                series={pieSeries}
+                type="donut"
+                height={560}
+              />
+            ),
+          }))}
       </div>
 
       <section style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12, overflow: 'hidden' }}>
@@ -845,7 +1097,7 @@ export default function LineCrossingLogs() {
                   </div>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 12 }}>
                 <div style={{ background: 'rgba(15,23,42,.55)', borderRadius: 8, padding: '8px 9px' }}>
                   <div style={{ fontSize: 9.5, color: 'rgba(226,232,240,.58)', fontWeight: 800, textTransform: 'uppercase' }}>Total Entry</div>
                   <div style={{ marginTop: 3, color: '#22c55e', fontSize: 16, fontWeight: 900 }}>{Number(fullscreenOverlay?.totalEntry || 0)}</div>
@@ -854,9 +1106,161 @@ export default function LineCrossingLogs() {
                   <div style={{ fontSize: 9.5, color: 'rgba(226,232,240,.58)', fontWeight: 800, textTransform: 'uppercase' }}>Total Exit</div>
                   <div style={{ marginTop: 3, color: '#ef4444', fontSize: 16, fontWeight: 900 }}>{Number(fullscreenOverlay?.totalExit || 0)}</div>
                 </div>
+                <div style={{ background: 'rgba(15,23,42,.55)', borderRadius: 8, padding: '8px 9px' }}>
+                  <div style={{ fontSize: 9.5, color: 'rgba(226,232,240,.58)', fontWeight: 800, textTransform: 'uppercase' }}>Total Present</div>
+                  <div style={{ marginTop: 3, color: '#60a5fa', fontSize: 16, fontWeight: 900 }}>{Number(fullscreenOverlay?.totalEntry || 0) - Number(fullscreenOverlay?.totalExit || 0)}</div>
+                </div>
               </div>
             </div>
           </div>
+        </div>,
+        document.body,
+      )}
+      {resetModalOpen && createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{ position: 'fixed', inset: 0, zIndex: 10015, background: 'rgba(15,23,42,.55)', backdropFilter: 'blur(6px)', display: 'grid', placeItems: 'center', padding: 24 }}
+          onClick={() => setResetModalOpen(false)}
+        >
+          <section
+            onClick={(event) => event.stopPropagation()}
+            style={{ width: 'min(520px, 94vw)', background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, padding: 16, boxShadow: '0 24px 70px rgba(0,0,0,.32)' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <span style={{ width: 30, height: 30, borderRadius: 9, display: 'grid', placeItems: 'center', background: 'rgba(124,58,237,.12)', color: '#7c3aed' }}>
+                <RefreshCw size={15} />
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--tx)' }}>Reset Analytics</div>
+                <div style={{ marginTop: 2, fontSize: 11, color: 'var(--tx3)' }}>Choose what you want to reset.</div>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setResetTarget('date')}
+                style={{ width: '100%', border: `1px solid ${resetTarget === 'date' ? 'rgba(124,58,237,.55)' : 'var(--bd)'}`, background: resetTarget === 'date' ? 'rgba(124,58,237,.1)' : 'var(--bg2)', color: 'var(--tx)', borderRadius: 10, padding: '12px 13px', textAlign: 'left', cursor: 'pointer' }}
+              >
+                <span style={{ display: 'block', fontSize: 13, fontWeight: 850 }}>Reset by date</span>
+                <span style={{ display: 'block', marginTop: 3, fontSize: 11, color: 'var(--tx3)' }}>Use selected date range only.</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setResetTarget('camera')}
+                style={{ width: '100%', border: `1px solid ${resetTarget === 'camera' ? 'rgba(124,58,237,.55)' : 'var(--bd)'}`, background: resetTarget === 'camera' ? 'rgba(124,58,237,.1)' : 'var(--bg2)', color: 'var(--tx)', borderRadius: 10, padding: '12px 13px', textAlign: 'left', cursor: 'pointer' }}
+              >
+                <span style={{ display: 'block', fontSize: 13, fontWeight: 850 }}>Reset by NVR & camera</span>
+                <span style={{ display: 'block', marginTop: 3, fontSize: 11, color: 'var(--tx3)' }}>Use date, NVR and camera.</span>
+              </button>
+            </div>
+            <div style={{ marginTop: 14, display: 'grid', gap: 12 }}>
+              <div>
+                <div style={{ marginBottom: 6, fontSize: 11, fontWeight: 800, color: 'var(--tx2)' }}>Date range</div>
+                <DateRangePicker
+                  startDate={resetDraft.startDate ? moment.tz(resetDraft.startDate, IST_ZONE).toDate() : null}
+                  endDate={resetDraft.endDate ? moment.tz(resetDraft.endDate, IST_ZONE).toDate() : null}
+                  onRangeChange={({ start, end }) => setResetDraft((prev) => ({
+                    ...prev,
+                    startDate: start ? moment(start).tz(IST_ZONE).format('YYYY-MM-DD') : '',
+                    endDate: end ? moment(end).tz(IST_ZONE).format('YYYY-MM-DD') : '',
+                  }))}
+                />
+              </div>
+              {resetTarget === 'camera' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <div style={{ marginBottom: 6, fontSize: 11, fontWeight: 800, color: 'var(--tx2)' }}>NVR</div>
+                    <MultiSelect
+                      options={nvrOptions}
+                      value={resetDraft.nvrIds}
+                      onChange={(next) => setResetDraft((prev) => ({ ...prev, nvrIds: next }))}
+                      placeholder="Select NVR"
+                      searchPlaceholder="Search NVR..."
+                      msg="No NVRs found"
+                      maxHeight="max-h-[190px]"
+                      tint="#0b3b8f"
+                    />
+                  </div>
+                  <div>
+                    <div style={{ marginBottom: 6, fontSize: 11, fontWeight: 800, color: 'var(--tx2)' }}>Camera</div>
+                    <MultiSelect
+                      options={resetCameraOptions}
+                      value={resetDraft.cameraIds}
+                      onChange={(next) => setResetDraft((prev) => ({ ...prev, cameraIds: next }))}
+                      placeholder="Select Camera"
+                      searchPlaceholder="Search camera..."
+                      msg="No cameras found"
+                      maxHeight="max-h-[190px]"
+                      tint="#2563eb"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setResetModalOpen(false)}
+                style={{ height: 34, padding: '0 14px', borderRadius: 9, border: '1px solid var(--bd)', background: 'transparent', color: 'var(--tx2)', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => resetAnalytics(resetTarget)}
+                style={{ height: 34, padding: '0 15px', borderRadius: 9, border: '1px solid rgba(124,58,237,.35)', background: 'linear-gradient(135deg,#5b6df6,#b935f2)', color: '#fff', fontSize: 12, fontWeight: 900, cursor: 'pointer' }}
+              >
+                Apply
+              </button>
+            </div>
+          </section>
+        </div>,
+        document.body,
+      )}
+      {chartModal && createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{ position: 'fixed', inset: 0, zIndex: 10020, background: 'rgba(15,23,42,.62)', backdropFilter: 'blur(8px)', display: 'grid', placeItems: 'center', padding: 24 }}
+          onClick={() => setChartModal(null)}
+        >
+          <section
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: 'min(1120px, 96vw)',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              background: '#fff',
+              border: '1px solid #e2e8f0',
+              borderRadius: 14,
+              padding: 18,
+              boxShadow: '0 24px 70px rgba(0,0,0,.35)',
+              color: '#0f172a',
+              '--bg1': '#fff',
+              '--bg2': '#f8fafc',
+              '--bd': '#e2e8f0',
+              '--tx': '#0f172a',
+              '--tx2': '#475569',
+              '--tx3': '#94a3b8',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--tx)' }}>{chartModal.title}</div>
+                <div style={{ marginTop: 3, fontSize: 12, color: 'var(--tx3)' }}>{chartModal.sub}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setChartModal(null)}
+                aria-label="Close chart fullscreen"
+                style={{ width: 34, height: 34, borderRadius: 9, border: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx2)', display: 'grid', placeItems: 'center', cursor: 'pointer' }}
+              >
+                <X size={17} />
+              </button>
+            </div>
+            {chartModal.children}
+          </section>
         </div>,
         document.body,
       )}

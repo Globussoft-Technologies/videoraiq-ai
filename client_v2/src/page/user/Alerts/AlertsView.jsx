@@ -19,6 +19,18 @@ const incidentIdOf = (incident) => String(
   incident?._id || incident?.id || incident?.incidentId || ''
 );
 
+function exportClipFilename(incident) {
+  const name = incident?.incidentName || detectionLabel(incident?.incidentType) || 'alert';
+  const safeName = String(name)
+    .trim()
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+  return `${safeName || 'alert'}.jpg`;
+}
+
 const TABS = [
   { key: 'all', label: 'All' },
   { key: 'high', label: 'High' },
@@ -527,13 +539,19 @@ export default function AlertsView() {
   const activeConfidence = active ? formatConfidence(active) : '_';
   const canReportActive = !!activeId && !activeResolved && !activeReported;
   const activeImageUrl = active?.Image ? mediaUrl(active.Image) : '';
+  const activeSeverityMeta = active ? alertSeverityMeta(active.severity) : null;
+  const activeTypeLabel = active ? shortIncidentName(active) : '';
+  const activeDescription = incidentDescription(active) || active?.incidentName || detectionLabel(active?.incidentType);
+  const activeCameraName = cameraNameOf(active) || active?.channelData?.name || '_';
+  const activeLocationName = locationNameOf(active);
+  const activeCameraLine = [activeCameraName, activeLocationName].filter(Boolean).join(' - ') || '_';
 
   async function exportActiveClipImage() {
     if (!activeImageUrl) {
       toast.error('No alert snapshot available to export.');
       return;
     }
-    const filename = `alert-${activeId || Date.now()}.jpg`;
+    const filename = exportClipFilename(active);
     try {
       const response = await fetch(activeImageUrl);
       if (!response.ok) throw new Error('Download failed');
@@ -635,7 +653,7 @@ export default function AlertsView() {
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16, minWidth: 0 }} className="vq-cc-grid vq-alerts-grid">
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 16, minWidth: 0 }} className="vq-cc-grid vq-alerts-grid">
         {/* Table */}
         <Panel style={{ overflow: 'hidden', minWidth: 0 }}>
           <div className="vq-alerts-row-head" style={{ display: 'grid', gridTemplateColumns: '64px minmax(0,1fr) 110px 100px', gap: 8, padding: '11px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>
@@ -728,53 +746,57 @@ export default function AlertsView() {
         </Panel>
 
         {/* Detail */}
-        <Panel className="vq-alerts-detail" style={{ overflow: 'hidden', alignSelf: 'flex-start', position: 'sticky', top: 0, minWidth: 0 }}>
+        <Panel className="vq-alerts-detail" style={{ overflow: 'hidden', alignSelf: 'flex-start', position: 'sticky', top: 0, minWidth: 0, padding: 10 }}>
           {!active ? (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--tx3)', fontSize: 12 }}>Select an alert to inspect</div>
           ) : (
             <>
-              <div style={{ position: 'relative', aspectRatio: '16/9', background: '#0a0e15' }}>
+              <div style={{ position: 'relative', aspectRatio: '16/9', background: '#0a0e15', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--bd)' }}>
                 {active.Image ? (
                   <img src={mediaUrl(active.Image)} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--tx3)', fontSize: 11.5 }}>No snapshot</div>
                 )}
+                <span style={{ position: 'absolute', top: 10, left: 10, fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 800, color: '#fff', background: 'rgba(7,10,18,.72)', border: '1px solid rgba(255,255,255,.16)', borderRadius: 5, padding: '4px 7px', letterSpacing: '.04em' }}>
+                  {activeCameraName}
+                </span>
+                <span style={{ position: 'absolute', top: 10, right: 10, fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 800, color: activeSeverityMeta.color, background: 'rgba(7,10,18,.72)', border: `1px solid ${activeSeverityMeta.border}`, borderRadius: 5, padding: '4px 8px', letterSpacing: '.06em' }}>
+                  {activeSeverityMeta.label === 'CRIT' ? 'CRITICAL' : activeSeverityMeta.label}
+                </span>
               </div>
-              <div style={{ padding: 15, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
-                <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <Badge color={severity(active.severity).color} solid>{detectionLabel(active.incidentType)}</Badge>
-                  <Badge color={severity(active.severity).color}>{alertSeverityMeta(active.severity).label}</Badge>
-                  <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>{shortDateTime(active.timeOfIncident)}</span>
+              <div style={{ padding: '10px 0 0', display: 'flex', flexDirection: 'column', gap: 9, minWidth: 0 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
+                  <Badge color="#ff6b00" style={{ fontSize: 10, padding: '4px 8px', borderRadius: 5 }}>{activeTypeLabel}</Badge>
+                  <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>{shortDateTime(active.timeOfIncident)}</span>
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, wordBreak: 'break-word' }}>{active.incidentName || detectionLabel(active.incidentType)}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--tx3)', wordBreak: 'break-word' }}>{active.channelData?.name || '_'}</div>
-                {active.description && <div style={{ fontSize: 12, color: 'var(--tx2)', lineHeight: 1.4, wordBreak: 'break-word' }}>{active.description}</div>}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 2 }}>
-                  <div style={{ minWidth: 0, padding: '7px 9px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
-                    <div style={{ fontSize: 9.5, color: 'var(--tx3)', marginBottom: 2 }}>Confidence</div>
-                    <div style={{ fontSize: 13, lineHeight: 1.2, fontWeight: 700, color: confidenceOf(active) == null ? 'var(--tx3)' : '#ff8a00', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.35, color: 'var(--tx)', wordBreak: 'break-word' }}>{activeDescription}</div>
+                <div style={{ fontSize: 12, color: 'var(--tx2)', wordBreak: 'break-word' }}>{activeCameraLine}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 1 }}>
+                  <div style={{ minWidth: 0, padding: '9px 11px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
+                    <div style={{ fontSize: 10, color: 'var(--tx3)', marginBottom: 4 }}>Confidence</div>
+                    <div style={{ fontSize: 16, lineHeight: 1.1, fontWeight: 800, color: confidenceOf(active) == null ? 'var(--tx3)' : '#ff6b00', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       { activeConfidence}
                     </div>
                   </div>
-                  <div style={{ minWidth: 0, padding: '7px 9px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
-                    <div style={{ fontSize: 9.5, color: 'var(--tx3)', marginBottom: 2 }}>Status</div>
-                    <div style={{ fontSize: 13, lineHeight: 1.2, fontWeight: 700, color: activeStatus.color, minWidth: 0 }}>
+                  <div style={{ minWidth: 0, padding: '9px 11px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
+                    <div style={{ fontSize: 10, color: 'var(--tx3)', marginBottom: 4 }}>Status</div>
+                    <div style={{ fontSize: 14, lineHeight: 1.15, fontWeight: 800, color: activeStatus.color, minWidth: 0 }}>
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeStatus.label}</span>
                     </div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-                  <div onClick={busy || activeResolved ? undefined : resolveActive} aria-disabled={busy || activeResolved} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: activeResolved ? 'var(--tx3)' : '#fff', background: activeResolved ? 'var(--bg2)' : 'linear-gradient(135deg,var(--blue),var(--violet))', border: activeResolved ? '1px solid var(--bd)' : '1px solid transparent', borderRadius: 8, padding: 9, cursor: busy ? 'wait' : activeResolved ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 2 }}>
+                  <div onClick={busy || activeResolved ? undefined : resolveActive} aria-disabled={busy || activeResolved} style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, color: activeResolved ? 'var(--tx3)' : '#fff', background: activeResolved ? 'var(--bg2)' : 'linear-gradient(135deg,var(--blue),var(--violet))', border: activeResolved ? '1px solid var(--bd)' : '1px solid transparent', borderRadius: 8, padding: '10px 10px', cursor: busy ? 'wait' : activeResolved ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}>
                     {busy ? '…' : activeResolved ? 'Resolved' : 'Resolve'}
                   </div>
-                  <div onClick={canReportActive ? () => setReportOpen(true) : undefined} aria-disabled={!canReportActive} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: canReportActive ? 'var(--crit)' : 'var(--tx3)', background: canReportActive ? 'transparent' : 'var(--bg2)', border: canReportActive ? '1px solid rgba(255,77,77,.4)' : '1px solid var(--bd)', borderRadius: 8, padding: 9, cursor: canReportActive ? 'pointer' : 'not-allowed' }}>
+                  <div onClick={canReportActive ? () => setReportOpen(true) : undefined} aria-disabled={!canReportActive} style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, color: canReportActive ? 'var(--crit)' : 'var(--tx3)', background: canReportActive ? 'transparent' : 'var(--bg2)', border: canReportActive ? '1px solid rgba(255,77,77,.45)' : '1px solid var(--bd)', borderRadius: 8, padding: '10px 10px', cursor: canReportActive ? 'pointer' : 'not-allowed' }}>
                     {activeReported ? 'Reported' : 'Report'}
                   </div>
-                  <div onClick={exportActiveClipImage} aria-disabled={!activeImageUrl} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: activeImageUrl ? 'var(--blue)' : 'var(--tx3)', background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 8, padding: 9, cursor: activeImageUrl ? 'pointer' : 'not-allowed' }}>
-                    Export Clip
-                  </div>
                 </div>
-                {active.videoLink && (
+                <div onClick={activeImageUrl ? exportActiveClipImage : undefined} aria-disabled={!activeImageUrl} style={{ textAlign: 'center', fontSize: 12, fontWeight: 600, color: activeImageUrl ? 'var(--tx2)' : 'var(--tx3)', background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 8, padding: '8px 12px', cursor: activeImageUrl ? 'pointer' : 'not-allowed' }}>
+                  Export clip{active.videoLink ? ' - view full timeline' : ''}
+                </div>
+                {false && active.videoLink && (
                   <a href={active.videoLink} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: 'var(--blue)', textAlign: 'center', textDecoration: 'none' }}>
                     Export clip Â· view full timeline â†’
                   </a>

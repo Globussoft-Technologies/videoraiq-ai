@@ -674,7 +674,7 @@ export default function DetectionZoneMarking({
             {url && videoState === 'loading' && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'rgba(0,0,0,.75)', zIndex: 2, color: '#2563EB', fontSize: 13 }}>
                 <Wifi size={34} className="vq-blink" />
-                <span>Bufferingâ€¦</span>
+                <span>Buffering</span>
               </div>
             )}
 

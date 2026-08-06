@@ -47,8 +47,13 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
   const siteRef = useRef(null);
   const notifRef = useRef(null);
   const moreRef = useRef(null);
+  const audioRef = useRef(null);
   const [moreOpen, setMoreOpen] = useState(false);
-  const { isMuted, toggleMute } = useAttendanceSocket() || {};
+  const [audioOpen, setAudioOpen] = useState(false);
+  const [lineCrossingMuted, setLineCrossingMuted] = useState(() => {
+    try { return localStorage.getItem('lineCrossingAudioMuted') !== 'false'; } catch { return true; }
+  });
+  const { isMuted, audioEnabled, setAudioEnabled } = useAttendanceSocket() || {};
   const unreadNum = unreadCount ?? notifications.length;
 
   // The header drops widgets progressively as IT gets narrow — measured with a
@@ -79,6 +84,7 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
   const closeSearch = useCallback(() => setSearchOpen(false), []);
   const closeSite = useCallback(() => setSiteOpen(false), []);
   const closeNotif = useCallback(() => setNotifOpen(false), []);
+  const closeAudio = useCallback(() => setAudioOpen(false), []);
   // Opening the panel is the "seen" signal — clears the unread badge, same as
   // any standard notification tray (Slack, GitHub, etc).
   const openNotif = useCallback(() => {
@@ -93,6 +99,21 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
   useOutsideClick(siteRef, siteOpen, closeSite);
   useOutsideClick(notifRef, notifOpen, closeNotif);
   useOutsideClick(moreRef, moreOpen, closeMore);
+  useOutsideClick(audioRef, audioOpen, closeAudio);
+
+  useEffect(() => {
+    const handleLineAudio = (event) => {
+      if (typeof event.detail?.muted === 'boolean') setLineCrossingMuted(event.detail.muted);
+    };
+    window.addEventListener('line-crossing-audio-change', handleLineAudio);
+    return () => window.removeEventListener('line-crossing-audio-change', handleLineAudio);
+  }, []);
+
+  const setLineCrossingAudioMuted = useCallback((muted) => {
+    setLineCrossingMuted(muted);
+    try { localStorage.setItem('lineCrossingAudioMuted', String(muted)); } catch {}
+    window.dispatchEvent(new CustomEvent('line-crossing-audio-change', { detail: { muted } }));
+  }, []);
 
   // Lazily load the camera list the first time the search is focused.
   const loadCameras = () => {
@@ -400,21 +421,60 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
         </div>
       )}
 
-      {/* Audio alarm mute toggle */}
-      {toggleMute && (
-        <button
-          type="button"
-          onClick={toggleMute}
-          aria-label={isMuted ? 'Unmute detection audio' : 'Mute detection audio'}
-          title={isMuted ? 'Unmute detection audio' : 'Mute detection audio'}
-          style={iconBtn}
-        >
-          {isMuted ? (
-            <VolumeX size={17} strokeWidth={1.7} style={{ color: 'var(--tx2)' }} />
-          ) : (
-            <Volume2 size={17} strokeWidth={1.7} style={{ color: 'var(--tx2)' }} />
+      {/* Audio controls */}
+      {setAudioEnabled && (
+        <div ref={audioRef} style={{ position: 'relative', flex: '0 0 auto' }}>
+          <button
+            type="button"
+            onClick={() => setAudioOpen((o) => !o)}
+            aria-label="Audio controls"
+            title="Audio controls"
+            style={iconBtn}
+          >
+            {isMuted && lineCrossingMuted ? (
+              <VolumeX size={17} strokeWidth={1.7} style={{ color: 'var(--tx2)' }} />
+            ) : (
+              <Volume2 size={17} strokeWidth={1.7} style={{ color: 'var(--tx2)' }} />
+            )}
+          </button>
+          {audioOpen && (
+            <div
+              className="vq-fadeup"
+              style={{ position: 'absolute', top: 44, right: 0, width: 250, background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, boxShadow: '0 18px 50px rgba(0,0,0,.5)', zIndex: 70, padding: 8 }}
+            >
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.08em', color: 'var(--tx3)', padding: '5px 7px 8px' }}>AUDIO CONTROLS</div>
+              {[
+                {
+                  label: 'Live Attendance',
+                  muted: !!isMuted,
+                  onClick: () => setAudioEnabled?.(!audioEnabled, { successMessage: `Live attendance audio ${audioEnabled ? 'muted' : 'unmuted'}` }),
+                },
+                {
+                  label: 'Line Crossing',
+                  muted: lineCrossingMuted,
+                  onClick: () => setLineCrossingAudioMuted(!lineCrossingMuted),
+                },
+              ].map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={item.onClick}
+                  style={{ width: '100%', border: 0, background: 'transparent', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 9, cursor: 'pointer', color: 'var(--tx)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg2)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <span style={{ width: 28, height: 28, borderRadius: 8, display: 'grid', placeItems: 'center', background: item.muted ? 'rgba(239,68,68,.12)' : 'rgba(34,197,94,.12)', color: item.muted ? '#ef4444' : '#22c55e' }}>
+                    {item.muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                  </span>
+                  <span style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700 }}>{item.muted ? 'Unmute' : 'Mute'} {item.label}</span>
+                    <span style={{ display: 'block', marginTop: 1, fontSize: 10.5, color: 'var(--tx3)' }}>{item.muted ? 'Currently muted' : 'Currently playing'}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
           )}
-        </button>
+        </div>
       )}
 
       {/* Overflow menu — holds whatever the header drops on narrow widths

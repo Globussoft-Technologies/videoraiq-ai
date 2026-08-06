@@ -256,7 +256,7 @@ const DateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeChange }
       {open &&
         createPortal(
           isMobile ? (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50">
+            <div className="fixed inset-0 z-[10030] flex items-center justify-center p-4 bg-black/50">
               <div
                 ref={panelRef}
                 className="w-[320px] max-w-full max-h-[90vh] overflow-y-auto rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-xl p-3"
@@ -268,7 +268,7 @@ const DateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeChange }
             <div
               ref={panelRef}
               style={pos || { position: 'fixed', top: -9999, left: -9999 }}
-              className="z-[200] w-[310px] max-w-[calc(100vw-1.5rem)] rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-xl p-3"
+              className="z-[10030] w-[310px] max-w-[calc(100vw-1.5rem)] rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-xl p-3"
             >
               {calendarBody}
             </div>
