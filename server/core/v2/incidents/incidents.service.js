@@ -2972,6 +2972,12 @@ console.log(result,'result');
       );
       const {
         type,
+        startDate,
+        endDate,
+        nvrId,
+        nvrIds,
+        channelId,
+        channelIds,
         minEntry,
         maxEntry,
         minExit,
@@ -3012,6 +3018,26 @@ console.log(result,'result');
         userId: data.user_id.toString(),
         incidentType: "lineCrossing",
       };
+      if (!deleteAll && startDate && endDate) {
+        match.timeOfIncident = {
+          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+        };
+      }
+      const toArray = (v) =>
+        v ? String(v).split(",").map((x) => x.trim()).filter(Boolean) : [];
+      const nvrFilter = nvrId ? [nvrId] : toArray(nvrIds);
+      if (!deleteAll && nvrFilter.length) {
+        match.nvrId = {
+          $in: nvrFilter.map((id) => new mongoose.Types.ObjectId(id)),
+        };
+      }
+      const channelFilter = channelId ? [channelId] : toArray(channelIds);
+      if (!deleteAll && channelFilter.length) {
+        match.channelId = {
+          $in: channelFilter.map((id) => new mongoose.Types.ObjectId(id)),
+        };
+      }
       if (!deleteAll) {
         Object.assign(match, extraMatch);
       }

@@ -611,6 +611,12 @@ class IncidentsController {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Delete Line Crossing logs using the same filters as the logs endpoint. Set all=true to delete all line crossing logs for the authenticated admin.'
     #swagger.parameters['all'] = { in: 'query', type: 'boolean', description: 'When true, delete all line crossing logs for the authenticated admin' }
+    #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['endDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['nvrId'] = { in: 'query', type: 'string' }
+    #swagger.parameters['nvrIds'] = { in: 'query', type: 'string' }
+    #swagger.parameters['channelId'] = { in: 'query', type: 'string' }
+    #swagger.parameters['channelIds'] = { in: 'query', type: 'string' }
     #swagger.parameters['type'] = { in: 'query', type: 'string', description: 'Filter by line-crossing direction bucket: entry, exit, or all' }
     #swagger.parameters['minEntry'] = { in: 'query', type: 'integer' }
     #swagger.parameters['maxEntry'] = { in: 'query', type: 'integer' }
