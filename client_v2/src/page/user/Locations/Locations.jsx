@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, memo } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { Search, CirclePlus, Trash, ArrowUp, ArrowDown } from 'lucide-react';
 import { FiEdit3 } from "react-icons/fi";
 import { toast } from 'sonner';
@@ -27,7 +28,7 @@ const Locations = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const { permissions, loading: permissionsLoading } = usePermissions();
-  console.log(permissions,"permissions")
+  const { refreshSites } = useOutletContext() || {};
   const canView = permissions?.locations?.view;
   const canEdit = permissions?.locations?.edit;
   const canDelete = permissions?.locations?.delete;
@@ -68,6 +69,11 @@ const Locations = () => {
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
+  const handleLocationSaved = useCallback(() => {
+    loadLocations();
+    refreshSites?.();
+  }, [loadLocations, refreshSites]);
+
   const handlePageChange = (page) => {
     setCurrentPage(page);
   };
@@ -77,7 +83,7 @@ const Locations = () => {
       const response = await deleteLocation(deleteTarget._id);
       if (response?.data?.statusCode === 200) {
         toast.success(response?.data?.body?.message || 'Location deleted successfully');
-        loadLocations();
+        handleLocationSaved();
       }
       setShowDeleteModal(false);
       setDeleteTarget(null);
@@ -116,7 +122,7 @@ const Locations = () => {
             <LocationForm
               mode="edit"
               initialValues={row.original}
-              onSave={loadLocations}
+              onSave={handleLocationSaved}
               trigger={
                 <button className="text-[var(--blue)] hover:opacity-80 cursor-pointer p-1 rounded hover:bg-[var(--bg2)] transition-colors">
                   <FiEdit3 strokeWidth={1.5} className="w-4 h-4 md:w-4 md:h-4 2xl:w-5 2xl:h-5" />
@@ -138,7 +144,7 @@ const Locations = () => {
         </div>
       ),
     },
-  ], [canEdit, canDelete, loadLocations]);
+  ], [canEdit, canDelete, handleLocationSaved]);
 
   if (permissionsLoading) return <PageLoader />;
   if (!canView) return <AccessDenied />;
@@ -161,7 +167,7 @@ const Locations = () => {
             {canCreate && (
               <LocationForm
                 mode="create"
-                onSave={loadLocations}
+                onSave={handleLocationSaved}
                 trigger={
                   <button
                     className="flex items-center gap-2 px-4 py-2 hover:opacity-95 active:scale-95 text-white rounded-lg text-sm font-medium transition-all cursor-pointer"

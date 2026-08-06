@@ -71,7 +71,7 @@ function Shell() {
   useEffect(() => setNavOpen(false), [location.pathname]);
 
   // Sites for the switcher (locations master data).
-  const { data: locations } = useApi(() => getLocations({ limit: 100 }), []);
+  const { data: locations, refetch: refreshSites } = useApi(() => getLocations(0, 100), []);
   const sites = Array.isArray(locations) ? locations : [];
 
   // Notifications + alerts badge from the recent alert feed.
@@ -146,9 +146,10 @@ function Shell() {
       siteFilter,
       location: siteRaw?.locationName || siteRaw?.name || (siteFilter !== 'All Sites' ? siteFilter : ''),
       sites,
+      refreshSites,
       setCamHealth,
     }),
-    [siteFilter, siteRaw, sites]
+    [siteFilter, siteRaw, sites, refreshSites]
   );
 
   return (
@@ -211,7 +212,7 @@ function Shell() {
           </div>
         </div>
         {/* Hidden on the assistant's own page — nothing to launch from there. */}
-        {viewKey !== 'assistant' && <AssistantLauncher />}
+        {/* {viewKey !== 'assistant' && <AssistantLauncher />} */}
       </main>
     </div>
   );

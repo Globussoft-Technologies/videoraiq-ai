@@ -147,6 +147,7 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
   // since neither token carries a real "Admin"/role-name string today.
   const roleTitle = user?.roleId?.roleName || user?.roleIds?.roleName || user?.role || user?.roleName
     || (user?.roleId ? 'User' : 'Security Admin');
+  const isAdmin = !user?.memberId;
   const initials =
     name
       .split(' ')
@@ -514,13 +515,20 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
                     </div>
                   </div>
                 </div>
-                <div
+                {!isAdmin && <div
                   onClick={() => { setAccountOpen(false); navigate('/profile'); }}
                   style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: 9, borderRadius: 9, cursor: 'pointer' }}
                 >
                   <span style={{ fontSize: 12.5, fontWeight: 600 }}>My Profile</span>
                   <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>View </span>
-                </div>
+                </div>}
+                {isAdmin && <div
+                  onClick={() => { setAccountOpen(false); navigate('/admin-profile'); }}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: 9, borderRadius: 9, cursor: 'pointer' }}
+                >
+                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>Detection Profile</span>
+                  <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>View detection details</span>
+                </div>}
                 <div
                   onClick={() => navigate('/logout')}
                   style={{

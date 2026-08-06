@@ -21,6 +21,7 @@ import Locations from './page/user/Locations/Locations';
 import RolesPermission from './page/user/RolesPermission/RolesPermission';
 import AddProfile from './pages/RegisterUser/AddProfile';
 import MyProfile from './pages/MyProfile/MyProfile';
+import AdminProfile from './pages/MyProfile/AdminProfile';
 import AttendanceLogs from './pages/AttendanceLogs/AttendanceLogs';
 import AccessLogs from './pages/AccessLogs/AccessLogs';
 import TaggedUsers from './pages/TaggedUsers/TaggedUsers';
@@ -76,6 +77,7 @@ export const v2Routes = (
     <Route path="departments" element={guard('departments', undefined, <Departments />)} />
     <Route path="register-users" element={guard('Users', undefined, <AddProfile />)} />
     <Route path="profile" element={<MyProfile />} />
+    <Route path="admin-profile" element={<AdminProfile />} />
     {/* Logs & Records (nested under /logs/*) */}
     <Route path="logs/attendance" element={guard('logs', 'attendanceLogs', <AttendanceLogs />)} />
     <Route path="logs/access" element={guard('logs', 'accessLogs', <AccessLogs />)} />

@@ -1,5 +1,4 @@
 import { User, Mail, AtSign, Code2, ShieldCheck, Calendar, MapPin, Activity, UserCog } from 'lucide-react';
-
 function Field({ icon: Icon, label, value, tint = 'var(--tx3)', valueColor, mono }) {
   return (
     <div className="flex min-w-0 items-start gap-2.5">
@@ -13,13 +12,12 @@ function Field({ icon: Icon, label, value, tint = 'var(--tx3)', valueColor, mono
           style={{ color: valueColor || 'var(--tx)', fontVariantNumeric: 'tabular-nums' }}
           title={typeof value === 'string' ? value : undefined}
         >
-          {value || '—'}
+          {value || 'Ã¢â‚¬â€'}
         </div>
       </div>
     </div>
   );
 }
-
 export default function AccountDetails({
   fullName,
   email,
@@ -34,9 +32,9 @@ export default function AccountDetails({
   memberSince,
   adminId,
   showTenantFields = true,
+  showLocation = true,
 }) {
   const isActive = String(status || '').toLowerCase() === 'active';
-
   return (
     <div className="rounded-2xl p-5" style={{ border: '1px solid var(--bd)', background: 'var(--bg1)' }}>
       <div className="mb-1 flex items-center gap-2.5">
@@ -50,7 +48,6 @@ export default function AccountDetails({
           Account Overview
         </h2>
       </div>
-
       <div
         className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3"
         style={{ marginTop: 10 }}
@@ -75,7 +72,7 @@ export default function AccountDetails({
             {userName && <Field icon={AtSign} label="User Name" value={userName} tint="var(--magenta)" />}
             <Field icon={Code2} label="Role" value={role} tint="var(--cyan)" />
             <Field icon={ShieldCheck} label="Permission Level" value={accessLevel} tint="var(--warn)" />
-            <Field icon={MapPin} label="Location" value={location} tint="var(--blue)" />
+            {showLocation && <Field icon={MapPin} label="Location" value={location} tint="var(--blue)" />}
             <Field
               icon={Activity}
               label="Status"
@@ -85,7 +82,7 @@ export default function AccountDetails({
             />
             <Field icon={Calendar} label="Access Since" value={memberSince} tint="var(--violet)" />
             {designation && <Field icon={UserCog} label="Designation" value={designation} tint="var(--magenta)" />}
-            {adminId && <Field icon={User} label="Admin ID" value={adminId} mono />}
+
           </>
         )}
       </div>

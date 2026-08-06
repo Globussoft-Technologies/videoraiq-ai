@@ -167,6 +167,7 @@ export const VIEW_META = {
   recipients: { title: 'Alert Recipients', sub: 'Who gets notified for each detection type' },
   settings: { title: 'Settings', sub: 'Platform, alerts, privacy & integrations' },
   profile: { title: 'My Profile', sub: 'Your account, activity & preferences' },
+  'admin-profile': { title: 'Detection Profile', sub: 'Your account and detection configuration' },
   locations: { title: 'Locations', sub: 'Locations' },
   departments: { title: 'Departments', sub: 'Departments ' },
   locations: { title: 'Locations', sub: 'Manage organization locations' },

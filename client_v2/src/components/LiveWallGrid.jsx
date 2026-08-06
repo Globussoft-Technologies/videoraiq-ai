@@ -1,4 +1,4 @@
-﻿import { useMemo, useState, useCallback, useEffect, useRef, memo } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef, memo } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { Search, X, Maximize2, Minimize2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AsyncBoundary } from './States';
@@ -601,7 +601,12 @@ export default function LiveWallGrid() {
           {() => (
             <>
               {size.cols === 1 && visible[0] ? (
-                <div style={{ flex: 1, minHeight: 0 }}>
+                <div style={{
+                  flex: '1 1 auto',
+                  width: '100%',
+                  height: 'clamp(280px, calc(100vh - 190px), 760px)',
+                  minHeight: 280,
+                }}>
                   <FullscreenCameraView
                     channel={visible[0]}
                     showPrev={pages > 1}

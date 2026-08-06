@@ -217,10 +217,7 @@ const DateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeChange }
         })}
       </div>
 
-      <div className="flex items-center justify-between gap-2 pt-3 mt-2 border-t border-[var(--bd)]">
-        <p className="text-[10px] leading-tight text-[var(--tx3)] max-w-[130px]">
-          Double-tap to pick one date or select a range.
-        </p>
+      <div className="flex items-center justify-end gap-2 pt-3 mt-2 border-t border-[var(--bd)]">
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"

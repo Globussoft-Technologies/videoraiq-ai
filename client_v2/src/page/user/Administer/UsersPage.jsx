@@ -612,7 +612,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 14 }}>
             <div>
-              <FieldLabel>Admin User Name *</FieldLabel>
+              <FieldLabel>User Name *</FieldLabel>
               <TextInput
                 placeholder="Search or type new user…"
                 value={username}

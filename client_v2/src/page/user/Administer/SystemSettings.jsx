@@ -978,7 +978,7 @@ export default function SystemSettings() {
             icon={SlidersHorizontal}
             title="AI Detection Defaults"
             // sub="Summary from the detection settings and detection types APIs."
-            action={<ActionButton onClick={() => navigate('/engines')}>Manage</ActionButton>}
+            action={<ActionButton onClick={() => navigate('/detection-settings')}>Manage</ActionButton>}
           />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 9 }}>
             <Metric label="Types Available" value={Object.keys(typeLabels || {}).length || '-'} icon={SlidersHorizontal} />
