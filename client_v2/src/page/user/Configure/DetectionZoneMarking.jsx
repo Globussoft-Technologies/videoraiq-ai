@@ -102,9 +102,20 @@ export default function DetectionZoneMarking({
     setPoints(prev => (prev.length > effectiveMaxPoints ? prev.slice(0, effectiveMaxPoints) : prev));
   }, [effectiveMaxPoints]);
 
-  const cameraNvrId = camera?.nvrId?._id || camera?.nvrId;
-  const url = cameraNvrId ? `stream/${cameraNvrId}-${camera._id}/playlist.m3u8` : '';
-  useHlsPlayer(videoRef, streamUrl({ streamingUrl: url }), {
+  const cameraNvrId = camera?.nvrId?._id || camera?.nvrId || camera?.NVRId || camera?.nvr?._id || camera?.nvr;
+  const cameraId = camera?._id || camera?.id || camera?.channelId;
+  const streamPath =
+    camera?.streamingUrl ||
+    camera?.StreamingUrl ||
+    camera?.config?.StreamingUrl ||
+    (camera?.localChannelId ? `stream/${camera.localChannelId}/playlist.m3u8` : '') ||
+    (cameraNvrId && cameraId ? `stream/${cameraNvrId}-${cameraId}/playlist.m3u8` : '');
+  const url = streamUrl({ ...camera, streamingUrl: streamPath });
+  useEffect(() => {
+    setVideoState(url ? 'loading' : 'error');
+  }, [url]);
+
+  useHlsPlayer(videoRef, url, {
     enabled: !!url,
     onError: () => setVideoState('error'),
     onStarted: () => setVideoState(s => (s === 'ready' ? s : 'loading')), // retrying after a 404 â€” stay in loading, don't clear a real error into limbo

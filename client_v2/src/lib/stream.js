@@ -13,6 +13,8 @@ export function streamUrl(channel) {
   const path = channel?.streamingUrl || channel?.StreamingUrl || channel?.config?.StreamingUrl || '';
   if (!path) return '';
   if (/^https?:\/\//i.test(path)) return path;
-  if (LOCAL_SETUP) return path;
-  return `${getStreamHost()}${path}`;
+  if (LOCAL_SETUP) return `/${path.replace(/^\/+/, '')}`;
+  const host = getStreamHost();
+  if (!host) return path;
+  return `${host.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
 }

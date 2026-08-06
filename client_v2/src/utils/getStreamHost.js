@@ -21,7 +21,6 @@ function decodeJwtPayload(token) {
  */
 export default function getStreamHost() {
   const token = getAccessToken();
-  if (!token) return '';
-  const payload = decodeJwtPayload(token);
-  return payload?.streamHost || '';
+  const payload = token ? decodeJwtPayload(token) : null;
+  return payload?.streamHost || import.meta.env.VITE_STREAM_URL || '';
 }

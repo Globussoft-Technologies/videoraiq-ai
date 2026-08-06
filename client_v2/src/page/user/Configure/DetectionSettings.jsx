@@ -16,6 +16,21 @@ const CHECK_TYPES = [
   { value: 'checkout', label: 'Check-out' },
 ];
 
+function mergeCameraStreamFields(nextCamera, previousCamera) {
+  if (!nextCamera || !previousCamera) return nextCamera;
+  return {
+    ...nextCamera,
+    streamingUrl: nextCamera.streamingUrl || previousCamera.streamingUrl,
+    StreamingUrl: nextCamera.StreamingUrl || previousCamera.StreamingUrl,
+    localChannelId: nextCamera.localChannelId || previousCamera.localChannelId,
+    config: {
+      ...(previousCamera.config || {}),
+      ...(nextCamera.config || {}),
+      StreamingUrl: nextCamera.config?.StreamingUrl || previousCamera.config?.StreamingUrl,
+    },
+  };
+}
+
 function isTypeEnabled(camera, key) {
   return !!camera?.detections?.[key]?.enabled;
 }
@@ -428,7 +443,7 @@ export default function DetectionSettings() {
     try {
       const list = await getCamerasByNvr(openCameraNvrId);
       const fresh = (list || []).find(c => c._id === openCamera._id);
-      if (fresh) setOpenCamera({ ...fresh, nvrId: openCamera.nvrId });
+      if (fresh) setOpenCamera(mergeCameraStreamFields({ ...fresh, nvrId: openCamera.nvrId }, openCamera));
     } catch {
       // Keep showing the previous snapshot — not worth surfacing an error for a background refresh.
     }

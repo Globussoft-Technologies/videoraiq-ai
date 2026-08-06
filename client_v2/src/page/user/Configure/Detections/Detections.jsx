@@ -123,6 +123,21 @@ function cameraWithNvr(camera, nvr) {
   };
 }
 
+function mergeCameraStreamFields(nextCamera, previousCamera) {
+  if (!nextCamera || !previousCamera) return nextCamera;
+  return {
+    ...nextCamera,
+    streamingUrl: nextCamera.streamingUrl || previousCamera.streamingUrl,
+    StreamingUrl: nextCamera.StreamingUrl || previousCamera.StreamingUrl,
+    localChannelId: nextCamera.localChannelId || previousCamera.localChannelId,
+    config: {
+      ...(previousCamera.config || {}),
+      ...(nextCamera.config || {}),
+      StreamingUrl: nextCamera.config?.StreamingUrl || previousCamera.config?.StreamingUrl,
+    },
+  };
+}
+
 function nvrIdOf(nvr) {
   if (!nvr) return '';
   return typeof nvr === 'object' ? nvr._id : nvr;
@@ -197,7 +212,10 @@ function findSettingForCamera(settingsResult, settingType, cameraId) {
 function mergeDetectionSetting(camera, nvr, settingType, settingsResult) {
   const item = findSettingForCamera(settingsResult, settingType, camera?._id);
   const linkedCamera = getLinkedCameras(item).find((cam) => String(cam?._id) === String(camera?._id));
-  const base = cameraWithNvr(linkedCamera || camera, linkedCamera?.nvrId || nvr);
+  const base = mergeCameraStreamFields(
+    cameraWithNvr(linkedCamera || camera, linkedCamera?.nvrId || nvr),
+    camera,
+  );
   const setting = getDetectionSetting(item);
   if (!base || !setting?._id) return base;
   const uiData = getSettingUiData(item, setting);
