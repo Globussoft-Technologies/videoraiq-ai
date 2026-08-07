@@ -7,6 +7,41 @@ import authorizedChannelsModel from "../cameraRestrictions/authorizedChannels.mo
 import NVRModel from "../NVR/nvr.model.js";
 
 class LocationService {
+  async syncLocationRenameInBackground({
+    adminId,
+    oldLocationName,
+    newLocationName,
+    userId = null,
+  }) {
+    if (!adminId || !oldLocationName || !newLocationName) return;
+
+    const matchLocation = { $regex: `^${oldLocationName}$`, $options: "i" };
+    const tasks = [
+      authorizedUsersModel.updateMany(
+        { adminId, location: matchLocation },
+        { $set: { location: newLocationName } },
+      ),
+    ];
+
+    if (userId) {
+      tasks.push(
+        NVRModel.updateMany(
+          { userId: userId.toString(), location: matchLocation },
+          { $set: { location: newLocationName } },
+        ),
+      );
+    }
+
+    const results = await Promise.allSettled(tasks);
+    results.forEach((result, index) => {
+      if (result.status === "rejected") {
+        logger.error(
+          `Background location rename failed (${index}) for admin ${adminId}: ${result.reason?.message || result.reason}`,
+        );
+      }
+    });
+  }
+
   async createLocation(req, res, next) {
     try {
       const data = req?.verified?.userData;
@@ -23,8 +58,9 @@ class LocationService {
 
       // Check for duplicate locationName (case-insensitive) for this admin
       if (locationName && locationName.trim() !== "") {
+        const normalizedLocationName = locationName.trim();
         const dupName = await locationModel.findOne({
-          locationName: { $regex: `^${locationName.trim().toLowerCase()}$`, $options: "i" },
+          locationName: { $regex: `^${normalizedLocationName}$`, $options: "i" },
           adminId
         });
         if (dupName) {
@@ -40,7 +76,7 @@ class LocationService {
       }
 
       const newLocation = await locationModel.create({
-        locationName: locationName.trim().toLowerCase(),
+        locationName: locationName.trim(),
         empLocationId,
         adminId
       });
@@ -132,7 +168,7 @@ class LocationService {
 
       // Check for duplicate locationName (case-insensitive, not current id)
       if (updateData.locationName && updateData.locationName.trim() !== "") {
-        updateData.locationName = updateData.locationName.trim().toLowerCase();
+        updateData.locationName = updateData.locationName.trim();
         const dupName = await locationModel.findOne({
           locationName: { $regex: `^${updateData.locationName}$`, $options: "i" },
           adminId,
@@ -152,6 +188,10 @@ class LocationService {
 
       // Save old name for reference
       const oldLocationName = existingLocation.locationName;
+      const nextLocationName =
+        updateData.locationName && updateData.locationName.trim() !== ""
+          ? updateData.locationName.trim()
+          : null;
 
       const updatedLocation = await locationModel.findByIdAndUpdate(
         id,
@@ -160,17 +200,19 @@ class LocationService {
       );
 
       // If locationName changed, update in authorizedUsers and NVRs
-      if (updateData.locationName && updateData.locationName.trim() !== "" && updateData.locationName !== oldLocationName) {
-        await Promise.all([
-          authorizedUsersModel.updateMany(
-            { adminId, location: { $regex: `^${oldLocationName}$`, $options: "i" } },
-            { $set: { location: updateData.locationName } }
-          ),
-          // NVRModel.updateMany(
-          //   { userId: data?.user_id?.toString(), location: { $regex: `^${oldLocationName}$`, $options: "i" } },
-          //   { $set: { location: updateData.locationName } }
-          // )
-        ]);
+      if (nextLocationName && nextLocationName !== oldLocationName) {
+        setImmediate(() => {
+          this.syncLocationRenameInBackground({
+            adminId,
+            oldLocationName,
+            newLocationName: nextLocationName,
+            userId: data?.user_id,
+          }).catch((error) => {
+            logger.error(
+              `Background rename task crashed for admin ${adminId}: ${error.message}`,
+            );
+          });
+        });
       }
 
       return res.status(200).json(Response.userSuccessResp("Location updated successfully.", updatedLocation));

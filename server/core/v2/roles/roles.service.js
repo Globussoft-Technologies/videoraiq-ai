@@ -222,7 +222,7 @@ class RolesServices{
             //         return res.send(Response.FailResp("You are not allowed to modify your own roles or permissions."))
             //     }
             // }
-            const roleValue = role.roleName?.toLowerCase();
+            const roleValue = role.roleName?.trim();
             const { value,error } = RoleValidation.updateRole(role);
             if (error) {
                 return res.send(Response.FailResp(RolesMessageNew['VALIDATION_FAIL'][language ?? 'en'], error.message));
@@ -233,7 +233,7 @@ class RolesServices{
                 { $match: { adminId: new ObjectId(adminId), _id: { $ne: excludedRoleId } } }
             ]);
             const userRoles = isRoleExist.map(item => item.roleName.toLowerCase());
-            const isRoleDuplicate = userRoles.includes(roleValue);
+            const isRoleDuplicate = userRoles.includes(roleValue?.toLowerCase());
             const existingRole = await rolesModel.findOne({ _id: roleId });
             if (!existingRole) {
                 return res.send(Response.FailResp(RolesMessageNew['ROLES_NOT_FOUND'][language ?? 'en']));
