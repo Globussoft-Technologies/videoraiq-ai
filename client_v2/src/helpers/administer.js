@@ -76,6 +76,34 @@ export const updateLogsSound = async (logsSound) => {
   return unwrap(res);
 };
 
+export const getAlertSwitches = async () => {
+  const token = getAccessToken();
+  const res = await axios.get(`${Api_url}/admin/alert-switches`, {
+    headers: { 'x-access-token': token },
+  });
+  return unwrap(res) || {};
+};
+
+export const updateEmailAlertSwitch = async (enabled) => {
+  const token = getAccessToken();
+  const res = await axios.put(
+    `${Api_url}/admin/alert-switches/email`,
+    { emailAlertsEnabled: enabled },
+    { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
+  );
+  return unwrap(res);
+};
+
+export const updateTelegramAlertSwitch = async (enabled) => {
+  const token = getAccessToken();
+  const res = await axios.put(
+    `${Api_url}/admin/alert-switches/telegram`,
+    { telegramAlertsEnabled: enabled },
+    { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
+  );
+  return unwrap(res);
+};
+
 export const getTimezones = async (search = '') => {
   const token = getAccessToken();
   const res = await axios.get(`${Api_url}/admin/timezones`, {

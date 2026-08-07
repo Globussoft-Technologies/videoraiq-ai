@@ -111,7 +111,7 @@ const exportToExcel = async (params) => {
       Name: log.userInfo?.userName || 'Unknown',
       Department: log.department?.departmentName || '--' ,
       Date: log.date ? moment.utc(log.date).tz(region).format('DD/MM/YYYY') : '--',
-      Location: log.userInfo?.location || '--',
+      Location: log.userInfo?.location || log.nvrInfo?.location || '--',
       'Access Time': formatAccessTime(enteredIn, exitTiming, region),
       Camera: sessions[0]?.channel?.name || '--',
       viewImage: '',
@@ -167,7 +167,7 @@ const exportToPDF = async (params) => {
       log.userInfo?.userName || 'Unknown',
       log.department?.departmentName || '--',
       log.date ? moment.utc(log.date).tz(region).format('DD/MM/YYYY') : '--',
-      log.userInfo?.location || '--',
+      log.userInfo?.location || log.nvrInfo?.location || '--',
       formatAccessTime(enteredIn, exitTiming, region),
       sessions[0]?.channel?.name || '--',
     ];

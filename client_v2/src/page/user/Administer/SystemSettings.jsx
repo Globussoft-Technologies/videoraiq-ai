@@ -26,8 +26,11 @@ import {
   fetchAdmin,
   fetchTimezone,
   getAttendanceSettings,
+  getAlertSwitches,
   getTimezones,
   updateAttendanceSettings,
+  updateEmailAlertSwitch,
+  updateTelegramAlertSwitch,
   updateRetention,
   updateTimezone,
 } from '../../../helpers/administer';
@@ -118,6 +121,35 @@ function normalizeDetectionRows(payload) {
   return [];
 }
 
+function linkedCamerasForDetectionRow(row) {
+  const setting = row?.detectionSetting || row?.setting || row;
+  const candidates = [
+    row?.linkedCameras,
+    row?.cameras,
+    row?.channels,
+    row?.linkedChannels,
+    setting?.linkedCameras,
+    setting?.cameras,
+    setting?.channels,
+    setting?.linkedChannels,
+  ];
+  return candidates.find(Array.isArray) || [];
+}
+
+function cameraIdentity(camera) {
+  if (!camera) return '';
+  if (typeof camera === 'string') return camera;
+  return String(
+    camera._id ||
+    camera.id ||
+    camera.channelId ||
+    camera.channel?._id ||
+    camera.channel?.id ||
+    camera.name ||
+    ''
+  );
+}
+
 function detectionName(row, typeLabels) {
   const setting = row?.detectionSetting || row;
   return setting?.detectionName || typeLabels?.[setting?.settingType] || setting?.name || setting?.settingType || 'Detection';
@@ -138,6 +170,14 @@ function getRecipientValue(recipient) {
 
 function isVerified(recipient) {
   return recipient?.verified === true || recipient?.status === 'verified';
+}
+
+function alertSwitchValue(payload, key) {
+  const data = payload?.alertSwitches || payload?.switches || payload?.data || payload || {};
+  const exactKey = key === 'email' ? 'emailAlertsEnabled' : 'telegramAlertsEnabled';
+  const value = data?.[exactKey];
+  if (typeof value === 'boolean') return value;
+  return false;
 }
 
 function Panel({ children, style }) {
@@ -728,6 +768,7 @@ export default function SystemSettings() {
   const emailRecipientsApi = useApi(() => getRecipients('email', '', 'All', 0, 100), []);
   const phoneRecipientsApi = useApi(() => getRecipients('phone', '', 'All', 0, 100), []);
   const telegramApi = useApi(() => getTelegramLinkCode(), [], { pollMs: 10000 });
+  const alertSwitchesApi = useApi(() => getAlertSwitches(), []);
   const detectionTypesApi = useApi(() => getDetectionTypes(), []);
   const detectionSettingsApi = useApi(() => getDetectionSettings({ skip: 0, limit: 500 }), []);
   const channelsApi = useApi(() => getChannels({ skip: 0, limit: 1000 }), []);
@@ -743,6 +784,8 @@ export default function SystemSettings() {
   const [retentionMonths, setRetentionMonths] = useState(RETENTION_DEFAULT_MONTHS);
   const [retentionTooltipVisible, setRetentionTooltipVisible] = useState(false);
   const [desktopNotifications, setDesktopNotifications] = useState(() => desktopNotificationsEnabled());
+  const [alertSwitchSaving, setAlertSwitchSaving] = useState('');
+  const [alertSwitchOverrides, setAlertSwitchOverrides] = useState({});
 
   const admin = adminApi.data || {};
   const adminName = [admin.name_f, admin.name_l].filter(Boolean).join(' ') || admin.login || 'Admin account';
@@ -813,6 +856,8 @@ export default function SystemSettings() {
   };
 
   const soundEnabled = !!audio.audioEnabled;
+  const emailAlertsEnabled = alertSwitchOverrides.email ?? alertSwitchValue(alertSwitchesApi.data, 'email');
+  const telegramAlertsEnabled = alertSwitchOverrides.telegram ?? alertSwitchValue(alertSwitchesApi.data, 'telegram');
   const emailRecipients = Array.isArray(emailRecipientsApi.data) ? emailRecipientsApi.data : [];
   const phoneRecipients = Array.isArray(phoneRecipientsApi.data) ? phoneRecipientsApi.data : [];
   const verifiedEmails = emailRecipients.filter(isVerified).length;
@@ -828,8 +873,8 @@ export default function SystemSettings() {
   const linkedCameraCount = useMemo(() => {
     const ids = new Set();
     detectionRows.forEach((row) => {
-      (row.linkedCameras || []).forEach((camera) => {
-        const id = camera?._id || camera?.id || camera?.name;
+      linkedCamerasForDetectionRow(row).forEach((camera) => {
+        const id = cameraIdentity(camera);
         if (id) ids.add(id);
       });
     });
@@ -858,6 +903,31 @@ export default function SystemSettings() {
   const canAdjustRetention = canEditSettings
     || (!storedRetentionEnabled && retentionEnabled && canCreateSettings);
   const canSaveRetention = !!adminUserId && !retentionSaving && canApplyRetention;
+
+  const handleAlertSwitchToggle = async (key, next) => {
+    const updateFn = key === 'email' ? updateEmailAlertSwitch : updateTelegramAlertSwitch;
+    setAlertSwitchOverrides((prev) => ({ ...prev, [key]: next }));
+    setAlertSwitchSaving(key);
+    try {
+      await updateFn(next);
+      await alertSwitchesApi.refetch();
+      setAlertSwitchOverrides((prev) => {
+        const copy = { ...prev };
+        delete copy[key];
+        return copy;
+      });
+      toast.success(`${key === 'email' ? 'Email' : 'Telegram'} alerts ${next ? 'enabled' : 'disabled'}`);
+    } catch (err) {
+      setAlertSwitchOverrides((prev) => {
+        const copy = { ...prev };
+        delete copy[key];
+        return copy;
+      });
+      toast.error(err?.response?.data?.body?.message || `Failed to update ${key} alerts`);
+    } finally {
+      setAlertSwitchSaving('');
+    }
+  };
 
   const handleSoundToggle = async (next) => {
     const allowed = next ? canEnableSetting : canDisableSetting;
@@ -1021,9 +1091,11 @@ export default function SystemSettings() {
           <ToggleRow
             icon={Mail}
             label="Email Alerts"
-            desc={`${verifiedEmails}/${emailRecipients.length} verified recipient${emailRecipients.length === 1 ? '' : 's'}`}
-            value={emailRecipients.length > 0}
-            disabled
+            desc={`${verifiedEmails}/${emailRecipients.length} verified recipient${emailRecipients.length === 1 ? '' : 's'} configured`}
+            value={emailAlertsEnabled}
+            onChange={(next) => handleAlertSwitchToggle('email', next)}
+            disabled={alertSwitchSaving === 'email'}
+            loading={alertSwitchSaving === 'email'}
           />
           {/* <ToggleRow
             icon={MessageSquare}
@@ -1036,8 +1108,10 @@ export default function SystemSettings() {
             icon={Radio}
             label="Telegram Alerts"
             desc={telegramLinked ? `Linked channel ${telegramChatId || ''}` : 'Not linked'}
-            value={telegramLinked}
-            disabled
+            value={telegramAlertsEnabled}
+            onChange={(next) => handleAlertSwitchToggle('telegram', next)}
+            disabled={alertSwitchSaving === 'telegram'}
+            loading={alertSwitchSaving === 'telegram'}
           />
           <ToggleRow
             icon={Volume2}
@@ -1264,11 +1338,11 @@ export default function SystemSettings() {
             desc={`${verifiedEmails + verifiedPhones} verified contact${verifiedEmails + verifiedPhones === 1 ? '' : 's'} available for alerts.`}
             enabled={verifiedEmails + verifiedPhones > 0}
           />
-          <ComplianceRow
+          {/* <ComplianceRow
             label="Telegram incident channel"
             desc={telegramLinked ? 'Telegram incident delivery is linked.' : 'Telegram is available but not linked.'}
             enabled={telegramLinked}
-          />
+          /> */}
           {/* <ComplianceRow
             label="Privacy masking"
             desc="No privacy-masking API is available in this build."

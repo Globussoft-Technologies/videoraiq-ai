@@ -247,7 +247,7 @@ const AccessLogs = () => {
           tag: !!log.tag,
           department: log.department?.departmentName || '--',
           date: log.date || '--',
-          location: log.userInfo?.location || '--',
+          location: log.userInfo?.location || log.nvrInfo?.location || '--',
           cameraName: sessions[0]?.channel?.name || '--',
           enteredIn: sessions.length > 0 ? sessions[0].timestamp : null,
           exitTiming: sessions.length > 1 ? sessions[sessions.length - 1].timestamp : null,
