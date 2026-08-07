@@ -2,6 +2,7 @@
 import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
+import { useAnalyticsRefresh } from './AnalyticsRefreshContext';
 import { getEngineShare } from '../../../helpers/analytics';
 import { num } from '../../../lib/format';
 import { ENGINE_PALETTE, engineMeta } from '../../../lib/engineMeta';
@@ -41,7 +42,9 @@ function sliceAt(entries, clientX, clientY, rect) {
 
 export default function EngineShareCard({ params }) {
   const paramsKey = JSON.stringify(params);
-  const api = useApi(() => getEngineShare(params), [paramsKey], { pollMs: 120000 });
+  const api = useApi(() => getEngineShare(params), [paramsKey]);
+  // Refetches on the page's auto-refresh tick / manual refresh.
+  useAnalyticsRefresh(api.refetch);
   const engines = (api.data?.engines || []).map((e, i) => ({
     ...e,
     name: engineMeta(e.engine).name,

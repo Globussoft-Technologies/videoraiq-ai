@@ -1,6 +1,7 @@
 ﻿import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
+import { useAnalyticsRefresh } from './AnalyticsRefreshContext';
 import { getActivityHeatmap } from '../../../helpers/analytics';
 import AnalyticsBlurb from './AnalyticsBlurb';
 
@@ -12,7 +13,9 @@ function heatCellColor(v, max) {
 
 export default function ActivityHeatmapCard({ params }) {
   const paramsKey = JSON.stringify(params);
-  const api = useApi(() => getActivityHeatmap(params), [paramsKey], { pollMs: 120000 });
+  const api = useApi(() => getActivityHeatmap(params), [paramsKey]);
+  // Refetches on the page's auto-refresh tick / manual refresh.
+  useAnalyticsRefresh(api.refetch);
   const grid = api.data?.grid || [];
   const dayLabels = api.data?.dayLabels || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const max = api.data?.max || 0;

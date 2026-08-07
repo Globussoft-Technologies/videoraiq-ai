@@ -272,15 +272,22 @@ export default function CommandCenter() {
   }, [selectedLocations, selectedNvrs, selectedDepts, location, locNameByKey]);
   const filterKey = JSON.stringify(filters);
 
+  // No NVR is selected by default — the dashboard opens across every NVR.
+  // This used to force `[nvrOptions[0].id]` on mount and again whenever a
+  // selection was pruned to empty, so the KPI row was silently scoped to one
+  // arbitrary NVR that the user never picked, and clearing the dropdown
+  // snapped straight back to it.
+  //
+  // Pruning stale ids is still worth doing: an NVR that disappears from the
+  // list must not linger in the filter payload.
   useEffect(() => {
     if (!nvrOptions.length) return;
     setSelectedNvrs((prev) => {
-      if (prev.length) {
-        const validIds = new Set(nvrOptions.map((nvr) => nvr.id));
-        const next = prev.filter((id) => validIds.has(id));
-        return next.length ? next : [nvrOptions[0].id];
-      }
-      return [nvrOptions[0].id];
+      if (!prev.length) return prev;
+      const validIds = new Set(nvrOptions.map((nvr) => nvr.id));
+      const next = prev.filter((id) => validIds.has(id));
+      // Same identity when nothing was dropped, so this can't loop.
+      return next.length === prev.length ? prev : next;
     });
   }, [nvrOptions]);
 
@@ -362,30 +369,28 @@ export default function CommandCenter() {
     return map;
   }, [recentValues]);
 
-  // Live camera tabs
-  const channels = useApi(
-    () => getChannels({
-      location: filters.location || location,
-      nvrId: selectedNvrs,
-      department: selectedDepts,
-      camType: selectedCamTypes,
-      // The whole filtered set, not just the tabs LiveCamera renders — the
-      // "Cameras Online" denominator is its length, so a small limit here
-      // silently under-reported it (a 16-camera NVR read as 8).
-      limit: 200,
-    }),
-    [filterKey, selectedCamTypes.join(',')]
-  );
-
-  // All channels (with their location) — used to map alerts -> site for the map.
-  const streamingChannels = useMemo(
-    () => (channels.data || []).filter((channel) =>
-      !!(channel?.streamingUrl || channel?.StreamingUrl || channel?.config?.StreamingUrl)
-    ),
-    [channels.data]
-  );
-
+  // Every camera the account has — the live strip, the "Cameras Online" tile
+  // and the site map all read from this one list.
+  //
+  // The strip deliberately ignores the NVR / department / camera-type filters
+  // and lists the whole estate; the tab row scrolls horizontally, so there is
+  // no reason to hide cameras from it. It also includes cameras with no stream
+  // URL configured, which used to be filtered out — a camera you own but can't
+  // stream is still a camera, and it reads as OFFLINE, which is the truth.
+  //
+  // "Cameras Online" is an estate-wide health figure for the same reason, so
+  // its denominator is this list's length. That is the total the Sidebar footer
+  // shows, so the two can no longer disagree ("3/4" beside "3 of 36").
   const allChannels = useApi(() => getChannels({ limit: 500 }), []);
+
+  const cameraInventoryTotal = (allChannels.data || []).length;
+  const camerasOnline = useMemo(
+    () => ({
+      online: onlineCameras.online,
+      total: cameraInventoryTotal || onlineCameras.total,
+    }),
+    [onlineCameras.online, onlineCameras.total, cameraInventoryTotal]
+  );
 
   const today = moment().format('YYYY-MM-DD');
   const yesterday = dateFilter(1);
@@ -483,14 +488,19 @@ export default function CommandCenter() {
         dailyComparison={dailyComparison.data}
         eventsToday={dailyComparison.data?.today?.events ?? todayApi.data?.totalCount}
         sitesCount={sites.length}
-        onlineCameras={onlineCameras}
+        onlineCameras={camerasOnline}
         loading={header.loading || incidentCounts.loading}
       />
 
       {/* Live camera + attendance | latest incident + controls */}
       <div ref={dashboardGridRef} style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 18 }} className="vq-cc-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
-          <LiveCamera channels={streamingChannels} loading={channels.loading} latestByChannel={latestByChannel} onOnlineCountChange={onOnlineCountChange} />
+          <LiveCamera
+            channels={allChannels.data || []}
+            loading={allChannels.loading}
+            latestByChannel={latestByChannel}
+            onOnlineCountChange={onOnlineCountChange}
+          />
           <LiveAttendance />
           {showSystemControls && (
             <div

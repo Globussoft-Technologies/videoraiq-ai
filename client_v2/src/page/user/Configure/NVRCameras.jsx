@@ -1971,18 +1971,26 @@ export default function NVRCameras() {
         />
       )}
 
-      {/* Delete NVR confirmation */}
+      {/* Delete NVR confirmation. Spells out everything the cascade actually
+          removes (cameras, incidents, and their stored images/videos) — a
+          bare "cannot be undone" undersold how much this one click wipes
+          out, per NVR deletion cleanup requirements. */}
       <DeleteConfirmation
         open={!!deleteTarget}
+        title="Delete this NVR permanently?"
         icon={<Trash2 className="w-7 h-7 text-[var(--crit)]" />}
         message={
           <>
-            Are you sure you want to delete "{deleteTarget?.name || deleteTarget?.nvrName || ''}"? This action cannot be undone. Once deleted, this NVR and all channels associated with it cannot be recovered.
+            Deleting "{deleteTarget?.name || deleteTarget?.nvrName || ''}" will also permanently delete{' '}
+            {(() => {
+              const n = deleteTarget?.cameraCount ?? deleteTarget?.usedChannels ?? deleteTarget?.used ?? 0;
+              return n > 0 ? `all ${n} of its cameras` : 'all of its cameras';
+            })()}, every recorded incident for them, and their stored images/videos. None of this can be recovered afterward.
           </>
         }
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleConfirmDeleteNvr}
-        confirmLabel="Delete"
+        confirmLabel="Delete Permanently"
         cancelLabel="Cancel"
         loading={deleting}
       />

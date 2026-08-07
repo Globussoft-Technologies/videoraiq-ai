@@ -25,6 +25,9 @@ import {
 const ATTENDANCE_REFRESH_KEY = 'attendance_auto_refresh_enabled';
 const ATTENDANCE_INTERVAL_KEY = 'attendance_auto_refresh_interval';
 const ATTENDANCE_VIEW_MODE_KEY = 'attendance_view_mode';
+// Module-level constant so the reducer gets the same reference on every reset
+// and the `stats` memo doesn't recompute on unrelated renders.
+const EMPTY_STATUS_COUNTS = { present: 0, halfDay: 0, absent: 0, checkedIn: 0 };
 
 const convertToRegionTime = (utcTime, region) => {
   if (!utcTime) return '--';
@@ -89,6 +92,8 @@ const AttendanceLogs = () => {
     searchInput,
     attendanceLogs,
     attendanceLogsCount,
+    statusCounts,
+    totalEmployees,
     departments,
     selectedDepartments,
     nvrIds,
@@ -216,12 +221,21 @@ const AttendanceLogs = () => {
       ) {
         dispatch({ type: 'SET_ATTENDANCE_LOGS', value: [] });
         dispatch({ type: 'SET_ATTENDANCE_COUNT', value: 0 });
+        dispatch({ type: 'SET_STATUS_COUNTS', value: EMPTY_STATUS_COUNTS });
       } else {
         dispatch({
           type: 'SET_ATTENDANCE_LOGS',
           value: response?.data?.body?.data?.attendanceLogs || [],
         });
         dispatch({ type: 'SET_ATTENDANCE_COUNT', value: response?.data?.body?.data?.total || 0 });
+        dispatch({
+          type: 'SET_STATUS_COUNTS',
+          value: response?.data?.body?.data?.statusCounts || EMPTY_STATUS_COUNTS,
+        });
+        dispatch({
+          type: 'SET_TOTAL_EMPLOYEES',
+          value: response?.data?.body?.data?.totalEmployees || 0,
+        });
         const minDateValue = response?.data?.body?.data?.attendanceLogsStartDate;
         dispatch({ type: 'SET_MIN_DATE', value: minDateValue ? new Date(minDateValue) : null });
       }
@@ -230,6 +244,7 @@ const AttendanceLogs = () => {
       console.error('Error fetching attendance logs:', error);
       dispatch({ type: 'SET_ATTENDANCE_LOGS', value: [] });
       dispatch({ type: 'SET_ATTENDANCE_COUNT', value: 0 });
+      dispatch({ type: 'SET_STATUS_COUNTS', value: EMPTY_STATUS_COUNTS });
     } finally {
       if (requestId === attendanceRequestRef.current) dispatch({ type: 'SET_LOADING', value: false });
     }
@@ -291,6 +306,11 @@ const AttendanceLogs = () => {
         email: item.employee?.email || '',
         checkinCam: cameraNamesForAttendance(item) || item.checkinCam || '-',
         checkoutCam: item.checkoutCam || '-',
+        // Graded on the server against this org's configured full-day /
+        // half-day thresholds — never re-derived here, so the table, the
+        // export and Attendance Analytics can't disagree.
+        status: item.status,
+        minutesSpent: item.minutesSpent,
       })),
     [attendanceLogs, BASE_URL, USER_AVTAR_INITIALS]
   );
@@ -305,21 +325,22 @@ const AttendanceLogs = () => {
     [region]
   );
 
-  // KPI tiles — derived from the loaded page + server total (no placeholder data).
-  const stats = useMemo(() => {
-    const rows = mappedLogs || [];
-    const checkedIn = rows.filter((r) => r.login).length;
-    const checkedOut = rows.filter((r) => r.logout && r.logout !== '--').length;
-    // Present = both checked in AND checked out; everyone else on the page is Absent.
-    const present = rows.filter((r) => r.login && r.logout && r.logout !== '--').length;
-    const absent = rows.length - present;
-    return [
-      { label: 'Checked In', value: checkedIn, color: 'var(--blue)' },
-      { label: 'Check Out', value: checkedOut, color: 'var(--cyan)' },
-      { label: 'Present', value: present, color: 'var(--ok)' },
-      { label: 'Absent', value: absent, color: 'var(--crit)' },
-    ];
-  }, [mappedLogs]);
+  // KPI tiles — server-graded status totals for the WHOLE filtered range, not
+  // the loaded page. Counting the page meant 150 employees at 10 rows per page
+  // reported totals out of 10, and the tiles changed as you paged. Same
+  // grading as the Status column; thresholds from Settings > Attendance Rules.
+  const stats = useMemo(
+    () => [
+      // Roster size — deliberately first, as the denominator the other four
+      // are read against. It is not range-scoped like they are.
+      { label: 'Total Employees', value: totalEmployees || 0, color: 'var(--tx)' },
+      { label: 'Present', value: statusCounts?.present || 0, color: 'var(--ok)' },
+      { label: 'Half Day', value: statusCounts?.halfDay || 0, color: 'var(--warn)' },
+      { label: 'Absent', value: statusCounts?.absent || 0, color: 'var(--crit)' },
+      { label: 'Checked In', value: statusCounts?.checkedIn || 0, color: 'var(--blue)' },
+    ],
+    [statusCounts, totalEmployees]
+  );
 
   const handleExport = (format) =>
     handleAttendanceExport(format, {

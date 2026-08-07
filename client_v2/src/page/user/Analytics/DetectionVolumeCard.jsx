@@ -3,6 +3,7 @@ import moment from 'moment';
 import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
+import { useAnalyticsRefresh } from './AnalyticsRefreshContext';
 import { getDetectionVolume } from '../../../helpers/analytics';
 import { num } from '../../../lib/format';
 import { rangeLabel } from './RangeFilter';
@@ -22,7 +23,9 @@ function areaChartPoints(values, width, height) {
 
 export default function DetectionVolumeCard({ params }) {
   const paramsKey = JSON.stringify(params);
-  const api = useApi(() => getDetectionVolume(params), [paramsKey], { pollMs: 120000 });
+  const api = useApi(() => getDetectionVolume(params), [paramsKey]);
+  // Refetches on the page's auto-refresh tick / manual refresh.
+  useAnalyticsRefresh(api.refetch);
   const series = api.data?.series || [];
   const counts = series.map((s) => s.count);
   const label = rangeLabel(params);

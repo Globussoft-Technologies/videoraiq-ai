@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Clock,
   Database,
+  ListOrdered,
   Loader2,
   Mail,
   MessageSquare,
@@ -20,10 +21,13 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useApi } from '../../../hooks/useApi';
+import { setLogOrderEnabled, useLogOrder } from '../../../lib/logOrder';
 import {
   fetchAdmin,
   fetchTimezone,
+  getAttendanceSettings,
   getTimezones,
+  updateAttendanceSettings,
   updateRetention,
   updateTimezone,
 } from '../../../helpers/administer';
@@ -34,29 +38,30 @@ import { getRecipients } from '../../../helpers/recipients';
 import { getTelegramLinkCode } from '../../../helpers/telegram';
 import { DESKTOP_NOTIFICATIONS_KEY, desktopNotificationsEnabled } from '../../../context/DetectionNotificationContext';
 
-const RETENTION_MIN = 1;
-const RETENTION_YEAR_DAYS = 365;
-const RETENTION_MAX = RETENTION_YEAR_DAYS * 4;
-const RETENTION_TICKS = [
-  { value: 1, label: '1d' },
-  { value: RETENTION_YEAR_DAYS, label: '1y' },
-  { value: RETENTION_YEAR_DAYS * 2, label: '2y' },
-  { value: RETENTION_YEAR_DAYS * 3, label: '3y' },
-  { value: RETENTION_YEAR_DAYS * 4, label: '4y' },
+// Data retention is capped at 6 months and offered as three fixed options —
+// the slider snaps between them rather than accepting any duration. Values are
+// month counts, saved to the API as an "Nm" spec (the sweeper's own format).
+const RETENTION_OPTIONS = [
+  { months: 1, tick: '1m' },
+  { months: 3, tick: '3m' },
+  { months: 6, tick: '6m' },
 ];
+const RETENTION_MIN_MONTHS = RETENTION_OPTIONS[0].months;
+const RETENTION_MAX_MONTHS = RETENTION_OPTIONS[RETENTION_OPTIONS.length - 1].months;
+const RETENTION_DEFAULT_MONTHS = RETENTION_MIN_MONTHS;
 
 function boolText(value) {
   return value ? 'Enabled' : 'Disabled';
 }
 
-function parseRetentionDays(spec) {
-  if (!spec || String(spec).toLowerCase() === 'never') return 30;
+function parseRetentionMonths(spec) {
+  if (!spec || String(spec).toLowerCase() === 'never') return RETENTION_DEFAULT_MONTHS;
   const match = String(spec).trim().match(/^(\d+)\s*([dmy])$/i);
-  if (!match) return 30;
+  if (!match) return RETENTION_DEFAULT_MONTHS;
   const value = Number(match[1]);
   const unit = match[2].toLowerCase();
-  if (unit === 'm') return value * 30;
-  if (unit === 'y') return value * 365;
+  if (unit === 'y') return value * 12;
+  if (unit === 'd') return value / 30;
   return value;
 }
 
@@ -64,34 +69,32 @@ function isNeverRetention(spec) {
   return String(spec || '').toLowerCase() === 'never';
 }
 
-function storedRetentionDays(...specs) {
+// Anything already stored outside the three options — a legacy "1y" or "90d",
+// say — is shown as the closest supported one, so the panel never displays a
+// policy it can no longer save. The stored spec itself is left alone until the
+// admin saves.
+function snapToRetentionOption(months) {
+  const wanted = Number(months) || RETENTION_DEFAULT_MONTHS;
+  const clamped = Math.min(RETENTION_MAX_MONTHS, Math.max(RETENTION_MIN_MONTHS, wanted));
+  return RETENTION_OPTIONS.reduce((best, option) =>
+    Math.abs(option.months - clamped) < Math.abs(best.months - clamped) ? option : best
+  ).months;
+}
+
+function storedRetentionMonths(...specs) {
   const configured = specs.find((spec) => spec && !isNeverRetention(spec));
-  return Math.min(RETENTION_MAX, Math.max(RETENTION_MIN, parseRetentionDays(configured)));
+  return snapToRetentionOption(parseRetentionMonths(configured));
 }
 
-function formatRetentionDuration(days) {
-  const totalDays = Math.max(RETENTION_MIN, Number(days) || RETENTION_MIN);
-  const years = Math.floor(totalDays / RETENTION_YEAR_DAYS);
-  const remainingAfterYears = totalDays % RETENTION_YEAR_DAYS;
-  const months = Math.floor(remainingAfterYears / 30);
-  const remainingDays = remainingAfterYears % 30;
-  const parts = [];
-
-  if (years) parts.push(`${years} year${years === 1 ? '' : 's'}`);
-  if (months) parts.push(`${months} month${months === 1 ? '' : 's'}`);
-  if (!years && (!months || remainingDays)) {
-    parts.push(`${remainingDays || totalDays} day${(remainingDays || totalDays) === 1 ? '' : 's'}`);
-  } else if (remainingDays) {
-    parts.push(`${remainingDays} day${remainingDays === 1 ? '' : 's'}`);
-  }
-
-  return parts.join(' ');
+function formatRetentionDuration(months) {
+  const value = Number(months) || RETENTION_DEFAULT_MONTHS;
+  return `${value} month${value === 1 ? '' : 's'}`;
 }
 
-function retentionLabel(spec, fallbackDays) {
-  if (!spec) return formatRetentionDuration(fallbackDays);
+function retentionLabel(spec, fallbackMonths) {
+  if (!spec) return formatRetentionDuration(fallbackMonths);
   if (isNeverRetention(spec)) return 'Never purge';
-  return formatRetentionDuration(parseRetentionDays(spec));
+  return formatRetentionDuration(snapToRetentionOption(parseRetentionMonths(spec)));
 }
 
 function formatTimezone(timezone) {
@@ -187,6 +190,38 @@ function PanelHeader({ icon: Icon, title, sub, action }) {
 
 function FieldLabel({ children }) {
   return <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>{children}</div>;
+}
+
+const ATTENDANCE_INPUT_STYLE = {
+  width: '100%',
+  height: 38,
+  padding: '8px 12px',
+  borderRadius: 9,
+  background: 'var(--bg2)',
+  border: '1px solid var(--bd)',
+  color: 'var(--tx)',
+  fontSize: 12.5,
+  fontFamily: 'var(--mono)',
+};
+
+/** "9h", "7h 30m", "45m" — hours entered as decimals read badly otherwise. */
+function formatHours(value) {
+  const hours = Number(value);
+  if (!Number.isFinite(hours) || hours <= 0) return '0h';
+  const whole = Math.floor(hours);
+  const minutes = Math.round((hours - whole) * 60);
+  if (!whole) return `${minutes}m`;
+  return minutes ? `${whole}h ${minutes}m` : `${whole}h`;
+}
+
+function StatusRule({ color, label, detail }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />
+      <span style={{ fontWeight: 700, color: 'var(--tx)', minWidth: 74 }}>{label}</span>
+      <span style={{ color: 'var(--tx3)' }}>{detail}</span>
+    </div>
+  );
 }
 
 function ReadOnlyField({ value, mono = false }) {
@@ -632,6 +667,51 @@ function ComplianceRow({ label, desc, enabled, last }) {
   );
 }
 
+/**
+ * Sidebar log ordering — the switch only. The reordering itself happens in the
+ * sidebar: while this is on, the LOGS & RECORDS items become draggable in
+ * place.
+ *
+ * Switching it off does NOT discard the arrangement, it just parks it — the
+ * sidebar returns to the shipped order and can be switched back on unchanged.
+ * That doubles as the way back to the default, so there's no separate reset.
+ *
+ * Not gated on canEditSettings: this is a browser-local display preference
+ * (see lib/logOrder.js), reaching this page already requires `settings` view,
+ * and an operator rearranging their own sidebar affects nobody else.
+ */
+function LogOrderPanel() {
+  const { enabled } = useLogOrder();
+
+  const handleToggle = (next) => {
+    setLogOrderEnabled(next);
+    toast.success(
+      next
+        ? 'Drag the sidebar logs to rearrange them'
+        : 'Sidebar logs are back to the default order',
+      { id: 'log-order-toggle' },
+    );
+  };
+
+  return (
+    <Panel>
+      <PanelHeader
+        icon={ListOrdered}
+        title="Log Order"
+        sub="Rearrange the LOGS & RECORDS section of the sidebar. Saved in this browser only."
+      />
+      <ToggleRow
+        icon={ListOrdered}
+        label="Customize log order"
+        desc={enabled ? 'Drag the logs in the sidebar to reorder them' : 'Sidebar logs use the default order'}
+        value={enabled}
+        onChange={handleToggle}
+        last
+      />
+    </Panel>
+  );
+}
+
 export default function SystemSettings() {
   const navigate = useNavigate();
   const audio = useAttendanceSocket() || {};
@@ -652,10 +732,15 @@ export default function SystemSettings() {
   const detectionSettingsApi = useApi(() => getDetectionSettings({ skip: 0, limit: 500 }), []);
   const channelsApi = useApi(() => getChannels({ skip: 0, limit: 1000 }), []);
 
+  const attendanceSettingsApi = useApi(() => getAttendanceSettings(), []);
+
   const [timezoneSaving, setTimezoneSaving] = useState(false);
+  const [attendanceSaving, setAttendanceSaving] = useState(false);
+  const [fullDayHours, setFullDayHours] = useState('');
+  const [halfDayHours, setHalfDayHours] = useState('');
   const [retentionSaving, setRetentionSaving] = useState(false);
   const [retentionEnabled, setRetentionEnabled] = useState(true);
-  const [retentionDays, setRetentionDays] = useState(30);
+  const [retentionMonths, setRetentionMonths] = useState(RETENTION_DEFAULT_MONTHS);
   const [retentionTooltipVisible, setRetentionTooltipVisible] = useState(false);
   const [desktopNotifications, setDesktopNotifications] = useState(() => desktopNotificationsEnabled());
 
@@ -681,8 +766,51 @@ export default function SystemSettings() {
 
   useEffect(() => {
     setRetentionEnabled(storedRetentionEnabled);
-    setRetentionDays(storedRetentionDays(storedIncidentRetention, storedAttendanceRetention, storedAccessRetention));
+    setRetentionMonths(storedRetentionMonths(storedIncidentRetention, storedAttendanceRetention, storedAccessRetention));
   }, [storedRetentionEnabled, storedIncidentRetention, storedAttendanceRetention, storedAccessRetention]);
+
+  const savedFullDayHours = attendanceSettingsApi.data?.fullDayHours;
+  const savedHalfDayHours = attendanceSettingsApi.data?.halfDayHours;
+
+  useEffect(() => {
+    if (savedFullDayHours != null) setFullDayHours(String(savedFullDayHours));
+    if (savedHalfDayHours != null) setHalfDayHours(String(savedHalfDayHours));
+  }, [savedFullDayHours, savedHalfDayHours]);
+
+  const fullDayValue = Number(fullDayHours);
+  const halfDayValue = Number(halfDayHours);
+  // Mirrors the server's Joi rules so the button explains itself before a
+  // round-trip; the server still validates independently.
+  const attendanceError = (() => {
+    if (fullDayHours === '' || halfDayHours === '') return 'Both thresholds are required';
+    if (!Number.isFinite(fullDayValue) || !Number.isFinite(halfDayValue)) return 'Enter a number of hours';
+    if (fullDayValue < 0 || halfDayValue < 0) return 'Hours cannot be negative';
+    if (fullDayValue > 24 || halfDayValue > 24) return 'Hours cannot exceed 24';
+    if (halfDayValue > fullDayValue) return 'Half day cannot be longer than a full day';
+    return null;
+  })();
+  const attendanceChanged = fullDayValue !== savedFullDayHours || halfDayValue !== savedHalfDayHours;
+
+  const handleSaveAttendance = async () => {
+    if (!canEditSettings) {
+      toast.error("You don't have permission to edit settings");
+      return;
+    }
+    if (attendanceError) {
+      toast.error(attendanceError);
+      return;
+    }
+    setAttendanceSaving(true);
+    try {
+      await updateAttendanceSettings({ fullDayHours: fullDayValue, halfDayHours: halfDayValue });
+      await attendanceSettingsApi.refetch();
+      toast.success('Attendance rules updated');
+    } catch (err) {
+      toast.error(err?.response?.data?.body?.message || 'Failed to update attendance rules');
+    } finally {
+      setAttendanceSaving(false);
+    }
+  };
 
   const soundEnabled = !!audio.audioEnabled;
   const emailRecipients = Array.isArray(emailRecipientsApi.data) ? emailRecipientsApi.data : [];
@@ -712,13 +840,16 @@ export default function SystemSettings() {
     return sum + (Array.isArray(setting?.alerts) ? setting.alerts.length : 0);
   }, 0);
   const firstEnabledDetection = enabledDetectionRows[0];
-  const selectedRetentionLabel = formatRetentionDuration(retentionDays);
-  const savedRetentionDays = storedRetentionDays(storedIncidentRetention, storedAttendanceRetention, storedAccessRetention);
-  const savedRetentionLabel = formatRetentionDuration(savedRetentionDays);
+  const selectedRetentionLabel = formatRetentionDuration(retentionMonths);
+  const savedRetentionMonths = storedRetentionMonths(storedIncidentRetention, storedAttendanceRetention, storedAccessRetention);
+  const savedRetentionLabel = formatRetentionDuration(savedRetentionMonths);
 
   const retentionSummaryLabel = (spec) => (spec ? String(spec) : '-');
 
-  const retentionSliderPercent = ((retentionDays - RETENTION_MIN) / (RETENTION_MAX - RETENTION_MIN)) * 100;
+  // The slider addresses RETENTION_OPTIONS by index, so its stops line up
+  // exactly with the tick labels beneath it.
+  const retentionIndex = Math.max(0, RETENTION_OPTIONS.findIndex((option) => option.months === retentionMonths));
+  const retentionSliderPercent = (retentionIndex / (RETENTION_OPTIONS.length - 1)) * 100;
 
   const retentionModeChanged = retentionEnabled !== storedRetentionEnabled;
   const canApplyRetention = retentionModeChanged
@@ -799,8 +930,8 @@ export default function SystemSettings() {
     notifyRetentionPendingSave();
   };
 
-  const handleRetentionDaysChange = (next) => {
-    setRetentionDays(next);
+  const handleRetentionMonthsChange = (next) => {
+    setRetentionMonths(next);
     notifyRetentionPendingSave();
   };
 
@@ -815,7 +946,7 @@ export default function SystemSettings() {
     }
     setRetentionSaving(true);
     try {
-      const spec = retentionEnabled ? `${retentionDays}d` : 'never';
+      const spec = retentionEnabled ? `${retentionMonths}m` : 'never';
       await updateRetention({
         userId: adminUserId,
         enabled: retentionEnabled,
@@ -940,7 +1071,7 @@ export default function SystemSettings() {
           <PanelHeader
             icon={Database}
             title="Data Retention"
-            sub="Summary from the incident, attendance, and access logs retention settings"
+            sub="Keep incidents, attendance, and access logs for 1, 3, or 6 months"
             action={
               <ActionButton onClick={handleRetentionSave} disabled={!canSaveRetention} icon={retentionSaving ? Loader2 : null} variant="primary">
                 Save
@@ -986,9 +1117,10 @@ export default function SystemSettings() {
             )}
             <input
               type="range"
-              min={RETENTION_MIN}
-              max={RETENTION_MAX}
-              value={retentionDays}
+              min={0}
+              max={RETENTION_OPTIONS.length - 1}
+              step={1}
+              value={retentionIndex}
               title={selectedRetentionLabel}
               disabled={!retentionEnabled || retentionSaving || !canAdjustRetention}
               onFocus={() => setRetentionTooltipVisible(true)}
@@ -997,19 +1129,88 @@ export default function SystemSettings() {
               onMouseUp={() => setRetentionTooltipVisible(false)}
               onTouchStart={() => setRetentionTooltipVisible(true)}
               onTouchEnd={() => setRetentionTooltipVisible(false)}
-              onChange={(e) => handleRetentionDaysChange(Number(e.target.value))}
+              onChange={(e) => handleRetentionMonthsChange(
+                RETENTION_OPTIONS[Number(e.target.value)]?.months ?? RETENTION_DEFAULT_MONTHS
+              )}
               style={{ width: '100%', accentColor: 'var(--blue)', height: 5, cursor: retentionEnabled && canAdjustRetention ? 'pointer' : 'default', opacity: retentionEnabled && canAdjustRetention ? 1 : 0.55 }}
             />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--tx3)', marginTop: 6 }}>
-            {RETENTION_TICKS.map((tick) => (
-              <span key={tick.value}>{tick.label}</span>
+            {RETENTION_OPTIONS.map((option) => (
+              <span key={option.months}>{option.tick}</span>
             ))}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 9, marginTop: 14 }}>
             <Metric label="Incidents" value={retentionSummaryLabel(storedIncidentRetention)} icon={Database} />
             <Metric label="Attendance" value={retentionSummaryLabel(storedAttendanceRetention)} icon={Clock} tone="ok" />
             <Metric label="Access Logs" value={retentionSummaryLabel(storedAccessRetention)} icon={ShieldCheck} tone="warn" />
+          </div>
+        </Panel>
+
+        <Panel>
+          <PanelHeader
+            icon={Clock}
+            title="Attendance Rules"
+            sub="Hours on site that count as a full or half day. Applies to every employee in this organisation."
+            action={attendanceSettingsApi.loading ? <Loader2 size={16} className="animate-spin" style={{ color: 'var(--blue)' }} /> : null}
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 11 }}>
+            <div>
+              <FieldLabel>Full day (hours)</FieldLabel>
+              <input
+                type="number"
+                min={0}
+                max={24}
+                step={0.25}
+                value={fullDayHours}
+                onChange={(e) => setFullDayHours(e.target.value)}
+                disabled={!canEditSettings || attendanceSaving || attendanceSettingsApi.loading}
+                style={ATTENDANCE_INPUT_STYLE}
+              />
+            </div>
+            <div>
+              <FieldLabel>Half day (hours)</FieldLabel>
+              <input
+                type="number"
+                min={0}
+                max={24}
+                step={0.25}
+                value={halfDayHours}
+                onChange={(e) => setHalfDayHours(e.target.value)}
+                disabled={!canEditSettings || attendanceSaving || attendanceSettingsApi.loading}
+                style={ATTENDANCE_INPUT_STYLE}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginTop: 13, padding: 12, borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx3)', letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 8 }}>
+              How days will be graded
+            </div>
+            <div style={{ display: 'grid', gap: 5, fontSize: 11.5, color: 'var(--tx2)' }}>
+              <StatusRule color="var(--ok)" label="Present" detail={`On site ${formatHours(fullDayValue)} or more`} />
+              <StatusRule color="var(--warn)" label="Half Day" detail={`${formatHours(halfDayValue)} up to ${formatHours(fullDayValue)}`} />
+              <StatusRule color="var(--crit)" label="Absent" detail={`Under ${formatHours(halfDayValue)}`} />
+              <StatusRule color="var(--blue)" label="Checked In" detail="Checked in, no check-out yet" />
+            </div>
+            <div style={{ marginTop: 9, fontSize: 11, color: 'var(--tx3)', lineHeight: 1.4 }}>
+              Time on site is the last check-out minus the first check-in. Changing these re-grades existing
+              attendance logs the next time they're loaded.
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 13, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11.5, color: attendanceError ? 'var(--crit)' : 'var(--tx3)' }}>
+              {attendanceError || (attendanceChanged ? 'Unsaved changes' : 'Saved')}
+            </span>
+            <ActionButton
+              variant="primary"
+              icon={attendanceSaving ? Loader2 : CheckCircle2}
+              onClick={handleSaveAttendance}
+              disabled={!canEditSettings || attendanceSaving || !!attendanceError || !attendanceChanged}
+            >
+              {attendanceSaving ? 'Saving...' : 'Save'}
+            </ActionButton>
           </div>
         </Panel>
       </div>
@@ -1119,6 +1320,8 @@ export default function SystemSettings() {
             last
           />
         </Panel>
+
+        <LogOrderPanel />
       </div>
     </div>
   );

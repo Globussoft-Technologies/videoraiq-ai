@@ -1,6 +1,7 @@
 ﻿import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
+import { useAnalyticsRefresh } from './AnalyticsRefreshContext';
 import { getDetectionsByHour } from '../../../helpers/analytics';
 import { num } from '../../../lib/format';
 import AnalyticsBlurb from './AnalyticsBlurb';
@@ -22,7 +23,9 @@ function niceStep(max, ticks = 4) {
 }
 
 export default function DetectionsByHourCard() {
-  const api = useApi(() => getDetectionsByHour(), [], { pollMs: 60000 });
+  const api = useApi(() => getDetectionsByHour(), []);
+  // Refetches on the page's auto-refresh tick / manual refresh.
+  useAnalyticsRefresh(api.refetch);
   const hours = api.data?.hours || [];
   const max = Math.max(...hours, 1);
   const step = niceStep(max);

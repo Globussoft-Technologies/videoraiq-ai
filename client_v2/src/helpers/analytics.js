@@ -21,6 +21,8 @@ const get = async (path, params = {}) => {
 
 export const getDetectionVolume = (params = {}) => get('detection-volume', params);
 export const getAttendanceAnalytics = (params = {}) => get('attendance-summary', params);
+/** Present / absent for one day, counted from the Attendance Logs pipeline. */
+export const getAttendancePresence = (params = {}) => get('attendance-presence', params);
 export const getEngineShare = (params = {}) => get('engine-share', params);
 export const getTopCameras = (params = {}) => get('top-cameras', params);
 export const getActivityHeatmap = (params = {}) => get('activity-heatmap', params);

@@ -1,6 +1,7 @@
 ﻿import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
+import { useAnalyticsRefresh } from './AnalyticsRefreshContext';
 import { getPeakActivity } from '../../../helpers/analytics';
 import { num } from '../../../lib/format';
 import { rangeLabel } from './RangeFilter';
@@ -67,7 +68,9 @@ function DateBreakdown({ dates = [] }) {
  */
 export default function PeakActivityCard({ params }) {
   const paramsKey = JSON.stringify(params);
-  const api = useApi(() => getPeakActivity(params), [paramsKey], { pollMs: 120000 });
+  const api = useApi(() => getPeakActivity(params), [paramsKey]);
+  // Refetches on the page's auto-refresh tick / manual refresh.
+  useAnalyticsRefresh(api.refetch);
   const { peakHour, peakDay } = api.data || {};
   const label = rangeLabel(params);
   const rangeText = label || 'selected range';

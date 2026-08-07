@@ -186,12 +186,10 @@ export default function SystemControls() {
   const nvrs = nvrsApi.data?.nvrs ?? [];
   const nvrOptions = useMemo(() => nvrs.map((n) => ({ id: n._id, label: n.nvrName })), [nvrs]);
 
-  // Default to the first NVR once the list loads, so the panel isn't empty
-  // on first view — only runs while nothing has been picked yet.
-  useEffect(() => {
-    if (nvrOptions.length && nvrFilter.length === 0) setNvrFilter([nvrOptions[0].id]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nvrOptions]);
+  // No NVR is pre-selected. This used to default to the first one so the panel
+  // wasn't "empty" on first view, but an empty selection already means every
+  // camera on the account (see the camera pool below) — so the default was
+  // narrowing the panel, not filling it.
 
   const typesApi = useApi(() => getDetectionTypes(), []);
   const typeLabels = typesApi.data || {};

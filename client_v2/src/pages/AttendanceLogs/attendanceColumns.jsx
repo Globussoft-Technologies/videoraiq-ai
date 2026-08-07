@@ -31,6 +31,21 @@ const SortHeader = ({ label, field, sortField, sortOrder, dispatch }) => (
 
 const mono = { fontFamily: 'var(--mono)' };
 
+/** Mirrors ATTENDANCE_STATUS on the server (attendanceStatus.js). */
+export const ATTENDANCE_STATUS_LABELS = {
+  present: 'Present',
+  half_day: 'Half Day',
+  absent: 'Absent',
+  checked_in: 'Checked In',
+};
+
+export const ATTENDANCE_STATUS_COLORS = {
+  present: '#22c55e',
+  half_day: '#f5a623',
+  absent: '#ef4444',
+  checked_in: '#3b82f6',
+};
+
 const validMoment = (value) => {
   if (!value || value === '--') return null;
   const parsed = moment(value);
@@ -50,20 +65,25 @@ const attendanceMeta = (item, region, convertToRegionTime) => {
 
   let hoursStr = '--';
   if (inM && outM) {
-    const mins = Math.max(0, outM.diff(inM, 'minutes'));
+    // Prefer the server's figure — it's the one the status was graded from.
+    const mins = Number.isFinite(item.minutesSpent)
+      ? Math.max(0, item.minutesSpent)
+      : Math.max(0, outM.diff(inM, 'minutes'));
     hoursStr = `${Math.floor(mins / 60)}h ${mins % 60}m`;
   } else if (inM) {
     hoursStr = 'active';
   }
 
   const checkedOut = !!outM;
-  // Present only when the person BOTH checked in and checked out. A check-in
-  // with no check-out (forgotten / still open) counts as Absent.
-  const present = !!inM && checkedOut;
-  const statusLabel = present ? 'Present' : 'Absent';
-  const statusColor = present ? '#22c55e' : '#ef4444';
+  // Status is graded on the server against the org's configured full-day /
+  // half-day thresholds (Settings > Attendance Rules) and is never recomputed
+  // here — a second implementation is how this screen and Attendance Analytics
+  // drifted apart before. `checked_in` is its own state, not a kind of absence.
+  const status = item.status || (inM ? 'checked_in' : 'absent');
+  const statusLabel = ATTENDANCE_STATUS_LABELS[status] || 'Absent';
+  const statusColor = ATTENDANCE_STATUS_COLORS[status] || ATTENDANCE_STATUS_COLORS.absent;
 
-  return { checkInStr, checkOutStr, hoursStr, checkedOut, statusLabel, statusColor };
+  return { checkInStr, checkOutStr, hoursStr, checkedOut, status, statusLabel, statusColor };
 };
 
 /**

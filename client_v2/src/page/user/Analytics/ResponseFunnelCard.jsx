@@ -1,6 +1,7 @@
 ﻿import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
+import { useAnalyticsRefresh } from './AnalyticsRefreshContext';
 import { getResponseFunnel } from '../../../helpers/analytics';
 import { ENGINE_PALETTE } from '../../../lib/engineMeta';
 import { num } from '../../../lib/format';
@@ -15,7 +16,9 @@ import AnalyticsBlurb from './AnalyticsBlurb';
  */
 export default function ResponseFunnelCard({ params }) {
   const paramsKey = JSON.stringify(params);
-  const api = useApi(() => getResponseFunnel(params), [paramsKey], { pollMs: 120000 });
+  const api = useApi(() => getResponseFunnel(params), [paramsKey]);
+  // Refetches on the page's auto-refresh tick / manual refresh.
+  useAnalyticsRefresh(api.refetch);
   const stages = (api.data?.stages || []).map((s, i) => ({ ...s, color: ENGINE_PALETTE[i % ENGINE_PALETTE.length] }));
   const label = rangeLabel(params);
 

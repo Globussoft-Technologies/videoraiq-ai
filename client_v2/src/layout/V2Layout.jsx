@@ -8,15 +8,43 @@ import CameraLimitLock from '../components/CameraLimitLock';
 import { VIEW_META } from './nav.config';
 import { getLocations } from '../helpers/monitoring';
 import { getCriticalityStats } from '../helpers/dashboard';
+import { getCamerasStatus } from '../helpers/cameraStatus';
 import { useApi } from '../hooks/useApi';
 import { timeAgo } from '../lib/format';
 
 const SEV_COLOR = { high: 'var(--crit)', critical: 'var(--crit)', moderate: 'var(--warn)', medium: 'var(--warn)', low: 'var(--tx3)' };
 
+// Incident types the Alerts feed deliberately leaves out: it only lists
+// incidents carrying a snapshot image, and these two never have one (a person
+// count is a running daily tally; a line cross is a tripwire event). Deep
+// linking them to /alerts lands on a card that isn't in the list, so each goes
+// to its own log page instead.
+const LOG_PAGE_BY_INCIDENT_TYPE = {
+  countPersons: '/logs/person-count',
+  lineCrossing: '/logs/line-crossing',
+};
+
+// Where clicking a bell-tray notification takes the user.
+function notificationTarget(alert, navigate) {
+  const logPage = LOG_PAGE_BY_INCIDENT_TYPE[alert.incidentType];
+  if (logPage) {
+    return () => navigate(logPage, {
+      state: {
+        nvrIds: alert.nvrId?._id ? [alert.nvrId._id] : [],
+        channelIds: alert.channelId?._id ? [alert.channelId._id] : [],
+        date: alert.timeOfIncident ? alert.timeOfIncident.slice(0, 10) : undefined,
+      },
+    });
+  }
+  if (!alert._id) return undefined;
+  return () => navigate('/alerts', { state: { alertId: alert._id } });
+}
+
 // Read notification ids persist locally so the unread badge stays cleared
 // across the 60s poll refresh and page reloads (the alerts feed itself has
 // no per-user read state on the server).
 const CAM_HEALTH_KEY = 'vq_cam_health';
+const SERVER_NETWORK_KEY = 'vq_server_network';
 const READ_IDS_KEY = 'vq_read_notification_ids';
 function loadReadIds() {
   try {
@@ -88,20 +116,7 @@ function Shell() {
     time: timeAgo(a.timeOfIncident),
     sevColor: SEV_COLOR[(a.severity || '').toLowerCase()] || 'var(--warn)',
     read: readIds.has(a._id || i),
-    // Person-count incidents have no image and are excluded from the Alerts
-    // feed entirely (they're a running daily tally, not a snapshot event) —
-    // route those to Person Count Logs instead, everything else as usual.
-    go: a.incidentType === 'countPersons'
-      ? () => navigate('/logs/person-count', {
-          state: {
-            nvrIds: a.nvrId?._id ? [a.nvrId._id] : [],
-            channelIds: a.channelId?._id ? [a.channelId._id] : [],
-            date: a.timeOfIncident ? a.timeOfIncident.slice(0, 10) : undefined,
-          },
-        })
-      : a._id
-        ? () => navigate('/alerts', { state: { alertId: a._id } })
-        : undefined,
+    go: notificationTarget(a, navigate),
   }));
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -141,6 +156,31 @@ function Shell() {
     }
   }, [camHealth]);
 
+  // This server's own internet uplink (server_network from the Camera Status
+  // API — see CAMERA_STATUS_API.md). Global, not per-camera, so it's fetched
+  // once here rather than by whichever page happens to be probing cameras;
+  // shown in the Sidebar footer next to the camera health tally. Persisted
+  // the same way camHealth is, so it doesn't blank out on a reload.
+  const [serverNetwork, setServerNetwork] = useState(() => {
+    try {
+      const saved = localStorage.getItem(SERVER_NETWORK_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const networkStatusApi = useApi(() => getCamerasStatus(), [], { pollMs: 20000 });
+  useEffect(() => {
+    if (networkStatusApi.data?.server_network) setServerNetwork(networkStatusApi.data.server_network);
+  }, [networkStatusApi.data]);
+  useEffect(() => {
+    try {
+      if (serverNetwork) localStorage.setItem(SERVER_NETWORK_KEY, JSON.stringify(serverNetwork));
+    } catch {
+      /* ignore */
+    }
+  }, [serverNetwork]);
+
   const outletCtx = useMemo(
     () => ({
       siteFilter,
@@ -149,8 +189,9 @@ function Shell() {
       refreshSites,
       camHealth,
       setCamHealth,
+      serverNetwork,
     }),
-    [siteFilter, siteRaw, sites, refreshSites, camHealth]
+    [siteFilter, siteRaw, sites, refreshSites, camHealth, serverNetwork]
   );
 
   return (
@@ -172,6 +213,7 @@ function Shell() {
         mobileOpen={navOpen}
         onMobileClose={() => setNavOpen(false)}
         camHealth={camHealth}
+        serverNetwork={serverNetwork}
       />
       <CameraLimitLock />
       {/* Drawer backdrop (mobile only) */}

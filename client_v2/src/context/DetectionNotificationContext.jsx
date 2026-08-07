@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
@@ -62,6 +62,15 @@ export function DetectionNotificationProvider({ children }) {
   const { user } = useAuth();
   const shownDetections = useRef(new Set());
   const permissionAsked = useRef(false);
+  // Ids of detection toasts currently on screen. Tracked so "Close all" clears
+  // only these — a bare toast.dismiss() would also wipe unrelated save/error
+  // toasts the user hasn't read yet.
+  const openDetectionToasts = useRef(new Set());
+
+  const closeAllDetections = useCallback(() => {
+    openDetectionToasts.current.forEach((id) => toast.dismiss(id));
+    openDetectionToasts.current.clear();
+  }, []);
 
   useEffect(() => {
     if (!socket || !user?.adminId) return undefined;
@@ -102,19 +111,35 @@ export function DetectionNotificationProvider({ children }) {
         return;
       }
 
+      // On every detection toast, unconditionally. An earlier version only
+      // showed it once a second toast was already open, which meant it was
+      // invisible exactly when you went looking for it — and it depended on
+      // `incidentType` being present, which it isn't always (detectionTitle
+      // falls back to incidentName/displayName for the same reason).
       severityToast(data?.severity)(title, {
         id: key,
         position: 'bottom-left',
         description,
         duration: 4000,
+        action: { label: 'Close all', onClick: closeAllDetections },
+        // Stop tracking however the toast goes away, so the set reflects
+        // what's on screen and never grows unbounded.
+        onDismiss: () => openDetectionToasts.current.delete(key),
+        onAutoClose: () => openDetectionToasts.current.delete(key),
       });
+
+      openDetectionToasts.current.add(key);
     };
 
     socket.on(`cameradetection_${user.adminId}`, handleDetection);
     return () => {
       socket.off(`cameradetection_${user.adminId}`, handleDetection);
+      // The socket is gone, so nothing will fire onDismiss/onAutoClose for
+      // these ids any more. Drop them rather than leaving stale ids that a
+      // later "Close all" would try to dismiss.
+      openDetectionToasts.current.clear();
     };
-  }, [socket, user?.adminId]);
+  }, [socket, user?.adminId, closeAllDetections]);
 
   return children;
 }

@@ -3,7 +3,6 @@ import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { Search, X, Maximize2, Minimize2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AsyncBoundary } from './States';
 import CameraStream from './CameraStream';
-import CameraProbe from './CameraProbe';
 import LiveCameraLogsOverlay from './LiveCameraLogsOverlay';
 import MultiSelect from './MultiSelect';
 import { useApi } from '../hooks/useApi';
@@ -11,13 +10,19 @@ import usePageActive from '../hooks/usePageActive';
 import { useStreamQueueStats } from '../hooks/useStreamSlot';
 import streamQueue from '../lib/streamQueue';
 import { getChannels, getLocations, getNVRs, getDepartments } from '../helpers/monitoring';
+import { getCamerasStatus, isCameraLive } from '../helpers/cameraStatus';
 
 /* ── Stream-scheduling tuning ────────────────────────────────────────────────
    Cameras are started one at a time through lib/streamQueue. Priorities below
    are relative: lower starts first. */
 const PRIORITY_FULLSCREEN = -100;  // the camera the user is staring at
 const PRIORITY_GRID       = 0;     // + tile index within the current page
-const PRIORITY_PROBE      = 1000;  // + index; off-screen status probes go last
+
+// The Camera Status API is a cached read regardless of scope (tested to 500
+// ids in one call), so this only bounds the query size for very large estates.
+const STATUS_LIMIT = 500;
+// How often the real backend status (rtsp_online / stream_status) is polled.
+const STATUS_POLL_MS = 5000;
 
 /* Camera-type maps to the channel `checkType` field on the backend. */
 const CAM_TYPE_OPTIONS = [
@@ -246,8 +251,6 @@ export default function LiveWallGrid() {
      hls.js instance, worker, decoder and timer on the page; coming back re-runs
      the same one-at-a-time load. A short grace period absorbs quick alt-tabs. */
   const pageActive = usePageActive({ graceMs: 3000 });
-  const pageActiveRef = useRef(pageActive);
-  pageActiveRef.current = pageActive;
 
   const size     = SIZES[sizeIdx] || SIZES[2];
 
@@ -297,49 +300,14 @@ export default function LiveWallGrid() {
     setStatusFilter(''); setSearch(''); setPage(0);
   };
 
-  /* track which channels are live (updated by CameraStream via onLiveChange).
-     Debounced: a status flip only commits after holding steady for 4s, so a
-     brief HLS buffering stall (onWaitingâ†’onPlaying within a second) doesn't
-     bounce a camera between the visible grid and the hidden probe layer â€”
-     that bounce was remounting streams in a loop (continuous reload). */
-  const [liveSet, setLiveSet] = useState(() => new Set());
-  const [liveStatus, setLiveStatus] = useState({});
-  const liveTimersRef = useRef({});
-  const setLive = useCallback((id, isLive) => {
-    // While the wall is paused every stream is torn down; reports from that
-    // teardown would wrongly mark the whole inventory offline, so freeze the
-    // last known status until the cameras are back up.
-    if (!pageActiveRef.current) return;
-    // Keep an immediate status map for shared health reporting. The separate
-    // liveSet below remains debounced to avoid grid remounts during buffering.
-    setLiveStatus(prev => (prev[id] === isLive ? prev : { ...prev, [id]: isLive }));
-    const timers = liveTimersRef.current;
-    if (timers[id]) { clearTimeout(timers[id]); delete timers[id]; }
-    timers[id] = setTimeout(() => {
-      delete timers[id];
-      setLiveSet(prev => {
-        if (prev.has(id) === isLive) return prev;
-        const next = new Set(prev);
-        isLive ? next.add(id) : next.delete(id);
-        return next;
-      });
-    }, 4000);
-  }, []);
-  useEffect(() => () => {
-    Object.values(liveTimersRef.current).forEach(clearTimeout);
-    // Leaving the wall entirely: nothing queued here is worth starting.
-    streamQueue.reset();
-  }, []);
-
-  /* Going inactive: drop every queued/in-flight start and any pending status
-     debounce. Tiles release their own slots and destroy their players via the
-     `active` prop; this clears the scheduler's own bookkeeping so the restart
-     begins from a clean queue with no orphaned entries. */
+  /* Going inactive: drop every queued/in-flight stream start. Tiles release
+     their own slots and destroy their players via the `active` prop; this
+     clears the scheduler's own bookkeeping so the restart begins from a
+     clean queue with no orphaned entries. */
+  useEffect(() => () => streamQueue.reset(), []);
   useEffect(() => {
     if (pageActive) return;
     streamQueue.reset();
-    Object.values(liveTimersRef.current).forEach(clearTimeout);
-    liveTimersRef.current = {};
   }, [pageActive]);
 
   /* Scheduler depth — how many streams are queued/starting right now. Counting
@@ -348,32 +316,51 @@ export default function LiveWallGrid() {
   const queueStats = useStreamQueueStats();
   const streamsPending = queueStats.waiting + queueStats.starting;
 
-  const activeCount = liveSet.size;
   const inventoryCameras = Array.isArray(channels.data) ? channels.data : [];
-  const probedCameras = inventoryCameras.filter((camera) => (
-    Object.prototype.hasOwnProperty.call(liveStatus, camera._id || camera.channelId)
-  ));
-  const sidebarOnlineCount = probedCameras.filter((camera) => (
-    liveStatus[camera._id || camera.channelId]
-  )).length;
 
-  // Publish to the Sidebar only when every camera in the inventory has actually
-  // been probed. The wall now streams just what's on screen, so a partial count
-  // would read as "5 of 60 online" when really only 5 were ever checked — worse
-  // than showing the Command Center's own full sweep. Deleting every camera must
-  // still publish 0/0 immediately.
+  // Real online/offline per camera, straight from the backend: a camera is
+  // live when the RTSP source is reachable AND this server is actually
+  // producing fresh HLS segments for it right now (rtsp_online &&
+  // stream_status === 'running') — see CAMERA_STATUS_API.md. Polled for the
+  // WHOLE filtered inventory in one request, not stream-probed per tile, so
+  // the Live/Offline filter and the "N active" tally never need to open a
+  // hidden connection just to find out.
+  const statusIds = useMemo(
+    () => inventoryCameras.map((c) => c._id || c.channelId).filter(Boolean).slice(0, STATUS_LIMIT),
+    [inventoryCameras]
+  );
+  const statusIdsKey = statusIds.join(',');
+  const statusApi = useApi(
+    () => (statusIds.length ? getCamerasStatus(statusIds) : Promise.resolve(null)),
+    [statusIdsKey],
+    { pollMs: STATUS_POLL_MS, enabled: statusIds.length > 0 }
+  );
+  const statusById = useMemo(() => {
+    const map = {};
+    (statusApi.data?.cameras || []).forEach((cam) => {
+      if (cam?.id) map[cam.id] = cam;
+    });
+    return map;
+  }, [statusApi.data]);
+  const liveSet = useMemo(
+    () => new Set(statusIds.filter((id) => isCameraLive(statusById[id]))),
+    [statusIds, statusById]
+  );
+  const activeCount = liveSet.size;
+
+  // Publish to the Sidebar once the first status response lands. Deleting
+  // every camera must still publish 0/0 immediately.
   useEffect(() => {
     if (channels.loading || !Array.isArray(channels.data)) return;
     if (inventoryCameras.length === 0) {
       ctx.setCamHealth?.({ online: 0, total: 0 });
       return;
     }
-    if (probedCameras.length < inventoryCameras.length) return;
-    ctx.setCamHealth?.({ online: sidebarOnlineCount, total: inventoryCameras.length });
-  }, [channels.data, channels.loading, ctx.setCamHealth, inventoryCameras.length, probedCameras.length, sidebarOnlineCount]);
+    if (!statusApi.data) return;
+    ctx.setCamHealth?.({ online: activeCount, total: inventoryCameras.length });
+  }, [channels.data, channels.loading, ctx.setCamHealth, inventoryCameras.length, statusApi.data, activeCount]);
 
-  // Filters other than status â€” this is the candidate set whose real live/offline
-  // status must be known BEFORE the status filter can correctly narrow it down.
+  // Filters other than status.
   const preStatusList = useMemo(() => {
     let arr = Array.isArray(channels.data) ? channels.data : [];
     if (search.trim()) {
@@ -396,33 +383,13 @@ export default function LiveWallGrid() {
   const visible  = list.slice(safePage * size.perPage, safePage * size.perPage + size.perPage);
 
   /* Opening the full view makes that one camera the only stream on the page:
-     every grid tile and background probe is torn down while it's up. Closing it
-     restarts the same one-at-a-time load. */
+     every grid tile is torn down while it's up. Closing it restarts the same
+     one-at-a-time load. */
   const wallActive = pageActive && !fullscreen;
 
   const fullscreenIndex = fullscreen
     ? list.findIndex(c => (c._id || c.channelId) === (fullscreen._id || fullscreen.channelId))
     : -1;
-
-  // Background probes â€” only while the Live/Offline filter is on. That filter
-  // has a chicken-and-egg problem: a camera excluded by "Live" never mounts, so
-  // it can never prove it's live. Probing the whole candidate set off-screen is
-  // the only way to resolve it. With "All Status" (the default) there is nothing
-  // to resolve, so the wall streams strictly what's on screen and nothing else.
-  const visibleIds = useMemo(() => new Set(visible.map(c => c._id || c.channelId)), [visible]);
-  const probeList = useMemo(
-    // Only sweep the inventory when the Live/Offline filter is actually in use.
-    // With "All Status" the wall streams nothing but the tiles you can see.
-    () => (statusFilter ? preStatusList.filter(c => !visibleIds.has(c._id || c.channelId)) : []),
-    [statusFilter, preStatusList, visibleIds]
-  );
-
-  /* Status-filter resolution progress: how much of the candidate set has been
-     probed. Only meaningful while the filter is on. */
-  const probeTotal = statusFilter ? preStatusList.length : 0;
-  const probeDone  = statusFilter
-    ? preStatusList.reduce((n, c) => n + (Object.prototype.hasOwnProperty.call(liveStatus, c._id || c.channelId) ? 1 : 0), 0)
-    : 0;
 
   const autoPageFsRef = useRef(false);
 
@@ -678,15 +645,6 @@ export default function LiveWallGrid() {
           </div>
         )}
 
-        {/* Status filter has to probe the whole candidate set to answer at all —
-            tell the user it's still resolving rather than showing a short list. */}
-        {pageActive && probeTotal > 0 && probeDone < probeTotal && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: 'var(--tx3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--tx3)', display: 'inline-block', flexShrink: 0 }} className="vq-blink" />
-            Checking {probeDone}/{probeTotal} cameras…
-          </div>
-        )}
-
         {/* Paused badge — streams released while the wall isn't being viewed */}
         {!pageActive && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: 'var(--tx3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
@@ -749,9 +707,7 @@ export default function LiveWallGrid() {
                         <CameraStreamTile
                           channel={c}
                           camLabel={camLabel}
-                          channelId={id}
                           onMaximize={openFullscreen}
-                          setLive={setLive}
                           rounded={false}
                           active={wallActive}
                           priority={PRIORITY_GRID + idx}
@@ -791,33 +747,13 @@ export default function LiveWallGrid() {
         </div>
       )}
 
-      {/* Hidden probes â€” connect every non-visible candidate camera's stream in
-          the background purely to learn its real live/offline state (see
-          probeList comment above). They queue behind the visible tiles and,
-          with RECYCLE_PROBES on, disconnect again once their verdict is in. */}
-      <div style={{ position: 'fixed', top: 0, left: 0, width: 0, height: 0, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }} aria-hidden="true">
-        {probeList.map((c, idx) => {
-          const id = c._id || c.channelId;
-          return (
-            <CameraProbe
-              key={id}
-              channel={c}
-              channelId={id}
-              setLive={setLive}
-              active={wallActive}
-              priority={PRIORITY_PROBE + idx}
-            />
-          );
-        })}
-      </div>
     </div>
   );
 }
 
 /* â”€â”€ CameraStreamTile: memoized to prevent infinite re-render from inline callbacks â”€â”€ */
-const CameraStreamTile = memo(function CameraStreamTile({ channel, camLabel, channelId, onMaximize, setLive, rounded, active, priority, requireVisible }) {
-  const handleMaximize   = useCallback(() => onMaximize(channel),          [onMaximize, channel]);
-  const handleLiveChange = useCallback((live) => setLive(channelId, live), [setLive, channelId]);
+const CameraStreamTile = memo(function CameraStreamTile({ channel, camLabel, onMaximize, rounded, active, priority, requireVisible }) {
+  const handleMaximize = useCallback(() => onMaximize(channel), [onMaximize, channel]);
   return (
     <CameraStream
       channel={channel}
@@ -826,7 +762,6 @@ const CameraStreamTile = memo(function CameraStreamTile({ channel, camLabel, cha
       rounded={rounded}
       showOverlay
       onMaximize={handleMaximize}
-      onLiveChange={handleLiveChange}
       active={active}
       priority={priority}
       requireVisible={requireVisible}

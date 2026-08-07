@@ -36,6 +36,11 @@ import {
   Settings2,
 } from 'lucide-react';
 
+// The sidebar group whose order the user can customise (Settings ▸ Log Order).
+// Exported so Sidebar.jsx and lib/logOrder.js match on one literal instead of
+// each carrying their own copy.
+export const LOGS_GROUP_LABEL = 'LOGS & RECORDS';
+
 // Mining incident log tabs (conveyor, crusher, etc.) — shown for every client.
 const stevinrockLogItems = [
   { key: 'conveyor', label: 'Conveyor Logs', path: 'logs/conveyor', icon: Container, permissionKey: 'logs', permissionSubKey: 'conveyorLogs' },
@@ -83,7 +88,7 @@ export const NAV_GROUPS = [
     ],
   },
   {
-    label: 'LOGS & RECORDS',
+    label: LOGS_GROUP_LABEL,
     items: [
       { key: 'attendance', label: 'Attendance Logs', path: 'logs/attendance', icon: CalendarCheck, permissionKey: 'logs', permissionSubKey: 'attendanceLogs' },
       { key: 'access', label: 'Access Logs', path: 'logs/access', icon: DoorOpen, permissionKey: 'logs', permissionSubKey: 'accessLogs' },

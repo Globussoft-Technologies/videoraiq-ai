@@ -2,55 +2,48 @@
 import moment from 'moment';
 import {
   Activity,
-  AlertTriangle,
   CalendarDays,
+  Hourglass,
+  LogIn,
   TrendingDown,
   TrendingUp,
   UserCheck,
   UserX,
   Users,
 } from 'lucide-react';
-import { Panel, PanelHeader, Badge } from '../../../components/primitives';
+import { Panel, PanelHeader } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
-import { getAttendanceAnalytics } from '../../../helpers/analytics';
-import { getAttendanceLogs } from '../../../pages/AttendanceLogs/Api';
-import { authorizedUsers } from '../../../pages/RegisterUser/Api';
+import { getAttendanceAnalytics, getAttendancePresence } from '../../../helpers/analytics';
+import { useAnalyticsRefresh } from './AnalyticsRefreshContext';
 import AnalyticsBlurb from './AnalyticsBlurb';
-
-// Same page size Attendance Logs' own KPI tiles are counted from, reused
-// here so "Currently Present" / "Absentees" match Attendance Logs exactly
-// for the same range instead of the range-wide server aggregate.
-const LOGS_STATS_LIMIT = 200;
 
 /**
  * Attendance Analytics.
  *
- * Sourced from attendance logs only: employees, present, checked out,
- * absentees, check-in and check-out counts, the Daily Activity bars, and
- * attendance anomalies.
+ * Sourced from attendance logs only. Every figure is graded by the same rules
+ * as the Attendance Logs page (Settings > Attendance Rules), so the two screens
+ * always agree: the KPI tiles and the log counts for the selected day, and the
+ * Daily Activity bars across the range.
  *
- * Access-log-derived "unauthorized access" figures were removed â€” the
- * underlying detection-to-roster matching isn't reliable enough yet for
- * testers to verify against, so surfacing it here was misleading rather
- * than useful.
+ * Two things were removed rather than left half-true. Access-log-derived
+ * "unauthorized access" figures went first - the detection-to-roster matching
+ * isn't reliable enough to verify against. The anomalies/Insights panel went
+ * next: its only surviving finding restated the roster gap the chart's "No log"
+ * band already shows, in different units and over a different window, which
+ * read as a contradiction rather than an insight.
  */
 
-const severityColor = {
-  critical: 'var(--crit)',
-  high: 'var(--crit)',
-  medium: 'var(--warn)',
-  info: 'var(--ok)',
-};
-
 const PLOT_H = 172;
+// Matches the Attendance Logs status badges so a colour means the same thing on
+// both screens. "No log" is deliberately the quietest of the set - it's the
+// remainder of the roster, not an event.
 const COLORS = {
   present: 'var(--ok)',
-  checkedOut: 'var(--blue)',
-  // --warn resolves to the same hex in both themes, so a literal alpha of it
-  // reads correctly in light and dark. Absent is deliberately the quietest of
-  // the three â€” it's the remainder of the roster, not an event.
-  absent: 'rgba(245, 166, 35, 0.34)',
+  halfDay: 'var(--warn)',
+  shortDay: 'var(--crit)',
+  checkedIn: 'var(--blue)',
+  noLog: 'rgba(245, 166, 35, 0.22)',
 };
 
 function numberFmt(value) {
@@ -320,10 +313,7 @@ function DailyActivity({ series = [], employees = 0 }) {
           {/* Attendance bars â€” left axis */}
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end' }}>
             {rows.map((row) => {
-              const present = Number(row.present || 0);
-              const checkedOut = Number(row.checkedOut || 0);
-              const absent = Number(row.absentees || 0);
-              const share = (value) => (roster > 0 ? (value / roster) * 100 : 0);
+              const share = (value) => (roster > 0 ? (Number(value || 0) / roster) * 100 : 0);
 
               return (
                 <div
@@ -343,9 +333,13 @@ function DailyActivity({ series = [], employees = 0 }) {
                       background: 'var(--bg3)',
                     }}
                   >
-                    <span style={{ height: `${share(present)}%`, background: COLORS.present }} />
-                    <span style={{ height: `${share(checkedOut)}%`, background: COLORS.checkedOut }} />
-                    <span style={{ height: `${share(absent)}%`, background: COLORS.absent }} />
+                    {/* Bottom-up (column-reverse): the graded statuses first,
+                        then the un-logged remainder of the roster on top. */}
+                    <span style={{ height: `${share(row.present)}%`, background: COLORS.present }} />
+                    <span style={{ height: `${share(row.halfDay)}%`, background: COLORS.halfDay }} />
+                    <span style={{ height: `${share(row.shortDay)}%`, background: COLORS.shortDay }} />
+                    <span style={{ height: `${share(row.checkedIn)}%`, background: COLORS.checkedIn }} />
+                    <span style={{ height: `${share(row.noLog)}%`, background: COLORS.noLog }} />
                   </div>
                 </div>
               );
@@ -360,7 +354,7 @@ function DailyActivity({ series = [], employees = 0 }) {
                 tabIndex={0}
                 onMouseMove={(event) => onHover(event, row, index)}
                 onFocus={(event) => onHover(event, row, index)}
-                aria-label={`${moment(row.date).format('D MMM')}: ${row.present} present, ${row.absentees} absent`}
+                aria-label={`${moment(row.date).format('D MMM')}: ${row.present} present, ${row.halfDay} half day, ${row.shortDay} absent, ${row.checkedIn} checked in, ${row.noLog} with no log`}
                 style={{ flex: '1 1 0', minWidth: 0, outline: 'none', cursor: 'default' }}
               />
             ))}
@@ -427,8 +421,10 @@ function DailyActivity({ series = [], employees = 0 }) {
 
           <div style={{ display: 'grid', gap: 3.5, fontFamily: 'var(--mono)', fontSize: 10.5 }}>
             <TooltipRow color={COLORS.present} label="Present" value={numberFmt(hover.row.present)} />
-            <TooltipRow color={COLORS.checkedOut} label="Checked out" value={numberFmt(hover.row.checkedOut)} />
-            <TooltipRow color={COLORS.absent} label="Absent" value={numberFmt(hover.row.absentees)} />
+            <TooltipRow color={COLORS.halfDay} label="Half day" value={numberFmt(hover.row.halfDay)} />
+            <TooltipRow color={COLORS.shortDay} label="Absent" value={numberFmt(hover.row.shortDay)} />
+            <TooltipRow color={COLORS.checkedIn} label="Checked in" value={numberFmt(hover.row.checkedIn)} />
+            <TooltipRow color={COLORS.noLog} label="No log" value={numberFmt(hover.row.noLog)} />
             <TooltipRow label="Attendance" value={`${attendancePct(hover.row)}%`} strong />
 
             <span style={{ height: 1, background: 'var(--bd)', margin: '3px 0' }} />
@@ -466,216 +462,195 @@ function CountStrip({ title, items = [] }) {
   );
 }
 
-function EventCounts({ counts = {} }) {
+/**
+ * Log counts for the selected day.
+ *
+ * These used to be range totals sitting directly beneath day-scoped tiles,
+ * which made them look like they came from somewhere else entirely. They come
+ * from the same single-day query as the tiles: one row per employee per day,
+ * exactly what the Attendance Logs page lists for that date.
+ */
+function EventCounts({ counts = {}, dayLabel }) {
   return (
     <CountStrip
-      title="From attendance logs"
+      title={`From attendance logs · ${dayLabel}`}
       items={[
-        ['Attendance logs', counts.attendanceLogs, 'Employee-day rows, same unit as the Attendance Logs page'],
-        ['Check-in logs', counts.checkinLogs, 'Attendance logs containing at least one check-in'],
-        ['Check-out logs', counts.checkoutLogs, 'Attendance logs containing at least one check-out'],
+        ['Attendance logs', counts.logs, 'Employee rows for this day — the row count the Attendance Logs page shows for the same date'],
+        ['Check-in logs', counts.checkinLogs, 'Of those rows, how many recorded a check-in'],
+        ['Check-out logs', counts.checkoutLogs, 'Of those rows, how many recorded a check-out'],
       ]}
     />
   );
 }
 
-function Anomalies({ items = [] }) {
-  if (!items.length) {
-    return (
-      <div
-        style={{
-          height: '100%',
-          minHeight: 120,
-          display: 'grid',
-          placeItems: 'center',
-          border: '1px dashed var(--bd)',
-          borderRadius: 8,
-          color: 'var(--tx3)',
-          fontSize: 11.5,
-          padding: 12,
-          textAlign: 'center',
-        }}
-      >
-        No attendance anomalies detected
-      </div>
-    );
-  }
-
-  return (
-    <div className="vq-scroll" style={{ display: 'grid', gap: 8, alignContent: 'start', maxHeight: 260, overflowY: 'auto' }}>
-      {items.map((item) => {
-        const color = severityColor[item.severity] || 'var(--tx3)';
-        return (
-          <div
-            key={`${item.type}-${item.title}`}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '18px 1fr auto',
-              alignItems: 'start',
-              gap: 9,
-              padding: 10,
-              borderRadius: 8,
-              border: `1px solid ${color}`,
-              background: 'var(--bg2)',
-            }}
-          >
-            <AlertTriangle size={16} strokeWidth={2} style={{ color, marginTop: 1 }} />
-            <div style={{ minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>{item.title}</span>
-                {item.group && (
-                  <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--tx3)', letterSpacing: 0.3, textTransform: 'uppercase' }}>
-                    {item.group}
-                  </span>
-                )}
-              </div>
-              <div style={{ marginTop: 2, fontSize: 11, color: 'var(--tx2)' }}>{item.message}</div>
-            </div>
-            <Badge color={color}>{item.severity}</Badge>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 /**
- * Total Employees / Currently Present / Absentees counted the same way
- * Attendance Logs counts its own tiles: from raw attendance-log rows for
- * the selected range, not the attendance-summary server aggregate. Present
- * = checked in AND checked out; Absent = every other loaded row (mirrors
- * AttendanceLogs.jsx's `stats` exactly, including that a row which checked
- * in but hasn't checked out yet counts as Absent here too).
+ * The KPI tiles are a single-day figure and are deliberately NOT driven by the
+ * page's date range — presence only means anything for one calendar day. They
+ * come from /analytics/attendance-presence, which counts them from the
+ * Attendance Logs pipeline itself, so this widget and the Attendance Logs page
+ * always agree for the same date.
+ *
+ * Rows are graded against the org's Settings > Attendance Rules thresholds:
+ * Present (full day), Half Day, Absent (under half a day), and Checked In
+ * (on site, no check-out yet).
+ *
+ * The chart, event counts and anomalies below stay range-scoped.
  */
-function useLogsStyleTotals(params) {
-  const paramsKey = useMemo(() => JSON.stringify(params), [params]);
-
-  const rosterApi = useApi(
-    () => authorizedUsers(0, 1, '', {}),
-    [paramsKey],
-    { pollMs: 60000 }
-  );
-  const logsApi = useApi(
-    () =>
-      getAttendanceLogs(
-        '',
-        '',
-        '',
-        params.startDate || '',
-        params.endDate || '',
-        1,
-        LOGS_STATS_LIMIT,
-        'name',
-        'asc',
-        '',
-        '',
-        '',
-        '',
-        false,
-        []
-      ),
-    [paramsKey],
-    { pollMs: 60000 }
-  );
-
-  const totalEmployees = rosterApi.data?.body?.data?.totalCount || 0;
-  const rows = logsApi.data?.data?.body?.data?.attendanceLogs || [];
-  const present = rows.filter((r) => r.logInTime && r.logOutTime).length;
-  const absent = rows.length - present;
-
-  return {
-    loading: rosterApi.loading || logsApi.loading,
-    error: rosterApi.error || logsApi.error,
-    refetch: () => {
-      rosterApi.refetch();
-      logsApi.refetch();
-    },
-    totalEmployees,
-    present,
-    absent,
-  };
-}
-
 export default function AttendanceAnalytics({ params = {} }) {
   const paramsKey = useMemo(() => JSON.stringify(params), [params]);
-  const analytics = useApi(() => getAttendanceAnalytics(params), [paramsKey], { pollMs: 60000 });
-  const logsStyle = useLogsStyleTotals(params);
-  const data = analytics.data || {};
-  const counts = data.eventCounts || {};
-  const activeRangeLabel = formatRangeLabel(data.range);
+  const today = useMemo(() => moment().format('YYYY-MM-DD'), []);
+  const [presenceDate, setPresenceDate] = useState(today);
 
-  const rangeAction = (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--tx3)', fontSize: 11, fontWeight: 700 }}>
-      <CalendarDays size={14} strokeWidth={2} />
-      {activeRangeLabel || 'Selected range'}
-    </span>
+  // `includeAccess: false` — this widget shows attendance only, so the server
+  // skips the two access-log rollups it would otherwise compute and discard.
+  const analytics = useApi(
+    () => getAttendanceAnalytics({ ...params, includeAccess: false }),
+    [paramsKey]
   );
+  // Separate from `analytics` on purpose: changing the date must refetch only
+  // this, not blank out the chart and anomalies behind a spinner.
+  const presenceApi = useApi(
+    () => getAttendancePresence({ date: presenceDate }),
+    [presenceDate]
+  );
+
+  // Both halves refetch on the page's auto-refresh tick / manual refresh.
+  // Silently, so the selected date and the chart stay put while they update.
+  useAnalyticsRefresh(analytics.refetch);
+  useAnalyticsRefresh(presenceApi.refetch);
+
+  const data = analytics.data || {};
+  const presence = presenceApi.data || {};
+  const activeRangeLabel = formatRangeLabel(data.range);
+  const presenceDayLabel = presenceDate === today ? 'Today' : moment(presenceDate).format('D MMM');
 
   return (
     <Panel>
-      <PanelHeader title="Attendance Analytics" dot dotColor="var(--blue)" action={rangeAction} />
+      {/* No range badge here: every figure on this widget is now driven by the
+          date picker below, so a second date in the header just competed with
+          it. The chart still carries the range in its own subtitle. */}
+      <PanelHeader title="Attendance Analytics" dot dotColor="var(--blue)" />
       <div style={{ padding: '0 14px 0' }}>
         <AnalyticsBlurb>
           Attendance logs for the selected range: workforce presence, absentee patterns, and attendance anomalies.
         </AnalyticsBlurb>
       </div>
       <AsyncBoundary
-        loading={analytics.loading || logsStyle.loading}
-        error={analytics.error || logsStyle.error}
-        onRetry={() => {
-          analytics.refetch();
-          logsStyle.refetch();
-        }}
+        loading={analytics.loading}
+        error={analytics.error}
+        onRetry={() => analytics.refetch()}
         minH={220}
         emptyLabel="No attendance analytics available"
       >
         <div style={{ padding: 14, display: 'grid', gap: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(160px, 1fr))', gap: 12 }} className="vq-att-kpi-grid">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--tx3)', letterSpacing: 0.4, textTransform: 'uppercase' }}>
+              Presence on {presenceDayLabel}
+            </span>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--tx3)', fontWeight: 700 }}>
+              <CalendarDays size={14} strokeWidth={2} />
+              <input
+                type="date"
+                value={presenceDate}
+                max={today}
+                onChange={(event) => setPresenceDate(event.target.value || today)}
+                aria-label="Presence date"
+                // No `colorScheme` here on purpose: tokens.css already maps
+                // native date controls to the active [data-vq-theme], and an
+                // inline value would override it — which is what made the
+                // calendar indicator render white-on-white in light mode.
+                style={{
+                  height: 30,
+                  border: '1px solid var(--bd)',
+                  borderRadius: 8,
+                  padding: '0 8px',
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  background: 'var(--bg2)',
+                  color: 'var(--tx)',
+                }}
+              />
+            </label>
+          </div>
+
+          {/* auto-fit rather than a fixed 5 columns: five tiles at 160px would
+              overflow before the existing breakpoints kick in. */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }} className="vq-att-kpi-grid">
             <MetricTile
               icon={Users}
               label="Total Employees"
-              metric={{ count: logsStyle.totalEmployees }}
+              metric={{ count: presence.employees }}
               color="var(--blue)"
               subLabel="Registered users"
             />
             <MetricTile
               icon={UserCheck}
-              label="Currently Present"
-              metric={{ count: logsStyle.present }}
+              label="Present"
+              metric={{ count: presence.present }}
               color="var(--ok)"
-              subLabel="From attendance logs"
+              subLabel={`Full day · ${presenceDayLabel}`}
+            />
+            <MetricTile
+              icon={Hourglass}
+              label="Half Day"
+              metric={{ count: presence.halfDay }}
+              color="var(--warn)"
+              subLabel={`Part day · ${presenceDayLabel}`}
             />
             <MetricTile
               icon={UserX}
               label="Absentees"
-              metric={{ count: logsStyle.absent }}
-              color="var(--warn)"
-              subLabel="From attendance logs"
+              metric={{ count: presence.absent }}
+              color="var(--crit)"
+              subLabel={`Under half day · ${presenceDayLabel}`}
               positiveUp={false}
+            />
+            <MetricTile
+              icon={LogIn}
+              label="Checked In"
+              metric={{ count: presence.checkedIn }}
+              color="var(--blue)"
+              subLabel={`Still on site · ${presenceDayLabel}`}
             />
           </div>
 
-          <EventCounts counts={counts} />
+          {presenceApi.error && (
+            <div style={{ fontSize: 11, color: 'var(--crit)' }}>
+              Couldn&apos;t load presence for {presenceDayLabel}.{' '}
+              <button
+                type="button"
+                onClick={() => presenceApi.refetch()}
+                style={{ background: 'none', border: 'none', padding: 0, color: 'var(--blue)', font: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1.35fr 1fr', gap: 14 }} className="vq-att-detail-grid">
-            <div style={{ border: '1px solid var(--bd)', borderRadius: 8, padding: 12, background: 'var(--bg2)', minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+          <EventCounts counts={presence} dayLabel={presenceDayLabel} />
+
+          {/* Full width now that the Insights column is gone. Thirty stacked
+              bars in a 1.35fr column were the most cramped thing on the page. */}
+          <div style={{ border: '1px solid var(--bd)', borderRadius: 8, padding: 12, background: 'var(--bg2)', minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>Daily Activity</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 10.5, flexWrap: 'wrap' }}>
-                  <LegendItem color={COLORS.present} label="Present" />
-                  <LegendItem color={COLORS.checkedOut} label="Checked out" />
-                  <LegendItem color={COLORS.absent} label="Absent" />
-                </div>
+                <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{activeRangeLabel || 'Selected range'}</span>
               </div>
-
-              <DailyActivity series={data.series || []} employees={logsStyle.totalEmployees} />
-
-              <div style={{ marginTop: 8, fontSize: 10, color: 'var(--tx3)' }}>
-                Bars: employees per day, stacked to the full roster (attendance logs).
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 10.5, flexWrap: 'wrap' }}>
+                <LegendItem color={COLORS.present} label="Present" />
+                <LegendItem color={COLORS.halfDay} label="Half day" />
+                <LegendItem color={COLORS.shortDay} label="Absent" />
+                <LegendItem color={COLORS.checkedIn} label="Checked in" />
+                <LegendItem color={COLORS.noLog} label="No log" />
               </div>
             </div>
-            <div style={{ minWidth: 0 }}>
-              <Anomalies items={(data.anomalies || []).filter((item) => item.group === 'attendance')} />
+
+            <DailyActivity series={data.series || []} employees={presence.employees} />
+
+            <div style={{ marginTop: 8, fontSize: 10, color: 'var(--tx3)' }}>
+              Bars: employees per day, stacked to the full roster and graded by the same rules as the
+              Attendance Logs page.
             </div>
           </div>
         </div>

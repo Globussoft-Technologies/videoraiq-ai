@@ -1,6 +1,7 @@
 ﻿import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
+import { useAnalyticsRefresh } from './AnalyticsRefreshContext';
 import { getTopCameras } from '../../../helpers/analytics';
 import { ENGINE_PALETTE } from '../../../lib/engineMeta';
 import { num } from '../../../lib/format';
@@ -8,7 +9,9 @@ import AnalyticsBlurb from './AnalyticsBlurb';
 
 export default function TopCamerasCard({ params, limit = 5 }) {
   const paramsKey = JSON.stringify(params);
-  const api = useApi(() => getTopCameras({ ...params, limit }), [paramsKey, limit], { pollMs: 120000 });
+  const api = useApi(() => getTopCameras({ ...params, limit }), [paramsKey, limit]);
+  // Refetches on the page's auto-refresh tick / manual refresh.
+  useAnalyticsRefresh(api.refetch);
   const cameras = (api.data?.cameras || []).map((c, i) => ({ ...c, color: ENGINE_PALETTE[i % ENGINE_PALETTE.length] }));
 
   return (

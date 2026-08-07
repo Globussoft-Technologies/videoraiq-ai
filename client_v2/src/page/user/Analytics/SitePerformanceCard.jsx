@@ -1,6 +1,7 @@
 ﻿import { Panel } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
+import { useAnalyticsRefresh } from './AnalyticsRefreshContext';
 import { getSitePerformance } from '../../../helpers/analytics';
 import { ENGINE_PALETTE } from '../../../lib/engineMeta';
 import { num } from '../../../lib/format';
@@ -16,7 +17,9 @@ const COLS = 'minmax(110px,1.3fr) 1fr';
  */
 export default function SitePerformanceCard({ params }) {
   const paramsKey = JSON.stringify(params);
-  const api = useApi(() => getSitePerformance(params), [paramsKey], { pollMs: 120000 });
+  const api = useApi(() => getSitePerformance(params), [paramsKey]);
+  // Refetches on the page's auto-refresh tick / manual refresh.
+  useAnalyticsRefresh(api.refetch);
   const sites = (api.data?.sites || []).map((s, i) => ({ ...s, color: ENGINE_PALETTE[i % ENGINE_PALETTE.length] }));
 
   return (

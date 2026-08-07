@@ -105,6 +105,25 @@ export const updateTimezone = async (timezone) => {
   return unwrap(res);
 };
 
+/** Per-org attendance rules. Falls back to server defaults if never saved. */
+export const getAttendanceSettings = async () => {
+  const token = getAccessToken();
+  const res = await axios.get(`${Api_url}/attendance/settings`, {
+    headers: { 'x-access-token': token },
+  });
+  return unwrap(res) || {};
+};
+
+export const updateAttendanceSettings = async ({ fullDayHours, halfDayHours }) => {
+  const token = getAccessToken();
+  const res = await axios.put(
+    `${Api_url}/attendance/settings`,
+    { fullDayHours, halfDayHours },
+    { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
+  );
+  return unwrap(res);
+};
+
 export const updateRetention = async ({ userId, ...payload }) => {
   const token = getAccessToken();
   const res = await axios.put(

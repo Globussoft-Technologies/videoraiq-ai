@@ -4,17 +4,18 @@ import { VideoOff, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Panel, ActionLink } from '../../../components/primitives';
 import { Loading, Empty } from '../../../components/States';
 import CameraStream from '../../../components/CameraStream';
-import CameraProbe from '../../../components/CameraProbe';
 import LiveCameraLogsOverlay from '../../../components/LiveCameraLogsOverlay';
 import usePageActive from '../../../hooks/usePageActive';
+import { useApi } from '../../../hooks/useApi';
+import { getCamerasStatus, isCameraLive } from '../../../helpers/cameraStatus';
 
-const PROBE_LIMIT = 32; // cameras stream-probed for the online tally
+// The Camera Status API is a cached read regardless of scope (tested to 500
+// ids in one call), so this only bounds the query size for very large estates.
+const STATUS_LIMIT = 500;
+// How often the real backend status is polled for the tally + tab dots.
+const STATUS_POLL_MS = 5000;
 
-/* Only the selected tab streams. Everything else is a background status probe
-   that runs one-at-a-time through the shared scheduler (lib/streamQueue) and
-   disconnects once it has a verdict — see components/CameraProbe. */
 const PRIORITY_SELECTED = -50;
-const PRIORITY_PROBE    = 800;
 
 /**
  * Command Center live camera panel: switchable camera tabs + the latest frame
@@ -22,26 +23,23 @@ const PRIORITY_PROBE    = 800;
  * this camera; the tile's maximize icon puts just the video into real
  * browser fullscreen in place.
  */
-export default function LiveCamera({ channels = [], loading, latestByChannel = {}, onLiveChange, onOnlineCountChange }) {
+export default function LiveCamera({ channels = [], loading, latestByChannel = {}, onOnlineCountChange }) {
   const navigate = useNavigate();
-  // Two different lists on purpose:
-  //   probeCams — every camera matching the current filter, each briefly
-  //     connected in the background so "Cameras Online" counts the whole
-  //     filtered set. These are serialised by the stream scheduler and torn
-  //     down again once their status is known, so the panel holds at most one
-  //     hidden stream at a time. PROBE_LIMIT caps the tally's denominator.
-  //   cams — the handful actually rendered as switchable tabs.
+  // `channels` is the full camera inventory: every one gets a switchable tab
+  // (the tab row scrolls) and every one is counted by "Cameras Online".
   const cams = useMemo(
     () => (Array.isArray(channels) ? channels : []),
     [channels]
   );
-  const probeCams = useMemo(() => cams.slice(0, PROBE_LIMIT), [cams]);
+  const statusIds = useMemo(
+    () => cams.map((c) => c._id || c.id).filter(Boolean).slice(0, STATUS_LIMIT),
+    [cams]
+  );
+  const statusIdsKey = statusIds.join(',');
   const [activeId, setActiveId] = useState(null);
 
-  /* Tab hidden / browser minimised → drop every stream on this panel. */
+  /* Tab hidden / browser minimised → drop the visible stream on this panel. */
   const pageActive = usePageActive({ graceMs: 3000 });
-  const pageActiveRef = useRef(pageActive);
-  pageActiveRef.current = pageActive;
   const tileRef = useRef(null);
   const tabsRef = useRef(null);
 
@@ -49,40 +47,36 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
   const activeKey = active?._id || active?.id;
   const snapshot = active ? latestByChannel[activeKey] : null;
 
-  // Real online/offline per tab — each tab's stream connection is probed in the
-  // background (hidden, same HLS decode Live Wall uses per tile) since there's
-  // no reliable "is this camera live" field from the backend to read instead.
-  const [liveById, setLiveById] = useState({});
-  const setTabLive = useCallback((id, isLive) => {
-    // Streams are torn down while the tab is hidden; those teardown reports
-    // would wrongly zero the tally, so freeze the last known state instead.
-    if (!pageActiveRef.current) return;
-    setLiveById((prev) => (prev[id] === isLive ? prev : { ...prev, [id]: isLive }));
-  }, []);
-  useEffect(() => {
-    // Drop entries for cameras no longer in the current filtered list.
-    const ids = new Set(probeCams.map((c) => c._id || c.id));
-    setLiveById((prev) => {
-      const next = {};
-      let changed = false;
-      Object.keys(prev).forEach((id) => {
-        if (ids.has(id)) next[id] = prev[id];
-        else changed = true;
-      });
-      return changed ? next : prev;
+  // Real online/offline per tab, straight from the backend: a camera is live
+  // when the RTSP source is reachable AND this server is actually producing
+  // fresh HLS segments for it right now (rtsp_online && stream_status ===
+  // 'running') — see CAMERA_STATUS_API.md. Polled, not stream-probed, so
+  // every tab (not just a capped subset) gets a real verdict in one request.
+  const statusApi = useApi(
+    () => (statusIds.length ? getCamerasStatus(statusIds) : Promise.resolve(null)),
+    [statusIdsKey],
+    { pollMs: STATUS_POLL_MS, enabled: statusIds.length > 0 }
+  );
+  const statusById = useMemo(() => {
+    const map = {};
+    (statusApi.data?.cameras || []).forEach((cam) => {
+      if (cam?.id) map[cam.id] = cam;
     });
-  }, [probeCams]);
-  const onlineCount = probeCams.filter((c) => liveById[c._id || c.id]).length;
-  const probedCount = probeCams.filter((c) => Object.prototype.hasOwnProperty.call(liveById, c._id || c.id)).length;
-  const probeComplete = probeCams.length > 0 && probedCount === probeCams.length;
-  useEffect(() => {
-    // Keep the last known Sidebar tally while streams are connecting. Publishing
-    // the initial 0/0 or 0/N would make navigation appear to reset the count.
-    if (!probeComplete) return;
-    onOnlineCountChange?.(onlineCount, probeCams.length);
-  }, [onlineCount, probeCams.length, onOnlineCountChange, probeComplete]);
+    return map;
+  }, [statusApi.data]);
+  const isLiveId = useCallback((id) => isCameraLive(statusById[id]), [statusById]);
 
-  const online = active ? !!liveById[activeKey] : false;
+  const onlineCount = statusIds.filter(isLiveId).length;
+  const hasStatus = !!statusApi.data;
+  useEffect(() => {
+    // Keep the last known Sidebar tally until the first status response lands,
+    // instead of publishing an initial 0/0 that would make navigation look
+    // like it reset the count.
+    if (!hasStatus) return;
+    onOnlineCountChange?.(onlineCount, statusIds.length);
+  }, [onlineCount, statusIds.length, onOnlineCountChange, hasStatus]);
+
+  const online = active ? isLiveId(activeKey) : false;
   const liveColor = !active ? 'var(--tx3)' : online ? 'var(--ok)' : 'var(--crit)';
 
   const handleTabWheel = useCallback((event) => {
@@ -182,7 +176,7 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
         {cams.map((c) => {
           const id = c._id || c.id;
           const isActive = id === activeKey;
-          const dot = liveById[id] ? 'var(--ok)' : 'var(--crit)';
+          const dot = isLiveId(id) ? 'var(--ok)' : 'var(--crit)';
           return (
             <div
               key={id}
@@ -223,7 +217,6 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
             channel={active}
             onMaximize={toggleTileFullscreen}
             isFullscreen={isFullscreen}
-            onLiveChange={(isLive) => { setTabLive(activeKey, isLive); onLiveChange?.(isLive); }}
             minH={isFullscreen ? 0 : 220}
             rounded={!isFullscreen}
             fit={isFullscreen ? 'contain' : 'cover'}
@@ -272,30 +265,6 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
             </button>
           </>
         )}
-      </div>
-
-      {/* Hidden probes — every filtered camera is connected in the background
-          (not rendered) purely to learn its real live/offline state for the
-          "Cameras Online" count and tab dots; the active tab's own tile above
-          already reports its status via onLiveChange.
-
-          These run strictly one at a time through the shared scheduler and
-          disconnect once their verdict is in, so clicking a tab opens that one
-          camera rather than the whole filtered set. */}
-      <div style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }} aria-hidden="true">
-        {probeCams.filter((c) => (c._id || c.id) !== activeKey).map((c, idx) => {
-          const id = c._id || c.id;
-          return (
-            <CameraProbe
-              key={id}
-              channel={c}
-              channelId={id}
-              setLive={setTabLive}
-              active={pageActive && !isFullscreen}
-              priority={PRIORITY_PROBE + idx}
-            />
-          );
-        })}
       </div>
     </Panel>
   );
