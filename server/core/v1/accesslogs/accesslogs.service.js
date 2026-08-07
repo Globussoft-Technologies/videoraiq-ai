@@ -529,6 +529,11 @@ async getLogs(req, res, next) {
           employeeLocations = [...authorizedEmployeeLocations,...employeeLocations];
           employeeLocations = [...new Set(employeeLocations)];
         }
+        const normalizedEmployeeLocations = [...new Set(
+          (employeeLocations || [])
+            .map((item) => String(item).trim().toLowerCase())
+            .filter(Boolean)
+        )];
 
         let { sortOrder = "desc", sortField = "lastCreatedAt" } = req.query;
 
@@ -574,6 +579,21 @@ async getLogs(req, res, next) {
         if(employeeLocations?.length){
           authorizedEmployeeIds = await userModel.find({employeeLocationId:{$in:employeeLocations},adminId:new ObjectId(adminId)}).distinct("_id");
         }
+        let locationEmployeeIds = [];
+        let locationNvrIds = [];
+        if (normalizedEmployeeLocations.length) {
+          const locationRegexes = normalizedEmployeeLocations.map((item) => new RegExp(`^${item}$`, "i"));
+          [locationEmployeeIds, locationNvrIds] = await Promise.all([
+            userModel.distinct("_id", {
+              adminId: new ObjectId(adminId),
+              location: { $in: locationRegexes },
+            }),
+            nvrModel.distinct("_id", {
+              userId: new ObjectId(adminId),
+              location: { $in: locationRegexes },
+            }),
+          ]);
+        }
         const authorizedUserIds = shouldRemoveUnknown
           ? await userModel.distinct("_id", { adminId: new ObjectId(adminId) })
           : [];
@@ -581,7 +601,10 @@ async getLogs(req, res, next) {
         // Convert department IDs to ObjectIds
         const deptObjectIds = departmentIds?.length ? departmentIds.map(id => new ObjectId(id)) : [];
         const channelObjectIds = channelIds?.length ? channelIds.map(id => new ObjectId(id)) : [];
-        const nvrObjectIds = nvrIds?.length ? nvrIds.map(id => new ObjectId(id)) : [];
+        const nvrObjectIds = [
+          ...(nvrIds?.length ? nvrIds.map(id => new ObjectId(id)) : []),
+          ...locationNvrIds.map((id) => new ObjectId(id)),
+        ];
         const authChannelObjectIds = authorizedChannels.map(id => new ObjectId(id));
 
         // ponytail: with no nvr/channel filter the session $filter below is a
@@ -694,6 +717,10 @@ async getLogs(req, res, next) {
             }
           },
           { $unwind: { path: "$departmentInfo", preserveNullAndEmptyArrays: true } },
+
+          ...(locationEmployeeIds.length
+            ? [{ $match: { userId: { $in: locationEmployeeIds.map((id) => new ObjectId(id)) } } }]
+            : []),
 
           // Filter by department
           ...(deptObjectIds.length ? [

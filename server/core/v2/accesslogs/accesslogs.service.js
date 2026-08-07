@@ -718,6 +718,10 @@ async getLogs(req, res, next) {
             ? [{ $match: { userId: { $in: authorizedUserIds.map((id) => new ObjectId(id)) } } }]
             : []),
 
+          ...(locationEmployeeIds.length
+            ? [{ $match: { userId: { $in: locationEmployeeIds.map((id) => new ObjectId(id)) } } }]
+            : []),
+
 
           // tag: true → tagged only | tag: false → untagged + old docs | tag: null/omitted → all
           ...(tag === null || tag === undefined ? [] : tag ? [{ $match: { tag: true } }] : [{ $match: { $or: [{ tag: false }, { tag: { $exists: false } }] } }]),

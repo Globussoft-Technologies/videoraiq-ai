@@ -93,8 +93,8 @@ class NVRValidation {
             "nvrName must not contain script-related characters.",
         }),
       username: Joi.string().min(1).required(),
-      oldPassword: Joi.string().allow("").required(),
-      newPassword: Joi.string().allow("").required(),
+      oldPassword: Joi.string().allow("").optional(),
+      newPassword: Joi.string().allow("").optional(),
       brand: Joi.string().allow("").required(),
       location: Joi.string().required().trim().messages({
         "any.required": "Location is required.",
