@@ -243,6 +243,49 @@ class AdminController {
     */
     return await adminService.updateAllowedDetections(req, res, next);
   }
+
+  async getAlertSwitches(req, res, next) {
+    /* #swagger.tags = ['Admin']
+    #swagger.description = 'Get global email and telegram alert switches for the authenticated admin'
+    #swagger.responses[200] = { description: 'Alert switches fetched successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return await adminService.getAlertSwitches(req, res, next);
+  }
+
+  async updateEmailAlertsEnabled(req, res, next) {
+    /* #swagger.tags = ['Admin']
+    #swagger.description = 'Globally enable or disable email alerts for the authenticated admin'
+    #swagger.parameters['data'] = {
+        in: 'body',
+        required: true,
+        schema: {
+          emailAlertsEnabled: true
+        }
+    }
+    #swagger.responses[200] = { description: 'Email alerts switch updated successfully' }
+    #swagger.responses[400] = { description: 'Validation error' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return await adminService.updateEmailAlertsEnabled(req, res, next);
+  }
+
+  async updateTelegramAlertsEnabled(req, res, next) {
+    /* #swagger.tags = ['Admin']
+    #swagger.description = 'Globally enable or disable telegram alerts for the authenticated admin'
+    #swagger.parameters['data'] = {
+        in: 'body',
+        required: true,
+        schema: {
+          telegramAlertsEnabled: true
+        }
+    }
+    #swagger.responses[200] = { description: 'Telegram alerts switch updated successfully' }
+    #swagger.responses[400] = { description: 'Validation error' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return await adminService.updateTelegramAlertsEnabled(req, res, next);
+  }
   async updateLogsSound(req, res, next) {
     /* #swagger.tags = ['Admin']
     #swagger.description = 'Update logsSound preferences for Admin or User'

@@ -16,6 +16,9 @@ router.get("/get-location-by-emp-email",verifyToken,adminController.getLocationB
 router.get("/delete-emp-email-progress",verifyToken,adminController.getDeletionProgress);
 router.get("/allowed-detections",verifyToken,adminController.getAllowedDetections);
 router.put("/allowed-detections",verifyToken,adminController.updateAllowedDetections);
+router.get("/alert-switches",verifyToken,adminController.getAlertSwitches);
+router.put("/alert-switches/email",verifyToken,adminController.updateEmailAlertsEnabled);
+router.put("/alert-switches/telegram",verifyToken,adminController.updateTelegramAlertsEnabled);
 router.put("/update-logs-sound",verifyToken,adminController.updateLogsSound);
 router.get("/fetch-logs-sound",verifyToken,adminController.fetchLogsSound);
 router.put("/update-stream-host",verifyToken,adminController.updateStreamHost);

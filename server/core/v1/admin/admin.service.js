@@ -692,6 +692,80 @@ class AdminService {
     }
   }
 
+  async getAlertSwitches(req, res, next) {
+    try {
+      const adminId = req?.verified?.userData?.adminId;
+      const admin = await adminModel.findById(adminId).select("emailAlertsEnabled telegramAlertsEnabled").lean();
+      if (!admin) {
+        return res.status(404).json(Response.userFailResp("Admin not found"));
+      }
+      return res.status(200).json(
+        Response.userSuccessResp("Alert switches fetched successfully", {
+          emailAlertsEnabled: admin.emailAlertsEnabled,
+          telegramAlertsEnabled: admin.telegramAlertsEnabled,
+        })
+      );
+    } catch (error) {
+      next(new AppError(error, 500));
+    }
+  }
+
+  async updateEmailAlertsEnabled(req, res, next) {
+    try {
+      const adminId = req?.verified?.userData?.adminId;
+      const { emailAlertsEnabled } = req.body || {};
+      if (typeof emailAlertsEnabled !== "boolean") {
+        return res.status(400).json(Response.userFailResp("emailAlertsEnabled must be boolean"));
+      }
+
+      const admin = await adminModel.findByIdAndUpdate(
+        adminId,
+        { $set: { emailAlertsEnabled } },
+        { new: true, select: "emailAlertsEnabled" }
+      ).lean();
+
+      if (!admin) {
+        return res.status(404).json(Response.userFailResp("Admin not found"));
+      }
+
+      return res.status(200).json(
+        Response.userSuccessResp("Email alerts switch updated successfully", {
+          emailAlertsEnabled: admin.emailAlertsEnabled,
+        })
+      );
+    } catch (error) {
+      next(new AppError(error, 500));
+    }
+  }
+
+  async updateTelegramAlertsEnabled(req, res, next) {
+    try {
+      const adminId = req?.verified?.userData?.adminId;
+      const { telegramAlertsEnabled } = req.body || {};
+      if (typeof telegramAlertsEnabled !== "boolean") {
+        return res.status(400).json(Response.userFailResp("telegramAlertsEnabled must be boolean"));
+      }
+
+      const admin = await adminModel.findByIdAndUpdate(
+        adminId,
+        { $set: { telegramAlertsEnabled } },
+        { new: true, select: "telegramAlertsEnabled" }
+      ).lean();
+
+      if (!admin) {
+        return res.status(404).json(Response.userFailResp("Admin not found"));
+      }
+
+      return res.status(200).json(
+        Response.userSuccessResp("Telegram alerts switch updated successfully", {
+          telegramAlertsEnabled: admin.telegramAlertsEnabled,
+        })
+      );
+    } catch (error) {
+      next(new AppError(error, 500));
+    }
+  }
+
   async updateLogsSound(req, res, next) {
     try {
       const { adminId, memberId } = req?.verified?.userData;

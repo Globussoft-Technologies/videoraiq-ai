@@ -63,6 +63,7 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
 
     // Send Email
     try {
+      const adminFlags = await adminModel.findById(adminId).select("emailAlertsEnabled telegramAlertsEnabled").lean();
       const [emailRecipientsFromAlerts, emailRecipientsFromIncidentType] = await Promise.all([
         RecipientModel.find({ _id: { $in: channelData?.alerts }, type: 'email' })
           .select('value -_id')
@@ -80,7 +81,7 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
       ];
 
       // if (emailAddresses?.length && channelData?.profile?.notification?.channels?.email===true) {
-      if(emailAddresses?.length){
+      if(emailAddresses?.length && adminFlags?.emailAlertsEnabled !== false){
         if(detectionType==="loiteringWithoutAuth"){
           let mailResponse = await MailResponse.loiteringWithoutAuth(emailAddresses,incidentData,detectionType,nvrData,channelData);
         }else if(detectionType==="loiteringWithAuth"){
@@ -173,7 +174,7 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
         zoneConfigs,
         adminTimezone: adminTz,
       });
-      if (windowOpen) {
+      if (windowOpen && adminFlags?.telegramAlertsEnabled !== false) {
         await TelegramService.sendIncident(telegramIncident, nvrData, channelData, adminId, adminTz);
       }
     } catch (err) {
