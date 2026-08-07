@@ -1,17 +1,23 @@
 import { useMemo, useState } from 'react';
-import { Search, Video, ChevronRight, ChevronDown } from 'lucide-react';
+import { Search, Video, ChevronRight, ChevronDown, Play, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import ConfirmationModal from '../../../components/DeleteConfirmation';
 import { useApi } from '../../../hooks/useApi';
 import { getChannels, getNvrs, getDetectionTypes, toggleChannelDetection, updateChannel, getCamerasByNvr } from '../../../helpers/configure';
 import { Popover, PopoverTrigger, PopoverContent } from '../../../pages/AttendanceLogs/components/Popover';
+import CameraStream from '../../../components/CameraStream';
 import DetectionZoneMarking from './DetectionZoneMarking';
 
 const CHECK_TYPES = [
   { value: 'none', label: 'None' },
   { value: 'checkin', label: 'Check-in' },
   { value: 'checkout', label: 'Check-out' },
+];
+
+const CAM_TYPE_FILTERS = [
+  { value: '', label: 'All Camera Types' },
+  ...CHECK_TYPES,
 ];
 
 function mergeCameraStreamFields(nextCamera, previousCamera) {
@@ -26,6 +32,19 @@ function mergeCameraStreamFields(nextCamera, previousCamera) {
       ...(nextCamera.config || {}),
       StreamingUrl: nextCamera.config?.StreamingUrl || previousCamera.config?.StreamingUrl,
     },
+  };
+}
+
+function nvrIdOf(camera) {
+  return camera?.nvrId?._id || camera?.nvrId || camera?.NVRId || camera?.nvr?._id || camera?.nvr;
+}
+
+function streamableCamera(camera) {
+  const nvrId = nvrIdOf(camera);
+  const channelId = camera?._id || camera?.id || camera?.channelId;
+  return {
+    ...camera,
+    streamingUrl: camera?.streamingUrl || camera?.StreamingUrl || (nvrId && channelId ? `stream/${nvrId}-${channelId}/playlist.m3u8` : ''),
   };
 }
 
@@ -132,7 +151,44 @@ function AppliedTypesPopover({ camera, typeLabels, onToggleRequest }) {
   );
 }
 
-function CameraRow({ camera, typeLabels, onOpen, onToggleDetectionRequest, onCheckTypeChange }) {
+function CameraPreviewModal({ camera, onClose }) {
+  const title = camera?.customName || camera?.name || camera?.channelId || 'Camera Preview';
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(15,23,42,.62)', backdropFilter: 'blur(7px)', display: 'grid', placeItems: 'center', padding: 24 }}
+    >
+      <section
+        onClick={(event) => event.stopPropagation()}
+        style={{ width: 'min(920px, 94vw)', background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, overflow: 'hidden', boxShadow: '0 24px 80px rgba(0,0,0,.38)' }}
+      >
+        <div style={{ height: 50, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '0 16px', borderBottom: '1px solid var(--bd)' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 850, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {title}
+            </div>
+            <div style={{ marginTop: 2, fontSize: 11, color: 'var(--tx3)' }}>Live camera preview</div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close preview"
+            style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg2)', color: 'var(--tx2)', display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0 }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div style={{ background: '#020617', aspectRatio: '16 / 9', minHeight: 320 }}>
+          <CameraStream channel={streamableCamera(camera)} minH={320} rounded={false} fit="contain" showOverlay />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionRequest, onCheckTypeChange, checkTypeSaving }) {
   return (
     <div
       className="vq-row"
@@ -151,9 +207,37 @@ function CameraRow({ camera, typeLabels, onOpen, onToggleDetectionRequest, onChe
         }}>
           <Video size={18} strokeWidth={1.7} />
         </span>
-        <span style={{ minWidth: 0 }}>
-          <span style={{ fontWeight: 600, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {camera.customName || camera.name}
+        <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <span style={{ fontWeight: 600, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {camera.customName || camera.name}
+            </span>
+            <button
+              type="button"
+              title="Preview camera"
+              onClick={(event) => {
+                event.stopPropagation();
+                onPreview?.(camera);
+              }}
+              style={{
+                height: 24,
+                padding: '0 8px',
+                borderRadius: 7,
+                border: '1px solid rgba(99,102,241,.32)',
+                background: 'rgba(99,102,241,.1)',
+                color: 'var(--blue)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                fontSize: 11,
+                fontWeight: 750,
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              <Play size={10} fill="currentColor" />
+              Preview
+            </button>
           </span>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)', display: 'block' }}>
             {camera.ipAddress || '—'}
@@ -170,15 +254,35 @@ function CameraRow({ camera, typeLabels, onOpen, onToggleDetectionRequest, onChe
           <select
             value={camera.checkType || 'none'}
             onChange={e => onCheckTypeChange(camera, e.target.value)}
+            disabled={checkTypeSaving}
             style={{
               height: 32, padding: '0 26px 0 11px', borderRadius: 8,
               background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12,
-              outline: 'none', cursor: 'pointer', color: 'var(--tx)', appearance: 'none',
+              outline: 'none', cursor: checkTypeSaving ? 'wait' : 'pointer', color: 'var(--tx)', appearance: 'none',
+              opacity: checkTypeSaving ? 0.72 : 1,
             }}
           >
             {CHECK_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
-          <ChevronDown size={12} style={{ position: 'absolute', right: 9, top: 10, pointerEvents: 'none', color: 'var(--tx3)' }} />
+          {checkTypeSaving ? (
+            <span
+              style={{
+                position: 'absolute',
+                right: 9,
+                top: '50%',
+                width: 12,
+                height: 12,
+                marginTop: -6,
+                borderRadius: '50%',
+                border: '2px solid rgba(99,102,241,.25)',
+                borderTopColor: 'var(--blue)',
+                animation: 'vq-spin .7s linear infinite',
+                pointerEvents: 'none',
+              }}
+            />
+          ) : (
+            <ChevronDown size={12} style={{ position: 'absolute', right: 9, top: 10, pointerEvents: 'none', color: 'var(--tx3)' }} />
+          )}
         </span>
       </span>
 
@@ -194,9 +298,12 @@ const LIMIT = 100;
 export function DetectionSettingsCameraList({ onOpenCamera }) {
   const [search, setSearch] = useState('');
   const [nvrFilter, setNvrFilter] = useState('');
+  const [camTypeFilter, setCamTypeFilter] = useState('');
   const [page, setPage] = useState(0);
   const [detectionConfirm, setDetectionConfirm] = useState(null);
   const [detectionActionLoading, setDetectionActionLoading] = useState(false);
+  const [previewCamera, setPreviewCamera] = useState(null);
+  const [checkTypeSavingId, setCheckTypeSavingId] = useState(null);
 
   const nvrsApi = useApi(() => getNvrs(0, 100), []);
   const nvrs = nvrsApi.data?.nvrs ?? [];
@@ -205,8 +312,8 @@ export function DetectionSettingsCameraList({ onOpenCamera }) {
   const typeLabels = typesApi.data || {};
 
   const channelsApi = useApi(
-    () => getChannels({ skip: page * LIMIT, limit: LIMIT, nvrId: nvrFilter, search }),
-    [page, nvrFilter, search],
+    () => getChannels({ skip: page * LIMIT, limit: LIMIT, nvrId: nvrFilter, search, camType: camTypeFilter }),
+    [page, nvrFilter, search, camTypeFilter],
   );
   const cameras = channelsApi.data?.channels ?? [];
   const total = channelsApi.data?.total ?? 0;
@@ -264,12 +371,17 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
   };
 
   const handleCheckTypeChange = async (camera, checkType) => {
+    if (!camera?._id || checkTypeSavingId) return;
+    if ((camera.checkType || 'none') === checkType) return;
+    setCheckTypeSavingId(camera._id);
     try {
       await updateChannel(camera._id, { checkType });
       channelsApi.refetch();
     } catch (err) {
       const msg = err?.response?.data?.body?.message || 'Failed to update camera type.';
       toast.error(msg);
+    } finally {
+      setCheckTypeSavingId(null);
     }
   };
 
@@ -304,6 +416,22 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
           </select>
           <ChevronDown size={14} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} />
         </div>
+        <div style={{ position: 'relative' }}>
+          <select
+            value={camTypeFilter}
+            onChange={e => { setCamTypeFilter(e.target.value); setPage(0); }}
+            style={{
+              height: 40, padding: '0 34px 0 13px', borderRadius: 10,
+              background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13,
+              outline: 'none', cursor: 'pointer', color: 'var(--tx)', appearance: 'none',
+            }}
+          >
+            {CAM_TYPE_FILTERS.map(type => (
+              <option key={type.value || 'all'} value={type.value}>{type.label}</option>
+            ))}
+          </select>
+          <ChevronDown size={14} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} />
+        </div>
         <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>
           {total} total
         </span>
@@ -334,12 +462,17 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
               camera={camera}
               typeLabels={typeLabels}
               onOpen={() => onOpenCamera?.(camera)}
+              onPreview={setPreviewCamera}
               onToggleDetectionRequest={handleDetectionToggleRequest}
               onCheckTypeChange={handleCheckTypeChange}
+              checkTypeSaving={checkTypeSavingId === camera._id}
             />
           ))}
         </AsyncBoundary>
       </div>
+      {previewCamera && (
+        <CameraPreviewModal camera={previewCamera} onClose={() => setPreviewCamera(null)} />
+      )}
 
       {pages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: 4 }}>

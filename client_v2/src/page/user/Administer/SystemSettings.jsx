@@ -733,6 +733,7 @@ export default function SystemSettings() {
     }
     await audio.setAudioEnabled?.(next, {
       successMessage: `Detection audio alerts ${next ? 'enabled' : 'disabled'}`,
+      syncLineCrossing: true,
     });
   };
 
@@ -878,7 +879,7 @@ export default function SystemSettings() {
           <ToggleRow
             icon={Volume2}
             label="Detection Audio Alerts"
-            desc="Control audible alert notifications for live attendance"
+            desc="Control audible alert notifications for live attendance and line crossing"
             value={soundEnabled}
             onChange={handleSoundToggle}
             disabled={soundEnabled ? !canDisableSetting : !canEnableSetting}

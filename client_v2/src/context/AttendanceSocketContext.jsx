@@ -8,6 +8,14 @@ const AttendanceSocketContext = createContext();
 export const useAttendanceSocket = () => useContext(AttendanceSocketContext);
 
 const TWO_MINUTES = 2 * 60 * 1000;
+const LINE_CROSSING_AUDIO_STORAGE_KEY = 'lineCrossingAudioMuted';
+
+function applyLineCrossingAudioEnabled(enabled) {
+  if (typeof window === 'undefined') return;
+  const muted = !enabled;
+  try { window.localStorage.setItem(LINE_CROSSING_AUDIO_STORAGE_KEY, String(muted)); } catch {}
+  window.dispatchEvent(new CustomEvent('line-crossing-audio-change', { detail: { muted } }));
+}
 
 function cleanId(value) {
   if (!value) return '';
@@ -49,6 +57,7 @@ export function AttendanceSocketProvider({ children }) {
     const nextMuted = !logsSound;
     isMutedRef.current = nextMuted;
     setIsMuted(nextMuted);
+    applyLineCrossingAudioEnabled(logsSound);
   }, []);
 
   const refreshAudioPreference = useCallback(async ({ silent = false } = {}) => {
@@ -74,11 +83,12 @@ export function AttendanceSocketProvider({ children }) {
     return () => { cancelled = true; };
   }, [user, applyLogsSound]);
 
-  const setAudioEnabled = useCallback(async (enabled, { successMessage } = {}) => {
+  const setAudioEnabled = useCallback(async (enabled, { successMessage, syncLineCrossing = false } = {}) => {
     const previousMuted = isMutedRef.current;
     const nextMuted = !enabled;
     isMutedRef.current = nextMuted;
     setIsMuted(nextMuted);
+    if (syncLineCrossing) applyLineCrossingAudioEnabled(enabled);
     setAudioSaving(true);
     try {
       await updateLogsSound(enabled);
@@ -86,6 +96,7 @@ export function AttendanceSocketProvider({ children }) {
     } catch {
       isMutedRef.current = previousMuted;
       setIsMuted(previousMuted);
+      if (syncLineCrossing) applyLineCrossingAudioEnabled(!previousMuted);
       toast.error('Could not update audio alarm preference');
     } finally {
       setAudioSaving(false);

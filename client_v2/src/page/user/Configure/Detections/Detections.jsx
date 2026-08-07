@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../../components/States';
 import { useApi } from '../../../../hooks/useApi';
-import { deleteDetectionSetting, getCamerasByNvr, getDetectionSettings, getDetectionTypes, toggleChannelDetection, updateDetectionSetting } from '../../../../helpers/configure';
+import { deleteDetectionSetting, getCamerasByNvr, getDetectionSettings, getDetectionTypes, toggleChannelDetection, updateChannel, updateDetectionSetting } from '../../../../helpers/configure';
 import { fetchDetectionTypes as fetchIncidentFilterTypes, fetchIncidents, fetchIncidentStats } from '../../../../helpers/incidents';
 import { timeOfDay } from '../../../../lib/format';
 import DetectionZoneMarking from '../DetectionZoneMarking';
@@ -27,6 +27,12 @@ const STATE_TABS = [
   { key: 'all', label: 'All' },
   { key: 'active', label: 'Active' },
   { key: 'paused', label: 'Paused' },
+];
+
+const CAMERA_TYPE_OPTIONS = [
+  { value: 'none', label: 'None' },
+  { value: 'checkin', label: 'Check-in' },
+  { value: 'checkout', label: 'Check-out' },
 ];
 
 const INCIDENT_PAGE_SIZE = 12;
@@ -296,6 +302,7 @@ export default function Detections() {
   const [searchParams, setSearchParams] = useSearchParams();
   const detailCameraId = searchParams.get('camera');
   const [resettingSetting, setResettingSetting] = useState(false);
+  const [cameraTypeSaving, setCameraTypeSaving] = useState(false);
   const incidentRequestIdRef = useRef(0);
   const typesApi = useApi(() => getDetectionTypes(), [], { initialData: {} });
   const incidentFilterTypesApi = useApi(
@@ -715,6 +722,24 @@ export default function Detections() {
     }
   };
 
+  const handleZoneCameraTypeChange = async (checkType) => {
+    if (!zoneCamera?._id || cameraTypeSaving) return;
+    const previous = zoneCamera.checkType || 'none';
+    if (previous === checkType) return;
+    setCameraTypeSaving(true);
+    setZoneCamera((prev) => (prev ? { ...prev, checkType } : prev));
+    try {
+      await updateChannel(zoneCamera._id, { checkType });
+      toast.success('Camera type updated.');
+      refreshZoneCamera();
+    } catch (err) {
+      setZoneCamera((prev) => (prev ? { ...prev, checkType: previous } : prev));
+      toast.error(err?.response?.data?.body?.message || 'Failed to update camera type.');
+    } finally {
+      setCameraTypeSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (!zoneCamera?._id || !zoneCameraNvrId || !selectedSettingType) return undefined;
     let cancelled = false;
@@ -755,6 +780,57 @@ export default function Detections() {
           <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--tx)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {cameraLabel(zoneCamera)}
           </span>
+        )}
+        {zoneCamera && (
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.08em', color: 'var(--tx3)' }}>
+              CAMERA TYPE
+            </span>
+            <span style={{ position: 'relative' }}>
+              <select
+                value={zoneCamera.checkType || 'none'}
+                onChange={(event) => handleZoneCameraTypeChange(event.target.value)}
+                disabled={cameraTypeSaving}
+                style={{
+                  height: 34,
+                  minWidth: 118,
+                  padding: '0 30px 0 12px',
+                  borderRadius: 9,
+                  background: 'var(--bg2)',
+                  border: '1px solid var(--bd)',
+                  color: 'var(--tx)',
+                  fontSize: 12,
+                  outline: 'none',
+                  cursor: cameraTypeSaving ? 'wait' : 'pointer',
+                  appearance: 'none',
+                  opacity: cameraTypeSaving ? 0.72 : 1,
+                }}
+              >
+                {CAMERA_TYPE_OPTIONS.map((type) => (
+                  <option key={type.value} value={type.value}>{type.label}</option>
+                ))}
+              </select>
+              {cameraTypeSaving ? (
+                <span
+                  style={{
+                    position: 'absolute',
+                    right: 10,
+                    top: '50%',
+                    width: 13,
+                    height: 13,
+                    marginTop: -6.5,
+                    borderRadius: '50%',
+                    border: '2px solid rgba(99,102,241,.25)',
+                    borderTopColor: 'var(--blue)',
+                    animation: 'vq-spin .7s linear infinite',
+                    pointerEvents: 'none',
+                  }}
+                />
+              ) : (
+                <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} />
+              )}
+            </span>
+          </div>
         )}
       </div>
 
