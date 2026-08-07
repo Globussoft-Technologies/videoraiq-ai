@@ -142,10 +142,6 @@ export let IncidentMail = (incidentData, alertBasedOn, nvrOrChannelDetails) => {
         <p><span class="label">Severity:</span> ${severity}</p>
       </div>
 
-      <div class="section">
-        <p><strong>🎥 Video Link:</strong> <a href="${videoLink}" target="_blank">Watch Recording</a></p>
-      </div>
-
       ${
         incidentType === "door_detection"
           ? `
@@ -426,14 +422,6 @@ export let loiteringWithoutAuthTemplate = (
   <br><br>
   <table cellpadding="0" cellspacing="0" border="0" width="100%">
   <tr>
-  <td align="left">
-  <a href="${videoLink}" target="_blank" style="display:inline-flex; align-items:center; padding:8px 18px; background:#ffffff; color:#07486A; text-decoration:none; border:1px solid #07486A; border-radius:35px; font-size:14px;">
-      <span style=" margin-right:8px;">
-          <img src="https://i.postimg.cc/mZNgqVBt/play.png" width="20" alt="" style="display:block;">
-      </span>
-      Watch Video
-  </a>
-  </td>
   <td align="right">
   <a href="${config.get("webUrl") + "/incidents?incidentId=" + _id}" style="display:inline-block; padding:10px 20px; background:#07486A; color:#ffffff; text-decoration:none; border-radius:36px;">Login to your account</a>
   </td>
@@ -675,14 +663,6 @@ export let LoiteringWithAuthIncident = (incidentData, nvrData, channelData) => {
   
   <table cellpadding="0" cellspacing="0" border="0" width="100%">
   <tr>
-  <td align="left">
-  <a href="${videoLink}" target="_blank" style="display:inline-flex; align-items:center; padding:8px 18px; background:#ffffff; color:#07486A; text-decoration:none; border:1px solid #07486A; border-radius:35px; font-family:Poppins, Arial, sans-serif; font-size:14px;">
-      <span style=" margin-right:8px;">
-          <img src="https://i.postimg.cc/mZNgqVBt/play.png" target="_blank" width="20" alt="" style="display:block;">
-      </span>
-      Watch Video
-  </a>
-  </td>
   <td align="right">
   <a href="${config.get("webUrl") + "/incidents?incidentId=" + _id}" target="_blank" style="display:inline-block; padding:10px 20px; background:#07486A; color:#ffffff; text-decoration:none; border-radius:36px; font-family:Poppins, Arial, sans-serif;">Login to your account</a>
   </td>
@@ -1207,14 +1187,6 @@ ${
   
   <table cellpadding="0" cellspacing="0" border="0" width="100%">
   <tr>
-  <td align="left">
-  <a href="${videoLink}" target="_blank" style="display:inline-flex; align-items:center; padding:8px 18px; background:#ffffff; color:#07486A; text-decoration:none; border:1px solid #07486A; border-radius:35px; font-family:Poppins, Arial, sans-serif; font-size:14px;">
-      <span style=" margin-right:8px;">
-          <img src="https://i.postimg.cc/mZNgqVBt/play.png" width="20" alt="" style="display:block;">
-      </span>
-      Watch Video
-  </a>
-  </td>
   <td align="right">
   <a href="${config.get("webUrl") + "/incidents?incidentId=" + _id}" target="_blank" style="display:inline-block; padding:10px 20px; background:#07486A; color:#ffffff; text-decoration:none; border-radius:36px; font-family:Poppins, Arial, sans-serif;">Login to your account</a>
   </td>
@@ -1442,14 +1414,6 @@ export let motionDetectionAuthTemplate = (
   
   <table cellpadding="0" cellspacing="0" border="0" width="100%">
   <tr>
-  <td align="left">
-  <a href="${videoLink}" target="_blank" style="display:inline-flex; align-items:center; padding:8px 18px; background:#ffffff; color:#07486A; text-decoration:none; border:1px solid #07486A; border-radius:35px; font-family:Poppins, Arial, sans-serif; font-size:14px;white-space: nowrap;">
-      <span style=" margin-right:8px;">
-          <img src="https://i.postimg.cc/xTf1SH1w/exm1.png" width="20" alt="" style="display:block;">
-      </span>
-      Watch Video
-  </a>
-  </td>
   <td align="right">
   <a href="${config.get("webUrl") + "/incidents?incidentId=" + _id}" target="_blank" style="display:inline-block; padding:10px 20px; background:#07486A; color:#ffffff; text-decoration:none; border-radius:36px; font-family:Poppins, Arial, sans-serif;white-space: nowrap;">Login to your account</a>
   </td>
@@ -1701,7 +1665,6 @@ export let countVehiclesTemplate = (incidentData, nvrData, channelData) => {
   
       <div class="section"><span class="label">Description:</span> ${incidentData.description || "N/A"}</div>
   
-      <div class="section"><span class="label">Video Link:</span> <a href="${incidentData.videoLink}" target="_blank">Watch Video</a></div>
     </div>
   </body>
   </html>`;

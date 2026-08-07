@@ -892,6 +892,19 @@ async getLogs(req, res, next) {
                 }
               }
             }
+          },
+          {
+            $lookup: {
+              from: "nvrs",
+              localField: "sessions.nvr",
+              foreignField: "_id",
+              as: "nvrInfo"
+            }
+          },
+          {
+            $set: {
+              nvrInfo: { $arrayElemAt: ["$nvrInfo", 0] }
+            }
           }
         );
 
@@ -922,6 +935,11 @@ async getLogs(req, res, next) {
               location: "$userInfo.location",
               emp_id: "$userInfo.emp_id",
               lastCreatedAt: "$lastCreatedAt"
+            },
+            nvrInfo: {
+              _id: "$nvrInfo._id",
+              nvrName: "$nvrInfo.nvrName",
+              location: "$nvrInfo.location"
             },
             department: {
               _id: "$departmentInfo._id",
