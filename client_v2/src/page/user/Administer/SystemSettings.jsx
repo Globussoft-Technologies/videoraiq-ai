@@ -10,6 +10,7 @@ import {
   Loader2,
   Mail,
   MessageSquare,
+  Monitor,
   Radio,
   Search,
   ShieldCheck,
@@ -31,6 +32,7 @@ import { usePermissions } from '../../../context/PermissionContext';
 import { getChannels, getDetectionSettings, getDetectionTypes } from '../../../helpers/configure';
 import { getRecipients } from '../../../helpers/recipients';
 import { getTelegramLinkCode } from '../../../helpers/telegram';
+import { DESKTOP_NOTIFICATIONS_KEY, desktopNotificationsEnabled } from '../../../context/DetectionNotificationContext';
 
 const RETENTION_MIN = 1;
 const RETENTION_YEAR_DAYS = 365;
@@ -655,6 +657,7 @@ export default function SystemSettings() {
   const [retentionEnabled, setRetentionEnabled] = useState(true);
   const [retentionDays, setRetentionDays] = useState(30);
   const [retentionTooltipVisible, setRetentionTooltipVisible] = useState(false);
+  const [desktopNotifications, setDesktopNotifications] = useState(() => desktopNotificationsEnabled());
 
   const admin = adminApi.data || {};
   const adminName = [admin.name_f, admin.name_l].filter(Boolean).join(' ') || admin.login || 'Admin account';
@@ -735,6 +738,35 @@ export default function SystemSettings() {
       successMessage: `Detection audio alerts ${next ? 'enabled' : 'disabled'}`,
       syncLineCrossing: true,
     });
+  };
+  const handleDesktopNotificationToggle = async (next) => {
+    const allowed = next ? canEnableSetting : canDisableSetting;
+    if (!allowed) {
+      toast.error(`You don't have permission to ${next ? 'enable' : 'disable'} settings`);
+      return;
+    }
+
+    if (next) {
+      if (!('Notification' in window)) {
+        toast.error('Desktop notifications are not supported in this browser');
+        return;
+      }
+      if (Notification.permission === 'denied') {
+        toast.error('Desktop notifications are blocked in browser settings');
+        return;
+      }
+      if (Notification.permission === 'default') {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          toast.error('Desktop notification permission was not granted');
+          return;
+        }
+      }
+    }
+
+    window.localStorage.setItem(DESKTOP_NOTIFICATIONS_KEY, next ? 'true' : 'false');
+    setDesktopNotifications(next);
+    toast.success(`Desktop notifications ${next ? 'enabled' : 'disabled'}`);
   };
 
   const handleTimezoneChange = async (next) => {
@@ -884,6 +916,15 @@ export default function SystemSettings() {
             onChange={handleSoundToggle}
             disabled={soundEnabled ? !canDisableSetting : !canEnableSetting}
             loading={audio.audioSaving}
+          />
+          <ToggleRow
+            icon={Monitor}
+            label="Desktop Notifications"
+            desc="Show browser notifications when this tab is not active"
+            value={desktopNotifications}
+            onChange={handleDesktopNotificationToggle}
+            disabled={desktopNotifications ? !canDisableSetting : !canEnableSetting}
+            last
           />
           {/* <ToggleRow
             icon={Webhook}

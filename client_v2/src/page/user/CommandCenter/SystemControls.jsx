@@ -178,7 +178,7 @@ export default function SystemControls() {
   const canViewControls = !!permissions?.detectionSettings?.view && !!permissions?.detectionSettings?.edit;
 
   const [nvrFilter, setNvrFilter] = useState([]);
-  const [cameraFilter, setCameraFilter] = useState('');
+  const [cameraFilter, setCameraFilter] = useState(null);
   const [detectionConfirm, setDetectionConfirm] = useState(null);
   const [detectionActionLoading, setDetectionActionLoading] = useState(false);
 
@@ -209,17 +209,23 @@ export default function SystemControls() {
     [allCameras, nvrFilter],
   );
   const cameraOptions = useMemo(
-    () => scopedCameras.map((c) => ({ id: c._id, label: c.customName || c.name })),
+    () => [
+      { id: '', label: 'Select Camera' },
+      ...scopedCameras.map((c) => ({ id: c._id, label: c.customName || c.name })),
+    ],
     [scopedCameras],
   );
 
-  // Only one camera can be selected at a time; once the current pick falls
-  // out of scope (e.g. its NVR was deselected), default back to the first
-  // camera in the (possibly new) scoped list so the panel is never left empty.
+  // Only one camera can be selected at a time. `null` means the picker has
+  // not defaulted yet; an empty string is the user's explicit "Select Camera"
+  // choice and should remain selectable.
   useEffect(() => {
+    if (cameraFilter === '') return;
     if (scopedCameras.some((c) => c._id === cameraFilter)) return;
-    setCameraFilter(scopedCameras.length ? scopedCameras[0]._id : '');
-  }, [scopedCameras]);
+    if (scopedCameras.length) {
+      setCameraFilter(scopedCameras[0]._id);
+    }
+  }, [scopedCameras, cameraFilter]);
 
   const selectedCamera = useMemo(
     () => scopedCameras.find((c) => c._id === cameraFilter) || null,

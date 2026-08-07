@@ -4,6 +4,13 @@ import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 import { timeOfDay } from '../lib/format';
 
+export const DESKTOP_NOTIFICATIONS_KEY = 'vq_desktop_notifications_enabled';
+
+export function desktopNotificationsEnabled() {
+  if (typeof window === 'undefined') return true;
+  return window.localStorage.getItem(DESKTOP_NOTIFICATIONS_KEY) !== 'false';
+}
+
 function notificationKey(detection) {
   return [
     detection?._id,
@@ -72,7 +79,10 @@ export function DetectionNotificationProvider({ children }) {
       const title = detectionTitle(data);
       const description = `${cameraLabel(data)} - ${detectionTime(data)}`;
 
+      const desktopEnabled = desktopNotificationsEnabled();
+
       if (
+        desktopEnabled &&
         !permissionAsked.current &&
         'Notification' in window &&
         Notification.permission === 'default'
@@ -82,6 +92,7 @@ export function DetectionNotificationProvider({ children }) {
       }
 
       if (
+        desktopEnabled &&
         document.visibilityState !== 'visible' &&
         'Notification' in window &&
         Notification.permission === 'granted'
