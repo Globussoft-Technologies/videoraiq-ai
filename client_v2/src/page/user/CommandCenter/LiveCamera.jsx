@@ -7,7 +7,7 @@ import CameraStream from '../../../components/CameraStream';
 import LiveCameraLogsOverlay from '../../../components/LiveCameraLogsOverlay';
 import usePageActive from '../../../hooks/usePageActive';
 import { useApi } from '../../../hooks/useApi';
-import { getCamerasStatus, isCameraLive } from '../../../helpers/cameraStatus';
+import { getCamerasStatus, isCameraLive, cameraStatusId } from '../../../helpers/cameraStatus';
 
 // The Camera Status API is a cached read regardless of scope (tested to 500
 // ids in one call), so this only bounds the query size for very large estates.
@@ -32,7 +32,7 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
     [channels]
   );
   const statusIds = useMemo(
-    () => cams.map((c) => c._id || c.id).filter(Boolean).slice(0, STATUS_LIMIT),
+    () => cams.map(cameraStatusId).filter(Boolean).slice(0, STATUS_LIMIT),
     [cams]
   );
   const statusIdsKey = statusIds.join(',');
@@ -64,19 +64,22 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
     });
     return map;
   }, [statusApi.data]);
-  const isLiveId = useCallback((id) => isCameraLive(statusById[id]), [statusById]);
+  const isCamLive = useCallback((channel) => isCameraLive(statusById[cameraStatusId(channel)]), [statusById]);
 
-  const onlineCount = statusIds.filter(isLiveId).length;
+  // Denominator is every rendered tab, including cameras with no stream URL
+  // configured — a camera you own but can't stream is still a camera, and it
+  // correctly reads OFFLINE (isCamLive returns false when cameraStatusId is null).
+  const onlineCount = cams.filter(isCamLive).length;
   const hasStatus = !!statusApi.data;
   useEffect(() => {
     // Keep the last known Sidebar tally until the first status response lands,
     // instead of publishing an initial 0/0 that would make navigation look
     // like it reset the count.
     if (!hasStatus) return;
-    onOnlineCountChange?.(onlineCount, statusIds.length);
-  }, [onlineCount, statusIds.length, onOnlineCountChange, hasStatus]);
+    onOnlineCountChange?.(onlineCount, cams.length);
+  }, [onlineCount, cams.length, onOnlineCountChange, hasStatus]);
 
-  const online = active ? isLiveId(activeKey) : false;
+  const online = active ? isCamLive(active) : false;
   const liveColor = !active ? 'var(--tx3)' : online ? 'var(--ok)' : 'var(--crit)';
 
   const handleTabWheel = useCallback((event) => {
@@ -176,7 +179,7 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
         {cams.map((c) => {
           const id = c._id || c.id;
           const isActive = id === activeKey;
-          const dot = isLiveId(id) ? 'var(--ok)' : 'var(--crit)';
+          const dot = isCamLive(c) ? 'var(--ok)' : 'var(--crit)';
           return (
             <div
               key={id}

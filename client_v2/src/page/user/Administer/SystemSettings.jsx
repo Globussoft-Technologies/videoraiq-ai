@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Bell,
+  BellRing,
   CheckCircle2,
   ChevronDown,
   Clock,
@@ -39,7 +40,12 @@ import { usePermissions } from '../../../context/PermissionContext';
 import { getChannels, getDetectionSettings, getDetectionTypes } from '../../../helpers/configure';
 import { getRecipients } from '../../../helpers/recipients';
 import { getTelegramLinkCode } from '../../../helpers/telegram';
-import { DESKTOP_NOTIFICATIONS_KEY, desktopNotificationsEnabled } from '../../../context/DetectionNotificationContext';
+import {
+  DESKTOP_NOTIFICATIONS_KEY,
+  desktopNotificationsEnabled,
+  IN_APP_NOTIFICATIONS_KEY,
+  inAppNotificationsEnabled,
+} from '../../../context/DetectionNotificationContext';
 
 // Data retention is capped at 6 months and offered as three fixed options —
 // the slider snaps between them rather than accepting any duration. Values are
@@ -786,6 +792,7 @@ export default function SystemSettings() {
   const [desktopNotifications, setDesktopNotifications] = useState(() => desktopNotificationsEnabled());
   const [alertSwitchSaving, setAlertSwitchSaving] = useState('');
   const [alertSwitchOverrides, setAlertSwitchOverrides] = useState({});
+  const [inAppNotifications, setInAppNotifications] = useState(() => inAppNotificationsEnabled());
 
   const admin = adminApi.data || {};
   const adminName = [admin.name_f, admin.name_l].filter(Boolean).join(' ') || admin.login || 'Admin account';
@@ -970,6 +977,18 @@ export default function SystemSettings() {
     toast.success(`Desktop notifications ${next ? 'enabled' : 'disabled'}`);
   };
 
+  const handleInAppNotificationToggle = (next) => {
+    const allowed = next ? canEnableSetting : canDisableSetting;
+    if (!allowed) {
+      toast.error(`You don't have permission to ${next ? 'enable' : 'disable'} settings`);
+      return;
+    }
+
+    window.localStorage.setItem(IN_APP_NOTIFICATIONS_KEY, next ? 'true' : 'false');
+    setInAppNotifications(next);
+    toast.success(`In-app alert notifications ${next ? 'enabled' : 'disabled'}`);
+  };
+
   const handleTimezoneChange = async (next) => {
     if (!canEditSettings) {
       toast.error("You don't have permission to edit settings");
@@ -1121,6 +1140,14 @@ export default function SystemSettings() {
             onChange={handleSoundToggle}
             disabled={soundEnabled ? !canDisableSetting : !canEnableSetting}
             loading={audio.audioSaving}
+          />
+          <ToggleRow
+            icon={BellRing}
+            label="In-App Alert Notifications"
+            desc="Show live detection alerts as on-screen toasts while using the app"
+            value={inAppNotifications}
+            onChange={handleInAppNotificationToggle}
+            disabled={inAppNotifications ? !canDisableSetting : !canEnableSetting}
           />
           <ToggleRow
             icon={Monitor}

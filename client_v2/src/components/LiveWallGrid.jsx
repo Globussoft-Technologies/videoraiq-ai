@@ -10,7 +10,7 @@ import usePageActive from '../hooks/usePageActive';
 import { useStreamQueueStats } from '../hooks/useStreamSlot';
 import streamQueue from '../lib/streamQueue';
 import { getChannels, getLocations, getNVRs, getDepartments } from '../helpers/monitoring';
-import { getCamerasStatus, isCameraLive } from '../helpers/cameraStatus';
+import { getCamerasStatus, isCameraLive, cameraStatusId } from '../helpers/cameraStatus';
 
 /* ── Stream-scheduling tuning ────────────────────────────────────────────────
    Cameras are started one at a time through lib/streamQueue. Priorities below
@@ -326,7 +326,7 @@ export default function LiveWallGrid() {
   // the Live/Offline filter and the "N active" tally never need to open a
   // hidden connection just to find out.
   const statusIds = useMemo(
-    () => inventoryCameras.map((c) => c._id || c.channelId).filter(Boolean).slice(0, STATUS_LIMIT),
+    () => inventoryCameras.map(cameraStatusId).filter(Boolean).slice(0, STATUS_LIMIT),
     [inventoryCameras]
   );
   const statusIdsKey = statusIds.join(',');
@@ -342,9 +342,17 @@ export default function LiveWallGrid() {
     });
     return map;
   }, [statusApi.data]);
+  // liveSet is keyed by the channel's own _id/channelId (what the rest of the
+  // page uses for filtering/selection) — membership is decided by looking up
+  // each channel's *stream* id (cameraStatusId), which is what the status API
+  // actually keys by.
   const liveSet = useMemo(
-    () => new Set(statusIds.filter((id) => isCameraLive(statusById[id]))),
-    [statusIds, statusById]
+    () => new Set(
+      inventoryCameras
+        .filter((c) => isCameraLive(statusById[cameraStatusId(c)]))
+        .map((c) => c._id || c.channelId)
+    ),
+    [inventoryCameras, statusById]
   );
   const activeCount = liveSet.size;
 
