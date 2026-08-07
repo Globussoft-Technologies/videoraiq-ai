@@ -21,7 +21,7 @@ export default function ActivityHeatmapCard({ params }) {
     <Panel style={{ padding: 18 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Activity Heatmap</div>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>day Ã— hour</span>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>day by hour</span>
       </div>
       <AnalyticsBlurb style={{ marginBottom: 14 }}>
         A 7 by 24 view of when incidents happen most often, with darker cells marking busier day and hour combinations.
@@ -39,7 +39,7 @@ export default function ActivityHeatmapCard({ params }) {
                     {row.map((v, ci) => (
                       <div
                         key={ci}
-                        title={`${dayLabels[ri] || ''} ${String(ci).padStart(2, '0')}:00 â€” ${v} alert${v === 1 ? '' : 's'}`}
+                        title={`${dayLabels[ri] || ''} ${String(ci).padStart(2, '0')}:00 - ${v} alert${v === 1 ? '' : 's'}`}
                         style={{ flex: 1, aspectRatio: '1', borderRadius: 2, background: heatCellColor(v, max) }}
                       />
                     ))}

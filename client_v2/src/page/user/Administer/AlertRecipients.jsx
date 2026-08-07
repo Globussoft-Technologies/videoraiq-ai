@@ -85,6 +85,7 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
       }}
     >
       <div
+        className="vq-recipients-modal"
         onClick={e => e.stopPropagation()}
         /* --bg1solid, not --bg1: --bg1 is translucent (62% white / 55% navy) and
            over the overlay's dark scrim it renders as muddy grey with the table
@@ -106,7 +107,7 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
           </button>
         </div>
 
-        <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="vq-recipients-modal-body" style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>Full Name</div>
             <input
@@ -139,7 +140,7 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '15px 20px', borderTop: '1px solid var(--bd)' }}>
+        <div className="vq-recipients-modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '15px 20px', borderTop: '1px solid var(--bd)' }}>
           <button onClick={onClose} disabled={saving} style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)', border: '1px solid var(--bd)', borderRadius: 9, padding: '9px 16px', cursor: 'pointer', background: 'none' }}>
             Cancel
           </button>
@@ -263,6 +264,69 @@ function RecipientRow({ recipient, detectionTypes, canEdit, canDelete, onVerify,
   );
 }
 
+function RecipientMobileCard({ recipient, detectionTypes, canEdit, canDelete, onVerify, onDelete, onSaved }) {
+  return (
+    <div
+      style={{
+        border: '1px solid var(--bd)',
+        borderRadius: 12,
+        background: 'var(--bg2)',
+        padding: 12,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, minWidth: 0 }}>
+        <Avatar name={recipient.fullName} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {recipient.fullName || '-'}
+          </div>
+          <div style={{ marginTop: 3, fontSize: 11.5, color: 'var(--tx3)', overflowWrap: 'anywhere' }}>
+            {recipient.value}
+          </div>
+        </div>
+        {canDelete && (
+          <button
+            onClick={onDelete}
+            title="Delete recipient"
+            style={{ width: 32, height: 32, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg1)', border: '1px solid rgba(255,77,77,.4)', color: 'var(--crit)', cursor: 'pointer', flex: '0 0 auto' }}
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {recipient.verified ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 10.5, fontWeight: 700, color: 'var(--ok)', border: '1px solid var(--ok)', borderRadius: 20, padding: '4px 10px' }}>
+            Verified
+          </span>
+        ) : canEdit ? (
+          <button
+            onClick={onVerify}
+            style={{ fontSize: 10.5, fontWeight: 700, color: '#fff', background: 'var(--blue)', border: 'none', borderRadius: 20, padding: '5px 11px', cursor: 'pointer' }}
+          >
+            Verify
+          </button>
+        ) : (
+          <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--warn)', border: '1px solid var(--warn)', borderRadius: 20, padding: '4px 10px' }}>
+            Unverified
+          </span>
+        )}
+      </div>
+
+      <div>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)', marginBottom: 6 }}>
+          DETECTIONS
+        </div>
+        <RowDetectionTypes recipient={recipient} detectionTypes={detectionTypes} canEdit={canEdit} onSaved={onSaved} />
+      </div>
+    </div>
+  );
+}
+
 /* ── Main page ────────────────────────────────────────────────────────────── */
 export default function AlertRecipients() {
   const { permissions } = usePermissions();
@@ -333,14 +397,77 @@ export default function AlertRecipients() {
   }
 
   return (
-    <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div className="vq-recipients-page" style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <style>{`
+        @media (max-width: 720px) {
+          .vq-recipients-page {
+            padding: 12px !important;
+            gap: 12px !important;
+          }
+          .vq-recipients-toolbar {
+            align-items: stretch !important;
+          }
+          .vq-recipients-search {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+          .vq-recipients-status {
+            width: 100% !important;
+            display: grid !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          }
+          .vq-recipients-status button {
+            padding-left: 6px !important;
+            padding-right: 6px !important;
+          }
+          .vq-recipients-spacer {
+            display: none !important;
+          }
+          .vq-recipients-add {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+          .vq-recipients-panel-head {
+            align-items: flex-start !important;
+            gap: 4px !important;
+            flex-direction: column !important;
+          }
+          .vq-recipients-desktop {
+            display: none !important;
+          }
+          .vq-recipients-mobile {
+            display: flex !important;
+          }
+          .vq-recipients-modal {
+            width: 100% !important;
+            max-height: calc(100vh - 28px) !important;
+            display: flex !important;
+            flex-direction: column !important;
+          }
+          .vq-recipients-modal-body {
+            overflow: auto !important;
+          }
+          .vq-recipients-modal-actions {
+            flex-direction: column-reverse !important;
+          }
+          .vq-recipients-modal-actions button {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+        }
+        @media (min-width: 721px) {
+          .vq-recipients-mobile {
+            display: none !important;
+          }
+        }
+      `}</style>
 
       {/* Telegram Alerts Menu  */}
       <TelegramAlerts />
 
       {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 12px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)', minWidth: 220 }}>
+      <div className="vq-recipients-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div className="vq-recipients-search" style={{ display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 12px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)', minWidth: 220 }}>
           <Search size={14} style={{ color: 'var(--tx3)', flexShrink: 0 }} />
           <input
             value={search}
@@ -350,7 +477,7 @@ export default function AlertRecipients() {
           />
         </div>
 
-        <div style={{ display: 'flex', gap: 4, background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 9, padding: 3 }}>
+        <div className="vq-recipients-status" style={{ display: 'flex', gap: 4, background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 9, padding: 3 }}>
           {STATUS_FILTERS.map(f => (
             <button
               key={f.key}
@@ -367,10 +494,11 @@ export default function AlertRecipients() {
           ))}
         </div>
 
-        <div style={{ flex: 1 }} />
+        <div className="vq-recipients-spacer" style={{ flex: 1 }} />
 
         {canCreate && (
           <button
+            className="vq-recipients-add"
             onClick={() => setShowAddModal(true)}
             style={{
               display: 'flex', alignItems: 'center', gap: 7,
@@ -387,7 +515,7 @@ export default function AlertRecipients() {
 
       {/* Table */}
       <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 14, overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid var(--bd)' }}>
+        <div className="vq-recipients-panel-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid var(--bd)' }}>
           <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>All Email Recipients</span>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>
             {verifiedCount} verified · {recipients.length - verifiedCount} pending
@@ -397,6 +525,7 @@ export default function AlertRecipients() {
         {/* Horizontal scroll on narrow screens (e.g. after restoring/un-maximizing
             the window), with edge fades hinting swipeability, instead of letting
             the status/detections column squish into the delete button. */}
+        <div className="vq-recipients-desktop">
         <HScrollHint minWidth={660} fadeColor="var(--bg1)">
           <div>
             <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.6fr 1.2fr 44px', padding: '10px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)' }}>
@@ -429,6 +558,31 @@ export default function AlertRecipients() {
             </AsyncBoundary>
           </div>
         </HScrollHint>
+        </div>
+
+        <div className="vq-recipients-mobile" style={{ display: 'none', flexDirection: 'column', gap: 10, padding: 12 }}>
+          <AsyncBoundary
+            loading={recipientsApi.loading}
+            error={recipientsApi.error}
+            isEmpty={!recipientsApi.loading && !recipientsApi.error && recipients.length === 0}
+            onRetry={recipientsApi.refetch}
+            minH={160}
+            emptyLabel={search ? `No results found for "${search}"` : 'No recipients added yet'}
+          >
+            {() => recipients.map(r => (
+              <RecipientMobileCard
+                key={r._id}
+                recipient={r}
+                detectionTypes={detectionTypes}
+                canEdit={canEdit}
+                canDelete={canDelete}
+                onVerify={() => handleVerify(r)}
+                onDelete={() => setDeleteTarget(r)}
+                onSaved={recipientsApi.refetch}
+              />
+            ))}
+          </AsyncBoundary>
+        </div>
       </div>
 
       {showAddModal && (

@@ -13,6 +13,7 @@ import ConfirmationModal from '../../../../components/DeleteConfirmation';
 import { getDetectionSchedule, updateDetectionSchedule, deleteDetectionSchedule } from '../../../../helpers/configure';
 import { useTimezones } from '../ZoneScheduleFields';
 import { thresholdLabel } from './detectionsData';
+import { fetchAlertRecipients, updateDetectionAlerts } from '../DetectionZoneMarking/api/detectionZoneApi';
 
 // Detection types are API-driven, so use their stable setting type rather than
 // the category icon. Aliases cover the setting-type variants returned by the
@@ -101,6 +102,200 @@ function formatScheduleMode(value, fallback = 'N/A') {
   if (!raw) return fallback;
   const text = String(raw);
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function recipientId(value) {
+  return String(typeof value === 'string' ? value : value?._id || value?.id || '');
+}
+
+function RecipientSelectButton({ settingId, initialAlerts = [], onSaved }) {
+  const [open, setOpen] = useState(false);
+  const [recipients, setRecipients] = useState([]);
+  const [selectedIds, setSelectedIds] = useState(() => initialAlerts.map(recipientId).filter(Boolean));
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    setSelectedIds(initialAlerts.map(recipientId).filter(Boolean));
+  }, [settingId, initialAlerts]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (event) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const loadRecipients = async () => {
+    if (loaded || loading) return;
+    setLoading(true);
+    try {
+      const result = await fetchAlertRecipients({ limit: 1000, filterByStatus: 'verified' });
+      setRecipients(result?.recipients || []);
+      setLoaded(true);
+    } catch {
+      toast.error('Failed to load recipients.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleOpen = () => {
+    if (!settingId) {
+      toast.error('No saved setting found for recipients.');
+      return;
+    }
+    setOpen((next) => {
+      const shouldOpen = !next;
+      if (shouldOpen) loadRecipients();
+      return shouldOpen;
+    });
+  };
+
+  const persist = async (nextIds) => {
+    const previous = selectedIds;
+    setSelectedIds(nextIds);
+    setSaving(true);
+    try {
+      await updateDetectionAlerts(settingId, nextIds);
+      onSaved?.(nextIds);
+      toast.success('Recipients updated successfully.');
+    } catch (err) {
+      setSelectedIds(previous);
+      toast.error(err?.response?.data?.body?.message || 'Failed to update recipients.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleRecipient = (id) => {
+    if (saving) return;
+    const nextIds = selectedIds.includes(id)
+      ? selectedIds.filter((item) => item !== id)
+      : [...selectedIds, id];
+    persist(nextIds);
+  };
+
+  const selectedNames = recipients
+    .filter((recipient) => selectedIds.includes(String(recipient._id)))
+    .map((recipient) => recipient.fullName || recipient.name || recipient.value)
+    .filter(Boolean);
+  const buttonLabel = selectedIds.length
+    ? `${selectedIds.length} Recipient${selectedIds.length === 1 ? '' : 's'}`
+    : 'Select Recipients';
+
+  return (
+    <div ref={wrapRef} style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+      <button
+        type="button"
+        onClick={toggleOpen}
+        disabled={!settingId}
+        title={!settingId ? 'No saved setting for this detection type' : 'Select alert recipients'}
+        style={{
+          width: '100%',
+          height: 36,
+          borderRadius: 8,
+          border: '1px solid var(--bd)',
+          cursor: !settingId ? 'not-allowed' : 'pointer',
+          fontSize: 12,
+          fontWeight: 600,
+          color: !settingId ? 'var(--tx3)' : 'var(--tx2)',
+          background: 'var(--bg2)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 7,
+          opacity: !settingId ? 0.65 : 1,
+        }}
+      >
+        {saving ? (
+          <span
+            style={{
+              width: 13,
+              height: 13,
+              borderRadius: '50%',
+              border: '2px solid rgba(99,102,241,.25)',
+              borderTopColor: 'var(--blue)',
+              animation: 'vq-spin .7s linear infinite',
+            }}
+          />
+        ) : (
+          <Users size={15} />
+        )}
+        {buttonLabel}
+        <ChevronDown size={13} />
+      </button>
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 42,
+            right: 0,
+            width: 'min(360px, 82vw)',
+            maxHeight: 260,
+            overflowY: 'auto',
+            zIndex: 80,
+            background: 'var(--bg1solid)',
+            border: '1px solid var(--bd)',
+            borderRadius: 10,
+            boxShadow: '0 14px 34px rgba(15,23,42,.18)',
+            padding: 6,
+          }}
+        >
+          <div style={{ padding: '8px 10px', fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>
+            Select Recipients
+          </div>
+          {loading ? (
+            <div style={{ padding: '10px', fontSize: 12, color: 'var(--tx3)' }}>Loading recipients...</div>
+          ) : recipients.length === 0 ? (
+            <div style={{ padding: '10px', fontSize: 12, color: 'var(--tx3)' }}>No recipients available</div>
+          ) : (
+            recipients.map((recipient) => {
+              const id = String(recipient._id);
+              const label = recipient.fullName || recipient.name || recipient.value || 'Recipient';
+              return (
+                <label
+                  key={id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 9,
+                    padding: '9px 10px',
+                    borderRadius: 8,
+                    cursor: saving ? 'wait' : 'pointer',
+                    fontSize: 12.5,
+                    color: 'var(--tx)',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg2)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(id)}
+                    disabled={saving}
+                    onChange={() => toggleRecipient(id)}
+                    style={{ cursor: saving ? 'wait' : 'pointer' }}
+                  />
+                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {label}
+                  </span>
+                </label>
+              );
+            })
+          )}
+          {selectedNames.length > 0 && (
+            <div style={{ borderTop: '1px solid var(--bd)', marginTop: 4, padding: '8px 10px', fontSize: 11, color: 'var(--tx3)' }}>
+              Selected: {selectedNames.slice(0, 2).join(', ')}{selectedNames.length > 2 ? ` +${selectedNames.length - 2}` : ''}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ScheduleFieldDropdown({
@@ -315,6 +510,8 @@ export default function DetectionDetailPanel({
   settingId,
   channel,
   onScheduleSaved,
+  initialAlerts = [],
+  onRecipientsChange,
 }) {
   const Icon = detectionIconFor(model, category?.icon);
   const color = category?.color || 'var(--blue)';
@@ -670,6 +867,11 @@ export default function DetectionDetailPanel({
           <ListRestart size={15} />
           Reset Setting
         </button>
+        <RecipientSelectButton
+          settingId={settingId}
+          initialAlerts={initialAlerts}
+          onSaved={onRecipientsChange}
+        />
       </div>
         {scheduleOpen && createPortal(
           <div

@@ -79,7 +79,7 @@ export default function SaveDetectionAreaModal({ initialName, initialPriority, z
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Priority</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Severity</label>
                 <select
                   value={priority}
                   onChange={e => setPriority(e.target.value)}

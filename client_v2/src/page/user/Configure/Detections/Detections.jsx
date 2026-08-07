@@ -360,6 +360,9 @@ export default function Detections() {
   const selectedDetectionSettingId = selectedDetectionEntry?.id && typeof selectedDetectionEntry.id === 'object'
     ? selectedDetectionEntry.id._id
     : selectedDetectionEntry?.id;
+  const selectedDetectionAlerts = selectedDetectionEntry?.id && typeof selectedDetectionEntry.id === 'object'
+    ? selectedDetectionEntry.id.alerts || []
+    : [];
   const incidentFilter = useMemo(() => {
     if (!enteredDetections || incidentFilterTypesApi.loading || !selectedIncidentType) return null;
     const severity = severityFilterValue(incidentSeverity);
@@ -589,6 +592,28 @@ export default function Detections() {
     } catch (err) {
       toast.error(err?.response?.data?.body?.message || err?.response?.data?.message || 'Failed to update threshold.');
     }
+  };
+
+  const updateSelectedRecipients = (alertIds) => {
+    if (!selectedSettingType) return;
+    setZoneCamera((prev) => {
+      if (!prev) return prev;
+      const currentEntry = prev.detections?.[selectedSettingType] || {};
+      const currentSetting = settingFromEntry(currentEntry);
+      const nextSetting = currentSetting
+        ? { ...currentSetting, alerts: alertIds }
+        : currentSetting;
+      return {
+        ...prev,
+        detections: {
+          ...(prev.detections || {}),
+          [selectedSettingType]: {
+            ...(typeof currentEntry === 'object' ? currentEntry : {}),
+            id: nextSetting || currentEntry?.id,
+          },
+        },
+      };
+    });
   };
 
   const setCameraDetectionEnabled = (settingType, enabled) => {
@@ -1111,6 +1136,8 @@ export default function Detections() {
                     setShowResetConfirm(true);
                   }}
                   resetDisabled={resettingSetting || !selectedDetectionSettingId}
+                  initialAlerts={selectedDetectionAlerts}
+                  onRecipientsChange={updateSelectedRecipients}
                 />
                 <DetectionIncidents
                   detectionName={selected.name}
