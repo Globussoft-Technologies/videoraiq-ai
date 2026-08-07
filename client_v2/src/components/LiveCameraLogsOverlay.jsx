@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import moment from 'moment';
-import { ChevronDown, GitBranch, Move, ShieldAlert, Timer, UserCheck } from 'lucide-react';
+import { ChevronDown, ChevronUp, GitBranch, Move, ShieldAlert, Timer, UserCheck } from 'lucide-react';
 import { useAttendanceSocket } from '../context/AttendanceSocketContext';
 import { detectionLabel } from '../lib/format';
 
@@ -40,7 +40,13 @@ function getAccessCameraId(item) {
 }
 
 function getDetectionCameraId(item) {
-  return cleanId(item?.cameraId || item?.channelId || item?.channel?._id || item?.channel);
+  return cleanId(
+    item?.cameraId ||
+    item?.channelData?._id ||
+    item?.channelId ||
+    item?.channel?._id ||
+    item?.channel
+  );
 }
 
 function mapAttendance(item) {
@@ -94,8 +100,13 @@ function detectionDetails(item) {
   const details = [];
 
   if (type === 'linecrossing' || type.includes('linecross')) {
-    if (valueExists(item?.atoB)) details.push({ label: 'Entry', value: item.atoB });
-    if (valueExists(item?.btoA)) details.push({ label: 'Exit', value: item.btoA });
+    const entry = item?.totalEntry ?? item?.entry ?? item?.entryCount ?? item?.atoB;
+    const exit = item?.totalExit ?? item?.exit ?? item?.exitCount ?? item?.btoA;
+    if (valueExists(entry)) details.push({ label: 'Total Entry', value: entry });
+    if (valueExists(exit)) details.push({ label: 'Total Exit', value: exit });
+    if (valueExists(entry) || valueExists(exit)) {
+      details.push({ label: 'Total Present', value: Math.max(Number(entry || 0) - Number(exit || 0), 0) });
+    }
   } else if (valueExists(item?.count)) {
     details.push({ label: 'Count', value: item.count });
   } else if (valueExists(item?.croudCount)) {
@@ -104,20 +115,30 @@ function detectionDetails(item) {
     details.push({ label: 'Status', value: item.currentStatus });
   }
 
-  const zone = item?.zoneName || item?.zone_name || item?.zone?.name || item?.detectionZoneName;
-  if (zone) details.push({ label: 'Zone', value: zone });
+  const zone = item?.lineName || item?.zoneName || item?.zone_name || item?.zone?.name || item?.detectionZoneName;
+  if (zone) details.push({ label: type === 'linecrossing' || type.includes('linecross') ? 'Line' : 'Zone', value: zone });
 
   return details;
 }
 
 function mapDetection(item, index) {
   const incidentType = item?.incidentType || item?.detectionType || item?.incidentName || item?.displayName;
+  const entry = item?.totalEntry ?? item?.entry ?? item?.entryCount ?? item?.atoB;
+  const exit = item?.totalExit ?? item?.exit ?? item?.exitCount ?? item?.btoA;
+  const hasMovementCounts = valueExists(entry) || valueExists(exit);
   return {
     key: item?.key || item?._id || `${incidentType || 'detection'}_${item?.timeOfIncident || item?.timestamp || index}`,
     title: item?.incidentName || item?.displayName || detectionLabel(incidentType),
+    camera: item?.channelData?.name || item?.channelData?.customName || item?.channelName || item?.cameraName || item?.channelId?.name || 'Camera',
     time: item?.timeOfIncident || item?.timestamp || item?.updatedAt || item?.createdAt,
     severity: item?.severity,
     details: detectionDetails(item),
+    isLineCrossing: String(incidentType || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes('linecross'),
+    metrics: hasMovementCounts ? {
+      entry: Number(entry || 0),
+      exit: Number(exit || 0),
+      present: Math.max(Number(entry || 0) - Number(exit || 0), 0),
+    } : null,
   };
 }
 
@@ -157,6 +178,7 @@ function LogRow({ item, type }) {
 }
 
 function DetectionLogRow({ item }) {
+  const [open, setOpen] = useState(true);
   const time = item.time && moment(item.time).isValid()
     ? moment(item.time).format('HH:mm:ss')
     : '--';
@@ -165,6 +187,58 @@ function DetectionLogRow({ item }) {
     severity === 'high' || severity === 'critical' ? '#ef4444' :
       severity === 'moderate' || severity === 'medium' ? '#f59e0b' :
         '#60a5fa';
+
+  if (item.isLineCrossing && item.metrics) {
+    return (
+      <div style={{ padding: 0, borderRadius: 10, background: 'rgba(31,36,59,.9)', border: '1px solid rgba(255,255,255,.08)', overflow: 'hidden' }}>
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          style={{ width: '100%', border: 0, background: 'transparent', color: '#fff', padding: 10, display: 'flex', gap: 10, cursor: 'pointer', textAlign: 'left' }}
+        >
+          <span style={{ width: 34, height: 34, borderRadius: 9, display: 'grid', placeItems: 'center', border: '1px solid rgba(249,115,22,.55)', color: '#fb923c', background: 'rgba(249,115,22,.12)', flexShrink: 0 }}>
+            <GitBranch size={17} />
+          </span>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 900, minWidth: 0 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', boxShadow: '0 0 8px #f59e0b', flexShrink: 0 }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {item.title || 'Line crossing detected'}
+              </span>
+            </div>
+            <div style={{ marginTop: 5, color: 'rgba(226,232,240,.82)', fontSize: 11, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {item.camera}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, color: 'rgba(226,232,240,.68)', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700 }}>
+              <Timer size={12} />
+              {time}
+            </div>
+          </div>
+          <span style={{ width: 24, height: 24, borderRadius: 7, display: 'grid', placeItems: 'center', background: 'rgba(15,23,42,.55)', color: 'rgba(226,232,240,.9)', flexShrink: 0 }}>
+            {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </span>
+        </button>
+        <div style={{ maxHeight: open ? 92 : 0, opacity: open ? 1 : 0, overflow: 'hidden', transition: 'max-height .18s ease, opacity .18s ease' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, padding: '0 10px 10px' }}>
+            <div style={{ background: 'rgba(15,23,42,.55)', borderRadius: 8, padding: '8px 9px' }}>
+              <div style={{ fontSize: 9.5, color: 'rgba(226,232,240,.58)', fontWeight: 800, textTransform: 'uppercase' }}>Total Entry</div>
+              <div style={{ marginTop: 3, color: '#22c55e', fontSize: 16, fontWeight: 900 }}>{item.metrics.entry}</div>
+            </div>
+            <div style={{ background: 'rgba(15,23,42,.55)', borderRadius: 8, padding: '8px 9px' }}>
+              <div style={{ fontSize: 9.5, color: 'rgba(226,232,240,.58)', fontWeight: 800, textTransform: 'uppercase' }}>Total Exit</div>
+              <div style={{ marginTop: 3, color: '#ef4444', fontSize: 16, fontWeight: 900 }}>{item.metrics.exit}</div>
+            </div>
+            <div style={{ background: 'rgba(15,23,42,.55)', borderRadius: 8, padding: '8px 9px' }}>
+              <div style={{ fontSize: 9.5, color: 'rgba(226,232,240,.58)', fontWeight: 800, textTransform: 'uppercase' }}>Total Present</div>
+              <div style={{ marginTop: 3, color: '#60a5fa', fontSize: 16, fontWeight: 900 }}>{item.metrics.present}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: 10, borderRadius: 10, background: 'rgba(15,23,42,.72)', border: '1px solid rgba(255,255,255,.08)' }}>

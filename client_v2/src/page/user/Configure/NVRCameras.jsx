@@ -1038,10 +1038,26 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   );
 
   const filteredLocationOptions = useMemo(() => {
+    if (form.location && locationQuery.trim().toLowerCase() === form.location.trim().toLowerCase()) {
+      return locationOptions;
+    }
     const q = locationQuery.trim().toLowerCase();
     if (!q) return locationOptions;
     return locationOptions.filter((name) => name.toLowerCase().includes(q));
-  }, [locationOptions, locationQuery]);
+  }, [form.location, locationOptions, locationQuery]);
+
+  const toggleLocationDropdown = () => {
+    setLocationOpen((open) => {
+      const nextOpen = !open;
+      if (nextOpen) {
+        requestAnimationFrame(() => locationInputRef.current?.focus());
+      } else {
+        locationInputRef.current?.blur();
+        setLocationQuery(form.location || '');
+      }
+      return nextOpen;
+    });
+  };
 
   // Only offer "Create" when the typed value isn't already an exact match
   // (case-insensitive) for an existing location — avoids creating duplicates.
@@ -1394,10 +1410,8 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                     />
                     <ChevronDown
                       size={14}
-                      onClick={() => {
-                        setLocationOpen((open) => !open);
-                        locationInputRef.current?.focus();
-                      }}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={toggleLocationDropdown}
                       style={{
                         flexShrink: 0,
                         color: 'var(--tx3)',

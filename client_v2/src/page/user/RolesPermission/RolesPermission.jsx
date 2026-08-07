@@ -655,7 +655,7 @@ function RoleRow({ role, perms, isOwnRole, onToggleField, onConfigure, onView, o
   );
 }
 
-const LIMIT = 12;
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 export default function RolesPermission() {
   const { permissions, loading: permissionsLoading } = usePermissions();
@@ -676,19 +676,25 @@ export default function RolesPermission() {
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [renameTarget, setRenameTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [configureTarget, setConfigureTarget] = useState(null); // { role, readOnly }
 
   const rolesApi = useApi(
-    () => getRoles({ skip: page * LIMIT, limit: LIMIT, searchQuery: search }),
-    [page, search],
+    () => getRoles({ skip: page * pageSize, limit: pageSize, searchQuery: search }),
+    [page, pageSize, search],
     { enabled: !!canViewRole },
   );
   const roles = rolesApi.data?.roles ?? [];
   const total = rolesApi.data?.total ?? 0;
-  const pages = Math.max(1, Math.ceil(total / LIMIT));
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+
+  const handlePageSizeChange = (nextPageSize) => {
+    setPageSize(nextPageSize);
+    setPage(0);
+  };
 
   // Toggling a row flag (view/create/edit/delete) cascades server-side into
   // EVERY module + log sub-module of the role's permissionConfig (see
@@ -922,25 +928,80 @@ export default function RolesPermission() {
         </HScrollHint>
       </div>
 
-      {pages > 1 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 4 }}>
-          {Array.from({ length: pages }, (_, i) => (
-            <button
-              key={i}
-              onClick={() => setPage(i)}
-              style={{
-                width: 30, height: 30, borderRadius: 7, fontSize: 12,
-                background: page === i ? 'var(--blue)' : 'var(--bg2)',
-                color: page === i ? '#fff' : 'var(--tx3)',
-                border: `1px solid ${page === i ? 'var(--blue)' : 'var(--bd)'}`,
-                cursor: 'pointer',
-              }}
-            >
-              {i + 1}
-            </button>
-          ))}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)',
+        alignItems: 'center',
+        gap: 12,
+      }}>
+        <div style={{
+          justifySelf: 'start',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          width: 'fit-content',
+          padding: '6px 10px',
+          borderRadius: 8,
+          background: 'var(--bg2)',
+          color: 'var(--tx2)',
+          fontSize: 12,
+        }}>
+          Total roles
+          <span style={{
+            padding: '3px 8px',
+            borderRadius: 7,
+            background: 'rgba(99,102,241,.12)',
+            color: 'var(--blue)',
+            fontWeight: 700,
+          }}>
+            {total}
+          </span>
         </div>
-      )}
+
+        {pages > 1 ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 4 }}>
+            {Array.from({ length: pages }, (_, i) => (
+              <button
+                key={i}
+                onClick={() => setPage(i)}
+                style={{
+                  width: 30, height: 30, borderRadius: 7, fontSize: 12,
+                  background: page === i ? 'var(--blue)' : 'var(--bg2)',
+                  color: page === i ? '#fff' : 'var(--tx3)',
+                  border: `1px solid ${page === i ? 'var(--blue)' : 'var(--bd)'}`,
+                  cursor: 'pointer',
+                }}
+              >
+                {i + 1}
+              </button>
+            ))}
+          </div>
+        ) : <span />}
+
+        <div style={{ justifySelf: 'end', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>Show entries</span>
+          <select
+            value={pageSize}
+            onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+            style={{
+              height: 36,
+              minWidth: 86,
+              borderRadius: 9,
+              border: '1px solid var(--bd)',
+              background: 'var(--bg2)',
+              color: 'var(--tx)',
+              padding: '0 10px',
+              fontSize: 12,
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+          >
+            {PAGE_SIZE_OPTIONS.map(size => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {showAddModal && (
         <RoleNameModal mode="add" onClose={() => setShowAddModal(false)} onSubmit={handleAddRole} />

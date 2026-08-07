@@ -109,9 +109,22 @@ export function AttendanceSocketProvider({ children }) {
   useEffect(() => {
     if (!socket || !user?.adminId) return;
 
-    const handleDetection = (data) => {
+    const normalizeDetectionPayload = (...args) => (
+      args.find((arg) => arg && typeof arg === 'object' && !Array.isArray(arg) && (arg.incidentType || arg.detectionType || arg.incidentName || arg.displayName))
+      || args.find((arg) => Array.isArray(arg))?.find((item) => item && typeof item === 'object' && (item.incidentType || item.detectionType || item.incidentName || item.displayName))
+      || args[0]
+    );
+
+    const handleDetection = (...args) => {
+      const data = normalizeDetectionPayload(...args);
+      if (!data || typeof data !== 'object') return;
       setAllDetections((prev) => {
-        const cameraId = cleanId(data?.cameraId || data?.channelId || data?.channel);
+        const cameraId = cleanId(
+          data?.cameraId ||
+          data?.channelData?._id ||
+          data?.channelId ||
+          data?.channel
+        );
         const incidentType = data?.incidentType || data?.incidentName || data?.displayName || 'detection';
         const key = `${cameraId}_${incidentType}`;
         const filtered = prev.filter((item) => item.key !== key);

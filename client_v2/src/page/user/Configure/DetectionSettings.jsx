@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Search, Video, ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
@@ -6,7 +6,6 @@ import ConfirmationModal from '../../../components/DeleteConfirmation';
 import { useApi } from '../../../hooks/useApi';
 import { getChannels, getNvrs, getDetectionTypes, toggleChannelDetection, updateChannel, getCamerasByNvr } from '../../../helpers/configure';
 import { Popover, PopoverTrigger, PopoverContent } from '../../../pages/AttendanceLogs/components/Popover';
-import CameraStream from '../../../components/CameraStream';
 import DetectionZoneMarking from './DetectionZoneMarking';
 
 const CHECK_TYPES = [
@@ -125,16 +124,13 @@ function AppliedTypesPopover({ camera, typeLabels, onToggleRequest }) {
   );
 }
 
-function CameraRow({ camera, online, typeLabels, onOpen, onToggleDetectionRequest, onCheckTypeChange }) {
-  // `online` is the real live-stream status, probed by the parent. The backend's
-  // `camera.control` flag means "has a detection enabled", NOT "is streaming",
-  // so it can't be used here (see Sidebar.jsx / Command Center for the same note).
+function CameraRow({ camera, typeLabels, onOpen, onToggleDetectionRequest, onCheckTypeChange }) {
   return (
     <div
       className="vq-row"
       onClick={onOpen}
       style={{
-        display: 'grid', gridTemplateColumns: 'minmax(200px,1.6fr) 120px 190px 150px 44px',
+        display: 'grid', gridTemplateColumns: 'minmax(200px,1.6fr) 190px 150px 44px',
         gap: 0, padding: '13px 18px', borderBottom: '1px solid var(--bd)',
         alignItems: 'center', fontSize: 13, cursor: 'pointer', transition: 'background .12s',
       }}
@@ -154,13 +150,6 @@ function CameraRow({ camera, online, typeLabels, onOpen, onToggleDetectionReques
           <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)', display: 'block' }}>
             {camera.ipAddress || '—'}
           </span>
-        </span>
-      </span>
-
-      <span style={{ display: 'flex', justifyContent: 'center' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: online ? 'var(--ok)' : 'var(--tx3)' }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: online ? 'var(--ok)' : 'var(--tx3)', boxShadow: online ? '0 0 6px var(--ok)' : 'none' }} />
-          {online ? 'Online' : 'Offline'}
         </span>
       </span>
 
@@ -214,38 +203,6 @@ export function DetectionSettingsCameraList({ onOpenCamera }) {
   const cameras = channelsApi.data?.channels ?? [];
   const total = channelsApi.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / LIMIT));
-
-  // Real per-camera online status. There's no backend "is live" field — the
-  // `control` flag only means a detection is enabled — so each camera's HLS
-  // stream is probed in the background (same approach as Command Center's
-  // "Cameras Online") and its live/offline state tracked here by id.
-  const [liveById, setLiveById] = useState({});
-  const setCamLive = useCallback((id, isLive) => {
-    setLiveById(prev => (prev[id] === isLive ? prev : { ...prev, [id]: isLive }));
-  }, []);
-  // Drop entries for cameras no longer on the page (filter / page change).
-  useEffect(() => {
-    const ids = new Set(cameras.map(c => c._id));
-    setLiveById(prev => {
-      const next = {};
-      let changed = false;
-      Object.keys(prev).forEach(id => {
-        if (ids.has(id)) next[id] = prev[id];
-        else changed = true;
-      });
-      return changed ? next : prev;
-    });
-  }, [cameras]);
-  const onlineCount = cameras.filter(c => liveById[c._id]).length;
-
-  // Online cameras first, offline after — stable within each group so rows
-  // don't otherwise reshuffle as more of the page's stream probes resolve.
-  // Sorting is scoped to the current (server-paginated) page only; a camera
-  // isn't known online/offline until its background probe connects.
-  const sortedCameras = useMemo(
-    () => [...cameras].sort((a, b) => (liveById[a._id] ? 0 : 1) - (liveById[b._id] ? 0 : 1)),
-    [cameras, liveById],
-  );
 
   // Matches V1: a single toggle endpoint for on/off; 404s if the type was
   // never linked to this camera (no auto-create — same as V1's real behavior).
@@ -321,18 +278,17 @@ export function DetectionSettingsCameraList({ onOpenCamera }) {
           <ChevronDown size={14} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} />
         </div>
         <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>
-          {onlineCount} online · {total} total
+          {total} total
         </span>
       </div>
 
       <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, overflow: 'hidden' }}>
         <div style={{
-          display: 'grid', gridTemplateColumns: 'minmax(200px,1.6fr) 120px 190px 150px 44px', gap: 0,
+          display: 'grid', gridTemplateColumns: 'minmax(200px,1.6fr) 190px 150px 44px', gap: 0,
           padding: '12px 18px', borderBottom: '1px solid var(--bd)',
           fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)', alignItems: 'center',
         }}>
           <span>CAMERA NAME</span>
-          <span style={{ textAlign: 'center' }}>STATUS</span>
           <span style={{ textAlign: 'center' }}>ENABLE DETECTION</span>
           <span style={{ textAlign: 'center' }}>CAMERA TYPE</span>
           <span />
@@ -345,11 +301,10 @@ export function DetectionSettingsCameraList({ onOpenCamera }) {
           minH={160}
           emptyLabel="No cameras found"
         >
-          {() => sortedCameras.map(camera => (
+          {() => cameras.map(camera => (
             <CameraRow
               key={camera._id}
               camera={camera}
-              online={!!liveById[camera._id]}
               typeLabels={typeLabels}
               onOpen={() => onOpenCamera?.(camera)}
               onToggleDetectionRequest={handleDetectionToggleRequest}
@@ -357,22 +312,6 @@ export function DetectionSettingsCameraList({ onOpenCamera }) {
             />
           ))}
         </AsyncBoundary>
-      </div>
-
-      {/* Hidden stream probes — each camera's HLS stream is connected in the
-          background (not rendered) purely to learn its real live/offline state
-          for the STATUS column and the online tally. Same technique the Command
-          Center uses; there's no backend field to read instead. */}
-      <div style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }} aria-hidden="true">
-        {cameras.map(camera => (
-          <CameraStream
-            key={camera._id}
-            channel={camera}
-            showOverlay={false}
-            onLiveChange={isLive => setCamLive(camera._id, isLive)}
-            minH={1}
-          />
-        ))}
       </div>
 
       {pages > 1 && (
