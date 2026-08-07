@@ -41,6 +41,12 @@ export default function ProfileHeader({
   configured,
   nonConfigured,
   detectionsEnabled,
+  stat2Label = 'Configured',
+  stat2Value = configured,
+  stat2Color = 'ok',
+  stat3Label = 'Non-Configured',
+  stat3Value = nonConfigured,
+  stat3Color = 'warn',
 }) {
   return (
     <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 16, overflow: 'hidden' }}>
@@ -123,8 +129,8 @@ export default function ProfileHeader({
       {showStats && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', borderTop: '1px solid var(--bd)' }}>
           <StatTile label="Total Cameras" value={totalCameras} color="blue" />
-          <StatTile label="Configured" value={configured} color="ok" />
-          <StatTile label="Non-Configured" value={nonConfigured} color="warn" />
+          <StatTile label={stat2Label} value={stat2Value} color={stat2Color} />
+          <StatTile label={stat3Label} value={stat3Value} color={stat3Color} />
           <StatTile label="Detections Enabled" value={detectionsEnabled} color="violet" last />
         </div>
       )}
