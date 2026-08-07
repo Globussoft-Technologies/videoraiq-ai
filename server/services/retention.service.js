@@ -49,23 +49,14 @@ import attendanceModel from "../core/v1/attendance/attendance.model.js";
 import accessLogsModel from "../core/v1/accesslogs/accesslogs.model.js";
 import newAccessLogsModel from "../core/v1/accesslogs/newAccessLogs.model.js";
 import reworkedAccessLogsModel from "../core/v1/accesslogs/reworkedAccesslogs.model.js";
-import { deleteMedia, toRelativeMediaPath } from "../utils/mediaStorage.js";
+import { toRelativeMediaPath } from "../utils/mediaStorage.js";
+import { collectMediaPaths, deleteMediaBestEffort } from "../utils/mediaCleanup.js";
 
-// Every media-bearing key across the swept documents, including nested ones:
-// incidents (Image, currentImage, videoLink, timeSeries[].Image), attendance
-// (events[].images.{face,person,frame}), access logs
-// (sessions[].images.* and usersLogs[].sessions[].images.*).
-const MEDIA_KEYS = new Set([
-  "Image",
-  "currentImage",
-  "videoLink",
-  "face",
-  "person",
-  "frame",
-  "faceImage",
-  "personImage",
-  "frameImage",
-]);
+// Re-exported for backward compatibility — this module used to define
+// collectMediaPaths itself; it now lives in utils/mediaCleanup.js so
+// NVR/channel deletion (services/delete.service.js) can share the exact
+// same field list and nested-path walk instead of redefining it.
+export { collectMediaPaths };
 
 // Only the fields the sweep needs — keeps batch memory small.
 const MEDIA_SELECT =
@@ -112,44 +103,22 @@ export const retentionCutoff = (spec, now = new Date()) => {
   return d;
 };
 
-const isPlain = (v) =>
-  Array.isArray(v) || (v !== null && typeof v === "object" && v.constructor === Object);
+/**
+ * Retention periods an admin may set through the API — 6 months is the product
+ * cap, and the settings UI offers exactly these three options. Kept here so the
+ * API can never store a period the settings screen cannot represent.
+ *
+ * The global config block is deliberately NOT bound by this: an operator can
+ * still configure any period the sweeper parses in config/<env>.json.
+ */
+export const RETENTION_OPTION_MONTHS = [1, 3, 6];
+export const MAX_RETENTION_MONTHS = Math.max(...RETENTION_OPTION_MONTHS);
 
-/** Walk a lean doc and collect every media path, however deeply nested. */
-export const collectMediaPaths = (node, out = []) => {
-  if (!isPlain(node)) return out;
-  for (const [key, value] of Object.entries(node)) {
-    if (typeof value === "string" && value.trim() && MEDIA_KEYS.has(key)) {
-      out.push(value);
-    } else if (isPlain(value)) {
-      collectMediaPaths(value, out);
-    }
-  }
-  return out;
+/** "1m" | "3m" | "6m" -> true. Everything else (including "180d") -> false. */
+export const isAllowedRetentionSpec = (spec) => {
+  const m = String(spec ?? "").trim().match(/^(\d+)\s*m$/i);
+  return !!m && RETENTION_OPTION_MONTHS.includes(Number(m[1]));
 };
-
-// Best-effort media deletion, bounded concurrency so a big batch can't flood
-// the SFTP pool. Returns how many deletions failed (already-gone files count
-// as success for retention purposes).
-const CHUNK = 5;
-async function deleteMediaBestEffort(paths, label) {
-  let failures = 0;
-  for (let i = 0; i < paths.length; i += CHUNK) {
-    const results = await Promise.allSettled(
-      paths.slice(i, i + CHUNK).map((p) => deleteMedia(p)),
-    );
-    for (let j = 0; j < results.length; j++) {
-      const r = results[j];
-      if (r.status === "rejected" && !/no such file/i.test(r.reason?.message || "")) {
-        failures++;
-        logger.warn(
-          `[RETENTION] ${label}: failed to delete media ${paths[i + j]}: ${r.reason?.message}`,
-        );
-      }
-    }
-  }
-  return failures;
-}
 
 /**
  * Delete one dataset's expired docs in batches until done or out of time.
@@ -187,7 +156,7 @@ export async function sweepDataset({
       // External URLs (e.g. video links) aren't ours to delete.
       .filter((p) => typeof p === "string" && p.trim() && !/^https?:\/\//i.test(p));
 
-    mediaFailures += await deleteMediaBestEffort(paths, label);
+    mediaFailures += await deleteMediaBestEffort(paths, `[RETENTION] ${label}`);
 
     const res = await model.deleteMany({ _id: { $in: docs.map((d) => d._id) } });
     deleted += res.deletedCount || 0;

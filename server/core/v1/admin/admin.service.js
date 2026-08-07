@@ -12,7 +12,7 @@ import roleModel from "../roles/roles.model.js";
 import departmentModel from "../departments/departments.model.js"
 import { deleteAuthorizedUserById } from "../users/users.service.js";
 import users from "./../users/users.model.js"
-import { retentionCutoff } from "../../../services/retention.service.js";
+import { isAllowedRetentionSpec, RETENTION_OPTION_MONTHS } from "../../../services/retention.service.js";
 import Channel from "../channels/channels.model.js";
 import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
 
@@ -1024,13 +1024,16 @@ class AdminService {
           update[`retention.${k}`] = null;
           continue;
         }
-        // Validated with the sweeper's own parser, so the API can never store a
-        // spec the sweeper won't read — which would silently mean "keep forever".
-        const spec = String(v).trim();
-        if (spec.toLowerCase() !== "never" && !retentionCutoff(spec)) {
-          return fail(`${k} must be like "90d", "3m", "1y", or "never" (or null for the global default).`);
+        // Restricted to the offered retention options (6 months being the cap),
+        // so the API can never store a period the settings screen cannot show —
+        // nor one the sweeper won't read, which would silently mean "keep forever".
+        const spec = String(v).trim().toLowerCase();
+        if (spec !== "never" && !isAllowedRetentionSpec(spec)) {
+          return fail(
+            `${k} must be one of ${RETENTION_OPTION_MONTHS.map((m) => `"${m}m"`).join(", ")}, or "never" (or null for the global default).`
+          );
         }
-        update[`retention.${k}`] = spec.toLowerCase() === "never" ? "never" : spec;
+        update[`retention.${k}`] = spec;
       }
 
       for (const [k, [min, max]] of Object.entries(NUM_KEYS)) {

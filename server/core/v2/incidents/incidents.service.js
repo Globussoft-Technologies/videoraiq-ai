@@ -11,6 +11,7 @@ import { withSFTPConnection } from "../../../utils/newSFTPConnectionCheck.js";
 import path from "path";
 import fs from "fs";
 import { deletionQueue } from "../jobs/utils/deletionQueue.js";
+import { ALERT_FEED_EXCLUDED_TYPES } from "../../../constants/detectionTypes.js";
 
 import {
   Incident,
@@ -666,9 +667,12 @@ class IncidentsService {
         statusFilter,
       } = req.body;
 
+      // Shared with the Analytics overview breakdown so the "why is this in the
+      // total but not in Alerts?" explanation can never drift from what this
+      // list actually filters on.
       const matchStage = {
         Image: { $exists: true, $nin: [null, "", undefined, "https://"] },
-        incidentType: { $nin: ["countPersons", "lineCrossing", "countVehicles"] },
+        incidentType: { $nin: ALERT_FEED_EXCLUDED_TYPES },
         userId: user_id.toString(),
         incidentName: { $not: /Guard Present/i }
       };

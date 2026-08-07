@@ -33,9 +33,15 @@ vi.mock("../../../core/v1/incidents/incidents.model.js", () => ({
 }));
 
 const { deleteMedia } = await import("../../../utils/mediaStorage.js");
-const { retentionCutoff, collectMediaPaths, sweepDataset, runRetentionSweep } = await import(
-  "../../../services/retention.service.js"
-);
+const {
+  retentionCutoff,
+  isAllowedRetentionSpec,
+  RETENTION_OPTION_MONTHS,
+  MAX_RETENTION_MONTHS,
+  collectMediaPaths,
+  sweepDataset,
+  runRetentionSweep,
+} = await import("../../../services/retention.service.js");
 
 beforeEach(() => {
   deleteMedia.mockClear();
@@ -56,6 +62,27 @@ describe("retentionCutoff", () => {
     expect(retentionCutoff("", now)).toBeNull();
     expect(retentionCutoff("banana", now)).toBeNull();
     expect(retentionCutoff("0d", now)).toBeNull();
+  });
+});
+
+describe("isAllowedRetentionSpec", () => {
+  it("accepts the three offered options, case and space tolerant", () => {
+    expect(RETENTION_OPTION_MONTHS).toEqual([1, 3, 6]);
+    expect(MAX_RETENTION_MONTHS).toBe(6);
+    expect(isAllowedRetentionSpec("1m")).toBe(true);
+    expect(isAllowedRetentionSpec("3m")).toBe(true);
+    expect(isAllowedRetentionSpec(" 6M ")).toBe(true);
+  });
+
+  it("rejects anything past the 6 month cap, other units, and junk", () => {
+    expect(isAllowedRetentionSpec("12m")).toBe(false);
+    expect(isAllowedRetentionSpec("1y")).toBe(false);
+    // A day spec is rejected even when it lands inside the cap — the API stores
+    // only the offered options, so the settings screen can always show it back.
+    expect(isAllowedRetentionSpec("90d")).toBe(false);
+    expect(isAllowedRetentionSpec("2m")).toBe(false);
+    expect(isAllowedRetentionSpec("never")).toBe(false);
+    expect(isAllowedRetentionSpec(undefined)).toBe(false);
   });
 });
 

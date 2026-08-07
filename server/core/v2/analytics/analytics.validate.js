@@ -124,6 +124,30 @@ class AnalyticsValidator {
         Joi.array().items(Joi.string().trim())
       ),
       days: Joi.number().integer().min(1).max(90),
+      // Opt out of the access-log rollups when the caller only needs the
+      // attendance figures. Defaults to true, so the response shape is
+      // unchanged for callers that don't pass it.
+      includeAccess: Joi.boolean(),
+    });
+
+    return schema.validate(query, { abortEarly: false });
+  }
+
+  // Single day, not a range — "present" and "absent" are only meaningful for
+  // one calendar date. Defaults to today when omitted.
+  attendancePresence(query) {
+    const schema = Joi.object({
+      date: Joi.string().trim().regex(dateOnlyPattern).messages({
+        'string.pattern.base': 'date must be in YYYY-MM-DD format',
+      }),
+      nvrId: Joi.alternatives().try(
+        Joi.string().trim(),
+        Joi.array().items(Joi.string().trim())
+      ),
+      channelId: Joi.alternatives().try(
+        Joi.string().trim(),
+        Joi.array().items(Joi.string().trim())
+      ),
     });
 
     return schema.validate(query, { abortEarly: false });

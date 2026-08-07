@@ -135,7 +135,21 @@ class AttendanceController {
         schema: { $ref: "#/definitions/getAttendance" }
         }
         #swagger.responses[200] = {
-            description: 'Logs retrieved successfully'
+            description: 'Logs retrieved successfully. `total` and `statusCounts` cover the whole filtered range, not just the returned page — each row is graded Present / Half Day / Absent / Checked In against the org thresholds from GET /attendance/settings.',
+            schema: {
+              statusCode: 200,
+              body: {
+                status: 'success',
+                message: 'Attendance summary',
+                data: {
+                  attendanceLogs: [],
+                  total: 150,
+                  totalEmployees: 180,
+                  statusCounts: { present: 96, halfDay: 12, absent: 30, checkedIn: 12 },
+                  attendanceLogsStartDate: '2026-01-04T04:12:00.000Z'
+                }
+              }
+            }
         }
         #swagger.responses[500] = {
             description: 'Internal server error'
@@ -259,6 +273,41 @@ class AttendanceController {
         }
     */
     return attendanceService.getUserLogs(req, res, next);
+  }
+
+  async getAttendanceSettings(req, res, next) {
+    /* #swagger.tags = ['Attendance']
+        #swagger.description = "This organisation's attendance rules: how many hours on site count as a full day and as a half day. Returns defaults (8h / 4h) when nothing has been saved yet."
+        #swagger.responses[200] = {
+            description: 'Attendance settings fetched successfully',
+            schema: {
+              statusCode: 200,
+              body: {
+                status: 'success',
+                message: 'Attendance settings fetched successfully',
+                data: { fullDayHours: 9, halfDayHours: 4 }
+              }
+            }
+        }
+        #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return attendanceService.getAttendanceSettings(req, res, next);
+  }
+
+  async updateAttendanceSettings(req, res, next) {
+    /* #swagger.tags = ['Attendance']
+        #swagger.description = 'Set this organisation\'s full-day and half-day hour thresholds. Applies to every employee under the admin. Status is derived at query time, so changing these re-grades existing attendance logs on the next read — no backfill.'
+        #swagger.parameters['data'] = {
+            in: 'body',
+            description: 'Attendance rules',
+            required: true,
+            schema: { fullDayHours: 9, halfDayHours: 4 }
+        }
+        #swagger.responses[200] = { description: 'Attendance settings updated successfully' }
+        #swagger.responses[400] = { description: 'Validation error, e.g. halfDayHours greater than fullDayHours' }
+        #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return attendanceService.updateAttendanceSettings(req, res, next);
   }
 }
 

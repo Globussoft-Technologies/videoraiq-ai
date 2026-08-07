@@ -9,7 +9,14 @@ import Channel from "../channels/channels.model.js";
 import Attendance from "../attendance/attendance.model.js";
 import AuthorizedUser from "../authorizedUsers/authorizedUsers.model.js";
 import OptimizedAccessLogs from "../accesslogs/newAccessLogs.model.js";
+import AttendanceService from "../attendance/attendance.service.js";
+import {
+  ATTENDANCE_STATUS,
+  attendanceStatusStage,
+  resolveAttendanceSettings,
+} from "../attendance/attendanceStatus.js";
 import AnalyticsValidator from "./analytics.validate.js";
+import { ALERT_FEED_EXCLUDED_TYPES } from "../../../constants/detectionTypes.js";
 
 const DEFAULT_DAYS = 30;
 const DEFAULT_TOP_CAMERAS_LIMIT = 5;
@@ -125,6 +132,12 @@ function emptyAccessRollup() {
  * access logs. They share the day key but are deliberately kept as separate
  * fields — they're different units and the chart plots them on separate axes.
  */
+// Attended that day and no longer on site: every graded status except the
+// still-inside one.
+function gradedCheckedOut(day) {
+  return (day?.present || 0) + (day?.halfDay || 0) + (day?.shortDay || 0);
+}
+
 // Most recent day in the rollup that has at least one attendance log — the
 // reference point for any "as of now" figure.
 function latestActiveDay(dailyRows = []) {
@@ -147,9 +160,13 @@ function fillSeries(range, attendanceRows = [], accessRows = [], totalEmployees 
       date,
       employees: totalEmployees,
       attended,
+      // Graded statuses, same rules as the Attendance Logs page. These four
+      // sum to `attended`; `noLog` is the rest of the roster that day.
       present: attendance.present || 0,
-      checkedOut: attendance.checkedOut || 0,
-      absentees: Math.max(totalEmployees - attended, 0),
+      halfDay: attendance.halfDay || 0,
+      shortDay: attendance.shortDay || 0,
+      checkedIn: attendance.checkedIn || 0,
+      noLog: Math.max(totalEmployees - attended, 0),
       checkins: attendance.checkinLogs || 0,
       checkouts: attendance.checkoutLogs || 0,
       unauthorizedAccess: accessByDate.get(date) || 0,
@@ -157,6 +174,53 @@ function fillSeries(range, attendanceRows = [], accessRows = [], totalEmployees 
   }
 
   return series;
+}
+
+/**
+ * Incident counts grouped by the site (NVR location) they came from.
+ *
+ * Shared by Site Performance and the Busiest Site KPI, which previously each
+ * carried their own copy of these stages.
+ *
+ * Two things this fixes:
+ *
+ * 1. The group key is the *normalised* location, so "Goa", "goa" and "goa "
+ *    are one site rather than three. Splitting them both fragments the counts
+ *    and manufactures ties at the top.
+ * 2. The sort carries an `_id` tiebreaker. `$sort` is not stable for equal
+ *    keys, so `{ events: -1 }` alone lets any two sites on the same count swap
+ *    places between executions — which is exactly how "Busiest Site" changed
+ *    name on every reload while the event count stayed put.
+ *
+ * `$min` rather than `$first` for the display name: `$first` without a
+ * preceding sort is itself arbitrary among casing variants.
+ */
+function siteGroupingStages() {
+  return [
+    { $group: { _id: "$nvrId", count: { $sum: 1 } } },
+    { $lookup: { from: "nvrs", localField: "_id", foreignField: "_id", as: "nvr" } },
+    { $unwind: { path: "$nvr", preserveNullAndEmptyArrays: true } },
+    {
+      $addFields: {
+        // $ifNull alone let an empty-string location through as its own
+        // nameless site; trim first, then fall back.
+        siteName: {
+          $let: {
+            vars: { trimmed: { $trim: { input: { $ifNull: ["$nvr.location", ""] } } } },
+            in: { $cond: [{ $eq: ["$$trimmed", ""] }, "Unknown", "$$trimmed"] },
+          },
+        },
+      },
+    },
+    {
+      $group: {
+        _id: { $toLower: "$siteName" },
+        site: { $min: "$siteName" },
+        events: { $sum: "$count" },
+      },
+    },
+    { $sort: { events: -1, _id: 1 } },
+  ];
 }
 
 // Echoes back whichever range a widget actually queried — an explicit
@@ -322,7 +386,7 @@ class AnalyticsService {
    * `present` means the day's last event was a check-in (still inside); its
    * complement among attendees is `checkedOut`.
    */
-  async _attendanceRollup(scope, range) {
+  async _attendanceRollup(scope, range, rules) {
     if (scope.eventScopeEmpty || !scope.employeeIds.length) return emptyAttendanceRollup();
 
     const cameraMatch = this._eventCameraMatch(scope);
@@ -330,6 +394,12 @@ class AnalyticsService {
 
     const rows = await Attendance.aggregate([
       {
+        // `employee` is load-bearing, not redundant: the roster it comes from is
+        // location-scoped for member accounts (see the pre-find hook on
+        // authorizedUsers), and restricting to it also gives the same
+        // inner-join semantics as the Attendance Logs page, whose $lookup +
+        // $unwind drops rows whose employee no longer exists. The
+        // { user, employee, createdAt } index serves this match directly.
         $match: {
           user: scope.adminId,
           employee: { $in: scope.employeeIds },
@@ -342,18 +412,20 @@ class AnalyticsService {
       { $unwind: "$events" },
       ...cameraStages,
       {
-        // One document per attendance log row. The last event of the day is
-        // derived from $max timestamps per camera type rather than a $sort +
-        // $last, so this never hits the aggregation sort memory limit.
+        // One document per attendance log row. First check-in / last check-out
+        // are derived from $min/$max per camera type rather than a $sort +
+        // $first/$last, so this never hits the aggregation sort memory limit.
+        // The field names match what the Attendance Logs pipeline produces so
+        // the shared grading stage below can be applied unchanged.
         $group: {
           _id: {
             employee: "$employee",
             date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: REPORT_TZ } },
           },
-          lastCheckin: {
-            $max: { $cond: [{ $eq: ["$events.cameraType", "checkin"] }, "$events.timestamp", null] },
+          firstCheckIn: {
+            $min: { $cond: [{ $eq: ["$events.cameraType", "checkin"] }, "$events.timestamp", null] },
           },
-          lastCheckout: {
+          lastCheckOut: {
             $max: { $cond: [{ $eq: ["$events.cameraType", "checkout"] }, "$events.timestamp", null] },
           },
           checkins: { $sum: { $cond: [{ $eq: ["$events.cameraType", "checkin"] }, 1, 0] } },
@@ -361,22 +433,11 @@ class AnalyticsService {
           events: { $sum: 1 },
         },
       },
-      {
-        $addFields: {
-          // Checked in and not checked out since — i.e. still inside.
-          stillIn: {
-            $and: [
-              { $ne: ["$lastCheckin", null] },
-              {
-                $or: [
-                  { $eq: ["$lastCheckout", null] },
-                  { $gt: ["$lastCheckin", "$lastCheckout"] },
-                ],
-              },
-            ],
-          },
-        },
-      },
+      // Grade each employee-day with the SAME stage the Attendance Logs
+      // pipeline uses. The chart used to colour "Present" by a local
+      // still-inside rule, which is what this codebase now calls Checked In —
+      // so the chart was contradicting the KPI tiles beside it.
+      attendanceStatusStage(rules),
       {
         $facet: {
           daily: [
@@ -384,8 +445,10 @@ class AnalyticsService {
               $group: {
                 _id: "$_id.date",
                 attended: { $sum: 1 },
-                present: { $sum: { $cond: ["$stillIn", 1, 0] } },
-                checkedOut: { $sum: { $cond: ["$stillIn", 0, 1] } },
+                present: { $sum: { $cond: [{ $eq: ["$status", ATTENDANCE_STATUS.PRESENT] }, 1, 0] } },
+                halfDay: { $sum: { $cond: [{ $eq: ["$status", ATTENDANCE_STATUS.HALF_DAY] }, 1, 0] } },
+                shortDay: { $sum: { $cond: [{ $eq: ["$status", ATTENDANCE_STATUS.ABSENT] }, 1, 0] } },
+                checkedIn: { $sum: { $cond: [{ $eq: ["$status", ATTENDANCE_STATUS.CHECKED_IN] }, 1, 0] } },
                 checkinLogs: { $sum: { $cond: [{ $gt: ["$checkins", 0] }, 1, 0] } },
                 checkoutLogs: { $sum: { $cond: [{ $gt: ["$checkouts", 0] }, 1, 0] } },
               },
@@ -397,7 +460,9 @@ class AnalyticsService {
                 date: "$_id",
                 attended: 1,
                 present: 1,
-                checkedOut: 1,
+                halfDay: 1,
+                shortDay: 1,
+                checkedIn: 1,
                 checkinLogs: 1,
                 checkoutLogs: 1,
               },
@@ -578,7 +643,7 @@ class AnalyticsService {
    * insights purely from the access rollup — the `group` field says which, so
    * the UI can keep the two kinds of finding visually apart.
    */
-  _attendanceAnomalies({ attendance, previousAttendance, access, previousAccess, totalEmployees }) {
+  _attendanceAnomalies({ attendance, previousAttendance, access, previousAccess, totalEmployees, accessIncluded = true }) {
     const attendedPct = pct(attendance.attended, totalEmployees);
     const absentPct = pct(Math.max(totalEmployees - attendance.attended, 0), totalEmployees);
     const unauthorizedRate = pct(access.unauthorized, access.sessions);
@@ -590,17 +655,24 @@ class AnalyticsService {
         group: "attendance",
         severity: "high",
         title: "No attendance activity",
-        message: "No check-in or check-out was recorded in any attendance log for the selected range.",
+        message: "No check-in or check-out reached the system for the selected range.",
+        hint: "Across a whole range this is almost always a camera or sync problem rather than nobody turning up.",
       });
     }
 
+    // Deliberately NOT called an absentee rate. It counts employees with no
+    // attendance log *at all* over the whole range, which is a different
+    // question from the Absentees tile (one day, graded against the org's
+    // hour thresholds) — giving both the same name is what made the two read
+    // as contradicting each other.
     if (totalEmployees > 0 && absentPct >= 25) {
       anomalies.push({
-        type: "high_absence",
+        type: "low_attendance_coverage",
         group: "attendance",
-        severity: absentPct >= 50 ? "critical" : "medium",
-        title: "High absentee rate",
-        message: `${absentPct}% of employees (${formatCount(Math.max(totalEmployees - attendance.attended, 0))} of ${formatCount(totalEmployees)}) have no attendance log in the selected range.`,
+        severity: absentPct >= 50 ? "high" : "medium",
+        title: "Low attendance coverage",
+        message: `${formatCount(Math.max(totalEmployees - attendance.attended, 0))} of ${formatCount(totalEmployees)} employees (${absentPct}%) have no attendance log at all in this range.`,
+        hint: "Employees who never appear are usually not enrolled on a check-in camera rather than genuinely absent. Separate from the daily tiles above.",
       });
     }
 
@@ -611,6 +683,7 @@ class AnalyticsService {
         severity: "medium",
         title: "Check-outs not being recorded",
         message: `${formatCount(attendance.checkinLogs)} attendance logs have a check-in but only ${formatCount(attendance.checkoutLogs)} have a check-out.`,
+        hint: "A day with no check-out has no measurable time on site, so it can never grade as Present or Half Day. Usually a missing or misconfigured check-out camera.",
       });
     }
 
@@ -621,6 +694,7 @@ class AnalyticsService {
         severity: "medium",
         title: "Attendance volume spike",
         message: `Attendance logs rose from ${formatCount(previousAttendance.logs)} to ${formatCount(attendance.logs)} versus the previous period.`,
+        hint: "Expected after enrolling employees or adding a check-in camera. Unexpected otherwise — worth checking for duplicate detections.",
       });
     }
 
@@ -658,17 +732,133 @@ class AnalyticsService {
       });
     }
 
-    if (totalEmployees > 0 && attendedPct >= 95 && access.unauthorized === 0) {
+    // The access half of this claim is only made when the access rollup
+    // actually ran — a caller that opted out of it hasn't checked, and
+    // "no unauthorized access events were detected" would be asserting
+    // something nobody looked for.
+    if (totalEmployees > 0 && attendedPct >= 95 && (!accessIncluded || access.unauthorized === 0)) {
       anomalies.push({
         type: "healthy_attendance",
         group: "attendance",
         severity: "info",
         title: "Attendance activity normal",
-        message: "Attendance coverage is high and no unauthorized access events were detected.",
+        message: accessIncluded
+          ? "Attendance coverage is high and no unauthorized access events were detected."
+          : "Attendance coverage is high across the selected range.",
+        hint: "Nearly every employee has at least one attendance log in this range.",
       });
     }
 
     return anomalies;
+  }
+
+  /**
+   * Present / absent for a single calendar day, for the Attendance Analytics
+   * KPI tiles.
+   *
+   * The row set is produced by the Attendance Logs pipeline itself
+   * (`AttendanceService.buildAttendancePipeline`) rather than by a second
+   * implementation here. That is deliberate: the two screens have to agree, and
+   * the only way to guarantee that is for both to count the same rows. It also
+   * means the logs page's scoping rules — admin vs member, authorized channels
+   * and NVRs, employee locations, its own day bucketing — apply here for free
+   * and cannot drift out of sync later.
+   *
+   * Rows are bucketed by the `status` that pipeline derives from the org's
+   * configured thresholds (see attendanceStatus.js):
+   *   present    — on site at least fullDayHours
+   *   halfDay    — at least halfDayHours but under fullDayHours
+   *   absent     — checked in and out, but under halfDayHours
+   *   checkedIn  — checked in, no check-out yet
+   *
+   * Counting server-side over all rows also drops the old 200-row page cap the
+   * client used to compute these from, which silently truncated the figures.
+   */
+  async attendancePresence(req, res, _next) {
+    try {
+      const { error } = AnalyticsValidator.attendancePresence(req.query);
+      if (error) return res.send(Response.validationFailResp(error.message, "Validation Failed!"));
+
+      const date = req.query.date || momentTz.tz(REPORT_TZ).format("YYYY-MM-DD");
+      const userData = req?.verified?.userData || {};
+      const adminId = userData.adminId || userData.user_id;
+
+      // Only the fields buildAttendancePipeline actually reads, passed as a
+      // plain object rather than a spread of the live Express request.
+      // `export: true` makes it skip $skip/$limit — this is a count, not a page.
+      const logsReq = {
+        verified: req.verified,
+        body: { employeeLocations: req.body?.employeeLocations || [] },
+        query: {
+          nvrId: req.query.nvrId,
+          channelId: req.query.channelId,
+          startDate: date,
+          endDate: date,
+          export: true,
+        },
+      };
+
+      const pipeline = await AttendanceService.buildAttendancePipeline(logsReq);
+      // $sort is dead weight when the result is collapsed to one row.
+      const countPipeline = pipeline.filter(
+        (stage) => !("$sort" in stage || "$skip" in stage || "$limit" in stage)
+      );
+
+      // Counted straight off the `status` the shared pipeline already derived
+      // from this org's configured thresholds — so these tiles and the
+      // Attendance Logs table grade every row identically.
+      const countByStatus = (status) => ({
+        $sum: { $cond: [{ $eq: ["$status", status] }, 1, 0] },
+      });
+
+      countPipeline.push({
+        $group: {
+          _id: null,
+          logs: { $sum: 1 },
+          present: countByStatus(ATTENDANCE_STATUS.PRESENT),
+          halfDay: countByStatus(ATTENDANCE_STATUS.HALF_DAY),
+          absent: countByStatus(ATTENDANCE_STATUS.ABSENT),
+          checkedIn: countByStatus(ATTENDANCE_STATUS.CHECKED_IN),
+          // Same three figures the "From attendance logs" strip shows, for the
+          // selected day rather than the whole range — showing range totals
+          // beside day-scoped tiles is what made them look unrelated.
+          checkinLogs: {
+            $sum: { $cond: [{ $ne: [{ $ifNull: ["$firstCheckIn", null] }, null] }, 1, 0] },
+          },
+          checkoutLogs: {
+            $sum: { $cond: [{ $ne: [{ $ifNull: ["$lastCheckOut", null] }, null] }, 1, 0] },
+          },
+        },
+      });
+
+      const [counts = {}, employees] = await Promise.all([
+        Attendance.aggregate(countPipeline)
+          .collation({ locale: "en", strength: 2 })
+          .then((rows) => rows[0]),
+        // Same count the Total Employees tile used to fetch from
+        // /authorizedUsers/fetch, including the member location scoping its
+        // pre-find hook applies.
+        AuthorizedUser.countDocuments(
+          { adminId: new mongoose.Types.ObjectId(adminId) },
+          { memberId: userData.memberId }
+        ),
+      ]);
+
+      return res.status(200).json(Response.userSuccessResp("Attendance presence fetched successfully", {
+        date,
+        employees,
+        logs: counts?.logs || 0,
+        present: counts?.present || 0,
+        halfDay: counts?.halfDay || 0,
+        absent: counts?.absent || 0,
+        checkedIn: counts?.checkedIn || 0,
+        checkinLogs: counts?.checkinLogs || 0,
+        checkoutLogs: counts?.checkoutLogs || 0,
+      }));
+    } catch (error) {
+      logger.error(error);
+      return res.status(500).json(Response.errorResp("Failed to fetch attendance presence.", error.message));
+    }
   }
 
   async attendanceSummary(req, res, _next) {
@@ -685,12 +875,23 @@ class AnalyticsService {
       previousRange.startDate = previousRange.start.format("YYYY-MM-DD");
       previousRange.endDate = previousRange.end.format("YYYY-MM-DD");
 
+      // The access rollup feeds `unauthorizedAccess` / `accessEvents` /
+      // `accessLogs` and the security-group anomalies. The Attendance Analytics
+      // widget renders none of them (it filters anomalies to group
+      // "attendance"), so it asks for `includeAccess=false` and skips two of
+      // the four aggregations. Defaults to true — any other caller of this
+      // endpoint keeps the full response.
+      const accessIncluded = String(req.query.includeAccess ?? "true") !== "false";
+
       const scope = await this._buildAttendanceAnalyticsScope(req);
+      // One read of the org's thresholds, shared by both rollups so the current
+      // and previous periods are graded identically.
+      const rules = await resolveAttendanceSettings(scope.adminId);
       const [attendance, previousAttendance, access, previousAccess] = await Promise.all([
-        this._attendanceRollup(scope, range),
-        this._attendanceRollup(scope, previousRange),
-        this._accessRollup(scope, range),
-        this._accessRollup(scope, previousRange),
+        this._attendanceRollup(scope, range, rules),
+        this._attendanceRollup(scope, previousRange, rules),
+        accessIncluded ? this._accessRollup(scope, range) : emptyAccessRollup(),
+        accessIncluded ? this._accessRollup(scope, previousRange) : emptyAccessRollup(),
       ]);
 
       const totalEmployees = scope.totalEmployees;
@@ -713,6 +914,7 @@ class AnalyticsService {
         access,
         previousAccess,
         totalEmployees,
+        accessIncluded,
       });
 
       return res.status(200).json(Response.userSuccessResp("Attendance analytics fetched successfully", {
@@ -730,6 +932,10 @@ class AnalyticsService {
           },
         },
         filtersApplied: scope.filtersApplied,
+        // Present / absent for the KPI tiles deliberately do NOT live here.
+        // They are the Attendance Logs page's figures and are served by
+        // /analytics/attendance-presence, which counts them from that page's
+        // own pipeline — one implementation, so the two screens cannot drift.
         // Attendance-sourced totals first, then the single access-sourced one.
         totals: {
           employees: {
@@ -748,11 +954,26 @@ class AnalyticsService {
             asOf: latestDay?.date || null,
             trend: trend(presentCount, previousLatestDay?.present || 0),
           },
+          // Preserves this key's original meaning — attended that day and no
+          // longer on site — now that the daily rollup is bucketed by graded
+          // status rather than a still-inside flag.
           checkedOut: {
-            count: latestDay?.checkedOut || 0,
-            pct: pct(latestDay?.checkedOut || 0, totalEmployees),
+            count: gradedCheckedOut(latestDay),
+            pct: pct(gradedCheckedOut(latestDay), totalEmployees),
             asOf: latestDay?.date || null,
-            trend: trend(latestDay?.checkedOut || 0, previousLatestDay?.checkedOut || 0),
+            trend: trend(gradedCheckedOut(latestDay), gradedCheckedOut(previousLatestDay)),
+          },
+          halfDay: {
+            count: latestDay?.halfDay || 0,
+            pct: pct(latestDay?.halfDay || 0, totalEmployees),
+            asOf: latestDay?.date || null,
+            trend: trend(latestDay?.halfDay || 0, previousLatestDay?.halfDay || 0),
+          },
+          checkedIn: {
+            count: latestDay?.checkedIn || 0,
+            pct: pct(latestDay?.checkedIn || 0, totalEmployees),
+            asOf: latestDay?.date || null,
+            trend: trend(latestDay?.checkedIn || 0, previousLatestDay?.checkedIn || 0),
           },
           absentees: {
             count: absentCount,
@@ -1011,26 +1232,10 @@ class AnalyticsService {
 
       const rows = await Incident.aggregate([
         { $match: match },
-        { $group: { _id: "$nvrId", count: { $sum: 1 } } },
-        {
-          $lookup: {
-            from: "nvrs",
-            localField: "_id",
-            foreignField: "_id",
-            as: "nvr",
-          },
-        },
-        { $unwind: { path: "$nvr", preserveNullAndEmptyArrays: true } },
-        {
-          $group: {
-            _id: { $ifNull: ["$nvr.location", "Unknown"] },
-            events: { $sum: "$count" },
-          },
-        },
-        { $sort: { events: -1 } },
+        ...siteGroupingStages(),
       ]);
 
-      const sites = rows.map((r) => ({ site: r._id, events: r.events }));
+      const sites = rows.map((r) => ({ site: r.site, events: r.events }));
 
       return res.status(200).json(Response.userSuccessResp("Site performance fetched successfully", {
         ...describeRange(req, DEFAULT_DAYS),
@@ -1085,42 +1290,75 @@ class AnalyticsService {
       const days = Number(req.query.days) || DEFAULT_DAYS;
       const match = await this._buildBaseMatch(req, { days });
 
-      const [totalDetections, resolvedCount, activeCameras, siteRows] = await Promise.all([
+      const [totalDetections, resolvedCount, activeCameras, siteRows, typeRows] = await Promise.all([
         Incident.countDocuments(match),
         Incident.countDocuments({ ...match, resolved: true }),
         Channel.countDocuments({ userId: data.user_id.toString(), control: 1 }),
+        // Top two, not one: with only the winner there's no way to tell a
+        // clear leader from an arbitrary pick between equals.
         Incident.aggregate([
           { $match: match },
-          { $group: { _id: "$nvrId", count: { $sum: 1 } } },
-          {
-            $lookup: {
-              from: "nvrs",
-              localField: "_id",
-              foreignField: "_id",
-              as: "nvr",
-            },
-          },
-          { $unwind: { path: "$nvr", preserveNullAndEmptyArrays: true } },
+          ...siteGroupingStages(),
+          { $limit: 2 },
+        ]),
+        // Per-engine breakdown of that same total, plus how many rows of each
+        // are eligible for the Alerts / Incident Center list. The two diverge
+        // because that list requires a reviewable snapshot and drops the
+        // counting/tripwire engines, so a nonzero total can show an empty
+        // Alerts page. Reporting both makes the gap explainable instead of
+        // looking like missing data.
+        Incident.aggregate([
+          { $match: match },
           {
             $group: {
-              _id: { $ifNull: ["$nvr.location", "Unknown"] },
-              events: { $sum: "$count" },
+              _id: "$incidentType",
+              count: { $sum: 1 },
+              inAlerts: {
+                $sum: {
+                  $cond: [
+                    {
+                      $and: [
+                        { $not: [{ $in: ["$incidentType", ALERT_FEED_EXCLUDED_TYPES] }] },
+                        // $ifNull collapses a missing/null Image to "", so the
+                        // same check covers absent, empty and placeholder URLs.
+                        { $not: [{ $in: [{ $ifNull: ["$Image", ""] }, ["", "https://"]] }] },
+                      ],
+                    },
+                    1,
+                    0,
+                  ],
+                },
+              },
             },
           },
-          { $sort: { events: -1 } },
-          { $limit: 1 },
+          { $sort: { count: -1, _id: 1 } },
         ]),
       ]);
 
       const resolvedRate = totalDetections > 0 ? Math.round((resolvedCount / totalDetections) * 1000) / 10 : 0;
       const busiestSite = siteRows[0] || null;
+      const tied = !!busiestSite && siteRows[1]?.events === busiestSite.events;
+
+      const byType = typeRows.map((row) => ({
+        type: row._id || "unknown",
+        count: row.count,
+        inAlerts: row.inAlerts,
+      }));
+      // Upper bound: the Alerts list also defaults to unresolved-only and drops
+      // "Guard Present" rows, both of which depend on the filters the user has
+      // selected there. This counts only the structural exclusions.
+      const alertsVisible = byType.reduce((sum, row) => sum + row.inAlerts, 0);
 
       return res.status(200).json(Response.userSuccessResp("Analytics overview fetched successfully", {
         ...describeRange(req, DEFAULT_DAYS),
         totalDetections,
         resolvedRate,
         activeCameras,
-        busiestSite: busiestSite ? { site: busiestSite._id, events: busiestSite.events } : null,
+        busiestSite: busiestSite
+          ? { site: busiestSite.site, events: busiestSite.events, tied }
+          : null,
+        byType,
+        alertsVisible,
       }));
     } catch (error) {
       logger.error(error);

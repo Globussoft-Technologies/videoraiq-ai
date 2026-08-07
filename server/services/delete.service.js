@@ -9,7 +9,18 @@ import { redis } from "../utils/database.js";
 import authorizedChannelsModel from "../core/v1/cameraRestrictions/authorizedChannels.model.js";
 import usersModel from "../core/v1/users/users.model.js";
 import { resolveStream } from "../utils/rtspStream.js";
+import { toRelativeMediaPath } from "../utils/mediaStorage.js";
+import { collectMediaPaths, deleteMediaBestEffort } from "../utils/mediaCleanup.js";
 const APP_ENV = config.get("APP_ENV");
+
+// Only the fields that can carry a stored media path on an Incident (base
+// schema Image/videoLink, plus the Door/Light discriminators' currentImage
+// and timeSeries[].Image) — see core/v1/incidents/incidents.model.js.
+const INCIDENT_MEDIA_SELECT = "_id Image currentImage videoLink timeSeries.Image";
+// Docs per batch: bounds memory for a channel with a very large incident
+// history, same sizing as the retention sweeper's default. Exported so tests
+// can construct an exact-size batch to exercise the multi-page loop.
+export const INCIDENT_BATCH_SIZE = 200;
 
 class DeleteService {
   static async deleteNVR(nId) {
@@ -73,12 +84,18 @@ class DeleteService {
       //   await DetectionSetting.deleteMany({ _id: { $in: detectionIds } });
       // }
 
-      await Incident.deleteMany({ channelId });
+      const { deleted, mediaFailures } = await this.deleteChannelIncidents(
+        channelId
+      );
 
       await Channel.deleteOne({ _id: channelId });
 
       logger.info(
-        `Deleted channel ${channelId} and all associated settings and incidents.`
+        `Deleted channel ${channelId}: removed ${deleted} incident(s)` +
+          (mediaFailures
+            ? ` (${mediaFailures} media file(s) failed to delete from storage — see warnings above; the incident rows are gone so those files can no longer be found and retried)`
+            : "") +
+          " and the channel itself."
       );
 
       return true;
@@ -86,6 +103,59 @@ class DeleteService {
       logger.error("Error deleting channel:", error);
       throw new Error("Failed to delete channel and its associated resources.");
     }
+  }
+
+  /**
+   * Deletes every Incident under a channel: for each bounded batch, first
+   * best-effort deletes the incident's stored media (image/video, from
+   * whichever storage provider is active — NAS or Oracle, via
+   * utils/mediaStorage.js) and only then deletes that batch's DB rows.
+   * `Incident.deleteMany({ channelId })` alone (the old behaviour) dropped
+   * the rows but left every referenced file orphaned on storage.
+   *
+   * A storage failure is logged but never blocks the DB row from being
+   * removed — an incident whose file failed to delete is not left behind
+   * as a retryable unit; it's only recoverable via the warning log. This
+   * matches the retention sweeper's same trade-off (utils/mediaCleanup.js).
+   *
+   * Safe to re-run: querying `{ channelId }` after a partial run (e.g. the
+   * process died mid-cascade) simply finds whatever incidents are still
+   * there and continues; a channel with nothing left returns
+   * { deleted: 0, mediaFailures: 0 } and deleteChannel proceeds straight to
+   * removing the channel row.
+   */
+  static async deleteChannelIncidents(channelId) {
+    let deleted = 0;
+    let mediaFailures = 0;
+
+    for (;;) {
+      const batch = await Incident.find({ channelId })
+        .select(INCIDENT_MEDIA_SELECT)
+        .limit(INCIDENT_BATCH_SIZE)
+        .lean();
+      if (!batch.length) break;
+
+      const paths = batch
+        .flatMap((doc) => collectMediaPaths(doc))
+        .map(toRelativeMediaPath)
+        // videoLink can be an external URL rather than a storage path — not
+        // ours to delete.
+        .filter((p) => typeof p === "string" && p.trim() && !/^https?:\/\//i.test(p));
+
+      mediaFailures += await deleteMediaBestEffort(
+        paths,
+        `[NVR-DELETE] channel:${channelId}`
+      );
+
+      const res = await Incident.deleteMany({
+        _id: { $in: batch.map((d) => d._id) },
+      });
+      deleted += res.deletedCount || 0;
+
+      if (batch.length < INCIDENT_BATCH_SIZE) break;
+    }
+
+    return { deleted, mediaFailures };
   }
 
   static async deleteStreamingCamera(cameraId, userId) {

@@ -42,6 +42,17 @@ export const DETECTION_TYPES = {
   mobilePhoneDetectionSettings: "Mobile Phone Detection",
 }
 
+/**
+ * Incident types the Alerts / Incident Center list leaves out. That list only
+ * shows incidents carrying a reviewable snapshot, and these engines never
+ * produce one — a person/vehicle count is a running tally, a line cross is a
+ * tripwire event. They are still recorded as incidents and still counted by
+ * Analytics, which is why an Analytics total can exceed what Alerts displays.
+ * Each has its own log page instead (Person Count / Vehicle Count / Line
+ * Crossing Logs).
+ */
+export const ALERT_FEED_EXCLUDED_TYPES = ["countPersons", "lineCrossing", "countVehicles"];
+
 export const TYPE_MAP = {
   countPersonsSettings: "countPersons",
   motionDetectionSettings: "motionDetection",

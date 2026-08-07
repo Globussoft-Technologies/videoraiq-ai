@@ -41,7 +41,12 @@ vi.mock("../../../core/v1/detectionSettings/detectionSettings.model.js", () => (
 }));
 
 vi.mock("../../../core/v1/incidents/incidents.model.js", () => ({
-  Incident: { deleteMany: vi.fn() },
+  Incident: { find: vi.fn(), deleteMany: vi.fn() },
+}));
+
+vi.mock("../../../utils/mediaStorage.js", () => ({
+  deleteMedia: vi.fn().mockResolvedValue(undefined),
+  toRelativeMediaPath: (v) => v,
 }));
 
 vi.mock("../../../core/v1/cameraRestrictions/authorizedChannels.model.js", () => ({
@@ -64,15 +69,17 @@ vi.mock("../../../utils/logger.js", () => ({
 }));
 
 /**
- * Chainable query stub. The delete path calls
- * `.setOptions({ includeInactive: true })` (to bypass the isAdded pre-hook)
- * and sometimes `.select()`, then awaits — so the stub has to support both
- * and still be thenable.
+ * Chainable query stub. The delete path calls `.setOptions({ includeInactive:
+ * true })` (to bypass the isAdded pre-hook), sometimes `.select()`, and (for
+ * the Incident batch loop) `.limit()` / `.lean()` — so the stub supports all
+ * of them and is still thenable.
  */
 const query = (docs) => {
   const q = {
     setOptions: vi.fn(() => q),
     select: vi.fn(() => q),
+    limit: vi.fn(() => q),
+    lean: vi.fn(() => q),
     then: (resolve, reject) => Promise.resolve(docs).then(resolve, reject),
   };
   return q;
@@ -83,6 +90,8 @@ const failingQuery = (err) => {
   const q = {
     setOptions: vi.fn(() => q),
     select: vi.fn(() => q),
+    limit: vi.fn(() => q),
+    lean: vi.fn(() => q),
     then: (resolve, reject) => Promise.reject(err).then(resolve, reject),
   };
   return q;
@@ -100,17 +109,34 @@ const { default: authorizedChannelsModel } = await import(
   "../../../core/v1/cameraRestrictions/authorizedChannels.model.js"
 );
 const { redis } = await import("../../../utils/database.js");
-const { default: DeleteService } = await import(
+const { deleteMedia } = await import("../../../utils/mediaStorage.js");
+const { default: DeleteService, INCIDENT_BATCH_SIZE } = await import(
   "../../../services/delete.service.js"
 );
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // mockReset (not just clearAllMocks) so a prior test's unconsumed
+  // mockReturnValueOnce queue can't leak into this one — a test whose batch
+  // loop breaks after one page (because that page was already short) leaves
+  // its second queued value unused, and clearAllMocks alone does not drain
+  // that queue.
+  Incident.find.mockReset().mockReturnValue(query([]));
+  deleteMedia.mockResolvedValue(undefined);
 });
 
 describe("DeleteService.deleteChannel", () => {
-  it("deletes incidents and the channel itself when the channel exists", async () => {
+  it("deletes each incident's stored media before its DB row, then the channel itself", async () => {
     Channel.findById.mockReturnValueOnce(query({ _id: "ch-1", nvrId: "nvr-1" }));
+    Incident.find
+      .mockReturnValueOnce(
+        query([
+          { _id: "inc-1", Image: "/uploads/images/a.jpg" },
+          { _id: "inc-2", Image: null },
+          { _id: "inc-3", Image: "/uploads/images/b.jpg" },
+        ]),
+      )
+      .mockReturnValueOnce(query([])); // second batch: nothing left, loop ends
     Incident.deleteMany.mockResolvedValueOnce({ deletedCount: 3 });
     Channel.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
 
@@ -118,8 +144,82 @@ describe("DeleteService.deleteChannel", () => {
     expect(out).toBe(true);
 
     expect(Channel.findById).toHaveBeenCalledWith("ch-1");
-    expect(Incident.deleteMany).toHaveBeenCalledWith({ channelId: "ch-1" });
+    expect(Incident.find).toHaveBeenCalledWith({ channelId: "ch-1" });
+    // Media deleted before the DB rows, one call per stored (non-null) path.
+    expect(deleteMedia).toHaveBeenCalledTimes(2);
+    expect(deleteMedia.mock.calls.map((c) => c[0]).sort()).toEqual([
+      "/uploads/images/a.jpg",
+      "/uploads/images/b.jpg",
+    ]);
+    expect(Incident.deleteMany).toHaveBeenCalledWith({
+      _id: { $in: ["inc-1", "inc-2", "inc-3"] },
+    });
     expect(Channel.deleteOne).toHaveBeenCalledWith({ _id: "ch-1" });
+  });
+
+  it("still deletes the incident rows when its media fails to delete from storage", async () => {
+    Channel.findById.mockReturnValueOnce(query({ _id: "ch-1", nvrId: "nvr-1" }));
+    Incident.find
+      .mockReturnValueOnce(query([{ _id: "inc-1", Image: "/uploads/images/a.jpg" }]))
+      .mockReturnValueOnce(query([]));
+    deleteMedia.mockRejectedValueOnce(new Error("SFTP down"));
+    Incident.deleteMany.mockResolvedValueOnce({ deletedCount: 1 });
+    Channel.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
+
+    const out = await DeleteService.deleteChannel("ch-1");
+    expect(out).toBe(true);
+
+    // The DB row is still removed — a storage failure is logged, not fatal.
+    expect(Incident.deleteMany).toHaveBeenCalledWith({ _id: { $in: ["inc-1"] } });
+    expect(Channel.deleteOne).toHaveBeenCalledWith({ _id: "ch-1" });
+  });
+
+  it("pages through incidents in batches of INCIDENT_BATCH_SIZE until a short page ends the loop", async () => {
+    Channel.findById.mockReturnValueOnce(query({ _id: "ch-1", nvrId: "nvr-1" }));
+    const fullBatch = Array.from({ length: INCIDENT_BATCH_SIZE }, (_, i) => ({
+      _id: `inc-${i}`,
+    }));
+    Incident.find
+      .mockReturnValueOnce(query(fullBatch)) // exactly a full page -> loop continues
+      .mockReturnValueOnce(query([{ _id: "inc-last" }])) // short page -> loop ends
+      .mockReturnValueOnce(query([])); // must not be reached
+    Incident.deleteMany.mockResolvedValue({ deletedCount: 1 });
+    Channel.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
+
+    await DeleteService.deleteChannel("ch-1");
+
+    expect(Incident.find).toHaveBeenCalledTimes(2);
+    expect(Incident.deleteMany).toHaveBeenCalledTimes(2);
+    expect(Incident.deleteMany.mock.calls[0][0]._id.$in).toHaveLength(
+      INCIDENT_BATCH_SIZE,
+    );
+    expect(Incident.deleteMany.mock.calls[1][0]._id.$in).toEqual(["inc-last"]);
+  });
+
+  it("skips an incident's external videoLink but still deletes its Image, whatever the active storage provider", async () => {
+    // The service never inspects which provider is active — it hands every
+    // non-external stored path to deleteMedia() and lets the mediaStorage
+    // abstraction route it to NAS or Oracle. Here Image is an Oracle-style
+    // key to prove that path shape doesn't need special-casing at this layer.
+    Channel.findById.mockReturnValueOnce(query({ _id: "ch-1", nvrId: "nvr-1" }));
+    Incident.find
+      .mockReturnValueOnce(
+        query([
+          {
+            _id: "inc-1",
+            Image: "oracle/uploads/images/ch-1/a.jpg",
+            videoLink: "https://cdn.example.com/incidents/a.mp4",
+          },
+        ]),
+      )
+      .mockReturnValueOnce(query([]));
+    Incident.deleteMany.mockResolvedValueOnce({ deletedCount: 1 });
+    Channel.deleteOne.mockResolvedValueOnce({ deletedCount: 1 });
+
+    await DeleteService.deleteChannel("ch-1");
+
+    expect(deleteMedia).toHaveBeenCalledTimes(1);
+    expect(deleteMedia).toHaveBeenCalledWith("oracle/uploads/images/ch-1/a.jpg");
   });
 
   it("wraps a missing channel in 'Failed to delete channel...' error", async () => {

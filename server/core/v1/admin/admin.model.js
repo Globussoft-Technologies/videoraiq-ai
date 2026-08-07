@@ -71,7 +71,8 @@ const adminSchema = new mongoose.Schema({
   // Per-admin data retention overrides — same shape as the global DataRetention
   // config block. Every key is null by default, meaning "use the global value".
   //   enabled: false        -> never sweep this admin's data
-  //   incidents/attendance/accessLogs: "90d" | "3m" | "1y" | "never"
+  //   incidents/attendance/accessLogs: "1m" | "3m" | "6m" | "never"
+  //     (the API caps these at 6 months; older/longer values may still exist)
   //   batchSize/maxRunMinutes: this admin's own pass sizing / time slice
   //   intervalHours: sweep this admin at most this often (lastSweepAt is the
   //                  sweeper's bookkeeping for it — not settable by the API)

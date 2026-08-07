@@ -54,7 +54,12 @@ vi.mock("../../../core/v1/detectionSettings/detectionSettings.model.js", () => (
 }));
 
 vi.mock("../../../core/v1/incidents/incidents.model.js", () => ({
-  Incident: { deleteMany: vi.fn() },
+  Incident: { find: vi.fn(), deleteMany: vi.fn() },
+}));
+
+vi.mock("../../../utils/mediaStorage.js", () => ({
+  deleteMedia: vi.fn().mockResolvedValue(undefined),
+  toRelativeMediaPath: (v) => v,
 }));
 
 vi.mock("../../../core/v1/cameraRestrictions/authorizedChannels.model.js", () => ({
@@ -90,20 +95,32 @@ const { default: DeleteService } = await import(
 
 /**
  * Chainable query stub. The delete path calls
- * `.setOptions({ includeInactive: true })` (bypassing the isAdded pre-hook)
- * and sometimes `.select()`, then awaits.
+ * `.setOptions({ includeInactive: true })` (bypassing the isAdded pre-hook),
+ * sometimes `.select()`, and (for the Incident batch loop) `.limit()` /
+ * `.lean()`, then awaits.
  */
 const query = (docs) => {
   const q = {
     setOptions: vi.fn(() => q),
     select: vi.fn(() => q),
+    limit: vi.fn(() => q),
+    lean: vi.fn(() => q),
     then: (resolve, reject) => Promise.resolve(docs).then(resolve, reject),
   };
   return q;
 };
 
+const { deleteMedia } = await import("../../../utils/mediaStorage.js");
+
 beforeEach(() => {
   vi.clearAllMocks();
+  // mockReset (not just clearAllMocks) so no unconsumed mockReturnValueOnce
+  // queue can leak between tests — see delete.service.test.js for why.
+  // No incidents left by default — that file has the dedicated media-cleanup
+  // coverage; these tests exercise the cloud-mode streaming teardown and the
+  // deleteDataFromUserAccounts error path.
+  Incident.find.mockReset().mockReturnValue(query([]));
+  deleteMedia.mockResolvedValue(undefined);
 });
 
 describe("DeleteService.deleteNVR — APP_ENV=cloud arm (lines 26-30)", () => {

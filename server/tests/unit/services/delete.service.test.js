@@ -86,8 +86,21 @@ vi.mock("../../../core/v1/cameraRestrictions/authorizedChannels.model.js", () =>
   },
 }));
 
+// Incident media/cascade behaviour has its own dedicated coverage in
+// tests/integration/services/delete.service.test.js; these unit tests are
+// about the channel/NVR cascade *shape*, so Incident.find always reports
+// "nothing left" and deleteChannelIncidents is a no-op.
 vi.mock("../../../core/v1/incidents/incidents.model.js", () => ({
-  Incident: { deleteMany: vi.fn(async () => ({ deletedCount: 0 })) },
+  Incident: {
+    find: vi.fn(() => ({
+      select: () => ({ limit: () => ({ lean: async () => [] }) }),
+    })),
+    deleteMany: vi.fn(async () => ({ deletedCount: 0 })),
+  },
+}));
+vi.mock("../../../utils/mediaStorage.js", () => ({
+  deleteMedia: vi.fn(async () => {}),
+  toRelativeMediaPath: (v) => v,
 }));
 vi.mock("../../../core/v1/detectionSettings/detectionSettings.model.js", () => ({
   DetectionSetting: { deleteMany: vi.fn(async () => ({ deletedCount: 0 })) },

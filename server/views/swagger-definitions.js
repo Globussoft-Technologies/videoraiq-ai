@@ -724,11 +724,12 @@ export const definitions = {
       logsSound: true,
     },
     // Only the keys you send are changed; null reverts one to the global
-    // DataRetention config. Periods accept "90d" | "3m" | "1y" | "never".
+    // DataRetention config. Periods accept "1m" | "3m" | "6m" | "never"
+    // (6 months is the maximum retention period).
     updateRetention: {
       userId: "22",
       enabled: true,
-      incidents: "1y",
+      incidents: "1m",
       attendance: "6m",
       accessLogs: "never",
       batchSize: 200,

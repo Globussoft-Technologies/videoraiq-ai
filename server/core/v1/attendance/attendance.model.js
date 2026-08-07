@@ -57,4 +57,13 @@ const attendanceSchema = new Schema(
   { timestamps: true },
 );
 
+// Every read path here matches on `user` and windows on `createdAt` (the
+// analytics rollups, the Attendance Logs list, the export). Without these the
+// collection had only its _id index, so each of those was a full scan — which
+// is what made Attendance Analytics take seconds on a 22-employee tenant.
+// `employee` sits between them for the department-scoped rollup, which adds an
+// `employee: { $in: [...] }` to the same match.
+attendanceSchema.index({ user: 1, createdAt: -1 });
+attendanceSchema.index({ user: 1, employee: 1, createdAt: -1 });
+
 export default mongoose.model("Attendance", attendanceSchema);

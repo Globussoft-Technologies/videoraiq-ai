@@ -12,5 +12,9 @@ router.post("/", attendanceController.logAttendance);
 // POST get user logs (break logs etc.)
 router.post("/user-logs", viewAccessCheck, attendanceController.getUserLogs);
 
+// Per-org attendance rules (full-day / half-day hour thresholds)
+router.get("/settings", viewAccessCheck, attendanceController.getAttendanceSettings);
+router.put("/settings", editAccessCheck, attendanceController.updateAttendanceSettings);
+
 
 export default router;

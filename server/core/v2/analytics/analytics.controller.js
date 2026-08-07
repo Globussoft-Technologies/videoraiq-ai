@@ -19,6 +19,38 @@ class AnalyticsController {
     return analyticsService.attendanceSummary(req, res, next);
   }
 
+  async attendancePresence(req, res, next) {
+    /*
+    #swagger.tags = ['Analytics']
+    #swagger.description = "Attendance status headcount for a single calendar day, for the Attendance Analytics KPI tiles. Counted from the Attendance Logs pipeline itself, so the figures always agree with the Attendance Logs page for the same day. Rows are graded against the org's configured thresholds (see GET /attendance/settings): present = on site at least fullDayHours, halfDay = at least halfDayHours, absent = below that, checkedIn = no check-out yet. Analytics-only."
+    #swagger.parameters['date'] = { in: 'query', description: 'Day to report on (YYYY-MM-DD). Defaults to today.', required: false, type: 'String', example: '2026-08-07' }
+    #swagger.parameters['nvrId'] = { in: 'query', description: 'Filter by one or more NVR ids', required: false, type: 'String' }
+    #swagger.parameters['channelId'] = { in: 'query', description: 'Filter by one or more channel ids', required: false, type: 'String' }
+    #swagger.responses[200] = {
+      description: 'Attendance presence fetched successfully',
+      schema: {
+        statusCode: 200,
+        body: {
+          status: 'success',
+          message: 'Attendance presence fetched successfully',
+          data: {
+            date: '2026-08-07',
+            employees: 22,
+            logs: 9,
+            present: 5,
+            halfDay: 2,
+            absent: 1,
+            checkedIn: 1
+          }
+        }
+      }
+    }
+    #swagger.responses[400] = { description: 'Validation error', schema: { statusCode: 400, body: { status: 'failed', message: 'date must be in YYYY-MM-DD format', error: 'Validation Failed!' } } }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return analyticsService.attendancePresence(req, res, next);
+  }
+
   async detectionVolume(req, res, next) {
     /*
     #swagger.tags = ['Analytics']
@@ -259,7 +291,14 @@ class AnalyticsController {
             totalDetections: 18420,
             resolvedRate: 16.8,
             activeCameras: 42,
-            busiestSite: { site: 'HQ Tower', events: 6840 }
+            busiestSite: { site: 'HQ Tower', events: 6840, tied: false },
+            // Per-engine split of totalDetections. inAlerts is how many of that
+            // engine's incidents are eligible for the Alerts / Incident Center
+            // list, which requires a reviewable snapshot and drops the
+            // counting/tripwire engines — so totalDetections can exceed what
+            // Alerts shows. alertsVisible is the sum of inAlerts.
+            byType: [{ type: 'lineCrossing', count: 4, inAlerts: 0 }],
+            alertsVisible: 0
           }
         }
       }

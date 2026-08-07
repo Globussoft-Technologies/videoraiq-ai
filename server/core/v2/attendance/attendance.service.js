@@ -2,7 +2,7 @@ import Attendance from "./attendance.model.js";
 import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
 import Admin from "../admin/admin.model.js";
-import { attendanceSchema } from "./attendance.validate.js";
+import { attendanceSchema, attendanceSettingsSchema } from "./attendance.validate.js";
 import mongoose from "mongoose";
 import { sendPayloadToUser } from "../../../socket.js";
 import authorisedUsers from "../authorizedUsers/authorizedUsers.model.js";
@@ -13,6 +13,12 @@ import moment from "moment-timezone";
 import config from "config";
 import MailResponse from "../../../mailService/mail.helper.js";
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
+import AttendanceSettings from "./attendanceSettings.model.js";
+import {
+  ATTENDANCE_STATUS,
+  attendanceStatusStage,
+  resolveAttendanceSettings,
+} from "./attendanceStatus.js";
 const ImageView = config.get("ImageView");
 
 class AttendanceService {
@@ -246,15 +252,6 @@ class AttendanceService {
               .at(-1)
           : null;
 
-        let minutesSpent = 0;
-        if (firstCheckIn && lastCheckOut) {
-          minutesSpent = Math.round(
-            (new Date(lastCheckOut.timestamp) -
-              new Date(firstCheckIn.timestamp)) /
-              (1000 * 60)
-          );
-        }
-
         const imageUrls = att.events.map((e) => ({
           images: e?.images,
           cameraType: e?.cameraType,
@@ -273,24 +270,65 @@ class AttendanceService {
             firstCheckIn?.customName || firstCheckIn?.channelName || null,
           checkoutCam:
             lastCheckOut?.customName || lastCheckOut?.channelName || null,
-          minutesSpent,
+          // Both come from the pipeline rather than being recomputed here, so
+          // the number shown in the table and the number the status was graded
+          // from can never disagree.
+          minutesSpent: att.minutesSpent || 0,
+          status: att.status || ATTENDANCE_STATUS.ABSENT,
           imageUrls,
         };
       });
 
+      // $sort is dropped too, not just pagination: this pass collapses to a
+      // single row, so ordering the whole result set first was wasted work.
       const countPipeline = pipeline.filter(
-        (stage) => !("$skip" in stage || "$limit" in stage)
+        (stage) => !("$skip" in stage || "$limit" in stage || "$sort" in stage)
       );
 
-      countPipeline.push({ $count: "total" });
+      // Status totals come from this same pass rather than a second query, and
+      // cover the whole filtered result set — the KPI tiles used to be counted
+      // on the client from the loaded page only, so a 150-employee range with
+      // 10 rows per page reported totals out of 10.
+      const countByStatus = (status) => ({
+        $sum: { $cond: [{ $eq: ["$status", status] }, 1, 0] },
+      });
 
-      const countResult = await Attendance.aggregate(countPipeline);
-      const total = countResult[0]?.total || 0;
+      countPipeline.push({
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          present: countByStatus(ATTENDANCE_STATUS.PRESENT),
+          halfDay: countByStatus(ATTENDANCE_STATUS.HALF_DAY),
+          absent: countByStatus(ATTENDANCE_STATUS.ABSENT),
+          checkedIn: countByStatus(ATTENDANCE_STATUS.CHECKED_IN),
+        },
+      });
+
+      const userData = req?.verified?.userData || {};
+      const [countResult, totalEmployees] = await Promise.all([
+        Attendance.aggregate(countPipeline),
+        // The same roster count the Analytics "Total Employees" tile uses, so
+        // the two screens agree. The authorizedUsers pre-find hook applies its
+        // location scoping for member accounts here too.
+        authorizedUsersModel.countDocuments(
+          { adminId: new mongoose.Types.ObjectId(userData.adminId) },
+          { memberId: userData.memberId }
+        ),
+      ]);
+      const counts = countResult[0] || {};
+      const total = counts.total || 0;
 
       return res.status(200).json(
         Response.userSuccessResp("Attendance summary", {
           attendanceLogs: attendanceSummary,
           total,
+          totalEmployees,
+          statusCounts: {
+            present: counts.present || 0,
+            halfDay: counts.halfDay || 0,
+            absent: counts.absent || 0,
+            checkedIn: counts.checkedIn || 0,
+          },
           attendanceLogsStartDate,
         })
       );
@@ -299,6 +337,73 @@ class AttendanceService {
       return res
         .status(500)
         .json(Response.errorResp("Failed to get attendance", error.message));
+    }
+  }
+
+  /**
+   * This org's attendance rules. Returns the defaults rather than 404-ing when
+   * nothing has been saved yet, so the settings form always has values to show
+   * and the grading below always has thresholds to use.
+   */
+  async getAttendanceSettings(req, res, _next) {
+    try {
+      const adminId = req?.verified?.userData?.adminId;
+      const settings = await resolveAttendanceSettings(adminId);
+
+      return res
+        .status(200)
+        .json(Response.userSuccessResp("Attendance settings fetched successfully", settings));
+    } catch (error) {
+      logger.error(error);
+      return res
+        .status(500)
+        .json(Response.errorResp("Failed to fetch attendance settings", error.message));
+    }
+  }
+
+  /**
+   * Upsert this org's rules. Changing them re-grades history on the next read:
+   * status is derived at query time from first check-in / last check-out, never
+   * stored on the attendance row, so there is nothing to backfill.
+   */
+  async updateAttendanceSettings(req, res, _next) {
+    try {
+      const { error, value } = attendanceSettingsSchema.validate(req.body, {
+        abortEarly: false,
+      });
+      if (error) {
+        return res.send(
+          Response.validationFailResp(error.message, "Validation Failed!")
+        );
+      }
+
+      const adminId = req?.verified?.userData?.adminId;
+      if (!adminId) {
+        return res.status(400).json(Response.errorResp("Missing admin context"));
+      }
+
+      const settings = await AttendanceSettings.findOneAndUpdate(
+        { adminId: new mongoose.Types.ObjectId(adminId) },
+        {
+          $set: {
+            fullDayHours: value.fullDayHours,
+            halfDayHours: value.halfDayHours,
+          },
+        },
+        { new: true, upsert: true, setDefaultsOnInsert: true }
+      ).lean();
+
+      return res.status(200).json(
+        Response.userSuccessResp("Attendance settings updated successfully", {
+          fullDayHours: settings.fullDayHours,
+          halfDayHours: settings.halfDayHours,
+        })
+      );
+    } catch (error) {
+      logger.error(error);
+      return res
+        .status(500)
+        .json(Response.errorResp("Failed to update attendance settings", error.message));
     }
   }
 
@@ -437,6 +542,10 @@ class AttendanceService {
       ) {
         return [{ $match: { _id: null } }];
       }
+
+      // This org's Present / Half Day / Absent thresholds, read once per
+      // pipeline build and baked into the aggregation below.
+      const attendanceRules = await resolveAttendanceSettings(adminId);
 
       const pipeline = [
         { $match: matchStage },
@@ -597,6 +706,12 @@ class AttendanceService {
             },
           },
         },
+
+        // Derive minutesSpent + Present / Half Day / Absent / Checked In from
+        // this org's configured thresholds. Placed immediately after
+        // firstCheckIn/lastCheckOut so every stage below — and every caller
+        // that reuses this pipeline — can read `status`.
+        attendanceStatusStage(attendanceRules),
 
         // --- Time Filter ---
         ...(fromTime || toTime

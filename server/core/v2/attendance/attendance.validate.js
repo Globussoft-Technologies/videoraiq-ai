@@ -31,3 +31,25 @@ export const attendanceSchema = Joi.object({
     }),
   confidenceScore: Joi.number().optional(),
 });
+
+// Per-org attendance rules. Quarter-hour precision keeps "7.5 hours" expressible
+// without inviting meaningless values like 8.03333.
+export const attendanceSettingsSchema = Joi.object({
+  fullDayHours: Joi.number().min(0).max(24).multiple(0.25).required().messages({
+    "any.required": "fullDayHours is required",
+    "number.max": "fullDayHours cannot exceed 24",
+    "number.multiple": "fullDayHours must be in steps of 0.25 (15 minutes)",
+  }),
+  halfDayHours: Joi.number().min(0).max(24).multiple(0.25).required().messages({
+    "any.required": "halfDayHours is required",
+    "number.max": "halfDayHours cannot exceed 24",
+    "number.multiple": "halfDayHours must be in steps of 0.25 (15 minutes)",
+  }),
+})
+  // A half day longer than a full day would make the Present branch
+  // unreachable, so every row would grade as Half Day.
+  .custom((value, helpers) =>
+    value.halfDayHours > value.fullDayHours
+      ? helpers.message("halfDayHours cannot be greater than fullDayHours")
+      : value,
+  );
