@@ -37,7 +37,7 @@ const convertToUTC = (date, time, region) => {
 
 const AccessLogs = () => {
   const nasUrl = import.meta.env.VITE_BACKEND || '';
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(12);
 
   const [state, dispatch] = useReducer(reducer, {
     ...initialState,

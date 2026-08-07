@@ -79,7 +79,7 @@ const INTERVAL_KEY = 'unauthorized_access_auto_refresh_interval';
 const UnauthorizedAccess = () => {
   const todayISO = moment().format('YYYY-MM-DD');
   const maxDateDefault = moment().endOf('day').toDate();
-  const limit = 10;
+  const limit = 12;
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);

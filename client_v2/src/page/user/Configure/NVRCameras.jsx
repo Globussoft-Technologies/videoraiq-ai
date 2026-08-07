@@ -40,7 +40,8 @@ function useIsMobile(maxWidth = 640) {
 
 // Add/Edit/Delete NVR and Manage Cameras are cloud-only actions — a local
 // setup provisions NVRs outside this UI, so these are hidden there.
-const SHOW_NVR_ACTIONS = import.meta.env.VITE_LOCAL_SETUP === 'false';
+const IS_LOCAL_SETUP = import.meta.env.VITE_LOCAL_SETUP === 'true';
+const SHOW_NVR_ACTIONS = !IS_LOCAL_SETUP;
 
 function statusColor(status) {
   const s = (status || '').toLowerCase();
@@ -251,6 +252,7 @@ function FieldError({ children }) {
 }
 
 function ModalInput({ label, required, invalid, error, ...props }) {
+  const isReadOnly = props.readOnly || props.disabled;
   return (
     <div>
       <FieldLabel required={required}>{label}</FieldLabel>
@@ -258,9 +260,14 @@ function ModalInput({ label, required, invalid, error, ...props }) {
         {...props}
         style={{
           width: '100%', height: 38, padding: '0 12px', boxSizing: 'border-box',
-          borderRadius: 9, background: 'var(--bg2)',
+          borderRadius: 9,
+          background: isReadOnly ? 'var(--bg3)' : 'var(--bg2)',
           border: `1px solid ${invalid ? 'var(--crit, #ef4444)' : 'var(--bd)'}`,
-          fontSize: 12.5, color: 'var(--tx)', outline: 'none',
+          fontSize: 12.5,
+          color: isReadOnly ? 'var(--tx3)' : 'var(--tx)',
+          outline: 'none',
+          opacity: isReadOnly ? 0.6 : 1,
+          cursor: isReadOnly ? 'not-allowed' : 'text',
           ...(props.mono ? { fontFamily: 'var(--mono)' } : {}),
         }}
       />
@@ -356,7 +363,7 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
       >
         <Cctv size={12} /> Camera Settings
       </button>
-      {SHOW_NVR_ACTIONS && (
+      {(SHOW_NVR_ACTIONS || IS_LOCAL_SETUP) && (
         <>
           <button
             onClick={() => onEdit(nvr)}
@@ -969,6 +976,7 @@ function friendlyErrorMessage(body, fallback) {
 // ── Add / Edit NVR wizard ───────────────────────────────────────────────────
 function AddNvrModal({ onClose, onSaved, editingNvr }) {
   const isEdit = !!editingNvr;
+  const isLocalEdit = IS_LOCAL_SETUP && isEdit;
   const isMobile = useIsMobile();
 
   const [step, setStep] = useState(1);
@@ -1114,6 +1122,43 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   }
 
   async function handleConnect() {
+    if (isLocalEdit) {
+      const found = {};
+      if (!form.name.trim()) found.name = 'NVR name is required.';
+      if (!form.location.trim()) found.location = 'Select or create a location.';
+      setErrors(found);
+      if (Object.keys(found).length) return;
+      setConnecting(true);
+      try {
+        const existingIp = editingNvr?.ip || editingNvr?.ipAddress || editingNvr?.domain || '';
+        const payload = {
+          nvrName: form.name.trim(), 
+          location: form.location.trim(),
+          ip: existingIp,
+          port: editingNvr?.port || 80,
+          rtspPort: editingNvr?.rtspPort || 554,
+          username: editingNvr?.username || 'admin',
+          oldPassword: '',
+          newPassword: '',
+          brand: editingNvr?.brand || 'hikvision'
+        };
+        const resp = await updateNvrById(editingNvr._id, payload);
+        const body = resp?.data?.body;
+        if (body?.status !== 'success') {
+          toast.error(friendlyErrorMessage(body, 'Failed to update NVR name and location.'));
+          return;
+        }
+        toast.success(body?.message || 'NVR updated');
+        onSaved?.();
+        onClose();
+      } catch (e) {
+        toast.error(friendlyErrorMessage(e?.response?.data?.body, 'Failed to update NVR name and location.'));
+      } finally {
+        setConnecting(false);
+      }
+      return;
+    }
+
     const ip = form.ip.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/:\d+$/, '');
 
     // Every required field is checked in one pass so the form surfaces all of
@@ -1268,7 +1313,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
               {isEdit ? 'Edit Network Recorder' : 'Add Network Recorder'}
             </div>
             <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 1 }}>
-              {isEdit ? 'Update NVR credentials and manage cameras' : 'Connect an NVR and onboard its cameras'}
+              {isLocalEdit ? 'Update NVR name and location' : isEdit ? 'Update NVR credentials and manage cameras' : 'Connect an NVR and onboard its cameras'}
             </div>
           </div>
           <button onClick={onClose} style={{
@@ -1490,23 +1535,13 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                 </div>
                 <FieldError>{errors.location}</FieldError>
               </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <ModalInput label="Public IP Address" required value={form.ip} onChange={set('ip')} placeholder="e.g. 203.0.113.24 (no http:// or port)" mono invalid={!!errors.ip} error={errors.ip} />
-              </div>
-              <ModalInput label="Username" required value={form.user} onChange={set('user')} placeholder="admin" invalid={!!errors.user} error={errors.user} />
-              {isEdit ? (
-                <div />
-              ) : (
-                <ModalInput label="Password" type="password" value={form.pass} onChange={set('pass')} placeholder="••••••••" />
-              )}
-              {isEdit && (
-                <>
-                  <ModalInput label="Old Password" type="password" value={form.oldPass} onChange={set('oldPass')} placeholder="••••••••" />
-                  <ModalInput label="New Password" type="password" value={form.newPass} onChange={set('newPass')} placeholder="••••••••" />
-                </>
-              )}
-              <ModalInput label="RTSP Port" required value={form.rtsp} onChange={set('rtsp')} placeholder="554" mono invalid={!!errors.rtsp} error={errors.rtsp} />
-              <ModalInput label="HTTP Port" required value={form.http} onChange={set('http')} placeholder="80" mono invalid={!!errors.http} error={errors.http} />
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <ModalInput label="Public IP Address" required value={form.ip} onChange={set('ip')} placeholder="e.g. 203.0.113.24 (no http:// or port)" mono invalid={!!errors.ip} error={errors.ip} readOnly={isLocalEdit} />
+                  </div>
+                  <ModalInput label="Username" required value={form.user} onChange={set('user')} placeholder="admin" invalid={!!errors.user} error={errors.user} readOnly={isLocalEdit} />
+                  {isEdit ? <div /> : <ModalInput label="Password" type="password" value={form.pass} onChange={set('pass')} placeholder="password" />}
+                  <ModalInput label="RTSP Port" required value={form.rtsp} onChange={set('rtsp')} placeholder="554" mono invalid={!!errors.rtsp} error={errors.rtsp} readOnly={isLocalEdit} />
+                  <ModalInput label="HTTP Port" required value={form.http} onChange={set('http')} placeholder="80" mono invalid={!!errors.http} error={errors.http} readOnly={isLocalEdit} />
             </div>
           )}
           {step === 2 && (
@@ -1580,7 +1615,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                 }}
               >
                 {connecting && <Loader2 size={13} className="animate-spin" />}
-                {connecting ? 'Connecting…' : 'Discover Cameras →'}
+                {connecting ? 'Saving...' : isLocalEdit ? 'Save Changes' : 'Discover Cameras ?'}
               </button>
             ) : (
               <button

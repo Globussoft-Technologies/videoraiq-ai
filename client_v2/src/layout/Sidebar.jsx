@@ -408,28 +408,32 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
                 }}
               />
               <span style={{ fontSize: 11, color: 'var(--tx2)' }}>
-                {onlineCount} of {totalCount} {totalCount === 1 ? 'camera' : 'cameras'} online
+                {onlineCount} of {totalCount} {totalCount === 1 ? 'camera' : 'cameras'} online ({totalCount > 0 ? Math.round((onlineCount / totalCount) * 100) : 0}%)
               </span>
             </div>
-            {/* One segment per camera; the first `onlineCount` are colored (cycling
-                the shared engine palette per segment), the rest grey. Driven off
-                the same counter as the label above rather than each camera's own
-                flag, so the bar can never disagree with the text. Gap tightens as
-                the camera count grows so 20+ segments still fit the track. */}
-            <div style={{ display: 'flex', gap: totalCount > 12 ? 2 : 3 }}>
-              {Array.from({ length: totalCount }, (_, i) => (
-                <div
-                  key={i}
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    height: 4,
-                    borderRadius: 2,
-                    background: i < onlineCount ? ENGINE_PALETTE[i % ENGINE_PALETTE.length] : 'var(--toggleoff)',
-                    transition: 'background .3s ease',
-                  }}
-                />
-              ))}
+            {/* Single continuous progress bar representing the percentage of online cameras */}
+            <div
+              style={{
+                width: '100%',
+                height: 4,
+                borderRadius: 2,
+                background: 'var(--toggleoff)',
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  height: '100%',
+                  width: `${totalCount > 0 ? Math.round((onlineCount / totalCount) * 100) : 0}%`,
+                  background: 'linear-gradient(90deg, var(--blue), var(--violet))',
+                  borderRadius: 2,
+                  transition: 'width .3s ease',
+                }}
+              />
             </div>
           </div>
         )}

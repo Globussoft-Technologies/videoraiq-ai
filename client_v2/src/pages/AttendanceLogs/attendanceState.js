@@ -42,7 +42,7 @@ export const initialState = {
 
   // pagination
   currentPage: 1,
-  limit: 10,
+  limit: 12,
 
   // time range
   fromTime: '',

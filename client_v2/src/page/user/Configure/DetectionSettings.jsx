@@ -41,18 +41,27 @@ function detectionTypeLabel(value, fallback) {
 function appliedTypesFor(camera, typeLabels) {
   const entries = Array.isArray(typeLabels)
     ? typeLabels.map((type, index) => [
-        type?.settingType || type?.detectionType || type?.key || type?.id || '',
+        type?.settingType || type?.detectionType || type?.key || type?.id || `type-${index}`,
         type,
       ])
     : Object.entries(typeLabels || {});
 
-  const masterList = entries
-    .map(([key, value], index) => ({
-      key,
-      label: detectionTypeLabel(value, key),
-      enabled: isTypeEnabled(camera, key),
-      order: index,
-    }))
+  const knownKeys = new Set(entries.map(([key]) => key));
+  // Keep camera-configured types visible even if the catalogue endpoint is
+  // temporarily incomplete or the backend has a newer type than the catalogue.
+  const cameraEntries = Object.entries(camera?.detections || {})
+    .filter(([key]) => key && !knownKeys.has(key))
+    .map(([key, value], index) => [key, value, entries.length + index]);
+
+  const masterList = [
+    ...entries.map(([key, value], index) => [key, value, index]),
+    ...cameraEntries,
+  ].map(([key, value, order]) => ({
+    key,
+    label: detectionTypeLabel(value, key),
+    enabled: isTypeEnabled(camera, key),
+    order,
+  }))
     .filter(type => type.key && type.label);
 
   return masterList.sort((a, b) => {
@@ -60,7 +69,6 @@ function appliedTypesFor(camera, typeLabels) {
     return a.order - b.order;
   });
 }
-
 /** Popover: toggle each detection type on/off for this one camera. Rendered in a
  * body portal (see Popover.jsx) so it isn't clipped by the table's overflow:hidden. */
 function AppliedTypesPopover({ camera, typeLabels, onToggleRequest }) {
@@ -95,7 +103,7 @@ function AppliedTypesPopover({ camera, typeLabels, onToggleRequest }) {
             DETECTION TYPES
           </div>
           {/* Capped to ~5 visible rows (34px each incl. gap) so a long type list scrolls instead of pushing the popover off-screen. */}
-          <div style={{ maxHeight: 170, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ maxHeight: 'min(220px, calc(100vh - 180px))', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
             {availableTypes.map(type => {
               return (
                 <div key={type.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '7px 6px' }}>
@@ -206,17 +214,36 @@ export function DetectionSettingsCameraList({ onOpenCamera }) {
 
   // Matches V1: a single toggle endpoint for on/off; 404s if the type was
   // never linked to this camera (no auto-create — same as V1's real behavior).
-  const handleToggleDetection = async (camera, detectionType, enable) => {
-    try {
-      await toggleChannelDetection({ channelId: camera._id, detectionType, enable });
-      channelsApi.refetch();
-    } catch (err) {
-      const msg = err?.response?.data?.body?.message || 'Failed to update detection type.';
-      toast.error(msg);
-      throw err;
-    }
-  };
+const handleToggleDetection = async (camera, detectionType, enable) => {
+  try {
+    const response = await toggleChannelDetection({
+      channelId: camera._id,
+      detectionType,
+      enable,
+    });
 
+    channelsApi.refetch();
+
+    const message =
+      response?.data?.body?.message ||
+      response?.body?.message ||
+      response?.message ||
+      `${detectionType} ${enable ? 'enabled' : 'disabled'} successfully.`;
+
+    toast.success(message);
+  } catch (err) {
+    const msg =
+      err?.response?.data?.body?.message ||
+      err?.response?.data?.message ||
+      err?.body?.message ||
+      err?.message ||
+      'Failed to update detection type.';
+
+    toast.error(msg);
+
+    throw err;
+  }
+};
   const handleDetectionToggleRequest = (camera, detectionType, label, currentlyEnabled) => {
     setDetectionConfirm({ camera, detectionType, label, currentlyEnabled });
   };

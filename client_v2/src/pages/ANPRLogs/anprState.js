@@ -41,7 +41,7 @@ export const initialState = {
   vehicleNumberSearch: '',
 
   // pagination
-  limit: 10,
+  limit: 12,
 };
 
 export function reducer(state, action) {

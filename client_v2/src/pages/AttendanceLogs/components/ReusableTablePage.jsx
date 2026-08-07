@@ -14,7 +14,7 @@ import ProfilesTable from './ProfilesTable';
 import DateRangePicker from './DateRangePicker';
 import StatCards from './StatCards';
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+const PAGE_SIZE_OPTIONS = [12, 20, 60, 100];
 
 /**
  * Reusable table/grid wrapper for the log pages. Theme-aware (dark/light) via
