@@ -92,32 +92,33 @@ function movementStatCard({ kind, value, rows, dropdownOpen, onToggle }) {
   const Icon = DoorOpen;
   const countKey = isEntry ? 'entry' : 'exit';
   const headerColor = isEntry ? '#059669' : '#dc2626';
+  const columnLabel = isEntry ? 'Entries' : 'Exit';
   const visibleRows = rows.slice(0, 3);
   return (
     <div style={{ position: 'relative', height: 164, background: `linear-gradient(135deg, ${soft}, var(--bg1) 58%, ${soft})`, border: `1px solid ${color}30`, borderRadius: 12, minWidth: 0, boxShadow: `0 12px 26px ${color}10` }}>
       <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: color, boxShadow: `0 0 18px ${color}55` }} />
-      <div style={{ display: 'grid', gridTemplateColumns: '112px minmax(0,1fr)', height: '100%' }}>
-        <div style={{ padding: '18px 12px 14px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 7 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ width: 38, height: 38, borderRadius: '50%', display: 'grid', placeItems: 'center', background: `${color}18`, color, flexShrink: 0 }}>
-              <Icon size={19} />
+      <div style={{ display: 'grid', gridTemplateColumns: '168px minmax(0,1fr)', height: '100%' }}>
+        <div style={{ padding: '16px 14px 12px 22px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '32px minmax(0,1fr)', alignItems: 'center', gap: 9 }}>
+            <span style={{ width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center', background: `${color}18`, color, flexShrink: 0 }}>
+              <Icon size={17} />
             </span>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 850, color: 'var(--tx2)' }}>{title}</div>
-              <div style={{ marginTop: 3, fontFamily: 'var(--disp)', fontSize: 27, lineHeight: 1, fontWeight: 900, color }}>{value}</div>
+              <div style={{ fontSize: 11.5, fontWeight: 850, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{title}</div>
+              <div style={{ marginTop: 3, fontFamily: 'var(--disp)', fontSize: 25, lineHeight: 1, fontWeight: 900, color, whiteSpace: 'nowrap' }}>{value}</div>
             </div>
           </div>
           <div style={{ fontSize: 11, lineHeight: 1.35, color: 'var(--tx3)' }}>{sub}</div>
         </div>
-        <div style={{ position: 'relative', borderLeft: '1px solid var(--bd)', padding: '10px 12px 8px', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(82px,1fr) 46px 38px', gap: 7, padding: '0 0 6px', borderBottom: '1px solid var(--bd)', fontSize: 10, fontWeight: 850, color: 'var(--tx2)' }}>
+        <div style={{ position: 'relative', borderLeft: '1px solid var(--bd)', padding: '10px 10px 8px', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(56px,1fr) 36px 32px', gap: 5, padding: '0 0 6px', borderBottom: '1px solid var(--bd)', fontSize: 10, fontWeight: 850, color: 'var(--tx2)' }}>
             <div>Camera Name</div>
             <div>Mode</div>
-            <div style={{ textAlign: 'right', color: headerColor }}>{title.slice(0, -1)}</div>
+            <div style={{ textAlign: 'right', color: headerColor }}>{columnLabel}</div>
           </div>
           <div style={{ display: 'grid', flex: '1 1 auto' }}>
             {visibleRows.length ? visibleRows.map((row) => (
-              <div key={`${kind}-${row.camera}-${row.mode}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(82px,1fr) 46px 38px', gap: 7, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--bd)', fontSize: 11 }}>
+              <div key={`${kind}-${row.camera}-${row.mode}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(56px,1fr) 36px 32px', gap: 5, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--bd)', fontSize: 11 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, color: 'var(--tx)' }}>
                   <span style={{ width: 16, height: 16, borderRadius: 5, display: 'grid', placeItems: 'center', background: `${color}12`, color, flexShrink: 0 }}>
                     <Camera size={10} />
@@ -150,7 +151,7 @@ function movementStatCard({ kind, value, rows, dropdownOpen, onToggle }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(130px,1fr) 68px 58px', gap: 10, padding: '8px 10px', borderRadius: 8, background: `${color}12`, fontSize: 11, fontWeight: 900, color: 'var(--tx2)' }}>
             <div>Camera Name</div>
             <div>Mode</div>
-            <div style={{ textAlign: 'right', color: headerColor }}>{title.slice(0, -1)}</div>
+            <div style={{ textAlign: 'right', color: headerColor }}>{columnLabel}</div>
           </div>
           {rows.length ? rows.map((row) => (
             <div key={`dropdown-${kind}-${row.camera}-${row.mode}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(130px,1fr) 68px 58px', gap: 10, alignItems: 'center', padding: '9px 10px', borderBottom: '1px solid var(--bd)', background: 'var(--bg1solid)', fontSize: 12 }}>
@@ -178,27 +179,27 @@ function movementTotalCard({ value, rows, dropdownOpen, onToggle }) {
   return (
     <div style={{ position: 'relative', height: 164, background: `linear-gradient(135deg, ${color}12 0%, var(--bg1) 58%, ${color}08 100%)`, border: `1px solid ${color}2f`, borderRadius: 12, minWidth: 0, boxShadow: `0 12px 26px ${color}10` }}>
       <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: color, boxShadow: `0 0 18px ${color}55` }} />
-      <div style={{ display: 'grid', gridTemplateColumns: '118px minmax(0,1fr)', height: '100%' }}>
-        <div style={{ padding: '18px 12px 14px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 7 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ width: 38, height: 38, borderRadius: '50%', display: 'grid', placeItems: 'center', background: `${color}18`, color, flexShrink: 0 }}>
-              <Users size={19} />
+      <div style={{ display: 'grid', gridTemplateColumns: '168px minmax(0,1fr)', height: '100%' }}>
+        <div style={{ padding: '16px 14px 12px 22px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '32px minmax(0,1fr)', alignItems: 'center', gap: 9 }}>
+            <span style={{ width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center', background: `${color}18`, color, flexShrink: 0 }}>
+              <Users size={17} />
             </span>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 850, color: 'var(--tx2)' }}>Total Present</div>
-              <div style={{ marginTop: 3, fontFamily: 'var(--disp)', fontSize: 27, lineHeight: 1, fontWeight: 900, color }}>{value}</div>
+              <div style={{ fontSize: 11.5, fontWeight: 850, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>Total Present</div>
+              <div style={{ marginTop: 3, fontFamily: 'var(--disp)', fontSize: 25, lineHeight: 1, fontWeight: 900, color, whiteSpace: 'nowrap' }}>{value}</div>
             </div>
           </div>
           <div style={{ fontSize: 11, lineHeight: 1.35, color: 'var(--tx3)' }}>Current people inside</div>
         </div>
-        <div style={{ position: 'relative', borderLeft: '1px solid var(--bd)', padding: '10px 12px 8px', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(96px,1fr) 72px', gap: 8, padding: '0 0 6px', borderBottom: '1px solid var(--bd)', fontSize: 10, fontWeight: 850, color: 'var(--tx2)' }}>
+        <div style={{ position: 'relative', borderLeft: '1px solid var(--bd)', padding: '10px 10px 8px', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(56px,1fr) 46px', gap: 5, padding: '0 0 6px', borderBottom: '1px solid var(--bd)', fontSize: 10, fontWeight: 850, color: 'var(--tx2)' }}>
             <div>Camera Name</div>
             <div style={{ textAlign: 'right', color }}>Present</div>
           </div>
           <div style={{ display: 'grid', flex: '1 1 auto' }}>
             {visibleRows.length ? visibleRows.map((row) => (
-              <div key={`present-${row.camera}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(96px,1fr) 72px', gap: 8, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--bd)', fontSize: 11 }}>
+              <div key={`present-${row.camera}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(56px,1fr) 46px', gap: 5, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--bd)', fontSize: 11 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, color: 'var(--tx)' }}>
                   <span style={{ width: 16, height: 16, borderRadius: 5, display: 'grid', placeItems: 'center', background: `${color}12`, color, flexShrink: 0 }}>
                     <Camera size={10} />
@@ -974,9 +975,15 @@ export default function LineCrossingLogs() {
 
   const streamPageCount = Math.max(1, Math.ceil(filteredEnabledCameras.length / streamsPerPage));
   const visibleCameras = filteredEnabledCameras.slice(streamPage * streamsPerPage, (streamPage + 1) * streamsPerPage);
+  const availableFullscreenGridOptions = useMemo(() => {
+    const cameraCount = filteredEnabledCameras.length;
+    if (cameraCount <= 1) return [1];
+    return GRID_OPTIONS.filter((size) => size === 1 || ((size - 1) * (size - 1)) < cameraCount);
+  }, [filteredEnabledCameras.length]);
   const fullscreenStreamsPerPage = fullscreenGridSize * fullscreenGridSize;
   const fullscreenPageCount = Math.max(1, Math.ceil(filteredEnabledCameras.length / fullscreenStreamsPerPage));
   const fullscreenVisibleCameras = filteredEnabledCameras.slice(fullscreenPage * fullscreenStreamsPerPage, (fullscreenPage + 1) * fullscreenStreamsPerPage);
+  const fullscreenGridColumns = Math.max(1, Math.min(fullscreenGridSize, fullscreenVisibleCameras.length || 1));
   const cameraCategories = cameraMetrics.map((item) => item.camera);
   const hourlyCategories = hourlyTraffic.map((item) => item.hour);
   const topCameras = cameraMetrics.slice(0, 5);
@@ -1016,6 +1023,13 @@ export default function LineCrossingLogs() {
   useEffect(() => {
     if (fullscreenPage > fullscreenPageCount - 1) setFullscreenPage(0);
   }, [fullscreenPage, fullscreenPageCount]);
+
+  useEffect(() => {
+    if (!availableFullscreenGridOptions.includes(fullscreenGridSize)) {
+      setFullscreenGridSize(availableFullscreenGridOptions[0]);
+      setFullscreenPage(0);
+    }
+  }, [availableFullscreenGridOptions, fullscreenGridSize]);
 
   useEffect(() => {
     if (!fullscreenCamera) return;
@@ -1441,7 +1455,7 @@ export default function LineCrossingLogs() {
               position: 'absolute',
               inset: 0,
               display: 'grid',
-              gridTemplateColumns: `repeat(${fullscreenGridSize}, minmax(0, 1fr))`,
+              gridTemplateColumns: `repeat(${fullscreenGridColumns}, minmax(0, 1fr))`,
               gridAutoRows: 'minmax(0, 1fr)',
               gap: fullscreenGridSize === 1 ? 0 : 8,
               padding: fullscreenGridSize === 1 ? 0 : 12,
@@ -1489,7 +1503,7 @@ export default function LineCrossingLogs() {
               backdropFilter: 'blur(10px)',
             }}
           >
-            {GRID_OPTIONS.map((size) => (
+            {availableFullscreenGridOptions.map((size) => (
               <button
                 key={size}
                 type="button"
