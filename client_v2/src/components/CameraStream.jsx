@@ -1,7 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Maximize2, Minimize2, VideoOff } from 'lucide-react';
 import useHlsPlayer from '../hooks/useHlsPlayer';
+import useStreamSlot from '../hooks/useStreamSlot';
 import { streamUrl } from '../lib/stream';
+
+/* How long a tile may hold the shared start slot before the next camera goes.
+   The camera is NOT torn down at this point — it keeps connecting; it just
+   stops blocking the queue, because the expensive part of startup (worker
+   spawn, SourceBuffer setup, first keyframe decode) is over by then. */
+const SETTLE_TIMEOUT_MS = 6000;
+
+/* Off-screen tiles start after on-screen ones regardless of DOM order. */
+const OFFSCREEN_PRIORITY_PENALTY = 500;
 
 /* Single shared clock — one interval regardless of how many tiles are mounted */
 let _clockListeners = new Set();
@@ -10,19 +20,28 @@ let _clockInterval = null;
 
 function _startClock() {
   if (_clockInterval) return;
+  _clockTick = new Date();
   _clockInterval = setInterval(() => {
     _clockTick = new Date();
     _clockListeners.forEach(fn => fn(_clockTick));
   }, 1000);
 }
 
-function useClock() {
+function _stopClockIfIdle() {
+  if (_clockListeners.size || !_clockInterval) return;
+  clearInterval(_clockInterval);
+  _clockInterval = null;
+}
+
+function useClock(enabled = true) {
   const [tick, setTick] = useState(() => _clockTick);
   useEffect(() => {
+    if (!enabled) return undefined;
     _clockListeners.add(setTick);
     _startClock();
-    return () => { _clockListeners.delete(setTick); };
-  }, []);
+    setTick(_clockTick);
+    return () => { _clockListeners.delete(setTick); _stopClockIfIdle(); };
+  }, [enabled]);
   return tick;
 }
 
@@ -44,6 +63,11 @@ function fmtTimestamp(d) {
  * - Top-right: LIVE / OFFLINE badge
  * - Bottom-left: camera name + location
  * - Bottom-right: maximize icon
+ *
+ * Streams are never created eagerly: the tile queues for a start slot from the
+ * shared stream scheduler (see lib/streamQueue) so cameras come up one at a
+ * time. Setting `active` to false releases the slot and destroys the player,
+ * freeing the WebRTC/MSE decoder, hls.js worker and its timers.
  */
 export default function CameraStream({
   channel,
@@ -52,34 +76,141 @@ export default function CameraStream({
   onMaximize,
   isFullscreen = false, // swaps the maximize icon to a "restore" icon when already fullscreen
   onLiveChange,      // (isLive: boolean) => void — reports live status up to grid
+  onSettled,         // () => void — fired once the stream has started or given up
   rounded = true,
   minH = 200,
   fit = 'cover',      // 'cover' crops to fill (grid tiles); 'contain' shows the full frame uncropped (fullscreen, so camera-burned OSD text at the edges isn't cut off)
+  active = true,      // false → tear the stream down entirely (page hidden, probe recycled)
+  priority = 0,       // lower starts earlier; the grid passes tile order here
+  immediate = false,  // user explicitly asked for THIS camera — skip the queue
+  requireVisible = false, // don't even queue until the tile is actually in view
+  slotId,             // scheduler key; defaults to the channel id
 }) {
   const videoRef = useRef(null);
+  const hostRef  = useRef(null);
   const [error,   setError]   = useState(false);
   const [playing, setPlaying] = useState(false);
-  const now = useClock();
+  const [settled, setSettled] = useState(false);
+  /* When gated on visibility we must start as "not visible" and let the observer
+     say otherwise, or an off-screen tile would queue itself before the first
+     observation lands. Ungated tiles assume visible so priority still works. */
+  const [onScreen, setOnScreen] = useState(!requireVisible);
+  const [everVisible, setEverVisible] = useState(false);
 
   const url  = streamUrl(channel);
   const name = channel?.customName || channel?.name || channel?.channelId || 'Camera';
   const site = channel?.location   || channel?.locationName || '';
   const label = camLabel || name;
 
-  useHlsPlayer(videoRef, url, {
-    enabled:   !!url,
-    onError:   () => setError(true),
-    onStarted: () => setError(false),
-  });
+  /* Scheduler key. Per-instance, not per-channel: the same camera can legitimately
+     be mounted twice at once (a grid tile plus the fullscreen modal on top of it),
+     and two tiles sharing one queue entry would leave one of them never admitted. */
+  const instanceId = useId();
+  const streamId = slotId || `${channel?._id || channel?.channelId || url || 'cam'}::${instanceId}`;
 
-  const live = playing && !error;
+  /* Viewport awareness — a tile scrolled out of view yields its turn to the
+     tiles the user is actually looking at, and with `requireVisible` doesn't
+     take a turn at all until it scrolls in. */
+  useEffect(() => {
+    const el = hostRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setOnScreen(true); // no observer support — fall back to "always eligible"
+      return undefined;
+    }
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        setOnScreen(entry.isIntersecting);
+        if (entry.isIntersecting) setEverVisible(true);
+      },
+      { rootMargin: '200px' }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  /* Once a gated tile has been scrolled into view it keeps streaming even if it
+     scrolls back out: tearing down on every scroll would make the grid flicker
+     and re-buffer constantly. A page change or pause unmounts it for real. */
+  const visibleEnough = !requireVisible || onScreen || everVisible;
 
   useEffect(() => {
-    onLiveChange?.(live);
-  }, [live, onLiveChange]);
+    if (!active) setEverVisible(false);
+  }, [active]);
+
+  const { admitted, settle } = useStreamSlot(streamId, {
+    priority: priority + (onScreen ? 0 : OFFSCREEN_PRIORITY_PENALTY),
+    enabled: active && !!url && visibleEnough,
+    immediate,
+  });
+
+  const enabled = active && admitted && !!url;
+
+  /* ── Settling: release the start slot exactly once per admission ────── */
+  const settledRef  = useRef(false);
+  const onSettledRef = useRef(onSettled);
+  onSettledRef.current = onSettled;
+
+  const markSettled = useCallback(() => {
+    if (settledRef.current) return;
+    settledRef.current = true;
+    setSettled(true);
+    settle();
+    onSettledRef.current?.();
+  }, [settle]);
+
+  /* Reset the tile's stream state whenever it loses (or regains) its slot, so
+     a torn-down tile never reports stale playback state. */
+  useEffect(() => {
+    if (enabled) return;
+    settledRef.current = false;
+    setSettled(false);
+    setPlaying(false);
+    setError(false);
+  }, [enabled]);
+
+  /* Don't let one unreachable camera hold the queue hostage. */
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const t = setTimeout(markSettled, SETTLE_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [enabled, markSettled]);
+
+  const handleError = useCallback(() => { setError(true); markSettled(); }, [markSettled]);
+  const handleStarted = useCallback(() => { setError(false); }, []);
+  const handlePlaying = useCallback(() => { setPlaying(true); markSettled(); }, [markSettled]);
+
+  useHlsPlayer(videoRef, url, {
+    enabled,
+    onError:   handleError,
+    onStarted: handleStarted,
+  });
+
+  const live = enabled && playing && !error;
+
+  /* Report status upward only once this tile has an actual opinion. While it is
+     queued (or the page is paused) the grid keeps the camera's last known
+     state, so the Live/Offline filter and the online counter don't flap. */
+  useEffect(() => {
+    if (!enabled) return;
+    if (live) { onLiveChange?.(true); return; }
+    if (settled) onLiveChange?.(false);
+  }, [live, settled, enabled, onLiveChange]);
+
+  const now = useClock(showOverlay && active);
+
+  const paused = !active;
+  const queued = active && !!url && !admitted;
+
+  const placeholder =
+    !url    ? 'No stream configured'
+    : paused ? 'Paused · not in view'
+    : queued ? 'Queued…'
+    : error  ? 'Stream unavailable'
+    : `${name} · connecting…`;
 
   return (
     <div
+      ref={hostRef}
       onClick={onMaximize}
       style={{
         position: 'relative',
@@ -97,19 +228,19 @@ export default function CameraStream({
         muted
         autoPlay
         playsInline
-        onPlaying={() => setPlaying(true)}
+        onPlaying={handlePlaying}
         onWaiting={() => setPlaying(false)}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, display: url ? 'block' : 'none' }}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, display: url && enabled ? 'block' : 'none' }}
       />
 
-      {/* Offline / connecting placeholder */}
-      {(!url || error || !playing) && (
+      {/* Offline / queued / connecting placeholder */}
+      {(!url || !enabled || error || !playing) && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'rgba(255,255,255,.3)' }}>
           <VideoOff size={22} strokeWidth={1.4} />
           <span style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '.5px' }}>
-            {!url ? 'No stream configured' : error ? 'Stream unavailable' : `${name} · connecting…`}
+            {placeholder}
           </span>
-          {!error && url && (
+          {!error && url && !paused && (
             <div style={{ position: 'absolute', left: 0, right: 0, height: 2, top: 0, background: 'linear-gradient(90deg,transparent,rgba(90,170,255,.5),transparent)', animation: 'vq-scan 6s linear infinite' }} />
           )}
         </div>
