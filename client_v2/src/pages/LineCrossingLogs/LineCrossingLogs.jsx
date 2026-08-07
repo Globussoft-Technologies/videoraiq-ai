@@ -59,6 +59,94 @@ function channelKey(channel) {
   return String(channel?._id || channel?.id || channel?.channelId || '');
 }
 
+function lineCrossingOverlayData(camera) {
+  const entry = camera?.detections?.lineCrossingSettings;
+  const setting = entry?.id && typeof entry.id === 'object' ? entry.id : null;
+  const settings = setting?.settings || {};
+  const cameraId = channelKey(camera);
+  const raw = settings.referencePoints?.[cameraId] || settings.referencePoints?.[camera?._id];
+  if (!Array.isArray(raw) || !raw.length) return null;
+  const line = Array.isArray(raw[0]?.[0]) ? raw[0] : raw;
+  const points = line.slice(0, 2).map((point) => (Array.isArray(point) ? { x: Number(point[0]), y: Number(point[1]) } : { x: Number(point?.x), y: Number(point?.y) }));
+  if (points.length < 2 || points.some((point) => Number.isNaN(point.x) || Number.isNaN(point.y))) return null;
+  const [videoW = 1280, videoH = 720] = Array.isArray(settings.videoResolution) ? settings.videoResolution : [];
+  const inside = Array.isArray(settings.inside_reference_point)
+    ? { x: Number(settings.inside_reference_point[0]), y: Number(settings.inside_reference_point[1]) }
+    : null;
+  return {
+    name: settings.zone_configs?.[0]?.name || setting?.name || 'Line',
+    points,
+    inside: inside && !Number.isNaN(inside.x) && !Number.isNaN(inside.y) ? inside : null,
+    videoW: Number(videoW) || 1280,
+    videoH: Number(videoH) || 720,
+  };
+}
+
+function LineCrossingOverlay({ camera, fit = 'contain' }) {
+  const hostRef = useRef(null);
+  const [box, setBox] = useState(null);
+  const data = lineCrossingOverlayData(camera);
+  useEffect(() => {
+    const node = hostRef.current;
+    if (!node) return undefined;
+    const update = () => {
+      const rect = node.getBoundingClientRect();
+      setBox({ width: rect.width, height: rect.height });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  if (!data) return null;
+  const containerW = box?.width || 0;
+  const containerH = box?.height || 0;
+  const videoRatio = data.videoW / data.videoH;
+  const containerRatio = containerW && containerH ? containerW / containerH : videoRatio;
+  let renderW = containerW || '100%';
+  let renderH = containerH || '100%';
+  let offsetX = 0;
+  let offsetY = 0;
+  if (containerW && containerH && fit === 'contain') {
+    if (containerRatio > videoRatio) {
+      renderH = containerH;
+      renderW = containerH * videoRatio;
+      offsetX = (containerW - renderW) / 2;
+    } else {
+      renderW = containerW;
+      renderH = containerW / videoRatio;
+      offsetY = (containerH - renderH) / 2;
+    }
+  }
+  const scaleX = (x) => (x / data.videoW) * 1000;
+  const scaleY = (y) => (y / data.videoH) * 1000;
+  const linePoints = data.points.map((point) => `${scaleX(point.x).toFixed(1)},${scaleY(point.y).toFixed(1)}`).join(' ');
+  const labelPoint = data.points[0];
+  return (
+    <div ref={hostRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 2 }}>
+      <div style={{ position: 'absolute', left: offsetX, top: offsetY, width: renderW, height: renderH, overflow: 'hidden' }}>
+        <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
+          <polyline points={linePoints} fill="none" stroke="#f59e0b" strokeWidth="5" strokeLinecap="round" />
+          {data.points.map((point, index) => (
+            <circle key={index} cx={scaleX(point.x)} cy={scaleY(point.y)} r="8" fill="#f59e0b" stroke="#fff" strokeWidth="2.5" />
+          ))}
+          {data.inside && (
+            <>
+              <circle cx={scaleX(data.inside.x)} cy={scaleY(data.inside.y)} r="10" fill="#22c55e" stroke="#fff" strokeWidth="2.5" />
+              <text x={scaleX(data.inside.x) + 14} y={scaleY(data.inside.y) - 12} fill="#22c55e" fontSize="26" fontWeight="800">
+                Inside Reference Point
+              </text>
+            </>
+          )}
+        </svg>
+        <span style={{ position: 'absolute', left: `${Math.min(92, Math.max(2, (labelPoint.x / data.videoW) * 100))}%`, top: `${Math.min(92, Math.max(2, (labelPoint.y / data.videoH) * 100 - 5))}%`, transform: 'translateY(-100%)', maxWidth: '55%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', borderRadius: 6, background: 'rgba(245,158,11,.95)', color: '#111827', padding: '3px 7px', fontSize: 11, fontWeight: 900, boxShadow: '0 8px 18px rgba(0,0,0,.24)' }}>
+          {data.name}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function statCard(label, value, sub, Icon, color = STAT_COLOR) {
   const valueIsText = Number.isNaN(Number(value));
   return (
@@ -173,80 +261,21 @@ function movementStatCard({ kind, value, rows, dropdownOpen, onToggle }) {
   );
 }
 
-function movementTotalCard({ value, rows, dropdownOpen, onToggle }) {
+function movementTotalCard(value) {
   const color = '#2563eb';
-  const visibleRows = rows.slice(0, 3);
   return (
-    <div style={{ position: 'relative', height: 164, background: `linear-gradient(135deg, ${color}12 0%, var(--bg1) 58%, ${color}08 100%)`, border: `1px solid ${color}2f`, borderRadius: 12, minWidth: 0, boxShadow: `0 12px 26px ${color}10` }}>
+    <div style={{ position: 'relative', height: 164, overflow: 'hidden', background: `linear-gradient(135deg, ${color}12 0%, var(--bg1) 58%, ${color}08 100%)`, border: `1px solid ${color}2f`, borderRadius: 12, padding: 22, minWidth: 0, boxShadow: `0 12px 26px ${color}10`, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
       <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: color, boxShadow: `0 0 18px ${color}55` }} />
-      <div style={{ display: 'grid', gridTemplateColumns: '168px minmax(0,1fr)', height: '100%' }}>
-        <div style={{ padding: '16px 14px 12px 22px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '32px minmax(0,1fr)', alignItems: 'center', gap: 9 }}>
-            <span style={{ width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center', background: `${color}18`, color, flexShrink: 0 }}>
-              <Users size={17} />
-            </span>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 850, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>Total Present</div>
-              <div style={{ marginTop: 3, fontFamily: 'var(--disp)', fontSize: 25, lineHeight: 1, fontWeight: 900, color, whiteSpace: 'nowrap' }}>{value}</div>
-            </div>
-          </div>
-          <div style={{ fontSize: 11, lineHeight: 1.35, color: 'var(--tx3)' }}>Current people inside</div>
-        </div>
-        <div style={{ position: 'relative', borderLeft: '1px solid var(--bd)', padding: '10px 10px 8px', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(56px,1fr) 46px', gap: 5, padding: '0 0 6px', borderBottom: '1px solid var(--bd)', fontSize: 10, fontWeight: 850, color: 'var(--tx2)' }}>
-            <div>Camera Name</div>
-            <div style={{ textAlign: 'right', color }}>Present</div>
-          </div>
-          <div style={{ display: 'grid', flex: '1 1 auto' }}>
-            {visibleRows.length ? visibleRows.map((row) => (
-              <div key={`present-${row.camera}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(56px,1fr) 46px', gap: 5, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--bd)', fontSize: 11 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, color: 'var(--tx)' }}>
-                  <span style={{ width: 16, height: 16, borderRadius: 5, display: 'grid', placeItems: 'center', background: `${color}12`, color, flexShrink: 0 }}>
-                    <Camera size={10} />
-                  </span>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700 }}>{row.camera}</span>
-                </div>
-                <div style={{ textAlign: 'right', color, fontWeight: 900 }}>{row.present}</div>
-              </div>
-            )) : (
-              <div style={{ padding: '18px 0', color: 'var(--tx3)', fontSize: 12 }}>No present data.</div>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onToggle}
-            style={{ alignSelf: 'flex-end', height: 20, border: 0, background: 'transparent', color: 'var(--tx2)', display: 'flex', alignItems: 'center', gap: 4, padding: '0 2px', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
-          >
-            View all
-            {dropdownOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          </button>
+      <div style={{ display: 'grid', gridTemplateColumns: '38px minmax(0,1fr)', alignItems: 'center', gap: 12 }}>
+        <span style={{ width: 38, height: 38, borderRadius: '50%', display: 'grid', placeItems: 'center', background: `${color}18`, color, flexShrink: 0 }}>
+          <Users size={19} />
+        </span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 850, color: 'var(--tx2)' }}>Total Present</div>
+          <div style={{ marginTop: 4, fontFamily: 'var(--disp)', fontSize: 30, lineHeight: 1, fontWeight: 900, color }}>{value}</div>
         </div>
       </div>
-      {dropdownOpen && (
-        <div style={{ position: 'absolute', right: 12, top: 'calc(100% + 6px)', zIndex: 60, width: 300, maxWidth: 'calc(100vw - 80px)', maxHeight: 260, overflowY: 'auto', background: 'var(--bg1solid)', border: `1px solid ${color}40`, borderRadius: 12, boxShadow: '0 24px 64px rgba(15,23,42,.28)', padding: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--tx)' }}>All Present</div>
-            <div style={{ fontSize: 11, fontWeight: 800, color }}>{rows.length} cameras</div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(130px,1fr) 78px', gap: 10, padding: '8px 10px', borderRadius: 8, background: `${color}12`, fontSize: 11, fontWeight: 900, color: 'var(--tx2)' }}>
-            <div>Camera Name</div>
-            <div style={{ textAlign: 'right', color }}>Total Present</div>
-          </div>
-          {rows.length ? rows.map((row) => (
-            <div key={`dropdown-present-${row.camera}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(130px,1fr) 78px', gap: 10, alignItems: 'center', padding: '9px 10px', borderBottom: '1px solid var(--bd)', background: 'var(--bg1solid)', fontSize: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, color: 'var(--tx)' }}>
-                <span style={{ width: 20, height: 20, borderRadius: 6, display: 'grid', placeItems: 'center', background: `${color}12`, color, flexShrink: 0 }}>
-                  <Camera size={12} />
-                </span>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 750 }}>{row.camera}</span>
-              </div>
-              <div style={{ textAlign: 'right', color, fontWeight: 900 }}>{row.present}</div>
-            </div>
-          )) : (
-            <div style={{ padding: 14, color: 'var(--tx3)', fontSize: 12 }}>No present data.</div>
-          )}
-        </div>
-      )}
+      <div style={{ marginTop: 10, fontSize: 11, lineHeight: 1.35, color: 'var(--tx3)' }}></div>
     </div>
   );
 }
@@ -300,17 +329,9 @@ function recordMode(record) {
 }
 
 function recordsPresentCount(records) {
-  const grouped = new Map();
-  records.forEach((record) => {
-    const camera = recordCameraName(record);
-    const current = grouped.get(camera) || { entry: 0, exit: 0 };
-    current.entry += recordEntry(record);
-    current.exit += recordExit(record);
-    grouped.set(camera, current);
-  });
-  return [...grouped.values()].reduce((sum, item) => (
-    sum + (item.entry > 0 ? Math.max(item.entry - item.exit, 0) : 0)
-  ), 0);
+  const totalEntry = records.reduce((sum, item) => sum + recordEntry(item), 0);
+  const totalExit = records.reduce((sum, item) => sum + recordExit(item), 0);
+  return Math.max(totalEntry - totalExit, 0);
 }
 
 function flattenSeries(records) {
@@ -492,6 +513,7 @@ export default function LineCrossingLogs() {
     try { return localStorage.getItem(LINE_AUDIO_STORAGE_KEY) !== 'false'; } catch { return true; }
   });
   const [detailsOpen, setDetailsOpen] = useState(true);
+  const [collapsedFullscreenLogs, setCollapsedFullscreenLogs] = useState({});
   const [movementDropdown, setMovementDropdown] = useState(null);
   const [logPanelPosition, setLogPanelPosition] = useState({ x: 18, y: 18 });
   const [streamPage, setStreamPage] = useState(0);
@@ -890,7 +912,6 @@ export default function LineCrossingLogs() {
           camera: item.camera,
           entry: item.entry,
           exit: item.exit,
-          present: item.entry > 0 ? Math.max(item.entry - item.exit, 0) : 0,
           total: item.total,
           mode: modes.includes('All') || modes.length > 1 ? 'All' : (modes[0] || '--'),
         };
@@ -905,11 +926,6 @@ export default function LineCrossingLogs() {
 
   const exitRows = useMemo(
     () => [...movementRows].sort((a, b) => b.exit - a.exit || b.total - a.total),
-    [movementRows],
-  );
-
-  const presentRows = useMemo(
-    () => [...movementRows].sort((a, b) => b.present - a.present || b.total - a.total),
     [movementRows],
   );
 
@@ -995,12 +1011,15 @@ export default function LineCrossingLogs() {
   const pieLabels = ['Entry', 'Exit'];
   const pieSeries = [stats.totalEntry, stats.totalExit];
 
-  const fullscreenChannelId = fullscreenCamera?._id || fullscreenCamera?.id || fullscreenCamera?.channelId;
-  const fullscreenSocketEvent = fullscreenChannelId ? socketEventsByChannel[String(fullscreenChannelId)] : null;
-  const fullscreenApiRecord = fullscreenChannelId
-    ? filteredRecords.find((record) => String(record.channelId || record.channelData?._id || record.cameraId) === String(fullscreenChannelId))
-    : null;
-  const fullscreenOverlay = fullscreenSocketEvent || fullscreenApiRecord;
+  const fullscreenLogItems = useMemo(() => fullscreenVisibleCameras
+    .map((camera) => {
+      const id = channelKey(camera);
+      const socketEvent = socketEventsByChannel[String(id)];
+      const apiRecord = filteredRecords.find((record) => recordCameraId(record) === String(id));
+      const data = socketEvent || apiRecord;
+      return data ? { camera, data } : null;
+    })
+    .filter(Boolean), [filteredRecords, fullscreenVisibleCameras, socketEventsByChannel]);
 
   const openFullscreenCamera = useCallback((camera) => {
     if (!camera) return;
@@ -1124,12 +1143,7 @@ export default function LineCrossingLogs() {
             onToggle: () => setMovementDropdown((current) => (current === 'exit' ? null : 'exit')),
           })}
           <div style={{ minWidth: 0, height: '100%' }}>
-            {movementTotalCard({
-              value: movementStats.net,
-              rows: presentRows,
-              dropdownOpen: movementDropdown === 'present',
-              onToggle: () => setMovementDropdown((current) => (current === 'present' ? null : 'present')),
-            })}
+            {movementTotalCard(movementStats.net)}
           </div>
         </div>
       </section>
@@ -1186,13 +1200,14 @@ export default function LineCrossingLogs() {
           {visibleCameras.length ? (
             <div style={{ position: 'relative', height: 430, borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(11,59,143,.35)', background: '#071a3d', display: 'grid', gridTemplateColumns: '1fr', gap: 0, padding: 0 }}>
               {visibleCameras.map((camera, index) => (
-                <div key={camera._id || camera.id || index} style={{ minWidth: 0, minHeight: 0, borderRadius: 0, overflow: 'hidden', background: '#071a3d' }}>
+                <div key={camera._id || camera.id || index} style={{ position: 'relative', minWidth: 0, minHeight: 0, borderRadius: 0, overflow: 'hidden', background: '#071a3d' }}>
                   <CameraStream
                     channel={camera}
                     camLabel={`LC-${streamPage * streamsPerPage + index + 1}`}
                     minH={0}
                     onMaximize={() => openFullscreenCamera(camera)}
                   />
+                  <LineCrossingOverlay camera={camera} fit="cover" />
                 </div>
               ))}
               {filteredEnabledCameras.length > 1 && (
@@ -1462,12 +1477,13 @@ export default function LineCrossingLogs() {
               background: '#020409',
             }}
           >
-            {fullscreenVisibleCameras.map((camera, index) => (
-              <div
-                key={camera._id || camera.id || index}
+              {fullscreenVisibleCameras.map((camera, index) => (
+                <div
+                  key={camera._id || camera.id || index}
                 style={{
                   minWidth: 0,
                   minHeight: 0,
+                  position: 'relative',
                   borderRadius: fullscreenGridSize === 1 ? 0 : 10,
                   overflow: 'hidden',
                   border: fullscreenGridSize === 1 ? 0 : '1px solid rgba(255,255,255,.12)',
@@ -1481,8 +1497,8 @@ export default function LineCrossingLogs() {
                   fit="contain"
                   minH={0}
                   isFullscreen
-                  onMaximize={() => setFullscreenCamera(null)}
                 />
+                <LineCrossingOverlay camera={camera} />
               </div>
             ))}
           </div>
@@ -1610,38 +1626,63 @@ export default function LineCrossingLogs() {
               Detection Details
               {detailsOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
             </button>
-            <div style={{ marginTop: detailsOpen ? 10 : 0, background: 'rgba(37,43,66,.92)', borderRadius: 10, padding: detailsOpen ? 12 : '0 12px', color: '#fff', maxHeight: detailsOpen ? 180 : 0, opacity: detailsOpen ? 1 : 0, overflow: 'hidden', transition: 'max-height .18s ease, opacity .18s ease, margin-top .18s ease, padding .18s ease' }}>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <span style={{ width: 34, height: 34, borderRadius: 9, display: 'grid', placeItems: 'center', border: '1px solid rgba(249,115,22,.55)', color: '#fb923c', background: 'rgba(249,115,22,.12)', flexShrink: 0 }}>
-                  <GitBranch size={17} />
-                </span>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 900, minWidth: 0 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', boxShadow: '0 0 8px #f59e0b', flexShrink: 0 }} />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {fullscreenOverlay?.incidentName || 'Line crossing detected'}
-                    </span>
+            <div className="hide-scrollbar" style={{ marginTop: detailsOpen ? 10 : 0, background: 'rgba(37,43,66,.92)', borderRadius: 10, padding: detailsOpen ? 10 : '0 10px', color: '#fff', maxHeight: detailsOpen ? 360 : 0, opacity: detailsOpen ? 1 : 0, overflowY: detailsOpen ? 'auto' : 'hidden', overflowX: 'hidden', msOverflowStyle: 'none', scrollbarWidth: 'none', transition: 'max-height .18s ease, opacity .18s ease, margin-top .18s ease, padding .18s ease' }}>
+              {fullscreenLogItems.length ? fullscreenLogItems.map(({ camera, data }) => {
+                const logKey = channelKey(camera);
+                const logOpen = !collapsedFullscreenLogs[logKey];
+                return (
+                  <div key={`fullscreen-log-${logKey}`} style={{ padding: 0, marginBottom: 10, borderRadius: 10, background: 'rgba(31,36,59,.82)', border: '1px solid rgba(255,255,255,.08)', overflow: 'hidden' }}>
+                    <button
+                      type="button"
+                      onClick={() => setCollapsedFullscreenLogs((prev) => ({ ...prev, [logKey]: !prev[logKey] }))}
+                      aria-expanded={logOpen}
+                      style={{ width: '100%', border: 0, background: 'transparent', color: '#fff', padding: '10px', display: 'flex', gap: 10, cursor: 'pointer', textAlign: 'left' }}
+                    >
+                      <span style={{ width: 34, height: 34, borderRadius: 9, display: 'grid', placeItems: 'center', border: '1px solid rgba(249,115,22,.55)', color: '#fb923c', background: 'rgba(249,115,22,.12)', flexShrink: 0 }}>
+                        <GitBranch size={17} />
+                      </span>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 900, minWidth: 0 }}>
+                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', boxShadow: '0 0 8px #f59e0b', flexShrink: 0 }} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {data?.incidentName || 'Line crossing detected'}
+                          </span>
+                        </div>
+                        <div style={{ marginTop: 5, color: 'rgba(226,232,240,.82)', fontSize: 11, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {channelName(camera)}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, color: 'rgba(226,232,240,.68)', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700 }}>
+                          <Clock3 size={12} />
+                          {data?.timeOfIncident ? moment(data.timeOfIncident).tz(IST_ZONE).format('HH:mm:ss') : '--'}
+                        </div>
+                      </div>
+                      <span style={{ width: 24, height: 24, borderRadius: 7, display: 'grid', placeItems: 'center', background: 'rgba(15,23,42,.55)', color: 'rgba(226,232,240,.9)', flexShrink: 0 }}>
+                        {logOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </span>
+                    </button>
+                    <div style={{ maxHeight: logOpen ? 92 : 0, opacity: logOpen ? 1 : 0, overflow: 'hidden', transition: 'max-height .18s ease, opacity .18s ease' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, padding: '0 10px 10px' }}>
+                        <div style={{ background: 'rgba(15,23,42,.55)', borderRadius: 8, padding: '8px 9px' }}>
+                          <div style={{ fontSize: 9.5, color: 'rgba(226,232,240,.58)', fontWeight: 800, textTransform: 'uppercase' }}>Total Entry</div>
+                          <div style={{ marginTop: 3, color: '#22c55e', fontSize: 16, fontWeight: 900 }}>{recordEntry(data)}</div>
+                        </div>
+                        <div style={{ background: 'rgba(15,23,42,.55)', borderRadius: 8, padding: '8px 9px' }}>
+                          <div style={{ fontSize: 9.5, color: 'rgba(226,232,240,.58)', fontWeight: 800, textTransform: 'uppercase' }}>Total Exit</div>
+                          <div style={{ marginTop: 3, color: '#ef4444', fontSize: 16, fontWeight: 900 }}>{recordExit(data)}</div>
+                        </div>
+                        <div style={{ background: 'rgba(15,23,42,.55)', borderRadius: 8, padding: '8px 9px' }}>
+                          <div style={{ fontSize: 9.5, color: 'rgba(226,232,240,.58)', fontWeight: 800, textTransform: 'uppercase' }}>Total Present</div>
+                          <div style={{ marginTop: 3, color: '#60a5fa', fontSize: 16, fontWeight: 900 }}>{Math.max(recordEntry(data) - recordExit(data), 0)}</div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, color: 'rgba(226,232,240,.68)', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700 }}>
-                    <Clock3 size={12} />
-                    {fullscreenOverlay?.timeOfIncident ? moment(fullscreenOverlay.timeOfIncident).tz(IST_ZONE).format('HH:mm:ss') : '--'}
-                  </div>
+                );
+              }) : (
+                <div style={{ padding: 14, color: 'rgba(226,232,240,.72)', fontSize: 12, textAlign: 'center' }}>
+                  No line crossing logs for visible cameras.
                 </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 12 }}>
-                <div style={{ background: 'rgba(15,23,42,.55)', borderRadius: 8, padding: '8px 9px' }}>
-                  <div style={{ fontSize: 9.5, color: 'rgba(226,232,240,.58)', fontWeight: 800, textTransform: 'uppercase' }}>Total Entry</div>
-                  <div style={{ marginTop: 3, color: '#22c55e', fontSize: 16, fontWeight: 900 }}>{recordEntry(fullscreenOverlay)}</div>
-                </div>
-                <div style={{ background: 'rgba(15,23,42,.55)', borderRadius: 8, padding: '8px 9px' }}>
-                  <div style={{ fontSize: 9.5, color: 'rgba(226,232,240,.58)', fontWeight: 800, textTransform: 'uppercase' }}>Total Exit</div>
-                  <div style={{ marginTop: 3, color: '#ef4444', fontSize: 16, fontWeight: 900 }}>{recordExit(fullscreenOverlay)}</div>
-                </div>
-                <div style={{ background: 'rgba(15,23,42,.55)', borderRadius: 8, padding: '8px 9px' }}>
-                  <div style={{ fontSize: 9.5, color: 'rgba(226,232,240,.58)', fontWeight: 800, textTransform: 'uppercase' }}>Total Present</div>
-                  <div style={{ marginTop: 3, color: '#60a5fa', fontSize: 16, fontWeight: 900 }}>{Math.max(recordEntry(fullscreenOverlay) - recordExit(fullscreenOverlay), 0)}</div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>,
