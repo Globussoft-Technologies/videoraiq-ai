@@ -275,7 +275,7 @@ class AnalyticsController {
   async overview(req, res, next) {
     /*
     #swagger.tags = ['Analytics']
-    #swagger.description = 'KPI summary for the Analytics header row: total detections, resolved rate, active camera count, and the busiest site. Only real, currently-tracked data is returned — false-positive rate, mean response time and platform uptime are not included since nothing in the system records them.'
+    #swagger.description = 'KPI summary for the Analytics header row: total detections, resolved rate, active camera count, and the busiest site. Only real, currently-tracked data is returned — false-positive rate, mean response time and platform uptime are not included since nothing in the system records them. byType is the per-engine split of totalDetections, where inAlerts is how many of those incidents are eligible for the Alerts / Incident Center list. That list requires a reviewable snapshot and drops the counting and tripwire engines, so totalDetections can exceed what Alerts shows. alertsVisible is the sum of inAlerts. busiestSite.tied is true when another site has the same event count.'
     #swagger.parameters['days'] = { in: 'query', description: 'Number of trailing days to include when startDate/endDate are not provided (default 30, max 90)', required: false, type: 'Number', example: 30 }
     #swagger.parameters['startDate'] = { in: 'query', description: 'Start of range (YYYY-MM-DD, inclusive)', required: false, type: 'String' }
     #swagger.parameters['endDate'] = { in: 'query', description: 'End of range (YYYY-MM-DD, inclusive)', required: false, type: 'String' }
@@ -292,11 +292,6 @@ class AnalyticsController {
             resolvedRate: 16.8,
             activeCameras: 42,
             busiestSite: { site: 'HQ Tower', events: 6840, tied: false },
-            // Per-engine split of totalDetections. inAlerts is how many of that
-            // engine's incidents are eligible for the Alerts / Incident Center
-            // list, which requires a reviewable snapshot and drops the
-            // counting/tripwire engines — so totalDetections can exceed what
-            // Alerts shows. alertsVisible is the sum of inAlerts.
             byType: [{ type: 'lineCrossing', count: 4, inAlerts: 0 }],
             alertsVisible: 0
           }

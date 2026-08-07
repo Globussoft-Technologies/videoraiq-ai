@@ -5,7 +5,7 @@
     "title": "EMP Surveillance API's — v2",
     "description": "API Documentation for v2 endpoints"
   },
-  "host": "s5z0fxb8-5001.inc1.devtunnels.ms",
+  "host": "dev-api.videoraiq.com",
   "basePath": "/",
   "schemes": [
     "http",
@@ -665,6 +665,92 @@
         "responses": {
           "200": {
             "description": "Allowed detections updated successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v2/admin/alert-switches": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "description": "Get global email and telegram alert switches for the authenticated admin",
+        "responses": {
+          "200": {
+            "description": "Alert switches fetched successfully"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v2/admin/alert-switches/email": {
+      "put": {
+        "tags": [
+          "Admin"
+        ],
+        "description": "Globally enable or disable email alerts for the authenticated admin",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "emailAlertsEnabled": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Email alerts switch updated successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v2/admin/alert-switches/telegram": {
+      "put": {
+        "tags": [
+          "Admin"
+        ],
+        "description": "Globally enable or disable telegram alerts for the authenticated admin",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "telegramAlertsEnabled": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Telegram alerts switch updated successfully"
           },
           "400": {
             "description": "Validation error"
@@ -4216,7 +4302,7 @@
         "tags": [
           "Incidents"
         ],
-        "description": "Get Line Crossing logs (tabular). Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, minAtoB, maxAtoB, minBtoA, maxBtoA, search. Paginated via skip/limit.",
+        "description": "Get Line Crossing logs (tabular). Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, type, minEntry, maxEntry, minExit, maxExit, search. Paginated via skip/limit.",
         "parameters": [
           {
             "name": "skip",
@@ -4281,24 +4367,54 @@
             "type": "boolean"
           },
           {
-            "name": "minAtoB",
+            "name": "type",
+            "in": "query",
+            "type": "string",
+            "description": "Filter by line-crossing direction bucket: entry, exit, or all"
+          },
+          {
+            "name": "minEntry",
             "in": "query",
             "type": "integer"
+          },
+          {
+            "name": "maxEntry",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "minExit",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "maxExit",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "minAtoB",
+            "in": "query",
+            "type": "integer",
+            "deprecated": true
           },
           {
             "name": "maxAtoB",
             "in": "query",
-            "type": "integer"
+            "type": "integer",
+            "deprecated": true
           },
           {
             "name": "minBtoA",
             "in": "query",
-            "type": "integer"
+            "type": "integer",
+            "deprecated": true
           },
           {
             "name": "maxBtoA",
             "in": "query",
-            "type": "integer"
+            "type": "integer",
+            "deprecated": true
           },
           {
             "name": "search",
@@ -4309,6 +4425,118 @@
         "responses": {
           "200": {
             "description": "Line crossing logs fetched successfully"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "EncryptedAuthToken": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Incidents"
+        ],
+        "description": "Delete Line Crossing logs using the same filters as the logs endpoint. Set all=true to delete all line crossing logs for the authenticated admin.",
+        "parameters": [
+          {
+            "name": "all",
+            "in": "query",
+            "type": "boolean",
+            "description": "When true, delete all line crossing logs for the authenticated admin"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "nvrId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "nvrIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "channelId",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "channelIds",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "type": "string",
+            "description": "Filter by line-crossing direction bucket: entry, exit, or all"
+          },
+          {
+            "name": "minEntry",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "maxEntry",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "minExit",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "maxExit",
+            "in": "query",
+            "type": "integer"
+          },
+          {
+            "name": "minAtoB",
+            "in": "query",
+            "type": "integer",
+            "deprecated": true
+          },
+          {
+            "name": "maxAtoB",
+            "in": "query",
+            "type": "integer",
+            "deprecated": true
+          },
+          {
+            "name": "minBtoA",
+            "in": "query",
+            "type": "integer",
+            "deprecated": true
+          },
+          {
+            "name": "maxBtoA",
+            "in": "query",
+            "type": "integer",
+            "deprecated": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Line crossing logs deleted successfully"
+          },
+          "400": {
+            "description": "Bad Request"
           },
           "500": {
             "description": "Internal server error"
@@ -7005,7 +7233,75 @@
         ],
         "responses": {
           "200": {
-            "description": "Logs retrieved successfully"
+            "description": "Logs retrieved successfully. `total` and `statusCounts` cover the whole filtered range, not just the returned page — each row is graded Present / Half Day / Absent / Checked In against the org thresholds from GET /attendance/settings.",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "statusCode": {
+                  "type": "number",
+                  "example": 200
+                },
+                "body": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Attendance summary"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "attendanceLogs": {
+                          "type": "array",
+                          "example": [],
+                          "items": {}
+                        },
+                        "total": {
+                          "type": "number",
+                          "example": 150
+                        },
+                        "totalEmployees": {
+                          "type": "number",
+                          "example": 180
+                        },
+                        "statusCounts": {
+                          "type": "object",
+                          "properties": {
+                            "present": {
+                              "type": "number",
+                              "example": 96
+                            },
+                            "halfDay": {
+                              "type": "number",
+                              "example": 12
+                            },
+                            "absent": {
+                              "type": "number",
+                              "example": 30
+                            },
+                            "checkedIn": {
+                              "type": "number",
+                              "example": 12
+                            }
+                          }
+                        },
+                        "attendanceLogsStartDate": {
+                          "type": "string",
+                          "example": "2026-01-04T04:12:00.000Z"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
           },
           "500": {
             "description": "Internal server error"
@@ -7199,6 +7495,98 @@
         "responses": {
           "200": {
             "description": "Logs retrieved successfully"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v2/attendance/settings": {
+      "get": {
+        "tags": [
+          "Attendance"
+        ],
+        "description": "This organisation's attendance rules: how many hours on site count as a full day and as a half day. Returns defaults (8h / 4h) when nothing has been saved yet.",
+        "responses": {
+          "200": {
+            "description": "Attendance settings fetched successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "statusCode": {
+                  "type": "number",
+                  "example": 200
+                },
+                "body": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Attendance settings fetched successfully"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "fullDayHours": {
+                          "type": "number",
+                          "example": 9
+                        },
+                        "halfDayHours": {
+                          "type": "number",
+                          "example": 4
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Attendance"
+        ],
+        "description": "Set this organisation\\'s full-day and half-day hour thresholds. Applies to every employee under the admin. Status is derived at query time, so changing these re-grades existing attendance logs on the next read — no backfill.",
+        "parameters": [
+          {
+            "name": "data",
+            "in": "body",
+            "description": "Attendance rules",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "fullDayHours": {
+                  "type": "number",
+                  "example": 9
+                },
+                "halfDayHours": {
+                  "type": "number",
+                  "example": 4
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Attendance settings updated successfully"
+          },
+          "400": {
+            "description": "Validation error, e.g. halfDayHours greater than fullDayHours"
           },
           "500": {
             "description": "Internal server error"
@@ -9124,6 +9512,136 @@
         }
       }
     },
+    "/api/v2/analytics/attendance-presence": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "description": "Attendance status headcount for a single calendar day, for the Attendance Analytics KPI tiles. Counted from the Attendance Logs pipeline itself, so the figures always agree with the Attendance Logs page for the same day. Rows are graded against the org's configured thresholds (see GET /attendance/settings): present = on site at least fullDayHours, halfDay = at least halfDayHours, absent = below that, checkedIn = no check-out yet. Analytics-only.",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "description": "Day to report on (YYYY-MM-DD). Defaults to today.",
+            "required": false,
+            "type": "String",
+            "example": "2026-08-07"
+          },
+          {
+            "name": "nvrId",
+            "in": "query",
+            "description": "Filter by one or more NVR ids",
+            "required": false,
+            "type": "String"
+          },
+          {
+            "name": "channelId",
+            "in": "query",
+            "description": "Filter by one or more channel ids",
+            "required": false,
+            "type": "String"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Attendance presence fetched successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "statusCode": {
+                  "type": "number",
+                  "example": 200
+                },
+                "body": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Attendance presence fetched successfully"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "date": {
+                          "type": "string",
+                          "example": "2026-08-07"
+                        },
+                        "employees": {
+                          "type": "number",
+                          "example": 22
+                        },
+                        "logs": {
+                          "type": "number",
+                          "example": 9
+                        },
+                        "present": {
+                          "type": "number",
+                          "example": 5
+                        },
+                        "halfDay": {
+                          "type": "number",
+                          "example": 2
+                        },
+                        "absent": {
+                          "type": "number",
+                          "example": 1
+                        },
+                        "checkedIn": {
+                          "type": "number",
+                          "example": 1
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "statusCode": {
+                  "type": "number",
+                  "example": 400
+                },
+                "body": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "failed"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "date must be in YYYY-MM-DD format"
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Validation Failed!"
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/api/v2/analytics/detection-volume": {
       "get": {
         "tags": [
@@ -10329,7 +10847,7 @@
         "tags": [
           "Analytics"
         ],
-        "description": "KPI summary for the Analytics header row: total detections, resolved rate, active camera count, and the busiest site. Only real, currently-tracked data is returned — false-positive rate, mean response time and platform uptime are not included since nothing in the system records them.",
+        "description": "KPI summary for the Analytics header row: total detections, resolved rate, active camera count, and the busiest site. Only real, currently-tracked data is returned — false-positive rate, mean response time and platform uptime are not included since nothing in the system records them. byType is the per-engine split of totalDetections, where inAlerts is how many of those incidents are eligible for the Alerts / Incident Center list. That list requires a reviewable snapshot and drops the counting and tripwire engines, so totalDetections can exceed what Alerts shows. alertsVisible is the sum of inAlerts. busiestSite.tied is true when another site has the same event count.",
         "parameters": [
           {
             "name": "days",
@@ -10404,8 +10922,36 @@
                             "events": {
                               "type": "number",
                               "example": 6840
+                            },
+                            "tied": {
+                              "type": "boolean",
+                              "example": false
                             }
                           }
+                        },
+                        "byType": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "example": "lineCrossing"
+                              },
+                              "count": {
+                                "type": "number",
+                                "example": 4
+                              },
+                              "inAlerts": {
+                                "type": "number",
+                                "example": 0
+                              }
+                            }
+                          }
+                        },
+                        "alertsVisible": {
+                          "type": "number",
+                          "example": 0
                         }
                       }
                     }
@@ -13346,6 +13892,20 @@
               "type": "number",
               "example": 0.7
             },
+            "inside_reference_point": {
+              "type": "array",
+              "example": [
+                900,
+                300
+              ],
+              "items": {
+                "type": "number"
+              }
+            },
+            "count_mode": {
+              "type": "string",
+              "example": "entry"
+            },
             "referencePoints": {
               "type": "object",
               "properties": {
@@ -14336,6 +14896,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "removeUnknown": {
+          "type": "boolean",
+          "example": false
         },
         "getAccessLogs": {
           "type": "boolean",
