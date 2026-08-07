@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import ReactApexChart from 'react-apexcharts';
 import moment from 'moment-timezone';
 import { toast } from 'sonner';
-import { Activity, ArrowDownRight, ArrowUpRight, BarChart3, Camera, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, GitBranch, Maximize2, Move, PieChart, RefreshCw, TrendingDown, Trophy, Users, X } from 'lucide-react';
+import { Activity, BarChart3, Camera, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, DoorOpen, GitBranch, Maximize2, Move, PieChart, RefreshCw, TrendingDown, Trophy, Users, X } from 'lucide-react';
 import AccessDenied from '@/components/AccessDenied';
 import CameraStream from '@/components/CameraStream';
 import { useAuth } from '@/context/AuthContext';
@@ -83,6 +83,173 @@ function statCard(label, value, sub, Icon, color = STAT_COLOR) {
   );
 }
 
+function movementStatCard({ kind, value, rows, dropdownOpen, onToggle }) {
+  const isEntry = kind === 'entry';
+  const color = isEntry ? '#10b981' : '#ef4444';
+  const soft = isEntry ? 'rgba(16,185,129,.1)' : 'rgba(239,68,68,.1)';
+  const title = isEntry ? 'Entries' : 'Exits';
+  const sub = isEntry ? 'People counted entering the line' : 'People counted exiting the line';
+  const Icon = DoorOpen;
+  const countKey = isEntry ? 'entry' : 'exit';
+  const headerColor = isEntry ? '#059669' : '#dc2626';
+  const visibleRows = rows.slice(0, 3);
+  return (
+    <div style={{ position: 'relative', height: 164, background: `linear-gradient(135deg, ${soft}, var(--bg1) 58%, ${soft})`, border: `1px solid ${color}30`, borderRadius: 12, minWidth: 0, boxShadow: `0 12px 26px ${color}10` }}>
+      <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: color, boxShadow: `0 0 18px ${color}55` }} />
+      <div style={{ display: 'grid', gridTemplateColumns: '112px minmax(0,1fr)', height: '100%' }}>
+        <div style={{ padding: '18px 12px 14px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 7 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ width: 38, height: 38, borderRadius: '50%', display: 'grid', placeItems: 'center', background: `${color}18`, color, flexShrink: 0 }}>
+              <Icon size={19} />
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 850, color: 'var(--tx2)' }}>{title}</div>
+              <div style={{ marginTop: 3, fontFamily: 'var(--disp)', fontSize: 27, lineHeight: 1, fontWeight: 900, color }}>{value}</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 11, lineHeight: 1.35, color: 'var(--tx3)' }}>{sub}</div>
+        </div>
+        <div style={{ position: 'relative', borderLeft: '1px solid var(--bd)', padding: '10px 12px 8px', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(82px,1fr) 46px 38px', gap: 7, padding: '0 0 6px', borderBottom: '1px solid var(--bd)', fontSize: 10, fontWeight: 850, color: 'var(--tx2)' }}>
+            <div>Camera Name</div>
+            <div>Mode</div>
+            <div style={{ textAlign: 'right', color: headerColor }}>{title.slice(0, -1)}</div>
+          </div>
+          <div style={{ display: 'grid', flex: '1 1 auto' }}>
+            {visibleRows.length ? visibleRows.map((row) => (
+              <div key={`${kind}-${row.camera}-${row.mode}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(82px,1fr) 46px 38px', gap: 7, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--bd)', fontSize: 11 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, color: 'var(--tx)' }}>
+                  <span style={{ width: 16, height: 16, borderRadius: 5, display: 'grid', placeItems: 'center', background: `${color}12`, color, flexShrink: 0 }}>
+                    <Camera size={10} />
+                  </span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700 }}>{row.camera}</span>
+                </div>
+                <div style={{ color: 'var(--tx2)', fontWeight: 700 }}>{row.mode}</div>
+                <div style={{ textAlign: 'right', color: headerColor, fontWeight: 900 }}>{row[countKey]}</div>
+              </div>
+            )) : (
+              <div style={{ padding: '18px 0', color: 'var(--tx3)', fontSize: 12 }}>No camera movement data.</div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onToggle}
+            style={{ alignSelf: 'flex-end', height: 20, border: 0, background: 'transparent', color: 'var(--tx2)', display: 'flex', alignItems: 'center', gap: 4, padding: '0 2px', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
+          >
+            View all
+            {dropdownOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
+        </div>
+      </div>
+      {dropdownOpen && (
+        <div style={{ position: 'absolute', right: 12, top: 'calc(100% + 6px)', zIndex: 60, width: 340, maxWidth: 'calc(100vw - 80px)', maxHeight: 260, overflowY: 'auto', background: 'var(--bg1solid)', border: `1px solid ${color}40`, borderRadius: 12, boxShadow: '0 24px 64px rgba(15,23,42,.28)', padding: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--tx)' }}>All {title}</div>
+            <div style={{ fontSize: 11, fontWeight: 800, color }}>{rows.length} cameras</div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(130px,1fr) 68px 58px', gap: 10, padding: '8px 10px', borderRadius: 8, background: `${color}12`, fontSize: 11, fontWeight: 900, color: 'var(--tx2)' }}>
+            <div>Camera Name</div>
+            <div>Mode</div>
+            <div style={{ textAlign: 'right', color: headerColor }}>{title.slice(0, -1)}</div>
+          </div>
+          {rows.length ? rows.map((row) => (
+            <div key={`dropdown-${kind}-${row.camera}-${row.mode}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(130px,1fr) 68px 58px', gap: 10, alignItems: 'center', padding: '9px 10px', borderBottom: '1px solid var(--bd)', background: 'var(--bg1solid)', fontSize: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, color: 'var(--tx)' }}>
+                <span style={{ width: 20, height: 20, borderRadius: 6, display: 'grid', placeItems: 'center', background: `${color}12`, color, flexShrink: 0 }}>
+                  <Camera size={12} />
+                </span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 750 }}>{row.camera}</span>
+              </div>
+              <div style={{ color: 'var(--tx2)', fontWeight: 750 }}>{row.mode}</div>
+              <div style={{ textAlign: 'right', color: headerColor, fontWeight: 900 }}>{row[countKey]}</div>
+            </div>
+          )) : (
+            <div style={{ padding: 14, color: 'var(--tx3)', fontSize: 12 }}>No camera movement data.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function movementTotalCard({ value, rows, dropdownOpen, onToggle }) {
+  const color = '#2563eb';
+  const visibleRows = rows.slice(0, 3);
+  return (
+    <div style={{ position: 'relative', height: 164, background: `linear-gradient(135deg, ${color}12 0%, var(--bg1) 58%, ${color}08 100%)`, border: `1px solid ${color}2f`, borderRadius: 12, minWidth: 0, boxShadow: `0 12px 26px ${color}10` }}>
+      <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: color, boxShadow: `0 0 18px ${color}55` }} />
+      <div style={{ display: 'grid', gridTemplateColumns: '118px minmax(0,1fr)', height: '100%' }}>
+        <div style={{ padding: '18px 12px 14px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 7 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ width: 38, height: 38, borderRadius: '50%', display: 'grid', placeItems: 'center', background: `${color}18`, color, flexShrink: 0 }}>
+              <Users size={19} />
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 850, color: 'var(--tx2)' }}>Total Present</div>
+              <div style={{ marginTop: 3, fontFamily: 'var(--disp)', fontSize: 27, lineHeight: 1, fontWeight: 900, color }}>{value}</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 11, lineHeight: 1.35, color: 'var(--tx3)' }}>Current people inside</div>
+        </div>
+        <div style={{ position: 'relative', borderLeft: '1px solid var(--bd)', padding: '10px 12px 8px', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(96px,1fr) 72px', gap: 8, padding: '0 0 6px', borderBottom: '1px solid var(--bd)', fontSize: 10, fontWeight: 850, color: 'var(--tx2)' }}>
+            <div>Camera Name</div>
+            <div style={{ textAlign: 'right', color }}>Present</div>
+          </div>
+          <div style={{ display: 'grid', flex: '1 1 auto' }}>
+            {visibleRows.length ? visibleRows.map((row) => (
+              <div key={`present-${row.camera}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(96px,1fr) 72px', gap: 8, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--bd)', fontSize: 11 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, color: 'var(--tx)' }}>
+                  <span style={{ width: 16, height: 16, borderRadius: 5, display: 'grid', placeItems: 'center', background: `${color}12`, color, flexShrink: 0 }}>
+                    <Camera size={10} />
+                  </span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700 }}>{row.camera}</span>
+                </div>
+                <div style={{ textAlign: 'right', color, fontWeight: 900 }}>{row.present}</div>
+              </div>
+            )) : (
+              <div style={{ padding: '18px 0', color: 'var(--tx3)', fontSize: 12 }}>No present data.</div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onToggle}
+            style={{ alignSelf: 'flex-end', height: 20, border: 0, background: 'transparent', color: 'var(--tx2)', display: 'flex', alignItems: 'center', gap: 4, padding: '0 2px', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
+          >
+            View all
+            {dropdownOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
+        </div>
+      </div>
+      {dropdownOpen && (
+        <div style={{ position: 'absolute', right: 12, top: 'calc(100% + 6px)', zIndex: 60, width: 300, maxWidth: 'calc(100vw - 80px)', maxHeight: 260, overflowY: 'auto', background: 'var(--bg1solid)', border: `1px solid ${color}40`, borderRadius: 12, boxShadow: '0 24px 64px rgba(15,23,42,.28)', padding: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--tx)' }}>All Present</div>
+            <div style={{ fontSize: 11, fontWeight: 800, color }}>{rows.length} cameras</div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(130px,1fr) 78px', gap: 10, padding: '8px 10px', borderRadius: 8, background: `${color}12`, fontSize: 11, fontWeight: 900, color: 'var(--tx2)' }}>
+            <div>Camera Name</div>
+            <div style={{ textAlign: 'right', color }}>Total Present</div>
+          </div>
+          {rows.length ? rows.map((row) => (
+            <div key={`dropdown-present-${row.camera}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(130px,1fr) 78px', gap: 10, alignItems: 'center', padding: '9px 10px', borderBottom: '1px solid var(--bd)', background: 'var(--bg1solid)', fontSize: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, color: 'var(--tx)' }}>
+                <span style={{ width: 20, height: 20, borderRadius: 6, display: 'grid', placeItems: 'center', background: `${color}12`, color, flexShrink: 0 }}>
+                  <Camera size={12} />
+                </span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 750 }}>{row.camera}</span>
+              </div>
+              <div style={{ textAlign: 'right', color, fontWeight: 900 }}>{row.present}</div>
+            </div>
+          )) : (
+            <div style={{ padding: 14, color: 'var(--tx3)', fontSize: 12 }}>No present data.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function recordCameraName(record) {
   return record?.channelData?.name || record?.channelName || record?.cameraName || record?.channelId?.name || '--';
 }
@@ -121,6 +288,28 @@ function recordExit(record) {
   if (record?.exitCount != null) return Number(record.exitCount || 0);
   if (record?.btoA != null) return Number(record.btoA || 0);
   return (record?.timeSeries || []).reduce((sum, point) => sum + Number(point.exit ?? point.exitCount ?? point.btoA ?? 0), 0);
+}
+
+function recordMode(record) {
+  const raw = String(record?.count_mode || record?.countMode || record?.mode || record?.type || '').toLowerCase();
+  if (raw === 'all' || raw === 'both' || raw === 'gauge') return 'All';
+  if (raw.includes('entry')) return 'Entry';
+  if (raw.includes('exit')) return 'Exit';
+  return '--';
+}
+
+function recordsPresentCount(records) {
+  const grouped = new Map();
+  records.forEach((record) => {
+    const camera = recordCameraName(record);
+    const current = grouped.get(camera) || { entry: 0, exit: 0 };
+    current.entry += recordEntry(record);
+    current.exit += recordExit(record);
+    grouped.set(camera, current);
+  });
+  return [...grouped.values()].reduce((sum, item) => (
+    sum + (item.entry > 0 ? Math.max(item.entry - item.exit, 0) : 0)
+  ), 0);
 }
 
 function flattenSeries(records) {
@@ -302,6 +491,7 @@ export default function LineCrossingLogs() {
     try { return localStorage.getItem(LINE_AUDIO_STORAGE_KEY) !== 'false'; } catch { return true; }
   });
   const [detailsOpen, setDetailsOpen] = useState(true);
+  const [movementDropdown, setMovementDropdown] = useState(null);
   const [logPanelPosition, setLogPanelPosition] = useState({ x: 18, y: 18 });
   const [streamPage, setStreamPage] = useState(0);
   const [fullscreenGridSize, setFullscreenGridSize] = useState(1);
@@ -642,8 +832,14 @@ export default function LineCrossingLogs() {
     const totalEntry = filteredRecords.reduce((sum, item) => sum + recordEntry(item), 0);
     const totalExit = filteredRecords.reduce((sum, item) => sum + recordExit(item), 0);
     const activeZones = new Set(filteredRecords.map((item) => item.zone).filter(Boolean)).size;
-    return { totalEntry, totalExit, net: Math.max(totalEntry - totalExit, 0), activeZones };
+    return { totalEntry, totalExit, net: recordsPresentCount(filteredRecords), activeZones };
   }, [filteredRecords]);
+
+  const movementStats = useMemo(() => {
+    const totalEntry = dateRangeRecords.reduce((sum, item) => sum + recordEntry(item), 0);
+    const totalExit = dateRangeRecords.reduce((sum, item) => sum + recordExit(item), 0);
+    return { totalEntry, totalExit, net: recordsPresentCount(dateRangeRecords) };
+  }, [dateRangeRecords]);
 
   const chartSeries = useMemo(() => ([
     { name: 'Entry', data: seriesPoints.map((point) => [new Date(point.timestamp).getTime(), point.entry]) },
@@ -667,6 +863,54 @@ export default function LineCrossingLogs() {
     });
     return [...grouped.values()].sort((a, b) => b.total - a.total);
   }, [filteredRecords]);
+
+  const movementRows = useMemo(() => {
+    const grouped = new Map();
+    dateRangeRecords.forEach((record) => {
+      const camera = recordCameraName(record);
+      const current = grouped.get(camera) || {
+        camera,
+        entry: 0,
+        exit: 0,
+        total: 0,
+        modes: new Set(),
+      };
+      current.entry += recordEntry(record);
+      current.exit += recordExit(record);
+      current.total = current.entry + current.exit;
+      const mode = recordMode(record);
+      if (mode && mode !== '--') current.modes.add(mode);
+      grouped.set(camera, current);
+    });
+    return [...grouped.values()]
+      .map((item) => {
+        const modes = [...item.modes];
+        return {
+          camera: item.camera,
+          entry: item.entry,
+          exit: item.exit,
+          present: item.entry > 0 ? Math.max(item.entry - item.exit, 0) : 0,
+          total: item.total,
+          mode: modes.includes('All') || modes.length > 1 ? 'All' : (modes[0] || '--'),
+        };
+      })
+      .sort((a, b) => b.total - a.total);
+  }, [dateRangeRecords]);
+
+  const entryRows = useMemo(
+    () => [...movementRows].sort((a, b) => b.entry - a.entry || b.total - a.total),
+    [movementRows],
+  );
+
+  const exitRows = useMemo(
+    () => [...movementRows].sort((a, b) => b.exit - a.exit || b.total - a.total),
+    [movementRows],
+  );
+
+  const presentRows = useMemo(
+    () => [...movementRows].sort((a, b) => b.present - a.present || b.total - a.total),
+    [movementRows],
+  );
 
   const dateRangeCameraMetrics = useMemo(() => {
     const grouped = new Map();
@@ -848,12 +1092,31 @@ export default function LineCrossingLogs() {
         </div>
       </div>
 
-      <section style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12, padding: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--tx)', marginBottom: 10 }}>People Movement</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
-          {statCard('Entries', stats.totalEntry, 'People counted entering the line', ArrowUpRight, '#22c55e')}
-          {statCard('Exits', stats.totalExit, 'People counted exiting the line', ArrowDownRight, '#ef4444')}
-          {statCard('Total Present', stats.net, '', Users, '#2563eb')}
+      <section style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12, padding: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--tx)', marginBottom: 8 }}>People Movement</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, alignItems: 'stretch' }}>
+          {movementStatCard({
+            kind: 'entry',
+            value: movementStats.totalEntry,
+            rows: entryRows,
+            dropdownOpen: movementDropdown === 'entry',
+            onToggle: () => setMovementDropdown((current) => (current === 'entry' ? null : 'entry')),
+          })}
+          {movementStatCard({
+            kind: 'exit',
+            value: movementStats.totalExit,
+            rows: exitRows,
+            dropdownOpen: movementDropdown === 'exit',
+            onToggle: () => setMovementDropdown((current) => (current === 'exit' ? null : 'exit')),
+          })}
+          <div style={{ minWidth: 0, height: '100%' }}>
+            {movementTotalCard({
+              value: movementStats.net,
+              rows: presentRows,
+              dropdownOpen: movementDropdown === 'present',
+              onToggle: () => setMovementDropdown((current) => (current === 'present' ? null : 'present')),
+            })}
+          </div>
         </div>
       </section>
 
