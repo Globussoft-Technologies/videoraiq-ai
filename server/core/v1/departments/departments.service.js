@@ -10,9 +10,6 @@ async create(req,res,next){
         const result = req.verified;
         let { orgId ,adminId} = result?.userData;
         orgId = orgId?.toString()
-        if (req?.body?.departmentName) {
-            req.body.departmentName = req.body.departmentName.toLowerCase();
-        }
         const {departmentName,orgId:OrgId,empDepartmentId,isActive,softDelete,description,isImportedFromEMP} = req?.body;
         
         let {error,value} = createDepartment.createDepartment(req?.body);
@@ -140,12 +137,11 @@ async get(req, res, next) {
   
       // ✅ Prevent duplicate departmentName within the same org
       if (value.departmentName) {
-        value.departmentName = value.departmentName.toLowerCase();
-        const escapedDept = value.departmentName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const escapedDept = String(value.departmentName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const duplicate = await departmentsModel.findOne({
           _id: { $ne: departmentId }, // exclude current one
           orgId: existingDepartment.orgId,
-          departmentName: new RegExp(`^${value.departmentName}$`, "i"),
+          departmentName: new RegExp(`^${escapedDept}$`, "i"),
           softDelete: false,
         });
         if (duplicate) {
