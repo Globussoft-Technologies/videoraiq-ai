@@ -58,6 +58,7 @@ const AccessLogs = () => {
   const [viewMode, setViewMode] = useState(() =>
     localStorage.getItem(ACCESS_VIEW_MODE_KEY) === 'table' ? 'table' : 'grid'
   );
+  const [authorizedTotal, setAuthorizedTotal] = useState(0);
 
   useEffect(() => localStorage.setItem(ACCESS_REFRESH_KEY, autoRefresh), [autoRefresh]);
   useEffect(() => localStorage.setItem(ACCESS_INTERVAL_KEY, refreshInterval), [refreshInterval]);
@@ -207,8 +208,22 @@ const AccessLogs = () => {
         ...(fromTime && toTime && { fromTime: utcFromTime, toTime: utcToTime }),
       };
 
-      const res = await getAllAccessLogsDetails(payload);
+      const authorizedPayload = {
+        ...payload,
+        skip: 0,
+        limit: 1,
+        removeUnknown: true,
+      };
+
+      const [res, authorizedRes] = await Promise.all([
+        getAllAccessLogsDetails(payload),
+        getAllAccessLogsDetails(authorizedPayload).catch((error) => {
+          console.log('Error fetching authorized user count:', error);
+          return null;
+        }),
+      ]);
       const data = res?.data?.body?.data;
+      const authorizedData = authorizedRes?.data?.body?.data;
 
       dispatch({ type: 'SET_MINDATE', value: data?.accessLogsStartDate?.createdAt || null });
 
@@ -262,6 +277,7 @@ const AccessLogs = () => {
 
       dispatch({ type: 'SET_ROWS', value: mapped });
       dispatch({ type: 'SET_TOTAL_COUNT', value: total });
+      setAuthorizedTotal(authorizedData?.total || 0);
     } catch (err) {
       console.log('Error fetching logs:', err);
       dispatch({ type: 'SET_ERROR', value: err });
@@ -338,23 +354,14 @@ const AccessLogs = () => {
   // KPI tiles — derived from the loaded page + server total (no placeholder data).
   const stats = useMemo(() => {
   const list = rows || [];
-  const tagged = list.filter((r) => r.tag).length;
-
-  const locationKeys = new Set(
-    list.map((r) => r.location).filter((l) => l && l !== '--')
-  );
-
-  const cameraKeys = new Set(
-    list.map((r) => r.cameraName).filter((c) => c && c !== '--')
-  );
+  const tagged = list.filter((r) => isTagged(r)).length;
 
   return [
     { label: 'Access Events', value: totalCount ?? 0, color: 'var(--blue)' },
     { label: 'Tagged', value: tagged, color: 'var(--cyan)' },
-    { label: 'Locations ', value: locationKeys.size,  color: 'var(--violet)'  },
-    { label: 'Cameras', value: cameraKeys.size,  color: 'var(--ok)' },
+    { label: 'Authorized Users', value: authorizedTotal, color: 'var(--ok)' },
   ];
-}, [rows, totalCount]);
+}, [rows, totalCount, authorizedTotal, tagOverrides, isTagged]);
 
   const handleExport = (format) =>
     handleAccessExport(format, {

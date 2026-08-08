@@ -77,11 +77,11 @@ function incidentTypeForDetection(model, incidentFilterTypes = []) {
 const chipStyle = (active, hasDot) => ({
   display: 'flex',
   alignItems: 'center',
-  gap: 6,
+  gap: 5,
   height: 28,
-  padding: hasDot ? '0 12px 0 10px' : '0 14px',
+  padding: hasDot ? '0 10px 0 9px' : '0 12px',
   borderRadius: 8,
-  fontSize: 11.5,
+  fontSize: 11,
   fontWeight: active ? 600 : 500,
   cursor: 'pointer',
   whiteSpace: 'nowrap',
@@ -830,57 +830,6 @@ export default function Detections() {
             {cameraLabel(zoneCamera)}
           </span>
         )}
-        {zoneCamera && (
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7 }}>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.08em', color: 'var(--tx3)' }}>
-              CAMERA TYPE
-            </span>
-            <span style={{ position: 'relative' }}>
-              <select
-                value={zoneCamera.checkType || 'none'}
-                onChange={(event) => handleZoneCameraTypeChange(event.target.value)}
-                disabled={cameraTypeSaving}
-                style={{
-                  height: 34,
-                  minWidth: 118,
-                  padding: '0 30px 0 12px',
-                  borderRadius: 9,
-                  background: 'var(--bg2)',
-                  border: '1px solid var(--bd)',
-                  color: 'var(--tx)',
-                  fontSize: 12,
-                  outline: 'none',
-                  cursor: cameraTypeSaving ? 'wait' : 'pointer',
-                  appearance: 'none',
-                  opacity: cameraTypeSaving ? 0.72 : 1,
-                }}
-              >
-                {CAMERA_TYPE_OPTIONS.map((type) => (
-                  <option key={type.value} value={type.value}>{type.label}</option>
-                ))}
-              </select>
-              {cameraTypeSaving ? (
-                <span
-                  style={{
-                    position: 'absolute',
-                    right: 10,
-                    top: '50%',
-                    width: 13,
-                    height: 13,
-                    marginTop: -6.5,
-                    borderRadius: '50%',
-                    border: '2px solid rgba(99,102,241,.25)',
-                    borderTopColor: 'var(--blue)',
-                    animation: 'vq-spin .7s linear infinite',
-                    pointerEvents: 'none',
-                  }}
-                />
-              ) : (
-                <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} />
-              )}
-            </span>
-          </div>
-        )}
       </div>
 
       <div className="vq-kpi-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 14 }}>
@@ -917,9 +866,9 @@ export default function Detections() {
       >
         <div
           className="vq-det-toolbar-row"
-          style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap' }}
         >
-          <div className="vq-det-search" style={{ position: 'relative', flex: '0 1 200px', minWidth: 160 }}>
+          <div className="vq-det-search" style={{ position: 'relative', flex: '0 0 200px', minWidth: 170 }}>
             <Search size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx3)' }} />
             <input
               value={search}
@@ -939,7 +888,7 @@ export default function Detections() {
             />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', minWidth: 0 }}>
             {[{ key: 'all', label: 'All', color: null }, ...DETECTION_CATEGORIES].map((c) => {
               const active = category === c.key;
               return (
@@ -953,12 +902,63 @@ export default function Detections() {
             })}
           </div>
 
-          <div className="vq-det-statetabs" style={{ marginLeft: 'auto', display: 'flex', gap: 8, flex: '0 0 auto' }}>
+          <div className="vq-det-statetabs" style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '0 0 auto', flexWrap: 'nowrap' }}>
             {STATE_TABS.map((t) => (
               <button key={t.key} type="button" onClick={() => setStateTab(t.key)} style={chipStyle(stateTab === t.key, false)}>
                 {t.label}
               </button>
             ))}
+            {zoneCamera && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flex: '0 0 auto' }}>
+                <span className="font-bold text-xs">
+                  Camera Type :
+                </span>
+                <span style={{ position: 'relative' }}>
+                  <select
+                    value={zoneCamera.checkType || 'none'}
+                    onChange={(event) => handleZoneCameraTypeChange(event.target.value)}
+                    disabled={cameraTypeSaving}
+                    style={{
+                      height: 30,
+                      minWidth: 104,
+                      padding: '0 28px 0 10px',
+                      borderRadius: 8,
+                      background: 'var(--bg2)',
+                      border: '1px solid var(--bd)',
+                      color: 'var(--tx)',
+                      fontSize: 12,
+                      outline: 'none',
+                      cursor: cameraTypeSaving ? 'wait' : 'pointer',
+                      appearance: 'none',
+                      opacity: cameraTypeSaving ? 0.72 : 1,
+                    }}
+                  >
+                    {CAMERA_TYPE_OPTIONS.map((type) => (
+                      <option key={type.value} value={type.value}>{type.label}</option>
+                    ))}
+                  </select>
+                  {cameraTypeSaving ? (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        right: 10,
+                        top: '50%',
+                        width: 13,
+                        height: 13,
+                        marginTop: -6.5,
+                        borderRadius: '50%',
+                        border: '2px solid rgba(99,102,241,.25)',
+                        borderTopColor: 'var(--blue)',
+                        animation: 'vq-spin .7s linear infinite',
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  ) : (
+                    <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} />
+                  )}
+                </span>
+              </div>
+            )}
             <button
               type="button"
               onClick={toggleAllGroupsCollapsed}

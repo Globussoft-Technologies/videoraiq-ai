@@ -372,7 +372,7 @@ const TaggedUsers = () => {
       />
 
       <ReusableTablePage
-        stats={stats}
+        stats={[]}
         data={rows}
         columns={columns}
         loading={loading}
