@@ -224,21 +224,42 @@ function mergeDetectionSetting(camera, nvr, settingType, settingsResult) {
     camera,
   );
   const setting = getDetectionSetting(item);
-  if (!base || !setting?._id) return base;
+  if (!base) return base;
+  if (!setting?._id) {
+    const existingEntry = base.detections?.[settingType] || camera?.detections?.[settingType] || {};
+    return {
+      ...base,
+      detections: {
+        ...(base.detections || {}),
+        [settingType]: {
+          ...(typeof existingEntry === 'object' ? existingEntry : {}),
+          enabled: false,
+          id: null,
+        },
+      },
+    };
+  }
   const uiData = getSettingUiData(item, setting);
   const hydratedSetting = uiData && setting.uiData !== uiData
     ? { ...setting, uiData }
     : setting;
 
-  const existingEntry = base.detections?.[settingType] || camera?.detections?.[settingType] || {};
-  const existingEnabled = typeof existingEntry === 'object' ? existingEntry.enabled : existingEntry;
+  const baseEntry = base.detections?.[settingType];
+  const cameraEntry = camera?.detections?.[settingType];
+  const existingEntry = typeof baseEntry === 'object'
+    ? baseEntry
+    : (typeof cameraEntry === 'object' ? cameraEntry : {});
+  const baseEnabled = typeof baseEntry === 'object' ? baseEntry.enabled : baseEntry;
+  const cameraEnabled = typeof cameraEntry === 'object' ? cameraEntry.enabled : cameraEntry;
+  const existingEnabled = baseEnabled ?? cameraEnabled;
+  const settingEnabled = setting?.active ?? setting?.enabled;
   return {
     ...base,
     detections: {
       ...(base.detections || {}),
       [settingType]: {
         ...(typeof existingEntry === 'object' ? existingEntry : {}),
-        enabled: existingEnabled ?? setting.enabled ?? true,
+        enabled: existingEnabled ?? settingEnabled ?? true,
         id: hydratedSetting,
       },
     },
@@ -320,7 +341,10 @@ export default function Detections() {
       const uiData = setting?.uiData || {};
       const apiSettings = uiData.settings || setting?.settings || {};
       const cameraEnabled = typeof cameraEntry === 'object' ? cameraEntry?.enabled : cameraEntry;
-      const cameraScopedActive = zoneCamera?._id ? !!cameraEnabled : m.active;
+      const settingEnabled = setting?.active ?? setting?.enabled;
+      const cameraScopedActive = zoneCamera?._id
+        ? (cameraEnabled ?? settingEnabled ?? false)
+        : m.active;
       const apiThresholds = thresholdsFromSettings(settingType, m.thresholds, apiSettings);
       const editedThresholds = edited.thresholds || {};
       const thresholds = { ...apiThresholds, ...editedThresholds };
@@ -359,7 +383,7 @@ export default function Detections() {
   const selectedDetectionEntry = selectedSettingType ? zoneCamera?.detections?.[selectedSettingType] : null;
   const selectedDetectionSettingId = selectedDetectionEntry?.id && typeof selectedDetectionEntry.id === 'object'
     ? selectedDetectionEntry.id._id
-    : selectedDetectionEntry?.id;
+    : null;
   const selectedDetectionAlerts = selectedDetectionEntry?.id && typeof selectedDetectionEntry.id === 'object'
     ? selectedDetectionEntry.id.alerts || []
     : [];
@@ -1138,6 +1162,7 @@ export default function Detections() {
                   resetDisabled={resettingSetting || !selectedDetectionSettingId}
                   initialAlerts={selectedDetectionAlerts}
                   onRecipientsChange={updateSelectedRecipients}
+                  onScheduleSaved={refreshZoneCamera}
                 />
                 <DetectionIncidents
                   detectionName={selected.name}

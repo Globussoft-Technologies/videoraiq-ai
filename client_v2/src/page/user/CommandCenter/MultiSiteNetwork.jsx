@@ -1,5 +1,7 @@
 import { Panel } from '../../../components/primitives';
 import { Empty } from '../../../components/States';
+import { useNavigate } from 'react-router-dom';
+import { detectionLabel } from '../../../lib/format';
 import sitemap from '../../../assets/sitemap2.jpg';
 
 const MAX_NODES = 18;
@@ -13,8 +15,9 @@ const SLOTS = [
 
 const STATUS_META = {
   clear: { label: 'No detections', color: 'var(--ok)' },
-  moderate: { label: 'Moderate', color: 'var(--warn)' },
-  major: { label: 'Major', color: 'var(--crit)' },
+  low: { label: 'Low', color: '#facc15' },
+  medium: { label: 'Medium', color: 'var(--warn)' },
+  high: { label: 'High', color: 'var(--crit)' },
 };
 
 function cleanId(value) {
@@ -36,10 +39,6 @@ function nvrIdOfChannel(channel) {
   return cleanId(channel?.nvrId || channel?.nvr || channel?.nvrData?._id || channel?.nvrData);
 }
 
-function cameraIdOf(value) {
-  return cleanId(value?.channelId || value?.cameraId || value?.channelData?._id || value?.cameraData?._id || value?.channel);
-}
-
 function locationOfChannel(channel, nvr) {
   return textValue(
     channel?.location,
@@ -53,27 +52,72 @@ function locationOfChannel(channel, nvr) {
   );
 }
 
-function severityRank(severity) {
-  const value = String(severity || '').toLowerCase();
-  if (['critical', 'high', 'major', 'alert'].includes(value)) return 2;
-  if (['moderate', 'medium', 'warn', 'warning', 'low'].includes(value)) return 1;
-  return 1;
+function severityKey(value) {
+  const key = String(value || '').trim().toLowerCase();
+  if (key === 'high') return 'high';
+  if (key === 'moderate' || key === 'medium') return 'medium';
+  if (key === 'low') return 'low';
+  return '';
 }
 
-function nodeStatus(majorCams, moderateCams) {
-  if (majorCams > 0) return 'major';
-  if (moderateCams > 0) return 'moderate';
+function levelOfImportance(entry) {
+  return severityKey(
+    entry?.id?.settings?.levelOfImportance ||
+    entry?.settings?.levelOfImportance ||
+    entry?.id?.levelOfImportance ||
+    entry?.levelOfImportance
+  );
+}
+
+function emptySeverityCounts() {
+  return { high: 0, medium: 0, low: 0 };
+}
+
+function detectionSeverityCounts(channel) {
+  const counts = emptySeverityCounts();
+  Object.values(channel?.detections || {}).forEach((entry) => {
+    if (!entry?.enabled) return;
+    const level = levelOfImportance(entry);
+    if (level) counts[level] += 1;
+  });
+  return counts;
+}
+
+function detectionDetails(channel) {
+  const camera = textValue(channel?.customName, channel?.name, channel?.channelName, channel?.channelId, 'Camera');
+  return Object.entries(channel?.detections || {}).reduce((items, [key, entry]) => {
+    if (!entry?.enabled) return items;
+    const level = levelOfImportance(entry);
+    if (!level) return items;
+    const name = textValue(entry?.id?.name, entry?.name, detectionLabel(entry?.id?.detectionType || key));
+    items.push({ level, name, camera });
+    return items;
+  }, []);
+}
+
+function addSeverityCounts(target, source) {
+  target.high += source.high;
+  target.medium += source.medium;
+  target.low += source.low;
+}
+
+function nodeStatus(counts) {
+  if (counts.high > 0) return 'high';
+  if (counts.medium > 0) return 'medium';
+  if (counts.low > 0) return 'low';
   return 'clear';
 }
 
-function buildCameraSeverity(alerts) {
-  const map = {};
-  (Array.isArray(alerts) ? alerts : []).forEach((alert) => {
-    const cameraId = cameraIdOf(alert);
-    if (!cameraId) return;
-    map[cameraId] = Math.max(map[cameraId] || 0, severityRank(alert?.severity));
-  });
-  return map;
+function severitySummary(counts) {
+  return [
+    counts.high ? `${counts.high} High` : '',
+    counts.medium ? `${counts.medium} Medium` : '',
+    counts.low ? `${counts.low} Low` : '',
+  ].filter(Boolean).join(' · ');
+}
+
+function severityDetails(details, level) {
+  return details.filter((item) => item.level === level);
 }
 
 function normalizeLocations(value) {
@@ -82,7 +126,7 @@ function normalizeLocations(value) {
     .filter(Boolean);
 }
 
-function buildNodes({ nvrs, channels, alerts, activeLocations }) {
+function buildNodes({ nvrs, channels, activeLocations }) {
   const nvrMap = {};
   (Array.isArray(nvrs) ? nvrs : []).forEach((nvr) => {
     const id = cleanId(nvr?._id || nvr?.id);
@@ -90,7 +134,6 @@ function buildNodes({ nvrs, channels, alerts, activeLocations }) {
     nvrMap[id] = nvr;
   });
 
-  const cameraSeverity = buildCameraSeverity(alerts);
   const nodesById = {};
 
   (Array.isArray(channels) ? channels : []).forEach((channel) => {
@@ -102,15 +145,13 @@ function buildNodes({ nvrs, channels, alerts, activeLocations }) {
       name: textValue(nvr?.nvrName, nvr?.name, channel?.nvrId?.nvrName, channel?.nvrData?.nvrName, 'NVR'),
       location: locationOfChannel(channel, nvr),
       cameraCount: 0,
-      majorCams: 0,
-      moderateCams: 0,
+      severityCounts: emptySeverityCounts(),
+      detectionDetails: [],
     };
 
-    const cameraId = cleanId(channel?._id || channel?.id || channel?.channelId);
-    const rank = cameraSeverity[cameraId] || 0;
     node.cameraCount += 1;
-    if (rank >= 2) node.majorCams += 1;
-    else if (rank === 1) node.moderateCams += 1;
+    addSeverityCounts(node.severityCounts, detectionSeverityCounts(channel));
+    node.detectionDetails.push(...detectionDetails(channel));
     if (!node.location) node.location = locationOfChannel(channel, nvr);
     nodesById[nvrId] = node;
   });
@@ -122,8 +163,8 @@ function buildNodes({ nvrs, channels, alerts, activeLocations }) {
       name: textValue(nvr?.nvrName, nvr?.name, 'NVR'),
       location: textValue(nvr?.location, nvr?.locationName, nvr?.site),
       cameraCount: 0,
-      majorCams: 0,
-      moderateCams: 0,
+      severityCounts: emptySeverityCounts(),
+      detectionDetails: [],
     };
   });
 
@@ -135,7 +176,7 @@ function buildNodes({ nvrs, channels, alerts, activeLocations }) {
       return loc ? active.includes(loc) : true;
     })
     .map((node) => {
-      const status = nodeStatus(node.majorCams, node.moderateCams);
+      const status = nodeStatus(node.severityCounts);
       return {
         ...node,
         status,
@@ -183,12 +224,12 @@ function buildLines(nodes) {
 export default function MultiSiteNetwork({
   nvrs = [],
   channels = [],
-  alerts = [],
   activeLocations = [],
   tall = false,
   fillAvailable = false,
 }) {
-  const nodes = withPositions(buildNodes({ nvrs, channels, alerts, activeLocations }));
+  const navigate = useNavigate();
+  const nodes = withPositions(buildNodes({ nvrs, channels, activeLocations }));
   const lines = buildLines(nodes);
   const totalCams = nodes.reduce((sum, node) => sum + node.cameraCount, 0);
   const groups = new Set(nodes.map((node) => node.group));
@@ -222,6 +263,28 @@ export default function MultiSiteNetwork({
           max-width: 230px;
           overflow: hidden;
           text-overflow: ellipsis;
+        }
+        .vq-msn .vq-msn-tooltip {
+          opacity: 0;
+          visibility: hidden;
+          transform: translateY(6px);
+          transition: opacity .14s ease, transform .14s ease, visibility .14s ease;
+          pointer-events: none;
+        }
+        .vq-msn .vq-msn-node:hover,
+        .vq-msn .vq-msn-node:focus-within {
+          z-index: 30 !important;
+        }
+        .vq-msn .vq-msn-node:hover .vq-msn-node-label,
+        .vq-msn .vq-msn-node:focus-within .vq-msn-node-label {
+          z-index: 1 !important;
+        }
+        .vq-msn .vq-msn-node:hover .vq-msn-tooltip,
+        .vq-msn .vq-msn-node:focus-within .vq-msn-tooltip {
+          opacity: 1;
+          visibility: visible;
+          transform: translateY(0);
+          z-index: 40;
         }
         @keyframes vq-msn-ring {
           0% { transform: translate(-50%, -50%) scale(.72); opacity: .9; }
@@ -293,8 +356,9 @@ export default function MultiSiteNetwork({
         >
           {[
             ['NO DETECTIONS', STATUS_META.clear.color],
-            ['MODERATE', STATUS_META.moderate.color],
-            ['MAJOR', STATUS_META.major.color],
+            ['LOW', STATUS_META.low.color],
+            ['MEDIUM', STATUS_META.medium.color],
+            ['HIGH', STATUS_META.high.color],
           ].map(([label, color]) => (
             <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#d4e0f2' }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: color }} />
@@ -327,6 +391,7 @@ export default function MultiSiteNetwork({
           {nodes.map((node) => (
             <div
               key={node.id}
+              className="vq-msn-node"
               style={{
                 position: 'absolute',
                 left: `${node.x}%`,
@@ -369,6 +434,15 @@ export default function MultiSiteNetwork({
               />
               <div
                 className="vq-msn-node-label"
+                onClick={() => navigate('/incidents')}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate('/incidents');
+                  }
+                }}
                 style={{
                   position: 'absolute',
                   left: 20,
@@ -381,16 +455,95 @@ export default function MultiSiteNetwork({
                   padding: '5px 8px',
                   boxShadow: '0 10px 28px rgba(0,0,0,.22)',
                   zIndex: 2,
+                  cursor: 'pointer',
                 }}
               >
                 <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</div>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: '#64748b', marginTop: 2 }}>
                   {node.group} · {node.cameraCount} cam{node.cameraCount === 1 ? '' : 's'}
                 </div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: node.status === 'high' ? '#dc2626' : node.status === 'medium' ? '#b45309' : node.status === 'low' ? '#a16207' : '#16a34a', marginTop: 2, fontWeight: 700 }}>
+                  {STATUS_META[node.status].label.toUpperCase()}
+                </div>
                 {node.status !== 'clear' && (
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: node.status === 'major' ? '#dc2626' : '#b45309', marginTop: 2 }}>
-                    {node.majorCams ? `${node.majorCams} major` : `${node.moderateCams} moderate`}
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: '#64748b', marginTop: 2 }}>
+                    {severitySummary(node.severityCounts)}
                   </div>
+                )}
+              </div>
+              <div
+                className="vq-msn-tooltip"
+                style={{
+                  position: 'absolute',
+                  left: node.x > 62 ? 'auto' : 182,
+                  right: node.x > 62 ? 182 : 'auto',
+                  top: -18,
+                  width: 360,
+                  maxWidth: 'min(360px, calc(100vw - 48px))',
+                  borderRadius: 10,
+                  background: 'var(--bg1solid)',
+                  border: '1px solid var(--bd)',
+                  color: 'var(--tx)',
+                  boxShadow: '0 20px 48px rgba(0,0,0,.28)',
+                  padding: '18px 20px',
+                  zIndex: 6,
+                }}
+              >
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: node.x > 62 ? 'auto' : -6,
+                    right: node.x > 62 ? -6 : 'auto',
+                    top: 28,
+                    width: 12,
+                    height: 12,
+                    background: 'var(--bg1solid)',
+                    borderLeft: node.x > 62 ? 0 : '1px solid var(--bd)',
+                    borderBottom: node.x > 62 ? 0 : '1px solid var(--bd)',
+                    borderRight: node.x > 62 ? '1px solid var(--bd)' : 0,
+                    borderTop: node.x > 62 ? '1px solid var(--bd)' : 0,
+                    transform: 'rotate(45deg)',
+                  }}
+                />
+                {node.status === 'clear' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: STATUS_META.clear.color, fontWeight: 800, fontSize: 13 }}>
+                      <span style={{ width: 9, height: 9, borderRadius: '50%', background: STATUS_META.clear.color }} />
+                      NO DETECTIONS
+                    </div>
+                    <div style={{ color: 'var(--tx2)', fontSize: 12.5, lineHeight: 1.5 }}>
+                      No enabled detections configured for this NVR.
+                    </div>
+                  </div>
+                ) : (
+                  ['high', 'medium', 'low'].map((level) => {
+                    const details = severityDetails(node.detectionDetails, level);
+                    if (!details.length) return null;
+                    const meta = STATUS_META[level];
+                    return (
+                      <div key={level} style={{ paddingBottom: level === 'low' ? 0 : 16, marginBottom: level === 'low' ? 0 : 16, borderBottom: level === 'low' ? 0 : '1px solid var(--bd)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: meta.color, fontWeight: 800, fontSize: 13, marginBottom: 10 }}>
+                          <span style={{ width: 9, height: 9, borderRadius: '50%', background: meta.color }} />
+                          {meta.label.toUpperCase()} ({details.length})
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                          {details.map((item, index) => (
+                            <div key={`${level}-${item.name}-${item.camera}-${index}`} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 14, alignItems: 'center', minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                                <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--tx2)', flex: '0 0 auto' }} />
+                                <span style={{ color: 'var(--tx)', fontSize: 12.5, fontWeight: 650, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {item.name}
+                                </span>
+                              </div>
+                              <span style={{ color: 'var(--tx2)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
+                                {item.camera}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>

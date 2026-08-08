@@ -386,7 +386,7 @@ export default function LiveAttendance() {
           {IS_DUBAI ? 'Live Notifications' : 'Live Attendance'}
         </span>
         <span className="font-[family-name:var(--mono)] text-[10px] text-[var(--tx3)]">
-          {IS_DUBAI ? 'live events' : 'face check-in'}
+          {IS_DUBAI ? 'live events' : ''}
         </span>
         <span className="ml-auto flex items-center gap-2">
           <span ref={settingsRef} style={{ position: 'relative', display: 'inline-flex', flex: '0 0 auto' }}>
@@ -396,8 +396,8 @@ export default function LiveAttendance() {
               aria-label="Attendance announcement settings"
               title="Attendance announcement settings"
               style={{
-                width: 26,
                 height: 26,
+                padding: '0 10px',
                 borderRadius: 8,
                 border: '1px solid var(--bd)',
                 background: 'var(--bg2)',
@@ -405,10 +405,14 @@ export default function LiveAttendance() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                gap: 6,
                 cursor: 'pointer',
               }}
             >
               <Settings size={14} strokeWidth={1.8} />
+              <span style={{ fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                Announcement settings
+              </span>
             </button>
             {settingsOpen && (
               <div
@@ -416,7 +420,7 @@ export default function LiveAttendance() {
                 onPointerDown={(event) => event.stopPropagation()}
               >
                 <div className="px-2 pt-1 pb-2 font-[family-name:var(--mono)] text-[10px] uppercase tracking-[.08em] text-[var(--tx3)]">
-                  Announcement Mode
+                  Announcement settings
                 </div>
                 {[
                   { key: ANNOUNCEMENT_MODES.department, label: 'Department Based' },
@@ -442,9 +446,9 @@ export default function LiveAttendance() {
               </div>
             )}
           </span>
-          <span className="font-[family-name:var(--mono)] text-[10.5px] text-[var(--tx2)]">
+          {/* <span className="font-[family-name:var(--mono)] text-[10.5px] text-[var(--tx2)]">
             <span className="text-[var(--ok)] font-semibold">{present}</span> present
-          </span>
+          </span> */}
         </span>
       </div>
 

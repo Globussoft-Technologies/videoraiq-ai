@@ -1110,7 +1110,8 @@ export default function SystemSettings() {
           <ToggleRow
             icon={Mail}
             label="Email Alerts"
-            desc={`${verifiedEmails}/${emailRecipients.length} verified recipient${emailRecipients.length === 1 ? '' : 's'} configured`}
+            // desc={`${verifiedEmails}/${emailRecipients.length} verified recipient${emailRecipients.length === 1 ? '' : 's'} configured`}
+            desc={"Email alerts are sent to all verified recipients"}
             value={emailAlertsEnabled}
             onChange={(next) => handleAlertSwitchToggle('email', next)}
             disabled={alertSwitchSaving === 'email'}
@@ -1126,7 +1127,8 @@ export default function SystemSettings() {
           <ToggleRow
             icon={Radio}
             label="Telegram Alerts"
-            desc={telegramLinked ? `Linked channel ${telegramChatId || ''}` : 'Not linked'}
+            // desc={telegramLinked ? `Linked channel ${telegramChatId || ''}` : 'Not linked'}
+            desc={"Telegram alerts are sent to the linked channel"}
             value={telegramAlertsEnabled}
             onChange={(next) => handleAlertSwitchToggle('telegram', next)}
             disabled={alertSwitchSaving === 'telegram'}
@@ -1144,7 +1146,7 @@ export default function SystemSettings() {
           <ToggleRow
             icon={BellRing}
             label="In-App Alert Notifications"
-            desc="Show live detection alerts as on-screen toasts while using the app"
+            desc="Enable or disable in-app alert notifications for detection events"
             value={inAppNotifications}
             onChange={handleInAppNotificationToggle}
             disabled={inAppNotifications ? !canDisableSetting : !canEnableSetting}
@@ -1152,7 +1154,7 @@ export default function SystemSettings() {
           <ToggleRow
             icon={Monitor}
             label="Desktop Notifications"
-            desc="Show browser notifications when this tab is not active"
+            desc="Enable or disable desktop notifications for detection events"
             value={desktopNotifications}
             onChange={handleDesktopNotificationToggle}
             disabled={desktopNotifications ? !canDisableSetting : !canEnableSetting}
@@ -1327,9 +1329,9 @@ export default function SystemSettings() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 9 }}>
             <Metric label="Types Available" value={Object.keys(typeLabels || {}).length || '-'} icon={SlidersHorizontal} />
             <Metric label="Enabled Configs" value={enabledDetectionToggleCount} icon={CheckCircle2} tone="ok" />
-            <Metric label="Linked Cameras" value={linkedCameraCount} icon={Radio} tone="warn" />
+            {/* <Metric label="Linked Cameras" value={linkedCameraCount} icon={Radio} tone="warn" /> */}
           </div>
-          <div style={{ marginTop: 13, padding: 12, borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
+          {/* <div style={{ marginTop: 13, padding: 12, borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
               <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--tx)' }}>Primary active detection</span>
               {(detectionSettingsApi.loading || channelsApi.loading) && <Loader2 size={14} className="animate-spin" style={{ color: 'var(--blue)' }} />}
@@ -1340,7 +1342,7 @@ export default function SystemSettings() {
             <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 5 }}>
               {recipientLinkedCount} recipient link{recipientLinkedCount === 1 ? '' : 's'} across {detectionRows.length} configuration{detectionRows.length === 1 ? '' : 's'}
             </div>
-          </div>
+          </div> */}
         </Panel>
 
         <Panel>

@@ -100,7 +100,7 @@ function AlertRow({ alert, showDivider, onDismiss }) {
         type="button"
         onClick={() => onDismiss(alert.id)}
         aria-label={`Dismiss ${alert.title} alert`}
-        className="flex h-6 w-6 flex-none items-center justify-center rounded-md text-[var(--tx3)] transition-colors hover:bg-[var(--bg2)] hover:text-[var(--tx)]"
+        className="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-md text-[var(--tx3)] transition-colors hover:bg-[var(--bg2)] hover:text-[var(--tx)]"
       >
         <X size={14} strokeWidth={2} />
       </button>
@@ -189,7 +189,7 @@ function DetectionAlertStack({ alerts, onDismiss, onClearAll }) {
           <button
             type="button"
             onClick={onClearAll}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border py-2 text-[12.5px] font-semibold transition-colors hover:bg-[var(--bg2)]"
+            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border py-2 text-[12.5px] font-semibold transition-colors hover:bg-[var(--bg2)]"
             style={{ borderColor: 'var(--bd)', color: 'var(--tx)' }}
           >
             <Trash2 size={13} strokeWidth={2} />

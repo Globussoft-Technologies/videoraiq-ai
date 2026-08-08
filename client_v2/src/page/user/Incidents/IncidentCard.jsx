@@ -177,7 +177,7 @@ function Spinner({ size = 14, color = '#fff' }) {
 }
 
 /* ── Card ─────────────────────────────────────────────────────────────────── */
-export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox, deleteMode, selectedForDelete, onToggleDelete }) {
+export default function IncidentCard({ item, onClick, onRefresh, onResolvedChange, onOpenLightbox, deleteMode, selectedForDelete, onToggleDelete }) {
   const [reportOpen,   setReportOpen]   = useState(false);
   const [resolving,    setResolving]    = useState(false);
   const [localResolved, setLocalResolved] = useState(item.resolved || false);
@@ -187,6 +187,9 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox,
   const [saveFlash,    setSaveFlash]    = useState(null);
   const flashTimerRef = useRef(null);
   useEffect(() => () => clearTimeout(flashTimerRef.current), []);
+  useEffect(() => {
+    setLocalResolved(!!item.resolved);
+  }, [item._id, item.id, item.resolved]);
 
   const det      = detectionLabel(item.incidentType || item.displayName);
   const st       = statusOf({ ...item, resolved: localResolved });
@@ -214,11 +217,11 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox,
     setSaveFlash(null);
     setResolving(true);
     try {
-      const newVal = !localResolved;
-      await apiMarkResolved(item._id || item.id, item.incidentType, newVal);
-      setLocalResolved(newVal);
-      onRefresh?.();
-      setSaveFlash({ text: newVal ? 'Resolved' : 'Unresolved', ok: true });
+      const next = !localResolved;
+      await apiMarkResolved(item._id || item.id, item.incidentType, next);
+      setLocalResolved(next);
+      onResolvedChange?.(item._id || item.id, next);
+      setSaveFlash({ text: next ? 'Resolved' : 'Mark as resolved', ok: true });
       flashTimerRef.current = setTimeout(() => setSaveFlash(null), 2500);
     } catch (err) {
       // Previously failed silently, leaving the user to assume it worked;
@@ -292,7 +295,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onOpenLightbox,
                 on `hover` meant moving the pointer off the card mid-request
                 unmounted the button and took the spinner with it, so the action
                 looked like it had done nothing. */}
-            {(hover || resolving || saveFlash) && (
+            {(localResolved || hover || resolving || saveFlash) && (
               <button
                 onClick={handleMarkResolved}
                 disabled={resolving}

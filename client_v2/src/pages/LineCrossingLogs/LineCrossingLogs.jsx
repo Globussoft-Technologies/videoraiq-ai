@@ -172,6 +172,7 @@ function statCard(label, value, sub, Icon, color = STAT_COLOR) {
 }
 
 function movementStatCard({ kind, value, rows, dropdownOpen, onToggle }) {
+  const wrapRef = useRef(null);
   const isEntry = kind === 'entry';
   const color = isEntry ? '#10b981' : '#ef4444';
   const soft = isEntry ? 'rgba(16,185,129,.1)' : 'rgba(239,68,68,.1)';
@@ -182,8 +183,20 @@ function movementStatCard({ kind, value, rows, dropdownOpen, onToggle }) {
   const headerColor = isEntry ? '#059669' : '#dc2626';
   const columnLabel = isEntry ? 'Entries' : 'Exit';
   const visibleRows = rows.slice(0, 3);
+
+  useEffect(() => {
+    if (!dropdownOpen) return undefined;
+    const handlePointerDown = (event) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target)) {
+        onToggle();
+      }
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [dropdownOpen, onToggle]);
+
   return (
-    <div style={{ position: 'relative', height: 164, background: `linear-gradient(135deg, ${soft}, var(--bg1) 58%, ${soft})`, border: `1px solid ${color}30`, borderRadius: 12, minWidth: 0, boxShadow: `0 12px 26px ${color}10` }}>
+    <div ref={wrapRef} style={{ position: 'relative', height: 164, background: `linear-gradient(135deg, ${soft}, var(--bg1) 58%, ${soft})`, border: `1px solid ${color}30`, borderRadius: 12, minWidth: 0, boxShadow: `0 12px 26px ${color}10` }}>
       <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: color, boxShadow: `0 0 18px ${color}55` }} />
       <div style={{ display: 'grid', gridTemplateColumns: '168px minmax(0,1fr)', height: '100%' }}>
         <div style={{ padding: '16px 14px 12px 22px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>

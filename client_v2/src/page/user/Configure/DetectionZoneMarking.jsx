@@ -251,48 +251,23 @@ export default function DetectionZoneMarking({
     setPoints([]);
   };
 
-  // Clear All doubles as a delete for already-saved zones (V1 parity â€”
-  // AreaMarkingControls' Clear All confirm persists an empty zone list via
-  // the same PUT used elsewhere, not just a local canvas reset). Always
-  // confirm first â€” losing an in-progress, never-saved polygon is just as
-  // unrecoverable to the user mid-drawing as losing a saved zone.
+  // Clear All only resets the editor canvas; Reset Setting deletes saved config.
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [clearing, setClearing] = useState(false);
 
   const handleClearAllClick = () => {
     if (points.length === 0 && draftZones.length === 0 && zones.length === 0) return;
-    // Clearing already-saved zones is a delete (persists an empty zone list â€”
-    // see handleConfirmClearAll); clearing only in-progress/unsaved points is
-    // not, so that path stays open even without detectionSettings.delete.
-    if (zones.length > 0 && activeType?.settingId && !canDeleteDetection) {
-      toast.error("You don't have permission to delete saved zones.");
-      return;
-    }
     setShowClearConfirm(true);
   };
 
-  const handleConfirmClearAll = async () => {
-    // No saved zones to persist â€” just drop the in-progress points locally.
-    if (!(zones.length > 0 && activeType?.settingId)) {
-      setDraftZones([]);
-      setPoints([]);
-      setShowClearConfirm(false);
-      return;
-    }
-    setClearing(true);
-    try {
-      await persistZones({ nextZones: [] });
-      setZones([]);
-      setDraftZones([]);
-      setPoints([]);
-      setShowClearConfirm(false);
-      toast.success('Detection area cleared.');
-      onSaved?.();
-    } catch (err) {
-      toast.error(err?.response?.data?.body?.message || 'Failed to clear zones.');
-    } finally {
-      setClearing(false);
-    }
+  const handleConfirmClearAll = () => {
+    setZones([]);
+    setDraftZones([]);
+    setPoints([]);
+    setActiveZoneIndex(null);
+    presetAreaRef.current = false;
+    setDrawing(false);
+    setShowClearConfirm(false);
+    toast.success('Drawing cleared.');
   };
 
   // Quick-start rectangle presets (V1 parity) â€” full-frame / a small fixed
@@ -1081,17 +1056,11 @@ export default function DetectionZoneMarking({
       <ConfirmDialog
         open={showClearConfirm && !!activeType}
         title="Clear Detection Area"
-        busy={clearing}
-        busyLabel="Clearing..."
         confirmLabel="Clear All"
         onCancel={() => setShowClearConfirm(false)}
         onConfirm={handleConfirmClearAll}
       >
-        {zones.length > 0 && activeType?.settingId ? (
-          <>Are you sure you want to clear all marked points?<br /><strong>This will remove the entire detection area. This action cannot be undone.</strong></>
-        ) : (
-          <>Are you sure you want to clear the in-progress drawing? <strong>Any points you've marked so far will be lost and this action cannot be undone.</strong></>
-        )}
+        This will clear the current drawing from the editor only. Saved detection settings, schedules, and recipients will stay unchanged.
       </ConfirmDialog>
 
       <ConfirmDialog

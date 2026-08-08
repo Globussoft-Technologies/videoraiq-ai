@@ -12,7 +12,7 @@ import MultiSiteNetwork from './MultiSiteNetwork';
 import SharedMultiSelect from '../../../components/MultiSelect';
 import { useApi } from '../../../hooks/useApi';
 import { getHeaderStats, getDetectionChart, getCriticalityStats, getRecentIncidents } from '../../../helpers/dashboard';
-import { getChannels, getLocations, getNVRs, getDepartments } from '../../../helpers/monitoring';
+import { getChannels, getChannelsByNvr, getLocations, getNVRs, getDepartments } from '../../../helpers/monitoring';
 import { fetchIncidents } from '../../../helpers/incidents';
 import { usePermissions } from '@/context/PermissionContext';
 
@@ -323,7 +323,7 @@ export default function CommandCenter() {
     return t;
   }, [detChart.data]);
 
-  // Threat feed (also feeds per-site alert tally for the map)
+  // Threat feed
   const crit = useApi(() => getCriticalityStats(filters, { skip: 0, limit: 50 }), [filterKey], { pollMs: 30000 });
   const alerts = crit.data?.recentAlerts || [];
   const networkFilters = useMemo(() => {
@@ -332,10 +332,6 @@ export default function CommandCenter() {
     if (locs?.length) f.location = locs;
     return f;
   }, [filters.location, location]);
-  const networkFilterKey = JSON.stringify(networkFilters);
-  const networkCrit = useApi(() => getCriticalityStats(networkFilters, { skip: 0, limit: 200 }), [networkFilterKey], { pollMs: 30000 });
-  const networkAlerts = networkCrit.data?.recentAlerts || [];
-
   // Recent incidents — TWO separate fetches:
   //   1. fetchIncidents (same API as Incident Center) → truly most-recent single incident
   //   2. getRecentIncidents (dashboard) → latest-per-type, used only for camera overlays
@@ -382,6 +378,21 @@ export default function CommandCenter() {
   // its denominator is this list's length. That is the total the Sidebar footer
   // shows, so the two can no longer disagree ("3/4" beside "3 of 36").
   const allChannels = useApi(() => getChannels({ limit: 500 }), []);
+  const nvrIds = useMemo(
+    () => (nvrsApi.data || []).map((nvr) => nvr._id || nvr.id).filter(Boolean),
+    [nvrsApi.data]
+  );
+  const nvrIdsKey = nvrIds.join(',');
+  const nvrDetailChannels = useApi(
+    async () => {
+      if (!nvrIds.length) return [];
+      const groups = await Promise.all(nvrIds.map((id) => getChannelsByNvr(id)));
+      return groups.flat();
+    },
+    [nvrIdsKey],
+    { pollMs: 60000 }
+  );
+  const networkChannels = nvrDetailChannels.data?.length ? nvrDetailChannels.data : (allChannels.data || []);
 
   const cameraInventoryTotal = (allChannels.data || []).length;
   const camerasOnline = useMemo(
@@ -516,8 +527,7 @@ export default function CommandCenter() {
             >
               <MultiSiteNetwork
                 nvrs={nvrsApi.data || []}
-                channels={allChannels.data || []}
-                alerts={networkAlerts}
+                channels={networkChannels}
                 activeLocations={networkFilters.location || []}
               />
             </div>
@@ -549,8 +559,7 @@ export default function CommandCenter() {
       {!showSystemControls && (
         <MultiSiteNetwork
           nvrs={nvrsApi.data || []}
-          channels={allChannels.data || []}
-          alerts={networkAlerts}
+          channels={networkChannels}
           activeLocations={networkFilters.location || []}
           tall
         />

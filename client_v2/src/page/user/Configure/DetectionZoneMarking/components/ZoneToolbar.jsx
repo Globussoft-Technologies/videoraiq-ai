@@ -19,6 +19,7 @@ export default function ZoneToolbar({
 }) {
   const hasVideo = !!videoSize.w;
   const hasDrawableContent = points.length > 0 || draftZones.length > 0 || zones.length > 0;
+  const canClearAll = drawing && hasDrawableContent;
   const canSave = !!activeType && !saving && (zones.length > 0 || draftZones.length > 0 || points.length >= minPointsToSave);
 
   return (
@@ -88,12 +89,12 @@ export default function ZoneToolbar({
       </button>
       <button
         onClick={onClearAll}
-        disabled={!hasDrawableContent}
-        title="Clear the in-progress drawing, or delete all saved zones for this detection type"
+        disabled={!canClearAll}
+        title="Clear all the in-progress drawing"
         style={{
           display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
           background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
-          cursor: hasDrawableContent ? 'pointer' : 'not-allowed', opacity: hasDrawableContent ? 1 : 0.5,
+          cursor: canClearAll ? 'pointer' : 'not-allowed', opacity: canClearAll ? 1 : 0.5,
         }}
       >
         <Trash2 size={14} /> Clear All

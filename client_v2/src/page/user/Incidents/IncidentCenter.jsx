@@ -366,7 +366,7 @@ function navBtnStyle(side) {
   };
 }
 
-function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, pageOffset = 0, totalCount = 0, onNavigateGlobal, navLoading = false, navFailedAt = 0 }) {
+function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onResolvedChange, pageOffset = 0, totalCount = 0, onNavigateGlobal, navLoading = false, navFailedAt = 0 }) {
   const item = items[index];
   // Navigation spans the whole filtered result set, not just the loaded page:
   // hitting either end of `items` fetches the neighbouring page via
@@ -470,8 +470,8 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, pag
       const next = !resolved;
       await apiMarkResolved(item._id || item.id, item.incidentType, next);
       setResolved(next);
-      onRefresh?.();
-      setSaveFlash({ text: next ? 'Marked as resolved' : 'Marked unresolved', ok: true });
+      onResolvedChange?.(item._id || item.id, next);
+      setSaveFlash({ text: next ? 'Marked as resolved' : 'Mark as resolved', ok: true });
       flashTimerRef.current = setTimeout(() => setSaveFlash(null), 2500);
     } catch (e) {
       // Leave the checkbox unchanged so the user sees it didn't take; surface
@@ -649,16 +649,9 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, pag
                 style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '8px 20px', cursor: resolving ? 'wait' : 'pointer',
-                  border: `1px solid ${
-                    saveFlash ? (saveFlash.ok ? 'rgba(16,185,129,.8)' : 'rgba(239,68,68,.7)')
-                              : resolved ? 'rgba(16,185,129,.5)' : 'rgba(255,255,255,.3)'
-                  }`,
-                  background: saveFlash
-                    ? (saveFlash.ok ? 'rgba(16,185,129,.28)' : 'rgba(239,68,68,.2)')
-                    : resolved ? 'rgba(16,185,129,.2)' : 'rgba(255,255,255,.05)',
-                  color: saveFlash
-                    ? (saveFlash.ok ? '#34d399' : '#f87171')
-                    : resolved ? '#34d399' : '#fff',
+                  border: `1px solid ${saveFlash ? (saveFlash.ok ? 'rgba(16,185,129,.8)' : 'rgba(239,68,68,.7)') : 'rgba(255,255,255,.3)'}`,
+                  background: saveFlash ? (saveFlash.ok ? 'rgba(16,185,129,.28)' : 'rgba(239,68,68,.2)') : 'rgba(255,255,255,.05)',
+                  color: saveFlash ? (saveFlash.ok ? '#34d399' : '#f87171') : '#fff',
                   transition: 'all .2s', whiteSpace: 'nowrap',
                 }}
               >
@@ -872,6 +865,47 @@ export default function IncidentCenter() {
 
   const items = useMemo(() => grid.data?.items || [], [grid.data]);
 
+  const refreshIncidentData = useCallback(() => {
+    grid.refetch({ silent: true });
+    stats.refetch({ silent: true });
+  }, [grid, stats]);
+
+  const handleResolvedChange = useCallback((incidentId, resolved) => {
+    grid.setData((prev) => {
+      if (!prev?.items) return prev;
+      let changed = false;
+      return {
+        ...prev,
+        items: prev.items.map((item) => {
+          const id = item._id || item.id;
+          if (id !== incidentId) return item;
+          changed = item.resolved !== resolved;
+          return { ...item, resolved };
+        }),
+        counts: changed && prev.counts?.status
+          ? {
+              ...prev.counts,
+              status: {
+                ...prev.counts.status,
+                new: Math.max(0, Number(prev.counts.status.new || 0) + (resolved ? -1 : 1)),
+                resolved: Math.max(0, Number(prev.counts.status.resolved || 0) + (resolved ? 1 : -1)),
+              },
+            }
+          : prev.counts,
+      };
+    });
+    stats.setData((prev) => {
+      if (!prev) return prev;
+      const delta = resolved ? 1 : -1;
+      return {
+        ...prev,
+        totalAlerts: Math.max(0, Number(prev.totalAlerts || 0) - delta),
+        incidentsResolved: Math.max(0, Number(prev.incidentsResolved || 0) + delta),
+      };
+    });
+    stats.refetch({ silent: true });
+  }, [grid, stats]);
+
   const totalCount = grid.data?.totalCount ?? 0;
   const pages      = Math.max(1, Math.ceil(totalCount / pageSize));
 
@@ -977,11 +1011,15 @@ export default function IncidentCenter() {
   }, []);
 
   const s    = stats.data || {};
+  const incidentCounts = grid.data?.counts || {};
+  const severityCounts = incidentCounts.severity || {};
+  const statusCounts = incidentCounts.status || {};
+  const allIncidents = statusCounts.all ?? severityCounts.all ?? grid.data?.totalCount;
   const kpis = [
-    { label: 'Total Incidents · 24h', value: num((s.totalAlerts ?? 0) + (s.incidentsResolved ?? 0)), color: 'var(--tx)' },
-    { label: 'High',                  value: num(s.criticalAlerts   ?? 0), color: 'var(--crit)' },
-    { label: 'Unresolved (New)',      value: num(s.totalAlerts      ?? 0), color: 'var(--warn)' },
-    { label: 'Resolved',             value: num(s.incidentsResolved ?? 0), color: 'var(--ok)'   },
+    { label: 'Total Incidents',       value: num(allIncidents ?? ((s.totalAlerts ?? 0) + (s.incidentsResolved ?? 0))), color: 'var(--tx)' },
+    { label: 'High',                  value: num(severityCounts.high ?? s.criticalAlerts ?? 0), color: 'var(--crit)' },
+    { label: 'Unresolved (New)',      value: num(statusCounts.new ?? s.totalAlerts ?? 0), color: 'var(--warn)' },
+    { label: 'Resolved',              value: num(statusCounts.resolved ?? s.incidentsResolved ?? 0), color: 'var(--ok)' },
   ];
 
   const typeOptions = useMemo(() => {
@@ -1100,7 +1138,6 @@ export default function IncidentCenter() {
 
         {/* Status chips */}
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <button onClick={() => { setStatusSet(new Set()); setPage(0); }} style={chip(!statusSet.size)}>All</button>
           {STATUSES.map((x) => (
             <button key={x.key}
               onClick={() => { toggleSet(setStatusSet)(x.key); setPage(0); }}
@@ -1129,7 +1166,7 @@ export default function IncidentCenter() {
           </div>
           <RefreshControl
             storageKey="incident_center"
-            onManualRefresh={() => { stats.refetch(); grid.refetch(); }}
+            onManualRefresh={refreshIncidentData}
           />
           <button
             onClick={togglePageFullscreen}
@@ -1247,7 +1284,8 @@ export default function IncidentCenter() {
                 <IncidentCard
                   key={item._id || item.id}
                   item={item}
-                  onRefresh={() => grid.refetch()}
+                  onRefresh={refreshIncidentData}
+                  onResolvedChange={handleResolvedChange}
                   onOpenLightbox={() => setLightboxIndex(i)}
                   deleteMode={isDeleteMode}
                   selectedForDelete={selectedForDelete.includes(item._id || item.id)}
@@ -1313,7 +1351,8 @@ export default function IncidentCenter() {
           index={Math.min(lightboxIndex, items.length - 1)}
           onIndexChange={setLightboxIndex}
           onClose={() => setLightboxIndex(null)}
-          onRefresh={() => grid.refetch()}
+          onRefresh={refreshIncidentData}
+          onResolvedChange={handleResolvedChange}
           pageOffset={page * pageSize}
           totalCount={totalCount}
           onNavigateGlobal={handleNavigateGlobal}

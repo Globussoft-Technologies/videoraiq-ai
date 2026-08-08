@@ -10,6 +10,16 @@ const unwrap = (res) => {
   return body;
 };
 
+export const getChannelsByNvr = async (nvrId) => {
+  const token = getAccessToken();
+  const res = await axios.get(`${Api_url}/channel/nvr/${nvrId}`, {
+    headers: { 'x-access-token': token },
+  });
+  const data = unwrap(res);
+  if (Array.isArray(data)) return data;
+  return data?.channels ?? data?.data ?? [];
+};
+
 export const getLocations = async (skip = 0, limit = 100, search = '') => {
   const token = getAccessToken();
   const res = await axios.post(

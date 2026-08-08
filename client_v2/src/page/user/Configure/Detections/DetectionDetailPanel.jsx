@@ -531,6 +531,10 @@ export default function DetectionDetailPanel({
 
   const channelId = channel?._id || channel?.channelId || channel?.id;
   const timezones = useTimezones();
+  const scheduleDisabled = !settingId || !channelId;
+  const scheduleDisabledTitle = !channelId
+    ? 'Select a camera to edit schedule'
+    : 'Create detection setting first to edit schedule';
 
   useEffect(() => {
     let alive = true;
@@ -552,7 +556,10 @@ export default function DetectionDetailPanel({
   }, [settingId, channelId, scheduleFallback]);
 
   async function openSchedule() {
-    if (!settingId || !channelId) return;
+    if (scheduleDisabled) {
+      toast.error(scheduleDisabledTitle);
+      return;
+    }
     setScheduleOpen(true);
     setScheduleLoading(true);
     setScheduleError('');
@@ -645,7 +652,7 @@ export default function DetectionDetailPanel({
       toast.success(message);
       const newMode = scheduleForm.mode || 'always';
       setActualScheduleMode(newMode.charAt(0).toUpperCase() + newMode.slice(1));
-      if (typeof onScheduleSaved === 'function') onScheduleSaved();
+      if (typeof onScheduleSaved === 'function') await onScheduleSaved();
       closeSchedule();
     } catch (e) {
       const message = e?.response?.data?.message || e?.message || 'Failed to update schedule';
@@ -670,7 +677,7 @@ export default function DetectionDetailPanel({
       const message = response?.message || 'Schedule deleted successfully';
       toast.success(message);
       setActualScheduleMode('Always');
-      if (typeof onScheduleSaved === 'function') onScheduleSaved();
+      if (typeof onScheduleSaved === 'function') await onScheduleSaved();
       setConfirmDeleteOpen(false);
       closeSchedule();
     } catch (e) {
@@ -821,23 +828,23 @@ export default function DetectionDetailPanel({
         <button
           type="button"
           onClick={openSchedule}
-          disabled={!settingId || !channel}
-          title={!settingId || !channel ? 'Select a camera with a saved setting to edit schedule' : 'Edit schedule for this camera'}
+          disabled={scheduleDisabled}
+          title={scheduleDisabled ? scheduleDisabledTitle : 'Edit schedule for this camera'}
           style={{
             flex: 1,
             height: 36,
             borderRadius: 8,
             border: '1px solid var(--bd)',
-            cursor: !settingId || !channel ? 'not-allowed' : 'pointer',
+            cursor: scheduleDisabled ? 'not-allowed' : 'pointer',
             fontSize: 12,
             fontWeight: 600,
-            color: !settingId || !channel ? 'var(--tx3)' : 'var(--tx2)',
+            color: scheduleDisabled ? 'var(--tx3)' : 'var(--tx2)',
             background: 'var(--bg2)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: 7,
-            opacity: !settingId || !channel ? 0.65 : 1,
+            opacity: scheduleDisabled ? 0.65 : 1,
           }}
         >
           Edit Schedule
@@ -1023,7 +1030,7 @@ export default function DetectionDetailPanel({
                       <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Always mode</div>
                       <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--tx2)' }}>
                         This detection is active continuously. Daily time ranges are not required when the schedule mode is Always.
-                        Switch to Custom if you want to define specific active days and times.
+                        Switch to Custom mode if you want to define specific active days and times.
                       </div>
                     </div>
                   ) : (

@@ -53,6 +53,7 @@ function normalizeProfileData(items, channelsData) {
     const settingType = setting.settingType || 'detection';
     const uiData = item?.uiData || setting?.uiData || {};
     const linkedCameras = Array.isArray(item?.linkedCameras) ? item.linkedCameras : [];
+    const settingEnabled = setting?.active ?? setting?.enabled;
     const activeCameras = channels.filter((camera) => camera?.detections?.[settingType]?.enabled === true).length
       || linkedCameras.filter((camera) => camera?.detections?.[settingType]?.enabled === true).length
       || Number(uiData.activeCameras)
@@ -77,7 +78,7 @@ function normalizeProfileData(items, channelsData) {
     return {
       settingType,
       name: setting.detectionName || uiData.detectionName || setting.name || settingType || 'Detection',
-      enabled: activeCameras > 0 || setting?.enabled === true,
+      enabled: activeCameras > 0 || settingEnabled === true,
       cameraAllocation,
     };
   });
