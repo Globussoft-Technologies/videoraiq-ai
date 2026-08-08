@@ -18,6 +18,28 @@ function initialsOf(name) {
     .join('');
 }
 
+function withCameraDetectionState(detections = [], cameras = []) {
+  if (!Array.isArray(detections) || !Array.isArray(cameras) || cameras.length === 0) {
+    return detections;
+  }
+
+  return detections.map((detection) => {
+    const settingType = detection?.settingType;
+    if (!settingType) return detection;
+
+    const assignedCameras = cameras.filter((camera) => camera?.detections?.[settingType]);
+    const enabledCameras = assignedCameras.filter((camera) => camera?.detections?.[settingType]?.enabled === true);
+
+    if (assignedCameras.length === 0) return detection;
+
+    return {
+      ...detection,
+      enabled: enabledCameras.length > 0,
+      cameraAllocation: assignedCameras.length,
+    };
+  });
+}
+
 export default function MyProfile() {
   const { user } = useAuth();
   const email = user?.user_email || user?.email || '';
@@ -48,6 +70,7 @@ export default function MyProfile() {
   const account = accountApi.data;
   const config = configApi.data;
   const cameras = camerasApi.data;
+  const detections = withCameraDetectionState(config?.detections, cameras);
   const stats = config?.stats;
   const selfUser = selfUserApi.data;
 
@@ -93,7 +116,7 @@ export default function MyProfile() {
         adminId={selfUser?.adminId}
       />
 
-      {isAdmin && <DetectionAllocation detections={config?.detections} />}
+      {isAdmin && <DetectionAllocation detections={detections} />}
       {isAdmin && <CamerasList cameras={cameras} stats={stats} />}
       {!isAdmin && <AccessScope authorizedChannels={selfUser?.authorizedChannels} />}
     </div>

@@ -1,39 +1,36 @@
-import { ScanEye, Camera as CameraIcon } from 'lucide-react';
+import { ScanEye } from 'lucide-react';
 import { detectionColor } from './detectionColors';
 
 function Row({ detection, isLast }) {
   const { fg, bg } = detectionColor(detection.settingType);
+
   return (
     <div
-      className="flex items-center gap-3 px-1 py-3"
-      style={{ borderBottom: isLast ? 'none' : '1px solid var(--bd)', opacity: detection.enabled ? 1 : 0.6 }}
+      className="grid items-center gap-3 px-1 py-3"
+      style={{
+        gridTemplateColumns: 'minmax(0,1fr) 88px',
+        borderBottom: isLast ? 'none' : '1px solid var(--bd)',
+      }}
     >
-      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg" style={{ background: bg }}>
-        <ScanEye size={16} strokeWidth={2} color={fg} />
-      </span>
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg" style={{ background: bg }}>
+          <ScanEye size={16} strokeWidth={2} color={fg} />
+        </span>
 
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] font-semibold" style={{ color: 'var(--tx)' }}>{detection.name}</div>
-        <div className="truncate text-[9.5px] uppercase tracking-wide" style={{ color: 'var(--tx3)', fontFamily: 'var(--mono)' }}>
-          {detection.settingType}
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13px] font-semibold" style={{ color: 'var(--tx)' }}>{detection.name}</div>
+          <div className="truncate text-[9.5px] uppercase tracking-wide" style={{ color: 'var(--tx3)', fontFamily: 'var(--mono)' }}>
+            {detection.settingType}
+          </div>
         </div>
       </div>
 
       <span
-        className="flex flex-shrink-0 items-center gap-1 text-[11px]"
-        title={`${detection.cameraAllocation} camera${detection.cameraAllocation === 1 ? '' : 's'} allocated for ${detection.name}`}
-        style={{ color: 'var(--tx3)', fontFamily: 'var(--mono)' }}
-      >
-        <CameraIcon size={11} strokeWidth={2} />
-        {detection.cameraAllocation}
-      </span>
-
-      <span
-        className="w-[72px] flex-shrink-0 rounded-full py-1 text-center text-[10px] font-semibold"
+        className="w-[72px] justify-self-end rounded-full py-1 text-center text-[10px] font-semibold"
         style={
           detection.enabled
             ? { background: 'rgba(34,197,94,.12)', color: 'var(--ok)' }
-            : { background: 'var(--bg2)', color: 'var(--tx3)', border: '1px solid var(--bd)' }
+            : { background: 'rgba(239,68,68,.12)', color: 'var(--crit)', border: '1px solid rgba(239,68,68,.22)' }
         }
       >
         {detection.enabled ? 'Enabled' : 'Disabled'}
@@ -45,7 +42,7 @@ function Row({ detection, isLast }) {
 export default function DetectionAllocation({ detections }) {
   const total = detections?.length ?? 0;
   const enabledCount = detections?.filter((d) => d.enabled).length ?? 0;
-  const assignedCameras = detections?.reduce((sum, d) => sum + (d.cameraAllocation || 0), 0) ?? 0;
+  const disabledCount = Math.max(total - enabledCount, 0);
   const pct = total ? Math.round((enabledCount / total) * 100) : 0;
 
   return (
@@ -63,7 +60,7 @@ export default function DetectionAllocation({ detections }) {
               Detection Allocation
             </h2>
             <span className="text-[11px]" style={{ color: 'var(--tx3)' }}>
-              {enabledCount} of {total} types enabled · {assignedCameras} cam-assignments
+              {enabledCount} enabled - {disabledCount} disabled
             </span>
           </div>
         </div>
@@ -84,6 +81,19 @@ export default function DetectionAllocation({ detections }) {
 
       {total ? (
         <div className="max-h-96 overflow-y-auto vq-scroll">
+          <div
+            className="sticky top-0 z-10 grid items-center gap-3 px-1 pb-2 pt-1 text-[10px] uppercase tracking-wide"
+            style={{
+              gridTemplateColumns: 'minmax(0,1fr) 88px',
+              background: 'var(--bg1)',
+              borderBottom: '1px solid var(--bd)',
+              color: 'var(--tx3)',
+              fontFamily: 'var(--mono)',
+            }}
+          >
+            <span>Detection</span>
+            <span className="justify-self-end">Status</span>
+          </div>
           {detections.map((d, i) => (
             <Row key={d.settingType} detection={d} isLast={i === detections.length - 1} />
           ))}
