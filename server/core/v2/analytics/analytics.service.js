@@ -808,8 +808,11 @@ class AnalyticsService {
         },
       };
 
-      const pipeline = await AttendanceService.buildAttendancePipeline(logsReq);
-      // $sort is dead weight when the result is collapsed to one row.
+      const { pipeline } = await AttendanceService.buildAttendancePipeline(logsReq);
+      // $sort is dead weight when the result is collapsed to one row. (No
+      // `name` on logsReq.query, so buildAttendancePipeline's own countPipeline
+      // would be equivalent here — filtering locally keeps this independent of
+      // that internal detail.)
       const countPipeline = pipeline.filter(
         (stage) => !("$sort" in stage || "$skip" in stage || "$limit" in stage)
       );
@@ -854,15 +857,25 @@ class AnalyticsService {
         ),
       ]);
 
+      const checkinLogs = counts?.checkinLogs || 0;
+      // Absent = full roster minus anyone who has checked in at all today
+      // (duration-agnostic) — the day starts with everyone absent and the
+      // count drops the moment a check-in lands. `counts.absent` (checked
+      // in/out under the half-day threshold) no longer drives this tile —
+      // it undercounted by construction, since it only ever covered
+      // employees who already had an event that day, never the ones with
+      // zero events at all.
+      const absent = Math.max(employees - checkinLogs, 0);
+
       return res.status(200).json(Response.userSuccessResp("Attendance presence fetched successfully", {
         date,
         employees,
         logs: counts?.logs || 0,
         present: counts?.present || 0,
         halfDay: counts?.halfDay || 0,
-        absent: counts?.absent || 0,
+        absent,
         checkedIn: counts?.checkedIn || 0,
-        checkinLogs: counts?.checkinLogs || 0,
+        checkinLogs,
         checkoutLogs: counts?.checkoutLogs || 0,
       }));
     } catch (error) {
