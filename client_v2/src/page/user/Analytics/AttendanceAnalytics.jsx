@@ -461,17 +461,16 @@ function DailyActivity({ series = [], employees = 0 }) {
           </div>
 
           <div style={{ display: 'grid', gap: 3.5, fontFamily: 'var(--mono)', fontSize: 10.5 }}>
-            <TooltipRow color={COLORS.present} label="Present" value={numberFmt(hover.row.present)} />
-            <TooltipRow color={COLORS.halfDay} label="Half day" value={numberFmt(hover.row.halfDay)} />
-            <TooltipRow color={COLORS.shortDay} label="Absent" value={numberFmt(hover.row.shortDay)} />
-            <TooltipRow color={COLORS.checkedIn} label="Checked in" value={numberFmt(hover.row.checkedIn)} />
-            <TooltipRow color={COLORS.noLog} label="No log" value={numberFmt(hover.row.noLog)} />
-            <TooltipRow label="Attendance" value={`${attendancePct(hover.row)}%`} strong />
-
-            <span style={{ height: 1, background: 'var(--bd)', margin: '3px 0' }} />
-
-            <TooltipRow label="Check-in logs" value={numberFmt(hover.row.checkins)} />
-            <TooltipRow label="Check-out logs" value={numberFmt(hover.row.checkouts)} />
+            <TooltipRow label="Total Employees" value={numberFmt(hover.row.employees)} strong />
+            <TooltipRow color={COLORS.checkedIn} label="Check In" value={numberFmt(hover.row.checkins)} />
+            <TooltipRow color={COLORS.halfDay} label="Half Day" value={numberFmt(hover.row.halfDay)} />
+            <TooltipRow
+              color={COLORS.shortDay}
+              label="Absentees"
+              value={numberFmt((hover.row.shortDay || 0) + (hover.row.noLog || 0))}
+              strong
+            />
+            <TooltipRow color={COLORS.present} label="Checkout" value={numberFmt(hover.row.checkouts)} />
           </div>
         </div>
       )}
@@ -740,12 +739,12 @@ export default function AttendanceAnalytics({ timezone }) {
                 <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{activeRangeLabel || 'Selected range'}</span>
               </div>
               {showDailyActivityHelpers && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 10.5, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 10.5, flexWrap: 'wrap' }}>
                   <LegendItem color={COLORS.present} label="Present" />
                   <LegendItem color={COLORS.halfDay} label="Half day" />
-                  <LegendItem color={COLORS.shortDay} label="Absent" />
+                  <LegendItem color={COLORS.shortDay} label="Early Leave" />
                   <LegendItem color={COLORS.checkedIn} label="Checked in" />
-                  <LegendItem color={COLORS.noLog} label="No log" />
+                  <LegendItem color={COLORS.noLog} label="Not Checked In" />
                 </div>
               )}
             </div>
