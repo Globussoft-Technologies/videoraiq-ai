@@ -118,6 +118,7 @@ class PythonService {
     severity,
     confidence_thresholds = {},
     line_crossing_settings = {},
+    mobile_phone_confidence
   ) {
     if (enable) {
       // ! old
@@ -165,6 +166,7 @@ class PythonService {
         severity,
         confidence_thresholds,
         line_crossing_settings,
+        mobile_phone_confidence
       };
       return await this.startNewDetection(payload);
     } else {
@@ -190,6 +192,7 @@ class PythonService {
         severity,
         confidence_thresholds = {},
         line_crossing_settings = {},
+        mobile_phone_confidence
       } = payload;
 
       // 🔹 Convert detection_modes → detectors
@@ -345,7 +348,7 @@ class PythonService {
 
       if( detection_modes?.includes("foodServicePPEDetection")) {
         detectors.push({
-          name: "foodServicePPEDetection",
+          name: "foodServicePPEDetectionSettings",
           zone_configs,
           zones: zones || [],
         });
@@ -353,11 +356,21 @@ class PythonService {
 
       if( detection_modes?.includes("desk_absence")) {
         detectors.push({
-          name: "deskAbsenceDetection",
+          name: "deskAbsenceDetectionSettings",
           zones: zones || [],
           zone_configs
         });
       }  
+      
+      if( detection_modes?.includes("mobilePhoneDetection")) {
+        detectors.push({
+          name: "mobilePhoneDetectionSettings",
+          mobile_phone_confidence,
+          zones: zones || [],
+          zone_configs
+        });
+      }
+        
 
       // ❗️ Validation
       if (!detectors.length) {
@@ -628,6 +641,7 @@ class PythonService {
     zoneName,
     confidence_thresholds = {},
     line_crossing_settings = {},
+    mobile_phone_confidence
   ) {
     const nvr = await NVR.findById(channel?.nvrId?._id);
     if (!nvr) throw new Error("NVR not found");

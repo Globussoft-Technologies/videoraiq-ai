@@ -630,6 +630,7 @@ class DetectionSettingService {
           const zoneName = detectionSetting?.settings?.zoneName || [];
           const confidence_thresholds = detectionSetting?.settings || {};
           const line_crossing_settings = detectionSetting?.settings || {};
+          const mobile_phone_confidence = detectionSetting?.settings || {};
 
 
 
@@ -645,6 +646,7 @@ class DetectionSettingService {
             zoneName,
             confidence_thresholds,
             line_crossing_settings,
+            mobile_phone_confidence,
           );
           await updateSettingsWithModelThresholds(detectionSetting, backendResponse);
         } catch (error) {
