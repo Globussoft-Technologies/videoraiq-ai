@@ -218,8 +218,8 @@ function RecipientSelectButton({ settingId, initialAlerts = [], onSaved }) {
               width: 13,
               height: 13,
               borderRadius: '50%',
-              border: '2px solid rgba(99,102,241,.25)',
-              borderTopColor: 'var(--blue)',
+              border: '2px solid rgba(236,72,153,.25)',
+              borderTopColor: '#ec4899',
               animation: 'vq-spin .7s linear infinite',
             }}
           />
@@ -779,7 +779,7 @@ export default function DetectionDetailPanel({
                     fontFamily: 'var(--mono)',
                     fontSize: 11.5,
                     fontWeight: 600,
-                    color: 'var(--blue)',
+                    color: '#ec4899',
                   }}
                 >
                   {value}
@@ -802,7 +802,7 @@ export default function DetectionDetailPanel({
         />
         <StatBox label="Schedule" value={actualScheduleMode} />
         <StatBox label="Applied Cameras" value={appliedCameras} />
-        <StatBox label="Min Confidence" value={minConfidence} color="var(--blue)" />
+        <StatBox label="Min Confidence" value={minConfidence} color="#ec4899" />
       </div>
 
       {/* Actions */}
@@ -819,8 +819,8 @@ export default function DetectionDetailPanel({
             fontSize: 12,
             fontWeight: 600,
             color: '#fff',
-            background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-            boxShadow: '0 6px 18px rgba(99,102,241,.25)',
+            background: 'linear-gradient(135deg,#ec4899,var(--violet))',
+            boxShadow: '0 6px 18px rgba(236,72,153,.25)',
           }}
         >
           Edit zones &amp; rules

@@ -169,7 +169,7 @@ export default function DetectionIncidents({
                   fontWeight: active ? 600 : 500,
                   cursor: showLoading ? 'wait' : 'pointer',
                   color: active ? '#fff' : 'var(--tx2)',
-                  background: active ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg2)',
+                  background: active ? 'linear-gradient(135deg,#ec4899,var(--violet))' : 'var(--bg2)',
                   border: `1px solid ${active ? 'transparent' : 'var(--bd)'}`,
                   opacity: showLoading && !active ? 0.65 : 1,
                   display: 'inline-flex',

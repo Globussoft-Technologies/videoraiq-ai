@@ -20,9 +20,11 @@ export default function DetectionCard({ model, color, selected, onSelect, onTogg
         }
       }}
       style={{
-        background: selected ? 'linear-gradient(135deg,rgba(59,130,246,.10),rgba(168,85,247,.05))' : 'var(--bg1)',
-        border: `1px solid ${selected ? 'rgba(59,130,246,.55)' : 'var(--bd)'}`,
-        boxShadow: selected ? 'inset 0 0 0 1px rgba(59,130,246,.35)' : 'none',
+        background: selected ? 'linear-gradient(135deg,rgba(99,102,241,.12),rgba(168,85,247,.06))' : 'var(--bg1)',
+        border: `1px solid ${selected ? 'rgba(99,102,241,.55)' : 'var(--bd)'}`,
+        boxShadow: selected
+          ? 'inset 0 0 0 1px rgba(99,102,241,.35), 0 0 0 3px rgba(99,102,241,.10)'
+          : 'none',
         borderRadius: 12,
         padding: '12px 13px 10px',
         cursor: 'pointer',

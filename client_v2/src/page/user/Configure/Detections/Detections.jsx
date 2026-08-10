@@ -86,7 +86,7 @@ const chipStyle = (active, hasDot) => ({
   cursor: 'pointer',
   whiteSpace: 'nowrap',
   color: active ? '#fff' : 'var(--tx2)',
-  background: active ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg2)',
+  background: active ? 'linear-gradient(135deg,#ec4899,var(--violet))' : 'var(--bg2)',
   border: `1px solid ${active ? 'transparent' : 'var(--bd)'}`,
 });
 
@@ -845,13 +845,13 @@ export default function Detections() {
             ? '...'
             : (loadingValue ?? selectedIncidentCount.toLocaleString())}
           sub={incidentFilter ? `${selected?.name || 'Selected detection'} total` : 'all detections combined'}
-          color="var(--blue)"
+          color="#ec4899"
         />
         <StatCard
           label="Selected"
           value={selected?.name || (typesApi.loading ? '...' : '-')}
           sub={`${incidents.length} ${incidents.length === 1 ? 'incident' : 'incidents'} shown`}
-          color="var(--blue)"
+          color="#ec4899"
           small
         />
       </div>
@@ -952,8 +952,8 @@ export default function Detections() {
                       height: 13,
                       marginTop: -6.5,
                       borderRadius: '50%',
-                      border: '2px solid rgba(99,102,241,.25)',
-                      borderTopColor: 'var(--blue)',
+                      border: '2px solid rgba(236,72,153,.25)',
+                      borderTopColor: '#ec4899',
                       animation: 'vq-spin .7s linear infinite',
                       pointerEvents: 'none',
                     }}

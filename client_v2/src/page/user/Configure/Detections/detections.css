@@ -21,7 +21,7 @@
 .vq-det-section-title { font-family: var(--disp); font-size: 14px; font-weight: 650; color: var(--tx); }
 .vq-det-section-subtitle { margin-top: 4px; font-size: 11.5px; color: var(--tx3); }
 .vq-det-zone-empty { min-height: 180px; display: grid; place-items: center; padding: 20px; border: 1px dashed var(--bd); border-radius: 10px; color: var(--tx3); font-size: 12px; text-align: center; }
-.vq-det-sensitivity-value { flex: 0 0 auto; padding: 5px 8px; border-radius: 7px; background: color-mix(in srgb, var(--blue) 10%, transparent); color: var(--blue); font-family: var(--mono); font-size: 11px; font-weight: 700; }
+.vq-det-sensitivity-value { flex: 0 0 auto; padding: 5px 8px; border-radius: 7px; background: rgba(236, 72, 153, 0.1); color: #ec4899; font-family: var(--mono); font-size: 11px; font-weight: 700; }
 .vq-det-sensitivity-scale { display: flex; justify-content: space-between; margin-top: 8px; font-size: 10.5px; color: var(--tx3); }
 /* Detection cards inside each category group Ã¢â‚¬â€ always two per row, as in the
    design (never three, however wide the column gets). Rows breathe a little

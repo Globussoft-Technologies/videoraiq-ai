@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, ChevronLeft, ChevronRight, Maximize2, Minimize2, SkipBack, SkipForward, RotateCcw, RotateCw, Wifi } from 'lucide-react';
+import { Play, Pause, ChevronLeft, ChevronRight, Maximize2, Minimize2, SkipBack, SkipForward, RotateCcw, RotateCw } from 'lucide-react';
+import BufferingIndicator from './BufferingIndicator';
 import { fetchIncidents } from '../helpers/incidents';
 import {
   getPlaybackUrl,
@@ -378,12 +379,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
         <video ref={videoRef} muted playsInline style={{ width: '100%', height: '100%', objectFit: 'contain', display: videoState === 'ready' ? 'block' : 'none' }} />
         {videoState !== 'ready' && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#2563EB', fontSize: 13, padding: 12, textAlign: 'center' }}>
-            {videoState === 'loading' && (
-              <>
-                <Wifi size={34} className="vq-blink" />
-                <span>Buffering…</span>
-              </>
-            )}
+            {videoState === 'loading' && <BufferingIndicator />}
             {videoState === 'no-recording' && (
               <span style={{ color: 'rgba(255,255,255,.55)', fontFamily: 'var(--mono)', fontSize: 12 }}>No recording available for this time</span>
             )}
@@ -554,3 +550,4 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     </div>
   );
 }
+

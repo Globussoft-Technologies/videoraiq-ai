@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Video, Pencil, Maximize2, Minimize2, X, Wifi, Minus, Plus, CheckCircle2, ChevronDown, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Video, Pencil, Maximize2, Minimize2, X, Minus, Plus, CheckCircle2, ChevronDown, RotateCcw } from 'lucide-react';
+import BufferingIndicator from '../../../components/BufferingIndicator';
 import { toast } from 'sonner';
 import useHlsPlayer from '../../../hooks/useHlsPlayer';
 import { streamUrl } from '../../../lib/stream';
@@ -647,9 +648,8 @@ export default function DetectionZoneMarking({
             {/* Buffering overlay â€” shown while the stream connects, instead of a blank box.
                 Same look as PlaybackTimeline.jsx's buffering state (Wifi icon + blink). */}
             {url && videoState === 'loading' && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'rgba(0,0,0,.75)', zIndex: 2, color: '#2563EB', fontSize: 13 }}>
-                <Wifi size={34} className="vq-blink" />
-                <span>Buffering</span>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.82)', zIndex: 2 }}>
+                <BufferingIndicator />
               </div>
             )}
 
