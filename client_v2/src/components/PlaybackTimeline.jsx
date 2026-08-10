@@ -347,7 +347,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
   const hourTicks = [0, 4, 8, 12, 16, 20, 24];
 
   return (
-    <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 14, padding: 16, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }}>
+    <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 14, padding: '16px 16px 10px', display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0, minHeight: 0, width: '100%', height: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
       {/* Responsive breakpoints for this component only — same <style>+vq- className
           pattern used elsewhere in the app (e.g. AlertsView.jsx / tokens.css) rather
           than inventing a new one. Prefixed vq-pbtl- to avoid clashing with the
@@ -374,7 +374,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
       {/* Video surface — the only screen in Camera View; shows the recording,
           never live. Sized larger in true browser fullscreen (no toolbar
           competing for space anymore) than in the normal in-page layout. */}
-      <div className="vq-pbtl-video" style={{ position: 'relative', height: isExpanded ? '78vh' : '72vh', minHeight: 360, background: '#000', borderRadius: 10, overflow: 'hidden' }}>
+      <div className="vq-pbtl-video" style={{ position: 'relative', flex: '1 1 auto', minHeight: isExpanded ? 0 : 300, background: '#000', borderRadius: 10, overflow: 'hidden' }}>
         <video ref={videoRef} muted playsInline style={{ width: '100%', height: '100%', objectFit: 'contain', display: videoState === 'ready' ? 'block' : 'none' }} />
         {videoState !== 'ready' && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#2563EB', fontSize: 13, padding: 12, textAlign: 'center' }}>
@@ -508,7 +508,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
           ref={trackRef}
           onClick={handleTrackClick}
           onPointerDown={handlePointerDown}
-          style={{ position: 'relative', height: 48, background: '#e2e8f0', borderRadius: 6, boxShadow: 'inset 0 1px 3px rgba(0,0,0,.15)', cursor: 'pointer', width: `${ZOOM_LEVELS[zoomIdx] * 100}%`, minWidth: '100%', overflow: 'hidden' }}
+          style={{ position: 'relative', height: 34, background: '#e2e8f0', borderRadius: 6, boxShadow: 'inset 0 1px 3px rgba(0,0,0,.15)', cursor: 'pointer', width: `${ZOOM_LEVELS[zoomIdx] * 100}%`, minWidth: '100%', overflow: 'hidden' }}
         >
           {/* progress fill — static 3-stop gradient, width = playback position */}
           <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${cursorPct}%`, background: 'linear-gradient(90deg, #07486A 0%, #2563EB 50%, #06B6D4 100%)', transition: dragging ? 'none' : 'width .1s linear' }} />
@@ -541,12 +541,12 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
           <div style={{ position: 'absolute', left: `${cursorPct}%`, top: 0, bottom: 0, width: dragging ? 3 : 2, background: '#fff', boxShadow: '0 0 6px rgba(255,255,255,.8)', transform: 'translateX(-50%)' }} />
 
           {/* hour ticks scale with the track so they stay aligned at any zoom */}
-          <div className="vq-pbtl-hourticks" style={{ position: 'absolute', left: 0, right: 0, bottom: -16, display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--tx3)', fontFamily: 'var(--mono)', pointerEvents: 'none' }}>
+          <div className="vq-pbtl-hourticks" style={{ position: 'absolute', left: 0, right: 0, bottom: -14, display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--tx3)', fontFamily: 'var(--mono)', pointerEvents: 'none' }}>
             {hourTicks.map((h) => <span key={h}>{pad2(h)}:00</span>)}
           </div>
         </div>
       </div>
-      <div style={{ height: 12 }} />{/* spacer for the absolutely-positioned hour-tick row above */}
+      <div style={{ height: 8 }} />{/* spacer for the absolutely-positioned hour-tick row above */}
 
       {loadingMeta && (
         <span style={{ fontSize: 10.5, color: 'var(--tx3)', fontFamily: 'var(--mono)' }}>Loading recording timeline…</span>

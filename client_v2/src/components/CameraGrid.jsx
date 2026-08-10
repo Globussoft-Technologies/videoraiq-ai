@@ -189,7 +189,7 @@ export default function CameraGrid() {
   return (
     <div
       ref={pageRef}
-      style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg0)', overflow: 'hidden' }}
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: 'var(--bg0)', overflow: 'hidden' }}
     >
       {/* ── Toolbar ──────────────────────────────────────────────── */}
       <div className="vq-wall-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: 'var(--bg1solid)', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap', flexShrink: 0 }}>
@@ -309,8 +309,8 @@ export default function CameraGrid() {
           recording is loaded; there is no separate live-view screen.
           ActiveDetectionsPanel sits alongside it — live detection events for
           this camera, its enabled engines, and a link into zone config. ── */}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 16, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-        <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: 16, display: 'flex', gap: 16, alignItems: 'stretch' }}>
+        <div style={{ flex: '1 1 auto', minWidth: 0, minHeight: 0, display: 'flex' }}>
           <AsyncBoundary
             loading={channels.loading}
             error={channels.error}
@@ -335,7 +335,7 @@ export default function CameraGrid() {
         </div>
 
         {!isPageFS && visible[0] && (
-          <div style={{ flex: '0 0 280px', width: 280 }}>
+          <div style={{ flex: '0 0 280px', width: 280, minHeight: 0, overflow: 'hidden' }}>
             <ActiveDetectionsPanel channel={visible[0]} showActiveDetections={false} />
           </div>
         )}

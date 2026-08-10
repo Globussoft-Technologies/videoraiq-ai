@@ -81,6 +81,7 @@ function Shell() {
   const navigate = useNavigate();
   const viewKey = currentViewKey(location.pathname);
   const meta = VIEW_META[viewKey] || VIEW_META.overview;
+  const fixedViewportPage = viewKey === 'camera';
 
   const [siteFilter, setSiteFilter] = useState('All Sites');
   const [siteRaw, setSiteRaw] = useState(null);
@@ -251,10 +252,14 @@ function Shell() {
           onMarkNotificationsRead={markNotificationsRead}
           onMenuClick={isMobile ? () => setNavOpen(true) : undefined}
         />
-        <div className="vq-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+        <div
+          className={fixedViewportPage ? undefined : 'vq-scroll'}
+          style={{ flex: 1, minHeight: 0, overflowY: fixedViewportPage ? 'hidden' : 'auto', overflowX: 'hidden' }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', minHeight: fixedViewportPage ? 0 : '100%', height: fixedViewportPage ? '100%' : undefined }}>
             <Outlet context={outletCtx} />
-            <footer
+            {!fixedViewportPage && (
+              <footer
               style={{
                 marginTop: 'auto',
                 padding: '16px 24px 18px',
@@ -264,7 +269,8 @@ function Shell() {
               }}
             >
               © 2026 VideoraIQ. All rights reserved.
-            </footer>
+              </footer>
+            )}
           </div>
         </div>
         {/* Hidden on the assistant's own page — nothing to launch from there. */}
