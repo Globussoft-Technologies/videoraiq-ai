@@ -148,6 +148,10 @@ class AnalyticsValidator {
       date: Joi.string().trim().regex(dateOnlyPattern).messages({
         'string.pattern.base': 'date must be in YYYY-MM-DD format',
       }),
+      location: Joi.alternatives().try(
+        Joi.string().trim(),
+        Joi.array().items(Joi.string().trim())
+      ),
       nvrId: Joi.alternatives().try(
         Joi.string().trim(),
         Joi.array().items(Joi.string().trim())

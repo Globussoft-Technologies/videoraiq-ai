@@ -304,23 +304,6 @@ class AnalyticsService {
       eventScopeEmpty = true;
     }
 
-    if (locations.length) {
-      const nvrs = await NVR.find({
-        userId,
-        location: { $in: locations },
-      }).select("_id").lean();
-      const locationNvrIds = nvrs.map((nvr) => nvr._id);
-
-      if (!locationNvrIds.length) {
-        eventScopeEmpty = true;
-      } else if (effectiveNvrIds.length) {
-        effectiveNvrIds = effectiveNvrIds.filter((id) => locationNvrIds.some((nvrId) => nvrId.equals(id)));
-        if (!effectiveNvrIds.length) eventScopeEmpty = true;
-      } else {
-        effectiveNvrIds = locationNvrIds;
-      }
-    }
-
     if (hasDepartmentFilter && !departmentIds.length) {
       eventScopeEmpty = true;
     } else if (departmentIds.length) {
@@ -349,11 +332,14 @@ class AnalyticsService {
     //                 would brand them unauthorized.
     const roster = await AuthorizedUser.find({ adminId })
       .setOptions({ memberId: data.memberId })
-      .select("_id departmentId")
+      .select("_id departmentId location")
       .lean();
-    const rosterIds = roster.map((employee) => employee._id);
+    const locationScopedRoster = locations.length
+      ? roster.filter((employee) => locations.includes(employee?.location))
+      : roster;
+    const rosterIds = locationScopedRoster.map((employee) => employee._id);
     const employeeIds = departmentIds.length
-      ? roster
+      ? locationScopedRoster
         .filter((employee) => employee.departmentId
           && departmentIds.some((id) => id.equals(employee.departmentId)))
         .map((employee) => employee._id)
@@ -796,9 +782,14 @@ class AnalyticsService {
       // Only the fields buildAttendancePipeline actually reads, passed as a
       // plain object rather than a spread of the live Express request.
       // `export: true` makes it skip $skip/$limit — this is a count, not a page.
+      const employeeLocations = splitValues(req.query.location);
       const logsReq = {
         verified: req.verified,
-        body: { employeeLocations: req.body?.employeeLocations || [] },
+        body: {
+          employeeLocations: employeeLocations.length
+            ? employeeLocations
+            : req.body?.employeeLocations || [],
+        },
         query: {
           nvrId: req.query.nvrId,
           channelId: req.query.channelId,
@@ -830,7 +821,20 @@ class AnalyticsService {
           logs: { $sum: 1 },
           present: countByStatus(ATTENDANCE_STATUS.PRESENT),
           halfDay: countByStatus(ATTENDANCE_STATUS.HALF_DAY),
-          absent: countByStatus(ATTENDANCE_STATUS.ABSENT),
+          earlyLeave: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ["$status", ATTENDANCE_STATUS.ABSENT] },
+                    { $ne: [{ $ifNull: ["$firstCheckIn", null] }, null] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
           checkedIn: countByStatus(ATTENDANCE_STATUS.CHECKED_IN),
           // Same three figures the "From attendance logs" strip shows, for the
           // selected day rather than the whole range — showing range totals
@@ -844,28 +848,24 @@ class AnalyticsService {
         },
       });
 
-      const [counts = {}, employees] = await Promise.all([
+      const [counts = {}, employees, notCheckedInSummary] = await Promise.all([
         Attendance.aggregate(countPipeline)
           .collation({ locale: "en", strength: 2 })
           .then((rows) => rows[0]),
         // Same count the Total Employees tile used to fetch from
         // /authorizedUsers/fetch, including the member location scoping its
         // pre-find hook applies.
-        AuthorizedUser.countDocuments(
-          { adminId: new mongoose.Types.ObjectId(adminId) },
-          { memberId: userData.memberId }
-        ),
+        AuthorizedUser.countDocuments({
+          adminId: new mongoose.Types.ObjectId(adminId),
+          ...(employeeLocations.length ? { location: { $in: employeeLocations } } : {}),
+        }, { memberId: userData.memberId }),
+        AttendanceService.buildNotCheckedInDataset(logsReq),
       ]);
 
       const checkinLogs = counts?.checkinLogs || 0;
-      // Absent = full roster minus anyone who has checked in at all today
-      // (duration-agnostic) — the day starts with everyone absent and the
-      // count drops the moment a check-in lands. `counts.absent` (checked
-      // in/out under the half-day threshold) no longer drives this tile —
-      // it undercounted by construction, since it only ever covered
-      // employees who already had an event that day, never the ones with
-      // zero events at all.
-      const absent = Math.max(employees - checkinLogs, 0);
+      const earlyLeave = counts?.earlyLeave || 0;
+      const notCheckedIn = notCheckedInSummary.rows.length;
+      const absent = earlyLeave + notCheckedIn;
 
       return res.status(200).json(Response.userSuccessResp("Attendance presence fetched successfully", {
         date,
@@ -875,6 +875,8 @@ class AnalyticsService {
         halfDay: counts?.halfDay || 0,
         absent,
         checkedIn: counts?.checkedIn || 0,
+        earlyLeave,
+        notCheckedIn,
         checkinLogs,
         checkoutLogs: counts?.checkoutLogs || 0,
       }));

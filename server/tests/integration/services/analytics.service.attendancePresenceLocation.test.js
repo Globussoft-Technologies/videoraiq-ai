@@ -1,0 +1,159 @@
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  vi,
+} from "vitest";
+import mongoose from "mongoose";
+import { connectMongo, disconnectMongo, clearCollections } from "../dbSetup.js";
+import { serviceCtx, payload } from "../../helpers/service.js";
+
+vi.mock("../../../socket.js", () => ({
+  sendPayloadToUser: vi.fn().mockResolvedValue(undefined),
+}));
+
+const { default: AnalyticsService } = await import(
+  "../../../core/v2/analytics/analytics.service.js"
+);
+const { default: Attendance } = await import(
+  "../../../core/v2/attendance/attendance.model.js"
+);
+const { default: Admin } = await import(
+  "../../../core/v2/admin/admin.model.js"
+);
+const { default: AuthorizedUsers } = await import(
+  "../../../core/v2/authorizedUsers/authorizedUsers.model.js"
+);
+
+beforeAll(async () => {
+  await connectMongo();
+});
+afterAll(async () => {
+  await disconnectMongo();
+});
+beforeEach(async () => {
+  await clearCollections();
+});
+
+describe("AnalyticsService.attendancePresence — location filter", () => {
+  it("scopes roster and counts to the selected location", async () => {
+    const admin = await Admin.create({
+      user_id: "1",
+      login: "a",
+      email: "a@test.com",
+    });
+    const bangaloreEmployee = await AuthorizedUsers.create({
+      adminId: admin._id,
+      firstName: "Bangalore",
+      lastName: "User",
+      email: "blr@test.com",
+      location: "bangalore",
+    });
+    await AuthorizedUsers.create({
+      adminId: admin._id,
+      firstName: "Mumbai",
+      lastName: "User",
+      email: "mum@test.com",
+      location: "mumbai",
+    });
+
+    const day = new Date("2026-08-10T09:00:00.000Z");
+    await Attendance.create({
+      user: admin._id,
+      employee: bangaloreEmployee._id,
+      createdAt: day,
+      events: [
+        {
+          cameraType: "checkin",
+          timestamp: day,
+          channel: new mongoose.Types.ObjectId(),
+          nvr: new mongoose.Types.ObjectId(),
+          images: { face: "f1" },
+        },
+      ],
+    });
+
+    const { req, res } = serviceCtx({
+      adminId: admin._id,
+      user_id: admin.user_id,
+      query: {
+        date: "2026-08-10",
+        location: "bangalore",
+      },
+      body: {},
+    });
+
+    await AnalyticsService.attendancePresence(req, res);
+
+    expect(res.statusCode).toBe(200);
+    const data = payload(res).data;
+    expect(data.employees).toBe(1);
+    expect(data.checkinLogs).toBe(1);
+    expect(data.absent).toBe(0);
+  });
+
+  it("reports absent as early-leave plus not-checked-in for the selected location", async () => {
+    const admin = await Admin.create({
+      user_id: "1",
+      login: "a",
+      email: "a@test.com",
+    });
+    const earlyLeaveEmployee = await AuthorizedUsers.create({
+      adminId: admin._id,
+      firstName: "Early",
+      lastName: "Leave",
+      email: "early@test.com",
+      location: "bangalore",
+    });
+    await AuthorizedUsers.create({
+      adminId: admin._id,
+      firstName: "No",
+      lastName: "Show",
+      email: "noshow@test.com",
+      location: "bangalore",
+    });
+
+    await Attendance.create({
+      user: admin._id,
+      employee: earlyLeaveEmployee._id,
+      createdAt: new Date("2026-08-10T09:00:00.000Z"),
+      events: [
+        {
+          cameraType: "checkin",
+          timestamp: new Date("2026-08-10T09:00:00.000Z"),
+          channel: new mongoose.Types.ObjectId(),
+          nvr: new mongoose.Types.ObjectId(),
+          images: { face: "f1" },
+        },
+        {
+          cameraType: "checkout",
+          timestamp: new Date("2026-08-10T10:00:00.000Z"),
+          channel: new mongoose.Types.ObjectId(),
+          nvr: new mongoose.Types.ObjectId(),
+          images: { face: "f2" },
+        },
+      ],
+    });
+
+    const { req, res } = serviceCtx({
+      adminId: admin._id,
+      user_id: admin.user_id,
+      query: {
+        date: "2026-08-10",
+        location: "bangalore",
+      },
+      body: {},
+    });
+
+    await AnalyticsService.attendancePresence(req, res);
+
+    expect(res.statusCode).toBe(200);
+    const data = payload(res).data;
+    expect(data.earlyLeave).toBe(1);
+    expect(data.notCheckedIn).toBe(1);
+    expect(data.absent).toBe(2);
+  });
+});

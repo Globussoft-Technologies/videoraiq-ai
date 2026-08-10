@@ -14,6 +14,7 @@ import config from "config";
 import MailResponse from "../../../mailService/mail.helper.js";
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
 import AttendanceSettings from "./attendanceSettings.model.js";
+import ShiftModel from "../shifts/shifts.model.js";
 import {
   ATTENDANCE_STATUS,
   attendanceStatusStage,
@@ -61,7 +62,218 @@ function breakMinutesFromPairs(pairs) {
   }, 0);
 }
 
+const SHIFT_DAY_KEYS = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
+const EARLY_LEAVE_STATUS = "early_leave";
+
+const collator = new Intl.Collator("en", { sensitivity: "base", numeric: true });
+
+function asObjectId(id) {
+  return new mongoose.Types.ObjectId(id);
+}
+
+function parseObjectIds(value) {
+  return value
+    ?.split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .map((id) => new mongoose.Types.ObjectId(id));
+}
+
+function employeeFullName(employee = {}) {
+  return `${employee?.firstName || ""} ${employee?.lastName || ""}`.trim();
+}
+
+function shiftExpectsEmployeeOnDate(shift, date) {
+  if (!shift) return true;
+  if (shift.isActive === false) return false;
+  const dayKey = SHIFT_DAY_KEYS[new Date(date).getDay()];
+  const dayConfig = shift?.timings?.[dayKey];
+  if (!dayConfig) return true;
+  return dayConfig.enabled !== false;
+}
+
+function sortNotCheckedInRows(rows, sortField = "checkin", sortOrder = "desc") {
+  const direction = sortOrder === "asc" ? 1 : -1;
+  const valueFor = (row) => {
+    switch (sortField) {
+      case "fullname":
+        return row.employee?.fullName || employeeFullName(row.employee);
+      case "department":
+        return row.employee?.departmentId?.departmentName || "";
+      case "location":
+        return row.employee?.location || "";
+      case "date":
+        return row.date || "";
+      case "checkin":
+      case "checkout":
+      default:
+        return row.employee?.fullName || employeeFullName(row.employee);
+    }
+  };
+
+  return [...rows].sort((a, b) => {
+    const left = valueFor(a);
+    const right = valueFor(b);
+    const compare = collator.compare(String(left || ""), String(right || ""));
+    if (compare !== 0) return compare * direction;
+    return collator.compare(String(a.employee?._id || ""), String(b.employee?._id || ""));
+  });
+}
+
 class AttendanceService {
+  async buildNotCheckedInDataset(req, { applyName = false } = {}) {
+    const adminId = req?.verified?.userData?.adminId;
+    if (!adminId) {
+      throw new Error("Missing admin context");
+    }
+
+    const memberId = req?.verified?.userData?.memberId;
+    const { name = "", startDate, endDate } = req.query || {};
+    const targetDate =
+      startDate || endDate || req?.query?.date || moment().format("YYYY-MM-DD");
+
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const authorizedEmployeeLocations =
+      req?.verified?.authorizedChannel?.employeeLocations || [];
+    const requestedLocations = Array.isArray(req?.body?.employeeLocations)
+      ? req.body.employeeLocations
+      : [];
+    const employeeLocations = [
+      ...new Set([...authorizedEmployeeLocations, ...requestedLocations]),
+    ];
+
+    const rosterQuery = {
+      adminId: asObjectId(adminId),
+    };
+
+    if (employeeLocations.length) {
+      rosterQuery.location = { $in: employeeLocations };
+    }
+
+    if (req?.query?.departmentIds) {
+      rosterQuery.departmentId = {
+        $in: req.query.departmentIds
+          .split(",")
+          .map((id) => id.trim())
+          .filter(Boolean)
+          .map((id) => new mongoose.Types.ObjectId(id)),
+      };
+    }
+
+    if (applyName && name) {
+      rosterQuery.$expr = {
+        $regexMatch: {
+          input: {
+            $trim: {
+              input: {
+                $concat: [
+                  { $ifNull: ["$firstName", ""] },
+                  " ",
+                  { $ifNull: ["$lastName", ""] },
+                ],
+              },
+            },
+          },
+          regex: name,
+          options: "i",
+        },
+      };
+    }
+
+    const roster = await authorizedUsersModel
+      .find(rosterQuery)
+      .setOptions({ memberId })
+      .populate({ path: "departmentId", select: "departmentName" })
+      .lean();
+
+    const shiftIds = [
+      ...new Set(
+        roster
+          .map((employee) => employee?.shiftId)
+          .filter(Boolean)
+          .map((id) => String(id))
+      ),
+    ];
+    const shifts = shiftIds.length
+      ? await ShiftModel.find({
+          _id: { $in: shiftIds.map((id) => asObjectId(id)) },
+        })
+          .select("name color timings isActive")
+          .lean()
+      : [];
+    const shiftMap = new Map(
+      shifts.map((shift) => [String(shift._id), shift])
+    );
+    const rosterWithShifts = roster.map((employee) => ({
+      ...employee,
+      shiftId: employee?.shiftId
+        ? shiftMap.get(String(employee.shiftId)) || null
+        : null,
+    }));
+
+    const expectedEmployees = rosterWithShifts.filter((employee) =>
+      shiftExpectsEmployeeOnDate(employee.shiftId, startOfDay)
+    );
+    const expectedEmployeeIds = expectedEmployees.map((employee) => employee._id);
+
+    const attendances = expectedEmployeeIds.length
+      ? await Attendance.find({
+          user: asObjectId(adminId),
+          employee: { $in: expectedEmployeeIds },
+          createdAt: { $gte: startOfDay, $lte: endOfDay },
+        })
+          .select("employee events")
+          .lean()
+      : [];
+
+    const checkedInEmployeeIds = new Set(
+      attendances
+        .filter(
+          (attendance) =>
+            Array.isArray(attendance?.events) &&
+            attendance.events.some((event) => event.cameraType === "checkin")
+        )
+        .map((attendance) => String(attendance.employee))
+    );
+
+    const rows = expectedEmployees
+      .filter((employee) => !checkedInEmployeeIds.has(String(employee._id)))
+      .map((employee) => ({
+        employee: {
+          ...employee,
+          fullName: employeeFullName(employee),
+        },
+        date: targetDate,
+        logInTime: null,
+        logOutTime: null,
+        checkinCam: "-",
+        checkoutCam: "-",
+        minutesSpent: 0,
+        status: "not_checked_in",
+        breakMinutes: 0,
+        breakCount: 0,
+        imageUrls: [],
+      }));
+
+    return {
+      rows,
+      totalEmployees: rosterWithShifts.length,
+      targetDate,
+    };
+  }
+
   async logAttendance(req, res, _next) {
     try {
       const { error, value } = attendanceSchema.validate(req.body, {
@@ -253,6 +465,10 @@ class AttendanceService {
 
   async getAttendance(req, res, _next) {
     try {
+      if (req?.query?.status === "not_checked_in") {
+        return this.getNotCheckedInAttendance(req, res);
+      }
+
       const { pipeline, countPipeline } = await this.buildAttendancePipeline(req);
 
       // strength: 2 → case-insensitive so Name/Location/Department sort
@@ -354,7 +570,20 @@ class AttendanceService {
           _id: null,
           present: countByStatus(ATTENDANCE_STATUS.PRESENT),
           halfDay: countByStatus(ATTENDANCE_STATUS.HALF_DAY),
-          absent: countByStatus(ATTENDANCE_STATUS.ABSENT),
+          earlyLeave: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ["$status", ATTENDANCE_STATUS.ABSENT] },
+                    { $ne: [{ $ifNull: ["$firstCheckIn", null] }, null] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
           checkedIn: countByStatus(ATTENDANCE_STATUS.CHECKED_IN),
           // Duration-agnostic: "did this employee check in/out at all today",
           // regardless of what status that graded to. Feeds the Check In /
@@ -370,27 +599,30 @@ class AttendanceService {
       });
 
       const userData = req?.verified?.userData || {};
-      const [rowCountResult, countResult, totalEmployees] = await Promise.all([
-        Attendance.aggregate(rowCountPipeline),
-        Attendance.aggregate(countPipeline),
-        // The same roster count the Analytics "Total Employees" tile uses, so
-        // the two screens agree. The authorizedUsers pre-find hook applies its
-        // location scoping for member accounts here too.
-        authorizedUsersModel.countDocuments(
-          { adminId: new mongoose.Types.ObjectId(userData.adminId) },
-          { memberId: userData.memberId }
-        ),
-      ]);
+      const summaryBreakdownReq = {
+        ...req,
+        query: {
+          ...(req.query || {}),
+          name: "",
+        },
+      };
+      const [rowCountResult, countResult, totalEmployees, notCheckedInSummary] =
+        await Promise.all([
+          Attendance.aggregate(rowCountPipeline),
+          Attendance.aggregate(countPipeline),
+          authorizedUsersModel.countDocuments(
+            { adminId: new mongoose.Types.ObjectId(userData.adminId) },
+            { memberId: userData.memberId }
+          ),
+          this.buildNotCheckedInDataset(summaryBreakdownReq),
+        ]);
       const total = rowCountResult[0]?.total || 0;
       const counts = countResult[0] || {};
       const checkinLogs = counts.checkinLogs || 0;
       const checkoutLogs = counts.checkoutLogs || 0;
-      // Absent = full roster minus anyone who checked in at all today. Starts
-      // at the full roster and drops the moment a check-in lands — see the
-      // matching comment in analytics.service.js#attendancePresence, which
-      // this mirrors. `counts.absent` only ever covered employees who
-      // already had an event that day, so it undercounted the roster gap.
-      const absent = Math.max(totalEmployees - checkinLogs, 0);
+      const earlyLeave = counts.earlyLeave || 0;
+      const notCheckedIn = notCheckedInSummary.rows.length;
+      const absent = earlyLeave + notCheckedIn;
 
       return res.status(200).json(
         Response.userSuccessResp("Attendance summary", {
@@ -402,10 +634,55 @@ class AttendanceService {
             halfDay: counts.halfDay || 0,
             absent,
             checkedIn: counts.checkedIn || 0,
+            earlyLeave,
+            notCheckedIn,
             checkinLogs,
             checkoutLogs,
           },
           attendanceLogsStartDate,
+        })
+      );
+    } catch (error) {
+      logger.error(error);
+      return res
+        .status(500)
+        .json(Response.errorResp("Failed to get attendance", error.message));
+    }
+  }
+
+  async getNotCheckedInAttendance(req, res) {
+    try {
+      const {
+        skip = 0,
+        limit = 10,
+        sortField = "checkin",
+        sortOrder = "desc",
+      } = req.query;
+      const { rows, totalEmployees } = await this.buildNotCheckedInDataset(req, {
+        applyName: true,
+      });
+      const sortedRows = sortNotCheckedInRows(rows, sortField, sortOrder);
+      const total = sortedRows.length;
+      const pagedRows = req?.query?.export
+        ? sortedRows
+        : sortedRows.slice(Number.parseInt(skip, 10), Number.parseInt(skip, 10) + Number.parseInt(limit, 10));
+
+      return res.status(200).json(
+        Response.userSuccessResp("Attendance summary", {
+          attendanceLogs: pagedRows,
+          total,
+          totalEmployees,
+          statusCounts: {
+            present: 0,
+            halfDay: 0,
+            absent: total,
+            checkedIn: 0,
+            earlyLeave: 0,
+            notCheckedIn: total,
+            checkinLogs: 0,
+            checkoutLogs: 0,
+          },
+          attendanceLogsStartDate: null,
         })
       );
     } catch (error) {
@@ -548,13 +825,6 @@ class AttendanceService {
       // if (nvrId) matchStage.nvr = new mongoose.Types.ObjectId(nvrId);
       // if (channelId)
       //   matchStage.channel = new mongoose.Types.ObjectId(channelId);
-
-      const parseObjectIds = (value) =>
-        value
-          ?.split(",")
-          .map((id) => id.trim())
-          .filter(Boolean)
-          .map((id) => new mongoose.Types.ObjectId(id));
 
       const toObjectIds = (arr) =>
         arr.map((id) => new mongoose.Types.ObjectId(id));
@@ -801,6 +1071,8 @@ class AttendanceService {
           ? [{ $match: { firstCheckIn: { $ne: null } } }]
           : status === "checkout"
           ? [{ $match: { lastCheckOut: { $ne: null } } }]
+          : status === EARLY_LEAVE_STATUS
+          ? [{ $match: { status: ATTENDANCE_STATUS.ABSENT, firstCheckIn: { $ne: null } } }]
           : status && Object.values(ATTENDANCE_STATUS).includes(status)
           ? [{ $match: { status } }]
           : []),
