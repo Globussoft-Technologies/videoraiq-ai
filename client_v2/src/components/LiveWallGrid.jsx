@@ -6,23 +6,18 @@ import CameraStream from './CameraStream';
 import LiveCameraLogsOverlay from './LiveCameraLogsOverlay';
 import MultiSelect from './MultiSelect';
 import { useApi } from '../hooks/useApi';
+import { useCameraStatusStream } from '../hooks/useCameraStatusStream';
 import usePageActive from '../hooks/usePageActive';
 import { useStreamQueueStats } from '../hooks/useStreamSlot';
 import streamQueue from '../lib/streamQueue';
 import { getChannels, getLocations, getNVRs, getDepartments } from '../helpers/monitoring';
-import { getCamerasStatus, isCameraLive, cameraStatusId } from '../helpers/cameraStatus';
+import { isCameraLive, cameraStatusId } from '../helpers/cameraStatus';
 
 /* ── Stream-scheduling tuning ────────────────────────────────────────────────
    Cameras are started one at a time through lib/streamQueue. Priorities below
    are relative: lower starts first. */
 const PRIORITY_FULLSCREEN = -100;  // the camera the user is staring at
 const PRIORITY_GRID       = 0;     // + tile index within the current page
-
-// The Camera Status API is a cached read regardless of scope (tested to 500
-// ids in one call), so this only bounds the query size for very large estates.
-const STATUS_LIMIT = 500;
-// How often the real backend status (rtsp_online / stream_status) is polled.
-const STATUS_POLL_MS = 5000;
 
 /* Camera-type maps to the channel `checkType` field on the backend. */
 const CAM_TYPE_OPTIONS = [
@@ -321,20 +316,16 @@ export default function LiveWallGrid() {
   // Real online/offline per camera, straight from the backend: a camera is
   // live when the RTSP source is reachable AND this server is actually
   // producing fresh HLS segments for it right now (rtsp_online &&
-  // stream_status === 'running') — see CAMERA_STATUS_API.md. Polled for the
-  // WHOLE filtered inventory in one request, not stream-probed per tile, so
-  // the Live/Offline filter and the "N active" tally never need to open a
-  // hidden connection just to find out.
+  // stream_status === 'running') — see CAMERA_STATUS_API.md. Streamed for the
+  // WHOLE filtered inventory over one connection (the backend pushes a fresh
+  // reading every ~3s), not stream-probed per tile, so the Live/Offline
+  // filter and the "N active" tally never need to open a hidden connection
+  // just to find out.
   const statusIds = useMemo(
-    () => inventoryCameras.map(cameraStatusId).filter(Boolean).slice(0, STATUS_LIMIT),
+    () => inventoryCameras.map(cameraStatusId).filter(Boolean),
     [inventoryCameras]
   );
-  const statusIdsKey = statusIds.join(',');
-  const statusApi = useApi(
-    () => (statusIds.length ? getCamerasStatus(statusIds) : Promise.resolve(null)),
-    [statusIdsKey],
-    { pollMs: STATUS_POLL_MS, enabled: statusIds.length > 0 }
-  );
+  const statusApi = useCameraStatusStream(statusIds, { enabled: statusIds.length > 0 });
   const statusById = useMemo(() => {
     const map = {};
     (statusApi.data?.cameras || []).forEach((cam) => {

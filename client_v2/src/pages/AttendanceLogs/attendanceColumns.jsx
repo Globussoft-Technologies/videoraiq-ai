@@ -83,7 +83,23 @@ const attendanceMeta = (item, region, convertToRegionTime) => {
   const statusLabel = ATTENDANCE_STATUS_LABELS[status] || 'Absent';
   const statusColor = ATTENDANCE_STATUS_COLORS[status] || ATTENDANCE_STATUS_COLORS.absent;
 
-  return { checkInStr, checkOutStr, hoursStr, checkedOut, status, statusLabel, statusColor };
+  // Total time spent on checkout→checkin breaks between the first check-in
+  // and last check-out — same pairing the Break Logs dialog totals up.
+  const breakCount = Number.isFinite(item.breakCount) ? item.breakCount : 0;
+  const breakMins = Number.isFinite(item.breakMinutes) ? Math.max(0, item.breakMinutes) : 0;
+  const breakStr = breakCount > 0 ? `${Math.floor(breakMins / 60)}h ${breakMins % 60}m` : '--';
+
+  return {
+    checkInStr,
+    checkOutStr,
+    hoursStr,
+    checkedOut,
+    status,
+    statusLabel,
+    statusColor,
+    breakStr,
+    breakCount,
+  };
 };
 
 /**
@@ -193,6 +209,21 @@ export const buildColumns = ({ dispatch, sortField, sortOrder, region, convertTo
       },
     },
     {
+      accessorKey: 'break',
+      header: 'Break',
+      cell: ({ row }) => {
+        const { breakStr, breakCount } = attendanceMeta(row.original, region, convertToRegionTime);
+        return (
+          <span className="text-[var(--tx2)] text-xs" style={mono}>
+            {breakStr}
+            {breakCount > 0 && (
+              <span className="text-[var(--tx3)]"> ({breakCount})</span>
+            )}
+          </span>
+        );
+      },
+    },
+    {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => {
@@ -259,7 +290,7 @@ export const buildColumns = ({ dispatch, sortField, sortOrder, region, convertTo
  * `ctx` = { dispatch, region, convertToRegionTime }.
  */
 export const renderAttendanceCard = (item, { dispatch, region, convertToRegionTime }) => {
-  const { checkInStr, checkOutStr, hoursStr, statusLabel, statusColor } = attendanceMeta(
+  const { checkInStr, checkOutStr, hoursStr, statusLabel, statusColor, breakStr, breakCount } = attendanceMeta(
     item,
     region,
     convertToRegionTime
@@ -383,6 +414,19 @@ export const renderAttendanceCard = (item, { dispatch, region, convertToRegionTi
             <span className="block text-[9.5px] text-[var(--tx3)] truncate" style={{ fontFamily: 'var(--mono)' }}>
               {hoursStr}
             </span>
+          </div>
+          <div className="shrink-0 text-right">
+            <span className="block text-[8.5px] uppercase tracking-[0.06em] text-[var(--tx3)]" style={{ fontFamily: 'var(--mono)' }}>
+              Break
+            </span>
+            <span className="block text-[11px] font-semibold text-[var(--tx)] truncate" style={{ fontFamily: 'var(--mono)' }}>
+              {breakStr}
+            </span>
+            {breakCount > 0 && (
+              <span className="block text-[9.5px] text-[var(--tx3)] truncate" style={{ fontFamily: 'var(--mono)' }}>
+                {breakCount} {breakCount === 1 ? 'break' : 'breaks'}
+              </span>
+            )}
           </div>
           <div className="shrink-0 text-right">
             <span className="block text-[8.5px] uppercase tracking-[0.06em] text-[var(--tx3)]" style={{ fontFamily: 'var(--mono)' }}>

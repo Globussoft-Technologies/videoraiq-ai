@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useMemo, useReducer, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
@@ -27,7 +27,7 @@ const ATTENDANCE_INTERVAL_KEY = 'attendance_auto_refresh_interval';
 const ATTENDANCE_VIEW_MODE_KEY = 'attendance_view_mode';
 // Module-level constant so the reducer gets the same reference on every reset
 // and the `stats` memo doesn't recompute on unrelated renders.
-const EMPTY_STATUS_COUNTS = { present: 0, halfDay: 0, absent: 0, checkedIn: 0 };
+const EMPTY_STATUS_COUNTS = { present: 0, halfDay: 0, absent: 0, checkedIn: 0, checkinLogs: 0, checkoutLogs: 0 };
 
 const convertToRegionTime = (utcTime, region) => {
   if (!utcTime) return '--';
@@ -51,10 +51,15 @@ const cameraNamesForAttendance = (item) => {
 };
 
 const AttendanceLogs = () => {
+  // Arriving from another screen (e.g. Attendance Analytics' "Present" tile)
+  // can pre-select a day and status — read once, on mount, as the reducer's
+  // initial state rather than reacting to it afterwards.
+  const navState = useLocation().state || {};
   const [state, dispatch] = useReducer(reducer, {
     ...initialState,
-    startDate: initialState.todayISO,
-    endDate: initialState.todayISO,
+    startDate: navState.startDate || initialState.todayISO,
+    endDate: navState.endDate || initialState.todayISO,
+    statusFilter: navState.statusFilter || '',
   });
 
   const [autoRefresh, setAutoRefresh] = useState(() => {
@@ -90,6 +95,7 @@ const AttendanceLogs = () => {
     endDate,
     maxDateDefault,
     searchInput,
+    statusFilter,
     attendanceLogs,
     attendanceLogsCount,
     statusCounts,
@@ -211,7 +217,8 @@ const AttendanceLogs = () => {
         utcToTime,
         timeType,
         false,
-        employeeLocations
+        employeeLocations,
+        statusFilter
       );
       if (requestId !== attendanceRequestRef.current) return;
       if (
@@ -264,6 +271,7 @@ const AttendanceLogs = () => {
     region,
     limit,
     employeeLocations,
+    statusFilter,
   ]);
 
   useEffect(() => {
@@ -311,6 +319,10 @@ const AttendanceLogs = () => {
         // export and Attendance Analytics can't disagree.
         status: item.status,
         minutesSpent: item.minutesSpent,
+        // Same checkout→checkin pairing behind the Break Logs dialog,
+        // totalled here so the table doesn't need a click-through to show it.
+        breakMinutes: item.breakMinutes || 0,
+        breakCount: item.breakCount || 0,
       })),
     [attendanceLogs, BASE_URL, USER_AVTAR_INITIALS]
   );
@@ -325,6 +337,11 @@ const AttendanceLogs = () => {
     [region]
   );
 
+  // Toggling a tile re-filters the table to just that status (clicking the
+  // active one clears it back to all statuses for the date range).
+  const toggleStatusFilter = (value) =>
+    dispatch({ type: 'SET_STATUS_FILTER', value: statusFilter === value ? '' : value });
+
   // KPI tiles — server-graded status totals for the WHOLE filtered range, not
   // the loaded page. Counting the page meant 150 employees at 10 rows per page
   // reported totals out of 10, and the tiles changed as you paged. Same
@@ -332,14 +349,49 @@ const AttendanceLogs = () => {
   const stats = useMemo(
     () => [
       // Roster size — deliberately first, as the denominator the other four
-      // are read against. It is not range-scoped like they are.
+      // are read against. It is not range-scoped like they are, so it isn't
+      // filterable by status.
       { label: 'Total Employees', value: totalEmployees || 0, color: 'var(--tx)' },
-      { label: 'Present', value: statusCounts?.present || 0, color: 'var(--ok)' },
-      { label: 'Half Day', value: statusCounts?.halfDay || 0, color: 'var(--warn)' },
-      { label: 'Absent', value: statusCounts?.absent || 0, color: 'var(--crit)' },
-      { label: 'Checked In', value: statusCounts?.checkedIn || 0, color: 'var(--blue)' },
+      // Anyone who has checked in at all today, regardless of duration or
+      // whether they've since checked out. `checkin` is a duration-agnostic
+      // pseudo-status the backend matches on firstCheckIn presence, not one
+      // of the four real ATTENDANCE_STATUS values.
+      {
+        label: 'Check In',
+        value: statusCounts?.checkinLogs || 0,
+        color: 'var(--ok)',
+        active: statusFilter === 'checkin',
+        onClick: () => toggleStatusFilter('checkin'),
+      },
+      {
+        label: 'Half Day',
+        value: statusCounts?.halfDay || 0,
+        color: 'var(--warn)',
+        active: statusFilter === 'half_day',
+        onClick: () => toggleStatusFilter('half_day'),
+      },
+      // Roster-based: total employees minus anyone who has checked in today.
+      // Starts at the full roster and only drops as check-ins land. Clicking
+      // through still filters the table to status=absent, but that can only
+      // ever show employees who already have a log row (checked in/out under
+      // the half-day threshold) — most of this count has no log row to show,
+      // since they never checked in at all.
+      {
+        label: 'Absent',
+        value: statusCounts?.absent || 0,
+        color: 'var(--crit)',
+        active: statusFilter === 'absent',
+        onClick: () => toggleStatusFilter('absent'),
+      },
+      {
+        label: 'Checkout',
+        value: statusCounts?.checkoutLogs || 0,
+        color: 'var(--blue)',
+        active: statusFilter === 'checkout',
+        onClick: () => toggleStatusFilter('checkout'),
+      },
     ],
-    [statusCounts, totalEmployees]
+    [statusCounts, totalEmployees, statusFilter]
   );
 
   const handleExport = (format) =>

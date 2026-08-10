@@ -22,11 +22,12 @@ function niceStep(max, ticks = 4) {
   return Math.max(1, Math.round(step));
 }
 
-export default function DetectionsByHourCard() {
-  const api = useApi(() => getDetectionsByHour(), []);
+export default function DetectionsByHourCard({ timezone }) {
+  const api = useApi(() => getDetectionsByHour({ timezone }), [timezone]);
   // Refetches on the page's auto-refresh tick / manual refresh.
   useAnalyticsRefresh(api.refetch);
   const hours = api.data?.hours || [];
+  const tzLabel = api.data?.timezone || timezone;
   const max = Math.max(...hours, 1);
   const step = niceStep(max);
   const yTicks = [];
@@ -37,7 +38,7 @@ export default function DetectionsByHourCard() {
     <Panel style={{ padding: 18 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Detections by Hour</div>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>today UTC</span>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--tx3)' }}>today {tzLabel}</span>
       </div>
       <AnalyticsBlurb style={{ marginBottom: 16 }}>
         Intraday distribution of today's detections, grouped into hourly buckets to show which part of the day is busiest.

@@ -28,7 +28,8 @@ export const getAttendanceLogs = async (
   toTime,
   timeType,
   isExport,
-  employeeLocations
+  employeeLocations,
+  status
 ) => {
   const skip = (page - 1) * limit;
   const body = {
@@ -50,6 +51,7 @@ export const getAttendanceLogs = async (
       toTime,
       timeType,
       export: isExport ? true : '',
+      status: status || '',
     },
     headers: jsonHeaders(),
   });

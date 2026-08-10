@@ -1,10 +1,10 @@
 ﻿import { useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import moment from 'moment';
 import {
   Activity,
-  CalendarDays,
   Hourglass,
-  LogIn,
+  LogOut,
   TrendingDown,
   TrendingUp,
   UserCheck,
@@ -17,6 +17,7 @@ import { useApi } from '../../../hooks/useApi';
 import { getAttendanceAnalytics, getAttendancePresence } from '../../../helpers/analytics';
 import { useAnalyticsRefresh } from './AnalyticsRefreshContext';
 import AnalyticsBlurb from './AnalyticsBlurb';
+import RangeFilter, { defaultRange, rangeParams } from './RangeFilter';
 
 /**
  * Attendance Analytics.
@@ -122,11 +123,15 @@ function Trend({ trend, positiveUp = true }) {
   );
 }
 
-function MetricTile({ icon: Icon, label, metric, color, subLabel, positiveUp = true }) {
+function MetricTile({ icon: Icon, label, metric, color, subLabel, positiveUp = true, onClick }) {
   const pct = Number(metric?.pct || 0);
 
   return (
     <div
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(e); } } : undefined}
       style={{
         border: '1px solid var(--bd)',
         background: 'var(--bg2)',
@@ -136,6 +141,7 @@ function MetricTile({ icon: Icon, label, metric, color, subLabel, positiveUp = t
         display: 'flex',
         flexDirection: 'column',
         gap: 9,
+        cursor: onClick ? 'pointer' : 'default',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -438,74 +444,40 @@ function DailyActivity({ series = [], employees = 0 }) {
   );
 }
 
-function CountStrip({ title, items = [] }) {
-  return (
-    <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--tx3)', letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 6 }}>
-        {title}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }} className="vq-att-event-grid">
-        {items.map(([label, value, hint]) => (
-          <div
-            key={label}
-            title={hint || undefined}
-            style={{ border: '1px solid var(--bd)', borderRadius: 8, padding: '9px 10px', background: 'var(--bg2)', minWidth: 0 }}
-          >
-            <div style={{ fontSize: 10.5, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {label}
-            </div>
-            <div style={{ marginTop: 4, fontFamily: 'var(--disp)', fontSize: 17, fontWeight: 700 }}>{numberFmt(value)}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /**
- * Log counts for the selected day.
- *
- * These used to be range totals sitting directly beneath day-scoped tiles,
- * which made them look like they came from somewhere else entirely. They come
- * from the same single-day query as the tiles: one row per employee per day,
- * exactly what the Attendance Logs page lists for that date.
- */
-function EventCounts({ counts = {}, dayLabel }) {
-  return (
-    <CountStrip
-      title={`From attendance logs · ${dayLabel}`}
-      items={[
-        ['Attendance logs', counts.logs, 'Employee rows for this day — the row count the Attendance Logs page shows for the same date'],
-        ['Check-in logs', counts.checkinLogs, 'Of those rows, how many recorded a check-in'],
-        ['Check-out logs', counts.checkoutLogs, 'Of those rows, how many recorded a check-out'],
-      ]}
-    />
-  );
-}
-
-/**
- * The KPI tiles are a single-day figure and are deliberately NOT driven by the
- * page's date range — presence only means anything for one calendar day. They
- * come from /analytics/attendance-presence, which counts them from the
- * Attendance Logs pipeline itself, so this widget and the Attendance Logs page
- * always agree for the same date.
+ * The KPI tiles are a single-day figure — presence only means anything for
+ * one calendar day. They come from /analytics/attendance-presence, which
+ * counts them from the Attendance Logs pipeline itself, so this widget and
+ * the Attendance Logs page always agree for the same date.
  *
  * Rows are graded against the org's Settings > Attendance Rules thresholds:
  * Present (full day), Half Day, Absent (under half a day), and Checked In
  * (on site, no check-out yet).
  *
- * The chart, event counts and anomalies below stay range-scoped.
+ * Both the KPI tiles and the Daily Activity chart are driven from the Range
+ * control below rather than the page's shared Range filter (see
+ * Analytics.jsx) — readers expect the chart to move with whatever range
+ * they're inspecting right here, not a separate control at the top of the
+ * page. It reuses the same 7/30/Custom picker the page-level filter uses.
  */
-export default function AttendanceAnalytics({ params = {} }) {
-  const paramsKey = useMemo(() => JSON.stringify(params), [params]);
+export default function AttendanceAnalytics({ timezone }) {
+  const navigate = useNavigate();
   const today = useMemo(() => moment().format('YYYY-MM-DD'), []);
-  const [presenceDate, setPresenceDate] = useState(today);
+
+  const [range, setRange] = useState(defaultRange);
+
+  const chartRange = useMemo(() => rangeParams(range), [range]);
+  const chartRangeKey = useMemo(() => JSON.stringify(chartRange), [chartRange]);
+
+  // Presence has no meaning over a range, so it shows the most recent day in
+  // the selected range — the one day figure a range still unambiguously implies.
+  const presenceDate = chartRange.endDate || today;
 
   // `includeAccess: false` — this widget shows attendance only, so the server
   // skips the two access-log rollups it would otherwise compute and discard.
   const analytics = useApi(
-    () => getAttendanceAnalytics({ ...params, includeAccess: false }),
-    [paramsKey]
+    () => getAttendanceAnalytics({ ...chartRange, timezone, includeAccess: false }),
+    [chartRangeKey, timezone]
   );
   // Separate from `analytics` on purpose: changing the date must refetch only
   // this, not blank out the chart and anomalies behind a spinner.
@@ -547,30 +519,7 @@ export default function AttendanceAnalytics({ params = {} }) {
             <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--tx3)', letterSpacing: 0.4, textTransform: 'uppercase' }}>
               Presence on {presenceDayLabel}
             </span>
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--tx3)', fontWeight: 700 }}>
-              <CalendarDays size={14} strokeWidth={2} />
-              <input
-                type="date"
-                value={presenceDate}
-                max={today}
-                onChange={(event) => setPresenceDate(event.target.value || today)}
-                aria-label="Presence date"
-                // No `colorScheme` here on purpose: tokens.css already maps
-                // native date controls to the active [data-vq-theme], and an
-                // inline value would override it — which is what made the
-                // calendar indicator render white-on-white in light mode.
-                style={{
-                  height: 30,
-                  border: '1px solid var(--bd)',
-                  borderRadius: 8,
-                  padding: '0 8px',
-                  fontSize: 11.5,
-                  fontWeight: 600,
-                  background: 'var(--bg2)',
-                  color: 'var(--tx)',
-                }}
-              />
-            </label>
+            <RangeFilter range={range} onChange={setRange} />
           </div>
 
           {/* auto-fit rather than a fixed 5 columns: five tiles at 160px would
@@ -582,13 +531,23 @@ export default function AttendanceAnalytics({ params = {} }) {
               metric={{ count: presence.employees }}
               color="var(--blue)"
               subLabel="Registered users"
+              onClick={() => navigate('/register-users')}
             />
+            {/* Anyone who has checked in at all today, regardless of duration
+                or whether they've since checked out. `checkin` is a
+                duration-agnostic pseudo-status the backend matches on
+                firstCheckIn presence, not one of the four real statuses. */}
             <MetricTile
               icon={UserCheck}
-              label="Present"
-              metric={{ count: presence.present }}
+              label="Check In"
+              metric={{ count: presence.checkinLogs }}
               color="var(--ok)"
-              subLabel={`Full day · ${presenceDayLabel}`}
+              subLabel={`Checked in · ${presenceDayLabel}`}
+              onClick={() =>
+                navigate('/logs/attendance', {
+                  state: { startDate: presenceDate, endDate: presenceDate, statusFilter: 'checkin' },
+                })
+              }
             />
             <MetricTile
               icon={Hourglass}
@@ -596,21 +555,43 @@ export default function AttendanceAnalytics({ params = {} }) {
               metric={{ count: presence.halfDay }}
               color="var(--warn)"
               subLabel={`Part day · ${presenceDayLabel}`}
+              onClick={() =>
+                navigate('/logs/attendance', {
+                  state: { startDate: presenceDate, endDate: presenceDate, statusFilter: 'half_day' },
+                })
+              }
             />
+            {/* Roster-based: total employees minus anyone who checked in
+                today. Starts at the full roster and only drops as check-ins
+                land — see attendancePresence() in analytics.service.js. The
+                statusFilter=absent it links to can only surface employees who
+                already have a log row (checked in/out under the half-day
+                threshold); most of this count never checked in at all, so has
+                no row to show. */}
             <MetricTile
               icon={UserX}
               label="Absentees"
               metric={{ count: presence.absent }}
               color="var(--crit)"
-              subLabel={`Under half day · ${presenceDayLabel}`}
+              subLabel={`No check-in · ${presenceDayLabel}`}
               positiveUp={false}
+              onClick={() =>
+                navigate('/logs/attendance', {
+                  state: { startDate: presenceDate, endDate: presenceDate, statusFilter: 'absent' },
+                })
+              }
             />
             <MetricTile
-              icon={LogIn}
-              label="Checked In"
-              metric={{ count: presence.checkedIn }}
+              icon={LogOut}
+              label="Checkout"
+              metric={{ count: presence.checkoutLogs }}
               color="var(--blue)"
-              subLabel={`Still on site · ${presenceDayLabel}`}
+              subLabel={`Checked out · ${presenceDayLabel}`}
+              onClick={() =>
+                navigate('/logs/attendance', {
+                  state: { startDate: presenceDate, endDate: presenceDate, statusFilter: 'checkout' },
+                })
+              }
             />
           </div>
 
@@ -626,8 +607,6 @@ export default function AttendanceAnalytics({ params = {} }) {
               </button>
             </div>
           )}
-
-          <EventCounts counts={presence} dayLabel={presenceDayLabel} />
 
           {/* Full width now that the Insights column is gone. Thirty stacked
               bars in a 1.35fr column were the most cramped thing on the page. */}

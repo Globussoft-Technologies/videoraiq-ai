@@ -25,13 +25,16 @@ export const initialState = {
   // search
   searchInput: '',
 
+  // status (present / half_day / absent / checked_in) — '' means no filter
+  statusFilter: '',
+
   // logs
   attendanceLogs: [],
   attendanceLogsCount: 0,
   // Status totals for the whole filtered result set, from the server. Not
   // derived from the loaded page — that made the KPI tiles report out of the
   // page size (10) instead of the full match.
-  statusCounts: { present: 0, halfDay: 0, absent: 0, checkedIn: 0 },
+  statusCounts: { present: 0, halfDay: 0, absent: 0, checkedIn: 0, checkinLogs: 0, checkoutLogs: 0 },
   // Registered employees for this org — a roster count, so unlike the status
   // totals it is independent of the date range and filters.
   totalEmployees: 0,
@@ -92,6 +95,8 @@ export function reducer(state, action) {
 
     case 'SET_SEARCH_INPUT':
       return { ...state, searchInput: action.value };
+    case 'SET_STATUS_FILTER':
+      return { ...state, statusFilter: action.value, currentPage: 1 };
 
     case 'SET_START_DATE':
       return { ...state, startDate: action.value };

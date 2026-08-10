@@ -206,16 +206,22 @@ export default function CommandCenter() {
   // probes every tab's stream in the background (not just the active one) since
   // there's no backend field for per-camera online status.
   const [onlineCameras, setOnlineCameras] = useState(() => ctx.camHealth || { online: 0, total: 0 });
-  // Also hand it to the layout so the Sidebar footer can show the same number.
+  // Also hand it to the layout so the Sidebar footer can show the same number
+  // — but only when LiveCamera is looking at the whole estate. While an NVR
+  // filter is active it's reporting a deliberately narrower count, which
+  // isn't a health reading for the account; leave the Sidebar showing its
+  // last known full-estate reading rather than overwrite it with the
+  // filtered one.
   const onOnlineCountChange = useCallback((online, total) => {
     setOnlineCameras({ online, total });
+    if (selectedNvrs.length) return;
     ctx.setCamHealth?.((previous) => {
       // The Sidebar total is the current inventory total, not the dashboard's
       // filtered stream list. Keep it stable while the dashboard re-probes.
       const inventoryTotal = Number(previous?.total) || total;
       return { online: Math.min(online, inventoryTotal), total: inventoryTotal };
     });
-  }, [ctx.setCamHealth]);
+  }, [ctx.setCamHealth, selectedNvrs]);
 
 
  
@@ -395,12 +401,30 @@ export default function CommandCenter() {
   const networkChannels = nvrDetailChannels.data?.length ? nvrDetailChannels.data : (allChannels.data || []);
 
   const cameraInventoryTotal = (allChannels.data || []).length;
+
+  // When one or more NVRs are picked in the filter bar, the Live Camera strip
+  // and its status probe both scope to just their cameras — LiveCamera opens
+  // its own status connection for whatever `channels` it's given, so a
+  // filtered list here means the status request it sends only asks about
+  // this NVR's ids, not the whole estate's. "Cameras Online" naturally
+  // follows suit via onOnlineCountChange below.
+  const channelNvrId = (c) => c.nvrId?._id || c.nvr?._id || c.nvrId || c.nvr || null;
+  const nvrFilterActive = selectedNvrs.length > 0;
+  const filteredChannels = useMemo(() => {
+    const all = allChannels.data || [];
+    if (!nvrFilterActive) return all;
+    return all.filter((c) => selectedNvrs.includes(channelNvrId(c)));
+  }, [allChannels.data, nvrFilterActive, selectedNvrs]);
+
   const camerasOnline = useMemo(
     () => ({
       online: onlineCameras.online,
-      total: cameraInventoryTotal || onlineCameras.total,
+      // Filtered: the exact scoped count (deterministic, not dependent on the
+      // callback's own async timing). Unfiltered: the real inventory total,
+      // same denominator the Sidebar footer uses.
+      total: nvrFilterActive ? filteredChannels.length : (cameraInventoryTotal || onlineCameras.total),
     }),
-    [onlineCameras.online, onlineCameras.total, cameraInventoryTotal]
+    [onlineCameras.online, onlineCameras.total, cameraInventoryTotal, nvrFilterActive, filteredChannels.length]
   );
 
   const today = moment().format('YYYY-MM-DD');
@@ -507,7 +531,7 @@ export default function CommandCenter() {
       <div ref={dashboardGridRef} style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 18 }} className="vq-cc-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
           <LiveCamera
-            channels={allChannels.data || []}
+            channels={filteredChannels}
             loading={allChannels.loading}
             latestByChannel={latestByChannel}
             onOnlineCountChange={onOnlineCountChange}

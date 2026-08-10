@@ -6,14 +6,8 @@ import { Loading, Empty } from '../../../components/States';
 import CameraStream from '../../../components/CameraStream';
 import LiveCameraLogsOverlay from '../../../components/LiveCameraLogsOverlay';
 import usePageActive from '../../../hooks/usePageActive';
-import { useApi } from '../../../hooks/useApi';
-import { getCamerasStatus, isCameraLive, cameraStatusId } from '../../../helpers/cameraStatus';
-
-// The Camera Status API is a cached read regardless of scope (tested to 500
-// ids in one call), so this only bounds the query size for very large estates.
-const STATUS_LIMIT = 500;
-// How often the real backend status is polled for the tally + tab dots.
-const STATUS_POLL_MS = 5000;
+import { useCameraStatusStream } from '../../../hooks/useCameraStatusStream';
+import { isCameraLive, cameraStatusId } from '../../../helpers/cameraStatus';
 
 const PRIORITY_SELECTED = -50;
 
@@ -32,10 +26,9 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
     [channels]
   );
   const statusIds = useMemo(
-    () => cams.map(cameraStatusId).filter(Boolean).slice(0, STATUS_LIMIT),
+    () => cams.map(cameraStatusId).filter(Boolean),
     [cams]
   );
-  const statusIdsKey = statusIds.join(',');
   const [activeId, setActiveId] = useState(null);
 
   /* Tab hidden / browser minimised → drop the visible stream on this panel. */
@@ -50,13 +43,10 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
   // Real online/offline per tab, straight from the backend: a camera is live
   // when the RTSP source is reachable AND this server is actually producing
   // fresh HLS segments for it right now (rtsp_online && stream_status ===
-  // 'running') — see CAMERA_STATUS_API.md. Polled, not stream-probed, so
-  // every tab (not just a capped subset) gets a real verdict in one request.
-  const statusApi = useApi(
-    () => (statusIds.length ? getCamerasStatus(statusIds) : Promise.resolve(null)),
-    [statusIdsKey],
-    { pollMs: STATUS_POLL_MS, enabled: statusIds.length > 0 }
-  );
+  // 'running') — see CAMERA_STATUS_API.md. Streamed over one connection (the
+  // backend pushes a fresh reading every ~3s), not stream-probed per tab, so
+  // every tab gets a real verdict without polling.
+  const statusApi = useCameraStatusStream(statusIds, { enabled: statusIds.length > 0 });
   const statusById = useMemo(() => {
     const map = {};
     (statusApi.data?.cameras || []).forEach((cam) => {

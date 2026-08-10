@@ -9,19 +9,8 @@ import { useAuth } from '@/context/AuthContext';
 import { usePermissions } from '@/context/PermissionContext';
 import { useTheme } from '@/theme/ThemeContext';
 import { ENGINE_PALETTE } from '@/lib/engineMeta';
-import { timeAgo } from '@/lib/format';
 import videoraiqLogoColor from '@/assets/videoraiq-logo-color.png';
 import videoraiqLogoWhite from '@/assets/videoraiq-logo-white.png';
-
-// server_network.rating -> dot/text color (see CAMERA_STATUS_API.md).
-const NETWORK_RATING_COLOR = {
-  excellent: 'var(--ok)',
-  good: 'var(--ok)',
-  moderate: 'var(--warn)',
-  poor: 'var(--crit)',
-  critical: 'var(--crit)',
-  unknown: 'var(--tx3)',
-};
 
 const navItemStyle = (active, collapsed) => ({
   display: 'flex',
@@ -74,7 +63,7 @@ function isItemVisible(item, permissions) {
 
 const LOGS_COLLAPSE_KEY = 'vq-sidebar-logs-collapsed';
 
-export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = false, onMobileClose, camHealth = null, serverNetwork = null }) {
+export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = false, onMobileClose, camHealth = null }) {
   const { user } = useAuth();
   const { permissions } = usePermissions();
   const { theme } = useTheme();
@@ -95,10 +84,6 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
   // backdrop-filter box and so never covers the rest of the page).
   const closeAccount = useCallback(() => setAccountOpen(false), []);
   useOutsideClick(accountRef, accountOpen, closeAccount);
-  const [networkOpen, setNetworkOpen] = useState(false);
-  const networkRef = useRef(null);
-  const closeNetwork = useCallback(() => setNetworkOpen(false), []);
-  useOutsideClick(networkRef, networkOpen, closeNetwork);
   const [desktopCollapsed, setDesktopCollapsed] = useState(() => {
     try {
       return localStorage.getItem(STORAGE_KEY) === '1';
@@ -160,12 +145,6 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
   const totalCount = camHealth?.total ?? 0;
   // Green for online cameras; the dot greys out only when none are up.
   const healthColor = onlineCount > 0 ? 'var(--ok)' : 'var(--toggleoff)';
-
-  // This server's own internet uplink (server_network, global — not
-  // per-camera). Click opens a card with the full reading.
-  const networkRating = serverNetwork?.rating || 'unknown';
-  const networkColor = NETWORK_RATING_COLOR[networkRating] || 'var(--tx3)';
-  const networkRatingLabel = networkRating.charAt(0).toUpperCase() + networkRating.slice(1);
 
   const name = user?.user_name || user?.name || user?.user_email?.split('@')[0] || 'User';
   const email = user?.user_email || '';
@@ -495,90 +474,6 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
                 }}
               />
             </div>
-          </div>
-        )}
-
-        {serverNetwork && !collapsed && (
-          <div ref={networkRef} style={{ position: 'relative' }}>
-            <div
-              onClick={() => setNetworkOpen((o) => !o)}
-              title="Server network status"
-              style={{
-                padding: '11px 12px',
-                borderRadius: 11,
-                background: 'linear-gradient(135deg,rgba(59,130,246,.12),rgba(168,85,247,.07))',
-                border: '1px solid var(--bd)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 7,
-              }}
-            >
-              <span
-                className={networkRating !== 'unknown' ? 'vq-glowpulse' : undefined}
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: '50%',
-                  background: networkColor,
-                  boxShadow: networkRating !== 'unknown' ? `0 0 8px ${networkColor}` : 'none',
-                  flex: '0 0 auto',
-                }}
-              />
-              <span style={{ fontSize: 11, color: 'var(--tx2)', flex: 1 }}>
-                Server network: {networkRatingLabel}
-              </span>
-              <ChevronDown
-                size={12}
-                style={{ color: 'var(--tx3)', flex: '0 0 auto', transform: networkOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
-              />
-            </div>
-
-            {networkOpen && (
-              <div
-                className="vq-fadeup"
-                style={{
-                  position: 'absolute',
-                  bottom: '100%',
-                  left: 0,
-                  right: 0,
-                  marginBottom: 8,
-                  background: 'var(--bg1solid)',
-                  border: '1px solid var(--bd2)',
-                  borderRadius: 13,
-                  boxShadow: '0 18px 50px rgba(0,0,0,.6)',
-                  zIndex: 70,
-                  padding: 14,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: networkColor, boxShadow: `0 0 8px ${networkColor}`, flex: '0 0 auto' }} />
-                  <span style={{ fontSize: 13, fontWeight: 700 }}>{networkRatingLabel}</span>
-                </div>
-                {serverNetwork.description && (
-                  <div style={{ fontSize: 11.5, color: 'var(--tx2)', lineHeight: 1.5, marginBottom: 10 }}>
-                    {serverNetwork.description}
-                  </div>
-                )}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 10.5 }}>
-                  <div>
-                    <div style={{ color: 'var(--tx3)', marginBottom: 2, letterSpacing: '.06em' }}>LATENCY</div>
-                    <div style={{ fontFamily: 'var(--mono)', fontWeight: 600 }}>
-                      {serverNetwork.latency_ms != null ? `${serverNetwork.latency_ms} ms` : '—'}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ color: 'var(--tx3)', marginBottom: 2, letterSpacing: '.06em' }}>STATUS</div>
-                    <div style={{ fontFamily: 'var(--mono)', fontWeight: 600, textTransform: 'capitalize' }}>
-                      {serverNetwork.status || 'unknown'}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ marginTop: 10, fontSize: 10, color: 'var(--tx3)' }}>
-                  Checked {timeAgo(serverNetwork.last_checked)}
-                </div>
-              </div>
-            )}
           </div>
         )}
 

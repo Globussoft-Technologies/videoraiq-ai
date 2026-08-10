@@ -1,8 +1,6 @@
 import axios from 'axios';
 import getStreamHost from '../utils/getStreamHost';
 
-const LOCAL_SETUP = import.meta.env.VITE_LOCAL_SETUP === 'true';
-
 /**
  * The Camera Status API lives on the SAME streaming instance that actually
  * generates this user's HLS — "is this server generating HLS" only means
@@ -15,25 +13,83 @@ const LOCAL_SETUP = import.meta.env.VITE_LOCAL_SETUP === 'true';
  * module load) since the token can change after login.
  */
 function statusBase() {
-  if (LOCAL_SETUP) return '';
   const host = getStreamHost() || import.meta.env.VITE_STATUS_URL || '';
   return host.replace(/\/+$/, '');
 }
 
-/* accept a string or an array of ids and return a comma-joined string */
-const csv = (v) => (Array.isArray(v) ? v.filter(Boolean).join(',') : v || '');
+/* accept a string or an array of ids and return a filtered array */
+const idArray = (v) => (Array.isArray(v) ? v.filter(Boolean) : [v].filter(Boolean));
 
 /**
  * Bulk camera status — rtsp_online/stream_status/viewers/playback_status per
  * camera, plus the global server_network reading. Omit `ids` to get every
  * configured camera. No auth token on this endpoint (see CAMERA_STATUS_API.md).
+ *
+ * POSTs the ids in the body rather than a `?ids=` query string — a GET here
+ * used to cap callers at ~500 ids to stay under URL length limits; the body
+ * has no such ceiling; this API is tested to work with 100s-1000s of ids.
  */
 export const getCamerasStatus = async (ids) => {
-  const idList = csv(ids);
-  const qs = idList ? `?ids=${encodeURIComponent(idList)}` : '';
-  const res = await axios.get(`${statusBase()}/api/cameras/status${qs}`);
+  const list = idArray(ids);
+  const res = await axios.post(`${statusBase()}/api/cameras/status`, list.length ? { ids: list } : {});
   return res?.data || {};
 };
+
+/**
+ * Streaming variant of getCamerasStatus: opens one connection and the backend
+ * pushes a fresh summary down it every ~3s (SSE-framed: `data: {...}\n\n`)
+ * until it's unsubscribed, instead of the caller re-polling on a timer. Uses
+ * `fetch` directly (not axios) since it needs the raw response body reader.
+ *
+ * Returns an unsubscribe function. `onClose` fires when the stream ends
+ * without an error (the backend or network closed it) — a plain drop, not a
+ * failure, so callers may want to reconnect on it too (see
+ * hooks/useCameraStatusStream.js, which does).
+ */
+export function subscribeCamerasStatus(ids, { onData, onError, onClose } = {}) {
+  const controller = new AbortController();
+  const list = idArray(ids);
+
+  (async () => {
+    try {
+      const res = await fetch(`${statusBase()}/api/cameras/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: list, stream: true }),
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) throw new Error(`Camera status stream failed (${res.status})`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        // eslint-disable-next-line no-await-in-loop
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        let frameEnd;
+        while ((frameEnd = buf.indexOf('\n\n')) !== -1) {
+          const frame = buf.slice(0, frameEnd);
+          buf = buf.slice(frameEnd + 2);
+          if (!frame.startsWith('data: ')) continue;
+          try {
+            onData?.(JSON.parse(frame.slice(6)));
+          } catch {
+            // malformed frame — skip it, the connection is still good
+          }
+        }
+      }
+      onClose?.();
+    } catch (err) {
+      if (err?.name !== 'AbortError') onError?.(err);
+    }
+  })();
+
+  return () => controller.abort();
+}
 
 /** Same fields as one entry of getCamerasStatus()'s `cameras` array, single camera. */
 export const getCameraStatus = async (camId) => {
@@ -61,12 +117,15 @@ export function isCameraLive(cam) {
  * The Camera Status API keys every camera by the same id embedded in its
  * stream path (e.g. `id: "nvr_123-ch6"` <-> `stream_url:
  * "stream/nvr_123-ch6/playlist.m3u8"`) — NOT the channel's Mongo `_id` or
- * `channelId`. Extract it from the same `streamingUrl` field
- * lib/stream.js already reads to build the actual HLS URL the player
- * requests, so status lookups always key off the exact id being streamed.
+ * `channelId`. `localChannelId` already IS that id verbatim (a required
+ * field on every channel — see channels.model.js), so prefer it directly;
+ * fall back to parsing it out of `streamingUrl` (the field lib/stream.js
+ * reads to build the actual HLS URL) for channels/deployments that only
+ * carry that field.
  */
 export function cameraStatusId(channel) {
-  const raw = channel?.streamingUrl || channel?.StreamingUrl || channel?.config?.StreamingUrl || '';
+  if (channel?.localChannelId) return channel.localChannelId;
+  const raw = channel?.streamingUrl || channel?.StreamingUrl || channel?.config?.StreamingUrl || channel?.streamingPath || '';
   const match = String(raw).match(/stream\/([^/?]+)\/playlist\.m3u8/i);
   return match ? match[1] : null;
 }

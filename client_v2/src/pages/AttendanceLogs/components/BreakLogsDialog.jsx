@@ -65,6 +65,10 @@ const sanitizeFilename = (str) =>
  */
 const BreakLogsDialog = ({ open, onOpenChange, log, region, selectedDate, canEdit = true }) => {
   const [logs, setLogs] = useState([]);
+  // The day's bookends — first check-in / last check-out — deliberately kept
+  // separate from `logs` (the break pairs): they're the two events pairBreaks()
+  // on the server excludes from every break, so they need their own slot here.
+  const [bookends, setBookends] = useState({ firstCheckIn: null, lastCheckOut: null });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -77,12 +81,15 @@ const BreakLogsDialog = ({ open, onOpenChange, log, region, selectedDate, canEdi
     getAttendanceUserLogs(log.id, date)
       .then((res) => {
         if (cancelled) return;
-        setLogs(res?.data?.body?.data?.logs || []);
+        const data = res?.data?.body?.data;
+        setLogs(data?.logs || []);
+        setBookends({ firstCheckIn: data?.firstCheckIn || null, lastCheckOut: data?.lastCheckOut || null });
       })
       .catch((err) => {
         if (cancelled) return;
         console.log('Error fetching user logs:', err);
         setLogs([]);
+        setBookends({ firstCheckIn: null, lastCheckOut: null });
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -207,6 +214,37 @@ const BreakLogsDialog = ({ open, onOpenChange, log, region, selectedDate, canEdi
             <div className="flex flex-col">
               <span className="text-[var(--tx)] text-sm font-medium">{log.name || '--'}</span>
               <span className="text-[var(--tx2)] text-xs">{formatRowDate(log)}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Bookends — the first check-in and last check-out of the day.
+            Never part of a break themselves (see pairBreaks on the server);
+            shown here so the breaks below read as "everything that happened
+            in between", not the whole picture on their own. */}
+        {!loading && (bookends.firstCheckIn || bookends.lastCheckOut) && (
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="bg-[var(--bg2)] rounded-xl border border-[var(--bd)] px-4 py-3 flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-[var(--bg1solid)] border border-[var(--bd2)] flex items-center justify-center flex-shrink-0">
+                <LogIn className="w-4 h-4 text-[var(--ok)]" />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[10px] text-[var(--tx3)] uppercase tracking-wide">First check-in</span>
+                <span className="text-sm text-[var(--tx)] font-medium truncate">
+                  {formatTime(bookends.firstCheckIn?.timestamp, region)}
+                </span>
+              </div>
+            </div>
+            <div className="bg-[var(--bg2)] rounded-xl border border-[var(--bd)] px-4 py-3 flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-[var(--bg1solid)] border border-[var(--bd2)] flex items-center justify-center flex-shrink-0">
+                <LogOut className="w-4 h-4 text-[var(--brand)]" />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[10px] text-[var(--tx3)] uppercase tracking-wide">Last check-out</span>
+                <span className="text-sm text-[var(--tx)] font-medium truncate">
+                  {bookends.lastCheckOut ? formatTime(bookends.lastCheckOut?.timestamp, region) : 'Still on site'}
+                </span>
+              </div>
             </div>
           </div>
         )}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
 import RangeFilter, { defaultRange, rangeParams } from './RangeFilter';
+import TimezoneFilter, { defaultTimezone } from './TimezoneFilter';
 import { AnalyticsRefreshProvider, useAnalyticsRefreshAll } from './AnalyticsRefreshContext';
 import OverviewKpiRow from './OverviewKpiRow';
 import DetectionVolumeCard from './DetectionVolumeCard';
@@ -17,7 +18,10 @@ import AttendanceAnalytics from './AttendanceAnalytics';
  * Trends, heatmaps & engine performance. Every widget on this page is backed
  * by /analytics/* — nothing is static/mocked. The 7 Days / 30 Days /
  * Custom range filter drives every widget except Detections by Hour, which
- * is inherently single-day ("today") and has its own dedicated endpoint.
+ * is inherently single-day ("today") and has its own dedicated endpoint, and
+ * Attendance Analytics, which has its own Day/Range control (presence is
+ * single-day and readers expect the chart to follow whatever day/range
+ * they're picking right there, not a separate control up here).
  *
  * The original mockup's False Positive Rate / Mean Response Time / Platform
  * Uptime KPI tiles and the Model Performance card (precision/recall/F1/mAP)
@@ -36,7 +40,7 @@ const INTERVAL_KEY = 'analytics_auto_refresh_interval';
  * timer is mostly wasted queries — several of these endpoints are the heaviest
  * on the server. Turning it on is a deliberate choice, and it persists.
  */
-function AnalyticsToolbar({ range, onRangeChange }) {
+function AnalyticsToolbar({ range, onRangeChange, timezone, onTimezoneChange }) {
   const refreshAll = useAnalyticsRefreshAll();
 
   const [autoRefresh, setAutoRefresh] = useState(() => localStorage.getItem(REFRESH_KEY) === 'true');
@@ -57,6 +61,7 @@ function AnalyticsToolbar({ range, onRangeChange }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
       <RangeFilter range={range} onChange={onRangeChange} />
+      <TimezoneFilter timezone={timezone} onChange={onTimezoneChange} />
       <div style={{ marginLeft: 'auto' }}>
         <AutoRefreshComponent
           isActive={autoRefresh}
@@ -74,16 +79,17 @@ function AnalyticsToolbar({ range, onRangeChange }) {
 
 export default function Analytics() {
   const [range, setRange] = useState(defaultRange);
-  const params = rangeParams(range);
+  const [timezone, setTimezone] = useState(defaultTimezone);
+  const params = { ...rangeParams(range), timezone };
 
   return (
     <AnalyticsRefreshProvider>
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <AnalyticsToolbar range={range} onRangeChange={setRange} />
+      <AnalyticsToolbar range={range} onRangeChange={setRange} timezone={timezone} onTimezoneChange={setTimezone} />
 
       <OverviewKpiRow params={params} />
 
-      <AttendanceAnalytics params={params} />
+      <AttendanceAnalytics timezone={timezone} />
 
       {/* Detection Volume | Share by Engine */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 18 }} className="vq-analytics-row">
@@ -100,7 +106,7 @@ export default function Analytics() {
       {/* Peak Activity | Detections by Hour */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 18 }} className="vq-analytics-row">
         <PeakActivityCard params={params} />
-        <DetectionsByHourCard />
+        <DetectionsByHourCard timezone={timezone} />
       </div>
 
       {/* Site Performance | Response Funnel */}

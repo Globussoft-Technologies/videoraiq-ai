@@ -6,10 +6,11 @@ import Header from './Header';
 import AssistantLauncher from '../components/AssistantLauncher';
 import CameraLimitLock from '../components/CameraLimitLock';
 import { VIEW_META } from './nav.config';
-import { getLocations } from '../helpers/monitoring';
+import { getLocations, getChannels } from '../helpers/monitoring';
 import { getCriticalityStats } from '../helpers/dashboard';
-import { getCamerasStatus } from '../helpers/cameraStatus';
+import { cameraStatusId } from '../helpers/cameraStatus';
 import { useApi } from '../hooks/useApi';
+import { useCameraStatusStream } from '../hooks/useCameraStatusStream';
 import { timeAgo } from '../lib/format';
 
 const SEV_COLOR = { high: 'var(--crit)', critical: 'var(--crit)', moderate: 'var(--warn)', medium: 'var(--warn)', low: 'var(--tx3)' };
@@ -169,7 +170,19 @@ function Shell() {
       return null;
     }
   });
-  const networkStatusApi = useApi(() => getCamerasStatus(), [], { pollMs: 20000 });
+  // `server_network` rides along on every Camera Status API response
+  // regardless of which camera(s) it's scoped to, so one arbitrary id is
+  // enough to get it — no need to query the whole fleet (see below). This
+  // one-off lookup just supplies that id.
+  // Some channels have no streamingUrl yet (backend registration pending),
+  // so cameraStatusId() returns null for them — pull enough candidates that
+  // at least one is very likely to resolve.
+  const probeChannelsApi = useApi(() => getChannels({ limit: 30 }), []);
+  const probeId = useMemo(
+    () => (probeChannelsApi.data || []).map(cameraStatusId).find(Boolean) || null,
+    [probeChannelsApi.data]
+  );
+  const networkStatusApi = useCameraStatusStream([probeId], { enabled: !!probeId });
   useEffect(() => {
     if (networkStatusApi.data?.server_network) setServerNetwork(networkStatusApi.data.server_network);
   }, [networkStatusApi.data]);
@@ -213,7 +226,6 @@ function Shell() {
         mobileOpen={navOpen}
         onMobileClose={() => setNavOpen(false)}
         camHealth={camHealth}
-        serverNetwork={serverNetwork}
       />
       <CameraLimitLock />
       {/* Drawer backdrop (mobile only) */}
@@ -233,6 +245,7 @@ function Shell() {
           sites={sites}
           siteFilter={siteFilter}
           onSiteChange={onSiteChange}
+          serverNetwork={serverNetwork}
           notifications={notifications}
           unreadCount={unreadCount}
           onMarkNotificationsRead={markNotificationsRead}

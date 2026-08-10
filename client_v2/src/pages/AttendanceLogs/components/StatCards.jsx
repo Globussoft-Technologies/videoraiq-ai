@@ -5,8 +5,10 @@ import React from 'react';
  * Values are real, derived by each page from the data it already has — no
  * placeholder numbers.
  *
- * `stats` = [{ label, value, color }] where `color` is a CSS var/hex used for
- * the big number (defaults to the primary text colour when omitted).
+ * `stats` = [{ label, value, color, onClick, active }] where `color` is a CSS
+ * var/hex used for the big number (defaults to the primary text colour when
+ * omitted). Cards with an `onClick` become a toggle button — `active`
+ * highlights the currently-applied one.
  */
 
 // Spelled out rather than built as `lg:grid-cols-${n}`: Tailwind scans source
@@ -31,7 +33,22 @@ const StatCards = ({ stats = [] }) => {
       {stats.map((s, i) => (
         <div
           key={s.label ?? i}
-          className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[13px] p-[15px]"
+          onClick={s.onClick}
+          role={s.onClick ? 'button' : undefined}
+          tabIndex={s.onClick ? 0 : undefined}
+          onKeyDown={
+            s.onClick
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    s.onClick(e);
+                  }
+                }
+              : undefined
+          }
+          className={`bg-[var(--bg1)] border rounded-[13px] p-[15px] ${
+            s.onClick ? 'cursor-pointer hover:border-[var(--brand)]' : ''
+          } ${s.active ? 'border-[var(--brand)] ring-1 ring-[var(--brand)]/30' : 'border-[var(--bd)]'}`}
         >
           <div className="text-[11px] text-[var(--tx2)] truncate" title={s.label}>
             {s.label}

@@ -1538,8 +1538,8 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                   <div style={{ gridColumn: '1 / -1' }}>
                     <ModalInput label="Public IP Address" required value={form.ip} onChange={set('ip')} placeholder="e.g. 203.0.113.24 (no http:// or port)" mono invalid={!!errors.ip} error={errors.ip} readOnly={isLocalEdit} />
                   </div>
-                  <ModalInput label="Username" required value={form.user} onChange={set('user')} placeholder="admin" invalid={!!errors.user} error={errors.user} readOnly={isLocalEdit} />
-                  {isEdit ? <div /> : <ModalInput label="Password" type="password" value={form.pass} onChange={set('pass')} placeholder="password" />}
+                  <ModalInput label="Username" required value={form.user} onChange={set('user')} placeholder="admin" invalid={!!errors.user} error={errors.user} readOnly={isLocalEdit} autoComplete="off" />
+                  {isEdit ? <div /> : <ModalInput label="Password" type="password" value={form.pass} onChange={set('pass')} placeholder="password" autoComplete="new-password" />}
                   <ModalInput label="RTSP Port" required value={form.rtsp} onChange={set('rtsp')} placeholder="554" mono invalid={!!errors.rtsp} error={errors.rtsp} readOnly={isLocalEdit} />
                   <ModalInput label="HTTP Port" required value={form.http} onChange={set('http')} placeholder="80" mono invalid={!!errors.http} error={errors.http} readOnly={isLocalEdit} />
             </div>
