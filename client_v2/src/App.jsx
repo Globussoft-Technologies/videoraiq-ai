@@ -7,6 +7,7 @@ import EmployeeLogin from '@/page/user/Portal/EmployeeLogin';
 import EmployeeRegister from '@/page/user/Portal/EmployeeRegister';
 import IsAuth from '@/components/Auth/IsAuth';
 import Logout from '@/components/Auth/Logout';
+import VerifyRecipient from '@/page/user/Administer/VerifyRecipient';
 
 /**
  * Standalone V2 app router.
@@ -25,6 +26,7 @@ export const router = createBrowserRouter(
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/employee-login" element={<EmployeeLogin />} />
       <Route path="/employee-register" element={<EmployeeRegister />} />
+      <Route path="/verify" element={<VerifyRecipient />} />
       <Route path="/logout" element={<Logout />} />
       <Route
         element={

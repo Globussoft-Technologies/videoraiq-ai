@@ -50,3 +50,12 @@ export const resendVerification = async ({ id, type, value }) => {
   );
   return res?.data?.body;
 };
+
+export const verifyRecipientOtp = async ({ type, value, tokenData }) => {
+  const res = await axios.post(
+    `${Api_url}/recipients/verify?alertType=${type}&otp=${encodeURIComponent(tokenData)}`,
+    { [type]: value },
+    { headers: { 'Content-Type': 'application/json' } }
+  );
+  return res?.data;
+};
