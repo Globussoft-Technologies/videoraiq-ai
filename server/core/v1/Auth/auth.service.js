@@ -25,6 +25,21 @@ import { autoSyncLocations, syncPermissionLocations, syncStevinrockLogPermission
 const backendToken = config.get("Backend.token");
 const detectionHost = config.get("PythonService.detectionUrl");
 const APP_ENV = config.get("APP_ENV");
+const DEFAULT_FETCH_TIMEOUT_MS = 8000;
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_FETCH_TIMEOUT_MS) {
+  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+    return fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) });
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // Every logs sub-permission the backfill maintains. Add new log types here and
 // the migration picks them up for existing admins automatically.
@@ -578,7 +593,7 @@ class AUTHService {
       pass: loginPass.pass,
     });
     try {
-      const response = await fetch(`${url}?${params}`);
+      const response = await fetchWithTimeout(`${url}?${params}`);
       const data = await response.json();
       return data;
     } catch (error) {
@@ -734,13 +749,13 @@ return bypassUsers.find(
         let maxRetries = 5;
         while (maxRetries > 0) {
           try {
-            const createCollRes = await fetch(`${dsAuthUsersAPI}/create_collection`, {
+            const createCollRes = await fetchWithTimeout(`${dsAuthUsersAPI}/create_collection`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({ admin_id: adminData._id.toString() })
-            });
+            }, 8000);
 
             if (createCollRes?.status === 201 || createCollRes?.status === 409) {
               break;
