@@ -1,6 +1,8 @@
 ﻿import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment';
+import { useEffect } from 'react';
+import SearchableSelect from '../../../components/SearchableSelect';
 import {
   Activity,
   Hourglass,
@@ -15,6 +17,7 @@ import { Panel, PanelHeader } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
 import { getAttendanceAnalytics, getAttendancePresence } from '../../../helpers/analytics';
+import { getEmployeeLocations } from '../../../api/administer';
 import { useAnalyticsRefresh } from './AnalyticsRefreshContext';
 import AnalyticsBlurb from './AnalyticsBlurb';
 import RangeFilter, { defaultRange, rangeParams } from './RangeFilter';
@@ -36,6 +39,8 @@ import RangeFilter, { defaultRange, rangeParams } from './RangeFilter';
  */
 
 const PLOT_H = 172;
+const LOCATION_STORAGE_KEY = 'attendance_analytics_location';
+const ALL_LOCATIONS = 'All Locations';
 // Matches the Attendance Logs status badges so a colour means the same thing on
 // both screens. "No log" is deliberately the quietest of the set - it's the
 // remainder of the roster, not an event.
@@ -49,6 +54,18 @@ const COLORS = {
 
 function numberFmt(value) {
   return Number(value || 0).toLocaleString('en-IN');
+}
+
+function ratioPct(count, total) {
+  const denominator = Number(total || 0);
+  if (denominator <= 0) return 0;
+  return (Number(count || 0) / denominator) * 100;
+}
+
+function formatPct(value) {
+  const pct = Number(value || 0);
+  if (!Number.isFinite(pct)) return '0%';
+  return `${Math.round(pct)}%`;
 }
 
 /**
@@ -123,7 +140,7 @@ function Trend({ trend, positiveUp = true }) {
   );
 }
 
-function MetricTile({ icon: Icon, label, metric, color, subLabel, positiveUp = true, onClick }) {
+function MetricTile({ icon: Icon, label, metric, color, subLabel, positiveUp = true, onClick, footerValue = null }) {
   const pct = Number(metric?.pct || 0);
 
   return (
@@ -167,7 +184,6 @@ function MetricTile({ icon: Icon, label, metric, color, subLabel, positiveUp = t
         <span style={{ fontFamily: 'var(--disp)', fontSize: 24, fontWeight: 700, color: 'var(--tx)' }}>
           {numberFmt(metric?.count)}
         </span>
-        <span style={{ fontSize: 11, color: 'var(--tx3)', paddingBottom: 4 }}>{pct}%</span>
       </div>
 
       <div style={{ height: 5, borderRadius: 4, background: 'var(--bg3)', overflow: 'hidden' }}>
@@ -188,7 +204,11 @@ function MetricTile({ icon: Icon, label, metric, color, subLabel, positiveUp = t
         >
           {subLabel}
         </span>
-        <Trend trend={metric?.trend} positiveUp={positiveUp} />
+        {footerValue != null ? (
+          <span style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--tx2)' }}>{footerValue}</span>
+        ) : (
+          <Trend trend={metric?.trend} positiveUp={positiveUp} />
+        )}
       </div>
     </div>
   );
@@ -232,6 +252,13 @@ function DailyActivity({ series = [], employees = 0 }) {
 
   const rows = Array.isArray(series) ? series : [];
   const roster = Math.max(Number(employees) || 0, ...rows.map((row) => Number(row.attended || 0)), 0);
+  const hasAttendanceData = rows.some((row) => {
+    const present = Number(row?.present || 0);
+    const halfDay = Number(row?.halfDay || 0);
+    const shortDay = Number(row?.shortDay || 0);
+    const checkedIn = Number(row?.checkedIn || 0);
+    return present > 0 || halfDay > 0 || shortDay > 0 || checkedIn > 0;
+  });
 
   const left = niceScale(roster, 4);
 
@@ -250,6 +277,14 @@ function DailyActivity({ series = [], employees = 0 }) {
     return (
       <div style={{ height: PLOT_H, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 12 }}>
         No activity in the selected range
+      </div>
+    );
+  }
+
+  if (!hasAttendanceData) {
+    return (
+      <div style={{ height: PLOT_H, display: 'grid', placeItems: 'center', color: 'var(--tx3)', fontSize: 12 }}>
+        No data available for the selected range
       </div>
     );
   }
@@ -444,6 +479,16 @@ function DailyActivity({ series = [], employees = 0 }) {
   );
 }
 
+function hasDailyAttendanceData(series = []) {
+  return (Array.isArray(series) ? series : []).some((row) => {
+    const present = Number(row?.present || 0);
+    const halfDay = Number(row?.halfDay || 0);
+    const shortDay = Number(row?.shortDay || 0);
+    const checkedIn = Number(row?.checkedIn || 0);
+    return present > 0 || halfDay > 0 || shortDay > 0 || checkedIn > 0;
+  });
+}
+
 /**
  * The KPI tiles are a single-day figure — presence only means anything for
  * one calendar day. They come from /analytics/attendance-presence, which
@@ -465,8 +510,38 @@ export default function AttendanceAnalytics({ timezone }) {
   const today = useMemo(() => moment().format('YYYY-MM-DD'), []);
 
   const [range, setRange] = useState(defaultRange);
+  const [selectedLocation, setSelectedLocation] = useState(() => localStorage.getItem(LOCATION_STORAGE_KEY) || '');
+  const [locationOptions, setLocationOptions] = useState([ALL_LOCATIONS]);
 
-  const chartRange = useMemo(() => rangeParams(range), [range]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const locations = await getEmployeeLocations({ skip: 0, limit: 1000 });
+        const names = (Array.isArray(locations) ? locations : [])
+          .map((location) => location?.locationName || location?.name || '')
+          .filter(Boolean);
+        setLocationOptions([ALL_LOCATIONS, ...new Set(names)]);
+      } catch (error) {
+        console.error('Failed to load employee locations for attendance analytics', error);
+        setLocationOptions([ALL_LOCATIONS]);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    const currentLabel = selectedLocation || ALL_LOCATIONS;
+    if (locationOptions.includes(currentLabel)) return;
+    localStorage.setItem(LOCATION_STORAGE_KEY, '');
+    setSelectedLocation('');
+  }, [locationOptions, selectedLocation]);
+
+  const chartRange = useMemo(
+    () => ({
+      ...rangeParams(range),
+      ...(selectedLocation ? { location: selectedLocation } : {}),
+    }),
+    [range, selectedLocation]
+  );
   const chartRangeKey = useMemo(() => JSON.stringify(chartRange), [chartRange]);
 
   // Presence has no meaning over a range, so it shows the most recent day in
@@ -482,8 +557,8 @@ export default function AttendanceAnalytics({ timezone }) {
   // Separate from `analytics` on purpose: changing the date must refetch only
   // this, not blank out the chart and anomalies behind a spinner.
   const presenceApi = useApi(
-    () => getAttendancePresence({ date: presenceDate }),
-    [presenceDate]
+    () => getAttendancePresence({ date: presenceDate, ...(selectedLocation ? { location: selectedLocation } : {}) }),
+    [presenceDate, selectedLocation]
   );
 
   // Both halves refetch on the page's auto-refresh tick / manual refresh.
@@ -495,6 +570,13 @@ export default function AttendanceAnalytics({ timezone }) {
   const presence = presenceApi.data || {};
   const activeRangeLabel = formatRangeLabel(data.range);
   const presenceDayLabel = presenceDate === today ? 'Today' : moment(presenceDate).format('D MMM');
+  const showDailyActivityHelpers = hasDailyAttendanceData(data.series || []);
+  const totalEmployees = Number(presence.employees || 0);
+  const totalEmployeesPct = ratioPct(totalEmployees, totalEmployees);
+  const checkInPct = ratioPct(presence.checkinLogs, totalEmployees);
+  const halfDayPct = ratioPct(presence.halfDay, totalEmployees);
+  const absentPct = ratioPct(presence.absent, totalEmployees);
+  const checkoutPct = ratioPct(presence.checkoutLogs, totalEmployees);
 
   return (
     <Panel>
@@ -519,7 +601,26 @@ export default function AttendanceAnalytics({ timezone }) {
             <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--tx3)', letterSpacing: 0.4, textTransform: 'uppercase' }}>
               Presence on {presenceDayLabel}
             </span>
-            <RangeFilter range={range} onChange={setRange} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ fontFamily: 'var(--ui)', fontSize: 11.5, color: 'var(--tx3)' }}>Employee location</span>
+                <div style={{ width: 230 }}>
+                  <SearchableSelect
+                    value={selectedLocation || ALL_LOCATIONS}
+                    options={locationOptions}
+                    onChange={(next) => {
+                      const normalized = next === ALL_LOCATIONS ? '' : next;
+                      localStorage.setItem(LOCATION_STORAGE_KEY, normalized);
+                      setSelectedLocation(normalized);
+                    }}
+                    placeholder="Select location"
+                    searchPlaceholder="Search location..."
+                    emptyLabel="No locations found"
+                  />
+                </div>
+              </div>
+              <RangeFilter range={range} onChange={setRange} />
+            </div>
           </div>
 
           {/* auto-fit rather than a fixed 5 columns: five tiles at 160px would
@@ -528,9 +629,10 @@ export default function AttendanceAnalytics({ timezone }) {
             <MetricTile
               icon={Users}
               label="Total Employees"
-              metric={{ count: presence.employees }}
+              metric={{ count: presence.employees, pct: totalEmployeesPct }}
               color="var(--blue)"
               subLabel="Registered users"
+              footerValue={formatPct(totalEmployeesPct)}
               onClick={() => navigate('/register-users')}
             />
             {/* Anyone who has checked in at all today, regardless of duration
@@ -540,56 +642,77 @@ export default function AttendanceAnalytics({ timezone }) {
             <MetricTile
               icon={UserCheck}
               label="Check In"
-              metric={{ count: presence.checkinLogs }}
+              metric={{ count: presence.checkinLogs, pct: checkInPct }}
               color="var(--ok)"
               subLabel={`Checked in · ${presenceDayLabel}`}
+              footerValue={formatPct(checkInPct)}
               onClick={() =>
                 navigate('/logs/attendance', {
-                  state: { startDate: presenceDate, endDate: presenceDate, statusFilter: 'checkin' },
+                  state: {
+                    startDate: presenceDate,
+                    endDate: presenceDate,
+                    statusFilter: 'checkin',
+                    employeeLocations: selectedLocation ? [selectedLocation] : [],
+                  },
                 })
               }
             />
             <MetricTile
               icon={Hourglass}
               label="Half Day"
-              metric={{ count: presence.halfDay }}
+              metric={{ count: presence.halfDay, pct: halfDayPct }}
               color="var(--warn)"
-              subLabel={`Part day · ${presenceDayLabel}`}
+              subLabel={`Half day · ${presenceDayLabel}`}
+              footerValue={formatPct(halfDayPct)}
               onClick={() =>
                 navigate('/logs/attendance', {
-                  state: { startDate: presenceDate, endDate: presenceDate, statusFilter: 'half_day' },
+                  state: {
+                    startDate: presenceDate,
+                    endDate: presenceDate,
+                    statusFilter: 'half_day',
+                    employeeLocations: selectedLocation ? [selectedLocation] : [],
+                  },
                 })
               }
             />
-            {/* Roster-based: total employees minus anyone who checked in
-                today. Starts at the full roster and only drops as check-ins
-                land — see attendancePresence() in analytics.service.js. The
-                statusFilter=absent it links to can only surface employees who
-                already have a log row (checked in/out under the half-day
-                threshold); most of this count never checked in at all, so has
-                no row to show. */}
+            {/* The full absence bucket for the selected day: employees who
+                checked in but still graded absent, plus employees who never
+                checked in at all. The Attendance Logs screen splits that same
+                server-calculated total into Early Leave and Not Checked In. */}
             <MetricTile
               icon={UserX}
               label="Absentees"
-              metric={{ count: presence.absent }}
+              metric={{ count: presence.absent, pct: absentPct }}
               color="var(--crit)"
-              subLabel={`No check-in · ${presenceDayLabel}`}
+              subLabel={`Absent · ${presenceDayLabel}`}
+              footerValue={formatPct(absentPct)}
               positiveUp={false}
               onClick={() =>
                 navigate('/logs/attendance', {
-                  state: { startDate: presenceDate, endDate: presenceDate, statusFilter: 'absent' },
+                  state: {
+                    startDate: presenceDate,
+                    endDate: presenceDate,
+                    statusFilter: 'absent',
+                    employeeLocations: selectedLocation ? [selectedLocation] : [],
+                  },
                 })
               }
             />
             <MetricTile
               icon={LogOut}
               label="Checkout"
-              metric={{ count: presence.checkoutLogs }}
+              metric={{ count: presence.checkoutLogs, pct: checkoutPct }}
               color="var(--blue)"
               subLabel={`Checked out · ${presenceDayLabel}`}
+              footerValue={formatPct(checkoutPct)}
               onClick={() =>
                 navigate('/logs/attendance', {
-                  state: { startDate: presenceDate, endDate: presenceDate, statusFilter: 'checkout' },
+                  state: {
+                    startDate: presenceDate,
+                    endDate: presenceDate,
+                    statusFilter: 'checkout',
+                    employeeLocations: selectedLocation ? [selectedLocation] : [],
+                  },
                 })
               }
             />
@@ -616,21 +739,25 @@ export default function AttendanceAnalytics({ timezone }) {
                 <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>Daily Activity</span>
                 <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{activeRangeLabel || 'Selected range'}</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 10.5, flexWrap: 'wrap' }}>
-                <LegendItem color={COLORS.present} label="Present" />
-                <LegendItem color={COLORS.halfDay} label="Half day" />
-                <LegendItem color={COLORS.shortDay} label="Absent" />
-                <LegendItem color={COLORS.checkedIn} label="Checked in" />
-                <LegendItem color={COLORS.noLog} label="No log" />
-              </div>
+              {showDailyActivityHelpers && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 10.5, flexWrap: 'wrap' }}>
+                  <LegendItem color={COLORS.present} label="Present" />
+                  <LegendItem color={COLORS.halfDay} label="Half day" />
+                  <LegendItem color={COLORS.shortDay} label="Absent" />
+                  <LegendItem color={COLORS.checkedIn} label="Checked in" />
+                  <LegendItem color={COLORS.noLog} label="No log" />
+                </div>
+              )}
             </div>
 
             <DailyActivity series={data.series || []} employees={presence.employees} />
 
-            <div style={{ marginTop: 8, fontSize: 10, color: 'var(--tx3)' }}>
-              Bars: employees per day, stacked to the full roster and graded by the same rules as the
-              Attendance Logs page.
-            </div>
+            {showDailyActivityHelpers && (
+              <div style={{ marginTop: 8, fontSize: 10, color: 'var(--tx3)' }}>
+                Bars: employees per day, stacked to the full roster and graded by the same rules as the
+                Attendance Logs page.
+              </div>
+            )}
           </div>
         </div>
       </AsyncBoundary>

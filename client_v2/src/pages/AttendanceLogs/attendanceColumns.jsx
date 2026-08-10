@@ -37,6 +37,7 @@ export const ATTENDANCE_STATUS_LABELS = {
   half_day: 'Half Day',
   absent: 'Absent',
   checked_in: 'Checked In',
+  not_checked_in: 'Not Checked In',
 };
 
 export const ATTENDANCE_STATUS_COLORS = {
@@ -44,6 +45,7 @@ export const ATTENDANCE_STATUS_COLORS = {
   half_day: '#f5a623',
   absent: '#ef4444',
   checked_in: '#3b82f6',
+  not_checked_in: '#ef4444',
 };
 
 const validMoment = (value) => {
@@ -169,7 +171,9 @@ export const buildColumns = ({ dispatch, sortField, sortOrder, region, convertTo
             ? moment(row.original.login).format('DD/MM/YYYY')
             : moment(row.original.logout).isValid()
               ? moment(row.original.logout).format('DD/MM/YYYY')
-              : '-'}
+              : row.original.date
+                ? moment(row.original.date).format('DD/MM/YYYY')
+                : '-'}
         </span>
       ),
     },
@@ -257,27 +261,31 @@ export const buildColumns = ({ dispatch, sortField, sortOrder, region, convertTo
       header: 'Action',
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <button
-            onClick={() => {
-              dispatch({ type: 'SET_SELECTED_LOG', value: row.original });
-              dispatch({ type: 'SET_SHOW_PREVIEW', value: true });
-            }}
-            className="p-2 rounded-full bg-transparent cursor-pointer hover:bg-[var(--bg2)] transition-colors"
-            aria-label={`Play ${row.original.name}`}
-          >
-            <Play className="w-5 h-5 text-[var(--brand)]" />
-          </button>
-          <button
-            onClick={() => {
-              dispatch({ type: 'SET_SELECTED_BREAK_LOG', value: row.original });
-              dispatch({ type: 'SET_SHOW_BREAK_LOGS', value: true });
-            }}
-            className="p-2 rounded-full bg-transparent cursor-pointer hover:bg-[var(--bg2)] transition-colors"
-            aria-label={`View break logs for ${row.original.name}`}
-            title="Break logs"
-          >
-            <Hourglass className="w-5 h-5 text-[var(--brand)]" />
-          </button>
+          {row.original.status !== 'not_checked_in' && (
+            <>
+              <button
+                onClick={() => {
+                  dispatch({ type: 'SET_SELECTED_LOG', value: row.original });
+                  dispatch({ type: 'SET_SHOW_PREVIEW', value: true });
+                }}
+                className="p-2 rounded-full bg-transparent cursor-pointer hover:bg-[var(--bg2)] transition-colors"
+                aria-label={`Play ${row.original.name}`}
+              >
+                <Play className="w-5 h-5 text-[var(--brand)]" />
+              </button>
+              <button
+                onClick={() => {
+                  dispatch({ type: 'SET_SELECTED_BREAK_LOG', value: row.original });
+                  dispatch({ type: 'SET_SHOW_BREAK_LOGS', value: true });
+                }}
+                className="p-2 rounded-full bg-transparent cursor-pointer hover:bg-[var(--bg2)] transition-colors"
+                aria-label={`View break logs for ${row.original.name}`}
+                title="Break logs"
+              >
+                <Hourglass className="w-5 h-5 text-[var(--brand)]" />
+              </button>
+            </>
+          )}
         </div>
       ),
     },
@@ -332,34 +340,36 @@ export const renderAttendanceCard = (item, { dispatch, region, convertToRegionTi
         )}
 
         {/* Action buttons */}
-        <div className="absolute top-2 right-2 flex items-center gap-1 z-30">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              dispatch({ type: 'SET_SELECTED_LOG', value: item });
-              dispatch({ type: 'SET_SHOW_PREVIEW', value: true });
-            }}
-            className="text-white bg-[rgba(6,8,13,.6)] hover:text-[#ec4899] hover:bg-[#ec4899]/20 p-1 rounded-[5px] transition-colors cursor-pointer"
-            style={{ backdropFilter: 'blur(4px)' }}
-            aria-label={`Play ${item.name}`}
-            title="Play preview"
-          >
-            <Play className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              dispatch({ type: 'SET_SELECTED_BREAK_LOG', value: item });
-              dispatch({ type: 'SET_SHOW_BREAK_LOGS', value: true });
-            }}
-            className="text-white bg-[rgba(6,8,13,.6)] hover:text-[#f59e0b] hover:bg-[#f59e0b]/20 p-1 rounded-[5px] transition-colors cursor-pointer"
-            style={{ backdropFilter: 'blur(4px)' }}
-            aria-label={`View break logs for ${item.name}`}
-            title="Break logs"
-          >
-            <Hourglass className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        {item.status !== 'not_checked_in' && (
+          <div className="absolute top-2 right-2 flex items-center gap-1 z-30">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                dispatch({ type: 'SET_SELECTED_LOG', value: item });
+                dispatch({ type: 'SET_SHOW_PREVIEW', value: true });
+              }}
+              className="text-white bg-[rgba(6,8,13,.6)] hover:text-[#ec4899] hover:bg-[#ec4899]/20 p-1 rounded-[5px] transition-colors cursor-pointer"
+              style={{ backdropFilter: 'blur(4px)' }}
+              aria-label={`Play ${item.name}`}
+              title="Play preview"
+            >
+              <Play className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                dispatch({ type: 'SET_SELECTED_BREAK_LOG', value: item });
+                dispatch({ type: 'SET_SHOW_BREAK_LOGS', value: true });
+              }}
+              className="text-white bg-[rgba(6,8,13,.6)] hover:text-[#f59e0b] hover:bg-[#f59e0b]/20 p-1 rounded-[5px] transition-colors cursor-pointer"
+              style={{ backdropFilter: 'blur(4px)' }}
+              aria-label={`View break logs for ${item.name}`}
+              title="Break logs"
+            >
+              <Hourglass className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Status pill */}
         <div

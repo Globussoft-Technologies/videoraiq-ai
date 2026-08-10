@@ -47,6 +47,7 @@ const ReusableTablePage = ({
   limit: limitProp,
   onLimitChange,
   stats,
+  secondaryToolbar,
 }) => {
   const [internalSearchInput, setInternalSearchInput] = useState('');
   const [internalViewMode, setInternalViewMode] = useState('table');
@@ -207,6 +208,8 @@ const ReusableTablePage = ({
             {children}
           </div>
         </div>
+
+        {secondaryToolbar ? <div>{secondaryToolbar}</div> : null}
 
         {/* Content */}
         {loading ? (

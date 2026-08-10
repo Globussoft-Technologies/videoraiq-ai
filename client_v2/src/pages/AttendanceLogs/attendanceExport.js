@@ -23,7 +23,9 @@ const rowDate = (item) =>
     ? moment(item.logInTime).format('DD/MM/YYYY')
     : moment(item.logOutTime).isValid()
       ? moment(item.logOutTime).format('DD/MM/YYYY')
-      : '-';
+      : item?.date
+        ? moment(item.date).format('DD/MM/YYYY')
+        : '-';
 
 /**
  * Fetch the full (unpaginated) result set for export using the current filters.
@@ -46,6 +48,7 @@ const fetchAllForExport = async (params) => {
     timeType,
     employeeLocations,
     region,
+    statusFilter,
   } = params;
 
   const departmentIds = selectedDepartments.join(',');
@@ -75,7 +78,8 @@ const fetchAllForExport = async (params) => {
     utcToTime,
     timeType,
     true,
-    employeeLocations
+    employeeLocations,
+    statusFilter
   );
 
   return response?.data?.body?.data?.attendanceLogs || [];

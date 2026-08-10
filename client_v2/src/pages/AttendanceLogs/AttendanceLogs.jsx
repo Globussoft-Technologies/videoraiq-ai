@@ -27,7 +27,16 @@ const ATTENDANCE_INTERVAL_KEY = 'attendance_auto_refresh_interval';
 const ATTENDANCE_VIEW_MODE_KEY = 'attendance_view_mode';
 // Module-level constant so the reducer gets the same reference on every reset
 // and the `stats` memo doesn't recompute on unrelated renders.
-const EMPTY_STATUS_COUNTS = { present: 0, halfDay: 0, absent: 0, checkedIn: 0, checkinLogs: 0, checkoutLogs: 0 };
+const EMPTY_STATUS_COUNTS = {
+  present: 0,
+  halfDay: 0,
+  absent: 0,
+  checkedIn: 0,
+  earlyLeave: 0,
+  notCheckedIn: 0,
+  checkinLogs: 0,
+  checkoutLogs: 0,
+};
 
 const convertToRegionTime = (utcTime, region) => {
   if (!utcTime) return '--';
@@ -50,16 +59,23 @@ const cameraNamesForAttendance = (item) => {
   return [...new Set(names.map((name) => String(name).trim()))].join(', ');
 };
 
+const ABSENT_TABS = {
+  EARLY_LEAVE: 'early_leave',
+  NOT_CHECKED_IN: 'not_checked_in',
+};
+
 const AttendanceLogs = () => {
   // Arriving from another screen (e.g. Attendance Analytics' "Present" tile)
   // can pre-select a day and status — read once, on mount, as the reducer's
   // initial state rather than reacting to it afterwards.
-  const navState = useLocation().state || {};
+  const location = useLocation();
+  const navState = location.state || {};
   const [state, dispatch] = useReducer(reducer, {
     ...initialState,
     startDate: navState.startDate || initialState.todayISO,
     endDate: navState.endDate || initialState.todayISO,
     statusFilter: navState.statusFilter || '',
+    employeeLocations: Array.isArray(navState.employeeLocations) ? navState.employeeLocations : [],
   });
 
   const [autoRefresh, setAutoRefresh] = useState(() => {
@@ -72,6 +88,11 @@ const AttendanceLogs = () => {
   });
   const [manualTrigger, setManualTrigger] = useState(0);
   const attendanceRequestRef = useRef(0);
+  const [absentTab, setAbsentTab] = useState(() =>
+    navState.statusFilter === ABSENT_TABS.NOT_CHECKED_IN
+      ? ABSENT_TABS.NOT_CHECKED_IN
+      : ABSENT_TABS.EARLY_LEAVE
+  );
   // Default to grid; a saved 'table' choice is still remembered.
   const [viewMode, setViewMode] = useState(() =>
     localStorage.getItem(ATTENDANCE_VIEW_MODE_KEY) === 'table' ? 'table' : 'grid'
@@ -119,6 +140,19 @@ const AttendanceLogs = () => {
 
   const { permissions, loading: permissionsLoading } = usePermissions();
   const navigate = useNavigate();
+  const absentFlowActive =
+    statusFilter === 'absent' ||
+    statusFilter === ABSENT_TABS.EARLY_LEAVE ||
+    statusFilter === ABSENT_TABS.NOT_CHECKED_IN;
+  const effectiveStatusFilter = absentFlowActive
+    ? absentTab === ABSENT_TABS.NOT_CHECKED_IN
+      ? ABSENT_TABS.NOT_CHECKED_IN
+      : ABSENT_TABS.EARLY_LEAVE
+    : statusFilter;
+
+  useEffect(() => {
+    if (!absentFlowActive) setAbsentTab(ABSENT_TABS.EARLY_LEAVE);
+  }, [absentFlowActive]);
   // Logs permissions may be nested per sub-section (attendanceLogs, global, …)
   // or a legacy flat shape ({ view, edit }). Resolve in order:
   // section-specific → global → legacy flat. Matches the V1 contract.
@@ -202,25 +236,50 @@ const AttendanceLogs = () => {
     const cameraIdStr = Array.isArray(cameraId) ? cameraId.join(',') : '';
 
     try {
-      const response = await getAttendanceLogs(
-        searchInput,
-        nvrIdStr,
-        cameraIdStr,
-        startDate,
-        endDate,
-        currentPage,
-        limit,
-        sortField,
-        sortOrder,
-        departmentIds,
-        utcFromTime,
-        utcToTime,
-        timeType,
-        false,
-        employeeLocations,
-        statusFilter
-      );
+      const [response, summaryResponse] = await Promise.all([
+        getAttendanceLogs(
+          searchInput,
+          nvrIdStr,
+          cameraIdStr,
+          startDate,
+          endDate,
+          currentPage,
+          limit,
+          sortField,
+          sortOrder,
+          departmentIds,
+          utcFromTime,
+          utcToTime,
+          timeType,
+          false,
+          employeeLocations,
+          effectiveStatusFilter
+        ),
+        // Keep the tiles pinned to the whole currently-selected range.
+        // Clicking a tile should only narrow the table/grid rows, not
+        // replace the summary totals with "counts inside the active tile".
+        getAttendanceLogs(
+          searchInput,
+          nvrIdStr,
+          cameraIdStr,
+          startDate,
+          endDate,
+          1,
+          limit,
+          sortField,
+          sortOrder,
+          departmentIds,
+          utcFromTime,
+          utcToTime,
+          timeType,
+          false,
+          employeeLocations,
+          ''
+        ),
+      ]);
       if (requestId !== attendanceRequestRef.current) return;
+
+      const summaryData = summaryResponse?.data?.body?.data;
       if (
         response?.data?.statusCode === 500 &&
         response?.data?.body?.status === 'failed' &&
@@ -228,7 +287,14 @@ const AttendanceLogs = () => {
       ) {
         dispatch({ type: 'SET_ATTENDANCE_LOGS', value: [] });
         dispatch({ type: 'SET_ATTENDANCE_COUNT', value: 0 });
-        dispatch({ type: 'SET_STATUS_COUNTS', value: EMPTY_STATUS_COUNTS });
+        dispatch({
+          type: 'SET_STATUS_COUNTS',
+          value: summaryData?.statusCounts || EMPTY_STATUS_COUNTS,
+        });
+        dispatch({
+          type: 'SET_TOTAL_EMPLOYEES',
+          value: summaryData?.totalEmployees || 0,
+        });
       } else {
         dispatch({
           type: 'SET_ATTENDANCE_LOGS',
@@ -237,13 +303,15 @@ const AttendanceLogs = () => {
         dispatch({ type: 'SET_ATTENDANCE_COUNT', value: response?.data?.body?.data?.total || 0 });
         dispatch({
           type: 'SET_STATUS_COUNTS',
-          value: response?.data?.body?.data?.statusCounts || EMPTY_STATUS_COUNTS,
+          value: summaryData?.statusCounts || EMPTY_STATUS_COUNTS,
         });
         dispatch({
           type: 'SET_TOTAL_EMPLOYEES',
-          value: response?.data?.body?.data?.totalEmployees || 0,
+          value: summaryData?.totalEmployees || 0,
         });
-        const minDateValue = response?.data?.body?.data?.attendanceLogsStartDate;
+        const minDateValue =
+          response?.data?.body?.data?.attendanceLogsStartDate ||
+          summaryData?.attendanceLogsStartDate;
         dispatch({ type: 'SET_MIN_DATE', value: minDateValue ? new Date(minDateValue) : null });
       }
     } catch (error) {
@@ -271,7 +339,7 @@ const AttendanceLogs = () => {
     region,
     limit,
     employeeLocations,
-    statusFilter,
+    effectiveStatusFilter,
   ]);
 
   useEffect(() => {
@@ -342,6 +410,70 @@ const AttendanceLogs = () => {
   const toggleStatusFilter = (value) =>
     dispatch({ type: 'SET_STATUS_FILTER', value: statusFilter === value ? '' : value });
 
+  const toggleAbsentFlow = () => {
+    if (absentFlowActive && absentTab === ABSENT_TABS.EARLY_LEAVE) {
+      dispatch({ type: 'SET_STATUS_FILTER', value: '' });
+      setAbsentTab(ABSENT_TABS.EARLY_LEAVE);
+      return;
+    }
+    setAbsentTab(ABSENT_TABS.EARLY_LEAVE);
+    dispatch({ type: 'SET_STATUS_FILTER', value: ABSENT_TABS.EARLY_LEAVE });
+  };
+
+  const handleOpenBasicPage = () => {
+    navigate('/register-users');
+  };
+
+  const handleResetBasicView = () => {
+    setAbsentTab(ABSENT_TABS.EARLY_LEAVE);
+    dispatch({ type: 'SET_STATUS_FILTER', value: '' });
+    navigate(location.pathname, {
+      replace: true,
+      state: {
+        ...navState,
+        startDate,
+        endDate,
+        employeeLocations,
+        statusFilter: '',
+      },
+    });
+  };
+
+  const hasActiveTileFilter = !!statusFilter;
+
+  const absentTabs = absentFlowActive ? (
+    <div className="inline-flex items-center gap-[3px] rounded-[10px] border border-[var(--bd)] bg-[var(--bg2)] p-[3px]">
+      <button
+        type="button"
+        onClick={() => {
+          setAbsentTab(ABSENT_TABS.EARLY_LEAVE);
+          dispatch({ type: 'SET_STATUS_FILTER', value: ABSENT_TABS.EARLY_LEAVE });
+        }}
+        className={`h-9 rounded-[8px] px-3 text-xs font-semibold transition-colors ${
+          absentTab === ABSENT_TABS.EARLY_LEAVE
+            ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white shadow-sm'
+            : 'text-[var(--tx2)] hover:text-[var(--tx)]'
+        }`}
+      >
+        Early Leave
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setAbsentTab(ABSENT_TABS.NOT_CHECKED_IN);
+          dispatch({ type: 'SET_STATUS_FILTER', value: ABSENT_TABS.NOT_CHECKED_IN });
+        }}
+        className={`h-9 rounded-[8px] px-3 text-xs font-semibold transition-colors ${
+          absentTab === ABSENT_TABS.NOT_CHECKED_IN
+            ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white shadow-sm'
+            : 'text-[var(--tx2)] hover:text-[var(--tx)]'
+        }`}
+      >
+        Not Checked In
+      </button>
+    </div>
+  ) : null;
+
   // KPI tiles — server-graded status totals for the WHOLE filtered range, not
   // the loaded page. Counting the page meant 150 employees at 10 rows per page
   // reported totals out of 10, and the tiles changed as you paged. Same
@@ -351,7 +483,13 @@ const AttendanceLogs = () => {
       // Roster size — deliberately first, as the denominator the other four
       // are read against. It is not range-scoped like they are, so it isn't
       // filterable by status.
-      { label: 'Total Employees', value: totalEmployees || 0, color: 'var(--tx)' },
+      {
+        label: 'Total Employees',
+        value: totalEmployees || 0,
+        color: 'var(--tx)',
+        active: !statusFilter,
+        onClick: handleOpenBasicPage,
+      },
       // Anyone who has checked in at all today, regardless of duration or
       // whether they've since checked out. `checkin` is a duration-agnostic
       // pseudo-status the backend matches on firstCheckIn presence, not one
@@ -380,8 +518,8 @@ const AttendanceLogs = () => {
         label: 'Absent',
         value: statusCounts?.absent || 0,
         color: 'var(--crit)',
-        active: statusFilter === 'absent',
-        onClick: () => toggleStatusFilter('absent'),
+        active: absentFlowActive,
+        onClick: toggleAbsentFlow,
       },
       {
         label: 'Checkout',
@@ -391,7 +529,7 @@ const AttendanceLogs = () => {
         onClick: () => toggleStatusFilter('checkout'),
       },
     ],
-    [statusCounts, totalEmployees, statusFilter]
+    [absentFlowActive, handleOpenBasicPage, statusCounts, totalEmployees, statusFilter]
   );
 
   const handleExport = (format) =>
@@ -411,6 +549,7 @@ const AttendanceLogs = () => {
       timeType,
       employeeLocations,
       region,
+      statusFilter: effectiveStatusFilter,
     });
 
   /* ─────────────── Guards ─────────────── */
@@ -440,6 +579,7 @@ const AttendanceLogs = () => {
       {/* TABLE / GRID */}
       <ReusableTablePage
         stats={stats}
+        secondaryToolbar={absentTabs}
         loading={state.loading}
         attendanceLogsCount={attendanceLogsCount}
         currentPage={currentPage}
@@ -478,6 +618,16 @@ const AttendanceLogs = () => {
           dispatch({ type: 'SET_END_DATE', value: e });
         }}
       >
+        {hasActiveTileFilter && (
+          <button
+            type="button"
+            onClick={handleResetBasicView}
+            className="h-10 rounded-[10px] border border-[var(--bd)] bg-[var(--bg2)] px-3 text-xs font-semibold text-[var(--tx2)] transition-colors hover:border-[var(--violet)] hover:text-[var(--tx)] cursor-pointer"
+          >
+            Clear Tile Filter
+          </button>
+        )}
+
         {canEdit && (
           <div className="flex gap-2">
             <ExportButton onClick={() => handleExport('excel')}>Excel</ExportButton>
