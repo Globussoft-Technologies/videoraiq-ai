@@ -902,79 +902,83 @@ export default function Detections() {
             })}
           </div>
 
-          <div className="vq-det-statetabs" style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '0 0 auto', flexWrap: 'nowrap' }}>
-            {STATE_TABS.map((t) => (
-              <button key={t.key} type="button" onClick={() => setStateTab(t.key)} style={chipStyle(stateTab === t.key, false)}>
-                {t.label}
-              </button>
-            ))}
-            {zoneCamera && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flex: '0 0 auto' }}>
-                <span className="font-bold text-xs">
-                  Camera Type :
-                </span>
-                <span style={{ position: 'relative' }}>
-                  <select
-                    value={zoneCamera.checkType || 'none'}
-                    onChange={(event) => handleZoneCameraTypeChange(event.target.value)}
-                    disabled={cameraTypeSaving}
-                    style={{
-                      height: 30,
-                      minWidth: 104,
-                      padding: '0 28px 0 10px',
-                      borderRadius: 8,
-                      background: 'var(--bg2)',
-                      border: '1px solid var(--bd)',
-                      color: 'var(--tx)',
-                      fontSize: 12,
-                      outline: 'none',
-                      cursor: cameraTypeSaving ? 'wait' : 'pointer',
-                      appearance: 'none',
-                      opacity: cameraTypeSaving ? 0.72 : 1,
-                    }}
-                  >
-                    {CAMERA_TYPE_OPTIONS.map((type) => (
-                      <option key={type.value} value={type.value}>{type.label}</option>
-                    ))}
-                  </select>
-                  {cameraTypeSaving ? (
-                    <span
-                      style={{
-                        position: 'absolute',
-                        right: 10,
-                        top: '50%',
-                        width: 13,
-                        height: 13,
-                        marginTop: -6.5,
-                        borderRadius: '50%',
-                        border: '2px solid rgba(99,102,241,.25)',
-                        borderTopColor: 'var(--blue)',
-                        animation: 'vq-spin .7s linear infinite',
-                        pointerEvents: 'none',
-                      }}
-                    />
-                  ) : (
-                    <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} />
-                  )}
-                </span>
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={toggleAllGroupsCollapsed}
-              disabled={groups.length === 0}
-              title={allVisibleGroupsCollapsed ? 'Expand all detection groups' : 'Collapse all detection groups'}
-              style={{
-                ...chipStyle(false, false),
-                gap: 7,
-                opacity: groups.length === 0 ? 0.5 : 1,
-                cursor: groups.length === 0 ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {allVisibleGroupsCollapsed ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              {allVisibleGroupsCollapsed ? 'Expand detections' : 'Collapse detections'}
+        </div>
+
+        <div
+          className="vq-det-statetabs"
+          style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 10 }}
+        >
+          {STATE_TABS.map((t) => (
+            <button key={t.key} type="button" onClick={() => setStateTab(t.key)} style={chipStyle(stateTab === t.key, false)}>
+              {t.label}
             </button>
-          </div>
+          ))}
+          {zoneCamera && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flex: '0 0 auto', marginLeft: 8 }}>
+              <span className="font-bold text-xs">
+                Camera Type :
+              </span>
+              <span style={{ position: 'relative' }}>
+                <select
+                  value={zoneCamera.checkType || 'none'}
+                  onChange={(event) => handleZoneCameraTypeChange(event.target.value)}
+                  disabled={cameraTypeSaving}
+                  style={{
+                    height: 30,
+                    minWidth: 104,
+                    padding: '0 28px 0 10px',
+                    borderRadius: 8,
+                    background: 'var(--bg2)',
+                    border: '1px solid var(--bd)',
+                    color: 'var(--tx)',
+                    fontSize: 12,
+                    outline: 'none',
+                    cursor: cameraTypeSaving ? 'wait' : 'pointer',
+                    appearance: 'none',
+                    opacity: cameraTypeSaving ? 0.72 : 1,
+                  }}
+                >
+                  {CAMERA_TYPE_OPTIONS.map((type) => (
+                    <option key={type.value} value={type.value}>{type.label}</option>
+                  ))}
+                </select>
+                {cameraTypeSaving ? (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      right: 10,
+                      top: '50%',
+                      width: 13,
+                      height: 13,
+                      marginTop: -6.5,
+                      borderRadius: '50%',
+                      border: '2px solid rgba(99,102,241,.25)',
+                      borderTopColor: 'var(--blue)',
+                      animation: 'vq-spin .7s linear infinite',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                ) : (
+                  <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} />
+                )}
+              </span>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={toggleAllGroupsCollapsed}
+            disabled={groups.length === 0}
+            title={allVisibleGroupsCollapsed ? 'Expand all detection groups' : 'Collapse all detection groups'}
+            style={{
+              ...chipStyle(false, false),
+              gap: 7,
+              opacity: groups.length === 0 ? 0.5 : 1,
+              cursor: groups.length === 0 ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {allVisibleGroupsCollapsed ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {allVisibleGroupsCollapsed ? 'Expand detections' : 'Collapse detections'}
+          </button>
         </div>
       </div>
 
