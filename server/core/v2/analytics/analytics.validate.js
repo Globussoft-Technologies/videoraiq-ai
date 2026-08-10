@@ -1,7 +1,9 @@
 import Joi from "joi";
+import moment from "moment-timezone";
 
 const objectIdPattern = /^[0-9a-fA-F]{24}$/;
 const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
+const validTimezones = moment.tz.names();
 
 const commonRangeFields = {
   startDate: Joi.string().trim().regex(dateOnlyPattern).messages({
@@ -22,6 +24,12 @@ const commonRangeFields = {
     Joi.string().trim(),
     Joi.array().items(Joi.string().trim())
   ),
+  // Lets the client pick which zone hour/day-of-week/day-boundary bucketing
+  // is done in — any IANA zone, same allow-list as the admin timezone field
+  // (profiles.validate.js).
+  timezone: Joi.string().valid(...validTimezones).messages({
+    'any.only': 'timezone must be a valid IANA timezone (e.g., Asia/Kolkata)',
+  }),
 };
 
 class AnalyticsValidator {

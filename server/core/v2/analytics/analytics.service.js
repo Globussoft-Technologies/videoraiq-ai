@@ -37,6 +37,15 @@ const REPORT_TZ = "Asia/Kolkata";
 const AFTER_HOURS_START = 21; // exclusive upper bound: > 21:00 is after hours
 const AFTER_HOURS_END = 7; //  exclusive lower bound: < 07:00 is after hours
 
+// Client-selectable override for REPORT_TZ (the Analytics page's "Time zone"
+// dropdown) — any IANA zone is accepted, same as AnalyticsValidator's
+// commonRangeFields; momentTz.tz.zone() is the defensive fallback check here
+// for callers that skip validation.
+function resolveTimezone(req) {
+  const tz = req?.query?.timezone;
+  return tz && momentTz.tz.zone(tz) ? tz : REPORT_TZ;
+}
+
 function toObjectIds(value) {
   const ids = Array.isArray(value) ? value : String(value).split(",").map((v) => v.trim());
   return ids
@@ -244,17 +253,18 @@ class AnalyticsService {
     const { startDate, endDate, nvrId, channelId, location } = req.query;
 
     const match = { userId: data.user_id.toString() };
+    const tz = resolveTimezone(req);
 
     if (startDate && endDate) {
       match.timeOfIncident = {
-        $gte: new Date(`${startDate}T00:00:00.000Z`),
-        $lte: new Date(`${endDate}T23:59:59.999Z`),
+        $gte: momentTz.tz(startDate, "YYYY-MM-DD", tz).startOf("day").toDate(),
+        $lte: momentTz.tz(endDate, "YYYY-MM-DD", tz).endOf("day").toDate(),
       };
     } else {
       const rangeDays = Number(days) || DEFAULT_DAYS;
       match.timeOfIncident = {
-        $gte: moment().subtract(rangeDays, "days").startOf("day").toDate(),
-        $lte: moment().endOf("day").toDate(),
+        $gte: momentTz.tz(tz).subtract(rangeDays, "days").startOf("day").toDate(),
+        $lte: momentTz.tz(tz).endOf("day").toDate(),
       };
     }
 
@@ -1031,19 +1041,20 @@ class AnalyticsService {
 
       const { startDate, endDate } = req.query;
       const days = Number(req.query.days) || DEFAULT_DAYS;
+      const tz = resolveTimezone(req);
       const match = await this._buildBaseMatch(req, { days });
 
       const rows = await Incident.aggregate([
         { $match: match },
-        { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$timeOfIncident" } }, count: { $sum: 1 } } },
+        { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$timeOfIncident", timezone: tz } }, count: { $sum: 1 } } },
         { $sort: { _id: 1 } },
       ]);
 
       const byDate = new Map(rows.map((r) => [r._id, r.count]));
       // Series window mirrors whatever _buildBaseMatch actually filtered on —
       // an explicit range when given, otherwise the trailing `days` window.
-      const rangeStart = startDate && endDate ? moment(startDate).startOf("day") : moment().subtract(days - 1, "days").startOf("day");
-      const rangeEnd = startDate && endDate ? moment(endDate).startOf("day") : moment().startOf("day");
+      const rangeStart = startDate && endDate ? momentTz.tz(startDate, "YYYY-MM-DD", tz).startOf("day") : momentTz.tz(tz).subtract(days - 1, "days").startOf("day");
+      const rangeEnd = startDate && endDate ? momentTz.tz(endDate, "YYYY-MM-DD", tz).startOf("day") : momentTz.tz(tz).startOf("day");
       const spanDays = rangeEnd.diff(rangeStart, "days") + 1;
 
       const series = [];
@@ -1143,20 +1154,24 @@ class AnalyticsService {
     }
   }
 
-  // Activity Heatmap — incident counts grouped by ISO day-of-week x hour-of-day (UTC).
+  // Activity Heatmap — incident counts grouped by ISO day-of-week x hour-of-day (REPORT_TZ).
   async activityHeatmap(req, res, _next) {
     try {
       const { error } = AnalyticsValidator.activityHeatmap(req.query);
       if (error) return res.send(Response.validationFailResp(error.message, "Validation Failed!"));
 
       const days = Number(req.query.days) || 7;
+      const tz = resolveTimezone(req);
       const match = await this._buildBaseMatch(req, { days });
 
       const rows = await Incident.aggregate([
         { $match: match },
         {
           $group: {
-            _id: { day: { $isoDayOfWeek: "$timeOfIncident" }, hour: { $hour: "$timeOfIncident" } },
+            _id: {
+              day: { $isoDayOfWeek: { date: "$timeOfIncident", timezone: tz } },
+              hour: { $hour: { date: "$timeOfIncident", timezone: tz } },
+            },
             count: { $sum: 1 },
           },
         },
@@ -1183,19 +1198,21 @@ class AnalyticsService {
     }
   }
 
-  // Detections by Hour — today's (or a given date's) incident counts bucketed by hour (UTC).
+  // Detections by Hour — today's (or a given date's) incident counts bucketed by hour (REPORT_TZ).
   async detectionsByHour(req, res, _next) {
     try {
       const { error } = AnalyticsValidator.detectionsByHour(req.query);
       if (error) return res.send(Response.validationFailResp(error.message, "Validation Failed!"));
 
       const data = req?.verified?.userData;
-      const date = req.query.date || moment().format("YYYY-MM-DD");
+      const tz = resolveTimezone(req);
+      const date = req.query.date || momentTz.tz(tz).format("YYYY-MM-DD");
+      const dayStart = momentTz.tz(date, "YYYY-MM-DD", tz).startOf("day");
       const match = {
         userId: data.user_id.toString(),
         timeOfIncident: {
-          $gte: new Date(`${date}T00:00:00.000Z`),
-          $lte: new Date(`${date}T23:59:59.999Z`),
+          $gte: dayStart.toDate(),
+          $lte: dayStart.clone().endOf("day").toDate(),
         },
       };
       if (req.query.nvrId) match.nvrId = { $in: toObjectIds(req.query.nvrId) };
@@ -1203,7 +1220,7 @@ class AnalyticsService {
 
       const rows = await Incident.aggregate([
         { $match: match },
-        { $group: { _id: { $hour: "$timeOfIncident" }, count: { $sum: 1 } } },
+        { $group: { _id: { $hour: { date: "$timeOfIncident", timezone: tz } }, count: { $sum: 1 } } },
       ]);
 
       const hours = Array.from({ length: 24 }, () => 0);
@@ -1211,6 +1228,7 @@ class AnalyticsService {
 
       return res.status(200).json(Response.userSuccessResp("Detections by hour fetched successfully", {
         date,
+        timezone: tz,
         total: hours.reduce((sum, c) => sum + c, 0),
         hours,
       }));
@@ -1375,18 +1393,19 @@ class AnalyticsService {
       if (error) return res.send(Response.validationFailResp(error.message, "Validation Failed!"));
 
       const days = Number(req.query.days) || DEFAULT_DAYS;
+      const tz = resolveTimezone(req);
       const match = await this._buildBaseMatch(req, { days });
 
       const [byHour, byDay] = await Promise.all([
         Incident.aggregate([
           { $match: match },
-          { $group: { _id: { $hour: "$timeOfIncident" }, count: { $sum: 1 } } },
+          { $group: { _id: { $hour: { date: "$timeOfIncident", timezone: tz } }, count: { $sum: 1 } } },
           { $sort: { count: -1 } },
           { $limit: 1 },
         ]),
         Incident.aggregate([
           { $match: match },
-          { $group: { _id: { $isoDayOfWeek: "$timeOfIncident" }, count: { $sum: 1 } } },
+          { $group: { _id: { $isoDayOfWeek: { date: "$timeOfIncident", timezone: tz } }, count: { $sum: 1 } } },
           { $sort: { count: -1 } },
           { $limit: 1 },
         ]),
@@ -1398,14 +1417,14 @@ class AnalyticsService {
 
       const [peakHourDates, peakDayDates] = await Promise.all([
         peakHourNumber == null ? [] : Incident.aggregate([
-          { $match: { ...match, $expr: { $eq: [{ $hour: "$timeOfIncident" }, peakHourNumber] } } },
-          { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$timeOfIncident" } }, count: { $sum: 1 } } },
+          { $match: { ...match, $expr: { $eq: [{ $hour: { date: "$timeOfIncident", timezone: tz } }, peakHourNumber] } } },
+          { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$timeOfIncident", timezone: tz } }, count: { $sum: 1 } } },
           { $sort: { _id: 1 } },
           { $project: { _id: 0, date: "$_id", count: 1 } },
         ]),
         peakDayNumber == null ? [] : Incident.aggregate([
-          { $match: { ...match, $expr: { $eq: [{ $isoDayOfWeek: "$timeOfIncident" }, peakDayNumber] } } },
-          { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$timeOfIncident" } }, count: { $sum: 1 } } },
+          { $match: { ...match, $expr: { $eq: [{ $isoDayOfWeek: { date: "$timeOfIncident", timezone: tz } }, peakDayNumber] } } },
+          { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$timeOfIncident", timezone: tz } }, count: { $sum: 1 } } },
           { $sort: { _id: 1 } },
           { $project: { _id: 0, date: "$_id", count: 1 } },
         ]),
@@ -1416,6 +1435,7 @@ class AnalyticsService {
 
       return res.status(200).json(Response.userSuccessResp("Peak activity fetched successfully", {
         ...describeRange(req, DEFAULT_DAYS),
+        timezone: tz,
         peakHour,
         peakDay,
       }));

@@ -128,6 +128,14 @@ class AttendanceController {
             type: 'boolean',
             example: true
         }
+        #swagger.parameters['status'] = {
+            in: 'query',
+            description: 'Filter logs by attendance status',
+            required: false,
+            type: 'string',
+            enum: ['present', 'half_day', 'absent', 'checked_in'],
+            example: 'present'
+        }
         #swagger.parameters['data'] = {
         in: 'body',
         description: 'Filter and pagination options',
