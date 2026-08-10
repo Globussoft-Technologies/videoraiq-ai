@@ -1315,7 +1315,6 @@ class ChannelService {
         const severity = detectionSettingDoc?.settings?.levelOfImportance;
         const confidence_thresholds = detectionSettingDoc?.settings || {};
         const line_crossing_settings = detectionSettingDoc?.settings || {};
-        const mobile_phone_confidence = detectionSettingDoc?.settings || {};
         if (String(channel.userId) === "32") {
           return res
             .status(403)
@@ -1333,9 +1332,8 @@ class ChannelService {
           obstruction_threshold_sec,
           severity,
           confidence_thresholds,
-          line_crossing_settings,
-          mobile_phone_confidence
-        );
+          line_crossing_settings
+          );
         await updateSettingsWithModelThresholds(detectionSettingDoc, beResponse);
 
         await channel.save();
