@@ -19,7 +19,7 @@ class RolesServices{
             const result = req.verified;
             let { orgId ,_id,adminId} = result?.userData;
 
-            const rolesDetails = (data?.roles).map(role => role.toLowerCase());
+            const rolesDetails = (data?.roles).map(role => String(role).trim());
             const { value, error } = RoleValidation.createRole({ rolesDetails });
             if (error) {
                 return resp.send(Response.FailResp(RolesMessageNew['VALIDATION_FAIL']['en'], error.message));
@@ -58,7 +58,7 @@ class RolesServices{
                     await Promise.all(newRole.map(async role_new => {
                         let roles = {
                             adminId: adminId,
-                            roleName: role_new.toLowerCase(),
+                            roleName: role_new,
                             is_default: value.is_default,
                             orgId
                         };
@@ -232,7 +232,7 @@ class RolesServices{
             const isRoleExist = await rolesModel.aggregate([
                 { $match: { adminId: new ObjectId(adminId), _id: { $ne: excludedRoleId } } }
             ]);
-            const userRoles = isRoleExist.map(item => item.roleName.toLowerCase());
+            const userRoles = isRoleExist.map(item => item.roleName?.trim().toLowerCase());
             const isRoleDuplicate = userRoles.includes(roleValue?.toLowerCase());
             const existingRole = await rolesModel.findOne({ _id: roleId });
             if (!existingRole) {
