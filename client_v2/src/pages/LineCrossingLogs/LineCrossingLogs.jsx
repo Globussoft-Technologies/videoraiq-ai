@@ -347,6 +347,22 @@ function recordsPresentCount(records) {
   return Math.max(totalEntry - totalExit, 0);
 }
 
+function isEntryMovementRow(row) {
+  const mode = String(row?.mode || '').toLowerCase();
+  if (mode === 'all') return true;
+  if (mode === 'entry') return true;
+  if (mode === 'exit') return false;
+  return Number(row?.entry || 0) > 0;
+}
+
+function isExitMovementRow(row) {
+  const mode = String(row?.mode || '').toLowerCase();
+  if (mode === 'all') return true;
+  if (mode === 'exit') return true;
+  if (mode === 'entry') return false;
+  return Number(row?.exit || 0) > 0;
+}
+
 function flattenSeries(records) {
   let runningEntry = 0;
   let runningExit = 0;
@@ -933,12 +949,16 @@ export default function LineCrossingLogs() {
   }, [dateRangeRecords]);
 
   const entryRows = useMemo(
-    () => [...movementRows].sort((a, b) => b.entry - a.entry || b.total - a.total),
+    () => movementRows
+      .filter(isEntryMovementRow)
+      .sort((a, b) => b.entry - a.entry || b.total - a.total),
     [movementRows],
   );
 
   const exitRows = useMemo(
-    () => [...movementRows].sort((a, b) => b.exit - a.exit || b.total - a.total),
+    () => movementRows
+      .filter(isExitMovementRow)
+      .sort((a, b) => b.exit - a.exit || b.total - a.total),
     [movementRows],
   );
 
