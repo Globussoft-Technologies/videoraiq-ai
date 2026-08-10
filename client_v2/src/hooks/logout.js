@@ -8,7 +8,7 @@ const cookieName = () =>
 /**
  * Clears the session, mirroring the V1 logout hook (client/src/hooks/logout.js):
  * the access-token cookie is removed but the per-portal "remember-me" cookies
- * (admin-remember-me / user-remember-me) and the V2 theme preference are
+ * (admin_remember_me / user_remember_me) and the V2 theme preference are
  * preserved so the login form can still prefill.
  */
 export function logout() {

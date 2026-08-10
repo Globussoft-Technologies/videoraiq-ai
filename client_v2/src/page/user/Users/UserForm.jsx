@@ -20,6 +20,8 @@ const url = import.meta.env.VITE_ENV;
 const accessCookieName = () =>
   url === "dev" ? "dev-access-token" : url === "prod" ? "prod-access-token" : "access-token";
 
+const REMEMBER_COOKIE = "admin_remember_me";
+
 const LoginForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -36,17 +38,25 @@ const LoginForm = () => {
   // of a hardcoded /dashboard some roles don't have access to.
   const redirectTo = location.state?.from?.pathname || "/";
 
-  // Prefill from the saved "admin-remember-me" cookie. Namespaced separately
+  // Prefill from the saved "admin_remember_me" cookie. Namespaced separately
   // from the user login's cookie so "remember me" on one portal never
   // prefills credentials on the other.
   useEffect(() => {
-    const saved = Cookies.get("admin-remember-me");
+    const saved = Cookies.get(REMEMBER_COOKIE);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setSavedCredentials(parsed);
-        setRememberMe(true);
+        if (parsed?.rememberMe === true) {
+          setSavedCredentials({
+            usernameOrEmail: parsed.usernameOrEmail || "",
+            password: parsed.password || "",
+          });
+          setRememberMe(true);
+        } else {
+          Cookies.remove(REMEMBER_COOKIE);
+        }
       } catch {
+        Cookies.remove(REMEMBER_COOKIE);
         console.error("Invalid saved credentials");
       }
     }
@@ -79,9 +89,21 @@ const LoginForm = () => {
           });
 
           if (rememberMe) {
-            Cookies.set("admin-remember-me", JSON.stringify(values));
+            Cookies.set(
+              REMEMBER_COOKIE,
+              JSON.stringify({
+                usernameOrEmail: values.usernameOrEmail,
+                password: values.password,
+                rememberMe: true,
+              }),
+              {
+                expires: 30,
+                secure: window.location.protocol === "https:",
+                path: "/",
+              }
+            );
           } else {
-            Cookies.remove("admin-remember-me");
+            Cookies.remove(REMEMBER_COOKIE);
           }
 
           setUser?.(result.user); // hydrate user context

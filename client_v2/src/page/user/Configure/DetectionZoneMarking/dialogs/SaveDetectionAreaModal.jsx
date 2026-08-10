@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 import { toast } from 'sonner';
 import ZoneScheduleFields, { TimezoneField, scheduleError } from '../../ZoneScheduleFields';
 import { PRIORITY_OPTIONS } from '../constants';
@@ -49,8 +49,26 @@ export default function SaveDetectionAreaModal({ initialName, initialPriority, z
         width: '100%', maxWidth: 440, maxHeight: '85vh', overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
         borderRadius: 16, padding: 22, boxShadow: '0 24px 64px rgba(0,0,0,.45)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15.5 }}>{isLineCrossing ? 'Save Detection Line' : 'Save Detection Area'}</span>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gap: 10, minWidth: 0, flex: 1 }}>
+            <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15.5 }}>{isLineCrossing ? 'Save Detection Line' : 'Save Detection Area'}</span>
+            <div
+              style={{
+                display: 'flex',
+                gap: 8,
+                alignItems: 'center',
+                padding: '10px',
+                borderRadius: 8,
+                border: '1px solid rgba(245, 158, 11, .45)',
+                background: 'rgba(245, 158, 11, .08)',
+              }}
+            >
+              <AlertTriangle size={17} color="#f59e0b" style={{ flex: '0 0 auto' }} />
+              <div style={{ minWidth: 0, fontSize: 11.5, lineHeight: 1.35, fontWeight: 800, color: 'var(--tx)', whiteSpace: 'nowrap' }}>
+                Please select Time Zone and Time Range for Telegram alerts.
+              </div>
+            </div>
+          </div>
           <span onClick={onCancel} style={{ cursor: 'pointer', color: 'var(--tx3)', display: 'flex' }}>
             <X size={17} />
           </span>

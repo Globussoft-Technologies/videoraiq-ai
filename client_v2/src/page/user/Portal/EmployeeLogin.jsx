@@ -16,6 +16,8 @@ const url = import.meta.env.VITE_ENV;
 const accessCookieName = () =>
   url === "dev" ? "dev-access-token" : url === "prod" ? "prod-access-token" : "access-token";
 
+const REMEMBER_COOKIE = "user_remember_me";
+
 const FEATURES = [
   { label: "AI Detection", c: "#3b82f6" },
   { label: "Cloud Storage", c: "#a855f7" },
@@ -85,17 +87,22 @@ export default function EmployeeLogin() {
     }
   };
 
-  // Prefill from the saved "user-remember-me" cookie. Namespaced separately
+  // Prefill from the saved "user_remember_me" cookie. Namespaced separately
   // from the admin login's cookie so "remember me" on one portal never
   // prefills credentials on the other.
   useEffect(() => {
-    const saved = Cookies.get("user-remember-me");
+    const saved = Cookies.get(REMEMBER_COOKIE);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setForm({ login: parsed.usernameOrEmail || "", password: parsed.password || "" });
-        setRememberMe(true);
+        if (parsed?.rememberMe === true) {
+          setForm({ login: parsed.usernameOrEmail || "", password: parsed.password || "" });
+          setRememberMe(true);
+        } else {
+          Cookies.remove(REMEMBER_COOKIE);
+        }
       } catch {
+        Cookies.remove(REMEMBER_COOKIE);
         console.error("Invalid saved credentials");
       }
     }
@@ -125,11 +132,16 @@ export default function EmployeeLogin() {
 
         if (rememberMe) {
           Cookies.set(
-            "user-remember-me",
-            JSON.stringify({ usernameOrEmail: form.login, password: form.password })
+            REMEMBER_COOKIE,
+            JSON.stringify({ usernameOrEmail: form.login, password: form.password, rememberMe: true }),
+            {
+              expires: 30,
+              secure: window.location.protocol === "https:",
+              path: "/",
+            }
           );
         } else {
-          Cookies.remove("user-remember-me");
+          Cookies.remove(REMEMBER_COOKIE);
         }
 
         toast.success(response?.data?.body?.message || "Signed in");
