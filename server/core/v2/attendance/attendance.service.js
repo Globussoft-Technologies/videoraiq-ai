@@ -21,6 +21,46 @@ import {
 } from "./attendanceStatus.js";
 const ImageView = config.get("ImageView");
 
+/**
+ * Pair sequential checkout→checkin events into breaks, for one employee's
+ * events on one day. The first check-in and the last check-out are the
+ * bookends and are never themselves part of a break: a checkout can only
+ * open a break once the employee has checked in at least once
+ * (`hasCheckedIn`), so a stray checkout logged before the day's first real
+ * check-in is discarded rather than wrongly paired. Shared by getUserLogs
+ * (the per-employee Break Logs dialog) and getAttendance (the break
+ * totals shown per row in the Attendance Logs table), so both agree.
+ */
+function pairBreaks(events) {
+  const sorted = [...(events || [])].sort(
+    (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+  );
+  const pairs = [];
+  let currentCheckout = null;
+  let hasCheckedIn = false;
+
+  for (const ev of sorted) {
+    if (ev.cameraType === "checkin") {
+      if (currentCheckout) {
+        pairs.push({ checkout: currentCheckout, checkin: ev });
+        currentCheckout = null;
+      }
+      hasCheckedIn = true;
+    } else if (hasCheckedIn && !currentCheckout && ev.cameraType === "checkout") {
+      currentCheckout = ev;
+    }
+  }
+  return pairs;
+}
+
+/** Total minutes across all break pairs (each checkin - checkout, floored at 0). */
+function breakMinutesFromPairs(pairs) {
+  return pairs.reduce((sum, p) => {
+    const ms = new Date(p.checkin.timestamp) - new Date(p.checkout.timestamp);
+    return sum + (ms > 0 ? Math.round(ms / 60000) : 0);
+  }, 0);
+}
+
 class AttendanceService {
   async logAttendance(req, res, _next) {
     try {
@@ -213,7 +253,7 @@ class AttendanceService {
 
   async getAttendance(req, res, _next) {
     try {
-      const pipeline = await this.buildAttendancePipeline(req);
+      const { pipeline, countPipeline } = await this.buildAttendancePipeline(req);
 
       // strength: 2 → case-insensitive so Name/Location/Department sort
       // alphabetically instead of MongoDB's default (uppercase before lowercase).
@@ -260,6 +300,11 @@ class AttendanceService {
           confidenceScore: e?.confidenceScore || null,
         }));
 
+        // Same checkout→checkin pairing the Break Logs dialog uses (see
+        // pairBreaks above), so the total shown per row in this table and the
+        // per-break detail behind the dialog can never disagree.
+        const breakPairs = pairBreaks(att.events);
+
         return {
           employee: att.employee,
           // shift: att.shift,
@@ -275,20 +320,31 @@ class AttendanceService {
           // from can never disagree.
           minutesSpent: att.minutesSpent || 0,
           status: att.status || ATTENDANCE_STATUS.ABSENT,
+          breakMinutes: breakMinutesFromPairs(breakPairs),
+          breakCount: breakPairs.length,
           imageUrls,
         };
       });
 
-      // $sort is dropped too, not just pagination: this pass collapses to a
-      // single row, so ordering the whole result set first was wasted work.
-      const countPipeline = pipeline.filter(
+      // Row count for pagination ("Total logs - N") — same filters as
+      // `pipeline` (including the name search), minus sort/skip/limit. This
+      // one deliberately DOES track the search box, unlike countPipeline
+      // below: the table's page count has to match what's actually listed.
+      const rowCountPipeline = pipeline.filter(
         (stage) => !("$skip" in stage || "$limit" in stage || "$sort" in stage)
       );
+      rowCountPipeline.push({ $count: "total" });
 
-      // Status totals come from this same pass rather than a second query, and
-      // cover the whole filtered result set — the KPI tiles used to be counted
-      // on the client from the loaded page only, so a 150-employee range with
-      // 10 rows per page reported totals out of 10.
+      // countPipeline comes from buildAttendancePipeline() already excluding
+      // the name-search match (and never had sort/pagination stages to begin
+      // with) — see the comment there. This is what feeds the KPI tiles
+      // below, so typing in the search box narrows the table but leaves the
+      // tiles reporting the full date-range totals.
+      //
+      // Status totals come from this pass rather than a second query, and
+      // cover the whole filtered (minus name) result set — the KPI tiles used
+      // to be counted on the client from the loaded page only, so a
+      // 150-employee range with 10 rows per page reported totals out of 10.
       const countByStatus = (status) => ({
         $sum: { $cond: [{ $eq: ["$status", status] }, 1, 0] },
       });
@@ -296,16 +352,26 @@ class AttendanceService {
       countPipeline.push({
         $group: {
           _id: null,
-          total: { $sum: 1 },
           present: countByStatus(ATTENDANCE_STATUS.PRESENT),
           halfDay: countByStatus(ATTENDANCE_STATUS.HALF_DAY),
           absent: countByStatus(ATTENDANCE_STATUS.ABSENT),
           checkedIn: countByStatus(ATTENDANCE_STATUS.CHECKED_IN),
+          // Duration-agnostic: "did this employee check in/out at all today",
+          // regardless of what status that graded to. Feeds the Check In /
+          // Checkout tiles and the roster-based Absent count below — same
+          // shape /analytics/attendance-presence already returns.
+          checkinLogs: {
+            $sum: { $cond: [{ $ne: [{ $ifNull: ["$firstCheckIn", null] }, null] }, 1, 0] },
+          },
+          checkoutLogs: {
+            $sum: { $cond: [{ $ne: [{ $ifNull: ["$lastCheckOut", null] }, null] }, 1, 0] },
+          },
         },
       });
 
       const userData = req?.verified?.userData || {};
-      const [countResult, totalEmployees] = await Promise.all([
+      const [rowCountResult, countResult, totalEmployees] = await Promise.all([
+        Attendance.aggregate(rowCountPipeline),
         Attendance.aggregate(countPipeline),
         // The same roster count the Analytics "Total Employees" tile uses, so
         // the two screens agree. The authorizedUsers pre-find hook applies its
@@ -315,8 +381,16 @@ class AttendanceService {
           { memberId: userData.memberId }
         ),
       ]);
+      const total = rowCountResult[0]?.total || 0;
       const counts = countResult[0] || {};
-      const total = counts.total || 0;
+      const checkinLogs = counts.checkinLogs || 0;
+      const checkoutLogs = counts.checkoutLogs || 0;
+      // Absent = full roster minus anyone who checked in at all today. Starts
+      // at the full roster and drops the moment a check-in lands — see the
+      // matching comment in analytics.service.js#attendancePresence, which
+      // this mirrors. `counts.absent` only ever covered employees who
+      // already had an event that day, so it undercounted the roster gap.
+      const absent = Math.max(totalEmployees - checkinLogs, 0);
 
       return res.status(200).json(
         Response.userSuccessResp("Attendance summary", {
@@ -326,8 +400,10 @@ class AttendanceService {
           statusCounts: {
             present: counts.present || 0,
             halfDay: counts.halfDay || 0,
-            absent: counts.absent || 0,
+            absent,
             checkedIn: counts.checkedIn || 0,
+            checkinLogs,
+            checkoutLogs,
           },
           attendanceLogsStartDate,
         })
@@ -448,6 +524,7 @@ class AttendanceService {
         fromTime,
         toTime,
         timeType = "checkin",
+        status,
       } = req.query;
 
       const formattedFromTime = fromTime ? fromTime.padStart(5, "0") : null;
@@ -713,6 +790,21 @@ class AttendanceService {
         // that reuses this pipeline — can read `status`.
         attendanceStatusStage(attendanceRules),
 
+        // --- Status filter (Present / Half Day / Absent / Checked In) ---
+        // Validated against the known set rather than passed through raw, so
+        // a bad value falls back to "no filter" instead of matching nothing.
+        // `checkin`/`checkout` are duration-agnostic pseudo-statuses (not part
+        // of ATTENDANCE_STATUS) backing the Check In / Checkout tiles: "has
+        // this employee checked in/out at all today", regardless of what
+        // status that graded to.
+        ...(status === "checkin"
+          ? [{ $match: { firstCheckIn: { $ne: null } } }]
+          : status === "checkout"
+          ? [{ $match: { lastCheckOut: { $ne: null } } }]
+          : status && Object.values(ATTENDANCE_STATUS).includes(status)
+          ? [{ $match: { status } }]
+          : []),
+
         // --- Time Filter ---
         ...(fromTime || toTime
           ? [
@@ -763,27 +855,20 @@ class AttendanceService {
               },
             ]
           : []),
-
-        // --- Name filter ---
-        ...(name
-          ? [
-              {
-                $match: {
-                  "employee.fullName": { $regex: name, $options: "i" },
-                },
-              },
-            ]
-          : []),
       ];
 
-      // Apply name filter
-      // if (name) {
-      //   pipeline.push({
-      //     $match: {
-      //       "employee.fullName": { $regex: name, $options: "i" },
-      //     },
-      //   });
-      // }
+      // Snapshot before the free-text name search is applied, so the KPI
+      // tile counts in getAttendance() reflect the full date-range/filtered
+      // set regardless of what's typed in the search box — only the table
+      // rows below should narrow by name.
+      const countPipeline = pipeline.slice();
+
+      // --- Name filter ---
+      if (name) {
+        pipeline.push({
+          $match: { "employee.fullName": { $regex: name, $options: "i" } },
+        });
+      }
 
       // --- Sorting (asc or desc) ---
       // const sortDirection = sortOrder === "desc" ? -1 : 1;
@@ -843,11 +928,11 @@ class AttendanceService {
       // Pagination
       if (req?.query?.export) {
         // for export, no pagination
-        return pipeline;
+        return { pipeline, countPipeline };
       }
       pipeline.push({ $skip: parseInt(skip) });
       pipeline.push({ $limit: parseInt(limit) });
-      return pipeline;
+      return { pipeline, countPipeline };
     } catch (error) {
       logger.error(error);
       throw new Error("Failed to build attendance pipeline: " + error.message);
@@ -857,7 +942,7 @@ class AttendanceService {
   async exportAttendance(req, res, _next) {
     try {
       const format = req.query.format || "excel";
-      const pipeline = await this.buildAttendancePipeline(req, true);
+      const { pipeline } = await this.buildAttendancePipeline(req, true);
 
       // Match on-screen ordering: case-insensitive alphabetical sort.
       const data = await Attendance.aggregate(pipeline).collation({
@@ -933,26 +1018,22 @@ class AttendanceService {
         };
       }));
 
-      // Pair sequential checkouts and checkins
-      let pairedLogs = [];
-      let currentCheckout = null;
+      const pairedLogs = pairBreaks(populatedEvents);
 
-      for (const ev of populatedEvents) {
-        if (!currentCheckout && ev.cameraType === "checkout") {
-          currentCheckout = ev;
-        } else if (currentCheckout && ev.cameraType === "checkin") {
-          pairedLogs.push({
-            checkout: currentCheckout,
-            checkin: ev
-          });
-          currentCheckout = null; // Clear the checkout so we can look for the next pair
-        }
-      }
+      // Bookends: the day's earliest check-in and latest check-out — the two
+      // events pairBreaks() deliberately excludes from every break pair.
+      const checkinEvents = populatedEvents.filter((ev) => ev.cameraType === "checkin");
+      const checkoutEvents = populatedEvents.filter((ev) => ev.cameraType === "checkout");
+      const firstCheckIn = checkinEvents[0] || null;
+      const lastCheckOut = checkoutEvents.length ? checkoutEvents[checkoutEvents.length - 1] : null;
 
       return res.status(200).json(Response.userSuccessResp("User logs retrieved successfully", {
          employee: attendance.employee,
          date: date,
-         logs: pairedLogs
+         firstCheckIn,
+         lastCheckOut,
+         logs: pairedLogs,
+         breakMinutes: breakMinutesFromPairs(pairedLogs),
       }));
 
     } catch (error) {
