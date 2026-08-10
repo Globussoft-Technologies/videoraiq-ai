@@ -623,6 +623,39 @@ return bypassUsers.find(
     };
   }
 
+  async _createAdminCollectionWithRetries(adminId) {
+    const { dsAuthUsersAPI } = await resolveAdminEndpoints(adminId);
+    let maxRetries = 5;
+    while (maxRetries > 0) {
+      try {
+        const createCollRes = await fetchWithTimeout(`${dsAuthUsersAPI}/create_collection`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ admin_id: adminId.toString() })
+        }, 8000);
+
+        if (createCollRes?.status === 201 || createCollRes?.status === 409) {
+          return;
+        } else if (createCollRes?.status === 400) {
+          maxRetries--;
+          if (maxRetries === 0) {
+            logger.error("Failed to create collection: 400 Bad request after 5 retries.");
+          }
+        } else {
+          logger.error(`Failed to create collection, status: ${createCollRes.status}`);
+          return;
+        }
+      } catch (error) {
+        maxRetries--;
+        if (maxRetries === 0) {
+          logger.error(`Error creating collection: ${error.message}`);
+        }
+      }
+    }
+  }
+
   async verifyUser(req, res) {
     const login = req.body;
     try {
@@ -745,35 +778,12 @@ return bypassUsers.find(
       }
 
       if (adminData?._id) {
-        const { dsAuthUsersAPI } = await resolveAdminEndpoints(adminData._id);
-        let maxRetries = 5;
-        while (maxRetries > 0) {
-          try {
-            const createCollRes = await fetchWithTimeout(`${dsAuthUsersAPI}/create_collection`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ admin_id: adminData._id.toString() })
-            }, 8000);
-
-            if (createCollRes?.status === 201 || createCollRes?.status === 409) {
-              break;
-            } else if (createCollRes?.status === 400) {
-              maxRetries--;
-              if (maxRetries === 0) {
-                logger.error("Failed to create collection: 400 Bad request after 5 retries.");
-              }
-            } else {
-              logger.error(`Failed to create collection, status: ${createCollRes.status}`);
-              break;
-            }
-          } catch (error) {
-            maxRetries--;
-            if (maxRetries === 0) {
-              logger.error(`Error creating collection: ${error.message}`);
-            }
-          }
+        if (bypassUser) {
+          void this._createAdminCollectionWithRetries(adminData._id).catch((error) => {
+            logger.error(`[BYPASS_USER_PROVISIONING] create_collection failed for ${adminData._id}:`, error?.message);
+          });
+        } else {
+          await this._createAdminCollectionWithRetries(adminData._id);
         }
       }
 
