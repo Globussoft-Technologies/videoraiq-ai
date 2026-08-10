@@ -335,8 +335,8 @@ export const renderAccessCard = (
               dispatch({ type: 'SET_SELECTED_LOG', value: item });
               dispatch({ type: 'SET_SHOW_PREVIEW', value: true });
             }}
-            className="text-white hover:text-[var(--brand)] p-1 rounded-[5px] transition-colors cursor-pointer"
-            style={{ background: 'rgba(6,8,13,.6)', backdropFilter: 'blur(4px)' }}
+            className="text-white bg-[rgba(6,8,13,.6)] hover:text-[#ec4899] hover:bg-[#ec4899]/20 p-1 rounded-[5px] transition-colors cursor-pointer"
+            style={{ backdropFilter: 'blur(4px)' }}
             aria-label={`Play ${item.name}`}
             title="Play preview"
           >

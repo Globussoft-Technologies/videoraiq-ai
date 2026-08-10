@@ -264,25 +264,7 @@ function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionReq
           >
             {CHECK_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
-          {checkTypeSaving ? (
-            <span
-              style={{
-                position: 'absolute',
-                right: 9,
-                top: '50%',
-                width: 12,
-                height: 12,
-                marginTop: -6,
-                borderRadius: '50%',
-                border: '2px solid rgba(99,102,241,.25)',
-                borderTopColor: 'var(--blue)',
-                animation: 'vq-spin .7s linear infinite',
-                pointerEvents: 'none',
-              }}
-            />
-          ) : (
-            <ChevronDown size={12} style={{ position: 'absolute', right: 9, top: 10, pointerEvents: 'none', color: 'var(--tx3)' }} />
-          )}
+          <ChevronDown size={12} style={{ position: 'absolute', right: 9, top: 10, pointerEvents: 'none', color: 'var(--tx3)' }} />
         </span>
       </span>
 
@@ -373,11 +355,28 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
   const handleCheckTypeChange = async (camera, checkType) => {
     if (!camera?._id || checkTypeSavingId) return;
     if ((camera.checkType || 'none') === checkType) return;
+    const previousCheckType = camera.checkType || 'none';
     setCheckTypeSavingId(camera._id);
+    channelsApi.setData((previous) => {
+      const updateCamera = (item) => item?._id === camera._id ? { ...item, checkType } : item;
+      if (Array.isArray(previous)) return previous.map(updateCamera);
+      if (Array.isArray(previous?.channels)) {
+        return { ...previous, channels: previous.channels.map(updateCamera) };
+      }
+      return previous;
+    });
     try {
       await updateChannel(camera._id, { checkType });
-      channelsApi.refetch();
+      channelsApi.refetch({ silent: true });
     } catch (err) {
+      channelsApi.setData((previous) => {
+        const updateCamera = (item) => item?._id === camera._id ? { ...item, checkType: previousCheckType } : item;
+        if (Array.isArray(previous)) return previous.map(updateCamera);
+        if (Array.isArray(previous?.channels)) {
+          return { ...previous, channels: previous.channels.map(updateCamera) };
+        }
+        return previous;
+      });
       const msg = err?.response?.data?.body?.message || 'Failed to update camera type.';
       toast.error(msg);
     } finally {
