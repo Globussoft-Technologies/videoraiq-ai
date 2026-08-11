@@ -493,6 +493,40 @@ class PythonService {
     }
   }
 
+  async resetDetectionConfidence(payload) {
+    try {
+      const {
+        camera_id,
+        nvr_id,
+        admin_id,
+        detectors,
+      } = payload;
+
+      const { detectionUrl } = await resolveAdminEndpoints(admin_id);
+      const response = await axios.post(
+        `${detectionUrl}/detectors/reset-confidence`,
+        {
+          camera_id,
+          nvr_id,
+          detectors,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      return response.data;
+    } catch (error) {
+      logger.error(
+        "Error resetting detection confidence:",
+        error?.response?.data || error.message,
+      );
+      throw error;
+    }
+  }
+
   async handleDetectionUpdate(
     channel,
     admin_id,

@@ -840,6 +840,89 @@ class DetectionSettingService {
         );
     }
   }
+
+  async resetDetectionThresholds(req, res, _next) {
+    try {
+      const { id } = req.params;
+      const user_id = req?.verified?.userData?.user_id;
+
+      const detectionSetting = await DetectionSetting.findOne({
+        _id: id,
+        userId: user_id,
+      });
+
+      if (!detectionSetting) {
+        return res
+          .status(404)
+          .json(Response.userFailResp("Detection setting not found"));
+      }
+
+      const settingType = detectionSetting.settingType;
+      const storedThresholds = detectionSetting.modelThresholds || {};
+      const thresholds = DetectionSettingsValidation.extractModelThresholds(
+        settingType,
+        { [settingType]: storedThresholds },
+      );
+
+      if (!Object.keys(thresholds).length) {
+        return res.status(400).json(
+          Response.userFailResp("No saved model thresholds available to reset"),
+        );
+      }
+
+      const currentSettings =
+        detectionSetting.settings?.toObject?.() || detectionSetting.settings || {};
+
+      detectionSetting.settings = {
+        ...currentSettings,
+        ...thresholds,
+      };
+      detectionSetting.markModified("settings");
+      await detectionSetting.save();
+
+      const linkedChannels = await Channel.find({
+        [`detections.${settingType}.id`]: id,
+        [`detections.${settingType}.enabled`]: true,
+      })
+        .populate("nvrId")
+        .populate(toPopulateDetections);
+
+      const adminId = req?.verified?.userData?.adminId;
+      for (const channel of linkedChannels) {
+        try {
+          const cameraId = channel._id.toString();
+          await pythonService.resetDetectionConfidence({
+            camera_id: cameraId,
+            nvr_id: channel?.nvrId?._id?.toString(),
+            admin_id: adminId,
+            detectors: [settingType],
+          });
+        } catch (error) {
+          logger.error(
+            `Failed to re-push reset thresholds for channel ${channel?._id}:`,
+            error,
+          );
+        }
+      }
+
+      return res.status(200).json(
+        Response.userSuccessResp("Detection thresholds reset successfully", {
+          detectionSetting,
+          resetThresholds: thresholds,
+        }),
+      );
+    } catch (error) {
+      logger.error("Error resetting detection thresholds:", error);
+      return res
+        .status(500)
+        .json(
+          Response.errorResp(
+            "Failed to reset detection thresholds",
+            error.message,
+          ),
+        );
+    }
+  }
 }
 
 export default new DetectionSettingService();

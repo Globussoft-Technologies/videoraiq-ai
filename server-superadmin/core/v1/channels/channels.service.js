@@ -26,10 +26,26 @@ import departmentsModel from "../departments/departments.model.js";
 import pythonService from "../../../services/python.service.js";
 import DetectionSettingService from "../detectionSettings/detectionSettings.service.js";
 import Recipient from "../verifyRecipients/recipients.model.js";
+import DetectionSettingsValidation from "../detectionSettings/detectionSettings.validate.js";
 import config from "config"
 const APP_ENV = config.get("APP_ENV");
 const rtsp_host = config.get("RTSPStream.host");
 
+const updateSettingsWithModelThresholds = async (detectionSetting, backendResponse) => {
+  const thresholds = DetectionSettingsValidation.extractModelThresholds(
+    detectionSetting?.settingType,
+    backendResponse?.model_thresholds,
+  );
+
+  if (!Object.keys(thresholds).length) return;
+
+  detectionSetting.modelThresholds = {
+    ...(detectionSetting.modelThresholds?.toObject?.() || detectionSetting.modelThresholds || {}),
+    ...thresholds,
+  };
+  detectionSetting.markModified("modelThresholds");
+  await detectionSetting.save();
+};
 
 class ChannelService {
   async updateChannel(req, res, _next) {
@@ -1311,6 +1327,9 @@ class ChannelService {
           obstruction_threshold_sec,
           severity,
         );
+        if (enable) {
+          await updateSettingsWithModelThresholds(detectionSettingDoc, beResponse);
+        }
 
         await channel.save();
         return res.status(200).json(

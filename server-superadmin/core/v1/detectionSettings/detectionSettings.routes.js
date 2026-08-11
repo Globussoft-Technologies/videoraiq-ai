@@ -11,6 +11,7 @@ router.get("/examples",viewAccessCheck, DetectionSettingsController.getDetection
 router.get("/types",viewAccessCheck, DetectionSettingsController.getDetectionTypes);
 router.get("/:id",viewAccessCheck, DetectionSettingsController.getDetectionSettings);
 router.put("/:id",editAccessCheck, DetectionSettingsController.updateDetectionSettings);
+router.put("/:id/reset-thresholds",editAccessCheck, DetectionSettingsController.resetDetectionThresholds);
 router.delete("/:id",deleteAccessCheck, DetectionSettingsController.deleteDetectionSettings);
 
 router.post("/attach",viewAccessCheck, DetectionSettingsController.attachDetectionSetting);

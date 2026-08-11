@@ -594,6 +594,27 @@ async getLogs(req, res, next) {
             }),
           ]);
         }
+        const locationAwareMatch = normalizedEmployeeLocations.length
+          ? [
+              {
+                $match: {
+                  $or: [
+                    ...(locationEmployeeIds.length
+                      ? [{ userId: { $in: locationEmployeeIds.map((id) => new ObjectId(id)) } }]
+                      : []),
+                    ...(locationNvrIds.length
+                      ? [{
+                          $and: [
+                            { $or: [{ userId: null }, { userId: { $exists: false } }] },
+                            { "sessions.nvr": { $in: locationNvrIds.map((id) => new ObjectId(id)) } },
+                          ],
+                        }]
+                      : []),
+                  ],
+                },
+              },
+            ]
+          : [];
         const authorizedUserIds = shouldRemoveUnknown
           ? await userModel.distinct("_id", { adminId: new ObjectId(adminId) })
           : [];
@@ -643,12 +664,11 @@ async getLogs(req, res, next) {
             ? [{ $match: { userId: { $in: authorizedUserIds.map((id) => new ObjectId(id)) } } }]
             : []),
 
+          ...locationAwareMatch,
+
 
           // tag: true → tagged only | tag: false → untagged + old docs | tag: null/omitted → all
           ...(tag === null || tag === undefined ? [] : tag ? [{ $match: { tag: true } }] : [{ $match: { $or: [{ tag: false }, { tag: { $exists: false } }] } }]),
-
-          // Filter by authorized locations
-          ...(authorizedEmployeeIds.length ? [{ $match: { userId: { $in: authorizedEmployeeIds.map(id => new ObjectId(id)) } } }] : []),
 
           // Filter sessions using $filter before unwind
           ...(sessionFilterActive ? [
