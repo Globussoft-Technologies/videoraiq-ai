@@ -1347,11 +1347,17 @@ class DetectionSettingService {
       }
 
       const settingType = detectionSetting.settingType;
-      const storedThresholds = detectionSetting.modelThresholds || {};
-      const thresholds = DetectionSettingsValidation.extractModelThresholds(
+      let thresholds = DetectionSettingsValidation.extractModelThresholds(
         settingType,
-        { [settingType]: storedThresholds },
+        { [settingType]: detectionSetting.modelThresholds || {} },
       );
+
+      if (!Object.keys(thresholds).length) {
+        thresholds = DetectionSettingsValidation.extractModelThresholds(
+          settingType,
+          { [settingType]: detectionSetting.settings || {} },
+        );
+      }
 
       if (!Object.keys(thresholds).length) {
         return res.status(400).json(

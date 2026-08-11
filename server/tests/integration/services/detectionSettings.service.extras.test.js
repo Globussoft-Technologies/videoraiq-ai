@@ -26,7 +26,11 @@ const { default: Channel } = await import(
 const detectionModels = await import(
   "../../../core/v1/detectionSettings/detectionSettings.model.js"
 );
-const { MotionDetectionSetting, DetectionSetting } = detectionModels;
+const {
+  MotionDetectionSetting,
+  DetectionSetting,
+  PersonalProtectiveEquipmentSetting,
+} = detectionModels;
 await import("../../../core/v1/NVR/nvr.model.js");
 await import("../../../core/v1/verifyRecipients/recipients.model.js");
 await import("../../../core/v1/authorizedUsers/authorizedUsers.model.js");
@@ -48,6 +52,22 @@ async function makeMotionSetting(over = {}) {
     userId: "u1",
     enabled: true,
     settings: { metricType: "gauge" },
+    alerts: [],
+    ...over,
+  });
+}
+
+async function makePpeSetting(over = {}) {
+  return PersonalProtectiveEquipmentSetting.create({
+    name: "ppe-1",
+    settingType: "personalProtectiveEquipmentSettings",
+    userId: "u1",
+    enabled: true,
+    settings: {
+      person_threshold: 0.65,
+      vest_threshold: 0.25,
+      helmet_threshold: 0.15,
+    },
     alerts: [],
     ...over,
   });
@@ -282,6 +302,66 @@ describe("DetectionSettingsService.attachDetectionSetting", () => {
       reloaded.detections?.motionDetectionSettings?.id?.toString() ||
         reloaded.detections?.motionDetectionSettings?.toString(),
     ).toBeTruthy();
+  });
+});
+
+// --------------------------------------------------------------------------
+// resetDetectionThresholds
+// --------------------------------------------------------------------------
+
+describe("DetectionSettingsService.resetDetectionThresholds", () => {
+  it("uses saved settings thresholds when modelThresholds is empty", async () => {
+    const setting = await makePpeSetting({
+      modelThresholds: {},
+      settings: {
+        person_threshold: 0.65,
+        vest_threshold: 0.25,
+        helmet_threshold: 0.15,
+      },
+    });
+
+    const { req, res, next } = serviceCtx({
+      user_id: "u1",
+      params: { id: setting._id.toString() },
+    });
+
+    await DetectionSettingsService.resetDetectionThresholds(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.resetThresholds).toEqual({
+      person_threshold: 0.65,
+      vest_threshold: 0.25,
+      helmet_threshold: 0.15,
+    });
+  });
+
+  it("prefers saved model thresholds over current settings", async () => {
+    const setting = await makePpeSetting({
+      modelThresholds: {
+        person_threshold: 0.8,
+        vest_threshold: 0.7,
+        helmet_threshold: 0.6,
+      },
+      settings: {
+        person_threshold: 0.4,
+        vest_threshold: 0.3,
+        helmet_threshold: 0.2,
+      },
+    });
+
+    const { req, res, next } = serviceCtx({
+      user_id: "u1",
+      params: { id: setting._id.toString() },
+    });
+
+    await DetectionSettingsService.resetDetectionThresholds(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.resetThresholds).toEqual({
+      person_threshold: 0.8,
+      vest_threshold: 0.7,
+      helmet_threshold: 0.6,
+    });
   });
 });
 
