@@ -10,6 +10,23 @@ import moment from "moment";
 import sideBarConfigData from './dashboardSidebar.model.js'
 import dashboardSidebarModel from "./dashboardSidebar.model.js";
 import NVR from "../NVR/nvr.model.js"
+
+function escapeRegex(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildCaseInsensitiveLocationMatch(values = []) {
+  const normalized = [...new Set(
+    (Array.isArray(values) ? values : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  )];
+
+  if (!normalized.length) return { $in: [] };
+  return {
+    $in: normalized.map((value) => new RegExp(`^${escapeRegex(value)}$`, "i")),
+  };
+}
 class DashboardService {
     async headerStats(req, res, next) {
         try {
@@ -171,7 +188,7 @@ class DashboardService {
               : location.split(",").map((l) => l.trim());
             const nvrs = await NVR.find({
               userId: resolvedUserId.toString(),
-              location: { $in: locations },
+              location: buildCaseInsensitiveLocationMatch(locations),
             }).select("_id");
             const nvrIds = nvrs.map((nvr) => nvr._id);
             if (nvrIds.length > 0) {
@@ -586,7 +603,7 @@ class DashboardService {
               : location.split(",").map((l) => l.trim());
             const nvrs = await NVR.find({
               userId: data.user_id.toString(),
-              location: { $in: locations },
+              location: buildCaseInsensitiveLocationMatch(locations),
             }).select("_id");
             const nvrIds = nvrs.map((nvr) => nvr._id);
             if (nvrIds.length > 0) {
@@ -864,7 +881,7 @@ class DashboardService {
               : location.split(",").map((l) => l.trim());
             const nvrs = await NVR.find({
               userId: data.user_id.toString(),
-              location: { $in: locations },
+              location: buildCaseInsensitiveLocationMatch(locations),
             }).select("_id");
             const nvrIds = nvrs.map((nvr) => nvr._id);
             if(data?.memberId){
@@ -1065,7 +1082,7 @@ class DashboardService {
               : location.split(",").map((l) => l.trim());
             const nvrs = await NVR.find({
               userId: data.user_id.toString(),
-              location: { $in: locations },
+              location: buildCaseInsensitiveLocationMatch(locations),
             }).select("_id");
             const nvrIds = nvrs.map((nvr) => nvr._id);
             if (nvrIds.length > 0) {
@@ -1290,7 +1307,7 @@ class DashboardService {
               : location.split(",").map((l) => l.trim());
             const nvrs = await NVR.find({
               userId: data.user_id.toString(),
-              location: { $in: locations },
+              location: buildCaseInsensitiveLocationMatch(locations),
             }).select("_id");
             const nvrIds = nvrs.map((nvr) => nvr._id);
             if (nvrIds.length > 0) {

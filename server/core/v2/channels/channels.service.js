@@ -31,6 +31,23 @@ import config from "config"
 const APP_ENV = config.get("APP_ENV");
 const rtsp_host = config.get("RTSPStream.host");
 
+function escapeRegex(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildCaseInsensitiveLocationMatch(values = []) {
+  const normalized = [...new Set(
+    (Array.isArray(values) ? values : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  )];
+
+  if (!normalized.length) return { $in: [] };
+  return {
+    $in: normalized.map((value) => new RegExp(`^${escapeRegex(value)}$`, "i")),
+  };
+}
+
 const updateSettingsWithModelThresholds = async (detectionSetting, backendResponse) => {
   const thresholds = DetectionSettingsValidation.extractModelThresholds(
     detectionSetting?.settingType,
@@ -304,7 +321,7 @@ class ChannelService {
           : location.split(",");
 
         const nvrs = await NVR.find({
-          location: { $in: locations },
+          location: buildCaseInsensitiveLocationMatch(locations),
           userId: user_id,
         })
           .select("_id")
@@ -1153,7 +1170,7 @@ class ChannelService {
           : location.split(",");
 
         const nvrs = await NVR.find({
-          location: { $in: locations },
+          location: buildCaseInsensitiveLocationMatch(locations),
           userId: user_id,
         })
           .select("_id")

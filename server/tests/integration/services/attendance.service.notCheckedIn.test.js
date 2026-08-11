@@ -246,4 +246,64 @@ describe("AttendanceService.getAttendance — not_checked_in", () => {
     expect(data.statusCounts.notCheckedIn).toBe(1);
     expect(data.statusCounts.absent).toBe(2);
   });
+
+  it("scopes total employees in attendance summary to the selected location filter", async () => {
+    const admin = await Admin.create({
+      user_id: "1",
+      login: "a",
+      email: "a@test.com",
+    });
+    const department = await Department.create({
+      adminId: admin._id,
+      departmentName: "Engineering",
+    });
+
+    const bangaloreEmployee = await AuthorizedUsers.create({
+      adminId: admin._id,
+      firstName: "Bangalore",
+      lastName: "User",
+      email: "blr@test.com",
+      departmentId: department._id,
+      location: "bangalore",
+    });
+    await AuthorizedUsers.create({
+      adminId: admin._id,
+      firstName: "Mumbai",
+      lastName: "User",
+      email: "mum@test.com",
+      departmentId: department._id,
+      location: "mumbai",
+    });
+
+    await Attendance.create({
+      user: admin._id,
+      employee: bangaloreEmployee._id,
+      createdAt: new Date("2026-08-10T09:00:00.000Z"),
+      events: [
+        {
+          cameraType: "checkin",
+          timestamp: new Date("2026-08-10T09:00:00.000Z"),
+          channel: new mongoose.Types.ObjectId(),
+          nvr: new mongoose.Types.ObjectId(),
+          images: { face: "f1" },
+        },
+      ],
+    });
+
+    const { req, res } = serviceCtx({
+      adminId: admin._id,
+      user_id: admin.user_id,
+      query: {
+        startDate: "2026-08-10",
+        endDate: "2026-08-10",
+      },
+      body: { employeeLocations: ["Bangalore"] },
+    });
+
+    await AttendanceService.getAttendance(req, res);
+
+    expect(res.statusCode).toBe(200);
+    const data = payload(res).data;
+    expect(data.totalEmployees).toBe(1);
+  });
 });

@@ -1,5 +1,22 @@
 import mongoose from "mongoose";
 import authorizedChannelsModel from "../cameraRestrictions/authorizedChannels.model.js";
+
+function escapeRegex(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildCaseInsensitiveLocationNameIn(values = []) {
+  const normalized = [...new Set(
+    (Array.isArray(values) ? values : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  )];
+
+  if (!normalized.length) return { $in: [] };
+  return {
+    $in: normalized.map((value) => new RegExp(`^${escapeRegex(value)}$`, "i")),
+  };
+}
 const locationSchema = new mongoose.Schema(
   {
     locationName: {
@@ -54,7 +71,7 @@ locationSchema.pre(/^find|countDocuments/, async function () {
     return;
   }
 
-  this.where({ locationName: { $in: allowedLocations } });
+  this.where({ locationName: buildCaseInsensitiveLocationNameIn(allowedLocations) });
 });
 
 export default mongoose.model("Location", locationSchema);

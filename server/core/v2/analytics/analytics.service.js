@@ -59,6 +59,27 @@ function splitValues(value) {
   return values.map((v) => String(v).trim()).filter(Boolean);
 }
 
+function normalizeText(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function escapeRegex(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildCaseInsensitiveLocationMatch(values = []) {
+  const normalized = [...new Set(
+    (Array.isArray(values) ? values : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  )];
+
+  if (!normalized.length) return { $in: [] };
+  return {
+    $in: normalized.map((value) => new RegExp(`^${escapeRegex(value)}$`, "i")),
+  };
+}
+
 // Resolved in REPORT_TZ rather than server-local time so the window matches the
 // $dateToString buckets below — otherwise a server running in UTC slices days
 // 5.5h away from where the Attendance/Access Logs pages slice them.
@@ -273,7 +294,10 @@ class AnalyticsService {
 
     if (location) {
       const locations = Array.isArray(location) ? location : String(location).split(",").map((l) => l.trim());
-      const nvrs = await NVR.find({ userId: data.user_id.toString(), location: { $in: locations } }).select("_id");
+      const nvrs = await NVR.find({
+        userId: data.user_id.toString(),
+        location: buildCaseInsensitiveLocationMatch(locations),
+      }).select("_id");
       const nvrIds = nvrs.map((n) => n._id);
       match.nvrId = match.nvrId ? { $in: match.nvrId.$in.filter((id) => nvrIds.some((n) => n.equals(id))) } : { $in: nvrIds };
     }
@@ -334,8 +358,9 @@ class AnalyticsService {
       .setOptions({ memberId: data.memberId })
       .select("_id departmentId location")
       .lean();
-    const locationScopedRoster = locations.length
-      ? roster.filter((employee) => locations.includes(employee?.location))
+    const normalizedLocations = locations.map(normalizeText);
+    const locationScopedRoster = normalizedLocations.length
+      ? roster.filter((employee) => normalizedLocations.includes(normalizeText(employee?.location)))
       : roster;
     const rosterIds = locationScopedRoster.map((employee) => employee._id);
     const employeeIds = departmentIds.length
@@ -848,19 +873,13 @@ class AnalyticsService {
         },
       });
 
-      const [counts = {}, employees, notCheckedInSummary] = await Promise.all([
+      const [counts = {}, notCheckedInSummary] = await Promise.all([
         Attendance.aggregate(countPipeline)
           .collation({ locale: "en", strength: 2 })
           .then((rows) => rows[0]),
-        // Same count the Total Employees tile used to fetch from
-        // /authorizedUsers/fetch, including the member location scoping its
-        // pre-find hook applies.
-        AuthorizedUser.countDocuments({
-          adminId: new mongoose.Types.ObjectId(adminId),
-          ...(employeeLocations.length ? { location: { $in: employeeLocations } } : {}),
-        }, { memberId: userData.memberId }),
         AttendanceService.buildNotCheckedInDataset(logsReq),
       ]);
+      const employees = notCheckedInSummary.totalEmployees || 0;
 
       const checkinLogs = counts?.checkinLogs || 0;
       const earlyLeave = counts?.earlyLeave || 0;

@@ -91,6 +91,23 @@ function employeeFullName(employee = {}) {
   return `${employee?.firstName || ""} ${employee?.lastName || ""}`.trim();
 }
 
+function escapeRegex(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildLocationMatch(locations = []) {
+  const normalized = [...new Set(
+    (Array.isArray(locations) ? locations : [])
+      .map((location) => String(location || "").trim())
+      .filter(Boolean)
+  )];
+
+  if (!normalized.length) return null;
+  return {
+    $in: normalized.map((location) => new RegExp(`^${escapeRegex(location)}$`, "i")),
+  };
+}
+
 function shiftExpectsEmployeeOnDate(shift, date) {
   if (!shift) return true;
   if (shift.isActive === false) return false;
@@ -158,8 +175,9 @@ class AttendanceService {
       adminId: asObjectId(adminId),
     };
 
-    if (employeeLocations.length) {
-      rosterQuery.location = { $in: employeeLocations };
+    const locationMatch = buildLocationMatch(employeeLocations);
+    if (locationMatch) {
+      rosterQuery.location = locationMatch;
     }
 
     if (req?.query?.departmentIds) {
@@ -606,20 +624,17 @@ class AttendanceService {
           name: "",
         },
       };
-      const [rowCountResult, countResult, totalEmployees, notCheckedInSummary] =
+      const [rowCountResult, countResult, notCheckedInSummary] =
         await Promise.all([
           Attendance.aggregate(rowCountPipeline),
           Attendance.aggregate(countPipeline),
-          authorizedUsersModel.countDocuments(
-            { adminId: new mongoose.Types.ObjectId(userData.adminId) },
-            { memberId: userData.memberId }
-          ),
           this.buildNotCheckedInDataset(summaryBreakdownReq),
         ]);
       const total = rowCountResult[0]?.total || 0;
       const counts = countResult[0] || {};
       const checkinLogs = counts.checkinLogs || 0;
       const checkoutLogs = counts.checkoutLogs || 0;
+      const totalEmployees = notCheckedInSummary.totalEmployees || 0;
       const earlyLeave = counts.earlyLeave || 0;
       const notCheckedIn = notCheckedInSummary.rows.length;
       const absent = earlyLeave + notCheckedIn;
@@ -767,18 +782,19 @@ class AttendanceService {
       
       let authorizedEmployeeLocations = req?.verified?.authorizedChannel?.employeeLocations || [];
       let { employeeLocations=[]} = req.body;
-
-      //combine authorizedEmployeeLocations and employeeLocations and remove duplicates
-      if(employeeLocations?.length){
-        employeeLocations = [...authorizedEmployeeLocations,...employeeLocations];
-        employeeLocations = [...new Set(employeeLocations)];
-      }
+      employeeLocations = [
+        ...new Set([
+          ...(Array.isArray(authorizedEmployeeLocations) ? authorizedEmployeeLocations : []),
+          ...(Array.isArray(employeeLocations) ? employeeLocations : []),
+        ]),
+      ];
 
       //Include only those authorized employee WHOSE location CONTAINS authorizedEmployeeLocations
       let fetchAllEmployeeswithAuthorizedLocations = [];
-      if(employeeLocations?.length){
+      const locationMatch = buildLocationMatch(employeeLocations);
+      if (locationMatch) {
         fetchAllEmployeeswithAuthorizedLocations = await authorizedUsersModel.find({
-          location: { $in: employeeLocations },
+          location: locationMatch,
           adminId: new mongoose.Types.ObjectId(adminId)
         }).distinct("_id");
       }

@@ -2,6 +2,23 @@ import mongoose from 'mongoose';
 import { encrypt, decrypt } from "../../../utils/cryptoUtils.js";
 import authorizedChannelsModel from "../cameraRestrictions/authorizedChannels.model.js";
 
+function escapeRegex(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildCaseInsensitiveLocationIn(values = []) {
+  const normalized = [...new Set(
+    (Array.isArray(values) ? values : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  )];
+
+  if (!normalized.length) return { $in: [] };
+  return {
+    $in: normalized.map((value) => new RegExp(`^${escapeRegex(value)}$`, "i")),
+  };
+}
+
 const authorizedUsersSchema = new mongoose.Schema({
   orgId: { type: Number, default: null },
   emp_id: { type: Number, default: null },
@@ -145,7 +162,7 @@ authorizedUsersSchema.pre(/^find|countDocuments/, async function () {
 
   // --- MERGE EXISTING QUERY WITH AUTHORIZATION FILTER ---
   this.where({
-    $and: [existingQuery, { location: { $in: allowedLocations } }],
+    $and: [existingQuery, { location: buildCaseInsensitiveLocationIn(allowedLocations) }],
   });
 });
 
