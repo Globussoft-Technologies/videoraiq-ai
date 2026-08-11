@@ -8,7 +8,7 @@ class DepartmentServices{
 async create(req,res,next){
     try{
         const result = req.verified;
-        let { orgId ,adminId} = result?.userData;
+        let { orgId ,adminId, memberId } = result?.userData;
         orgId = orgId?.toString()
         const {departmentName,orgId:OrgId,empDepartmentId,isActive,softDelete,description,isImportedFromEMP} = req?.body;
         
@@ -30,6 +30,13 @@ async create(req,res,next){
             softDelete,
             adminId
         });
+
+        if (memberId) {
+          await authorizedChannelsModel.updateOne(
+            { adminId, userId: memberId },
+            { $addToSet: { departmentIds: newDepartment._id } }
+          );
+        }
     
         return res.status(201).send(
             Response.userSuccessResp("Department created successfully.", newDepartment)
