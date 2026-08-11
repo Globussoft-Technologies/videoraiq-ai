@@ -20,6 +20,11 @@ import Webcam from 'react-webcam';
 import { toast } from 'sonner';
 import { verifyUser } from './Api';
 
+const CAMERA_ACCESS_TOAST = {
+  id: 'camera-access-required',
+  description: "We couldn't access your camera. Please connect a camera or allow camera access in your browser settings",
+};
+
 const VerifyUserDialog = ({ trigger }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState(1); // 1 select, 2 preview, 3 processing, 4 result
@@ -36,6 +41,10 @@ const VerifyUserDialog = ({ trigger }) => {
     setPreviewImage(null);
     setSelectedFile(null);
     setApiMessage('');
+  };
+
+  const showCameraAccessError = () => {
+    toast.error('Camera access required', CAMERA_ACCESS_TOAST);
   };
 
   const handleOpenChange = (open) => {
@@ -256,6 +265,7 @@ const VerifyUserDialog = ({ trigger }) => {
                     audio={false}
                     ref={webcamRef}
                     screenshotFormat="image/jpeg"
+                    onUserMediaError={showCameraAccessError}
                     className="w-full h-full object-cover"
                     videoConstraints={{ width: 1280, height: 720, facingMode: 'user' }}
                   />

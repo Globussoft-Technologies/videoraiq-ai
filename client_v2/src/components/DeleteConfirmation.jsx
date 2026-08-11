@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { AlertCircle, Loader2, Siren, TriangleAlert } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 
 /**
@@ -48,13 +48,6 @@ const ConfirmationModal = ({
           {message}
         </div>
 
-        {/* Warning banner */}
-        <div className="bg-[var(--crit)]/5 border border-[var(--crit)]/20 rounded-lg p-2.5 sm:p-3 mb-4 sm:mb-6">
-          <p className="text-xs text-[var(--crit)] text-center font-medium flex items-center justify-center gap-1.5">
-            <TriangleAlert className="w-4 h-4" /> This action cannot be undone
-          </p>
-        </div>
-        
         {/* Action buttons */}
         <div className="flex gap-3 justify-center w-full">
           <button

@@ -1,7 +1,7 @@
 ﻿import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Inbox, Maximize2, X } from 'lucide-react';
+import { Maximize2, X } from 'lucide-react';
 import { Panel, ActionLink, Badge } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { severity, detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
@@ -178,27 +178,11 @@ function Lightbox({ src, alt, onClose }) {
 
 function EmptyIncidentCard() {
   return (
-    <>
-      <div style={{ position: 'relative', aspectRatio: '16/9', background: '#0a0e15', display: 'grid', placeItems: 'center' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: 'var(--tx3)', fontSize: 11.5 }}>
-          <Inbox size={24} strokeWidth={1.6} />
-          <span>No incidents yet</span>
-        </div>
+    <div style={{ minHeight: 360, background: '#fff', display: 'grid', placeItems: 'center', color: '#667085', fontSize: 12, fontWeight: 500 }}>
+      <div style={{ textAlign: 'center' }}>
+        No incidents yet
       </div>
-      <div style={{ padding: '11px 14px', minHeight: 158, boxSizing: 'border-box' }}>
-        <div style={{ height: 16, width: '52%', borderRadius: 6, background: 'var(--bg2)', border: '1px solid var(--bd)', marginBottom: 7 }} />
-        <div style={{ height: 12, width: '34%', borderRadius: 6, background: 'var(--bg2)', border: '1px solid var(--bd)' }} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 17 }}>
-          {[0, 1].map(index => (
-            <div key={index} style={{ minHeight: 50, padding: '7px 9px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)' }} />
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: 7, marginTop: 11 }}>
-          <div style={{ flex: 1, height: 34, borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)' }} />
-          <div style={{ flex: 1, height: 34, borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)' }} />
-        </div>
-      </div>
-    </>
+    </div>
   );
 }
 

@@ -748,7 +748,9 @@ export default function AlertsView() {
         {/* Detail */}
         <Panel className="vq-alerts-detail" style={{ overflow: 'hidden', alignSelf: 'flex-start', position: 'sticky', top: 0, minWidth: 0, padding: 10 }}>
           {!active ? (
-            <div style={{ padding: 24, textAlign: 'center', color: 'var(--tx3)', fontSize: 12 }}>Select an alert to inspect</div>
+            <div style={{ minHeight: 78, display: 'grid', placeItems: 'center', textAlign: 'center', color: 'var(--tx3)', fontSize: 12 }}>
+              {rows.length === 0 ? 'No alerts to inspect' : 'Select an alert to view details'}
+            </div>
           ) : (
             <>
               <div style={{ position: 'relative', aspectRatio: '16/9', background: '#0a0e15', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--bd)' }}>

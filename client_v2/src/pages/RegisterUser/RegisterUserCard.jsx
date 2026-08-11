@@ -12,6 +12,11 @@ const captureAngles = orgId === 'dubai' ? ['Front'] : ['Front', 'Right', 'Left']
 const angleIndexMap = { Front: 0, Right: 1, Left: 2 };
 
 const GRADIENT = 'linear-gradient(90deg,var(--blue),var(--violet))';
+const CAMERA_ACCESS_TOAST = {
+  ...COMPACT_TOAST,
+  id: 'camera-access-required',
+  description: "We couldn't access your camera. Please connect a camera or allow camera access in your browser settings",
+};
 
 const fieldLabel = 'block text-xs font-medium text-[var(--tx2)] mb-1.5';
 const Req = () => <span className="text-[var(--crit)]"> *</span>;
@@ -102,6 +107,10 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     uploadFile(file, angleIndexMap[activeAngle]);
     setIsCameraOpen(false);
     setActiveAngle(null);
+  };
+
+  const showCameraAccessError = () => {
+    toast.error('Camera access required', CAMERA_ACCESS_TOAST);
   };
 
   /* ---- reset ---- */
@@ -411,6 +420,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
                 audio={false}
                 ref={webcamRef}
                 screenshotFormat="image/jpeg"
+                onUserMediaError={showCameraAccessError}
                 className="w-full h-full object-cover object-top"
               />
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-56 border-2 border-white/50 rounded-[40%] pointer-events-none" />

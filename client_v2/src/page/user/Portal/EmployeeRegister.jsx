@@ -31,6 +31,10 @@ const PHOTO_SLOTS = [
    off. sessionStorage (not localStorage) so the draft doesn't outlive the
    browsing session or leak across a shared/public device. */
 const DRAFT_KEY_PREFIX = "vqp_employee_register_draft_";
+const CAMERA_ACCESS_TOAST = {
+  id: "camera-access-required",
+  description: "We couldn't access your camera. Please connect a camera or allow camera access in your browser settings",
+};
 
 function draftKey() {
   const token = new URLSearchParams(window.location.search).get("token") || "default";
@@ -254,6 +258,10 @@ export default function EmployeeRegister() {
   };
 
   const openCamera = (key) => () => setCaptureSlot(key);
+
+  const showCameraAccessError = () => {
+    toast.error("Camera access required", CAMERA_ACCESS_TOAST);
+  };
 
   const capturePhoto = () => {
     if (!webcamRef.current || !captureSlot) return;
@@ -610,6 +618,7 @@ export default function EmployeeRegister() {
                           ref={webcamRef}
                           screenshotFormat="image/jpeg"
                           screenshotQuality={0.95}
+                          onUserMediaError={showCameraAccessError}
                           // Without an explicit resolution the browser picks its own default,
                           // which on some webcams is low enough (e.g. 320x240) that the face
                           // recognition service can't detect a face and registration fails

@@ -25,6 +25,11 @@ import {
 
 const orgId = import.meta.env.VITE_ORGANISATION_ID;
 const requiredImageCount = orgId === 'dubai' ? 1 : 3;
+const CAMERA_ACCESS_TOAST = {
+  ...COMPACT_TOAST,
+  id: 'camera-access-required',
+  description: "We couldn't access your camera. Please connect a camera or allow camera access in your browser settings",
+};
 
 const angleIndexMap = { Front: 0, Right: 1, Left: 2 };
 
@@ -133,6 +138,10 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
     uploadFile(file, folderName, angleIndexMap[activeCaptureAngle]);
     setIsCameraOpen(false);
     setActiveCaptureAngle(null);
+  };
+
+  const showCameraAccessError = () => {
+    toast.error('Camera access required', CAMERA_ACCESS_TOAST);
   };
 
   const handleRemoveImage = (index) => {
@@ -408,6 +417,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
                         audio={false}
                         ref={webcamRef}
                         screenshotFormat="image/jpeg"
+                        onUserMediaError={showCameraAccessError}
                         className="w-full h-full object-cover"
                       />
                       <div className="absolute inset-0 border-[20px] border-black/20 pointer-events-none" />
