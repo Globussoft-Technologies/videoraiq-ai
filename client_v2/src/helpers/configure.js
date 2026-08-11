@@ -93,6 +93,14 @@ export const updateDetectionSetting = async (id, data) => {
   return unwrap(res);
 };
 
+export const resetDetectionThresholds = async (id) => {
+  const token = getAccessToken();
+  const res = await axios.put(`${Api_url}/detection-settings/${id}/reset-thresholds`, {}, {
+    headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+  });
+  return unwrap(res);
+};
+
 /** Create a brand-new DetectionSetting for a camera that has never had this
  * type configured — same POST /detection-settings V1 uses on first save. */
 export const createDetectionSetting = async (data) => {

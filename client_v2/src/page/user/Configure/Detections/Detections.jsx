@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, Search, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import AccessDenied from '../../../../components/AccessDenied';
 import { AsyncBoundary } from '../../../../components/States';
 import { useApi } from '../../../../hooks/useApi';
 import { usePermissions } from '@/context/PermissionContext';
-import { deleteDetectionSetting, getCamerasByNvr, getDetectionSettings, getDetectionTypes, toggleChannelDetection, updateChannel, updateDetectionSetting } from '../../../../helpers/configure';
+import MultiSelect from '../../../../components/MultiSelect';
+import { deleteDetectionSetting, getCamerasByNvr, getChannels, getDetectionSettings, getDetectionTypes, getNvrs, resetDetectionThresholds, toggleChannelDetection, updateChannel, updateDetectionSetting } from '../../../../helpers/configure';
 import { fetchDetectionTypes as fetchIncidentFilterTypes, fetchIncidents, fetchIncidentStats } from '../../../../helpers/incidents';
 import { timeOfDay } from '../../../../lib/format';
 import DetectionZoneMarking from '../DetectionZoneMarking';
@@ -120,8 +121,210 @@ function StatCard({ label, value, sub, color = 'var(--tx)', small = false }) {
   );
 }
 
+function CameraFilterDropdown({
+  options = [],
+  value,
+  onChange,
+  placeholder = 'Select Camera',
+  loading = false,
+  disabled = false,
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const wrapperRef = useRef(null);
+  const selected = options.find((option) => String(option.id) === String(value));
+
+  useEffect(() => {
+    const onClick = (event) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return options;
+    return options.filter((option) => String(option.label || '').toLowerCase().includes(needle));
+  }, [options, query]);
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative', width: '100%' }}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) return;
+          setOpen((next) => !next);
+        }}
+        style={{
+          width: '100%',
+          height: 34,
+          padding: '0 34px 0 12px',
+          borderRadius: 9,
+          background: 'var(--bg2)',
+          border: '1px solid var(--bd)',
+          color: selected ? 'var(--tx)' : 'var(--ph)',
+          fontSize: 12.5,
+          fontWeight: 600,
+          outline: 'none',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.72 : 1,
+          textAlign: 'left',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+        title={selected?.label || placeholder}
+      >
+        {loading ? 'Loading cameras...' : selected?.label || placeholder}
+      </button>
+      {loading ? (
+        <span
+          style={{
+            position: 'absolute',
+            right: 11,
+            top: '50%',
+            width: 13,
+            height: 13,
+            marginTop: -6.5,
+            borderRadius: '50%',
+            border: '2px solid rgba(99,115,255,.25)',
+            borderTopColor: 'var(--brand)',
+            animation: 'vq-spin .7s linear infinite',
+            pointerEvents: 'none',
+          }}
+        />
+      ) : (
+        <>
+          {selected && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onChange('');
+                setOpen(false);
+                setQuery('');
+              }}
+              style={{
+                position: 'absolute',
+                right: 29,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: 18,
+                height: 18,
+                border: 0,
+                background: 'transparent',
+                color: 'var(--tx3)',
+                cursor: 'pointer',
+                display: 'grid',
+                placeItems: 'center',
+                padding: 0,
+              }}
+              aria-label="Clear camera filter"
+            >
+              <X size={13} />
+            </button>
+          )}
+          <ChevronDown
+            size={14}
+            style={{
+              position: 'absolute',
+              right: 11,
+              top: '50%',
+              transform: `translateY(-50%) rotate(${open ? 180 : 0}deg)`,
+              color: 'var(--tx3)',
+              pointerEvents: 'none',
+              transition: 'transform .15s ease',
+            }}
+          />
+        </>
+      )}
+
+      {open && !disabled && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 39,
+            left: 0,
+            right: 0,
+            zIndex: 80,
+            borderRadius: 10,
+            border: '1px solid var(--bd)',
+            background: 'var(--bg1solid)',
+            boxShadow: '0 14px 34px rgba(15,23,42,.14)',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ padding: 8, borderBottom: '1px solid var(--bd)' }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={14} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx3)' }} />
+              <input
+                type="text"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search camera..."
+                style={{
+                  width: '100%',
+                  height: 32,
+                  padding: '0 10px 0 31px',
+                  borderRadius: 9,
+                  border: '1px solid var(--bd)',
+                  background: 'var(--bg2)',
+                  color: 'var(--tx)',
+                  fontSize: 12,
+                  outline: 'none',
+                }}
+              />
+            </div>
+          </div>
+          <div className="customscrollbar" style={{ maxHeight: 236, overflowY: 'auto', padding: '4px 0' }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: '9px 12px', color: 'var(--tx3)', fontSize: 12 }}>No Camera Found</div>
+            ) : (
+              filtered.map((option) => {
+                const active = String(option.id) === String(value);
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => {
+                      onChange(option.id);
+                      setOpen(false);
+                      setQuery('');
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: 0,
+                      background: active ? 'var(--bg3)' : 'transparent',
+                      color: 'var(--tx)',
+                      fontSize: 12.5,
+                      fontWeight: active ? 700 : 500,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function cameraLabel(camera) {
   return camera?.customName || camera?.name || camera?.channelId || camera?.ipAddress || camera?._id || 'Camera';
+}
+
+function nvrLabel(nvr) {
+  return nvr?.nvrName || nvr?.name || nvr?.location || nvr?._id || 'NVR';
 }
 
 function cameraWithNvr(camera, nvr) {
@@ -312,6 +515,9 @@ export default function Detections() {
   const [selectedId, setSelectedId] = useState('');
   const [edits, setEdits] = useState({});
   const [zoneCamera, setZoneCamera] = useState(null);
+  const [selectedNvrIds, setSelectedNvrIds] = useState([]);
+  const [selectedFilterCameraId, setSelectedFilterCameraId] = useState('');
+  const [cameraFilterLoading, setCameraFilterLoading] = useState(false);
   const [enteredDetections, setEnteredDetections] = useState(false);
   const [zoneSettingsOpen, setZoneSettingsOpen] = useState(false);
   const [detectionToggleLoading, setDetectionToggleLoading] = useState('');
@@ -325,9 +531,11 @@ export default function Detections() {
   const [incidentError, setIncidentError] = useState(null);
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showResetThresholdConfirm, setShowResetThresholdConfirm] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const detailCameraId = searchParams.get('camera');
   const [resettingSetting, setResettingSetting] = useState(false);
+  const [resettingThresholds, setResettingThresholds] = useState(false);
   const [cameraTypeSaving, setCameraTypeSaving] = useState(false);
   const incidentRequestIdRef = useRef(0);
 
@@ -342,6 +550,41 @@ export default function Detections() {
     [],
     { initialData: [] },
   );
+  const nvrsApi = useApi(() => getNvrs(0, 500), [], { initialData: { nvrs: [] } });
+  const filterCamerasApi = useApi(
+    () => getChannels({ nvrId: selectedNvrIds, limit: 1000 }),
+    [selectedNvrIds.join(',')],
+    { initialData: { channels: [] } },
+  );
+
+  const nvrOptions = useMemo(
+    () => (nvrsApi.data?.nvrs || []).map((nvr) => ({ id: String(nvr._id || nvr.id), label: nvrLabel(nvr) })),
+    [nvrsApi.data],
+  );
+  const filterCameraOptions = useMemo(() => {
+    const channels = filterCamerasApi.data?.channels || [];
+    return channels
+      .filter((camera) => camera?._id || camera?.id)
+      .map((camera) => ({
+        id: String(camera._id || camera.id),
+        label: cameraLabel(camera),
+        camera,
+      }));
+  }, [filterCamerasApi.data]);
+
+  useEffect(() => {
+    if (!enteredDetections || filterCamerasApi.loading || !selectedFilterCameraId) return;
+    if (filterCameraOptions.length === 0) return;
+    const exists = filterCameraOptions.some((option) => option.id === selectedFilterCameraId);
+    if (exists) return;
+    setSelectedFilterCameraId('');
+    setZoneCamera(null);
+    setZoneSettingsOpen(false);
+    setIncidentItems([]);
+    setIncidentTotalCount(0);
+    setIncidentLoading(false);
+    setIncidentError(null);
+  }, [enteredDetections, filterCamerasApi.loading, filterCameraOptions, selectedFilterCameraId]);
 
   const models = useMemo(
     () => buildDetectionModels(typesApi.data).map((m) => {
@@ -399,7 +642,7 @@ export default function Detections() {
     ? selectedDetectionEntry.id.alerts || []
     : [];
   const incidentFilter = useMemo(() => {
-    if (!enteredDetections || incidentFilterTypesApi.loading || !selectedIncidentType) return null;
+    if (!enteredDetections || !zoneCamera?._id || incidentFilterTypesApi.loading || !selectedIncidentType) return null;
     const severity = severityFilterValue(incidentSeverity);
     return {
       incidentTypeFilter: [selectedIncidentType],
@@ -723,10 +966,33 @@ export default function Detections() {
     }
   };
 
+  const handleResetThresholds = async () => {
+    if (!selectedDetectionSettingId) {
+      toast.error('No detection settings found to reset thresholds.');
+      setShowResetThresholdConfirm(false);
+      return;
+    }
+
+    setResettingThresholds(true);
+    try {
+      await resetDetectionThresholds(selectedDetectionSettingId);
+      setShowResetThresholdConfirm(false);
+      toast.success('Detection thresholds reset successfully.');
+      await refreshZoneCamera();
+      detectionSettingsApi.refetch({ silent: true });
+    } catch (err) {
+      toast.error(err?.response?.data?.body?.message || err?.response?.data?.message || 'Failed to reset detection thresholds.');
+    } finally {
+      setResettingThresholds(false);
+    }
+  };
+
   useEffect(() => {
     if (!detailCameraId && enteredDetections) {
       setEnteredDetections(false);
       setZoneCamera(null);
+      setSelectedNvrIds([]);
+      setSelectedFilterCameraId('');
       setZoneSettingsOpen(false);
     }
   // Only react to URL changes. Running this effect when `enteredDetections`
@@ -735,11 +1001,15 @@ export default function Detections() {
   }, [detailCameraId]);
 
   const enterDetections = (camera) => {
+    const nextCameraId = String(camera?._id || '');
+    const nextNvrId = nvrIdOf(camera?.nvrId);
     setSearchParams((previous) => {
       const next = new URLSearchParams(previous);
-      next.set('camera', String(camera?._id || ''));
+      next.set('camera', nextCameraId);
       return next;
     });
+    setSelectedFilterCameraId(nextCameraId);
+    if (nextNvrId) setSelectedNvrIds([String(nextNvrId)]);
     setZoneCamera(camera);
     // Show the loader in the first rendered frame; the filter effect below
     // performs the request once enteredDetections becomes active.
@@ -756,6 +1026,8 @@ export default function Detections() {
     }, { replace: true });
     setEnteredDetections(false);
     setZoneCamera(null);
+    setSelectedNvrIds([]);
+    setSelectedFilterCameraId('');
     setZoneSettingsOpen(false);
   };
 
@@ -770,6 +1042,67 @@ export default function Detections() {
       limit: 100,
     });
     return mergeDetectionSetting(normalized, normalized.nvrId || nvr, settingType, settingsResult);
+  };
+
+  const handleNvrFilterChange = (nextIds) => {
+    const normalizedIds = nextIds.map(String);
+    setSelectedNvrIds(normalizedIds);
+    const currentNvrId = nvrIdOf(zoneCamera?.nvrId);
+    if (normalizedIds.length > 0 && currentNvrId && !normalizedIds.includes(String(currentNvrId))) {
+      setSelectedFilterCameraId('');
+      setZoneCamera(null);
+      setZoneSettingsOpen(false);
+      setIncidentItems([]);
+      setIncidentTotalCount(0);
+      setIncidentLoading(false);
+      setIncidentError(null);
+    }
+  };
+
+  const handleCameraFilterChange = async (cameraId) => {
+    setSelectedFilterCameraId(cameraId);
+    if (!cameraId) {
+      setZoneCamera(null);
+      setZoneSettingsOpen(false);
+      setIncidentItems([]);
+      setIncidentTotalCount(0);
+      setIncidentLoading(false);
+      setIncidentError(null);
+      setSearchParams((previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete('camera');
+        return next;
+      }, { replace: true });
+      return;
+    }
+
+    const option = filterCameraOptions.find((item) => item.id === cameraId);
+    const camera = option?.camera;
+    if (!camera) {
+      toast.error('Selected camera details are not available yet.');
+      return;
+    }
+
+    setCameraFilterLoading(true);
+    setIncidentLoading(true);
+    setIncidentError(null);
+    try {
+      const nvr = camera.nvrId || zoneCamera?.nvrId;
+      const hydratedCamera = await fetchCameraWithZones(camera, nvr, selectedSettingType);
+      setZoneCamera(hydratedCamera || camera);
+      const nextNvrId = nvrIdOf((hydratedCamera || camera)?.nvrId);
+      if (nextNvrId && selectedNvrIds.length === 0) setSelectedNvrIds([String(nextNvrId)]);
+      setSearchParams((previous) => {
+        const next = new URLSearchParams(previous);
+        next.set('camera', String(cameraId));
+        return next;
+      });
+    } catch (err) {
+      setIncidentLoading(false);
+      toast.error(err?.response?.data?.body?.message || 'Failed to load selected camera.');
+    } finally {
+      setCameraFilterLoading(false);
+    }
   };
 
   const refreshZoneCamera = async () => {
@@ -844,6 +1177,27 @@ export default function Detections() {
             {cameraLabel(zoneCamera)}
           </span>
         )}
+        <div style={{ width: 276, maxWidth: '32vw' }}>
+          <MultiSelect
+            options={nvrOptions}
+            value={selectedNvrIds}
+            onChange={handleNvrFilterChange}
+            placeholder={nvrsApi.loading ? 'Loading NVRs...' : 'Select NVR'}
+            searchPlaceholder="Search NVR..."
+            maxHeight="max-h-48"
+            msg="No NVR Found"
+          />
+        </div>
+        <div style={{ position: 'relative', width: 276, maxWidth: '32vw' }}>
+          <CameraFilterDropdown
+            options={filterCameraOptions}
+            value={selectedFilterCameraId}
+            onChange={handleCameraFilterChange}
+            placeholder="Select Camera"
+            loading={filterCamerasApi.loading || cameraFilterLoading}
+            disabled={filterCamerasApi.loading || cameraFilterLoading}
+          />
+        </div>
       </div>
 
       <div className="vq-kpi-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 14 }}>
@@ -1179,6 +1533,15 @@ export default function Detections() {
                     setShowResetConfirm(true);
                   }}
                   resetDisabled={!canEditDetections || resettingSetting || !selectedDetectionSettingId}
+                  onResetThresholds={() => {
+                    if (!canEditDetections) return;
+                    if (!selectedDetectionSettingId) {
+                      toast.error('No detection settings found to reset thresholds.');
+                      return;
+                    }
+                    setShowResetThresholdConfirm(true);
+                  }}
+                  resetThresholdDisabled={!canEditDetections || resettingThresholds || !selectedDetectionSettingId}
                   initialAlerts={selectedDetectionAlerts}
                   onRecipientsChange={(alertIds) => { if (canEditDetections) updateSelectedRecipients(alertIds); }}
                   onScheduleSaved={refreshZoneCamera}
@@ -1226,6 +1589,17 @@ export default function Detections() {
         onConfirm={handleResetSetting}
       >
         <strong>Warning:</strong> This will reset the selected detection settings to their default values. This action cannot be undone.
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={showResetThresholdConfirm}
+        title="Reset detection thresholds"
+        busy={resettingThresholds}
+        busyLabel="Resetting..."
+        confirmLabel="Reset Thresholds"
+        onCancel={() => setShowResetThresholdConfirm(false)}
+        onConfirm={handleResetThresholds}
+      >
+        Reset saved threshold values for <strong>{selected?.name || 'this detection'}</strong> to defaults?
       </ConfirmDialog>
     </div>
   );

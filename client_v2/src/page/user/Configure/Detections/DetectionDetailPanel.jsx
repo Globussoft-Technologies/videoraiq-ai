@@ -506,7 +506,9 @@ export default function DetectionDetailPanel({
   onThresholdChange,
   onEditZones,
   onResetSetting,
+  onResetThresholds,
   resetDisabled = false,
+  resetThresholdDisabled = false,
   settingId,
   channel,
   onScheduleSaved,
@@ -735,7 +737,29 @@ export default function DetectionDetailPanel({
             {category?.label} · {model.subtitle}
           </span>
         </span>
-        <span style={{ flex: '0 0 auto' }}>
+        <span style={{ flex: '0 0 auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          {/* <button
+            type="button"
+            onClick={onResetThresholds}
+            disabled={resetThresholdDisabled}
+            title={resetThresholdDisabled ? 'No saved setting for this detection type' : 'Reset detection thresholds'}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              border: '1px solid var(--bd)',
+              background: 'var(--bg2)',
+              color: resetThresholdDisabled ? 'var(--tx3)' : '#ec4899',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: resetThresholdDisabled ? 'not-allowed' : 'pointer',
+              opacity: resetThresholdDisabled ? 0.6 : 1,
+            }}
+            aria-label="Reset detection thresholds"
+          >
+            <ListRestart size={15} />
+          </button> */}
           <Toggle on={model.active} onChange={onToggle} disabled={toggleDisabled} />
         </span>
       </div>

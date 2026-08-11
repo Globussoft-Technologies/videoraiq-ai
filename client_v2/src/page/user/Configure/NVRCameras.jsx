@@ -410,7 +410,7 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
       >
         <Cctv size={12} /> Camera Settings
       </button>
-      {(SHOW_NVR_ACTIONS || IS_LOCAL_SETUP) && (
+      {SHOW_NVR_ACTIONS && (
         <>
           <button
             onClick={() => onEdit(nvr)}
