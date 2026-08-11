@@ -17,9 +17,7 @@
  *   9) sorts + paginates (skipped when isExport=true) and projects.
  *
  * Tests use mongodb-memory-server end-to-end (no model mocks needed for
- * the aggregation). The known product bug at line 556
- * (`authorizedUsersModel` not imported — issue #108) means the
- * `employeeLocations`-non-empty branch must be skipped citing the issue.
+ * the aggregation).
  *
  * Mock budget: 1 (socket.js — same as accesslogs.service.extras.test.js).
  */
@@ -448,13 +446,104 @@ describe("AccessLogsService.getLogs", () => {
     expect(ts0).toBeLessThanOrEqual(ts1);
   });
 
-  it.skip(
-    "employeeLocations non-empty branch crashes — authorizedUsersModel not imported (issue #108)",
-    async () => {
-      // intentionally skipped — see issue #108. Re-enable once line 556 is
-      // changed to use the imported `userModel`.
-    },
-  );
+  it("filters known users by employee location and unknown users by NVR location", async () => {
+    const hqUser = await AuthorizedUsers.create({
+      adminId: admin._id,
+      firstName: "HQ",
+      lastName: "Employee",
+      userName: "hq-employee",
+      email: "hq@x.com",
+      profilePics: [],
+      password: "x",
+      location: "HQ",
+    });
+    const remoteUser = await AuthorizedUsers.create({
+      adminId: admin._id,
+      firstName: "Remote",
+      lastName: "Employee",
+      userName: "remote-employee",
+      email: "remote@x.com",
+      profilePics: [],
+      password: "x",
+      location: "Remote",
+    });
+
+    // Known-user filtering must ignore the NVR location.
+    await seedLog({ userId: hqUser._id, nvrId: nvr2._id, channelId: channel2._id });
+    await seedLog({ userId: remoteUser._id, nvrId: nvr._id, channelId: channel._id });
+    await OptimizedAccessLogs.create({
+      admin: admin._id,
+      userId: null,
+      sessions: [{
+        nvr: nvr._id,
+        channel: channel._id,
+        personName: "Unknown HQ",
+        timestamp: new Date(),
+      }],
+    });
+    await OptimizedAccessLogs.create({
+      admin: admin._id,
+      userId: null,
+      sessions: [{
+        nvr: nvr2._id,
+        channel: channel2._id,
+        personName: "Unknown Remote",
+        timestamp: new Date(),
+      }],
+    });
+
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      user_id: "1",
+      body: { employeeLocations: ["hQ"] },
+    });
+    await AccessLogsService.getLogs(req, res, next);
+
+    expect(payload(res).status).toBe("success");
+    expect(payload(res).data.total).toBe(2);
+    const rows = payload(res).data.usersLogs;
+    const knownRow = rows.find((row) => String(row.userId) === String(hqUser._id));
+    const unknownRow = rows.find((row) => !row.userId);
+    expect(knownRow.userInfo.location).toBe("HQ");
+    expect(String(knownRow.sessions[0].nvr)).toBe(String(nvr2._id));
+    expect(unknownRow.nvrInfo.location).toBe("HQ");
+    expect(String(unknownRow.sessions[0].nvr)).toBe(String(nvr._id));
+  });
+
+  it("treats the default location as no location filter", async () => {
+    const remoteUser = await AuthorizedUsers.create({
+      adminId: admin._id,
+      firstName: "Remote",
+      lastName: "Employee",
+      userName: "default-filter-remote",
+      email: "default-filter-remote@x.com",
+      profilePics: [],
+      password: "x",
+      location: "Remote",
+    });
+    await seedLog({ userId: remoteUser._id, nvrId: nvr2._id, channelId: channel2._id });
+    await OptimizedAccessLogs.create({
+      admin: admin._id,
+      userId: null,
+      sessions: [{
+        nvr: nvr._id,
+        channel: channel._id,
+        personName: "Unknown HQ",
+        timestamp: new Date(),
+      }],
+    });
+
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      user_id: "1",
+      body: { employeeLocations: [" Default ", "HQ"] },
+    });
+    await AccessLogsService.getLogs(req, res, next);
+
+    expect(payload(res).status).toBe("success");
+    expect(payload(res).data.total).toBe(2);
+    expect(payload(res).data.usersLogs).toHaveLength(2);
+  });
 
   it("catch arm: invalid adminId shape routes to next(AppError)", async () => {
     // Send an unparseable ObjectId-ish adminId (string with bad length) so

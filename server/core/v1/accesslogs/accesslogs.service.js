@@ -512,6 +512,7 @@ class AccessLogsService {
 async getLogs(req, res, next) {
       try {
         const adminId = req.verified?.userData?.adminId;
+        const accountUserId = req.verified?.userData?.user_id;
         let memberId = req.verified?.userData?.memberId;
         let authorizedChannels = req?.verified?.authorizedChannel?.channels || [];
         let authorizedEmployeeLocations = req?.verified?.authorizedChannel?.employeeLocations || [];
@@ -525,15 +526,27 @@ async getLogs(req, res, next) {
         skip = Number(skip);
         limit = Number(limit);
 
-        if(employeeLocations?.length){
-          employeeLocations = [...authorizedEmployeeLocations,...employeeLocations];
-          employeeLocations = [...new Set(employeeLocations)];
-        }
-        const normalizedEmployeeLocations = [...new Set(
-          (employeeLocations || [])
-            .map((item) => String(item).trim().toLowerCase())
+        const requestedEmployeeLocations = Array.isArray(employeeLocations)
+          ? [...new Set(
+              employeeLocations
+                .filter(Boolean)
+                .map((item) => String(item).trim().toLowerCase())
+                .filter(Boolean)
+            )]
+          : [];
+        const hasDefaultLocation = requestedEmployeeLocations.includes("default");
+        const hasLocationFilter = requestedEmployeeLocations.length > 0 && !hasDefaultLocation;
+        const isRestrictedMember = memberId !== undefined && memberId !== null;
+        const authorizedLocationSet = new Set(
+          (authorizedEmployeeLocations || [])
             .filter(Boolean)
-        )];
+            .map((item) => String(item).trim().toLowerCase())
+        );
+        const normalizedEmployeeLocations = hasLocationFilter
+          ? requestedEmployeeLocations.filter(
+              (item) => !isRestrictedMember || authorizedLocationSet.has(item)
+            )
+          : [];
 
         let { sortOrder = "desc", sortField = "lastCreatedAt" } = req.query;
 
@@ -574,11 +587,6 @@ async getLogs(req, res, next) {
           }
         }
 
-        // Fetch authorized employees by location
-        let authorizedEmployeeIds = [];
-        if(employeeLocations?.length){
-          authorizedEmployeeIds = await userModel.find({employeeLocationId:{$in:employeeLocations},adminId:new ObjectId(adminId)}).distinct("_id");
-        }
         let locationEmployeeIds = [];
         let locationNvrIds = [];
         if (normalizedEmployeeLocations.length) {
@@ -589,26 +597,32 @@ async getLogs(req, res, next) {
               location: { $in: locationRegexes },
             }),
             nvrModel.distinct("_id", {
-              userId: new ObjectId(adminId),
+              userId: String(accountUserId),
               location: { $in: locationRegexes },
             }),
           ]);
         }
+        const locationEmployeeObjectIds = locationEmployeeIds.map((id) => new ObjectId(id));
+        const locationNvrObjectIds = locationNvrIds.map((id) => new ObjectId(id));
         const locationAwareClauses = [
           ...(locationEmployeeIds.length
-            ? [{ userId: { $in: locationEmployeeIds.map((id) => new ObjectId(id)) } }]
+            ? [{ userId: { $in: locationEmployeeObjectIds } }]
             : []),
           ...(locationNvrIds.length
             ? [{
                 $and: [
                   { $or: [{ userId: null }, { userId: { $exists: false } }] },
-                  { "sessions.nvr": { $in: locationNvrIds.map((id) => new ObjectId(id)) } },
+                  { "sessions.nvr": { $in: locationNvrObjectIds } },
                 ],
               }]
             : []),
         ];
-        const locationAwareMatch = locationAwareClauses.length
-          ? [{ $match: { $or: locationAwareClauses } }]
+        const locationAwareMatch = hasLocationFilter
+          ? [{
+              $match: locationAwareClauses.length
+                ? { $or: locationAwareClauses }
+                : { _id: { $in: [] } },
+            }]
           : [];
         const authorizedUserIds = shouldRemoveUnknown
           ? await userModel.distinct("_id", { adminId: new ObjectId(adminId) })
@@ -617,10 +631,7 @@ async getLogs(req, res, next) {
         // Convert department IDs to ObjectIds
         const deptObjectIds = departmentIds?.length ? departmentIds.map(id => new ObjectId(id)) : [];
         const channelObjectIds = channelIds?.length ? channelIds.map(id => new ObjectId(id)) : [];
-        const nvrObjectIds = [
-          ...(nvrIds?.length ? nvrIds.map(id => new ObjectId(id)) : []),
-          ...locationNvrIds.map((id) => new ObjectId(id)),
-        ];
+        const nvrObjectIds = nvrIds?.length ? nvrIds.map(id => new ObjectId(id)) : [];
         const authChannelObjectIds = authorizedChannels.map(id => new ObjectId(id));
 
         // ponytail: with no nvr/channel filter the session $filter below is a
@@ -631,6 +642,7 @@ async getLogs(req, res, next) {
         // {admin, lastCreatedAt, createdAt} and only the returned page is read.
         const sessionFilterActive = Boolean(
           nvrObjectIds.length ||
+          locationNvrObjectIds.length ||
           (memberId !== undefined && authChannelObjectIds.length) ||
           channelObjectIds.length
         );
@@ -676,6 +688,12 @@ async getLogs(req, res, next) {
                     cond: {
                       $and: [
                         ...(nvrObjectIds.length ? [{ $in: ["$$session.nvr", nvrObjectIds] }] : [true]),
+                        ...(locationNvrObjectIds.length ? [{
+                          $or: [
+                            { $ne: [{ $ifNull: ["$userId", null] }, null] },
+                            { $in: ["$$session.nvr", locationNvrObjectIds] },
+                          ],
+                        }] : [true]),
                         ...(memberId !== undefined && authChannelObjectIds.length ? [{ $in: ["$$session.channel", authChannelObjectIds] }] : [true]),
                         ...(channelObjectIds.length ? [{ $in: ["$$session.channel", channelObjectIds] }] : [true])
                       ]
@@ -732,10 +750,6 @@ async getLogs(req, res, next) {
             }
           },
           { $unwind: { path: "$departmentInfo", preserveNullAndEmptyArrays: true } },
-
-          ...(locationEmployeeIds.length
-            ? [{ $match: { userId: { $in: locationEmployeeIds.map((id) => new ObjectId(id)) } } }]
-            : []),
 
           // Filter by department
           ...(deptObjectIds.length ? [
