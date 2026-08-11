@@ -1,10 +1,23 @@
 import config from "config";
+import moment from "moment-timezone";
 import { encrypt, decrypt } from "../../utils/cryptoUtils.js";
 
-// Weekday name for the Day row shown in every incident mail (same locale as
-// the templates' formattedTime).
-const dayOf = (t) => (t ? new Date(t).toLocaleDateString("en-IN", { weekday: "long" }) : "N/A");
-export let IncidentMail = (incidentData, alertBasedOn, nvrOrChannelDetails) => {
+const DEFAULT_EMAIL_TIMEZONE = "Asia/Kolkata";
+const resolveEmailTimezone = (timezone) => {
+  if (!timezone || typeof timezone !== "string") return DEFAULT_EMAIL_TIMEZONE;
+  return moment.tz.zone(timezone) ? timezone : DEFAULT_EMAIL_TIMEZONE;
+};
+const formatEmailTime = (t, timezone) => {
+  if (!t) return "N/A";
+  const m = moment.utc(t).tz(resolveEmailTimezone(timezone));
+  return m.isValid() ? m.format("DD/MM/YYYY hh:mm A") : "N/A";
+};
+const dayOf = (t, timezone) => {
+  if (!t) return "N/A";
+  const m = moment.utc(t).tz(resolveEmailTimezone(timezone));
+  return m.isValid() ? m.format("dddd") : "N/A";
+};
+export let IncidentMail = (incidentData, alertBasedOn, nvrOrChannelDetails, timezone) => {
   const {
     incidentName,
     incidentType,
@@ -129,8 +142,8 @@ export let IncidentMail = (incidentData, alertBasedOn, nvrOrChannelDetails) => {
     <div class="container">
       <div class="header">
         <h2>🚨 Incident Reported: ${incidentName} (${incidentType})</h2>
-        <p><strong>Day:</strong> ${dayOf(timeOfIncident)}</p>
-        <p><strong>Time:</strong> ${timeOfIncident}</p>
+        <p><strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}</p>
+        <p><strong>Time:</strong> ${formatEmailTime(timeOfIncident, timezone)}</p>
       </div>
 
       <div class="section">
@@ -214,6 +227,7 @@ export let loiteringWithoutAuthTemplate = (
   incidentData,
   nvrData,
   channelData,
+  timezone,
 ) => {
   const {
     incidentName,
@@ -246,11 +260,7 @@ export let loiteringWithoutAuthTemplate = (
 
   const { bgColor, textColor, label } = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "short",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `
   <!DOCTYPE html>
@@ -336,7 +346,7 @@ export let loiteringWithoutAuthTemplate = (
   <img src="https://i.postimg.cc/SRrQMQD9/clock.png" width="24" alt="" style="vertical-align:middle;">
   <span style="margin-left:6px;"><strong>Day</strong></span>
   </td>
-  <td style="padding:6px 10px; color: #626262;">${dayOf(timeOfIncident)}</td>
+  <td style="padding:6px 10px; color: #626262;">${dayOf(timeOfIncident, timezone)}</td>
   </tr>
   
   <tr>
@@ -444,7 +454,7 @@ export let loiteringWithoutAuthTemplate = (
   `;
 };
 
-export let LoiteringWithAuthIncident = (incidentData, nvrData, channelData) => {
+export let LoiteringWithAuthIncident = (incidentData, nvrData, channelData, timezone) => {
   const {
     incidentName,
     timeOfIncident,
@@ -477,11 +487,7 @@ export let LoiteringWithAuthIncident = (incidentData, nvrData, channelData) => {
 
   const { bgColor, textColor, label } = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "short",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   const personNames = personDetected.length
     ? personDetected.map((p) => `${p.firstName} ${p.lastName}`).join(", ")
@@ -571,7 +577,7 @@ export let LoiteringWithAuthIncident = (incidentData, nvrData, channelData) => {
   <img src="https://i.postimg.cc/SRrQMQD9/clock.png" width="24" alt="" style="vertical-align:middle;">
   <span style="margin-left:6px;"><strong style="color: #333333;">Day</strong></span>
   </td>
-  <td style="padding:6px 10px;color: #626262; font-weight: 400;">${dayOf(timeOfIncident)}</td>
+  <td style="padding:6px 10px;color: #626262; font-weight: 400;">${dayOf(timeOfIncident, timezone)}</td>
   </tr>
   
   <tr>
@@ -689,6 +695,7 @@ export let unauthorizedAccessIncident = (
   incidentData,
   nvrData,
   channelData,
+  timezone,
 ) => {
   const {
     incidentName,
@@ -723,11 +730,7 @@ export let unauthorizedAccessIncident = (
 
   const { bgColor, textColor, label } = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "short",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   const personNames = personDetected.length
     ? personDetected.map((p) => `${p.firstName} ${p.lastName}`).join(", ")
@@ -817,7 +820,7 @@ export let unauthorizedAccessIncident = (
   <img src="https://i.postimg.cc/SRrQMQD9/clock.png" width="24" alt="" style="vertical-align:middle;">
   <span style="margin-left:6px;"><strong style="color: #333333;">Day</strong></span>
   </td>
-  <td style="padding:6px 10px;color: #626262; font-weight: 400;">${dayOf(timeOfIncident)}</td>
+  <td style="padding:6px 10px;color: #626262; font-weight: 400;">${dayOf(timeOfIncident, timezone)}</td>
   </tr>
   
   <tr>
@@ -925,7 +928,7 @@ export let unauthorizedAccessIncident = (
   `;
 };
 
-export let LineCrossingAuthIncident = (incidentData, nvrData, channelData) => {
+export let LineCrossingAuthIncident = (incidentData, nvrData, channelData, timezone) => {
   const {
     incidentName,
     timeOfIncident,
@@ -960,11 +963,7 @@ export let LineCrossingAuthIncident = (incidentData, nvrData, channelData) => {
 
   const { bgColor, textColor, label } = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "short",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   const personNames = personDetected.length
     ? personDetected.map((p) => `${p.firstName} ${p.lastName}`).join(", ")
@@ -1054,7 +1053,7 @@ export let LineCrossingAuthIncident = (incidentData, nvrData, channelData) => {
   <img src="https://i.postimg.cc/SRrQMQD9/clock.png" width="24" alt="" style="vertical-align:middle;">
   <span style="margin-left:6px;"><strong style="color: #333333;">Day</strong></span>
   </td>
-  <td style="padding:6px 10px;color: #626262; font-weight: 400;">${dayOf(timeOfIncident)}</td>
+  <td style="padding:6px 10px;color: #626262; font-weight: 400;">${dayOf(timeOfIncident, timezone)}</td>
   </tr>
   
   <tr>
@@ -1214,6 +1213,7 @@ export let motionDetectionAuthTemplate = (
   incidentData,
   nvrData,
   channelData,
+  timezone,
 ) => {
   const {
     incidentName,
@@ -1245,11 +1245,7 @@ export let motionDetectionAuthTemplate = (
 
   const { bgColor, textColor, label } = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "short",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `<!DOCTYPE html>
   <html>
@@ -1335,7 +1331,7 @@ export let motionDetectionAuthTemplate = (
   <img src="https://i.postimg.cc/SRrQMQD9/clock.png" width="24" alt="" style="vertical-align:middle;">
   <span style="margin-left:6px;"><strong style="color: #333333;">Day</strong></span>
   </td>
-  <td style="padding:6px 10px;color: #626262; font-weight: 400;">${dayOf(timeOfIncident)}</td>
+  <td style="padding:6px 10px;color: #626262; font-weight: 400;">${dayOf(timeOfIncident, timezone)}</td>
   </tr>
   
   <tr>
@@ -1505,6 +1501,7 @@ export let genericObjectDetectionTemplate = (
   incidentData,
   nvrData,
   channelData,
+  timezone,
 ) => {
   const {
     incidentName,
@@ -1536,11 +1533,7 @@ export let genericObjectDetectionTemplate = (
 
   const { bgColor, textColor, label } = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "short",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `<!DOCTYPE html>
   <html>
@@ -1560,8 +1553,8 @@ export let genericObjectDetectionTemplate = (
       <h2>Generic Object Detection Report</h2>
   
       <div class="section"><span class="label">Incident Type:</span> genericObjectDetection</div>
-      <div class="section"><span class="label">Day:</span> ${dayOf(incidentData.timeOfIncident)}</div>
-      <div class="section"><span class="label">Time of Incident:</span> ${incidentData.timeOfIncident}</div>
+      <div class="section"><span class="label">Day:</span> ${dayOf(incidentData.timeOfIncident, timezone)}</div>
+      <div class="section"><span class="label">Time of Incident:</span> ${formattedTime}</div>
       <div class="section"><span class="label">Zone:</span> ${incidentData.zone}</div>
   
       <div class="section"><span class="label">Objects Detected:</span>
@@ -1602,7 +1595,7 @@ export let genericObjectDetectionTemplate = (
   </html>`;
 };
 
-export let countVehiclesTemplate = (incidentData, nvrData, channelData) => {
+export let countVehiclesTemplate = (incidentData, nvrData, channelData, timezone) => {
   const {
     incidentName,
     timeOfIncident,
@@ -1633,11 +1626,7 @@ export let countVehiclesTemplate = (incidentData, nvrData, channelData) => {
 
   const { bgColor, textColor, label } = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "short",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `<!DOCTYPE html>
   <html>
@@ -1657,8 +1646,8 @@ export let countVehiclesTemplate = (incidentData, nvrData, channelData) => {
       <h2>Vehicle Count Report</h2>
   
       <div class="section"><span class="label">Incident Type:</span> countVehicles</div>
-      <div class="section"><span class="label">Day:</span> ${dayOf(incidentData.timeOfIncident)}</div>
-      <div class="section"><span class="label">Time of Incident:</span> ${incidentData.timeOfIncident}</div>
+      <div class="section"><span class="label">Day:</span> ${dayOf(incidentData.timeOfIncident, timezone)}</div>
+      <div class="section"><span class="label">Time of Incident:</span> ${formattedTime}</div>
       <div class="section"><span class="label">Zone:</span> ${incidentData.zone}</div>
   
       <div class="section"><span class="label">Vehicles Counted:</span> ${incidentData.count}</div>
@@ -1670,7 +1659,7 @@ export let countVehiclesTemplate = (incidentData, nvrData, channelData) => {
   </html>`;
 };
 
-export const crowdDetectionTemplate = (incidentData, nvrData, channelData) => {
+export const crowdDetectionTemplate = (incidentData, nvrData, channelData, timezone) => {
   const {
     incidentName,
     timeOfIncident,
@@ -1695,11 +1684,7 @@ export const crowdDetectionTemplate = (incidentData, nvrData, channelData) => {
 
   const severityStyle = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `
 <!DOCTYPE html>
@@ -1752,7 +1737,7 @@ export const crowdDetectionTemplate = (incidentData, nvrData, channelData) => {
                 </tr>
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                    <strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
                   </td>
                 </tr>
                 <tr>
@@ -1867,7 +1852,7 @@ export const crowdDetectionTemplate = (incidentData, nvrData, channelData) => {
 `;
 };
 
-export const countPersonsTemplate = (incidentData, nvrData, channelData) => {
+export const countPersonsTemplate = (incidentData, nvrData, channelData, timezone) => {
   const {
     incidentName,
     timeOfIncident,
@@ -1892,11 +1877,7 @@ export const countPersonsTemplate = (incidentData, nvrData, channelData) => {
 
   const severityStyle = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `
 <!DOCTYPE html>
@@ -1949,7 +1930,7 @@ export const countPersonsTemplate = (incidentData, nvrData, channelData) => {
                 </tr>
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                    <strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
                   </td>
                 </tr>
                 <tr>
@@ -2064,7 +2045,7 @@ export const countPersonsTemplate = (incidentData, nvrData, channelData) => {
 `;
 };
 
-export const personDetectedTemplate = (incidentData, nvrData, channelData) => {
+export const personDetectedTemplate = (incidentData, nvrData, channelData, timezone) => {
   const {
     incidentName,
     timeOfIncident,
@@ -2090,11 +2071,7 @@ export const personDetectedTemplate = (incidentData, nvrData, channelData) => {
 
   const severityStyle = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   let nvrIp = "N/A";
   try {
@@ -2177,7 +2154,7 @@ export const personDetectedTemplate = (incidentData, nvrData, channelData) => {
                 </tr>
                 <tr>
                   <td style="padding:6px 10px;"><strong>Day</strong></td>
-                  <td style="padding:6px 10px;color:#626262;">${dayOf(timeOfIncident)}</td>
+                  <td style="padding:6px 10px;color:#626262;">${dayOf(timeOfIncident, timezone)}</td>
                 </tr>
                 <tr>
                   <td style="padding:6px 10px;"><strong>Zone</strong></td>
@@ -2266,6 +2243,7 @@ export const personalProtectiveEquipmentTemplate = (
   incidentData,
   nvrData,
   channelData,
+  timezone,
 ) => {
   const {
     incidentName,
@@ -2291,11 +2269,7 @@ export const personalProtectiveEquipmentTemplate = (
 
   const severityStyle = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   const latestPPE =
     incidentData?.timeSeries?.[incidentData.timeSeries.length - 1]?.ppe || {};
@@ -2348,7 +2322,7 @@ export const personalProtectiveEquipmentTemplate = (
                 </tr>
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                    <strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
                   </td>
                 </tr>
                 <tr>
@@ -2482,6 +2456,7 @@ export const foodServicePPEDetectionTemplate = (
   incidentData,
   nvrData,
   channelData,
+  timezone,
 ) => {
   const {
     incidentName,
@@ -2507,11 +2482,7 @@ export const foodServicePPEDetectionTemplate = (
 
   const severityStyle = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   const latestPPE =
     incidentData?.timeSeries?.[incidentData.timeSeries.length - 1]?.ppe || {};
@@ -2562,7 +2533,7 @@ export const foodServicePPEDetectionTemplate = (
                 </tr>
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                    <strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
                   </td>
                 </tr>
                 <tr>
@@ -2662,7 +2633,7 @@ export const foodServicePPEDetectionTemplate = (
 `;
 };
 
-export const doorDetectionTemplate = (incidentData, nvrData, channelData) => {
+export const doorDetectionTemplate = (incidentData, nvrData, channelData, timezone) => {
   const {
     incidentName,
     timeOfIncident,
@@ -2703,11 +2674,7 @@ export const doorDetectionTemplate = (incidentData, nvrData, channelData) => {
   const severityStyle = getSeverityStyles(severity);
   const doorStatusStyle = getDoorStatusStyles(currentStatus);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `
 <!DOCTYPE html>
@@ -2764,7 +2731,7 @@ export const doorDetectionTemplate = (incidentData, nvrData, channelData) => {
 
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                    <strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
                   </td>
                 </tr>
                 <tr>
@@ -2868,7 +2835,7 @@ export const doorDetectionTemplate = (incidentData, nvrData, channelData) => {
 `;
 };
 
-export const lightDetectionTemplate = (incidentData, nvrData, channelData) => {
+export const lightDetectionTemplate = (incidentData, nvrData, channelData, timezone) => {
   const {
     incidentName,
     timeOfIncident,
@@ -2909,11 +2876,7 @@ export const lightDetectionTemplate = (incidentData, nvrData, channelData) => {
   const severityStyle = getSeverityStyles(severity);
   const lightStatusStyle = getLightStatusStyles(currentStatus);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `
 <!DOCTYPE html>
@@ -2970,7 +2933,7 @@ export const lightDetectionTemplate = (incidentData, nvrData, channelData) => {
 
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                    <strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
                   </td>
                 </tr>
                 <tr>
@@ -3074,7 +3037,7 @@ export const lightDetectionTemplate = (incidentData, nvrData, channelData) => {
 `;
 };
 
-export let bagDetectionTemplate = (incidentData, nvrData, channelData) => {
+export let bagDetectionTemplate = (incidentData, nvrData, channelData, timezone) => {
   const {
     incidentName,
     timeOfIncident,
@@ -3099,11 +3062,7 @@ export let bagDetectionTemplate = (incidentData, nvrData, channelData) => {
 
   const severityStyle = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `<!DOCTYPE html>
 <html>
@@ -3155,7 +3114,7 @@ export let bagDetectionTemplate = (incidentData, nvrData, channelData) => {
                 </tr>
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                    <strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
                   </td>
                 </tr>
                 <tr>
@@ -3273,6 +3232,7 @@ export const vehicleDetectionTemplate = (
   incidentData,
   nvrData,
   channelData,
+  timezone,
 ) => {
   const {
     incidentName,
@@ -3315,11 +3275,7 @@ export const vehicleDetectionTemplate = (
   const severityStyle = getSeverityStyles(severity);
   const doorStatusStyle = getDoorStatusStyles(currentStatus);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `<!DOCTYPE html>
 <html>
@@ -3374,12 +3330,12 @@ export const vehicleDetectionTemplate = (
 
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                    <strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
                   </td>
                 </tr>
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Time of Incident:</strong> ${timeOfIncident}
+                    <strong>Time of Incident:</strong> ${formattedTime}
                   </td>
                 </tr>
 
@@ -3491,7 +3447,8 @@ export const vehicleDetectionTemplate = (
 export const deskAbsenceTemplate = (
   incidentData,
   nvrData,
-  channelData
+  channelData,
+  timezone,
 ) => {
   const {
     incidentName,
@@ -3534,11 +3491,7 @@ export const deskAbsenceTemplate = (
   const severityStyle = getSeverityStyles(severity);
   const presenceStyle = getPresenceStyles(personPresent);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `<!DOCTYPE html>
 <html>
@@ -3593,7 +3546,7 @@ Automated Incident Notification
 
 <tr>
 <td style="font-size:14px;padding-bottom:6px;">
-<strong>Day:</strong> ${dayOf(timeOfIncident)}
+<strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
 </td>
 </tr>
 
@@ -3687,7 +3640,8 @@ Please do not reply to this email.
 export const guardAbsenceTemplate = (
   incidentData,
   nvrData,
-  channelData
+  channelData,
+  timezone,
 ) => {
   const {
     incidentName,
@@ -3730,11 +3684,7 @@ export const guardAbsenceTemplate = (
   const severityStyle = getSeverityStyles(severity);
   const presenceStyle = getPresenceStyles(personPresent);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `<!DOCTYPE html>
 <html>
@@ -3789,7 +3739,7 @@ Automated Incident Notification
 
 <tr>
 <td style="font-size:14px;padding-bottom:6px;">
-<strong>Day:</strong> ${dayOf(timeOfIncident)}
+<strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
 </td>
 </tr>
 
@@ -4163,6 +4113,7 @@ const industrialEquipmentTemplate = (
   incidentData,
   nvrData,
   channelData,
+  timezone,
 ) => {
   const {
     incidentName,
@@ -4186,6 +4137,7 @@ const industrialEquipmentTemplate = (
   };
 
   const severityStyle = getSeverityStyles(severity);
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `<!DOCTYPE html>
 <html>
@@ -4230,12 +4182,12 @@ const industrialEquipmentTemplate = (
                
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                    <strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
                   </td>
                 </tr>
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Time of Incident:</strong> ${timeOfIncident}
+                    <strong>Time of Incident:</strong> ${formattedTime}
                   </td>
                 </tr>
                 <tr>
@@ -4319,36 +4271,40 @@ const industrialEquipmentTemplate = (
 </html>`;
 };
 
-export const conveyorDetectionTemplate = (incidentData, nvrData, channelData) =>
+export const conveyorDetectionTemplate = (incidentData, nvrData, channelData, timezone) =>
   industrialEquipmentTemplate(
     "Conveyor Detection",
     incidentData,
     nvrData,
     channelData,
+    timezone,
   );
 
-export const crusherDetectionTemplate = (incidentData, nvrData, channelData) =>
+export const crusherDetectionTemplate = (incidentData, nvrData, channelData, timezone) =>
   industrialEquipmentTemplate(
     "Crusher Detection",
     incidentData,
     nvrData,
     channelData,
+    timezone,
   );
 
 export const waterSpillageDetectionTemplate = (
   incidentData,
   nvrData,
   channelData,
+  timezone,
 ) =>
   industrialEquipmentTemplate(
     "Water Spillage Detection",
     incidentData,
     nvrData,
     channelData,
+    timezone,
   );
 
 
-  export let vehicleTypeDetectionTemplate = (incidentData, nvrData, channelData) => {
+  export let vehicleTypeDetectionTemplate = (incidentData, nvrData, channelData, timezone) => {
   const {
     incidentName,
     timeOfIncident,
@@ -4373,11 +4329,7 @@ export const waterSpillageDetectionTemplate = (
 
   const severityStyle = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `<!DOCTYPE html>
 <html>
@@ -4429,7 +4381,7 @@ export const waterSpillageDetectionTemplate = (
                 </tr>
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                    <strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
                   </td>
                 </tr>
                 <tr>
@@ -4544,7 +4496,7 @@ export const waterSpillageDetectionTemplate = (
 `;
 };
 
-export let loiteringDetectionTemplate = (incidentData, nvrData, channelData) => {
+export let loiteringDetectionTemplate = (incidentData, nvrData, channelData, timezone) => {
   const {
     incidentName,
     timeOfIncident,
@@ -4570,11 +4522,7 @@ export let loiteringDetectionTemplate = (incidentData, nvrData, channelData) => 
 
   const severityStyle = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `<!DOCTYPE html>
 <html>
@@ -4626,7 +4574,7 @@ export let loiteringDetectionTemplate = (incidentData, nvrData, channelData) => 
                 </tr>
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                    <strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
                   </td>
                 </tr>
                 <tr>
@@ -4745,6 +4693,7 @@ export const vehicleObstructionTemplate = (
   incidentData,
   nvrData,
   channelData,
+  timezone,
 ) => {
   const {
     incidentName,
@@ -4776,13 +4725,7 @@ export const vehicleObstructionTemplate = (
     .join("");
 
   // Dispatch window: entry comes in the trigger payload, exit is timeOfIncident.
-  const formattedEntryTime = dispatchEntryTime
-    ? new Date(dispatchEntryTime).toLocaleString("en-IN", {
-        dateStyle: "medium",
-        timeStyle: "short",
-        hour12: true,
-      })
-    : "N/A";
+  const formattedEntryTime = formatEmailTime(dispatchEntryTime, timezone);
 
   const getSeverityStyles = (level = "low") => {
     switch (level) {
@@ -4814,11 +4757,7 @@ export const vehicleObstructionTemplate = (
   const severityStyle = getSeverityStyles(severity);
   const doorStatusStyle = getDoorStatusStyles(currentStatus);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `<!DOCTYPE html>
 <html>
@@ -4873,7 +4812,7 @@ export const vehicleObstructionTemplate = (
 
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                    <strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
                   </td>
                 </tr>
 
@@ -4994,7 +4933,7 @@ ${vehicleRows}
 </html>`;
 };
 
-export let tableOccupancyDetectionTemplate = (incidentData, nvrData, channelData) => {
+export let tableOccupancyDetectionTemplate = (incidentData, nvrData, channelData, timezone) => {
   const {
     incidentName,
     timeOfIncident,
@@ -5020,11 +4959,7 @@ export let tableOccupancyDetectionTemplate = (incidentData, nvrData, channelData
 
   const severityStyle = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `<!DOCTYPE html>
 <html>
@@ -5074,7 +5009,7 @@ export let tableOccupancyDetectionTemplate = (incidentData, nvrData, channelData
                 </tr>
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                    <strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
                   </td>
                 </tr>
                 <tr>
@@ -5189,7 +5124,7 @@ export let tableOccupancyDetectionTemplate = (incidentData, nvrData, channelData
 };
 
 // ponytail: cloned from tableOccupancyDetectionTemplate; labels + count meaning differ
-export let mobilePhoneDetectionTemplate = (incidentData, nvrData, channelData) => {
+export let mobilePhoneDetectionTemplate = (incidentData, nvrData, channelData, timezone) => {
   const {
     incidentName,
     timeOfIncident,
@@ -5215,11 +5150,7 @@ export let mobilePhoneDetectionTemplate = (incidentData, nvrData, channelData) =
 
   const severityStyle = getSeverityStyles(severity);
 
-  const formattedTime = new Date(timeOfIncident).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    hour12: true,
-  });
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
 
   return `<!DOCTYPE html>
 <html>
@@ -5269,7 +5200,7 @@ export let mobilePhoneDetectionTemplate = (incidentData, nvrData, channelData) =
                 </tr>
                 <tr>
                   <td style="font-size:14px;padding-bottom:6px;">
-                    <strong>Day:</strong> ${dayOf(timeOfIncident)}
+                    <strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
                   </td>
                 </tr>
                 <tr>

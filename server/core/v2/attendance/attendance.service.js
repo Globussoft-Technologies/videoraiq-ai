@@ -461,7 +461,8 @@ class AttendanceService {
           mailData,
           "countPersons",
           channel?.nvrId,
-          channel
+          channel,
+          user?.timezone
         ).catch((err) =>
           logger.error(
             "personDetected email (attendance) error:",

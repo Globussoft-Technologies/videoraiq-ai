@@ -48,7 +48,7 @@ function buildCaseInsensitiveLocationMatch(values = []) {
   };
 }
 
-const updateSettingsWithModelThresholds = async (detectionSetting, backendResponse) => {
+const updateModelThresholds = async (detectionSetting, backendResponse) => {
   const thresholds = DetectionSettingsValidation.extractModelThresholds(
     detectionSetting?.settingType,
     backendResponse?.model_thresholds,
@@ -56,14 +56,16 @@ const updateSettingsWithModelThresholds = async (detectionSetting, backendRespon
 
   if (!Object.keys(thresholds).length) return;
 
-  const currentSettings =
-    detectionSetting.settings?.toObject?.() || detectionSetting.settings || {};
+  const currentModelThresholds =
+    detectionSetting.modelThresholds?.toObject?.()
+    || detectionSetting.modelThresholds
+    || {};
 
-  detectionSetting.settings = {
-    ...currentSettings,
+  detectionSetting.modelThresholds = {
+    ...currentModelThresholds,
     ...thresholds,
   };
-  detectionSetting.markModified("settings");
+  detectionSetting.markModified("modelThresholds");
   await detectionSetting.save();
 };
 
@@ -1351,7 +1353,7 @@ class ChannelService {
           confidence_thresholds,
           line_crossing_settings
           );
-        await updateSettingsWithModelThresholds(detectionSettingDoc, beResponse);
+        await updateModelThresholds(detectionSettingDoc, beResponse);
 
         await channel.save();
         return res.status(200).json(

@@ -204,7 +204,7 @@ const handleDetectionStartStopWithRetry = async (args) => {
   throw lastError;
 };
 
-const updateSettingsWithModelThresholds = async (detectionSetting, backendResponse) => {
+const updateModelThresholds = async (detectionSetting, backendResponse) => {
   const thresholds = DetectionSettingsValidation.extractModelThresholds(
     detectionSetting?.settingType,
     backendResponse?.model_thresholds,
@@ -212,14 +212,16 @@ const updateSettingsWithModelThresholds = async (detectionSetting, backendRespon
 
   if (!Object.keys(thresholds).length) return;
 
-  const currentSettings =
-    detectionSetting.settings?.toObject?.() || detectionSetting.settings || {};
+  const currentModelThresholds =
+    detectionSetting.modelThresholds?.toObject?.()
+    || detectionSetting.modelThresholds
+    || {};
 
-  detectionSetting.settings = {
-    ...currentSettings,
+  detectionSetting.modelThresholds = {
+    ...currentModelThresholds,
     ...thresholds,
   };
-  detectionSetting.markModified("settings");
+  detectionSetting.markModified("modelThresholds");
   await detectionSetting.save();
 };
 
@@ -649,7 +651,7 @@ class DetectionSettingService {
             line_crossing_settings,
             mobile_phone_confidence
           );
-          await updateSettingsWithModelThresholds(detectionSetting, backendResponse);
+          await updateModelThresholds(detectionSetting, backendResponse);
         } catch (error) {
           logger.error(
             `Failed to notify python for channel ${channel?._id}:`,
@@ -956,7 +958,7 @@ class DetectionSettingService {
         confidence_thresholds,
         line_crossing_settings,
       ]);
-      await updateSettingsWithModelThresholds(detectionSetting, backendResponse);
+      await updateModelThresholds(detectionSetting, backendResponse);
 
       link.enabled = shouldEnable;
       channel.markModified(`detections.${settingType}.enabled`);

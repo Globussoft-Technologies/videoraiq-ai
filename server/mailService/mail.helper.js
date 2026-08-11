@@ -84,6 +84,16 @@ const inlineEmailAttachment = ({ contentId, ...asset }) => ({
     content_id: contentId,
 });
 
+const DEFAULT_EMAIL_TIMEZONE = "Asia/Kolkata";
+const resolveEmailTimezone = (timezone) => {
+    if (!timezone || typeof timezone !== "string") return DEFAULT_EMAIL_TIMEZONE;
+    try {
+        return Intl.DateTimeFormat("en-US", { timeZone: timezone }).resolvedOptions().timeZone || DEFAULT_EMAIL_TIMEZONE;
+    } catch {
+        return DEFAULT_EMAIL_TIMEZONE;
+    }
+};
+
 class MailHelper {
     _emailMetadata(args = []) {
         const data = args[1] || {};
@@ -164,6 +174,10 @@ class MailHelper {
         }
     }
 
+    _renderIncidentTemplate(templateFn, timezone, ...templateArgs) {
+        return templateFn(...templateArgs, resolveEmailTimezone(timezone));
+    }
+
     async _sendAndTrack(email, args = []) {
         this._withReliableAssets(email);
         this._withConfidence(email, args);
@@ -177,7 +191,7 @@ class MailHelper {
         }
     }
 
-    async loiteringWithoutAuth(emailAddresses, data, detectionType, nvrData, channelData) {
+    async loiteringWithoutAuth(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -186,13 +200,13 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: loiteringWithoutAuthTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(loiteringWithoutAuthTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
-    async LoiteringWithAuth(emailAddresses, data, detectionType, nvrData, channelData) {
+    async LoiteringWithAuth(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -201,13 +215,13 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: LoiteringWithAuthIncident(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(LoiteringWithAuthIncident, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
-    async unauthorizedAccess(emailAddresses, data, detectionType, nvrData, channelData) {
+    async unauthorizedAccess(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -216,13 +230,13 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: unauthorizedAccessIncident(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(unauthorizedAccessIncident, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
-    async LineCrossingAuth(emailAddresses, data, detectionType, nvrData, channelData) {
+    async LineCrossingAuth(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -231,13 +245,13 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: LineCrossingAuthIncident(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(LineCrossingAuthIncident, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
-    async motionDetectionAuth(emailAddresses, data, detectionType, nvrData, channelData) {
+    async motionDetectionAuth(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -246,7 +260,7 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: motionDetectionAuthTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(motionDetectionAuthTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
@@ -254,7 +268,7 @@ class MailHelper {
 
 
 
-    async genericObjectDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+    async genericObjectDetection(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -263,13 +277,13 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: genericObjectDetectionTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(genericObjectDetectionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
-    async countVehicles(emailAddresses, data, detectionType, nvrData, channelData) {
+    async countVehicles(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -278,13 +292,13 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: countVehiclesTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(countVehiclesTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
-    async countPersons(emailAddresses, data, detectionType, nvrData, channelData) {
+    async countPersons(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -293,13 +307,13 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: countPersonsTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(countPersonsTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
-    async personDetected(emailAddresses, data, detectionType, nvrData, channelData) {
+    async personDetected(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -308,7 +322,7 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] Person Detected${data?.count ? ` (${data.count})` : ''} – ${data?.incidentName || 'Person Detection'} | Severity: ${data?.severity || 'low'}`,
-            html: personDetectedTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(personDetectedTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
@@ -359,7 +373,7 @@ class MailHelper {
     }
 
 
-    async crowdDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+    async crowdDetection(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
 
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
@@ -369,7 +383,7 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: crowdDetectionTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(crowdDetectionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         console.log(sendStatus, 'sendStatus');
@@ -377,7 +391,7 @@ class MailHelper {
         return sendStatus;
     }
 
-    async personalProtectiveEquipment(emailAddresses, data, detectionType, nvrData, channelData) {
+    async personalProtectiveEquipment(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -386,13 +400,13 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: personalProtectiveEquipmentTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(personalProtectiveEquipmentTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
-    async lightDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+    async lightDetection(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -401,13 +415,13 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: lightDetectionTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(lightDetectionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
-    async doorDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+    async doorDetection(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -416,13 +430,13 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: doorDetectionTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(doorDetectionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
-    async bagDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+    async bagDetection(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -431,13 +445,13 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: bagDetectionTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(bagDetectionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
-    async vehicleDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+    async vehicleDetection(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -446,14 +460,14 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: vehicleDetectionTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(vehicleDetectionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
 
         return sendStatus;
     }
 
-    async vehicleObstruction(emailAddresses, data, detectionType, nvrData, channelData) {
+    async vehicleObstruction(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -462,7 +476,7 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: vehicleObstructionTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(vehicleObstructionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
 
@@ -497,7 +511,7 @@ class MailHelper {
         return sendStatus;
     }
 
-    async deskAbsence(emailAddresses, data, detectionType, nvrData, channelData) {
+    async deskAbsence(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -506,7 +520,7 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: deskAbsenceTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(deskAbsenceTemplate, timezone, data, nvrData, channelData),
         };
         // console.log(deskAbsenceTemplate(data,nvrData,channelData),'deskAbsenceTemplate(data,nvrData,channelData)');
 
@@ -515,7 +529,7 @@ class MailHelper {
         return sendStatus;
     }
 
-    async guardAbsence(emailAddresses, data, detectionType, nvrData, channelData) {
+    async guardAbsence(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -524,7 +538,7 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: guardAbsenceTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(guardAbsenceTemplate, timezone, data, nvrData, channelData),
         };
         // console.log(deskAbsenceTemplate(data,nvrData,channelData),'deskAbsenceTemplate(data,nvrData,channelData)');
 
@@ -533,7 +547,7 @@ class MailHelper {
         return sendStatus;
     }
 
-    async conveyorDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+    async conveyorDetection(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -542,13 +556,13 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: conveyorDetectionTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(conveyorDetectionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
-    async crusherDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+    async crusherDetection(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -557,13 +571,13 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: crusherDetectionTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(crusherDetectionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
-    async waterSpillageDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+    async waterSpillageDetection(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -572,7 +586,7 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: waterSpillageDetectionTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(waterSpillageDetectionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
@@ -594,7 +608,7 @@ class MailHelper {
     }
 
 
-    async vehicleTypeDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+    async vehicleTypeDetection(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -603,13 +617,13 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: vehicleTypeDetectionTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(vehicleTypeDetectionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
-    async loiteringDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+    async loiteringDetection(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -618,13 +632,13 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: loiteringDetectionTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(loiteringDetectionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
 
-    async tableOccupancyDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+    async tableOccupancyDetection(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -633,12 +647,12 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: tableOccupancyDetectionTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(tableOccupancyDetectionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
     }
-        async vehicleObstruction(emailAddresses, data, detectionType, nvrData, channelData) {
+        async vehicleObstruction(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -647,14 +661,14 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: vehicleObstructionTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(vehicleObstructionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
 
         return sendStatus;
     }
 
-    async foodServicePPEDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+    async foodServicePPEDetection(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -663,7 +677,7 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: foodServicePPEDetectionTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(foodServicePPEDetectionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;
@@ -671,7 +685,7 @@ class MailHelper {
 
 
     
-    async mobilePhoneDetection(emailAddresses, data, detectionType, nvrData, channelData) {
+    async mobilePhoneDetection(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
         sendGridMail.setApiKey(config.get('sendgrid.key'));
         const email = {
             from: {
@@ -680,7 +694,7 @@ class MailHelper {
             },
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
-            html: mobilePhoneDetectionTemplate(data, nvrData, channelData),
+            html: this._renderIncidentTemplate(mobilePhoneDetectionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;

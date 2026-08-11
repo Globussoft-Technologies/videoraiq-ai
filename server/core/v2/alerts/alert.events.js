@@ -52,6 +52,9 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
       if (incidentData) incidentData.incidentName = detectionSettingName;
       if (saved) saved.incidentName = detectionSettingName;
     }
+    const adminTz = await adminModel.findById(adminId).select("timezone").lean()
+      .then(a => a?.timezone || "Asia/Kolkata")
+      .catch(() => "Asia/Kolkata");
       // Step 4: Group alerts by recipientModel
       const groupedAlerts = matchedDetection?.id?.alerts
 
@@ -83,55 +86,55 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
       // if (emailAddresses?.length && channelData?.profile?.notification?.channels?.email===true) {
       if(emailAddresses?.length && adminFlags?.emailAlertsEnabled !== false){
         if(detectionType==="loiteringWithoutAuth"){
-          let mailResponse = await MailResponse.loiteringWithoutAuth(emailAddresses,incidentData,detectionType,nvrData,channelData);
+          let mailResponse = await MailResponse.loiteringWithoutAuth(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz);
         }else if(detectionType==="loiteringWithAuth"){
-          let mailResponse = await MailResponse.LoiteringWithAuth(emailAddresses,incidentData,detectionType,nvrData,channelData);
+          let mailResponse = await MailResponse.LoiteringWithAuth(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz);
         }else if(detectionType==="unauthorizedAccess"){
-          let mailResponse = await MailResponse.unauthorizedAccess(emailAddresses,incidentData,detectionType,nvrData,channelData);
+          let mailResponse = await MailResponse.unauthorizedAccess(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz);
         }else if(detectionType==="lineCrossing"){
-          let mailResponse = await MailResponse.LineCrossingAuth(emailAddresses,incidentData,detectionType,nvrData,channelData);
+          let mailResponse = await MailResponse.LineCrossingAuth(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz);
         }else if(detectionType==="motionDetection"){
-          let mailResponse = await MailResponse.motionDetectionAuth(emailAddresses,incidentData,detectionType,nvrData,channelData);
+          let mailResponse = await MailResponse.motionDetectionAuth(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz);
         }else if(detectionType ==="genericObjectDetection"){
-          let mailResponse = await MailResponse.genericObjectDetection(emailAddresses,incidentData,detectionType,nvrData,channelData);
+          let mailResponse = await MailResponse.genericObjectDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz);
         }else if(detectionType==="countPersons"){
-          let mailResponse = await MailResponse.countPersons(emailAddresses,incidentData,detectionType,nvrData,channelData);
+          let mailResponse = await MailResponse.countPersons(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz);
         }else if(detectionType==="countVehicles"){
-          let mailResponse = await MailResponse.countVehicles(emailAddresses,incidentData,detectionType,nvrData,channelData);
+          let mailResponse = await MailResponse.countVehicles(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz);
         } else if(detectionType==="crowdDetection"){
-          let mailResponse = await MailResponse.crowdDetection(emailAddresses,incidentData,detectionType,nvrData,channelData);
+          let mailResponse = await MailResponse.crowdDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz);
         } else if(detectionType==="personalProtectiveEquipment"){
-          let mailResponse = await MailResponse.personalProtectiveEquipment(emailAddresses,incidentData,detectionType,nvrData,channelData);
+          let mailResponse = await MailResponse.personalProtectiveEquipment(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz);
         } else if(detectionType==="lightDetection"){
-          let mailResponse = await MailResponse.lightDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
+          let mailResponse = await MailResponse.lightDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="doorDetection"){
-          let mailResponse = await MailResponse.doorDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
+          let mailResponse = await MailResponse.doorDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="bagDetection"){
-          let mailResponse = await MailResponse.bagDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
+          let mailResponse = await MailResponse.bagDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="vehicleDetection"){
-          let mailResponse = await MailResponse.vehicleDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
+          let mailResponse = await MailResponse.vehicleDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="deskAbsence"){
-          let mailResponse = await MailResponse.deskAbsence(emailAddresses,incidentData,detectionType,nvrData,channelData)
+          let mailResponse = await MailResponse.deskAbsence(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="guardAbsence"){
-          let mailResponse = await MailResponse.guardAbsence(emailAddresses,incidentData,detectionType,nvrData,channelData)
+          let mailResponse = await MailResponse.guardAbsence(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="conveyorDetection"){
-          let mailResponse = await MailResponse.conveyorDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
+          let mailResponse = await MailResponse.conveyorDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="crusherDetection"){
-          let mailResponse = await MailResponse.crusherDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
+          let mailResponse = await MailResponse.crusherDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="waterSpillageDetection"){
-          let mailResponse = await MailResponse.waterSpillageDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
+          let mailResponse = await MailResponse.waterSpillageDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="vehicleObstruction"){
-          let mailResponse = await MailResponse.vehicleObstruction(emailAddresses,incidentData,detectionType,nvrData,channelData)
+          let mailResponse = await MailResponse.vehicleObstruction(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="vehicleTypeDetection"){
-          let mailResponse = await MailResponse.vehicleTypeDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
+          let mailResponse = await MailResponse.vehicleTypeDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="loiteringDetection"){
-          let mailResponse = await MailResponse.loiteringDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
+          let mailResponse = await MailResponse.loiteringDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="tableOccupancyDetection"){
-          let mailResponse = await MailResponse.tableOccupancyDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
+          let mailResponse = await MailResponse.tableOccupancyDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="foodServicePPEDetection"){
-          let mailResponse = await MailResponse.foodServicePPEDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
+          let mailResponse = await MailResponse.foodServicePPEDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="mobilePhoneDetection"){
-          let mailResponse = await MailResponse.mobilePhoneDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
+          let mailResponse = await MailResponse.mobilePhoneDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         }
       }
     } catch (err) {
@@ -139,12 +142,6 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
         detectionType, channelId, nvrId, adminId, errorMessage: err.message,
       });
     }
-
-    // Admin's timezone — used to render incident times in the admin's local zone
-    // across all alert channels (WhatsApp/Telegram) instead of the server's zone.
-    const adminTz = await adminModel.findById(adminId).select("timezone").lean()
-      .then(a => a?.timezone)
-      .catch(() => undefined);
 
     // Send WhatsApp alert (replaces SMS) to the same phone recipients.
     try {
