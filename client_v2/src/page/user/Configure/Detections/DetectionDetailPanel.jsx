@@ -512,6 +512,7 @@ export default function DetectionDetailPanel({
   onScheduleSaved,
   initialAlerts = [],
   onRecipientsChange,
+  canEdit = true,
 }) {
   const Icon = detectionIconFor(model, category?.icon);
   const color = category?.color || 'var(--blue)';
@@ -531,10 +532,12 @@ export default function DetectionDetailPanel({
 
   const channelId = channel?._id || channel?.channelId || channel?.id;
   const timezones = useTimezones();
-  const scheduleDisabled = !settingId || !channelId;
+  const scheduleDisabled = !canEdit || !settingId || !channelId;
   const scheduleDisabledTitle = !channelId
     ? 'Select a camera to edit schedule'
-    : 'Create detection setting first to edit schedule';
+    : !canEdit
+      ? 'You only have view access for detections'
+      : 'Create detection setting first to edit schedule';
 
   useEffect(() => {
     let alive = true;
@@ -761,7 +764,7 @@ export default function DetectionDetailPanel({
                   min={0}
                   max={100}
                   value={value}
-                  disabled={!model.active}
+                  disabled={!model.active || !canEdit}
                   onChange={(e) => onThresholdChange(key, Number(e.target.value))}
                   aria-label={`${model.name} ${label}`}
                   style={{
@@ -810,17 +813,19 @@ export default function DetectionDetailPanel({
         <button
           type="button"
           onClick={onEditZones}
+          disabled={!canEdit}
           style={{
             flex: 1,
             height: 36,
             borderRadius: 8,
             border: 0,
-            cursor: 'pointer',
+            cursor: canEdit ? 'pointer' : 'not-allowed',
             fontSize: 12,
             fontWeight: 600,
             color: '#fff',
             background: 'linear-gradient(135deg,#ec4899,var(--violet))',
             boxShadow: '0 6px 18px rgba(236,72,153,.25)',
+            opacity: canEdit ? 1 : 0.65,
           }}
         >
           Edit zones &amp; rules
@@ -852,30 +857,30 @@ export default function DetectionDetailPanel({
         <button
           type="button"
           onClick={onResetSetting}
-          disabled={resetDisabled}
-          title={resetDisabled ? 'No saved setting for this detection type' : 'Reset selected detection settings'}
+          disabled={resetDisabled || !canEdit}
+          title={!canEdit ? 'You only have view access for detections' : (resetDisabled ? 'No saved setting for this detection type' : 'Reset selected detection settings')}
           style={{
             flex: 1,
             height: 36,
             borderRadius: 8,
             border: '1px solid var(--bd)',
-            cursor: resetDisabled ? 'not-allowed' : 'pointer',
+            cursor: (resetDisabled || !canEdit) ? 'not-allowed' : 'pointer',
             fontSize: 12,
             fontWeight: 600,
-            color: resetDisabled ? 'var(--tx3)' : 'var(--tx2)',
+            color: (resetDisabled || !canEdit) ? 'var(--tx3)' : 'var(--tx2)',
             background: 'var(--bg2)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: 7,
-            opacity: resetDisabled ? 0.65 : 1,
+            opacity: (resetDisabled || !canEdit) ? 0.65 : 1,
           }}
         >
           <ListRestart size={15} />
           Reset Setting
         </button>
         <RecipientSelectButton
-          settingId={settingId}
+          settingId={canEdit ? settingId : null}
           initialAlerts={initialAlerts}
           onSaved={onRecipientsChange}
         />

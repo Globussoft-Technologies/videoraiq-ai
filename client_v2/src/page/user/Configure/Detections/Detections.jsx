@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import AccessDenied from '../../../../components/AccessDenied';
 import { AsyncBoundary } from '../../../../components/States';
 import { useApi } from '../../../../hooks/useApi';
+import { usePermissions } from '@/context/PermissionContext';
 import { deleteDetectionSetting, getCamerasByNvr, getDetectionSettings, getDetectionTypes, toggleChannelDetection, updateChannel, updateDetectionSetting } from '../../../../helpers/configure';
 import { fetchDetectionTypes as fetchIncidentFilterTypes, fetchIncidents, fetchIncidentStats } from '../../../../helpers/incidents';
 import { timeOfDay } from '../../../../lib/format';
@@ -301,6 +303,9 @@ function percentToApiValue(value) {
  * PUT /channel/detection/toggle.
  */
 export default function Detections() {
+  const { permissions, loading: permissionsLoading } = usePermissions();
+  const canViewDetections = permissions?.detectionSettings?.view === true;
+  const canEditDetections = permissions?.detectionSettings?.edit === true;
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
   const [stateTab, setStateTab] = useState('all');
@@ -325,6 +330,12 @@ export default function Detections() {
   const [resettingSetting, setResettingSetting] = useState(false);
   const [cameraTypeSaving, setCameraTypeSaving] = useState(false);
   const incidentRequestIdRef = useRef(0);
+
+  if (permissionsLoading) return null;
+  if (!canViewDetections) {
+    return <AccessDenied message="You don't have permission to view Detections." />;
+  }
+
   const typesApi = useApi(() => getDetectionTypes(), [], { initialData: {} });
   const incidentFilterTypesApi = useApi(
     () => fetchIncidentFilterTypes({ skip: 0, limit: 100 }),
@@ -658,6 +669,7 @@ export default function Detections() {
   };
 
   const toggleModel = async (model) => {
+    if (!canEditDetections) return;
     const detectionType = model.settingType || model.id;
     if (!zoneCamera?._id || !detectionType) {
       toast.error('Select a camera before changing detection status.');
@@ -678,6 +690,7 @@ export default function Detections() {
   };
 
   const handleResetSetting = async () => {
+    if (!canEditDetections) return;
     if (!selectedSettingType || !selectedDetectionSettingId) {
       toast.error('No detection settings found to reset.');
       setShowResetConfirm(false);
@@ -772,6 +785,7 @@ export default function Detections() {
   };
 
   const handleZoneCameraTypeChange = async (checkType) => {
+    if (!canEditDetections) return;
     if (!zoneCamera?._id || cameraTypeSaving) return;
     const previous = zoneCamera.checkType || 'none';
     if (previous === checkType) return;
@@ -922,7 +936,7 @@ export default function Detections() {
                 <select
                   value={zoneCamera.checkType || 'none'}
                   onChange={(event) => handleZoneCameraTypeChange(event.target.value)}
-                  disabled={cameraTypeSaving}
+                  disabled={cameraTypeSaving || !canEditDetections}
                   style={{
                     height: 30,
                     minWidth: 104,
@@ -933,9 +947,9 @@ export default function Detections() {
                     color: 'var(--tx)',
                     fontSize: 12,
                     outline: 'none',
-                    cursor: cameraTypeSaving ? 'wait' : 'pointer',
+                    cursor: cameraTypeSaving ? 'wait' : (canEditDetections ? 'pointer' : 'not-allowed'),
                     appearance: 'none',
-                    opacity: cameraTypeSaving ? 0.72 : 1,
+                    opacity: (cameraTypeSaving || !canEditDetections) ? 0.72 : 1,
                   }}
                 >
                   {CAMERA_TYPE_OPTIONS.map((type) => (
@@ -1098,7 +1112,7 @@ export default function Detections() {
                           selected={model.id === selected?.id}
                           onSelect={() => selectDetection(model.id)}
                           onToggle={() => toggleModel(model)}
-                          toggleDisabled={detectionToggleLoading === (model.settingType || model.id)}
+                          toggleDisabled={!canEditDetections || detectionToggleLoading === (model.settingType || model.id)}
                         />
                       ))}
                     </div>
@@ -1131,7 +1145,7 @@ export default function Detections() {
                       camera={zoneCamera}
                       embedded
                       selectedSettingType={selectedSettingType}
-                      onSaved={refreshZoneCamera}
+                      onSaved={canEditDetections ? refreshZoneCamera : undefined}
                       zoneSettingsOpen={zoneSettingsOpen}
                       onZoneSettingsClose={() => setZoneSettingsOpen(false)}
                     />
@@ -1152,21 +1166,23 @@ export default function Detections() {
                   settingId={selectedDetectionSettingId}
                   channel={zoneCamera}
                   onToggle={() => toggleModel(selected)}
-                  toggleDisabled={detectionToggleLoading === selectedSettingType}
+                  toggleDisabled={!canEditDetections || detectionToggleLoading === selectedSettingType}
                   onSensitivityChange={(value) => patch(selected.id, { sensitivity: value })}
-                  onThresholdChange={updateSelectedThreshold}
-                  onEditZones={() => setZoneSettingsOpen(true)}
+                  onThresholdChange={(key, value) => { if (canEditDetections) updateSelectedThreshold(key, value); }}
+                  onEditZones={() => { if (canEditDetections) setZoneSettingsOpen(true); }}
                   onResetSetting={() => {
+                    if (!canEditDetections) return;
                     if (!selectedDetectionSettingId) {
                       toast.error('No detection settings found to reset.');
                       return;
                     }
                     setShowResetConfirm(true);
                   }}
-                  resetDisabled={resettingSetting || !selectedDetectionSettingId}
+                  resetDisabled={!canEditDetections || resettingSetting || !selectedDetectionSettingId}
                   initialAlerts={selectedDetectionAlerts}
-                  onRecipientsChange={updateSelectedRecipients}
+                  onRecipientsChange={(alertIds) => { if (canEditDetections) updateSelectedRecipients(alertIds); }}
                   onScheduleSaved={refreshZoneCamera}
+                  canEdit={canEditDetections}
                 />
                 <DetectionIncidents
                   detectionName={selected.name}

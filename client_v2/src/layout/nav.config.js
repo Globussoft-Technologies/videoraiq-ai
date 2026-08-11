@@ -109,9 +109,7 @@ export const NAV_GROUPS = [
     label: 'CONFIGURE',
     items: [
       { key: 'cameras', label: 'Cameras & NVRs', path: 'cameras', icon: Cctv, permissionKey: 'NVR' },
-      // Shown to admins and sub-users alike — left ungated (like email-monitoring
-      // / assistant) until a `detections` module exists in the permission matrix.
-      { key: 'detection-settings', label: 'Detections', path: 'detection-settings', icon: Settings2 },
+      { key: 'detection-settings', label: 'Detections', path: 'detection-settings', icon: Settings2, permissionKey: 'detectionSettings' },
     ],
   },
   {

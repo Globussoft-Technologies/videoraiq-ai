@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import ConfirmationModal from '../../../components/DeleteConfirmation';
 import { useApi } from '../../../hooks/useApi';
+import { usePermissions } from '@/context/PermissionContext';
 import { getChannels, getNvrs, getDetectionTypes, toggleChannelDetection, updateChannel, getCamerasByNvr } from '../../../helpers/configure';
 import { Popover, PopoverTrigger, PopoverContent } from '../../../pages/AttendanceLogs/components/Popover';
 import CameraStream from '../../../components/CameraStream';
@@ -90,7 +91,7 @@ function appliedTypesFor(camera, typeLabels) {
 }
 /** Popover: toggle each detection type on/off for this one camera. Rendered in a
  * body portal (see Popover.jsx) so it isn't clipped by the table's overflow:hidden. */
-function AppliedTypesPopover({ camera, typeLabels, onToggleRequest }) {
+function AppliedTypesPopover({ camera, typeLabels, onToggleRequest, disabled = false }) {
   const [open, setOpen] = useState(false);
 
   // Detection types API is the master list; merge each type with
@@ -98,6 +99,7 @@ function AppliedTypesPopover({ camera, typeLabels, onToggleRequest }) {
   const availableTypes = appliedTypesFor(camera, typeLabels);
 
   const handleToggle = (type) => {
+    if (disabled) return;
     setOpen(false);
     onToggleRequest(camera, type.key, type.label, type.enabled);
   };
@@ -106,10 +108,11 @@ function AppliedTypesPopover({ camera, typeLabels, onToggleRequest }) {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
+          disabled={disabled}
           style={{
             display: 'flex', alignItems: 'center', gap: 6, height: 30, padding: '0 10px 0 12px',
             borderRadius: 20, background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.32)',
-            fontSize: 11.5, fontWeight: 500, color: 'var(--blue)', cursor: 'pointer',
+            fontSize: 11.5, fontWeight: 500, color: 'var(--blue)', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.65 : 1,
           }}
         >
           Applied Types
@@ -188,7 +191,7 @@ function CameraPreviewModal({ camera, onClose }) {
   );
 }
 
-function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionRequest, onCheckTypeChange, checkTypeSaving }) {
+function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionRequest, onCheckTypeChange, checkTypeSaving, canEdit = false }) {
   return (
     <div
       className="vq-row"
@@ -246,7 +249,7 @@ function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionReq
       </span>
 
       <span style={{ display: 'flex', justifyContent: 'center' }} onClick={e => e.stopPropagation()}>
-        <AppliedTypesPopover camera={camera} typeLabels={typeLabels} onToggleRequest={onToggleDetectionRequest} />
+        <AppliedTypesPopover camera={camera} typeLabels={typeLabels} onToggleRequest={onToggleDetectionRequest} disabled={!canEdit} />
       </span>
 
       <span style={{ display: 'flex', justifyContent: 'center' }} onClick={e => e.stopPropagation()}>
@@ -254,12 +257,12 @@ function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionReq
           <select
             value={camera.checkType || 'none'}
             onChange={e => onCheckTypeChange(camera, e.target.value)}
-            disabled={checkTypeSaving}
+            disabled={checkTypeSaving || !canEdit}
             style={{
               height: 32, padding: '0 26px 0 11px', borderRadius: 8,
               background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12,
-              outline: 'none', cursor: checkTypeSaving ? 'wait' : 'pointer', color: 'var(--tx)', appearance: 'none',
-              opacity: checkTypeSaving ? 0.72 : 1,
+              outline: 'none', cursor: checkTypeSaving ? 'wait' : (canEdit ? 'pointer' : 'not-allowed'), color: 'var(--tx)', appearance: 'none',
+              opacity: (checkTypeSaving || !canEdit) ? 0.72 : 1,
             }}
           >
             {CHECK_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -278,6 +281,8 @@ function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionReq
 const LIMIT = 100;
 
 export function DetectionSettingsCameraList({ onOpenCamera }) {
+  const { permissions } = usePermissions();
+  const canEditDetections = permissions?.detectionSettings?.edit === true;
   const [search, setSearch] = useState('');
   const [nvrFilter, setNvrFilter] = useState('');
   const [camTypeFilter, setCamTypeFilter] = useState('');
@@ -304,6 +309,7 @@ export function DetectionSettingsCameraList({ onOpenCamera }) {
   // Matches V1: a single toggle endpoint for on/off; 404s if the type was
   // never linked to this camera (no auto-create — same as V1's real behavior).
 const handleToggleDetection = async (camera, detectionType, enable) => {
+  if (!canEditDetections) return;
   try {
     const response = await toggleChannelDetection({
       channelId: camera._id,
@@ -334,6 +340,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
   }
 };
   const handleDetectionToggleRequest = (camera, detectionType, label, currentlyEnabled) => {
+    if (!canEditDetections) return;
     setDetectionConfirm({ camera, detectionType, label, currentlyEnabled });
   };
 
@@ -353,6 +360,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
   };
 
   const handleCheckTypeChange = async (camera, checkType) => {
+    if (!canEditDetections) return;
     if (!camera?._id || checkTypeSavingId) return;
     if ((camera.checkType || 'none') === checkType) return;
     const previousCheckType = camera.checkType || 'none';
@@ -465,6 +473,7 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
               onToggleDetectionRequest={handleDetectionToggleRequest}
               onCheckTypeChange={handleCheckTypeChange}
               checkTypeSaving={checkTypeSavingId === camera._id}
+              canEdit={canEditDetections}
             />
           ))}
         </AsyncBoundary>

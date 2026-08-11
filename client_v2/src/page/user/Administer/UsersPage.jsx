@@ -378,6 +378,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   const [employeeLocationOptions, setEmployeeLocationOptions] = useState([]);
   const [locationOptions, setLocationOptions] = useState([]);
   const [optionsLoading, setOptionsLoading] = useState(true);
+  const accessCascadeRequestRef = useRef(0);
 
   // Stack the paired fields into a single column on phones so the form never
   // exceeds the viewport width (which was clipping the right-hand fields).
@@ -395,15 +396,13 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
     let cancelled = false;
     (async () => {
       try {
-        const [locs, empLocs, nvrs] = await Promise.all([
+        const [locs, empLocs] = await Promise.all([
           getLocations(0, 200),
           getEmployeeLocations(),
-          getNvrsForUserAccess([]),
         ]);
         if (cancelled) return;
         setLocationOptions(locs || []);
         setEmployeeLocationOptions(Array.isArray(empLocs) ? empLocs : []);
-        setNvrOptions(nvrs || []);
       } finally {
         if (!cancelled) setOptionsLoading(false);
       }
@@ -412,35 +411,36 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   }, []);
 
   // Location -> NVR -> Channels cascade, and Channels/Employee Access -> Department —
-  // ported from V1's NewPermissionForm.jsx handleGetNvrs/handleGetChannels/handleGetDepartments.
+  // keep this as one guarded async flow so late responses from an earlier
+  // selection cannot overwrite a newer NVR/channel list.
   useEffect(() => {
     let cancelled = false;
+    const requestId = ++accessCascadeRequestRef.current;
     (async () => {
       const nvrs = await getNvrsForUserAccess(selectedLocations);
-      if (cancelled) return;
+      if (cancelled || requestId !== accessCascadeRequestRef.current) return;
       setNvrOptions(nvrs || []);
+
       const validNvrIds = new Set((nvrs || []).map(n => n._id));
       const prunedNvrs = selectedNvrs.filter(id => validNvrIds.has(id));
+      const effectiveNvrs = prunedNvrs.length === selectedNvrs.length ? selectedNvrs : prunedNvrs;
       if (prunedNvrs.length !== selectedNvrs.length) setSelectedNvrs(prunedNvrs);
-      const channels = await getChannelsForUserAccess({ selectedLocations, nvrIds: prunedNvrs });
-      console.log('channels for user access', channels);
-      if (cancelled) return;
+
+      const channels = await getChannelsForUserAccess({ selectedLocations, nvrIds: effectiveNvrs });
+      if (cancelled || requestId !== accessCascadeRequestRef.current) return;
       setChannelOptions(channels || []);
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedLocations]);
+  }, [selectedLocations, selectedNvrs]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const channels = await getChannelsForUserAccess({ selectedLocations, nvrIds: selectedNvrs });
-      if (cancelled) return;
-      setChannelOptions(channels || []);
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedNvrs]);
+    const validChannelIds = new Set((channelOptions || []).map(channel => channel?._id).filter(Boolean));
+    setSelectedChannels((previous) => {
+      const next = previous.filter(id => validChannelIds.has(id));
+      return next.length === previous.length ? previous : next;
+    });
+  }, [channelOptions]);
 
   useEffect(() => {
     let cancelled = false;
