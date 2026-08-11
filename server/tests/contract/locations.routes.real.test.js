@@ -88,8 +88,8 @@ describe("POST /api/v1/locations/create (real vertical)", () => {
     expect(inner(res).status).toBe("success");
     const all = await Locations.find({});
     expect(all).toHaveLength(1);
-    // Service normalizes locationName to lowercase on create.
-    expect(all[0].locationName).toBe("hq");
+    // The entered display casing becomes canonical for a new location.
+    expect(all[0].locationName).toBe("HQ");
   });
 
   it("400s when locationName is missing (Joi)", async () => {

@@ -6,8 +6,11 @@ import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
 import authorizedChannelsModel from "../cameraRestrictions/authorizedChannels.model.js";
 import NVRModel from "../NVR/nvr.model.js";
 
+const escapeRegex = (value = "") =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 class LocationService {
-  async syncLocationRenameInBackground({
+  async syncLocationRename({
     adminId,
     oldLocationName,
     newLocationName,
@@ -15,11 +18,21 @@ class LocationService {
   }) {
     if (!adminId || !oldLocationName || !newLocationName) return;
 
-    const matchLocation = { $regex: `^${oldLocationName}$`, $options: "i" };
+    const matchLocation = new RegExp(`^${escapeRegex(oldLocationName)}$`, "i");
     const tasks = [
       authorizedUsersModel.updateMany(
         { adminId, location: matchLocation },
         { $set: { location: newLocationName } },
+      ),
+      authorizedChannelsModel.updateMany(
+        { adminId, employeeLocations: matchLocation },
+        { $set: { "employeeLocations.$[location]": newLocationName } },
+        { arrayFilters: [{ location: matchLocation }] },
+      ),
+      authorizedChannelsModel.updateMany(
+        { adminId, locations: matchLocation },
+        { $set: { "locations.$[location]": newLocationName } },
+        { arrayFilters: [{ location: matchLocation }] },
       ),
     ];
 
@@ -32,14 +45,7 @@ class LocationService {
       );
     }
 
-    const results = await Promise.allSettled(tasks);
-    results.forEach((result, index) => {
-      if (result.status === "rejected") {
-        logger.error(
-          `Background location rename failed (${index}) for admin ${adminId}: ${result.reason?.message || result.reason}`,
-        );
-      }
-    });
+    return Promise.all(tasks);
   }
 
   async createLocation(req, res, next) {
@@ -199,19 +205,13 @@ class LocationService {
         { new: true } // Return updated doc
       );
 
-      // If locationName changed, update in authorizedUsers and NVRs
-      if (nextLocationName && nextLocationName !== oldLocationName) {
-        setImmediate(() => {
-          this.syncLocationRenameInBackground({
-            adminId,
-            oldLocationName,
-            newLocationName: nextLocationName,
-            userId: data?.user_id,
-          }).catch((error) => {
-            logger.error(
-              `Background rename task crashed for admin ${adminId}: ${error.message}`,
-            );
-          });
+      // Await propagation so a successful response means all references agree.
+      if (nextLocationName) {
+        await this.syncLocationRename({
+          adminId,
+          oldLocationName,
+          newLocationName: nextLocationName,
+          userId: data?.user_id,
         });
       }
 

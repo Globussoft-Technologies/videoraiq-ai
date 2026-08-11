@@ -4,10 +4,9 @@
  * Three exported helpers used by the auth + NVR-registration flow:
  *   - getEmpAuthInfo(email) — POSTs to `${empDomain}/auth/info` via axios.
  *     Returns the body on success; null on a 404; re-throws any other error.
- *   - autoSyncLocations(adminData, userData) — best-effort: lowercases
- *     existing department + authorizedUsers + NVR location records and
- *     inserts any new (locationName, locationId) pairs into the Location
- *     collection. All failures swallowed via try/catch + logger.error.
+ *   - autoSyncLocations(adminData, userData) - best-effort: normalizes
+ *     departments, applies canonical Location casing to authorized users and
+ *     NVRs, and inserts missing locations. Failures are logged and swallowed.
  *   - syncPermissionLocations(adminId) — patches the four permission tiers
  *     (admin / read / write / custom) so they all have a `locations` key on
  *     `permissionConfig`. No-op when adminId is falsy; swallows errors.
@@ -261,57 +260,74 @@ describe("autoSyncLocations — department normalisation", () => {
   });
 });
 
-describe("autoSyncLocations — authorizedUsers + NVR normalisation", () => {
+describe("autoSyncLocations - authorizedUsers + NVR canonical casing", () => {
   beforeEach(() => {
     departmentsFindMock.mockReturnValue(lean([]));
-    locationFindMock.mockReturnValue(lean([]));
   });
 
-  it("lowercases string locations on authorizedUsers", async () => {
+  it("updates authorizedUsers to the casing stored in Location", async () => {
     authUsersFindMock.mockReturnValue(
-      lean([{ _id: "u1", location: "Office-A", locationId: "L1" }])
+      lean([{ _id: "u1", location: "bangalore", locationId: "L1" }])
     );
     nvrFindMock.mockReturnValue(lean([]));
+    locationFindMock.mockReturnValue(
+      lean([{ _id: "L1", locationName: "Bangalore" }])
+    );
 
     await autoSyncLocations({ _id: "admin1" }, { user_id: 7 });
 
     expect(authUsersBulkWriteMock).toHaveBeenCalledOnce();
     const ops = authUsersBulkWriteMock.mock.calls[0][0];
-    expect(ops[0].updateOne.update.$set.location).toBe("office-a");
+    expect(ops[0].updateOne.update.$set.location).toBe("Bangalore");
+    expect(locationInsertManyMock).not.toHaveBeenCalled();
   });
 
-  it("lowercases array locations element-wise on authorizedUsers", async () => {
+  it("canonicalizes array locations element-wise", async () => {
     authUsersFindMock.mockReturnValue(
-      lean([{ _id: "u1", location: ["Floor-1", "Floor-2"] }])
+      lean([{ _id: "u1", location: ["floor-1", "FLOOR-2"] }])
     );
     nvrFindMock.mockReturnValue(lean([]));
-    locationFindMock.mockReturnValue(lean([]));
+    locationFindMock.mockReturnValue(
+      lean([
+        { _id: "L1", locationName: "Floor-1" },
+        { _id: "L2", locationName: "Floor-2" },
+      ])
+    );
 
     await autoSyncLocations({ _id: "admin1" }, { user_id: 7 });
 
     const setLoc =
       authUsersBulkWriteMock.mock.calls[0][0][0].updateOne.update.$set.location;
-    expect(setLoc).toEqual(["floor-1", "floor-2"]);
+    expect(setLoc).toEqual(["Floor-1", "Floor-2"]);
   });
 
-  it("passes through non-string non-array location without crashing", async () => {
-    // The downstream location-merge loop calls .toLowerCase() on each
-    // collected name; numeric locations crash there. The outer try/catch
-    // swallows it and logs once. We assert the bulkWrite already happened
-    // before the catch arm fired, since that step runs first.
-    const consoleErrSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("does not rewrite records that already use canonical casing", async () => {
     authUsersFindMock.mockReturnValue(
-      lean([{ _id: "u1", location: 123 }])
+      lean([{ _id: "u1", location: "Bangalore" }])
     );
+    nvrFindMock.mockReturnValue(
+      lean([{ _id: "n1", location: "Bangalore" }])
+    );
+    locationFindMock.mockReturnValue(
+      lean([{ _id: "L1", locationName: "Bangalore" }])
+    );
+
+    await autoSyncLocations({ _id: "admin1" }, { user_id: 7 });
+
+    expect(authUsersBulkWriteMock).not.toHaveBeenCalled();
+    expect(nvrBulkWriteMock).not.toHaveBeenCalled();
+    expect(locationInsertManyMock).not.toHaveBeenCalled();
+  });
+
+  it("ignores non-string locations without crashing", async () => {
+    authUsersFindMock.mockReturnValue(lean([{ _id: "u1", location: 123 }]));
     nvrFindMock.mockReturnValue(lean([]));
     locationFindMock.mockReturnValue(lean([]));
 
     await autoSyncLocations({ _id: "admin1" }, { user_id: 7 });
-    expect(authUsersBulkWriteMock).toHaveBeenCalledOnce();
-    expect(
-      authUsersBulkWriteMock.mock.calls[0][0][0].updateOne.update.$set.location
-    ).toBe(123);
-    consoleErrSpy.mockRestore();
+
+    expect(authUsersBulkWriteMock).not.toHaveBeenCalled();
+    expect(loggerErrorMock).not.toHaveBeenCalled();
   });
 
   it("skips authorizedUsers without a location", async () => {
@@ -322,18 +338,25 @@ describe("autoSyncLocations — authorizedUsers + NVR normalisation", () => {
       ])
     );
     nvrFindMock.mockReturnValue(lean([]));
+    locationFindMock.mockReturnValue(lean([]));
 
     await autoSyncLocations({ _id: "admin1" }, { user_id: 7 });
     expect(authUsersBulkWriteMock).not.toHaveBeenCalled();
   });
 
-  it("lowercases NVR locations and skips empty ones", async () => {
+  it("updates NVR locations to canonical casing and skips empty ones", async () => {
     authUsersFindMock.mockReturnValue(lean([]));
     nvrFindMock.mockReturnValue(
       lean([
-        { _id: "n1", location: "Warehouse-X" },
-        { _id: "n2", location: ["Bay-1", "Bay-2"] },
+        { _id: "n1", location: "warehouse-x" },
+        { _id: "n2", location: "BAY-1" },
         { _id: "n3", location: null },
+      ])
+    );
+    locationFindMock.mockReturnValue(
+      lean([
+        { _id: "L1", locationName: "Warehouse-X" },
+        { _id: "L2", locationName: "Bay-1" },
       ])
     );
 
@@ -342,13 +365,14 @@ describe("autoSyncLocations — authorizedUsers + NVR normalisation", () => {
     expect(nvrBulkWriteMock).toHaveBeenCalledOnce();
     const ops = nvrBulkWriteMock.mock.calls[0][0];
     expect(ops).toHaveLength(2);
-    expect(ops[0].updateOne.update.$set.location).toBe("warehouse-x");
-    expect(ops[1].updateOne.update.$set.location).toEqual(["bay-1", "bay-2"]);
+    expect(ops[0].updateOne.update.$set.location).toBe("Warehouse-X");
+    expect(ops[1].updateOne.update.$set.location).toBe("Bay-1");
   });
 
   it("queries NVRs using the adminUserIdStr derived from userData.user_id", async () => {
     authUsersFindMock.mockReturnValue(lean([]));
     nvrFindMock.mockReturnValue(lean([]));
+    locationFindMock.mockReturnValue(lean([]));
 
     await autoSyncLocations({ _id: "admin1" }, { user_id: 42 });
 
@@ -359,6 +383,7 @@ describe("autoSyncLocations — authorizedUsers + NVR normalisation", () => {
   it("tolerates missing user_id (passes undefined string)", async () => {
     authUsersFindMock.mockReturnValue(lean([]));
     nvrFindMock.mockReturnValue(lean([]));
+    locationFindMock.mockReturnValue(lean([]));
 
     await autoSyncLocations({ _id: "admin1" }, undefined);
     // userData?.user_id?.toString() → undefined → query is { userId: undefined }
@@ -372,7 +397,7 @@ describe("autoSyncLocations — new location creation", () => {
     departmentsFindMock.mockReturnValue(lean([]));
   });
 
-  it("inserts new locations (lowercased, dedup'd) and tags them as imported from EMP", async () => {
+  it("preserves source casing, deduplicates case-insensitively, and tags imports", async () => {
     authUsersFindMock.mockReturnValue(
       lean([
         { _id: "u1", location: "Office-A", locationId: "EMP-A" },
@@ -393,6 +418,7 @@ describe("autoSyncLocations — new location creation", () => {
 
     expect(locationInsertManyMock).toHaveBeenCalledOnce();
     const inserts = locationInsertManyMock.mock.calls[0][0];
+    expect(inserts).toHaveLength(2);
     // Office-A is mapped first (with EMP-A), Office-B exists, Warehouse-X is new
     const names = inserts.map((i) => i.locationName);
     expect(names).toContain("Office-A");

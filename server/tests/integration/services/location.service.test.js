@@ -12,6 +12,15 @@ const { default: LocationService } = await import(
 const { default: Location } = await import(
   "../../../core/v1/locations/location.model.js"
 );
+const { default: AuthorizedUser } = await import(
+  "../../../core/v1/authorizedUsers/authorizedUsers.model.js"
+);
+const { default: AuthorizedChannel } = await import(
+  "../../../core/v1/cameraRestrictions/authorizedChannels.model.js"
+);
+const { default: NVR } = await import(
+  "../../../core/v1/NVR/nvr.model.js"
+);
 
 const adminId = new mongoose.Types.ObjectId();
 
@@ -128,6 +137,47 @@ describe("LocationService.updateLocation", () => {
     expect(res.statusCode).toBe(200);
     const reloaded = await Location.findById(loc._id);
     expect(reloaded.locationName).toBe("newname");
+  });
+
+  it("propagates canonical casing to all v1 location references", async () => {
+    const loc = await Location.create({ adminId, locationName: "Bangalore" });
+    const employee = await AuthorizedUser.create({
+      adminId,
+      email: "afzal@example.com",
+      location: "bangalore",
+    });
+    const nvr = await NVR.create({
+      userId: "1",
+      nvrName: "NVR 1",
+      brand: "hikvision",
+      domain: "http://nvr.test",
+      location: "BANGALORE",
+      localNvrId: "local-1",
+    });
+    const restrictions = await AuthorizedChannel.create({
+      adminId,
+      userId: new mongoose.Types.ObjectId(),
+      employeeLocations: ["bangalore", "Remote"],
+      locations: ["BANGALORE", "Other"],
+      nvrIds: [],
+      departmentIds: [],
+      channels: [],
+    });
+    const { req, res, next } = serviceCtx({
+      adminId,
+      user_id: "1",
+      query: { id: loc._id.toString() },
+      body: { locationName: "Bangalore" },
+    });
+
+    await LocationService.updateLocation(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect((await AuthorizedUser.findById(employee._id)).location).toBe("Bangalore");
+    expect((await NVR.findById(nvr._id)).location).toBe("Bangalore");
+    const updatedRestrictions = await AuthorizedChannel.findById(restrictions._id);
+    expect(updatedRestrictions.employeeLocations).toEqual(["Bangalore", "Remote"]);
+    expect(updatedRestrictions.locations).toEqual(["Bangalore", "Other"]);
   });
 
   it("returns 404 for an unknown id", async () => {

@@ -52,110 +52,111 @@ export async function autoSyncLocations(adminData, userData) {
         }
       }
 
-      // Fetch from authorizedUsers
+      // Fetch location sources without rewriting their display casing.
       const authUsers = await authorizedUsersModel
         .find({ adminId: adminObjId }, { location: 1, locationId: 1 })
         .lean();
 
-      // Normalize authorizedUsers locations to lowercase
-      if (authUsers && authUsers.length) {
-        const bulkOps = authUsers.map(u => {
-          if (!u.location) return null;
-          const newLoc = Array.isArray(u.location)
-            ? u.location.map(l => typeof l === 'string' ? l.toLowerCase() : l)
-            : typeof u.location === 'string'
-              ? u.location.toLowerCase()
-              : u.location;
-          return {
-            updateOne: {
-              filter: { _id: u._id },
-              update: { $set: { location: newLoc } }
-            }
-          };
-        }).filter(op => op !== null);
-        if (bulkOps.length) {
-          await authorizedUsersModel.bulkWrite(bulkOps);
-        }
-      }
-
-      // Fetch from NVR
       const nvrs = await NVRModel
         .find({ userId: adminUserIdStr }, { location: 1 })
         .lean();
 
-      // Normalize NVR locations to lowercase
-      if (nvrs && nvrs.length) {
-        const bulkOpsNVR = nvrs.map(n => {
-          if (!n.location) return null;
-          const newLoc = Array.isArray(n.location)
-            ? n.location.map(l => typeof l === 'string' ? l.toLowerCase() : l)
-            : typeof n.location === 'string'
-              ? n.location.toLowerCase()
-              : n.location;
-          return {
-            updateOne: {
-              filter: { _id: n._id },
-              update: { $set: { location: newLoc } }
-            }
-          };
-        }).filter(op => op !== null);
-        if (bulkOpsNVR.length) {
-          await NVRModel.bulkWrite(bulkOpsNVR);
-        }
-      }
+      const locationKey = (value) =>
+        typeof value === "string" ? value.trim().toLowerCase() : "";
+      const locationValues = (value) => Array.isArray(value) ? value : [value];
+      const sourceLocations = new Map();
+      const collectLocation = (value, empLocationId = null) => {
+        const name = typeof value === "string" ? value.trim() : "";
+        const key = locationKey(name);
+        if (!key) return;
 
-      // Map to track unique locationName -> locationId
-      const uniqueLocationsMap = new Map();
+        const existing = sourceLocations.get(key);
+        if (!existing) {
+          sourceLocations.set(key, { name, empLocationId });
+        } else if (!existing.empLocationId && empLocationId) {
+          existing.empLocationId = empLocationId;
+        }
+      };
 
       // Collect from authorizedUsers
-      authUsers.forEach((u) => {
-        if (u.location) {
-          const locs = Array.isArray(u.location) ? u.location : [u.location];
-          locs.forEach((loc) => {
-            if (loc) {
-              const existingEmpId = uniqueLocationsMap.get(loc);
-              uniqueLocationsMap.set(loc, existingEmpId || (u.locationId || null));
-            }
-          });
-        }
+      (authUsers || []).forEach((u) => {
+        locationValues(u.location).forEach((location) => {
+          collectLocation(location, u.locationId || null);
+        });
       });
 
       // Collect from NVRs
-      nvrs.forEach((n) => {
-        if (n.location) {
-          const locs = Array.isArray(n.location) ? n.location : [n.location];
-          locs.forEach((loc) => {
-            if (loc && !uniqueLocationsMap.has(loc)) {
-              uniqueLocationsMap.set(loc, null);
-            }
-          });
+      (nvrs || []).forEach((n) => {
+        locationValues(n.location).forEach((location) => {
+          collectLocation(location);
+        });
+      });
+
+      // Location documents are the source of truth for display casing.
+      const existingLocationRecords = await locationModel
+        .find({ adminId: adminObjId }, { locationName: 1 })
+        .lean();
+      const canonicalLocations = new Map();
+      (existingLocationRecords || []).forEach((location) => {
+        const key = locationKey(location.locationName);
+        if (key && !canonicalLocations.has(key)) {
+          canonicalLocations.set(key, location.locationName.trim());
         }
       });
 
-    // Check against Location collection and create missing (case-insensitive)
-    const existingLocationRecords = await locationModel
-      .find({ adminId: adminObjId }, { locationName: 1 })
-      .lean();
-
-    // Use lowercased names for comparison
-    const existingLocationNamesLower = new Set(existingLocationRecords.map(l => l.locationName?.toLowerCase?.() || ""));
-
-    const newLocationsToCreate = [];
-    for (const [locName, empLocId] of uniqueLocationsMap.entries()) {
-      if (locName && !existingLocationNamesLower.has(locName.toLowerCase())) {
-        newLocationsToCreate.push({
-          locationName: locName,
-          empLocationId: empLocId || "",
-          adminId: adminObjId,
-          isImportedFromEMP:true
-        });
+      const newLocationsToCreate = [];
+      for (const [key, source] of sourceLocations.entries()) {
+        if (!canonicalLocations.has(key)) {
+          canonicalLocations.set(key, source.name);
+          newLocationsToCreate.push({
+            locationName: source.name,
+            empLocationId: source.empLocationId || "",
+            adminId: adminObjId,
+            isImportedFromEMP: true
+          });
+        }
       }
-    }
 
-    if (newLocationsToCreate.length > 0) {
-      await locationModel.insertMany(newLocationsToCreate);
-      logger.info(`Auto-synced ${newLocationsToCreate.length} new locations for admin: ${adminObjId}`);
-    }
+      if (newLocationsToCreate.length > 0) {
+        await locationModel.insertMany(newLocationsToCreate);
+        logger.info(`Auto-synced ${newLocationsToCreate.length} new locations for admin: ${adminObjId}`);
+      }
+
+      const canonicalize = (value) => {
+        if (Array.isArray(value)) return value.map(canonicalize);
+        if (typeof value !== "string") return value;
+        return canonicalLocations.get(locationKey(value)) || value;
+      };
+      const locationChanged = (before, after) =>
+        JSON.stringify(before) !== JSON.stringify(after);
+
+      const authUserUpdates = (authUsers || []).map((user) => {
+        const location = canonicalize(user.location);
+        if (!user.location || !locationChanged(user.location, location)) return null;
+        return {
+          updateOne: {
+            filter: { _id: user._id },
+            update: { $set: { location } }
+          }
+        };
+      }).filter(Boolean);
+      if (authUserUpdates.length) {
+        await authorizedUsersModel.bulkWrite(authUserUpdates);
+      }
+
+      const nvrUpdates = (nvrs || []).map((nvr) => {
+        const location = canonicalize(nvr.location);
+        if (!nvr.location || !locationChanged(nvr.location, location)) return null;
+        return {
+          updateOne: {
+            filter: { _id: nvr._id },
+            update: { $set: { location } }
+          }
+        };
+      }).filter(Boolean);
+      if (nvrUpdates.length) {
+        await NVRModel.bulkWrite(nvrUpdates);
+      }
     }
   } catch (syncError) {
     logger.error("Failed to auto-sync locations on login:", syncError);
