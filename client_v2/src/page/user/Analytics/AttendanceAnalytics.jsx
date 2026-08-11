@@ -45,11 +45,10 @@ const ALL_LOCATIONS = 'All Locations';
 // both screens. "No log" is deliberately the quietest of the set - it's the
 // remainder of the roster, not an event.
 const COLORS = {
-  present: 'var(--ok)',
+  checkIn: 'var(--ok)',
   halfDay: 'var(--warn)',
-  shortDay: 'var(--crit)',
-  checkedIn: 'var(--blue)',
-  noLog: 'rgba(245, 166, 35, 0.22)',
+  absentees: 'var(--crit)',
+  checkout: 'var(--blue)',
 };
 
 function numberFmt(value) {
@@ -257,7 +256,8 @@ function DailyActivity({ series = [], employees = 0 }) {
     const halfDay = Number(row?.halfDay || 0);
     const shortDay = Number(row?.shortDay || 0);
     const checkedIn = Number(row?.checkedIn || 0);
-    return present > 0 || halfDay > 0 || shortDay > 0 || checkedIn > 0;
+    const noLog = Number(row?.noLog || 0);
+    return present > 0 || halfDay > 0 || shortDay > 0 || checkedIn > 0 || noLog > 0;
   });
 
   const left = niceScale(roster, 4);
@@ -376,11 +376,11 @@ function DailyActivity({ series = [], employees = 0 }) {
                   >
                     {/* Bottom-up (column-reverse): the graded statuses first,
                         then the un-logged remainder of the roster on top. */}
-                    <span style={{ height: `${share(row.present)}%`, background: COLORS.present }} />
+                    <span style={{ height: `${share(row.present)}%`, background: COLORS.checkIn }} />
                     <span style={{ height: `${share(row.halfDay)}%`, background: COLORS.halfDay }} />
-                    <span style={{ height: `${share(row.shortDay)}%`, background: COLORS.shortDay }} />
-                    <span style={{ height: `${share(row.checkedIn)}%`, background: COLORS.checkedIn }} />
-                    <span style={{ height: `${share(row.noLog)}%`, background: COLORS.noLog }} />
+                    <span style={{ height: `${share(row.shortDay)}%`, background: COLORS.absentees }} />
+                    <span style={{ height: `${share(row.checkedIn)}%`, background: COLORS.checkout }} />
+                    <span style={{ height: `${share(row.noLog)}%`, background: COLORS.absentees, opacity: 0.25 }} />
                   </div>
                 </div>
               );
@@ -395,7 +395,7 @@ function DailyActivity({ series = [], employees = 0 }) {
                 tabIndex={0}
                 onMouseMove={(event) => onHover(event, row, index)}
                 onFocus={(event) => onHover(event, row, index)}
-                aria-label={`${moment(row.date).format('D MMM')}: ${row.present} present, ${row.halfDay} half day, ${row.shortDay} absent, ${row.checkedIn} checked in, ${row.noLog} with no log`}
+                aria-label={`${moment(row.date).format('D MMM')}: ${row.employees} total employees, ${row.checkins} check in, ${row.halfDay} half day, ${(row.shortDay || 0) + (row.noLog || 0)} absentees, ${row.checkouts} checkout`}
                 style={{ flex: '1 1 0', minWidth: 0, outline: 'none', cursor: 'default' }}
               />
             ))}
@@ -462,15 +462,14 @@ function DailyActivity({ series = [], employees = 0 }) {
 
           <div style={{ display: 'grid', gap: 3.5, fontFamily: 'var(--mono)', fontSize: 10.5 }}>
             <TooltipRow label="Total Employees" value={numberFmt(hover.row.employees)} strong />
-            <TooltipRow color={COLORS.checkedIn} label="Check In" value={numberFmt(hover.row.checkins)} />
+            <TooltipRow color={COLORS.checkIn} label="Check In" value={numberFmt(hover.row.checkins)} />
             <TooltipRow color={COLORS.halfDay} label="Half Day" value={numberFmt(hover.row.halfDay)} />
             <TooltipRow
-              color={COLORS.shortDay}
+              color={COLORS.absentees}
               label="Absentees"
               value={numberFmt((hover.row.shortDay || 0) + (hover.row.noLog || 0))}
-              strong
             />
-            <TooltipRow color={COLORS.present} label="Checkout" value={numberFmt(hover.row.checkouts)} />
+            <TooltipRow color={COLORS.checkout} label="Checkout" value={numberFmt(hover.row.checkouts)} />
           </div>
         </div>
       )}
@@ -484,7 +483,8 @@ function hasDailyAttendanceData(series = []) {
     const halfDay = Number(row?.halfDay || 0);
     const shortDay = Number(row?.shortDay || 0);
     const checkedIn = Number(row?.checkedIn || 0);
-    return present > 0 || halfDay > 0 || shortDay > 0 || checkedIn > 0;
+    const noLog = Number(row?.noLog || 0);
+    return present > 0 || halfDay > 0 || shortDay > 0 || checkedIn > 0 || noLog > 0;
   });
 }
 
@@ -740,11 +740,10 @@ export default function AttendanceAnalytics({ timezone }) {
               </div>
               {showDailyActivityHelpers && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 10.5, flexWrap: 'wrap' }}>
-                  <LegendItem color={COLORS.present} label="Present" />
-                  <LegendItem color={COLORS.halfDay} label="Half day" />
-                  <LegendItem color={COLORS.shortDay} label="Early Leave" />
-                  <LegendItem color={COLORS.checkedIn} label="Checked in" />
-                  <LegendItem color={COLORS.noLog} label="Not Checked In" />
+                  <LegendItem color={COLORS.checkIn} label="Check In" />
+                  <LegendItem color={COLORS.halfDay} label="Half Day" />
+                  <LegendItem color={COLORS.absentees} label="Absentees" />
+                  <LegendItem color={COLORS.checkout} label="Checkout" />
                 </div>
               )}
             </div>

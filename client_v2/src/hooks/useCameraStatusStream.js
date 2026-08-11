@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { subscribeCamerasStatus } from '../helpers/cameraStatus';
 
 // The raw stream has no built-in retry — a network blip or the backend
@@ -13,14 +13,28 @@ const RECONNECT_DELAY_MS = 3000;
  * hook re-polling on a timer. Same `{ data, loading, error }` shape as useApi
  * so call sites swap in with no downstream changes.
  */
-export function useCameraStatusStream(ids, { enabled = true } = {}) {
-  const idsKey = (Array.isArray(ids) ? ids : []).filter(Boolean).join(',');
+export function useCameraStatusStream(targets, { enabled = true } = {}) {
+  const normalizedTargets = useMemo(
+    () => (Array.isArray(targets) ? targets.filter(Boolean) : [targets].filter(Boolean)),
+    [targets]
+  );
+  const targetsKey = normalizedTargets.map((target) => {
+    if (typeof target === 'string') return target;
+    const id = target?.id || target?.localChannelId || target?._id || target?.channelId || '';
+    const domain =
+      target?.nvrId?.domain ||
+      target?.nvr?.domain ||
+      target?.nvrData?.domain ||
+      target?.domain ||
+      '';
+    return `${id}@${domain}`;
+  }).join(',');
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(enabled && !!idsKey);
+  const [loading, setLoading] = useState(enabled && normalizedTargets.length > 0);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!enabled || !idsKey) {
+    if (!enabled || !normalizedTargets.length) {
       setLoading(false);
       return undefined;
     }
@@ -38,7 +52,7 @@ export function useCameraStatusStream(ids, { enabled = true } = {}) {
 
     function connect() {
       if (stopped) return;
-      unsubscribe = subscribeCamerasStatus(idsKey.split(','), {
+      unsubscribe = subscribeCamerasStatus(normalizedTargets, {
         onData: (summary) => {
           setData(summary);
           setLoading(false);
@@ -46,6 +60,8 @@ export function useCameraStatusStream(ids, { enabled = true } = {}) {
         },
         onError: (err) => {
           setError(err);
+          unsubscribe?.();
+          unsubscribe = null;
           scheduleReconnect();
         },
         onClose: scheduleReconnect,
@@ -59,7 +75,7 @@ export function useCameraStatusStream(ids, { enabled = true } = {}) {
       unsubscribe?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idsKey, enabled]);
+  }, [targetsKey, enabled]);
 
   return { data, loading, error };
 }

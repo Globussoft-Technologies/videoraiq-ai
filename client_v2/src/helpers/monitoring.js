@@ -64,6 +64,33 @@ export const getChannels = async ({
   return data?.channels ?? [];
 };
 
+export const getAllChannels = async ({
+  nvrId = '',
+  location = '',
+  department = '',
+  camType = '',
+  camera = '',
+} = {}) => {
+  const token = getAccessToken();
+  const params = new URLSearchParams();
+  const nvr = csv(nvrId);
+  const loc = csv(location);
+  const dept = csv(department);
+  const type = csv(camType);
+  const cam = csv(camera);
+  if (nvr) params.append('nvrId', nvr);
+  if (loc) params.append('location', loc);
+  if (dept) params.append('department', dept);
+  if (type) params.append('camType', type);
+  if (cam) params.append('_id', cam);
+  const res = await axios.get(`${Api_url}/channel/all-channels?${params.toString()}`, {
+    headers: { 'x-access-token': token },
+  });
+  const data = unwrap(res);
+  if (Array.isArray(data)) return data;
+  return data?.channels ?? [];
+};
+
 /** Authorized NVRs for the filter dropdowns → [{ _id, nvrName }]. */
 export const getNVRs = async () => {
   const token = getAccessToken();

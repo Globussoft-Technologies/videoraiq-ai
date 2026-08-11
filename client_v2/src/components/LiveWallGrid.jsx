@@ -321,11 +321,11 @@ export default function LiveWallGrid() {
   // reading every ~3s), not stream-probed per tile, so the Live/Offline
   // filter and the "N active" tally never need to open a hidden connection
   // just to find out.
-  const statusIds = useMemo(
-    () => inventoryCameras.map(cameraStatusId).filter(Boolean),
+  const statusTargets = useMemo(
+    () => inventoryCameras.filter((camera) => !!cameraStatusId(camera)),
     [inventoryCameras]
   );
-  const statusApi = useCameraStatusStream(statusIds, { enabled: statusIds.length > 0 });
+  const statusApi = useCameraStatusStream(statusTargets, { enabled: statusTargets.length > 0 });
   const statusById = useMemo(() => {
     const map = {};
     (statusApi.data?.cameras || []).forEach((cam) => {

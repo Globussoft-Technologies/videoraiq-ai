@@ -25,8 +25,8 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
     () => (Array.isArray(channels) ? channels : []),
     [channels]
   );
-  const statusIds = useMemo(
-    () => cams.map(cameraStatusId).filter(Boolean),
+  const statusTargets = useMemo(
+    () => cams.filter((camera) => !!cameraStatusId(camera)),
     [cams]
   );
   const [activeId, setActiveId] = useState(null);
@@ -46,7 +46,7 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
   // 'running') — see CAMERA_STATUS_API.md. Streamed over one connection (the
   // backend pushes a fresh reading every ~3s), not stream-probed per tab, so
   // every tab gets a real verdict without polling.
-  const statusApi = useCameraStatusStream(statusIds, { enabled: statusIds.length > 0 });
+  const statusApi = useCameraStatusStream(statusTargets, { enabled: statusTargets.length > 0 });
   const statusById = useMemo(() => {
     const map = {};
     (statusApi.data?.cameras || []).forEach((cam) => {

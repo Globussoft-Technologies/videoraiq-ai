@@ -215,12 +215,7 @@ export default function CommandCenter() {
   const onOnlineCountChange = useCallback((online, total) => {
     setOnlineCameras({ online, total });
     if (selectedNvrs.length) return;
-    ctx.setCamHealth?.((previous) => {
-      // The Sidebar total is the current inventory total, not the dashboard's
-      // filtered stream list. Keep it stable while the dashboard re-probes.
-      const inventoryTotal = Number(previous?.total) || total;
-      return { online: Math.min(online, inventoryTotal), total: inventoryTotal };
-    });
+    ctx.setCamHealth?.({ online, total });
   }, [ctx.setCamHealth, selectedNvrs]);
 
 
@@ -383,7 +378,7 @@ export default function CommandCenter() {
   // "Cameras Online" is an estate-wide health figure for the same reason, so
   // its denominator is this list's length. That is the total the Sidebar footer
   // shows, so the two can no longer disagree ("3/4" beside "3 of 36").
-  const allChannels = useApi(() => getChannels({ limit: 500 }), []);
+  const allChannels = useApi(() => getChannels({ limit: 500 }), [], { pollMs: 60000 });
   const nvrIds = useMemo(
     () => (nvrsApi.data || []).map((nvr) => nvr._id || nvr.id).filter(Boolean),
     [nvrsApi.data]
@@ -399,8 +394,21 @@ export default function CommandCenter() {
     { pollMs: 60000 }
   );
   const networkChannels = nvrDetailChannels.data?.length ? nvrDetailChannels.data : (allChannels.data || []);
-
-  const cameraInventoryTotal = (allChannels.data || []).length;
+  const normalizedFilterLocations = filters.location || [];
+  const scopedNvrs = useMemo(() => {
+    const allNvrs = nvrsApi.data || [];
+    return allNvrs.filter((nvr) => {
+      const nvrId = nvr._id || nvr.id;
+      const nvrLocation = nvr.location || nvr.locationName || nvr.site || '';
+      if (selectedNvrs.length && !selectedNvrs.includes(nvrId)) return false;
+      if (normalizedFilterLocations.length && !normalizedFilterLocations.includes(nvrLocation)) return false;
+      return true;
+    });
+  }, [nvrsApi.data, selectedNvrs, normalizedFilterLocations]);
+  const cameraInventoryTotal = useMemo(
+    () => scopedNvrs.reduce((sum, nvr) => sum + (Number(nvr.cameraCount ?? nvr.usedChannels ?? nvr.used) || 0), 0),
+    [scopedNvrs]
+  );
 
   // When one or more NVRs are picked in the filter bar, the Live Camera strip
   // and its status probe both scope to just their cameras — LiveCamera opens
@@ -411,10 +419,10 @@ export default function CommandCenter() {
   const channelNvrId = (c) => c.nvrId?._id || c.nvr?._id || c.nvrId || c.nvr || null;
   const nvrFilterActive = selectedNvrs.length > 0;
   const filteredChannels = useMemo(() => {
-    const all = allChannels.data || [];
+    const all = networkChannels;
     if (!nvrFilterActive) return all;
     return all.filter((c) => selectedNvrs.includes(channelNvrId(c)));
-  }, [allChannels.data, nvrFilterActive, selectedNvrs]);
+  }, [networkChannels, nvrFilterActive, selectedNvrs]);
 
   const camerasOnline = useMemo(
     () => ({
@@ -422,7 +430,7 @@ export default function CommandCenter() {
       // Filtered: the exact scoped count (deterministic, not dependent on the
       // callback's own async timing). Unfiltered: the real inventory total,
       // same denominator the Sidebar footer uses.
-      total: nvrFilterActive ? filteredChannels.length : (cameraInventoryTotal || onlineCameras.total),
+      total: cameraInventoryTotal || (nvrFilterActive ? filteredChannels.length : onlineCameras.total),
     }),
     [onlineCameras.online, onlineCameras.total, cameraInventoryTotal, nvrFilterActive, filteredChannels.length]
   );

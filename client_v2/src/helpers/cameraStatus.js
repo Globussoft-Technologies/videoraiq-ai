@@ -1,6 +1,8 @@
 import axios from 'axios';
 import getStreamHost from '../utils/getStreamHost';
 
+const LOCAL_SETUP = import.meta.env.VITE_LOCAL_SETUP === 'true';
+
 /**
  * The Camera Status API lives on the SAME streaming instance that actually
  * generates this user's HLS — "is this server generating HLS" only means
@@ -17,8 +19,88 @@ function statusBase() {
   return host.replace(/\/+$/, '');
 }
 
-/* accept a string or an array of ids and return a filtered array */
-const idArray = (v) => (Array.isArray(v) ? v.filter(Boolean) : [v].filter(Boolean));
+function stripTrailingSlash(value) {
+  return String(value || '').replace(/\/+$/, '');
+}
+
+function nvrDomainBase(target) {
+  return stripTrailingSlash(
+    target?.nvrId?.domain ||
+    target?.nvr?.domain ||
+    target?.nvrData?.domain ||
+    target?.domain ||
+    target?.config?.domain ||
+    ''
+  );
+}
+
+function targetStatusBase(target) {
+  if (LOCAL_SETUP) {
+    const domainBase = nvrDomainBase(target);
+    if (domainBase) return domainBase;
+  }
+  return statusBase();
+}
+
+function statusUrl(base, path) {
+  return `${stripTrailingSlash(base)}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+function normalizeStatusTarget(target) {
+  if (!target) return null;
+  if (typeof target === 'string') {
+    const id = target.trim();
+    return id ? { id, baseUrl: statusBase() } : null;
+  }
+
+  const id =
+    target?.id ||
+    target?.cameraStatusId ||
+    target?.localChannelId ||
+    cameraStatusId(target);
+  if (!id) return null;
+
+  return {
+    id,
+    baseUrl: targetStatusBase(target),
+  };
+}
+
+function targetGroups(targets) {
+  const groups = new Map();
+
+  (Array.isArray(targets) ? targets : [targets])
+    .map(normalizeStatusTarget)
+    .filter((target) => target?.id && target?.baseUrl)
+    .forEach((target) => {
+      const key = target.baseUrl;
+      const existing = groups.get(key) || [];
+      existing.push(target.id);
+      groups.set(key, existing);
+    });
+
+  return [...groups.entries()].map(([baseUrl, ids]) => ({
+    baseUrl,
+    ids: [...new Set(ids)],
+  }));
+}
+
+function mergeSummaries(summaries) {
+  const cameraMap = new Map();
+  let serverNetwork = null;
+
+  summaries.forEach((summary) => {
+    (summary?.cameras || []).forEach((camera) => {
+      if (camera?.id) cameraMap.set(camera.id, camera);
+    });
+    if (!serverNetwork && summary?.server_network) serverNetwork = summary.server_network;
+  });
+
+  return {
+    cameras: [...cameraMap.values()],
+    server_network: serverNetwork,
+  };
+}
 
 /**
  * Bulk camera status — rtsp_online/stream_status/viewers/playback_status per
@@ -29,10 +111,18 @@ const idArray = (v) => (Array.isArray(v) ? v.filter(Boolean) : [v].filter(Boolea
  * used to cap callers at ~500 ids to stay under URL length limits; the body
  * has no such ceiling; this API is tested to work with 100s-1000s of ids.
  */
-export const getCamerasStatus = async (ids) => {
-  const list = idArray(ids);
-  const res = await axios.post(`${statusBase()}/api/cameras/status`, list.length ? { ids: list } : {});
-  return res?.data || {};
+export const getCamerasStatus = async (targets) => {
+  const groups = targetGroups(targets);
+  if (!groups.length) return {};
+
+  const responses = await Promise.all(
+    groups.map(async ({ baseUrl, ids }) => {
+      const res = await axios.post(statusUrl(baseUrl, '/api/cameras/status'), ids.length ? { ids } : {});
+      return res?.data || {};
+    })
+  );
+
+  return mergeSummaries(responses);
 };
 
 /**
@@ -46,49 +136,68 @@ export const getCamerasStatus = async (ids) => {
  * failure, so callers may want to reconnect on it too (see
  * hooks/useCameraStatusStream.js, which does).
  */
-export function subscribeCamerasStatus(ids, { onData, onError, onClose } = {}) {
-  const controller = new AbortController();
-  const list = idArray(ids);
+export function subscribeCamerasStatus(targets, { onData, onError, onClose } = {}) {
+  const controllers = [];
+  const groups = targetGroups(targets);
+  const latestByBase = new Map();
+  let activeStreams = groups.length;
+  let closed = false;
 
-  (async () => {
-    try {
-      const res = await fetch(`${statusBase()}/api/cameras/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: list, stream: true }),
-        signal: controller.signal,
-      });
-      if (!res.ok || !res.body) throw new Error(`Camera status stream failed (${res.status})`);
+  if (!groups.length) {
+    queueMicrotask(() => onClose?.());
+    return () => {};
+  }
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
+  groups.forEach(({ baseUrl, ids }) => {
+    const controller = new AbortController();
+    controllers.push(controller);
 
-      while (true) {
-        // eslint-disable-next-line no-await-in-loop
-        const { value, done } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
+    (async () => {
+      try {
+        const res = await fetch(statusUrl(baseUrl, '/api/cameras/status'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids, stream: true }),
+          signal: controller.signal,
+        });
+        if (!res.ok || !res.body) throw new Error(`Camera status stream failed (${res.status})`);
 
-        let frameEnd;
-        while ((frameEnd = buf.indexOf('\n\n')) !== -1) {
-          const frame = buf.slice(0, frameEnd);
-          buf = buf.slice(frameEnd + 2);
-          if (!frame.startsWith('data: ')) continue;
-          try {
-            onData?.(JSON.parse(frame.slice(6)));
-          } catch {
-            // malformed frame — skip it, the connection is still good
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+
+        while (true) {
+          // eslint-disable-next-line no-await-in-loop
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+
+          let frameEnd;
+          while ((frameEnd = buf.indexOf('\n\n')) !== -1) {
+            const frame = buf.slice(0, frameEnd);
+            buf = buf.slice(frameEnd + 2);
+            if (!frame.startsWith('data: ')) continue;
+            try {
+              latestByBase.set(baseUrl, JSON.parse(frame.slice(6)));
+              onData?.(mergeSummaries([...latestByBase.values()]));
+            } catch {
+              // malformed frame — skip it, the connection is still good
+            }
           }
         }
-      }
-      onClose?.();
-    } catch (err) {
-      if (err?.name !== 'AbortError') onError?.(err);
-    }
-  })();
 
-  return () => controller.abort();
+        activeStreams -= 1;
+        if (!closed && activeStreams === 0) onClose?.();
+      } catch (err) {
+        if (err?.name !== 'AbortError') onError?.(err);
+      }
+    })();
+  });
+
+  return () => {
+    closed = true;
+    controllers.forEach((controller) => controller.abort());
+  };
 }
 
 /** Same fields as one entry of getCamerasStatus()'s `cameras` array, single camera. */

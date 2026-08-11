@@ -179,11 +179,11 @@ function Shell() {
   // so cameraStatusId() returns null for them — pull enough candidates that
   // at least one is very likely to resolve.
   const probeChannelsApi = useApi(() => getChannels({ limit: 30 }), []);
-  const probeId = useMemo(
-    () => (probeChannelsApi.data || []).map(cameraStatusId).find(Boolean) || null,
+  const probeChannel = useMemo(
+    () => (probeChannelsApi.data || []).find((channel) => !!cameraStatusId(channel)) || null,
     [probeChannelsApi.data]
   );
-  const networkStatusApi = useCameraStatusStream([probeId], { enabled: !!probeId });
+  const networkStatusApi = useCameraStatusStream(probeChannel ? [probeChannel] : [], { enabled: !!probeChannel });
   useEffect(() => {
     if (networkStatusApi.data?.server_network) setServerNetwork(networkStatusApi.data.server_network);
   }, [networkStatusApi.data]);
