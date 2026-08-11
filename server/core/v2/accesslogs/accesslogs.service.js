@@ -690,26 +690,21 @@ async getLogs(req, res, next) {
             }),
           ]);
         }
-        const locationAwareMatch = normalizedEmployeeLocations.length
-          ? [
-              {
-                $match: {
-                  $or: [
-                    ...(locationEmployeeIds.length
-                      ? [{ userId: { $in: locationEmployeeIds.map((id) => new ObjectId(id)) } }]
-                      : []),
-                    ...(locationNvrIds.length
-                      ? [{
-                          $and: [
-                            { $or: [{ userId: null }, { userId: { $exists: false } }] },
-                            { "sessions.nvr": { $in: locationNvrIds.map((id) => new ObjectId(id)) } },
-                          ],
-                        }]
-                      : []),
-                  ],
-                },
-              },
-            ]
+        const locationAwareClauses = [
+          ...(locationEmployeeIds.length
+            ? [{ userId: { $in: locationEmployeeIds.map((id) => new ObjectId(id)) } }]
+            : []),
+          ...(locationNvrIds.length
+            ? [{
+                $and: [
+                  { $or: [{ userId: null }, { userId: { $exists: false } }] },
+                  { "sessions.nvr": { $in: locationNvrIds.map((id) => new ObjectId(id)) } },
+                ],
+              }]
+            : []),
+        ];
+        const locationAwareMatch = locationAwareClauses.length
+          ? [{ $match: { $or: locationAwareClauses } }]
           : [];
         const authorizedUserIds = shouldRemoveUnknown
           ? await userModel.distinct("_id", { adminId: new ObjectId(adminId) })

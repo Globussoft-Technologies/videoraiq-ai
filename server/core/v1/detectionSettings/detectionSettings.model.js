@@ -58,6 +58,10 @@ const DetectionSettingBaseSchema = new mongoose.Schema(
     detectionType: {
       type: String,
     },
+    modelThresholds: {
+      type: Object,
+      default: {},
+    },
     alerts: [
       {
         type: mongoose.Schema.Types.ObjectId,

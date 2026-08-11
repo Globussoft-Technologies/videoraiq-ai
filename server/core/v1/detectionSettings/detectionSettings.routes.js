@@ -15,6 +15,7 @@ router.put("/:id/schedule/:channelId", editAccessCheck, DetectionSettingsControl
 router.delete("/:id/schedule/:channelId", editAccessCheck, DetectionSettingsController.resetCameraDetectionSchedule);
 router.get("/:id",viewAccessCheck, DetectionSettingsController.getDetectionSettings);
 router.put("/:id",editAccessCheck, DetectionSettingsController.updateDetectionSettings);
+router.put("/:id/reset-thresholds",editAccessCheck, DetectionSettingsController.resetDetectionThresholds);
 router.delete("/:id",deleteAccessCheck, DetectionSettingsController.deleteDetectionSettings);
 
 router.post("/attach",viewAccessCheck, DetectionSettingsController.attachDetectionSetting);

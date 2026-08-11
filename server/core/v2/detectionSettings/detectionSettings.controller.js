@@ -411,8 +411,33 @@ class DetectionSettingsController {
             #swagger.security = [{
              "EncryptedAuthToken": []
         }]
-        */
+    */
     return DetectionSettingService.detachDetectionSetting(req, res, next);
+  }
+
+  async resetDetectionThresholds(req, res, next) {
+    /* #swagger.tags = ['Detection Settings']
+         #swagger.description = 'Reset saved detection thresholds for one detection setting'
+         #swagger.parameters['id'] = {
+           in: 'path',
+           description: 'ID of the detection setting to reset',
+           required: true,
+           type: 'string'
+         }
+         #swagger.responses[200] = {
+             description: 'Detection thresholds reset successfully'
+         }
+         #swagger.responses[404] = {
+             description: 'Detection setting not found'
+         }
+         #swagger.responses[500] = {
+             description: 'Internal server error'
+         }
+            #swagger.security = [{
+             "EncryptedAuthToken": []
+        }]
+        */
+    return DetectionSettingService.resetDetectionThresholds(req, res, next);
   }
 }
 
