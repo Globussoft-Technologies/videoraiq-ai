@@ -34,7 +34,7 @@ function typeMeta(alert) {
 export default function LiveThreatFeed({ alerts = [], loading, error, isEmpty, onRetry }) {
   const navigate = useNavigate();
   return (
-    <Panel style={{ display: 'flex', flexDirection: 'column', minHeight: 380, maxHeight: 420, overflow: 'hidden' }}>
+    <Panel style={{ display: 'flex', flexDirection: 'column', height: 580, minHeight: 580, overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px 16px 11px', borderBottom: '1px solid var(--bd)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="vq-blink" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--crit)' }} />

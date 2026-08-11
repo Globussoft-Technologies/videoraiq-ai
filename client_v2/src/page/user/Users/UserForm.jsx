@@ -361,13 +361,13 @@ const LoginForm = () => {
                   </span>
                   Remember me
                 </label>
-                <span
+                {/* <span
                   className="vqlogin-link"
                   onClick={() => navigate("/forgot-password")}
                   style={{ fontSize: 12.5, fontWeight: 600, color: "#6ea0ff", cursor: "pointer" }}
                 >
                   Forgot password?
-                </span>
+                </span> */}
               </div>
 
               <CtaButton

@@ -388,7 +388,10 @@ export default function MultiSiteNetwork({
             ))}
           </svg>
 
-          {nodes.map((node) => (
+          {nodes.map((node) => {
+            const openLeft = node.x >= 45;
+            const labelLeft = node.x <= 74;
+            return (
             <div
               key={node.id}
               className="vq-msn-node"
@@ -445,7 +448,8 @@ export default function MultiSiteNetwork({
                 }}
                 style={{
                   position: 'absolute',
-                  left: 20,
+                  left: labelLeft ? 20 : 'auto',
+                  right: labelLeft ? 'auto' : 20,
                   top: -9,
                   whiteSpace: 'nowrap',
                   background: 'rgba(248,250,252,.95)',
@@ -475,11 +479,11 @@ export default function MultiSiteNetwork({
                 className="vq-msn-tooltip"
                 style={{
                   position: 'absolute',
-                  left: node.x > 62 ? 'auto' : 182,
-                  right: node.x > 62 ? 182 : 'auto',
+                  left: openLeft ? 'auto' : 28,
+                  right: openLeft ? 28 : 'auto',
                   top: -18,
-                  width: 360,
-                  maxWidth: 'min(360px, calc(100vw - 48px))',
+                  width: 300,
+                  maxWidth: 'min(300px, calc(100vw - 48px))',
                   borderRadius: 10,
                   background: 'var(--bg1solid)',
                   border: '1px solid var(--bd)',
@@ -492,16 +496,16 @@ export default function MultiSiteNetwork({
                 <div
                   style={{
                     position: 'absolute',
-                    left: node.x > 62 ? 'auto' : -6,
-                    right: node.x > 62 ? -6 : 'auto',
+                    left: openLeft ? 'auto' : -6,
+                    right: openLeft ? -6 : 'auto',
                     top: 28,
                     width: 12,
                     height: 12,
                     background: 'var(--bg1solid)',
-                    borderLeft: node.x > 62 ? 0 : '1px solid var(--bd)',
-                    borderBottom: node.x > 62 ? 0 : '1px solid var(--bd)',
-                    borderRight: node.x > 62 ? '1px solid var(--bd)' : 0,
-                    borderTop: node.x > 62 ? '1px solid var(--bd)' : 0,
+                    borderLeft: openLeft ? 0 : '1px solid var(--bd)',
+                    borderBottom: openLeft ? 0 : '1px solid var(--bd)',
+                    borderRight: openLeft ? '1px solid var(--bd)' : 0,
+                    borderTop: openLeft ? '1px solid var(--bd)' : 0,
                     transform: 'rotate(45deg)',
                   }}
                 />
@@ -547,7 +551,7 @@ export default function MultiSiteNetwork({
                 )}
               </div>
             </div>
-          ))}
+          );})}
         </>
       )}
     </Panel>

@@ -58,6 +58,12 @@ const RETENTION_MIN_MONTHS = RETENTION_OPTIONS[0].months;
 const RETENTION_MAX_MONTHS = RETENTION_OPTIONS[RETENTION_OPTIONS.length - 1].months;
 const RETENTION_DEFAULT_MONTHS = RETENTION_MIN_MONTHS;
 
+const RETENTION_DATASETS = [
+  { key: 'incidents', label: 'Incidents', icon: Database, color: '#5b7cfa' },
+  { key: 'attendance', label: 'Attendance', icon: Clock, color: '#00c853' },
+  { key: 'accessLogs', label: 'Access Logs', icon: ShieldCheck, color: '#ff9800' },
+];
+
 function boolText(value) {
   return value ? 'Enabled' : 'Disabled';
 }
@@ -578,9 +584,11 @@ export default function SystemSettings() {
   const audio = useAttendanceSocket() || {};
   const { permissions } = usePermissions();
   const settingsPermissions = permissions?.settings || {};
-  const canCreateSettings = settingsPermissions.create === true;
-  const canEditSettings = settingsPermissions.edit === true;
-  const canDeleteSettings = settingsPermissions.delete === true;
+  const hasSettingsPermission = (key) => settingsPermissions === true || settingsPermissions?.[key] === true;
+  const canCreateSettings = hasSettingsPermission('create');
+  const canEditSettings = hasSettingsPermission('edit') || hasSettingsPermission('update');
+  const canDeleteSettings = hasSettingsPermission('delete');
+  const canWriteSettings = canCreateSettings || canEditSettings || canDeleteSettings;
   const canEnableSetting = canCreateSettings || canEditSettings;
   const canDisableSetting = canDeleteSettings || canEditSettings;
   const adminApi = useApi(() => fetchAdmin(), []);
@@ -602,8 +610,11 @@ export default function SystemSettings() {
   const [halfDayHours, setHalfDayHours] = useState('');
   const [retentionSaving, setRetentionSaving] = useState(false);
   const [retentionEnabled, setRetentionEnabled] = useState(true);
-  const [retentionMonths, setRetentionMonths] = useState(RETENTION_DEFAULT_MONTHS);
-  const [retentionTooltipVisible, setRetentionTooltipVisible] = useState(false);
+  const [retentionMonths, setRetentionMonths] = useState({
+    incidents: RETENTION_DEFAULT_MONTHS,
+    attendance: RETENTION_DEFAULT_MONTHS,
+    accessLogs: RETENTION_DEFAULT_MONTHS,
+  });
   const [desktopNotifications, setDesktopNotifications] = useState(() => desktopNotificationsEnabled());
   const [alertSwitchSaving, setAlertSwitchSaving] = useState('');
   const [alertSwitchOverrides, setAlertSwitchOverrides] = useState({});
@@ -620,7 +631,7 @@ export default function SystemSettings() {
     return Array.from(set);
   }, [savedTimezone, timezones]);
 
-  const adminUserId = admin.user_id;
+  const adminUserId = admin.user_id || admin.userId;
   const retention = admin.retention || {};
   const storedIncidentRetention = retention.incidents || '';
   const storedAttendanceRetention = retention.attendance || '';
@@ -631,7 +642,11 @@ export default function SystemSettings() {
 
   useEffect(() => {
     setRetentionEnabled(storedRetentionEnabled);
-    setRetentionMonths(storedRetentionMonths(storedIncidentRetention, storedAttendanceRetention, storedAccessRetention));
+    setRetentionMonths({
+      incidents: storedRetentionMonths(storedIncidentRetention),
+      attendance: storedRetentionMonths(storedAttendanceRetention),
+      accessLogs: storedRetentionMonths(storedAccessRetention),
+    });
   }, [storedRetentionEnabled, storedIncidentRetention, storedAttendanceRetention, storedAccessRetention]);
 
   const savedFullDayHours = attendanceSettingsApi.data?.fullDayHours;
@@ -707,24 +722,29 @@ export default function SystemSettings() {
     return sum + (Array.isArray(setting?.alerts) ? setting.alerts.length : 0);
   }, 0);
   const firstEnabledDetection = enabledDetectionRows[0];
-  const selectedRetentionLabel = formatRetentionDuration(retentionMonths);
-  const savedRetentionMonths = storedRetentionMonths(storedIncidentRetention, storedAttendanceRetention, storedAccessRetention);
-  const savedRetentionLabel = formatRetentionDuration(savedRetentionMonths);
+  const storedRetentionMonthValues = {
+    incidents: storedRetentionMonths(storedIncidentRetention),
+    attendance: storedRetentionMonths(storedAttendanceRetention),
+    accessLogs: storedRetentionMonths(storedAccessRetention),
+  };
+  const retentionPolicySummary = retentionEnabled
+    ? RETENTION_DATASETS
+      .map((item) => `${item.label}: ${retentionMonths[item.key]}m`)
+      .join(' · ')
+    : 'Keep data forever';
+  const savedRetentionLabel = RETENTION_DATASETS
+    .map((item) => `${item.label}: ${storedRetentionMonthValues[item.key]}m`)
+    .join(' · ');
 
   const retentionSummaryLabel = (spec) => (spec ? String(spec) : '-');
 
-  // The slider addresses RETENTION_OPTIONS by index, so its stops line up
-  // exactly with the tick labels beneath it.
-  const retentionIndex = Math.max(0, RETENTION_OPTIONS.findIndex((option) => option.months === retentionMonths));
-  const retentionSliderPercent = (retentionIndex / (RETENTION_OPTIONS.length - 1)) * 100;
-
   const retentionModeChanged = retentionEnabled !== storedRetentionEnabled;
-  const canApplyRetention = retentionModeChanged
-    ? (retentionEnabled ? canEnableSetting : canDisableSetting)
-    : canEditSettings;
-  const canAdjustRetention = canEditSettings
-    || (!storedRetentionEnabled && retentionEnabled && canCreateSettings);
-  const canSaveRetention = !!adminUserId && !retentionSaving && canApplyRetention;
+  const retentionValuesChanged = RETENTION_DATASETS.some((item) => (
+    retentionMonths[item.key] !== storedRetentionMonthValues[item.key]
+  ));
+  const canApplyRetention = canWriteSettings;
+  const canAdjustRetention = canWriteSettings;
+  const canSaveRetention = !!adminUserId && !retentionSaving && canApplyRetention && (retentionModeChanged || retentionValuesChanged);
 
   const handleAlertSwitchToggle = async (key, next) => {
     const updateFn = key === 'email' ? updateEmailAlertSwitch : updateTelegramAlertSwitch;
@@ -834,8 +854,8 @@ export default function SystemSettings() {
     notifyRetentionPendingSave();
   };
 
-  const handleRetentionMonthsChange = (next) => {
-    setRetentionMonths(next);
+  const handleRetentionMonthsChange = (key, next) => {
+    setRetentionMonths((current) => ({ ...current, [key]: next }));
     notifyRetentionPendingSave();
   };
 
@@ -850,13 +870,13 @@ export default function SystemSettings() {
     }
     setRetentionSaving(true);
     try {
-      const spec = retentionEnabled ? `${retentionMonths}m` : 'never';
+      const specFor = (key) => (retentionEnabled ? `${retentionMonths[key]}m` : 'never');
       await updateRetention({
         userId: adminUserId,
         enabled: retentionEnabled,
-        incidents: spec,
-        attendance: spec,
-        accessLogs: spec,
+        incidents: specFor('incidents'),
+        attendance: specFor('attendance'),
+        accessLogs: specFor('accessLogs'),
       });
       await adminApi.refetch({ silent: true });
       toast.success('Retention settings updated');
@@ -994,6 +1014,52 @@ export default function SystemSettings() {
         </Panel>
 
         <Panel>
+          <style>{`
+            .vq-retention-slider {
+              -webkit-appearance: none;
+              appearance: none;
+              width: 100%;
+              height: 18px;
+              margin: 0;
+              background: transparent;
+            }
+            .vq-retention-slider::-webkit-slider-runnable-track {
+              height: 8px;
+              border-radius: 999px;
+              background: var(--retention-color);
+              border: 0;
+            }
+            .vq-retention-slider::-webkit-slider-thumb {
+              -webkit-appearance: none;
+              appearance: none;
+              width: 18px;
+              height: 18px;
+              margin-top: -5px;
+              border-radius: 999px;
+              background: var(--retention-color);
+              border: 2px solid #fff;
+              box-shadow: 0 3px 10px rgba(15,23,42,.22);
+            }
+            .vq-retention-slider::-moz-range-track {
+              height: 8px;
+              border-radius: 999px;
+              background: var(--retention-color);
+              border: 0;
+            }
+            .vq-retention-slider::-moz-range-progress {
+              height: 8px;
+              border-radius: 999px;
+              background: var(--retention-color);
+            }
+            .vq-retention-slider::-moz-range-thumb {
+              width: 18px;
+              height: 18px;
+              border-radius: 999px;
+              background: var(--retention-color);
+              border: 2px solid #fff;
+              box-shadow: 0 3px 10px rgba(15,23,42,.22);
+            }
+          `}</style>
           <PanelHeader
             icon={Database}
             title="Data Retention"
@@ -1007,7 +1073,7 @@ export default function SystemSettings() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)' }}>Automatic cleanup</div>
-              <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2 }}>{retentionEnabled ? `${selectedRetentionLabel} policy` : 'Keep data forever'}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2 }}>{retentionPolicySummary}</div>
             </div>
             <Toggle
               value={retentionEnabled}
@@ -1015,56 +1081,68 @@ export default function SystemSettings() {
               disabled={retentionSaving || (retentionEnabled ? !canDisableSetting : !canEnableSetting)}
             />
           </div>
-          <div
-            style={{ position: 'relative', paddingTop: 22 }}
-            onMouseEnter={() => setRetentionTooltipVisible(true)}
-            onMouseLeave={() => setRetentionTooltipVisible(false)}
-          >
-            {retentionEnabled && retentionTooltipVisible && (
-              <div
-                style={{
-                  position: 'absolute',
-                  left: `clamp(48px, ${retentionSliderPercent}%, calc(100% - 48px))`,
-                  top: 0,
-                  transform: 'translateX(-50%)',
-                  padding: '4px 8px',
-                  borderRadius: 7,
-                  background: 'var(--tx)',
-                  color: 'var(--bg1)',
-                  fontSize: 10.5,
-                  fontWeight: 700,
-                  whiteSpace: 'nowrap',
-                  pointerEvents: 'none',
-                  zIndex: 2,
-                }}
-              >
-                {selectedRetentionLabel}
-              </div>
-            )}
-            <input
-              type="range"
-              min={0}
-              max={RETENTION_OPTIONS.length - 1}
-              step={1}
-              value={retentionIndex}
-              title={selectedRetentionLabel}
-              disabled={!retentionEnabled || retentionSaving || !canAdjustRetention}
-              onFocus={() => setRetentionTooltipVisible(true)}
-              onBlur={() => setRetentionTooltipVisible(false)}
-              onMouseDown={() => setRetentionTooltipVisible(true)}
-              onMouseUp={() => setRetentionTooltipVisible(false)}
-              onTouchStart={() => setRetentionTooltipVisible(true)}
-              onTouchEnd={() => setRetentionTooltipVisible(false)}
-              onChange={(e) => handleRetentionMonthsChange(
-                RETENTION_OPTIONS[Number(e.target.value)]?.months ?? RETENTION_DEFAULT_MONTHS
-              )}
-              style={{ width: '100%', accentColor: 'var(--blue)', height: 5, cursor: retentionEnabled && canAdjustRetention ? 'pointer' : 'default', opacity: retentionEnabled && canAdjustRetention ? 1 : 0.55 }}
-            />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--tx3)', marginTop: 6 }}>
-            {RETENTION_OPTIONS.map((option) => (
-              <span key={option.months}>{option.tick}</span>
-            ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
+            {RETENTION_DATASETS.map((item) => {
+              const Icon = item.icon;
+              const currentMonths = retentionMonths[item.key] ?? RETENTION_DEFAULT_MONTHS;
+              const currentIndex = Math.max(0, RETENTION_OPTIONS.findIndex((option) => option.months === currentMonths));
+              const activeColor = item.color;
+              const disabled = !retentionEnabled || retentionSaving || !canAdjustRetention;
+              return (
+                <div key={item.key}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 7 }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                      <Icon size={13} style={{ color: activeColor, flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx2)' }}>{item.label}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={RETENTION_OPTIONS.length - 1}
+                      step={1}
+                      value={currentIndex}
+                      aria-label={`${item.label} retention`}
+                      disabled={disabled}
+                      onInput={(e) => handleRetentionMonthsChange(
+                        item.key,
+                        RETENTION_OPTIONS[Number(e.target.value)]?.months ?? RETENTION_DEFAULT_MONTHS
+                      )}
+                      onChange={(e) => handleRetentionMonthsChange(
+                        item.key,
+                        RETENTION_OPTIONS[Number(e.target.value)]?.months ?? RETENTION_DEFAULT_MONTHS
+                      )}
+                      className="vq-retention-slider"
+                      style={{ '--retention-color': activeColor, cursor: !disabled ? 'pointer' : 'default', opacity: !disabled ? 1 : 0.55 }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 9.5, color: 'var(--tx3)', marginTop: 5 }}>
+                    {RETENTION_OPTIONS.map((option) => {
+                      const active = option.months === currentMonths;
+                      return (
+                        <span
+                          key={option.months}
+                          style={{
+                            color: active ? activeColor : 'var(--tx3)',
+                            fontWeight: active ? 900 : 500,
+                            fontSize: active ? 12 : 9.5,
+                            lineHeight: '16px',
+                            minWidth: 24,
+                            textAlign: 'center',
+                            borderRadius: 999,
+                            background: active ? `${activeColor}1f` : 'transparent',
+                            boxShadow: active ? `0 0 0 1px ${activeColor}33` : 'none',
+                          }}
+                        >
+                          {option.tick}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 9, marginTop: 14 }}>
             <Metric label="Incidents" value={retentionSummaryLabel(storedIncidentRetention)} icon={Database} />
