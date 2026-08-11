@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Search, Plus, X, Loader2, ArrowLeft, Pencil, ListVideo, Play, Maximize2, Minimize2, ArrowUpRight, Cctv, Trash2, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
+import { ShieldOff } from 'lucide-react';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
 import DeleteConfirmation from '../../../components/DeleteConfirmation';
@@ -20,6 +21,7 @@ import { encrypt, decrypt } from '../../../helpers/decryptNvr';
 import useHlsPlayer from '../../../hooks/useHlsPlayer';
 import { streamUrl } from '../../../lib/stream';
 import HScrollHint from '../../../components/HScrollHint';
+import { usePermissions } from '@/context/PermissionContext';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 // Track a narrow (phone) viewport so inline-styled layouts can adapt.
@@ -319,6 +321,51 @@ function NvrCardSkeleton() {
             <SkeletonBlock width="100%" height={5} radius={3} />
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function ChannelAccessDeniedState() {
+  return (
+    <div style={{ minHeight: 360, display: 'grid', placeItems: 'center', padding: '28px 18px' }}>
+      <div style={{ width: 'min(560px, 100%)', textAlign: 'center' }}>
+        <div style={{ position: 'relative', marginBottom: 16 }}>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 132, height: 132, borderRadius: '50%', background: 'radial-gradient(circle, rgba(7,72,106,.10) 0%, rgba(7,72,106,0) 70%)', filter: 'blur(10px)' }} />
+          </div>
+          <div style={{ position: 'relative', display: 'inline-flex', width: 72, height: 72, borderRadius: '50%', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%)', border: '1px solid rgba(148, 163, 184, 0.35)', boxShadow: '0 14px 30px rgba(15, 23, 42, 0.08)' }}>
+            <ShieldOff size={34} strokeWidth={1.6} style={{ color: '#07486a' }} />
+          </div>
+        </div>
+
+        <div style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 999, background: 'var(--bg2)', border: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', color: 'var(--tx3)', marginBottom: 14 }}>
+          403 FORBIDDEN
+        </div>
+
+        <div style={{ fontFamily: 'var(--disp)', fontWeight: 700, fontSize: 34, color: 'var(--tx)', marginBottom: 10 }}>
+          Access Denied
+        </div>
+        <div style={{ fontSize: 13.5, color: 'var(--tx2)', lineHeight: 1.65, marginBottom: 18 }}>
+          You don't have permission to view Channels.
+        </div>
+
+        <div style={{ margin: '0 auto', width: 'min(320px, 100%)', display: 'flex', gap: 12, padding: '14px 16px', borderRadius: 14, border: '1px solid var(--bd)', background: 'linear-gradient(180deg, var(--bg1) 0%, var(--bg2) 100%)', boxShadow: '0 10px 24px rgba(15, 23, 42, 0.05)', textAlign: 'left' }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--bd)', background: 'var(--bg1)', display: 'grid', placeItems: 'center', color: 'var(--tx2)', flexShrink: 0 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M22 16.92V19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4" />
+              <path d="M22 4 12 14.01l-3-3" />
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--tx)', marginBottom: 4 }}>
+              Need assistance?
+            </div>
+            <div style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--tx2)' }}>
+              Contact your administrator to request access permissions or report this issue.
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1646,6 +1693,8 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
 export default function NVRCameras() {
   const navigate = useNavigate();
   const { setCamHealth } = useOutletContext() || {};
+  const { permissions, loading: permissionsLoading } = usePermissions();
+  const canViewChannels = permissions?.channels?.view === true;
   const isMobile = useIsMobile();
   const [nvrModal, setNvrModal] = useState(false);
   const [editingNvr, setEditingNvr] = useState(null);
@@ -1665,7 +1714,10 @@ export default function NVRCameras() {
   }, [nvrPickerOpen]);
 
   const nvrsApi     = useApi(() => getNvrs(0, 100), []);
-  const channelsApi = useApi(() => getChannels({ limit: 200 }), []);
+  const channelsApi = useApi(
+    () => (canViewChannels ? getChannels({ limit: 200 }) : Promise.resolve([])),
+    [canViewChannels]
+  );
   const refetchNvrs = nvrsApi.refetch;
   const refetchChannels = channelsApi.refetch;
 
@@ -1695,6 +1747,7 @@ export default function NVRCameras() {
   // pages. Publish the latest inventory total here so add/remove changes are
   // reflected immediately without requiring a dashboard visit or full reload.
   useEffect(() => {
+    if (!canViewChannels) return;
     if (channelsApi.loading || channelsApi.error || !Array.isArray(channelsApi.data)) return;
     setCamHealth?.((previous) => {
       const previousOnline = Number(previous?.online) || 0;
@@ -1703,7 +1756,7 @@ export default function NVRCameras() {
         total: channels.length,
       };
     });
-  }, [channelsApi.data, channelsApi.error, channelsApi.loading, channels.length, setCamHealth]);
+  }, [canViewChannels, channelsApi.data, channelsApi.error, channelsApi.loading, channels.length, setCamHealth]);
 
   /* Channels don't carry their own location — it lives on the parent NVR.
      Only one NVR is registered on most installs, so also fall back to it
@@ -1853,11 +1906,13 @@ export default function NVRCameras() {
         {/* Table header */}
         <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid var(--bd)' }}>
           <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Camera Inventory</span>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)', marginLeft: 8 }}>
-            {camFiltered.length} of {channels.length} cameras
-          </span>
+          {canViewChannels && !permissionsLoading && (
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)', marginLeft: 8 }}>
+              {camFiltered.length} of {channels.length} cameras
+            </span>
+          )}
           <div ref={nvrPickerRef} style={{ marginLeft: 'auto', position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
-            {SHOW_NVR_ACTIONS && (
+            {SHOW_NVR_ACTIONS && canViewChannels && !permissionsLoading && (
               <button
                 onClick={handleManageCamerasClick}
                 style={{
@@ -1893,64 +1948,68 @@ export default function NVRCameras() {
         </div>
 
         {/* Search + filters */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 16px', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap' }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 7, height: 32, padding: '0 11px', borderRadius: 8,
-            background: camSearch ? 'rgba(59,130,246,.08)' : 'var(--bg2)',
-            border: `1px solid ${camSearch ? 'rgba(59,130,246,.4)' : 'var(--bd)'}`,
-            color: 'var(--tx3)', transition: 'border-color .12s, background .12s',
-          }}>
-            <Search size={13} style={{ color: camSearch ? 'var(--blue)' : 'var(--tx3)', flexShrink: 0 }} />
-            <input
-              value={camSearch}
-              onChange={e => setCamSearch(e.target.value)}
-              placeholder="Search camera or ID"
-              style={{ background: 'transparent', border: 0, outline: 'none', fontSize: 12, width: 140, color: 'var(--tx)' }}
-            />
+        {canViewChannels && !permissionsLoading && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 16px', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 7, height: 32, padding: '0 11px', borderRadius: 8,
+              background: camSearch ? 'rgba(59,130,246,.08)' : 'var(--bg2)',
+              border: `1px solid ${camSearch ? 'rgba(59,130,246,.4)' : 'var(--bd)'}`,
+              color: 'var(--tx3)', transition: 'border-color .12s, background .12s',
+            }}>
+              <Search size={13} style={{ color: camSearch ? 'var(--blue)' : 'var(--tx3)', flexShrink: 0 }} />
+              <input
+                value={camSearch}
+                onChange={e => setCamSearch(e.target.value)}
+                placeholder="Search camera or ID"
+                style={{ background: 'transparent', border: 0, outline: 'none', fontSize: 12, width: 140, color: 'var(--tx)' }}
+              />
+            </div>
+            <SiteFilterSelect options={siteOpts} value={siteFilter} onChange={setSiteFilter} />
+            {(camSearch || siteFilter) && (
+              <button
+                onClick={() => { setCamSearch(''); setSiteFilter(''); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5, height: 32, padding: '0 11px', borderRadius: 8,
+                  fontSize: 11.5, fontWeight: 600, color: 'var(--crit)',
+                  background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.3)', cursor: 'pointer',
+                }}
+              >
+                <X size={12} /> Clear filters
+              </button>
+            )}
           </div>
-          <SiteFilterSelect options={siteOpts} value={siteFilter} onChange={setSiteFilter} />
-          {(camSearch || siteFilter) && (
-            <button
-              onClick={() => { setCamSearch(''); setSiteFilter(''); }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5, height: 32, padding: '0 11px', borderRadius: 8,
-                fontSize: 11.5, fontWeight: 600, color: 'var(--crit)',
-                background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.3)', cursor: 'pointer',
-              }}
-            >
-              <X size={12} /> Clear filters
-            </button>
-          )}
-        </div>
+        )}
 
-        {/* Column headers + rows share one horizontal scroller so the grid
-            columns stay aligned and are swipeable on narrow screens. */}
-        <HScrollHint minWidth={720}>
-          {/* Column headers */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: CAM_COL,
-            padding: '10px 16px', borderBottom: '1px solid var(--bd)',
-            fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)',
-          }}>
-            {['ID', 'NAME', 'SITE', 'ENGINES', ''].map((h, i) => <span key={i}>{h}</span>)}
-          </div>
+        {permissionsLoading ? (
+          <div style={{ minHeight: 220 }} />
+        ) : !canViewChannels ? (
+          <ChannelAccessDeniedState />
+        ) : (
+          <HScrollHint minWidth={720}>
+            <div style={{
+              display: 'grid', gridTemplateColumns: CAM_COL,
+              padding: '10px 16px', borderBottom: '1px solid var(--bd)',
+              fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)',
+            }}>
+              {['ID', 'NAME', 'SITE', 'ENGINES', ''].map((h, i) => <span key={i}>{h}</span>)}
+            </div>
 
-          {/* Rows */}
-          <div style={{ maxHeight: 430, overflowY: 'auto' }}>
-            <AsyncBoundary
-              loading={channelsApi.loading}
-              error={channelsApi.error}
-              isEmpty={!channelsApi.loading && !channelsApi.error && camFiltered.length === 0}
-              onRetry={channelsApi.refetch}
-              minH={100}
-              emptyLabel="No cameras found"
-            >
-              {() => camFiltered.map(c => (
-                <CamRow key={c._id || c.id} c={c} site={siteOf(c)} onView={handleViewCamera} />
-              ))}
-            </AsyncBoundary>
-          </div>
-        </HScrollHint>
+            <div style={{ maxHeight: 430, overflowY: 'auto' }}>
+              <AsyncBoundary
+                loading={channelsApi.loading}
+                error={channelsApi.error}
+                isEmpty={!channelsApi.loading && !channelsApi.error && camFiltered.length === 0}
+                onRetry={channelsApi.refetch}
+                minH={100}
+                emptyLabel="No cameras found"
+              >
+                {() => camFiltered.map(c => (
+                  <CamRow key={c._id || c.id} c={c} site={siteOf(c)} onView={handleViewCamera} />
+                ))}
+              </AsyncBoundary>
+            </div>
+          </HScrollHint>
+        )}
       </div>
 
       {/* Add / Edit NVR wizard */}

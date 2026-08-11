@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
-import { Search, X, Maximize2, Minimize2, Calendar } from 'lucide-react';
+import { Search, X, Maximize2, Minimize2, Calendar, VideoOff } from 'lucide-react';
 import { AsyncBoundary } from './States';
 import MultiSelect from './MultiSelect';
 import PlaybackTimeline from './PlaybackTimeline';
@@ -59,6 +59,55 @@ const PER_PAGE = 1;
 /** Local YYYY-MM-DD for a Date — matches an <input type="date"> value, not UTC-shifted. */
 function toDateInputValue(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function PlaybackEmptyState() {
+  return (
+    <div
+      style={{
+        flex: 1,
+        minHeight: 360,
+        display: 'grid',
+        placeItems: 'center',
+      }}
+    >
+      <div
+        style={{
+          width: 'min(460px, 92%)',
+          padding: '36px 28px',
+          borderRadius: 24,
+          border: '1px solid var(--bd2)',
+          background: 'linear-gradient(180deg, color-mix(in srgb, var(--bg2) 94%, white 6%) 0%, var(--bg2) 100%)',
+          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.22)',
+          display: 'grid',
+          justifyItems: 'center',
+          gap: 12,
+          textAlign: 'center',
+        }}
+      >
+        <div
+          style={{
+            width: 60,
+            height: 60,
+            borderRadius: 18,
+            display: 'grid',
+            placeItems: 'center',
+            background: 'linear-gradient(135deg, color-mix(in srgb, var(--blue) 18%, transparent), color-mix(in srgb, var(--blue) 6%, transparent))',
+            border: '1px solid color-mix(in srgb, var(--blue) 28%, var(--bd2))',
+            color: 'var(--blue)',
+          }}
+        >
+          <VideoOff size={28} strokeWidth={1.9} />
+        </div>
+        <div style={{ fontFamily: 'var(--disp)', fontSize: 22, fontWeight: 700, color: 'var(--tx)' }}>
+          No cameras found
+        </div>
+        <div style={{ maxWidth: 320, fontSize: 13, lineHeight: 1.6, color: 'var(--tx2)' }}>
+          Try adjusting the filters above or clearing them to load playback cameras into this view.
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function CameraGrid() {
@@ -314,13 +363,12 @@ export default function CameraGrid() {
           <AsyncBoundary
             loading={channels.loading}
             error={channels.error}
-            isEmpty={!channels.loading && !channels.error && list.length === 0}
+            isEmpty={false}
             onRetry={channels.refetch}
             minH={360}
-            emptyLabel="No cameras found"
           >
             {() => (
-              visible[0] && (
+              visible[0] ? (
                 <PlaybackTimeline
                   channel={visible[0]}
                   date={playbackDate}
@@ -329,6 +377,8 @@ export default function CameraGrid() {
                   onExpand={togglePageFullscreen}
                   isExpanded={isPageFS}
                 />
+              ) : (
+                <PlaybackEmptyState />
               )
             )}
           </AsyncBoundary>

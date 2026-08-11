@@ -178,7 +178,7 @@ function Lightbox({ src, alt, onClose }) {
 
 function EmptyIncidentCard() {
   return (
-    <div style={{ minHeight: 360, background: '#fff', display: 'grid', placeItems: 'center', color: '#667085', fontSize: 12, fontWeight: 500 }}>
+    <div style={{ minHeight: 360, background: '#fff', display: 'grid', placeItems: 'center', color: '#667085', fontSize: 16, fontWeight: 600 }}>
       <div style={{ textAlign: 'center' }}>
         No incidents yet
       </div>

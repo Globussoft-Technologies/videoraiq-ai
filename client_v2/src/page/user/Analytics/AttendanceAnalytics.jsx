@@ -17,7 +17,7 @@ import { Panel, PanelHeader } from '../../../components/primitives';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
 import { getAttendanceAnalytics, getAttendancePresence } from '../../../helpers/analytics';
-import { getEmployeeLocations } from '../../../api/administer';
+import { getLocations } from '../../../helpers/monitoring';
 import { useAnalyticsRefresh } from './AnalyticsRefreshContext';
 import AnalyticsBlurb from './AnalyticsBlurb';
 import RangeFilter, { defaultRange, rangeParams } from './RangeFilter';
@@ -139,8 +139,25 @@ function Trend({ trend, positiveUp = true }) {
   );
 }
 
+function tileTooltipText(label) {
+  switch (label) {
+    case 'Check In':
+      return 'Employees who were recorded at a check-in camera today. This includes everyone who has arrived, even if they have not checked out yet.';
+    case 'Half Day':
+      return 'Employees who checked in today and spent enough time on site for a half day, but not enough to count as a full day.';
+    case 'Absentees':
+      return 'Employees who are absent today. This includes people who never checked in and people who left too early to meet the half-day rule.';
+    case 'Checkout':
+      return 'Employees who were recorded at a check-out camera today after leaving the site.';
+    default:
+      return '';
+  }
+}
+
 function MetricTile({ icon: Icon, label, metric, color, subLabel, positiveUp = true, onClick, footerValue = null }) {
   const pct = Number(metric?.pct || 0);
+  const [showTooltip, setShowTooltip] = useState(false);
+  const tooltipText = tileTooltipText(label);
 
   return (
     <div
@@ -148,7 +165,12 @@ function MetricTile({ icon: Icon, label, metric, color, subLabel, positiveUp = t
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(e); } } : undefined}
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+      onFocus={() => setShowTooltip(true)}
+      onBlur={() => setShowTooltip(false)}
       style={{
+        position: 'relative',
         border: '1px solid var(--bd)',
         background: 'var(--bg2)',
         borderRadius: 8,
@@ -160,6 +182,28 @@ function MetricTile({ icon: Icon, label, metric, color, subLabel, positiveUp = t
         cursor: onClick ? 'pointer' : 'default',
       }}
     >
+      {tooltipText && showTooltip && (
+        <div
+          role="tooltip"
+          style={{
+            position: 'absolute',
+            left: 12,
+            right: 12,
+            bottom: 'calc(100% + 8px)',
+            background: 'var(--tx)',
+            color: 'var(--bg1)',
+            borderRadius: 8,
+            padding: '8px 10px',
+            fontSize: 10.5,
+            lineHeight: 1.45,
+            boxShadow: '0 10px 24px rgba(15, 23, 42, 0.2)',
+            zIndex: 3,
+            pointerEvents: 'none',
+          }}
+        >
+          {tooltipText}
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
         <span
           style={{
@@ -240,10 +284,10 @@ function TooltipRow({ color, label, value, strong = false }) {
 }
 
 /**
- * Daily Activity â€” attendance headcount per day.
+ * Daily Activity â€” attendance mix per day.
  *
- * Bars (left axis, headcount) stack to the full roster: present + checked out +
- * absent, so each bar's coloured share reads directly as "who turned up".
+ * Each stick is split using the same counts shown in the tooltip so the
+ * largest visible number always owns the largest visible colour share.
  */
 function DailyActivity({ series = [], employees = 0 }) {
   const wrapRef = useRef(null);
@@ -354,7 +398,12 @@ function DailyActivity({ series = [], employees = 0 }) {
           {/* Attendance bars â€” left axis */}
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end' }}>
             {rows.map((row) => {
-              const share = (value) => (roster > 0 ? (Number(value || 0) / roster) * 100 : 0);
+              const displayedCheckIn = Number(row?.checkins || 0);
+              const displayedHalfDay = Number(row?.halfDay || 0);
+              const displayedAbsentees = Number(row?.shortDay || 0) + Number(row?.noLog || 0);
+              const displayedCheckout = Number(row?.checkouts || 0);
+              const displayedTotal = displayedCheckIn + displayedHalfDay + displayedAbsentees + displayedCheckout;
+              const share = (value) => (displayedTotal > 0 ? (Number(value || 0) / displayedTotal) * 100 : 0);
 
               return (
                 <div
@@ -374,13 +423,10 @@ function DailyActivity({ series = [], employees = 0 }) {
                       background: 'var(--bg3)',
                     }}
                   >
-                    {/* Bottom-up (column-reverse): the graded statuses first,
-                        then the un-logged remainder of the roster on top. */}
-                    <span style={{ height: `${share(row.present)}%`, background: COLORS.checkIn }} />
-                    <span style={{ height: `${share(row.halfDay)}%`, background: COLORS.halfDay }} />
-                    <span style={{ height: `${share(row.shortDay)}%`, background: COLORS.absentees }} />
-                    <span style={{ height: `${share(row.checkedIn)}%`, background: COLORS.checkout }} />
-                    <span style={{ height: `${share(row.noLog)}%`, background: COLORS.absentees, opacity: 0.25 }} />
+                    <span style={{ height: `${share(displayedCheckIn)}%`, background: COLORS.checkIn }} />
+                    <span style={{ height: `${share(displayedHalfDay)}%`, background: COLORS.halfDay }} />
+                    <span style={{ height: `${share(displayedAbsentees)}%`, background: COLORS.absentees }} />
+                    <span style={{ height: `${share(displayedCheckout)}%`, background: COLORS.checkout }} />
                   </div>
                 </div>
               );
@@ -395,7 +441,7 @@ function DailyActivity({ series = [], employees = 0 }) {
                 tabIndex={0}
                 onMouseMove={(event) => onHover(event, row, index)}
                 onFocus={(event) => onHover(event, row, index)}
-                aria-label={`${moment(row.date).format('D MMM')}: ${row.employees} total employees, ${row.checkins} check in, ${row.halfDay} half day, ${(row.shortDay || 0) + (row.noLog || 0)} absentees, ${row.checkouts} checkout`}
+                aria-label={`${moment(row.date).format('D MMM')}: ${row.employees} total employees, ${row.checkins || 0} check in, ${row.halfDay || 0} half day, ${(row.shortDay || 0) + (row.noLog || 0)} absentees, ${row.checkouts || 0} checkout`}
                 style={{ flex: '1 1 0', minWidth: 0, outline: 'none', cursor: 'default' }}
               />
             ))}
@@ -515,13 +561,13 @@ export default function AttendanceAnalytics({ timezone }) {
   useEffect(() => {
     (async () => {
       try {
-        const locations = await getEmployeeLocations({ skip: 0, limit: 1000 });
+        const locations = await getLocations(0, 1000);
         const names = (Array.isArray(locations) ? locations : [])
           .map((location) => location?.locationName || location?.name || '')
           .filter(Boolean);
         setLocationOptions([ALL_LOCATIONS, ...new Set(names)]);
       } catch (error) {
-        console.error('Failed to load employee locations for attendance analytics', error);
+        console.error('Failed to load locations for attendance analytics', error);
         setLocationOptions([ALL_LOCATIONS]);
       }
     })();
@@ -602,7 +648,7 @@ export default function AttendanceAnalytics({ timezone }) {
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <span style={{ fontFamily: 'var(--ui)', fontSize: 11.5, color: 'var(--tx3)' }}>Employee location</span>
+                <span style={{ fontFamily: 'var(--ui)', fontSize: 11.5, color: 'var(--tx3)' }}>Location</span>
                 <div style={{ width: 230 }}>
                   <SearchableSelect
                     value={selectedLocation || ALL_LOCATIONS}
@@ -752,8 +798,7 @@ export default function AttendanceAnalytics({ timezone }) {
 
             {showDailyActivityHelpers && (
               <div style={{ marginTop: 8, fontSize: 10, color: 'var(--tx3)' }}>
-                Bars: employees per day, stacked to the full roster and graded by the same rules as the
-                Attendance Logs page.
+                Bars: each day is split into exclusive attendance buckets, so the stick and tooltip always agree.
               </div>
             )}
           </div>

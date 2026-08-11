@@ -4,10 +4,12 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Search, RefreshCw, Pencil, Loader2, X, Eye, ChevronDown, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
+import AccessDenied from '../../../components/AccessDenied';
 import { getNvrChannelDetails, updateChannel, refetchNvrChannels } from '../../../helpers/configure';
 import { fetchDepartments } from '../Departments/Api';
 import useHlsPlayer from '../../../hooks/useHlsPlayer';
 import { streamUrl } from '../../../lib/stream';
+import { usePermissions } from '@/context/PermissionContext';
 
 // ── Alias edit popup ─────────────────────────────────────────────────────────
 function AliasModal({ camera, onClose, onSave }) {
@@ -389,6 +391,8 @@ export default function CameraSettings() {
   const navigate = useNavigate();
   const location = useLocation();
   const nvrId = location.state?.nvrId;
+  const { permissions, loading: permissionsLoading } = usePermissions();
+  const canViewChannels = permissions?.channels?.view === true;
 
   const [nvrDetails, setNvrDetails] = useState(null);
   const [tableData, setTableData] = useState([]);
@@ -427,6 +431,7 @@ export default function CameraSettings() {
   }
 
   useEffect(() => {
+    if (!canViewChannels) return;
     fetchDepartments(0, 100, '').then(res => {
       const data = res?.data?.body?.data;
       const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
@@ -434,7 +439,17 @@ export default function CameraSettings() {
     }).catch(() => {});
     loadCameraDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nvrId]);
+  }, [nvrId, canViewChannels]);
+
+  if (permissionsLoading) return null;
+  if (!canViewChannels) {
+    return (
+      <AccessDenied
+        message="You don't have permission to view Channels."
+        onBack={() => navigate('/cameras')}
+      />
+    );
+  }
 
   async function handleRefreshAll() {
     if (!nvrId) return;

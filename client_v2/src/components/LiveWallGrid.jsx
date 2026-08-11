@@ -11,7 +11,7 @@ import usePageActive from '../hooks/usePageActive';
 import { useStreamQueueStats } from '../hooks/useStreamSlot';
 import streamQueue from '../lib/streamQueue';
 import { getChannels, getLocations, getNVRs, getDepartments } from '../helpers/monitoring';
-import { isCameraLive, cameraStatusId } from '../helpers/cameraStatus';
+import { isCameraLive, isCameraRtspOnline, cameraStatusId } from '../helpers/cameraStatus';
 
 /* ── Stream-scheduling tuning ────────────────────────────────────────────────
    Cameras are started one at a time through lib/streamQueue. Priorities below
@@ -346,6 +346,13 @@ export default function LiveWallGrid() {
     [inventoryCameras, statusById]
   );
   const activeCount = liveSet.size;
+  const rtspOnlineCount = useMemo(
+    () =>
+      inventoryCameras.filter((camera) =>
+        isCameraRtspOnline(statusById[cameraStatusId(camera)])
+      ).length,
+    [inventoryCameras, statusById]
+  );
 
   // Publish to the Sidebar once the first status response lands. Deleting
   // every camera must still publish 0/0 immediately.
@@ -356,8 +363,8 @@ export default function LiveWallGrid() {
       return;
     }
     if (!statusApi.data) return;
-    ctx.setCamHealth?.({ online: activeCount, total: inventoryCameras.length });
-  }, [channels.data, channels.loading, ctx.setCamHealth, inventoryCameras.length, statusApi.data, activeCount]);
+    ctx.setCamHealth?.({ online: rtspOnlineCount, total: inventoryCameras.length });
+  }, [channels.data, channels.loading, ctx.setCamHealth, inventoryCameras.length, statusApi.data, rtspOnlineCount]);
 
   // Filters other than status.
   const preStatusList = useMemo(() => {

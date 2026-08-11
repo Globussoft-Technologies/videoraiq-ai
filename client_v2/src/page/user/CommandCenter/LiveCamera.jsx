@@ -7,7 +7,7 @@ import CameraStream from '../../../components/CameraStream';
 import LiveCameraLogsOverlay from '../../../components/LiveCameraLogsOverlay';
 import usePageActive from '../../../hooks/usePageActive';
 import { useCameraStatusStream } from '../../../hooks/useCameraStatusStream';
-import { isCameraLive, cameraStatusId } from '../../../helpers/cameraStatus';
+import { isCameraLive, isCameraRtspOnline, cameraStatusId } from '../../../helpers/cameraStatus';
 
 const PRIORITY_SELECTED = -50;
 
@@ -59,7 +59,7 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
   // Denominator is every rendered tab, including cameras with no stream URL
   // configured — a camera you own but can't stream is still a camera, and it
   // correctly reads OFFLINE (isCamLive returns false when cameraStatusId is null).
-  const onlineCount = cams.filter(isCamLive).length;
+  const onlineCount = cams.filter((channel) => isCameraRtspOnline(statusById[cameraStatusId(channel)])).length;
   const hasStatus = !!statusApi.data;
   useEffect(() => {
     // Keep the last known Sidebar tally until the first status response lands,

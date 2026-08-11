@@ -1,8 +1,6 @@
 import axios from 'axios';
 import getStreamHost from '../utils/getStreamHost';
 
-const LOCAL_SETUP = import.meta.env.VITE_LOCAL_SETUP === 'true';
-
 /**
  * The Camera Status API lives on the SAME streaming instance that actually
  * generates this user's HLS — "is this server generating HLS" only means
@@ -23,11 +21,31 @@ function stripTrailingSlash(value) {
   return String(value || '').replace(/\/+$/, '');
 }
 
+function streamingBase(target) {
+  const raw =
+    target?.streamingUrl ||
+    target?.StreamingUrl ||
+    target?.config?.StreamingUrl ||
+    target?.streamingPath ||
+    '';
+
+  if (!raw) return '';
+
+  try {
+    const url = new URL(String(raw), window.location.origin);
+    if (!/^https?:$/i.test(url.protocol)) return '';
+    return stripTrailingSlash(url.origin);
+  } catch {
+    return '';
+  }
+}
+
 function nvrDomainBase(target) {
   return stripTrailingSlash(
     target?.nvrId?.domain ||
     target?.nvr?.domain ||
     target?.nvrData?.domain ||
+    streamingBase(target) ||
     target?.domain ||
     target?.config?.domain ||
     ''
@@ -35,10 +53,8 @@ function nvrDomainBase(target) {
 }
 
 function targetStatusBase(target) {
-  if (LOCAL_SETUP) {
-    const domainBase = nvrDomainBase(target);
-    if (domainBase) return domainBase;
-  }
+  const domainBase = nvrDomainBase(target);
+  if (domainBase) return domainBase;
   return statusBase();
 }
 
@@ -220,6 +236,13 @@ export const postStreamHeartbeat = async ({ cameraId, sessionId, state }) => {
  * server is actually producing fresh HLS segments for it right now. */
 export function isCameraLive(cam) {
   return !!cam && cam.rtsp_online === true && cam.stream_status === 'running';
+}
+
+/** Aggregate "online count" uses RTSP reachability only. This intentionally
+ * differs from the stricter per-camera live badge, which also requires the
+ * stream to be actively running. */
+export function isCameraRtspOnline(cam) {
+  return !!cam && cam.rtsp_online === true;
 }
 
 /**

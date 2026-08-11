@@ -12,7 +12,7 @@ import MultiSiteNetwork from './MultiSiteNetwork';
 import SharedMultiSelect from '../../../components/MultiSelect';
 import { useApi } from '../../../hooks/useApi';
 import { getHeaderStats, getDetectionChart, getCriticalityStats, getRecentIncidents } from '../../../helpers/dashboard';
-import { getChannels, getChannelsByNvr, getLocations, getNVRs, getDepartments } from '../../../helpers/monitoring';
+import { getChannels, getLocations, getNVRs, getDepartments } from '../../../helpers/monitoring';
 import { fetchIncidents } from '../../../helpers/incidents';
 import { usePermissions } from '@/context/PermissionContext';
 
@@ -252,6 +252,32 @@ export default function CommandCenter() {
     () => (nvrsApi.data || []).map((n) => ({ id: n._id || n.id, label: n.nvrName || n.name || '' })),
     [nvrsApi.data]
   );
+  const nvrLookup = useMemo(() => {
+    const byId = new Map();
+    const byName = new Map();
+    const byLocation = new Map();
+
+    const pushLocation = (key, nvr) => {
+      if (!key) return;
+      const normalized = String(key).trim().toLowerCase();
+      if (!normalized) return;
+      const list = byLocation.get(normalized) || [];
+      list.push(nvr);
+      byLocation.set(normalized, list);
+    };
+
+    (nvrsApi.data || []).forEach((nvr) => {
+      const id = nvr?._id || nvr?.id;
+      const name = nvr?.nvrName || nvr?.name || '';
+      const locationName = nvr?.location || nvr?.locationName || nvr?.site || '';
+
+      if (id) byId.set(String(id), nvr);
+      if (name) byName.set(String(name).trim().toLowerCase(), nvr);
+      pushLocation(locationName, nvr);
+    });
+
+    return { byId, byName, byLocation };
+  }, [nvrsApi.data]);
   const deptOptions = useMemo(
     () => (deptsApi.data || []).map((d) => ({ id: d._id || d.id, label: d.departmentName || d.name || '' })),
     [deptsApi.data]
@@ -269,8 +295,9 @@ export default function CommandCenter() {
     if (locs.length) f.location = locs;
     if (selectedNvrs.length) f.nvrId = selectedNvrs;
     if (selectedDepts.length) f.department = selectedDepts;
+    if (selectedCamTypes.length) f.camType = selectedCamTypes;
     return f;
-  }, [selectedLocations, selectedNvrs, selectedDepts, location, locNameByKey]);
+  }, [selectedLocations, selectedNvrs, selectedDepts, selectedCamTypes, location, locNameByKey]);
   const filterKey = JSON.stringify(filters);
 
   // No NVR is selected by default — the dashboard opens across every NVR.
@@ -366,34 +393,94 @@ export default function CommandCenter() {
     return map;
   }, [recentValues]);
 
-  // Every camera the account has — the live strip, the "Cameras Online" tile
-  // and the site map all read from this one list.
-  //
-  // The strip deliberately ignores the NVR / department / camera-type filters
-  // and lists the whole estate; the tab row scrolls horizontally, so there is
-  // no reason to hide cameras from it. It also includes cameras with no stream
-  // URL configured, which used to be filtered out — a camera you own but can't
-  // stream is still a camera, and it reads as OFFLINE, which is the truth.
-  //
-  // "Cameras Online" is an estate-wide health figure for the same reason, so
-  // its denominator is this list's length. That is the total the Sidebar footer
-  // shows, so the two can no longer disagree ("3/4" beside "3 of 36").
-  const allChannels = useApi(() => getChannels({ limit: 500 }), [], { pollMs: 60000 });
-  const nvrIds = useMemo(
-    () => (nvrsApi.data || []).map((nvr) => nvr._id || nvr.id).filter(Boolean),
-    [nvrsApi.data]
-  );
-  const nvrIdsKey = nvrIds.join(',');
-  const nvrDetailChannels = useApi(
-    async () => {
-      if (!nvrIds.length) return [];
-      const groups = await Promise.all(nvrIds.map((id) => getChannelsByNvr(id)));
-      return groups.flat();
-    },
-    [nvrIdsKey],
+  // Use one stable, server-filtered inventory for both the live strip and the
+  // camera-status stream. The old fallback→detail swap changed the target ids
+  // mid-flight, which aborted the first status stream and reopened it for a
+  // broader second list (often the full estate).
+  const networkChannelsApi = useApi(
+    () => getChannels({ ...filters, limit: 500 }),
+    [filterKey],
     { pollMs: 60000 }
   );
-  const networkChannels = nvrDetailChannels.data?.length ? nvrDetailChannels.data : (allChannels.data || []);
+  const networkChannels = useMemo(
+    () =>
+      (networkChannelsApi.data || []).map((channel) => {
+        const nvrId =
+          channel?.nvrId?._id ||
+          channel?.nvr?._id ||
+          channel?.nvrData?._id ||
+          channel?.nvrId ||
+          channel?.nvr ||
+          null;
+        const nvrName =
+          channel?.nvrId?.nvrName ||
+          channel?.nvr?.nvrName ||
+          channel?.nvrData?.nvrName ||
+          channel?.nvrName ||
+          '';
+        const channelLocation =
+          channel?.location ||
+          channel?.locationName ||
+          channel?.site ||
+          channel?.nvrId?.location ||
+          channel?.nvrData?.location ||
+          '';
+
+        let nvr = nvrId ? nvrLookup.byId.get(String(nvrId)) : null;
+        if (!nvr && nvrName) {
+          nvr = nvrLookup.byName.get(String(nvrName).trim().toLowerCase()) || null;
+        }
+        if (!nvr && channelLocation) {
+          const candidates = nvrLookup.byLocation.get(String(channelLocation).trim().toLowerCase()) || [];
+          const domains = [...new Set(
+            candidates
+              .map((candidate) => candidate?.domain || candidate?.config?.domain || '')
+              .filter(Boolean)
+          )];
+          if (candidates.length === 1 || domains.length === 1) {
+            nvr = candidates[0] || null;
+          }
+        }
+        if (!nvr) return channel;
+
+        const domain = nvr?.domain || nvr?.config?.domain || '';
+        if (!domain) return channel;
+
+        return {
+          ...channel,
+          domain,
+          location: channel?.location || channelLocation,
+          nvrData: {
+            ...(channel?.nvrData || {}),
+            _id: channel?.nvrData?._id || nvr?._id,
+            nvrName: channel?.nvrData?.nvrName || nvr?.nvrName || nvr?.name,
+            location: channel?.nvrData?.location || nvr?.location || nvr?.locationName || nvr?.site,
+            domain,
+          },
+          nvrId:
+            channel?.nvrId && typeof channel.nvrId === 'object'
+              ? {
+                  ...channel.nvrId,
+                  _id: channel?.nvrId?._id || nvr?._id,
+                  nvrName: channel?.nvrId?.nvrName || nvr?.nvrName || nvr?.name,
+                  location: channel?.nvrId?.location || nvr?.location || nvr?.locationName || nvr?.site,
+                  domain: channel.nvrId.domain || domain,
+                }
+              : channel?.nvrId || nvr?._id,
+          nvr:
+            channel?.nvr && typeof channel.nvr === 'object'
+              ? {
+                  ...channel.nvr,
+                  _id: channel?.nvr?._id || nvr?._id,
+                  nvrName: channel?.nvr?.nvrName || nvr?.nvrName || nvr?.name,
+                  location: channel?.nvr?.location || nvr?.location || nvr?.locationName || nvr?.site,
+                  domain: channel.nvr.domain || domain,
+                }
+              : channel?.nvr,
+        };
+      }),
+    [networkChannelsApi.data, nvrLookup]
+  );
   const normalizedFilterLocations = filters.location || [];
   const scopedNvrs = useMemo(() => {
     const allNvrs = nvrsApi.data || [];
@@ -410,29 +497,16 @@ export default function CommandCenter() {
     [scopedNvrs]
   );
 
-  // When one or more NVRs are picked in the filter bar, the Live Camera strip
-  // and its status probe both scope to just their cameras — LiveCamera opens
-  // its own status connection for whatever `channels` it's given, so a
-  // filtered list here means the status request it sends only asks about
-  // this NVR's ids, not the whole estate's. "Cameras Online" naturally
-  // follows suit via onOnlineCountChange below.
-  const channelNvrId = (c) => c.nvrId?._id || c.nvr?._id || c.nvrId || c.nvr || null;
-  const nvrFilterActive = selectedNvrs.length > 0;
-  const filteredChannels = useMemo(() => {
-    const all = networkChannels;
-    if (!nvrFilterActive) return all;
-    return all.filter((c) => selectedNvrs.includes(channelNvrId(c)));
-  }, [networkChannels, nvrFilterActive, selectedNvrs]);
-
   const camerasOnline = useMemo(
     () => ({
       online: onlineCameras.online,
-      // Filtered: the exact scoped count (deterministic, not dependent on the
-      // callback's own async timing). Unfiltered: the real inventory total,
-      // same denominator the Sidebar footer uses.
-      total: cameraInventoryTotal || (nvrFilterActive ? filteredChannels.length : onlineCameras.total),
+      // Keep the dashboard denominator aligned with Live Wall: use the same
+      // filtered channel inventory / status-stream target count first. NVR
+      // cameraCount metadata can be stale or broader than the current filter,
+      // so it should only be a fallback.
+      total: onlineCameras.total || networkChannels.length || cameraInventoryTotal,
     }),
-    [onlineCameras.online, onlineCameras.total, cameraInventoryTotal, nvrFilterActive, filteredChannels.length]
+    [onlineCameras.online, onlineCameras.total, networkChannels.length, cameraInventoryTotal]
   );
 
   const today = moment().format('YYYY-MM-DD');
@@ -539,8 +613,8 @@ export default function CommandCenter() {
       <div ref={dashboardGridRef} style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 18 }} className="vq-cc-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
           <LiveCamera
-            channels={filteredChannels}
-            loading={allChannels.loading}
+            channels={networkChannels}
+            loading={networkChannelsApi.loading}
             latestByChannel={latestByChannel}
             onOnlineCountChange={onOnlineCountChange}
           />
