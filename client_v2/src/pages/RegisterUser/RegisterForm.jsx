@@ -46,6 +46,7 @@ const validationSchemaStep1 = Yup.object().shape({
     .email('Invalid email')
     .matches(/^[^\s@]+@[^\s@]+\.(com|net|org|in|co|io|edu|gov)$/, 'Invalid email format')
     .required('Email is required'),
+  vehicleNumber: Yup.string(),
   designation: Yup.string().required('Designation is required'),
   location: Yup.string(),
   departmentId: Yup.string().required('Department is required'),
@@ -185,6 +186,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
             firstName: editUser.firstName || '',
             lastName: editUser.lastName || '',
             email: editUser.email || '',
+            vehicleNumber: editUser.vehicleNumber || '',
             designation: editUser.designation || '',
             location: editUser.location || '',
             departmentId: editUser?.departmentId?._id || '',
@@ -193,6 +195,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
             firstName: '',
             lastName: '',
             email: '',
+            vehicleNumber: '',
             designation: '',
             location: '',
             departmentId: '',
@@ -218,7 +221,10 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
     }
 
     const formData = new FormData();
-    Object.keys(values).forEach((key) => formData.append(key, values[key]));
+    Object.keys(values).forEach((key) => {
+      const value = typeof values[key] === 'string' ? values[key].trim() : values[key];
+      formData.append(key, value);
+    });
     uploadedImagePaths.forEach((item) => {
       if (item instanceof File) {
         formData.append('file', item);

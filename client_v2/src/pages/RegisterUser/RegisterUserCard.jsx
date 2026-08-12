@@ -38,6 +38,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState('');
   const [designation, setDesignation] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [location, setLocation] = useState('');
@@ -119,6 +120,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     setFirstName('');
     setLastName('');
     setEmail('');
+    setVehicleNumber('');
     setDesignation('');
     setDepartmentId('');
     setLocation('');
@@ -174,6 +176,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     formData.append('firstName', firstName.trim());
     formData.append('lastName', lastName.trim());
     formData.append('email', email.trim());
+    formData.append('vehicleNumber', vehicleNumber.trim());
     formData.append('designation', designation.trim());
     if (departmentId) formData.append('departmentId', departmentId);
     if (location) formData.append('location', location);
@@ -295,6 +298,15 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
               {errors.department && (
                 <p className="text-xs text-[var(--crit)] mt-1">{errors.department}</p>
               )}
+            </div>
+            <div>
+              <label className={fieldLabel}>Vehicle Number</label>
+              <input
+                className={fieldInput}
+                placeholder="e.g. KA01AB1234"
+                value={vehicleNumber}
+                onChange={(e) => setVehicleNumber(e.target.value)}
+              />
             </div>
           </div>
 

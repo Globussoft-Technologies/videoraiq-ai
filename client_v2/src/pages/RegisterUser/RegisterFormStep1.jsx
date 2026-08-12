@@ -87,6 +87,16 @@ const RegisterFormStep1 = ({ departments = [], locations = [] }) => {
         />
         <ErrorMessage name="departmentId" component="div" className={errorClass} />
       </div>
+      <div>
+        <FieldLabel>Vehicle Number</FieldLabel>
+        <Field
+          as={Input}
+          name="vehicleNumber"
+          placeholder="e.g. KA01AB1234"
+          className="bg-[var(--bg3)] border-[var(--bd)] text-[var(--tx)] shadow-none rounded-[10px]"
+        />
+        <ErrorMessage name="vehicleNumber" component="div" className={errorClass} />
+      </div>
     </div>
   );
 };
