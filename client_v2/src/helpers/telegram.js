@@ -6,7 +6,7 @@ const Api_url = import.meta.env.VITE_BACKEND;
 
 
 // Fetch the admin's verification code + current link status.
-// Returns { code, linked, chatId }, or null when the request fails so the
+// Returns { code, linked, chatId, channelName, channelUsername, chatType }, or null when the request fails so the
 // caller can tell "not linked yet" apart from "couldn't load".
 export const getTelegramLinkCode = async () => {
   const token = getAccessToken();

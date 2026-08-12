@@ -154,8 +154,14 @@ export default function TelegramAlerts() {
                 <CheckCircle2 size={16} /> Telegram Connected
               </div>
               <p style={{ marginTop: 8, fontSize: 12.5, color: 'var(--tx2)' }}>
-                Alerts are being delivered to your channel.
+                Alerts are being delivered to{' '}
+                <strong style={{ color: 'var(--tx)' }}>{status.channelName || 'your Telegram channel'}</strong>.
               </p>
+              {status.channelUsername && (
+                <p style={{ marginTop: 4, fontSize: 11.5, color: 'var(--tx3)' }}>
+                  @{status.channelUsername}
+                </p>
+              )}
               <p style={{ marginTop: 4, fontSize: 11.5, color: 'var(--tx3)' }}>
                 Channel ID: <span style={{ fontFamily: 'var(--mono)' }}>{status.chatId}</span>
               </p>

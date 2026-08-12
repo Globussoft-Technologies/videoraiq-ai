@@ -147,8 +147,14 @@ const TelegramAlerts = () => {
                 <span className="font-medium">Telegram Connected</span>
               </div>
               <p className="mt-2 text-sm text-[#5D5D5D]">
-                Alerts are being delivered to your channel.
+                Alerts are being delivered to{' '}
+                <span className="font-medium text-[#333333]">
+                  {status.channelName || 'your Telegram channel'}
+                </span>.
               </p>
+              {status.channelUsername ? (
+                <p className="mt-1 text-xs text-[#7A7A7A]">@{status.channelUsername}</p>
+              ) : null}
               <p className="mt-1 text-xs text-[#7A7A7A]">
                 Channel ID: <span className="font-mono">{status.chatId}</span>
               </p>
