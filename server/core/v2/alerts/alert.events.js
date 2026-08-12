@@ -23,24 +23,7 @@ const findMatchingZoneConfig = (incidentZone, zoneConfigs = []) => {
   );
 };
 
-const resolveTelegramZoneConfig = (incidentZone, zoneConfigs = []) => {
-  if (!Array.isArray(zoneConfigs) || zoneConfigs.length === 0) return null;
-  const exactMatch = findMatchingZoneConfig(incidentZone, zoneConfigs);
-  if (exactMatch) return exactMatch;
-
-  // Preserve the old "default channel" behavior for single-zone detections:
-  // if only one zone exists, use it even when the incident carries a different
-  // zone label (or no label at all).
-  if (zoneConfigs.length === 1) return zoneConfigs[0];
-
-  return null;
-};
-
-const isTelegramWindowOpenForZoneConfig = ({
-  zoneConfig,
-  timeOfIncidentUTC,
-  adminTimezone,
-}) => {
+const isIncidentWithinZoneWindow = (zoneConfig, timeOfIncidentUTC, adminTimezone) => {
   if (!zoneConfig || !adminTimezone || !timeOfIncidentUTC) return false;
   if (!zoneConfig.startTime || !zoneConfig.endTime) return false;
 
@@ -55,6 +38,50 @@ const isTelegramWindowOpenForZoneConfig = ({
   if (start === end) return true;
   if (start < end) return incidentMinutes >= start && incidentMinutes <= end;
   return incidentMinutes >= start || incidentMinutes <= end;
+};
+
+const resolveTelegramZoneConfig = ({
+  incidentZone,
+  zoneConfigs = [],
+  timeOfIncidentUTC,
+  adminTimezone,
+}) => {
+  if (!Array.isArray(zoneConfigs) || zoneConfigs.length === 0) return null;
+  const exactMatch = findMatchingZoneConfig(incidentZone, zoneConfigs);
+  if (exactMatch) return exactMatch;
+
+  // Preserve the old "default channel" behavior for single-zone detections:
+  // if only one zone exists, use it even when the incident carries a different
+  // zone label (or no label at all).
+  if (zoneConfigs.length === 1) return zoneConfigs[0];
+
+  // When multiple zones exist, fall back to the first zone whose configured
+  // Telegram window is open for this incident. This preserves alert delivery
+  // for detections that emit a generic/mismatched zone label while still
+  // respecting the per-zone schedule and preferred Telegram channel.
+  return (
+    zoneConfigs.find((zoneConfig) =>
+      isIncidentWithinZoneWindow(zoneConfig, timeOfIncidentUTC, adminTimezone),
+    ) || null
+  );
+};
+
+const resolvePreferredTelegramChatIds = ({
+  matchingZoneConfig,
+  detectionSettings,
+}) => {
+  const candidates = [
+    matchingZoneConfig?.telegramChatId,
+    detectionSettings?.telegramChatId,
+  ];
+
+  return [
+    ...new Set(
+      candidates
+        .map((chatId) => String(chatId || "").trim())
+        .filter(Boolean),
+    ),
+  ];
 };
 
 export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,saved,adminId}) => {
@@ -206,19 +233,40 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
     }
 
     // Telegram: send to the admin's channel ONLY if the incident's zone has a
-    // per-zone time window on this detection setting AND the incident's local
-    // time (UTC -> admin's timezone) falls inside it. No matching window -> skip.
+    // preferred Telegram channel configured. Keep per-zone window support when
+    // it can be evaluated, but do not silently drop alerts when the incident
+    // arrives without a reliable zone/time payload. In those cases, fall back
+    // to the saved detection/zone channel so Telegram keeps behaving like the
+    // earlier default-channel flow.
     try {
       const adminFlags = await adminModel.findById(adminId).select("telegramAlertsEnabled").lean();
       const telegramIncident = incidentData || saved;
-      const zoneConfigs = matchedDetection?.id?.settings?.zone_configs || [];
-      const matchingZoneConfig = resolveTelegramZoneConfig(telegramIncident?.zone, zoneConfigs);
-      const windowOpen = isTelegramWindowOpenForZoneConfig({
-        zoneConfig: matchingZoneConfig,
+      const detectionSettings = matchedDetection?.id?.settings || {};
+      const zoneConfigs = detectionSettings?.zone_configs || [];
+      const matchingZoneConfig = resolveTelegramZoneConfig({
+        incidentZone: telegramIncident?.zone,
+        zoneConfigs,
         timeOfIncidentUTC: telegramIncident?.timeOfIncident,
         adminTimezone: adminTz,
       });
-      if (windowOpen && adminFlags?.telegramAlertsEnabled !== false) {
+      const preferredChatIds = resolvePreferredTelegramChatIds({
+        matchingZoneConfig,
+        detectionSettings,
+      });
+      const hasEvaluableWindow =
+        Boolean(matchingZoneConfig?.startTime) &&
+        Boolean(matchingZoneConfig?.endTime) &&
+        Boolean(telegramIncident?.timeOfIncident) &&
+        Boolean(adminTz);
+      const windowOpen = hasEvaluableWindow
+        ? isIncidentWithinZoneWindow(
+            matchingZoneConfig,
+            telegramIncident?.timeOfIncident,
+            adminTz,
+          )
+        : true;
+
+      if (adminFlags?.telegramAlertsEnabled !== false && windowOpen) {
         await TelegramService.sendIncident(
           telegramIncident,
           nvrData,
@@ -226,9 +274,7 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
           adminId,
           adminTz,
           {
-            preferredChatIds: matchingZoneConfig?.telegramChatId
-              ? [matchingZoneConfig.telegramChatId]
-              : [],
+            preferredChatIds,
           },
         );
       }
