@@ -178,7 +178,7 @@ export default function DetectionAllocation({ detections }) {
             <button
               type="button"
               onClick={toggleAll}
-              className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+              className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold cursor-pointer"
               style={{ background: 'var(--bg2)', color: 'var(--tx2)', border: '1px solid var(--bd)' }}
             >
               {anyExpanded ? <ChevronsDownUp size={12} /> : <ChevronsUpDown size={12} />}

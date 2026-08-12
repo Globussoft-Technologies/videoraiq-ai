@@ -144,6 +144,7 @@ export const VIEW_META = {
   assistant: { title: 'AI Assistant', sub: 'Ask questions about your live operational data' },
   faces: { title: 'Face Recognition & Watchlist', sub: 'Identity verification & attendance' },
   cameras: { title: 'Cameras & NVRs', sub: 'Device inventory & recorder health' },
+  'camera-settings': { title: 'Camera Settings', sub: 'Camera alias names & department assignment' },
   'detection-settings': { title: 'Detections', sub: 'AI detections - configure & investigate incidents' },
   detections: { title: 'Detections', sub: 'AI detections — configure & investigate incidents' },
   engines: { title: 'Detection Settings', sub: 'Configure detection types per camera' },
