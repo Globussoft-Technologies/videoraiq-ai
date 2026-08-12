@@ -47,6 +47,7 @@ function notificationTarget(alert, navigate) {
 const CAM_HEALTH_KEY = 'vq_cam_health';
 const SERVER_NETWORK_KEY = 'vq_server_network';
 const READ_IDS_KEY = 'vq_read_notification_ids';
+const EMPTY_ALERTS = [];
 function loadReadIds() {
   try {
     return new Set(JSON.parse(localStorage.getItem(READ_IDS_KEY) || '[]'));
@@ -106,9 +107,9 @@ function Shell() {
 
   // Notifications + alerts badge from the recent alert feed.
   const { data: crit } = useApi(() => getCriticalityStats({}, { skip: 0, limit: 8 }), [], { pollMs: 60000 });
-  const recentAlerts = crit?.recentAlerts || [];
+  const recentAlerts = crit?.recentAlerts || EMPTY_ALERTS;
   const [readIds, setReadIds] = useState(loadReadIds);
-  const notifications = recentAlerts.map((a, i) => ({
+  const notifications = useMemo(() => recentAlerts.map((a, i) => ({
     id: a._id || i,
     title: a.incidentName || a.displayName || a.incidentType || 'Detection event',
     cam: a.channelData?.name || a.nvrData?.nvrName || '',
@@ -119,7 +120,7 @@ function Shell() {
     sevColor: SEV_COLOR[(a.severity || '').toLowerCase()] || 'var(--warn)',
     read: readIds.has(a._id || i),
     go: notificationTarget(a, navigate),
-  }));
+  })), [recentAlerts, readIds, navigate]);
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const markNotificationsRead = useCallback((ids) => {
@@ -130,6 +131,7 @@ function Shell() {
       return next;
     });
   }, []);
+  const openMobileNav = useCallback(() => setNavOpen(true), []);
 
   const onSiteChange = useCallback((label, raw) => {
     setSiteFilter(label);
@@ -250,7 +252,7 @@ function Shell() {
           notifications={notifications}
           unreadCount={unreadCount}
           onMarkNotificationsRead={markNotificationsRead}
-          onMenuClick={isMobile ? () => setNavOpen(true) : undefined}
+          onMenuClick={isMobile ? openMobileNav : undefined}
         />
         <div
           className={fixedViewportPage ? undefined : 'vq-scroll'}

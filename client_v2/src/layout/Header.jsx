@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { memo, useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Bell, Sun, Moon, ChevronDown, Volume2, VolumeX, SunMoon, Menu } from 'lucide-react';
 import { useTheme } from '../theme/ThemeContext';
@@ -34,9 +34,31 @@ const iconBtn = {
   flex: '0 0 auto',
 };
 
-export default function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange, serverNetwork = null, notifications = [], unreadCount, onMarkNotificationsRead, onSearch, onMenuClick }) {
-  const { theme, setTheme } = useTheme();
+const clockStyle = {
+  fontFamily: 'var(--mono)',
+  fontSize: 13,
+  color: 'var(--tx2)',
+  letterSpacing: '.02em',
+  width: 122,
+  textAlign: 'right',
+  whiteSpace: 'nowrap',
+  fontVariantNumeric: 'tabular-nums',
+  flex: '0 0 auto',
+};
+
+const centeredClockStyle = {
+  ...clockStyle,
+  width: '100%',
+  textAlign: 'center',
+};
+
+const HeaderClock = memo(function HeaderClock({ compact = false }) {
   const clock = useClock();
+  return <div style={compact ? centeredClockStyle : clockStyle}>{clock}</div>;
+});
+
+function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange, serverNetwork = null, notifications = [], unreadCount, onMarkNotificationsRead, onSearch, onMenuClick }) {
+  const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const [siteOpen, setSiteOpen] = useState(false);
   const [networkOpen, setNetworkOpen] = useState(false);
@@ -72,7 +94,10 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
     const ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect?.width;
-      if (w) setHeaderW(w);
+      if (w) {
+        const next = Math.round(w);
+        setHeaderW((prev) => (prev === next ? prev : next));
+      }
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -248,10 +273,11 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
         gap: isNarrow ? 8 : 16,
         padding: isNarrow ? '0 12px' : '0 22px',
         borderBottom: '1px solid var(--bd)',
-        background: 'var(--headerglass)',
-        backdropFilter: 'blur(10px)',
+        background: 'var(--bg1solid)',
         position: 'relative',
         zIndex: 60,
+        transform: 'translateZ(0)',
+        backfaceVisibility: 'hidden',
       }}
     >
       {onMenuClick && (
@@ -502,7 +528,7 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
 
       {/* UTC clock */}
       {!hideClock && (
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--tx2)', letterSpacing: '.02em' }}>{clock}</div>
+        <HeaderClock />
       )}
 
       {/* Theme toggle */}
@@ -587,7 +613,7 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
               style={{ position: 'absolute', top: 44, right: 0, width: 200, background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, boxShadow: '0 18px 50px rgba(0,0,0,.5)', zIndex: 60, padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}
             >
               {hideClock && (
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--tx2)', textAlign: 'center', letterSpacing: '.02em' }}>{clock}</div>
+                <HeaderClock compact />
               )}
               {hideNetwork && serverNetwork && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -712,3 +738,5 @@ export default function Header({ title, sub, sites = [], siteFilter = 'All Sites
     </header>
   );
 }
+
+export default memo(Header);
