@@ -1530,8 +1530,11 @@ export default function LineCrossingLogs() {
                   fit="contain"
                   minH={0}
                   isFullscreen
-                />
-                <LineCrossingOverlay camera={camera} />
+                  enableFullscreenZoom
+                  zoomToolbarStyle={{ top: 8, right: 104 }}
+                >
+                  <LineCrossingOverlay camera={camera} />
+                </CameraStream>
               </div>
             ))}
           </div>

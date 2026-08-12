@@ -369,12 +369,12 @@ export default function EmployeeLogin() {
                     </span>
                     Remember me
                   </label>
-                  <span
+                  {/* <span
                     className="vqp-link text-[12.5px] font-semibold text-[#3b82f6] cursor-pointer"
                     onClick={openForgot}
                   >
                     Forgot password?
-                  </span>
+                  </span> */}
                 </div>
 
                 <PButton label={isSubmitting ? "Signing in..." : "Sign In"} loading={isSubmitting} disabled={isSubmitting} />

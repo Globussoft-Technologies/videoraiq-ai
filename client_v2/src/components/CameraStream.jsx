@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Maximize2, Minimize2, VideoOff } from 'lucide-react';
 import useHlsPlayer from '../hooks/useHlsPlayer';
 import useStreamSlot from '../hooks/useStreamSlot';
@@ -72,6 +72,7 @@ function fmtTimestamp(d) {
  */
 export default function CameraStream({
   channel,
+  children,
   camLabel,          // e.g. "CAM-001" — injected by CameraGrid
   showOverlay = true,
   onMaximize,
@@ -223,6 +224,13 @@ export default function CameraStream({
     />
   );
 
+  const streamContent = (
+    <>
+      {videoElement}
+      {children}
+    </>
+  );
+
   return (
     <div
       ref={hostRef}
@@ -240,17 +248,10 @@ export default function CameraStream({
     >
       {enableFullscreenZoom ? (
         <FullscreenZoomSurface enabled={isFullscreen} resetKey={streamId} toolbarStyle={zoomToolbarStyle}>
-          {isValidElement(videoElement)
-            ? cloneElement(videoElement, {
-                style: {
-                  ...videoElement.props.style,
-                  pointerEvents: 'none',
-                },
-              })
-            : videoElement}
+          {streamContent}
         </FullscreenZoomSurface>
       ) : (
-        videoElement
+        streamContent
       )}
 
       {/* Offline / queued / connecting placeholder */}

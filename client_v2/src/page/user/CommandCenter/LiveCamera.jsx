@@ -216,6 +216,8 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
             active={pageActive}
             priority={PRIORITY_SELECTED}
             immediate
+            enableFullscreenZoom
+            zoomToolbarStyle={{ top: 8, right: 96 }}
           />
         )}
         {isFullscreen && active && <LiveCameraLogsOverlay channel={active} />}
