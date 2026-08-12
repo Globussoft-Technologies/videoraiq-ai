@@ -12,7 +12,13 @@ export const getTelegramLinkCode = async () => {
   const token = getAccessToken();
   try {
     const res = await axios.get(`${Api_url}/telegram/link-code`, {
-      headers: { 'x-access-token': token },
+      params: { _ts: Date.now() },
+      headers: {
+        'x-access-token': token,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+        Expires: '0',
+      },
     });
     return res?.data?.body?.data || null;
   } catch {
@@ -22,11 +28,11 @@ export const getTelegramLinkCode = async () => {
 
 // Disconnect the bound channel. The backend clears the chatId and rotates the
 // code, so callers should re-fetch link-code afterwards.
-export const unlinkTelegram = async () => {
+export const unlinkTelegram = async (chatId = null) => {
   const token = getAccessToken();
   const res = await axios.post(
     `${Api_url}/telegram/unlink`,
-    {},
+    chatId ? { chatId } : {},
     { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
   );
   return res?.data;

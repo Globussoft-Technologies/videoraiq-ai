@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Search, Plus, X, Trash2, Loader2, BellRing } from 'lucide-react';
+import {
+  Search,
+  Plus,
+  X,
+  Trash2,
+  Loader2,
+  BellRing,
+  CheckCircle2,
+} from 'lucide-react';
 import { AsyncBoundary } from '../../../components/States';
 import HScrollHint from '../../../components/HScrollHint';
 import { useApi } from '../../../hooks/useApi';
@@ -9,14 +17,18 @@ import DeleteConfirmation from '../../../components/DeleteConfirmation';
 import MultiSelect from '../../../components/MultiSelect';
 import TelegramAlerts from './TelegramAlerts';
 import { getDetectionTypes } from '../../../helpers/configure';
-import { getRecipients, createRecipient, updateRecipient, removeRecipient, resendVerification } from '../../../helpers/recipients';
+import { getTelegramLinkCode, unlinkTelegram } from '../../../helpers/telegram';
+import {
+  getRecipients,
+  createRecipient,
+  removeRecipient,
+  resendVerification,
+} from '../../../helpers/recipients';
 
-/* Detection-settings key (e.g. "loiteringWithoutAuthSettings") -> incidentType
-   key stored on the recipient (e.g. "loiteringWithoutAuth"). Ported 1:1 from
-   client/src/components/NotificationRecipientModal/AddRecipientModal.jsx so
-   the values match what the backend already expects. */
 function toIncidentKey(detectionKey) {
-  if (detectionKey === 'personalProtectiveEquipmentSettings') return 'personProtectiveEquipment';
+  if (detectionKey === 'personalProtectiveEquipmentSettings') {
+    return 'personProtectiveEquipment';
+  }
   return detectionKey.replace('Settings', '');
 }
 
@@ -28,21 +40,41 @@ const STATUS_FILTERS = [
   { key: 'unverified', label: 'Unverified' },
 ];
 
+const RECIPIENT_VIEWS = [
+  { key: 'email', label: 'Email' },
+  { key: 'telegram', label: 'Telegram' },
+];
+
+const TELEGRAM_STATUS_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'connected', label: 'Connected' },
+  { key: 'disconnected', label: 'Disconnected' },
+];
+
 function Avatar({ name }) {
   const initials = (name || '?').trim().slice(0, 2).toUpperCase();
   return (
-    <span style={{
-      width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-      color: '#fff', fontSize: 11.5, fontWeight: 700, fontFamily: 'var(--mono)',
-    }}>
+    <span
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: '50%',
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg,var(--blue),var(--violet))',
+        color: '#fff',
+        fontSize: 11.5,
+        fontWeight: 700,
+        fontFamily: 'var(--mono)',
+      }}
+    >
       {initials}
     </span>
   );
 }
 
-/* ── Add recipient modal (email only — matches the mockup / v1's active path) ── */
 function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -50,26 +82,41 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
   const [saving, setSaving] = useState(false);
 
   const typeOptions = useMemo(
-    () => Object.entries(detectionTypes).map(([key, label]) => ({ id: toIncidentKey(key), label })),
-    [detectionTypes]
+    () =>
+      Object.entries(detectionTypes).map(([key, label]) => ({
+        id: toIncidentKey(key),
+        label,
+      })),
+    [detectionTypes],
   );
 
   async function submit() {
-    if (!fullName.trim()) { toast.error('Full name is required'); return; }
-    if (!EMAIL_RE.test(email.trim())) { toast.error('Enter a valid email address'); return; }
+    if (!fullName.trim()) {
+      toast.error('Full name is required');
+      return;
+    }
+    if (!EMAIL_RE.test(email.trim())) {
+      toast.error('Enter a valid email address');
+      return;
+    }
 
     setSaving(true);
     try {
-      const resp = await createRecipient({ type: 'email', value: email.trim(), fullName: fullName.trim(), incidentTypes: incidentIds });
-      if (resp?.statusCode === 200 || resp?.body?.status === 'success') {
-        toast.success(resp?.body?.message || 'Recipient added successfully');
+      const response = await createRecipient({
+        type: 'email',
+        value: email.trim(),
+        fullName: fullName.trim(),
+        incidentTypes: incidentIds,
+      });
+      if (response?.statusCode === 200 || response?.body?.status === 'success') {
+        toast.success(response?.body?.message || 'Recipient added successfully');
         onCreated();
         onClose();
       } else {
-        toast.error(resp?.body?.message || 'Something went wrong');
+        toast.error(response?.body?.message || 'Something went wrong');
       }
-    } catch (e) {
-      toast.error(e?.response?.data?.body?.message || 'Failed to add recipient');
+    } catch (error) {
+      toast.error(error?.response?.data?.body?.message || 'Failed to add recipient');
     } finally {
       setSaving(false);
     }
@@ -79,84 +126,189 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
     <div
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, zIndex: 300,
-        background: 'rgba(6,8,13,.62)', backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        position: 'fixed',
+        inset: 0,
+        zIndex: 300,
+        background: 'rgba(6,8,13,.62)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
       }}
     >
       <div
         className="vq-recipients-modal"
-        onClick={e => e.stopPropagation()}
-        /* --bg1solid, not --bg1: --bg1 is translucent (62% white / 55% navy) and
-           over the overlay's dark scrim it renders as muddy grey with the table
-           showing through. Matches the account menu and other floating panels. */
+        onClick={(event) => event.stopPropagation()}
         style={{
-          width: 440, maxWidth: '100%',
-          background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
-          borderRadius: 16, overflow: 'hidden',
+          width: 440,
+          maxWidth: '100%',
+          background: 'var(--bg1solid)',
+          border: '1px solid var(--bd2)',
+          borderRadius: 16,
+          overflow: 'hidden',
           boxShadow: '0 18px 50px rgba(0,0,0,.35)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--bd)' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 20px',
+            borderBottom: '1px solid var(--bd)',
+          }}
+        >
           <div>
-            <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15.5 }}>Add Notification Recipient</div>
-            <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2 }}>Enter contact details and choose alert types</div>
+            <div
+              style={{
+                fontFamily: 'var(--disp)',
+                fontWeight: 600,
+                fontSize: 15.5,
+              }}
+            >
+              Add Notification Recipient
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2 }}>
+              Enter contact details and choose alert types
+            </div>
           </div>
-          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid var(--bd)', color: 'var(--tx3)', cursor: 'pointer' }}>
+          <button
+            onClick={onClose}
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'none',
+              border: '1px solid var(--bd)',
+              color: 'var(--tx3)',
+              cursor: 'pointer',
+            }}
+          >
             <X size={14} />
           </button>
         </div>
 
-        <div className="vq-recipients-modal-body" style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div
+          className="vq-recipients-modal-body"
+          style={{
+            padding: '18px 20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 14,
+          }}
+        >
           <div>
-            <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>Full Name</div>
+            <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>
+              Full Name
+            </div>
             <input
               value={fullName}
-              onChange={e => setFullName(e.target.value)}
+              onChange={(event) => setFullName(event.target.value)}
               placeholder="e.g. John Doe"
-              style={{ width: '100%', boxSizing: 'border-box', height: 38, padding: '0 12px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5, color: 'var(--tx)', outline: 'none' }}
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                height: 38,
+                padding: '0 12px',
+                borderRadius: 9,
+                background: 'var(--bg2)',
+                border: '1px solid var(--bd)',
+                fontSize: 12.5,
+                color: 'var(--tx)',
+                outline: 'none',
+              }}
             />
           </div>
+
           <div>
-            <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>Email Address</div>
+            <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>
+              Email Address
+            </div>
             <input
               type="email"
               value={email}
-              onChange={e => setEmail(e.target.value)}
+              onChange={(event) => setEmail(event.target.value)}
               placeholder="e.g. michael@company.com"
-              style={{ width: '100%', boxSizing: 'border-box', height: 38, padding: '0 12px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12.5, color: 'var(--tx)', outline: 'none' }}
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                height: 38,
+                padding: '0 12px',
+                borderRadius: 9,
+                background: 'var(--bg2)',
+                border: '1px solid var(--bd)',
+                fontSize: 12.5,
+                color: 'var(--tx)',
+                outline: 'none',
+              }}
             />
           </div>
+
           <div>
-            <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>Detection Types</div>
+            <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>
+              Detection Types
+            </div>
             <MultiSelect
               options={typeOptions}
               value={incidentIds}
               onChange={setIncidentIds}
-              placeholder="Select detection types…"
+              placeholder="Select detection types..."
               searchPlaceholder="Search detection types..."
               msg="No detection types found"
             />
           </div>
         </div>
 
-        <div className="vq-recipients-modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '15px 20px', borderTop: '1px solid var(--bd)' }}>
-          <button onClick={onClose} disabled={saving} style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)', border: '1px solid var(--bd)', borderRadius: 9, padding: '9px 16px', cursor: 'pointer', background: 'none' }}>
+        <div
+          className="vq-recipients-modal-actions"
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 8,
+            padding: '15px 20px',
+            borderTop: '1px solid var(--bd)',
+          }}
+        >
+          <button
+            onClick={onClose}
+            disabled={saving}
+            style={{
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: 'var(--tx2)',
+              border: '1px solid var(--bd)',
+              borderRadius: 9,
+              padding: '9px 16px',
+              cursor: 'pointer',
+              background: 'none',
+            }}
+          >
             Cancel
           </button>
           <button
             onClick={submit}
             disabled={saving}
             style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              fontSize: 12.5, fontWeight: 600, color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 7,
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: '#fff',
               background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-              borderRadius: 9, padding: '9px 18px', cursor: saving ? 'wait' : 'pointer', border: 'none',
+              borderRadius: 9,
+              padding: '9px 18px',
+              cursor: saving ? 'wait' : 'pointer',
+              border: 'none',
               opacity: saving ? 0.7 : 1,
             }}
           >
             {saving && <Loader2 size={13} className="animate-spin" />}
-            {saving ? 'Adding…' : 'Add'}
+            {saving ? 'Adding...' : 'Add'}
           </button>
         </div>
       </div>
@@ -164,96 +316,117 @@ function AddRecipientModal({ detectionTypes, onClose, onCreated }) {
   );
 }
 
-/* ── Per-row detection-type multi-select, saved immediately on change ─────── */
-function RowDetectionTypes({ recipient, detectionTypes, canEdit, onSaved }) {
-  const [busy, setBusy] = useState(false);
-  const typeOptions = useMemo(
-    () => Object.entries(detectionTypes).map(([key, label]) => ({ id: toIncidentKey(key), label })),
-    [detectionTypes]
-  );
-  const selected = recipient.incidentTypes || [];
-
-  async function handleChange(next) {
-    if (busy) return;
-    if (!canEdit) {
-      toast.error("You don't have permission to edit Alert Recipients.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const result = await updateRecipient(recipient._id, { incidentTypes: next });
-      if (result?.status === 'success') {
-        toast.success('Detection types updated');
-        onSaved();
-      } else {
-        toast.error(result?.message || 'Failed to update detection types');
-      }
-    } catch (e) {
-      toast.error(e?.response?.data?.body?.message || 'Failed to update detection types');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const label = selected.length === 0
-    ? 'None'
-    : selected.length === typeOptions.length
-      ? 'All detections'
-      : `${selected.length} selected`;
-
+function RecipientRow({ recipient, canEdit, canDelete, onVerify, onDelete }) {
   return (
-    <MultiSelect
-      options={typeOptions}
-      value={selected}
-      onChange={handleChange}
-      placeholder="None"
-      className="w-full sm:w-48"
-      maxHeight="max-h-56"
-      msg="No detection types found"
-    />
-  );
-}
-
-/* ── Recipient row ────────────────────────────────────────────────────────── */
-function RecipientRow({ recipient, detectionTypes, canEdit, canDelete, onVerify, onDelete, onSaved }) {
-  return (
-    <div style={{
-      display: 'grid', gridTemplateColumns: '1.4fr 1.6fr .8fr 44px',
-      alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--bd)',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '1.4fr 1.6fr .8fr 44px',
+        alignItems: 'center',
+        gap: 12,
+        padding: '12px 16px',
+        borderBottom: '1px solid var(--bd)',
+      }}
+    >
+      <div
+        style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}
+      >
         <Avatar name={recipient.fullName} />
-        <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {recipient.fullName || '—'}
+        <span
+          style={{
+            fontSize: 12.5,
+            fontWeight: 600,
+            color: 'var(--tx)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {recipient.fullName || '-'}
         </span>
       </div>
-      <div style={{ fontSize: 12, color: 'var(--tx2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+
+      <div
+        style={{
+          fontSize: 12,
+          color: 'var(--tx2)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
         {recipient.value}
       </div>
+
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         {recipient.verified ? (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 600, color: 'var(--ok)', border: '1px solid var(--ok)', borderRadius: 20, padding: '3px 9px', whiteSpace: 'nowrap' }}>
-            ✓ Verified
+          <span
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              fontSize: 10.5,
+              fontWeight: 600,
+              color: 'var(--ok)',
+              border: '1px solid var(--ok)',
+              borderRadius: 20,
+              padding: '3px 9px',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Verified
           </span>
         ) : canEdit ? (
           <button
             onClick={onVerify}
-            style={{ fontSize: 10.5, fontWeight: 600, color: '#fff', background: 'var(--blue)', border: 'none', borderRadius: 20, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            style={{
+              fontSize: 10.5,
+              fontWeight: 600,
+              color: '#fff',
+              background: 'var(--blue)',
+              border: 'none',
+              borderRadius: 20,
+              padding: '4px 10px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
           >
             Verify
           </button>
         ) : (
-          <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--warn)', border: '1px solid var(--warn)', borderRadius: 20, padding: '3px 9px', whiteSpace: 'nowrap' }}>
+          <span
+            style={{
+              fontSize: 10.5,
+              fontWeight: 600,
+              color: 'var(--warn)',
+              border: '1px solid var(--warn)',
+              borderRadius: 20,
+              padding: '3px 9px',
+              whiteSpace: 'nowrap',
+            }}
+          >
             Unverified
           </span>
         )}
       </div>
+
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         {canDelete && (
           <button
             onClick={onDelete}
             title="Delete recipient"
-            style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid rgba(255,77,77,.4)', color: 'var(--crit)', cursor: 'pointer' }}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'none',
+              border: '1px solid rgba(255,77,77,.4)',
+              color: 'var(--crit)',
+              cursor: 'pointer',
+            }}
           >
             <Trash2 size={13} />
           </button>
@@ -263,7 +436,7 @@ function RecipientRow({ recipient, detectionTypes, canEdit, canDelete, onVerify,
   );
 }
 
-function RecipientMobileCard({ recipient, detectionTypes, canEdit, canDelete, onVerify, onDelete, onSaved }) {
+function RecipientMobileCard({ recipient, canEdit, canDelete, onVerify, onDelete }) {
   return (
     <div
       style={{
@@ -279,18 +452,47 @@ function RecipientMobileCard({ recipient, detectionTypes, canEdit, canDelete, on
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, minWidth: 0 }}>
         <Avatar name={recipient.fullName} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: 'var(--tx)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {recipient.fullName || '-'}
           </div>
-          <div style={{ marginTop: 3, fontSize: 11.5, color: 'var(--tx3)', overflowWrap: 'anywhere' }}>
+          <div
+            style={{
+              marginTop: 3,
+              fontSize: 11.5,
+              color: 'var(--tx3)',
+              overflowWrap: 'anywhere',
+            }}
+          >
             {recipient.value}
           </div>
         </div>
+
         {canDelete && (
           <button
             onClick={onDelete}
             title="Delete recipient"
-            style={{ width: 32, height: 32, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg1)', border: '1px solid rgba(255,77,77,.4)', color: 'var(--crit)', cursor: 'pointer', flex: '0 0 auto' }}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 9,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'var(--bg1)',
+              border: '1px solid rgba(255,77,77,.4)',
+              color: 'var(--crit)',
+              cursor: 'pointer',
+              flex: '0 0 auto',
+            }}
           >
             <Trash2 size={13} />
           </button>
@@ -299,18 +501,47 @@ function RecipientMobileCard({ recipient, detectionTypes, canEdit, canDelete, on
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         {recipient.verified ? (
-          <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 10.5, fontWeight: 700, color: 'var(--ok)', border: '1px solid var(--ok)', borderRadius: 20, padding: '4px 10px' }}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              fontSize: 10.5,
+              fontWeight: 700,
+              color: 'var(--ok)',
+              border: '1px solid var(--ok)',
+              borderRadius: 20,
+              padding: '4px 10px',
+            }}
+          >
             Verified
           </span>
         ) : canEdit ? (
           <button
             onClick={onVerify}
-            style={{ fontSize: 10.5, fontWeight: 700, color: '#fff', background: 'var(--blue)', border: 'none', borderRadius: 20, padding: '5px 11px', cursor: 'pointer' }}
+            style={{
+              fontSize: 10.5,
+              fontWeight: 700,
+              color: '#fff',
+              background: 'var(--blue)',
+              border: 'none',
+              borderRadius: 20,
+              padding: '5px 11px',
+              cursor: 'pointer',
+            }}
           >
             Verify
           </button>
         ) : (
-          <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--warn)', border: '1px solid var(--warn)', borderRadius: 20, padding: '4px 10px' }}>
+          <span
+            style={{
+              fontSize: 10.5,
+              fontWeight: 700,
+              color: 'var(--warn)',
+              border: '1px solid var(--warn)',
+              borderRadius: 20,
+              padding: '4px 10px',
+            }}
+          >
             Unverified
           </span>
         )}
@@ -319,7 +550,187 @@ function RecipientMobileCard({ recipient, detectionTypes, canEdit, canDelete, on
   );
 }
 
-/* ── Main page ────────────────────────────────────────────────────────────── */
+function TelegramChannelCard({
+  channel,
+  index,
+  unlinkingChatId,
+  onDisconnect,
+  onReconnect,
+}) {
+  const displayName =
+    channel.channelName ||
+    channel.channelTitle ||
+    channel.channelUsername ||
+    channel.chatId ||
+    `Channel ${index + 1}`;
+  const isConnected = channel.active !== false;
+  const isUnlinking = isConnected && unlinkingChatId === channel.chatId;
+
+  return (
+    <div
+      style={{
+        border: '1px solid var(--bd)',
+        borderRadius: 14,
+        background: 'var(--bg2)',
+        padding: 16,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              color: isConnected ? 'var(--ok)' : 'var(--tx3)',
+              fontWeight: 700,
+              fontSize: 13,
+            }}
+          >
+            <CheckCircle2 size={16} /> {isConnected ? 'Telegram Connected' : 'Telegram Disconnected'}
+          </div>
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 14,
+              fontWeight: 700,
+              color: 'var(--tx)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+            title={displayName}
+          >
+            {displayName}
+          </div>
+        </div>
+
+        {isConnected ? (
+          <button
+            onClick={() => onDisconnect(channel.chatId)}
+            disabled={isUnlinking}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 7,
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: 'var(--crit)',
+              background: 'none',
+              border: '1px solid rgba(255,77,77,.4)',
+              borderRadius: 9,
+              padding: '9px 14px',
+              cursor: isUnlinking ? 'wait' : 'pointer',
+              opacity: isUnlinking ? 0.6 : 1,
+              flexShrink: 0,
+            }}
+          >
+            {isUnlinking && <Loader2 size={13} className="animate-spin" />}
+            Disconnect
+          </button>
+        ) : (
+          <button
+            onClick={() => onReconnect(channel, displayName)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 7,
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: '#fff',
+              background: 'linear-gradient(135deg,var(--blue),var(--violet))',
+              border: 'none',
+              borderRadius: 9,
+              padding: '9px 14px',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            Connect Again
+          </button>
+        )}
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: 12,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontFamily: 'var(--mono)',
+              fontSize: 10,
+              letterSpacing: '.07em',
+              color: 'var(--tx3)',
+            }}
+          >
+            CHANNEL NAME
+          </div>
+          <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--tx2)', overflowWrap: 'anywhere' }}>
+            {displayName}
+          </div>
+        </div>
+
+        <div>
+          <div
+            style={{
+              fontFamily: 'var(--mono)',
+              fontSize: 10,
+              letterSpacing: '.07em',
+              color: 'var(--tx3)',
+            }}
+          >
+            CHANNEL ID
+          </div>
+          <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--tx2)', overflowWrap: 'anywhere' }}>
+            {channel.chatId || '-'}
+          </div>
+        </div>
+
+        <div>
+          <div
+            style={{
+              fontFamily: 'var(--mono)',
+              fontSize: 10,
+              letterSpacing: '.07em',
+              color: 'var(--tx3)',
+            }}
+          >
+            STATUS
+          </div>
+          <div
+            style={{
+              marginTop: 4,
+              fontSize: 12.5,
+              color: isConnected ? 'var(--ok)' : 'var(--tx3)',
+              fontWeight: 600,
+            }}
+          >
+            {isConnected ? 'Connected' : 'Disconnected'}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AlertRecipients() {
   const { permissions } = usePermissions();
   const canView = permissions?.recipients?.view ?? true;
@@ -327,12 +738,21 @@ export default function AlertRecipients() {
   const canEdit = permissions?.recipients?.edit ?? true;
   const canDelete = permissions?.recipients?.delete ?? true;
 
+  const [activeView, setActiveView] = useState('email');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [showAddModal, setShowAddModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [telegramStatus, setTelegramStatus] = useState(null);
+  const [telegramLoading, setTelegramLoading] = useState(true);
+  const [telegramUnlinkingChatId, setTelegramUnlinkingChatId] = useState(null);
+  const [telegramSearch, setTelegramSearch] = useState('');
+  const [telegramStatusFilter, setTelegramStatusFilter] = useState('all');
+  const [telegramReconnectHint, setTelegramReconnectHint] = useState(null);
+  const [telegramReconnectTargetChatId, setTelegramReconnectTargetChatId] = useState(null);
   const debounceRef = useRef(null);
+  const telegramSetupRef = useRef(null);
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
   useEffect(() => {
@@ -341,28 +761,99 @@ export default function AlertRecipients() {
     return () => clearTimeout(debounceRef.current);
   }, [search]);
 
-  const recipientsApi = useApi(() => getRecipients('email', debouncedSearch, statusFilter), [debouncedSearch, statusFilter]);
+  const recipientsApi = useApi(
+    () => getRecipients('email', debouncedSearch, statusFilter),
+    [debouncedSearch, statusFilter],
+  );
   const typesApi = useApi(() => getDetectionTypes(), []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      setTelegramLoading(true);
+      const data = await getTelegramLinkCode();
+      if (!mounted) return;
+      setTelegramStatus(data);
+      setTelegramLoading(false);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const recipients = Array.isArray(recipientsApi.data) ? recipientsApi.data : [];
   const detectionTypes = typesApi.data || {};
-  const verifiedCount = recipients.filter(r => r.verified).length;
+  const verifiedCount = recipients.filter((recipient) => recipient.verified).length;
+
+  const linkedTelegramChannels = telegramStatus?.linkedChannels?.length
+    ? telegramStatus.linkedChannels
+    : telegramStatus?.linked
+      ? [
+          {
+            chatId: telegramStatus.chatId,
+            channelName: telegramStatus.channelName,
+            channelTitle: telegramStatus.channelTitle,
+            channelUsername: telegramStatus.channelUsername,
+            chatType: telegramStatus.chatType,
+          },
+        ]
+      : [];
+
+  const filteredTelegramChannels = linkedTelegramChannels.filter((channel) => {
+    const statusMatches =
+      telegramStatusFilter === 'all' ||
+      (telegramStatusFilter === 'connected' && channel.active !== false) ||
+      (telegramStatusFilter === 'disconnected' && channel.active === false);
+
+    const haystack = [
+      channel.channelName,
+      channel.channelTitle,
+      channel.channelUsername,
+      channel.chatId,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    const searchMatches =
+      !telegramSearch.trim() ||
+      haystack.includes(telegramSearch.trim().toLowerCase());
+
+    return statusMatches && searchMatches;
+  });
+
+  async function reloadTelegramStatus() {
+    setTelegramLoading(true);
+    const data = await getTelegramLinkCode();
+    setTelegramStatus(data);
+    setTelegramLoading(false);
+    return data;
+  }
 
   async function handleVerify(recipient) {
     try {
-      const result = await resendVerification({ id: recipient._id, type: 'email', value: recipient.value });
+      const result = await resendVerification({
+        id: recipient._id,
+        type: 'email',
+        value: recipient.value,
+      });
       if (result?.status === 'success') {
         toast.success(result?.message || 'A verification link has been sent');
       } else {
         toast.error(result?.message || 'Failed to send verification link');
       }
-    } catch (e) {
-      toast.error(e?.response?.data?.body?.message || 'Failed to send verification link');
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.body?.message || 'Failed to send verification link',
+      );
     }
   }
 
   async function confirmDelete() {
     if (!deleteTarget) return;
+
     setDeleting(true);
     try {
       const result = await removeRecipient({ emailToRemove: deleteTarget.value });
@@ -372,12 +863,35 @@ export default function AlertRecipients() {
       } else {
         toast.error(result?.message || 'Something went wrong');
       }
-    } catch (e) {
-      toast.error(e?.response?.data?.body?.message || 'Failed to delete recipient');
+    } catch (error) {
+      toast.error(error?.response?.data?.body?.message || 'Failed to delete recipient');
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
     }
+  }
+
+  async function handleTelegramDisconnect(chatId) {
+    setTelegramUnlinkingChatId(chatId);
+    try {
+      const result = await unlinkTelegram(chatId);
+      if (result?.statusCode === 200 || result?.body?.status === 'success') {
+        toast.success('Telegram channel disconnected');
+        await reloadTelegramStatus();
+      } else {
+        toast.error(result?.body?.message || 'Failed to disconnect');
+      }
+    } catch (error) {
+      toast.error(error?.response?.data?.body?.message || 'Failed to disconnect');
+    } finally {
+      setTelegramUnlinkingChatId(null);
+    }
+  }
+
+  function handleTelegramReconnect(channel, displayName) {
+    setTelegramReconnectHint(displayName);
+    setTelegramReconnectTargetChatId(channel?.chatId ? String(channel.chatId) : null);
+    telegramSetupRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   if (!canView) {
@@ -389,7 +903,10 @@ export default function AlertRecipients() {
   }
 
   return (
-    <div className="vq-recipients-page" style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div
+      className="vq-recipients-page"
+      style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}
+    >
       <style>{`
         @media (max-width: 720px) {
           .vq-recipients-page {
@@ -407,6 +924,12 @@ export default function AlertRecipients() {
             width: 100% !important;
             display: grid !important;
             grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          }
+          .vq-recipients-mode-toggle {
+            width: 100% !important;
+          }
+          .vq-recipients-mode-toggle button {
+            flex: 1 1 0 !important;
           }
           .vq-recipients-status button {
             padding-left: 6px !important;
@@ -454,130 +977,424 @@ export default function AlertRecipients() {
         }
       `}</style>
 
-      {/* Telegram Alerts Menu  */}
-      <TelegramAlerts />
-
-      {/* Toolbar */}
-      <div className="vq-recipients-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <div className="vq-recipients-search" style={{ display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 12px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)', minWidth: 220 }}>
-          <Search size={14} style={{ color: 'var(--tx3)', flexShrink: 0 }} />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search recipients..."
-            style={{ flex: 1, background: 'transparent', border: 0, outline: 'none', color: 'var(--tx)', fontSize: 12.5 }}
-          />
-        </div>
-
-        <div className="vq-recipients-status" style={{ display: 'flex', gap: 4, background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 9, padding: 3 }}>
-          {STATUS_FILTERS.map(f => (
-            <button
-              key={f.key}
-              onClick={() => setStatusFilter(f.key)}
-              style={{
-                padding: '6px 13px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                fontSize: 12, fontWeight: 600,
-                background: statusFilter === f.key ? 'var(--blue)' : 'transparent',
-                color: statusFilter === f.key ? '#fff' : 'var(--tx2)',
-              }}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="vq-recipients-spacer" style={{ flex: 1 }} />
-
-        {canCreate && (
+      <div
+        className="vq-recipients-mode-toggle"
+        style={{
+          display: 'inline-flex',
+          gap: 4,
+          background: 'var(--bg2)',
+          border: '1px solid var(--bd)',
+          borderRadius: 10,
+          padding: 4,
+          width: 'fit-content',
+          maxWidth: '100%',
+        }}
+      >
+        {RECIPIENT_VIEWS.map((view) => (
           <button
-            className="vq-recipients-add"
-            onClick={() => setShowAddModal(true)}
+            key={view.key}
+            onClick={() => setActiveView(view.key)}
             style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              fontSize: 12.5, fontWeight: 600, color: '#fff',
-              background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-              borderRadius: 9, padding: '9px 16px', cursor: 'pointer', border: 'none',
-              boxShadow: '0 0 14px rgba(99,102,241,.3)',
+              padding: '8px 18px',
+              borderRadius: 8,
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 12.5,
+              fontWeight: 700,
+              background:
+                activeView === view.key
+                  ? 'linear-gradient(135deg,var(--blue),var(--violet))'
+                  : 'transparent',
+              color: activeView === view.key ? '#fff' : 'var(--tx2)',
             }}
           >
-            <Plus size={14} /> Add New
+            {view.label}
           </button>
-        )}
+        ))}
       </div>
 
-      {/* Table */}
-      <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 14, overflow: 'hidden' }}>
-        <div className="vq-recipients-panel-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid var(--bd)' }}>
-          <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>All Email Recipients</span>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>
-            {verifiedCount} verified · {recipients.length - verifiedCount} pending
-          </span>
+      {activeView === 'telegram' && (
+        <div ref={telegramSetupRef}>
+          <TelegramAlerts
+            showConnectedChannels={false}
+            initiallyExpanded={true}
+            reconnectHint={telegramReconnectHint}
+            reconnectTargetChatId={telegramReconnectTargetChatId}
+            onStatusChange={setTelegramStatus}
+          />
         </div>
+      )}
 
-        {/* Horizontal scroll on narrow screens (e.g. after restoring/un-maximizing
-            the window), with edge fades hinting swipeability, instead of letting
-            the status/detections column squish into the delete button. */}
-        <div className="vq-recipients-desktop">
-        <HScrollHint minWidth={660} fadeColor="var(--bg1)">
-          <div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.6fr .8fr 44px', padding: '10px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)' }}>
-              <span>NAME</span>
-              <span>EMAIL ID</span>
-              <span>STATUS</span>
-              <span />
+      {activeView === 'email' ? (
+        <>
+          <div
+            className="vq-recipients-toolbar"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              flexWrap: 'wrap',
+            }}
+          >
+            <div
+              className="vq-recipients-search"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 7,
+                height: 36,
+                padding: '0 12px',
+                borderRadius: 9,
+                background: 'var(--bg2)',
+                border: '1px solid var(--bd)',
+                minWidth: 220,
+              }}
+            >
+              <Search size={14} style={{ color: 'var(--tx3)', flexShrink: 0 }} />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search recipients..."
+                style={{
+                  flex: 1,
+                  background: 'transparent',
+                  border: 0,
+                  outline: 'none',
+                  color: 'var(--tx)',
+                  fontSize: 12.5,
+                }}
+              />
             </div>
 
-            <AsyncBoundary
-              loading={recipientsApi.loading}
-              error={recipientsApi.error}
-              isEmpty={!recipientsApi.loading && !recipientsApi.error && recipients.length === 0}
-              onRetry={recipientsApi.refetch}
-              minH={160}
-              emptyLabel={search ? `No results found for "${search}"` : 'No recipients added yet'}
+            <div
+              className="vq-recipients-status"
+              style={{
+                display: 'flex',
+                gap: 4,
+                background: 'var(--bg2)',
+                border: '1px solid var(--bd)',
+                borderRadius: 9,
+                padding: 3,
+              }}
             >
-              {() => recipients.map(r => (
-                <RecipientRow
-                  key={r._id}
-                  recipient={r}
-                  detectionTypes={detectionTypes}
-                  canEdit={canEdit}
-                  canDelete={canDelete}
-                  onVerify={() => handleVerify(r)}
-                  onDelete={() => setDeleteTarget(r)}
-                  onSaved={recipientsApi.refetch}
-                />
+              {STATUS_FILTERS.map((filter) => (
+                <button
+                  key={filter.key}
+                  onClick={() => setStatusFilter(filter.key)}
+                  style={{
+                    padding: '6px 13px',
+                    borderRadius: 6,
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    background:
+                      statusFilter === filter.key ? 'var(--blue)' : 'transparent',
+                    color: statusFilter === filter.key ? '#fff' : 'var(--tx2)',
+                  }}
+                >
+                  {filter.label}
+                </button>
               ))}
+            </div>
+
+            <div className="vq-recipients-spacer" style={{ flex: 1 }} />
+
+            {canCreate && (
+              <button
+                className="vq-recipients-add"
+                onClick={() => setShowAddModal(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  color: '#fff',
+                  background: 'linear-gradient(135deg,var(--blue),var(--violet))',
+                  borderRadius: 9,
+                  padding: '9px 16px',
+                  cursor: 'pointer',
+                  border: 'none',
+                  boxShadow: '0 0 14px rgba(99,102,241,.3)',
+                }}
+              >
+                <Plus size={14} /> Add New
+              </button>
+            )}
+          </div>
+
+          <div
+            style={{
+              background: 'var(--bg1)',
+              border: '1px solid var(--bd)',
+              borderRadius: 14,
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              className="vq-recipients-panel-head"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '14px 16px',
+                borderBottom: '1px solid var(--bd)',
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: 'var(--disp)',
+                  fontWeight: 600,
+                  fontSize: 14,
+                }}
+              >
+                All Email Recipients
+              </span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>
+                {verifiedCount} verified · {recipients.length - verifiedCount} pending
+              </span>
+            </div>
+
+            <div className="vq-recipients-desktop">
+              <HScrollHint minWidth={660} fadeColor="var(--bg1)">
+                <div>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1.4fr 1.6fr .8fr 44px',
+                      padding: '10px 16px',
+                      borderBottom: '1px solid var(--bd)',
+                      fontFamily: 'var(--mono)',
+                      fontSize: 9.5,
+                      letterSpacing: '.07em',
+                      color: 'var(--tx3)',
+                    }}
+                  >
+                    <span>NAME</span>
+                    <span>EMAIL ID</span>
+                    <span>STATUS</span>
+                    <span />
+                  </div>
+
+                  <AsyncBoundary
+                    loading={recipientsApi.loading}
+                    error={recipientsApi.error}
+                    isEmpty={
+                      !recipientsApi.loading &&
+                      !recipientsApi.error &&
+                      recipients.length === 0
+                    }
+                    onRetry={recipientsApi.refetch}
+                    minH={160}
+                    emptyLabel={
+                      search
+                        ? `No results found for "${search}"`
+                        : 'No recipients added yet'
+                    }
+                  >
+                    {() =>
+                      recipients.map((recipient) => (
+                        <RecipientRow
+                          key={recipient._id}
+                          recipient={recipient}
+                          canEdit={canEdit}
+                          canDelete={canDelete}
+                          onVerify={() => handleVerify(recipient)}
+                          onDelete={() => setDeleteTarget(recipient)}
+                        />
+                      ))
+                    }
+                  </AsyncBoundary>
+                </div>
+              </HScrollHint>
+            </div>
+
+            <div
+              className="vq-recipients-mobile"
+              style={{ display: 'none', flexDirection: 'column', gap: 10, padding: 12 }}
+            >
+              <AsyncBoundary
+                loading={recipientsApi.loading}
+                error={recipientsApi.error}
+                isEmpty={
+                  !recipientsApi.loading &&
+                  !recipientsApi.error &&
+                  recipients.length === 0
+                }
+                onRetry={recipientsApi.refetch}
+                minH={160}
+                emptyLabel={
+                  search
+                    ? `No results found for "${search}"`
+                    : 'No recipients added yet'
+                }
+              >
+                {() =>
+                  recipients.map((recipient) => (
+                    <RecipientMobileCard
+                      key={recipient._id}
+                      recipient={recipient}
+                      canEdit={canEdit}
+                      canDelete={canDelete}
+                      onVerify={() => handleVerify(recipient)}
+                      onDelete={() => setDeleteTarget(recipient)}
+                    />
+                  ))
+                }
+              </AsyncBoundary>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <div
+            className="vq-recipients-toolbar"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              flexWrap: 'wrap',
+            }}
+          >
+            <div
+              className="vq-recipients-search"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 7,
+                height: 36,
+                padding: '0 12px',
+                borderRadius: 9,
+                background: 'var(--bg2)',
+                border: '1px solid var(--bd)',
+                minWidth: 220,
+              }}
+            >
+              <Search size={14} style={{ color: 'var(--tx3)', flexShrink: 0 }} />
+              <input
+                value={telegramSearch}
+                onChange={(event) => setTelegramSearch(event.target.value)}
+                placeholder="Search by channel name..."
+                style={{
+                  flex: 1,
+                  background: 'transparent',
+                  border: 0,
+                  outline: 'none',
+                  color: 'var(--tx)',
+                  fontSize: 12.5,
+                }}
+              />
+            </div>
+
+            <div
+              className="vq-recipients-status"
+              style={{
+                display: 'flex',
+                gap: 4,
+                background: 'var(--bg2)',
+                border: '1px solid var(--bd)',
+                borderRadius: 9,
+                padding: 3,
+              }}
+            >
+              {TELEGRAM_STATUS_FILTERS.map((filter) => (
+                <button
+                  key={filter.key}
+                  onClick={() => setTelegramStatusFilter(filter.key)}
+                  style={{
+                    padding: '6px 13px',
+                    borderRadius: 6,
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    background:
+                      telegramStatusFilter === filter.key
+                        ? 'var(--blue)'
+                        : 'transparent',
+                    color:
+                      telegramStatusFilter === filter.key ? '#fff' : 'var(--tx2)',
+                  }}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: 'var(--bg1)',
+              border: '1px solid var(--bd)',
+              borderRadius: 14,
+              overflow: 'hidden',
+            }}
+          >
+          <div
+            className="vq-recipients-panel-head"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '14px 16px',
+              borderBottom: '1px solid var(--bd)',
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--disp)',
+                fontWeight: 600,
+                fontSize: 14,
+              }}
+            >
+              Connected Telegram Channels
+            </span>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>
+              {filteredTelegramChannels.length} shown · {linkedTelegramChannels.filter((channel) => channel.active !== false).length} connected
+            </span>
+          </div>
+
+          <div style={{ padding: 16 }}>
+            <AsyncBoundary
+              loading={telegramLoading}
+              error={null}
+              isEmpty={!telegramLoading && filteredTelegramChannels.length === 0}
+              onRetry={reloadTelegramStatus}
+              minH={180}
+              emptyLabel={
+                telegramSearch.trim() || telegramStatusFilter !== 'all'
+                  ? 'No Telegram channels match the selected filters'
+                  : 'No Telegram channels found yet'
+              }
+            >
+              {() => (
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                    gap: 14,
+                  }}
+                >
+                  {filteredTelegramChannels.map((channel, index) => (
+                    <TelegramChannelCard
+                      key={channel.chatId || `telegram-linked-${index}`}
+                      channel={channel}
+                      index={index}
+                      unlinkingChatId={telegramUnlinkingChatId}
+                      onDisconnect={handleTelegramDisconnect}
+                      onReconnect={handleTelegramReconnect}
+                    />
+                  ))}
+                </div>
+              )}
             </AsyncBoundary>
           </div>
-        </HScrollHint>
-        </div>
+          </div>
+        </>
+      )}
 
-        <div className="vq-recipients-mobile" style={{ display: 'none', flexDirection: 'column', gap: 10, padding: 12 }}>
-          <AsyncBoundary
-            loading={recipientsApi.loading}
-            error={recipientsApi.error}
-            isEmpty={!recipientsApi.loading && !recipientsApi.error && recipients.length === 0}
-            onRetry={recipientsApi.refetch}
-            minH={160}
-            emptyLabel={search ? `No results found for "${search}"` : 'No recipients added yet'}
-          >
-            {() => recipients.map(r => (
-              <RecipientMobileCard
-                key={r._id}
-                recipient={r}
-                detectionTypes={detectionTypes}
-                canEdit={canEdit}
-                canDelete={canDelete}
-                onVerify={() => handleVerify(r)}
-                onDelete={() => setDeleteTarget(r)}
-                onSaved={recipientsApi.refetch}
-              />
-            ))}
-          </AsyncBoundary>
-        </div>
-      </div>
-
-      {showAddModal && (
+      {showAddModal && activeView === 'email' && (
         <AddRecipientModal
           detectionTypes={detectionTypes}
           onClose={() => setShowAddModal(false)}
@@ -588,7 +1405,9 @@ export default function AlertRecipients() {
       <DeleteConfirmation
         open={!!deleteTarget}
         title="Delete Recipient"
-        message={`Are you sure you want to delete ${deleteTarget?.fullName || deleteTarget?.value}? They will stop receiving alert notifications.`}
+        message={`Are you sure you want to delete ${
+          deleteTarget?.fullName || deleteTarget?.value
+        }? They will stop receiving alert notifications.`}
         icon={<BellRing className="w-6 h-6 text-red-500" />}
         confirmLabel="Delete"
         cancelLabel="Cancel"

@@ -1,19 +1,14 @@
 import axios from 'axios';
-import getStreamHost from '../utils/getStreamHost';
+
+const LOCAL_SETUP = import.meta.env.VITE_LOCAL_SETUP === 'true';
 
 /**
- * The Camera Status API lives on the SAME streaming instance that actually
- * generates this user's HLS — "is this server generating HLS" only means
- * something for the server actually doing it. That host is per-deployment,
- * decoded from the JWT's `streamHost` claim (see utils/getStreamHost.js,
- * the same resolution lib/stream.js uses for the real playback URL) — NOT a
- * single fixed origin, since different accounts/NVRs can be served by
- * different streaming hosts. VITE_STATUS_URL is only a last-resort fallback
- * for local setups with no JWT claim. Resolved fresh on every call (not at
- * module load) since the token can change after login.
+ * Status API routing has two modes:
+ * - Local setup: resolve per target/NVR so each recorder can answer for its own cameras.
+ * - Cloud/staging: always use the fixed status host from VITE_STATUS_URL.
  */
 function statusBase() {
-  const host = getStreamHost() || import.meta.env.VITE_STATUS_URL || '';
+  const host = import.meta.env.VITE_STATUS_URL || '';
   return host.replace(/\/+$/, '');
 }
 
@@ -53,8 +48,10 @@ function nvrDomainBase(target) {
 }
 
 function targetStatusBase(target) {
-  const domainBase = nvrDomainBase(target);
-  if (domainBase) return domainBase;
+  if (LOCAL_SETUP) {
+    const domainBase = nvrDomainBase(target);
+    if (domainBase) return domainBase;
+  }
   return statusBase();
 }
 
