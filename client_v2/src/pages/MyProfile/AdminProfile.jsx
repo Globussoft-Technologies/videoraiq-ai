@@ -53,13 +53,14 @@ function normalizeProfileData(items, channelsData) {
     const settingType = setting.settingType || 'detection';
     const uiData = item?.uiData || setting?.uiData || {};
     const linkedCameras = Array.isArray(item?.linkedCameras) ? item.linkedCameras : [];
-    const activeCameras = channels.filter((camera) => camera?.detections?.[settingType]?.enabled === true).length
-      || linkedCameras.filter((camera) => camera?.detections?.[settingType]?.enabled === true).length
-      || Number(uiData.activeCameras)
-      || 0;
-    const cameraAllocation = channels.filter((camera) => camera?.detections?.[settingType]).length
-      || Number(uiData.appliedCameras)
-      || linkedCameras.length;
+    // Scoped to THIS setting document's own linked cameras, not every camera
+    // with the same settingType anywhere — settingType can repeat across
+    // multiple separate DetectionSetting documents (e.g. several Line
+    // Crossing configs for different zones), each with its own camera set.
+    const activeCameras = linkedCameras.length
+      ? linkedCameras.filter((camera) => camera?.detections?.[settingType]?.enabled === true).length
+      : Number(uiData.activeCameras) || 0;
+    const cameraAllocation = linkedCameras.length || Number(uiData.appliedCameras) || 0;
 
     linkedCameras.forEach((camera) => {
       const id = channelIdOf(camera, cameraMap.size);
@@ -75,10 +76,17 @@ function normalizeProfileData(items, channelsData) {
     });
 
     return {
+      settingId: String(setting._id || item?._id || settingType),
       settingType,
       name: setting.detectionName || uiData.detectionName || setting.name || settingType || 'Detection',
       enabled: activeCameras > 0,
       cameraAllocation,
+      cameras: linkedCameras.map((camera) => ({
+        cameraId: channelIdOf(camera, cameraMap.size),
+        name: cameraNameOf(camera),
+        nvrName: nvrNameOf(camera),
+        enabled: camera?.detections?.[settingType]?.enabled === true,
+      })),
     };
   });
 
