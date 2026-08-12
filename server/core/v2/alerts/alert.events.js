@@ -10,6 +10,17 @@ import adminModel from '../admin/admin.model.js';
 import { isTelegramWindowOpen } from '../../../utils/telegramWindow.js';
 import logger from '../../../utils/logger.js';
 
+const findMatchingZoneConfig = (incidentZone, zoneConfigs = []) => {
+  if (!incidentZone || !Array.isArray(zoneConfigs)) return null;
+
+  return (
+    zoneConfigs.find(
+      zone =>
+        String(zone?.name || '').trim().toLowerCase() ===
+        String(incidentZone || '').trim().toLowerCase(),
+    ) || null
+  );
+};
 
 export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,saved,adminId}) => {
   try {
@@ -163,8 +174,10 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
     // per-zone time window on this detection setting AND the incident's local
     // time (UTC -> admin's timezone) falls inside it. No matching window -> skip.
     try {
+      const adminFlags = await adminModel.findById(adminId).select("telegramAlertsEnabled").lean();
       const telegramIncident = incidentData || saved;
       const zoneConfigs = matchedDetection?.id?.settings?.zone_configs || [];
+      const matchingZoneConfig = findMatchingZoneConfig(telegramIncident?.zone, zoneConfigs);
       const windowOpen = isTelegramWindowOpen({
         incidentZone: telegramIncident?.zone,
         timeOfIncidentUTC: telegramIncident?.timeOfIncident,
@@ -172,7 +185,18 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
         adminTimezone: adminTz,
       });
       if (windowOpen && adminFlags?.telegramAlertsEnabled !== false) {
-        await TelegramService.sendIncident(telegramIncident, nvrData, channelData, adminId, adminTz);
+        await TelegramService.sendIncident(
+          telegramIncident,
+          nvrData,
+          channelData,
+          adminId,
+          adminTz,
+          {
+            preferredChatIds: matchingZoneConfig?.telegramChatId
+              ? [matchingZoneConfig.telegramChatId]
+              : [],
+          },
+        );
       }
     } catch (err) {
       logger.error(`[ALERT_TELEGRAM_ERROR] Telegram alert failed`, {

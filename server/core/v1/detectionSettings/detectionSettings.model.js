@@ -18,6 +18,7 @@ const zoneConfigsField = {
       // (UTC converted to the admin's timezone) falls inside the window.
       startTime: { type: String, default: null },
       endTime: { type: String, default: null },
+      telegramChatId: { type: String, default: null },
     },
   ],
 };

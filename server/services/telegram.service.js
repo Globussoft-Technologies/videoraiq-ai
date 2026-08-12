@@ -200,6 +200,22 @@ class TelegramService {
     }
   }
 
+  async _resolveSelectedIncidentTelegram(adminId, preferredChatIds = []) {
+    const { token, chats } = await this._resolveIncidentTelegram(adminId);
+    if (!token || !chats?.length) return { token: "", chats: [] };
+
+    const preferred = new Set(
+      (Array.isArray(preferredChatIds) ? preferredChatIds : [preferredChatIds])
+        .map((chatId) => String(chatId || "").trim())
+        .filter(Boolean),
+    );
+
+    if (!preferred.size) return { token, chats };
+
+    const targetedChats = chats.filter((chatId) => preferred.has(String(chatId)));
+    return { token, chats: targetedChats.length ? targetedChats : chats };
+  }
+
   async getLinkCode(adminId) {
     const isObjectId = /^[a-f\d]{24}$/i.test(String(adminId));
     const query = isObjectId ? { _id: adminId } : { user_id: String(adminId) };
@@ -459,9 +475,13 @@ class TelegramService {
     channelData = {},
     adminId = null,
     timezone = null,
+    options = {},
   ) {
     try {
-      const { token, chats } = await this._resolveIncidentTelegram(adminId);
+      const { token, chats } = await this._resolveSelectedIncidentTelegram(
+        adminId,
+        options?.preferredChatIds || [],
+      );
       if (!token || !chats?.length) return;
 
       const message = buildIncidentTelegramMessage(
