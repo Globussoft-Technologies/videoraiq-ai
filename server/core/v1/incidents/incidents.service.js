@@ -311,7 +311,12 @@ class IncidentsService {
           //     channelId,
           //   ))
           // ) {
-            if (req.body.incidentName !== "Guard Present" && req.body.incidentType !== "countPersons" && req.body.incidentType !== "countVehicles") {
+            const shouldTriggerAlert =
+              triggerNotification !== false &&
+              incidentType !== "countPersons" &&
+              incidentType !== "countVehicles";
+
+            if (shouldTriggerAlert) {
               void triggerAlertOnIncident({
                 detectionType: incidentType,
                 nvrId,
@@ -512,7 +517,12 @@ class IncidentsService {
       //     channelId,
       //   ))
       // ) {
-        if (req.body.incidentName !== "Guard Present" && req.body.incidentType !== "countPersons" && req.body.incidentType !== "countVehicles") {
+        const shouldTriggerAlert =
+          triggerNotification !== false &&
+          incidentType !== "countPersons" &&
+          incidentType !== "countVehicles";
+
+        if (shouldTriggerAlert) {
           void triggerAlertOnIncident({
             detectionType: incidentType,
             nvrId,

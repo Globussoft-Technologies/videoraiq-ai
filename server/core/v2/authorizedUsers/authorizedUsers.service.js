@@ -385,7 +385,7 @@ class AuthUsersService {
     async createAuthUser(req, res, _next) {
       try {
         const data = req?.verified?.userData;
-        const { firstName, lastName, email ,departmentId,designation,branch,shiftId,numberPlate,location} = req.body;
+        const { firstName, lastName, email ,departmentId,designation,branch,shiftId,numberPlate,vehicleNumber,location} = req.body;
         // Self-registration via an invite link. multipart/form-data delivers
         // every field as a string, so "true" is what actually arrives.
         const userRegistrByLink = String(req.body.userRegistrByLink) === "true";
@@ -504,6 +504,7 @@ class AuthUsersService {
           designation,
           branch,
           numberPlate,
+          vehicleNumber,
           location
         });
 
