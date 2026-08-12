@@ -68,7 +68,7 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
     try {
       const adminFlags = await adminModel.findById(adminId).select("emailAlertsEnabled telegramAlertsEnabled").lean();
       const [emailRecipientsFromAlerts, emailRecipientsFromIncidentType] = await Promise.all([
-        RecipientModel.find({ _id: { $in: channelData?.alerts }, type: 'email' })
+        RecipientModel.find({ _id: { $in: groupedAlerts }, type: 'email' })
           .select('value -_id')
           .lean(),
         RecipientModel.find({ adminId, type: 'email', incidentTypes: detectionType})

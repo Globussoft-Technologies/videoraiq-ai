@@ -170,14 +170,16 @@ describe("triggerAlertOnIncident", () => {
   it("sends email + SMS on a fully-populated loiteringWithoutAuth incident", async () => {
     const channelData = {
       _id: "ch-1",
-      alerts: ["r-email-1"],
+      alerts: [],
       detections: { loiteringWithoutAuthSettings: "settings-id" },
       profile: {},
     };
     const channelForDetections = {
       _id: "ch-1",
       detections: {
-        loiteringWithoutAuthSettings: { id: { alerts: ["r-phone-1"] } },
+        loiteringWithoutAuthSettings: {
+          id: { alerts: ["r-email-1", "r-phone-1"] },
+        },
       },
     };
     setupChannelsChain(channelData, channelForDetections);
@@ -205,6 +207,10 @@ describe("triggerAlertOnIncident", () => {
       "user@a.com",
       "user@b.com",
     ]);
+    expect(RecipientModel.find.mock.calls[0][0]).toEqual({
+      _id: { $in: ["r-email-1", "r-phone-1"] },
+      type: "email",
+    });
     expect(sendIncidentWhatsApp).toHaveBeenCalledTimes(1);
     expect(sendIncidentWhatsApp.mock.calls[0][1]).toEqual(["+1234567890"]);
     // No res.status calls on the happy path.
