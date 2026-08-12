@@ -7,8 +7,9 @@ import channelsModel from '../channels/channels.model.js';
 import RecipientModel from '../verifyRecipients/recipients.model.js';
 import { Incident } from '../incidents/incidents.model.js';
 import adminModel from '../admin/admin.model.js';
-import { isTelegramWindowOpen } from '../../../utils/telegramWindow.js';
+import { parseClockToMinutes } from '../../../utils/telegramWindow.js';
 import logger from '../../../utils/logger.js';
+import momentTZ from "moment-timezone";
 
 const findMatchingZoneConfig = (incidentZone, zoneConfigs = []) => {
   if (!incidentZone || !Array.isArray(zoneConfigs)) return null;
@@ -20,6 +21,40 @@ const findMatchingZoneConfig = (incidentZone, zoneConfigs = []) => {
         String(incidentZone || '').trim().toLowerCase(),
     ) || null
   );
+};
+
+const resolveTelegramZoneConfig = (incidentZone, zoneConfigs = []) => {
+  if (!Array.isArray(zoneConfigs) || zoneConfigs.length === 0) return null;
+  const exactMatch = findMatchingZoneConfig(incidentZone, zoneConfigs);
+  if (exactMatch) return exactMatch;
+
+  // Preserve the old "default channel" behavior for single-zone detections:
+  // if only one zone exists, use it even when the incident carries a different
+  // zone label (or no label at all).
+  if (zoneConfigs.length === 1) return zoneConfigs[0];
+
+  return null;
+};
+
+const isTelegramWindowOpenForZoneConfig = ({
+  zoneConfig,
+  timeOfIncidentUTC,
+  adminTimezone,
+}) => {
+  if (!zoneConfig || !adminTimezone || !timeOfIncidentUTC) return false;
+  if (!zoneConfig.startTime || !zoneConfig.endTime) return false;
+
+  const start = parseClockToMinutes(zoneConfig.startTime);
+  const end = parseClockToMinutes(zoneConfig.endTime);
+  if (start === null || end === null) return false;
+
+  const local = momentTZ.utc(timeOfIncidentUTC).tz(adminTimezone);
+  if (!local.isValid()) return false;
+  const incidentMinutes = local.hours() * 60 + local.minutes();
+
+  if (start === end) return true;
+  if (start < end) return incidentMinutes >= start && incidentMinutes <= end;
+  return incidentMinutes >= start || incidentMinutes <= end;
 };
 
 export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,saved,adminId}) => {
@@ -177,11 +212,10 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
       const adminFlags = await adminModel.findById(adminId).select("telegramAlertsEnabled").lean();
       const telegramIncident = incidentData || saved;
       const zoneConfigs = matchedDetection?.id?.settings?.zone_configs || [];
-      const matchingZoneConfig = findMatchingZoneConfig(telegramIncident?.zone, zoneConfigs);
-      const windowOpen = isTelegramWindowOpen({
-        incidentZone: telegramIncident?.zone,
+      const matchingZoneConfig = resolveTelegramZoneConfig(telegramIncident?.zone, zoneConfigs);
+      const windowOpen = isTelegramWindowOpenForZoneConfig({
+        zoneConfig: matchingZoneConfig,
         timeOfIncidentUTC: telegramIncident?.timeOfIncident,
-        zoneConfigs,
         adminTimezone: adminTz,
       });
       if (windowOpen && adminFlags?.telegramAlertsEnabled !== false) {
