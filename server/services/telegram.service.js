@@ -3,7 +3,11 @@ import axios from "axios";
 import crypto from "crypto";
 import logger from "../utils/logger.js";
 import adminModel from "../core/v1/admin/admin.model.js";
-import { buildIncidentTelegramMessage, buildIncidentImageUrl } from "../messagingService/message.helper.js";
+import {
+  buildIncidentTelegramMessage,
+  buildIncidentImageUrl,
+} from "../messagingService/message.helper.js";
+
 const botToken = config.get("domainPoint.botToken");
 const chatId = config.get("domainPoint.chatId");
 
@@ -15,12 +19,9 @@ const platformBotToken = config.has("Telegram.botToken")
 
 class TelegramService {
   constructor() {
-    // Per-chat send queues to respect Telegram's ~1 msg/sec/chat rate limit.
-    this._queues = new Map(); // chat_id -> { jobs: [], running: bool }
-    this._MIN_GAP_MS = 1100; // ~1 msg/sec per chat (a little headroom)
-    this._MAX_QUEUE = 100; // cap per-chat backlog to bound memory during bursts
-    // Photo-fetch retry schedule: 3s catches an upload race, 15s rides out
-    // NFS visibility lag / a flaky SFTP read on the media store.
+    this._queues = new Map();
+    this._MIN_GAP_MS = 1100;
+    this._MAX_QUEUE = 100;
     this._PHOTO_RETRY_DELAYS_MS = [3000, 15000];
   }
 
@@ -32,151 +33,317 @@ class TelegramService {
         parse_mode: "Markdown",
       });
     } catch (error) {
-      console.error("❌ Telegram sendMessage error:", error.message);
+      console.error("Telegram sendMessage error:", error.message);
     }
-  }
-
-  // Resolve the incident Telegram bot+channel for an admin. Uses the shared
-  // platform bot by default (one-bot model) and the admin's own bot token only
-  // if they set one (override, backward compatible). telegramChatId must be set
-  // (bound via the linking flow) or this admin gets no Telegram alert. Pass the
-  // admin's _id or user_id.
-  async _resolveIncidentTelegram(adminId) {
-    if (!adminId) return { token: "", chat: "" };
-    try {
-      const isObjectId = /^[a-f\d]{24}$/i.test(String(adminId));
-      const query = isObjectId ? { _id: adminId } : { user_id: String(adminId) };
-      const admin = await adminModel.findOne(query).select("telegramChatId").lean();
-      // One-bot model: the platform bot token comes from config/env and is the
-      // single source of truth. Changing Telegram.botToken in env applies to
-      // every admin immediately — no stale per-admin token can override it.
-      return {
-        token: platformBotToken || "",
-        chat: admin?.telegramChatId || "",
-      };
-    } catch (err) {
-      logger.error(`[TELEGRAM] Failed to resolve admin telegram for ${adminId}`, err.message);
-      return { token: "", chat: "" };
-    }
-  }
-
-  // --- One-bot linking (Option A) -----------------------------------------
-
-  // Return (creating if needed) the stable verification code for an admin. The
-  // client posts this in their channel after adding the platform bot as admin.
-  async getLinkCode(adminId) {
-    const isObjectId = /^[a-f\d]{24}$/i.test(String(adminId));
-    const query = isObjectId ? { _id: adminId } : { user_id: String(adminId) };
-    let admin = await adminModel
-      .findOne(query)
-      .select("telegramLinkCode telegramChatId telegramChatTitle telegramChatUsername telegramChatType")
-      .lean();
-    if (!admin) return null;
-    if (admin.telegramChatId && !admin.telegramChatTitle) {
-      admin = await this._backfillChatMetadata(admin);
-    }
-    const linkStatus = {
-      linked: !!admin.telegramChatId,
-      chatId: admin.telegramChatId || null,
-      channelName: admin.telegramChatTitle || null,
-      channelUsername: admin.telegramChatUsername || null,
-      chatType: admin.telegramChatType || null,
-    };
-    if (admin.telegramLinkCode) {
-      return { code: admin.telegramLinkCode, ...linkStatus };
-    }
-    // No active code (never generated, or consumed after a successful link).
-    // Generate a fresh single-use code, but report the real link status —
-    // telegramChatId may already be set from a prior link.
-    const code = `VRIQ-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
-    await adminModel.updateOne({ _id: admin._id }, { $set: { telegramLinkCode: code } });
-    return { code, ...linkStatus };
   }
 
   _chatMetadata(chat = {}) {
-    const privateName = [chat.first_name, chat.last_name].filter(Boolean).join(" ").trim();
+    const privateName = [chat.first_name, chat.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
     return {
-      telegramChatTitle: chat.title || privateName || (chat.username ? `@${chat.username}` : null),
+      telegramChatTitle:
+        chat.title || privateName || (chat.username ? `@${chat.username}` : null),
       telegramChatUsername: chat.username || null,
       telegramChatType: chat.type || null,
     };
   }
 
+  _normalizeChannel(channel = {}) {
+    if (!channel?.chatId) return null;
+
+    const chatIdValue = String(channel.chatId);
+    const channelTitle = channel.channelTitle ?? channel.title ?? null;
+    const channelUsername = channel.channelUsername ?? channel.username ?? null;
+    const chatType = channel.chatType ?? null;
+    const active = channel.active !== false;
+    const linkedAt = channel.linkedAt || null;
+    const disconnectedAt = channel.disconnectedAt || null;
+
+    return {
+      chatId: chatIdValue,
+      channelName: channelTitle || (channelUsername ? `@${channelUsername}` : null),
+      channelTitle,
+      channelUsername,
+      chatType,
+      active,
+      linkedAt,
+      disconnectedAt,
+    };
+  }
+
+  _legacyChannel(admin = {}) {
+    if (!admin?.telegramChatId) return null;
+
+    return this._normalizeChannel({
+      chatId: admin.telegramChatId,
+      title: admin.telegramChatTitle || null,
+      username: admin.telegramChatUsername || null,
+      chatType: admin.telegramChatType || null,
+    });
+  }
+
+  _extractChannels(admin = {}) {
+    const seen = new Set();
+    const channels = [];
+
+    for (const channel of admin.telegramChannels || []) {
+      const normalized = this._normalizeChannel(channel);
+      if (!normalized || seen.has(normalized.chatId)) continue;
+      seen.add(normalized.chatId);
+      channels.push(normalized);
+    }
+
+    const legacy = this._legacyChannel(admin);
+    if (legacy && !seen.has(legacy.chatId)) {
+      channels.push(legacy);
+    }
+
+    return channels;
+  }
+
+  _serializeChannels(channels = []) {
+    return channels.map((channel) => ({
+      chatId: channel.chatId,
+      title: channel.channelTitle || null,
+      username: channel.channelUsername || null,
+      chatType: channel.chatType || null,
+      active: channel.active !== false,
+      linkedAt: channel.linkedAt || new Date(),
+      disconnectedAt: channel.disconnectedAt || null,
+    }));
+  }
+
+  _buildLinkStatus(admin = {}) {
+    const channels = this._extractChannels(admin);
+    const linkedChannels = channels.filter((channel) => channel.active !== false);
+    const primary = linkedChannels[0] || null;
+
+    return {
+      linked: linkedChannels.length > 0,
+      chatId: primary?.chatId || null,
+      channelName: primary?.channelName || null,
+      channelTitle: primary?.channelTitle || null,
+      channelUsername: primary?.channelUsername || null,
+      chatType: primary?.chatType || null,
+      linkedChannels: channels,
+    };
+  }
+
+  async _syncChannelState(adminId, channels, { clearCode = false } = {}) {
+    const activeChannels = channels.filter((channel) => channel.active !== false);
+    const primary = activeChannels[0] || null;
+    const setPayload = {
+      telegramChatId: primary?.chatId || null,
+      telegramChatTitle: primary?.channelTitle || null,
+      telegramChatUsername: primary?.channelUsername || null,
+      telegramChatType: primary?.chatType || null,
+      telegramChannels: this._serializeChannels(channels),
+    };
+
+    if (clearCode) {
+      setPayload.telegramLinkCode = null;
+    }
+
+    await adminModel.updateOne({ _id: adminId }, { $set: setPayload });
+  }
+
+  async _ensureChannels(admin) {
+    if (!admin?._id) return admin;
+
+    const channels = this._extractChannels(admin);
+    const storedCount = Array.isArray(admin.telegramChannels)
+      ? admin.telegramChannels.length
+      : 0;
+
+    if (channels.length > 0 && storedCount !== channels.length) {
+      await this._syncChannelState(admin._id, channels);
+    }
+
+    return {
+      ...admin,
+      telegramChannels: this._serializeChannels(channels),
+      ...this._buildLinkStatus({ ...admin, telegramChannels: channels }),
+    };
+  }
+
+  async _resolveIncidentTelegram(adminId) {
+    if (!adminId) return { token: "", chats: [] };
+
+    try {
+      const isObjectId = /^[a-f\d]{24}$/i.test(String(adminId));
+      const query = isObjectId ? { _id: adminId } : { user_id: String(adminId) };
+      let admin = await adminModel
+        .findOne(query)
+        .select(
+          "telegramChatId telegramChatTitle telegramChatUsername telegramChatType telegramChannels",
+        )
+        .lean();
+
+      admin = await this._ensureChannels(admin);
+      const chats = this._extractChannels(admin)
+        .filter((channel) => channel.active !== false)
+        .map((channel) => channel.chatId);
+
+      return {
+        token: platformBotToken || "",
+        chats,
+      };
+    } catch (err) {
+      logger.error(
+        `[TELEGRAM] Failed to resolve admin telegram for ${adminId}`,
+        err.message,
+      );
+      return { token: "", chats: [] };
+    }
+  }
+
+  async getLinkCode(adminId) {
+    const isObjectId = /^[a-f\d]{24}$/i.test(String(adminId));
+    const query = isObjectId ? { _id: adminId } : { user_id: String(adminId) };
+    let admin = await adminModel
+      .findOne(query)
+      .select(
+        "telegramLinkCode telegramChatId telegramChatTitle telegramChatUsername telegramChatType telegramChannels",
+      )
+      .lean();
+
+    if (!admin) return null;
+
+    admin = await this._ensureChannels(admin);
+
+    for (const channel of this._extractChannels(admin)) {
+      if (channel.channelName) continue;
+      admin = await this._backfillChatMetadata({
+        ...admin,
+        telegramChatId: channel.chatId,
+      });
+    }
+
+    admin = await this._ensureChannels(admin);
+    const linkStatus = this._buildLinkStatus(admin);
+
+    if (admin.telegramLinkCode) {
+      return { code: admin.telegramLinkCode, ...linkStatus };
+    }
+
+    const code = `VRIQ-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+    await adminModel.updateOne({ _id: admin._id }, { $set: { telegramLinkCode: code } });
+    return { code, ...linkStatus };
+  }
+
   async _backfillChatMetadata(admin) {
     try {
-      const response = await axios.post(`https://api.telegram.org/bot${platformBotToken}/getChat`, {
-        chat_id: admin.telegramChatId,
-      });
+      const response = await axios.post(
+        `https://api.telegram.org/bot${platformBotToken}/getChat`,
+        {
+          chat_id: admin.telegramChatId,
+        },
+      );
       const chat = response?.data?.result;
       if (!chat) return admin;
 
       const metadata = this._chatMetadata(chat);
-      await adminModel.updateOne({ _id: admin._id }, { $set: metadata });
-      return { ...admin, ...metadata };
+      const updatedChannels = this._extractChannels(admin).map((channel) =>
+        channel.chatId === String(admin.telegramChatId)
+          ? {
+              ...channel,
+              channelName:
+                metadata.telegramChatTitle ||
+                (metadata.telegramChatUsername
+                  ? `@${metadata.telegramChatUsername}`
+                  : null),
+              channelTitle: metadata.telegramChatTitle,
+              channelUsername: metadata.telegramChatUsername,
+              chatType: metadata.telegramChatType,
+              active: channel.active !== false,
+              disconnectedAt: channel.disconnectedAt || null,
+            }
+          : channel,
+      );
+
+      await this._syncChannelState(admin._id, updatedChannels);
+
+      return {
+        ...admin,
+        ...metadata,
+        telegramChannels: this._serializeChannels(updatedChannels),
+      };
     } catch (err) {
       logger.warn(
-        `[TELEGRAM] could not backfill chat metadata for ${admin.telegramChatId}: ${err?.message || err}`,
+        `[TELEGRAM] could not backfill chat metadata for ${admin.telegramChatId}: ${
+          err?.message || err
+        }`,
       );
       return admin;
     }
   }
 
-  // Unlink: clear the bound channel + rotate the code, and make the bot leave
-  // the channel so it no longer sits there with admin rights. Reading the old
-  // chatId BEFORE nulling it lets us call leaveChat. The leaveChat is
-  // fire-and-forget — a Telegram failure must never fail the unlink.
-  async unlink(adminId) {
+  async unlink(adminId, chatIdToRemove = null) {
     const isObjectId = /^[a-f\d]{24}$/i.test(String(adminId));
     const query = isObjectId ? { _id: adminId } : { user_id: String(adminId) };
 
     const admin = await adminModel
       .findOne(query)
-      .select("telegramChatId")
+      .select(
+        "telegramChatId telegramChatTitle telegramChatUsername telegramChatType telegramChannels",
+      )
       .lean();
 
-    const res = await adminModel.updateOne(query, {
-      $set: {
-        telegramChatId: null,
-        telegramChatTitle: null,
-        telegramChatUsername: null,
-        telegramChatType: null,
-        telegramLinkCode: null,
-      },
+    if (!admin) return false;
+
+    const allChannels = this._extractChannels(admin);
+    const targetChatId = chatIdToRemove ? String(chatIdToRemove) : null;
+    const disconnectedChannels = targetChatId
+      ? allChannels.filter((channel) => channel.chatId === targetChatId)
+      : allChannels;
+    const nextChannels = allChannels.map((channel) => {
+      if (targetChatId && channel.chatId !== targetChatId) {
+        return channel;
+      }
+      return {
+        ...channel,
+        active: false,
+        disconnectedAt: new Date(),
+      };
     });
 
-    // Ask Telegram to remove the bot from the channel (best-effort). Always the
-    // env platform bot (single source of truth).
-    const oldChatId = admin?.telegramChatId;
-    if (oldChatId) {
+    await this._syncChannelState(admin._id, nextChannels, { clearCode: true });
+
+    for (const channel of disconnectedChannels) {
       axios
-        .post(`https://api.telegram.org/bot${platformBotToken}/leaveChat`, { chat_id: oldChatId })
+        .post(`https://api.telegram.org/bot${platformBotToken}/leaveChat`, {
+          chat_id: channel.chatId,
+        })
         .catch((err) =>
           logger.error(
-            `[TELEGRAM] leaveChat failed for ${oldChatId}: ${err?.response?.data ? JSON.stringify(err.response.data) : err.message}`,
+            `[TELEGRAM] leaveChat failed for ${channel.chatId}: ${
+              err?.response?.data
+                ? JSON.stringify(err.response.data)
+                : err.message
+            }`,
           ),
         );
     }
 
-    return res.modifiedCount > 0;
+    return true;
   }
 
-  // Return the code ONLY if the message is exactly "VRIQ-XXXXXXXX" (8 hex,
-  // case-insensitive), ignoring surrounding whitespace. The whole message must
-  // be the code — anything else (extra chars like "VRIQ-9961072B222", or a code
-  // buried in a sentence) is rejected, so only the exact generated key links.
   _extractLinkCode(text) {
     if (!text) return null;
-    const m = String(text).trim().toUpperCase().match(/^VRIQ-[0-9A-F]{8}$/);
-    return m ? m[0] : null;
+    const match = String(text).trim().toUpperCase().match(/^VRIQ-[0-9A-F]{8}$/);
+    return match ? match[0] : null;
   }
 
-  // Webhook handler. When the client posts their code in the channel (or DMs the
-  // bot), Telegram delivers the update here: it carries the code (-> which admin)
-  // AND the chat_id (-> which channel). Bind them. Best-effort, never throws.
   async handleUpdate(update) {
     try {
-      // Accept channel_post, group message, or a private message to the bot.
-      const msg = update?.channel_post || update?.message || update?.edited_channel_post || update?.edited_message;
+      const msg =
+        update?.channel_post ||
+        update?.message ||
+        update?.edited_channel_post ||
+        update?.edited_message;
       if (!msg) return { ok: true, matched: false };
 
       const code = this._extractLinkCode(msg.text || msg.caption);
@@ -184,49 +351,88 @@ class TelegramService {
 
       const chat = msg.chat;
       if (!chat?.id) return { ok: true, matched: false };
+
       const boundChatId = String(chat.id);
       const chatMetadata = this._chatMetadata(chat);
 
-      // The code must belong to an admin before anything is sent to the chat.
-      const candidate = await adminModel.findOne({ telegramLinkCode: code }).select("_id").lean();
+      const candidate = await adminModel
+        .findOne({ telegramLinkCode: code })
+        .select(
+          "_id telegramLinkCode telegramChatId telegramChatTitle telegramChatUsername telegramChatType telegramChannels",
+        )
+        .lean();
       if (!candidate) {
         logger.warn(`[TELEGRAM] link code not found or already used: ${code}`);
         return { ok: true, matched: false };
       }
 
-      // Prove the bot can actually post here BEFORE binding — if its post
-      // rights were revoked, alerts would silently go nowhere while the
-      // dashboard shows "connected". The confirmation message doubles as the
-      // probe; on failure the code stays active so the client can fix the
-      // bot's permissions and post it again.
       try {
         await axios.post(`https://api.telegram.org/bot${platformBotToken}/sendMessage`, {
           chat_id: boundChatId,
-          text: "✅ This channel is now linked\\. Incident alerts will arrive here\\.",
+          text: "This channel is now linked\\. Incident alerts will arrive here\\.",
           parse_mode: "MarkdownV2",
         });
       } catch (sendErr) {
         const reason = sendErr?.response?.data
           ? JSON.stringify(sendErr.response.data)
           : sendErr?.message || String(sendErr);
-        logger.warn(`[TELEGRAM] link rejected for chat ${boundChatId} — bot cannot post: ${reason}`);
+        logger.warn(
+          `[TELEGRAM] link rejected for chat ${boundChatId} - bot cannot post: ${reason}`,
+        );
         return { ok: true, matched: false };
       }
 
-      // Match AND consume the code atomically: only bind if this exact code is
-      // still active, and clear it in the same write so it becomes single-use.
-      // Prevents a leaked/re-posted code from re-binding another channel later.
-      const admin = await adminModel.findOneAndUpdate(
-        { telegramLinkCode: code },
-        {
-          $set: {
-            telegramChatId: boundChatId,
-            ...chatMetadata,
-            telegramLinkCode: null,
+      const channels = this._extractChannels(candidate);
+      const linkedChannel = {
+        chatId: boundChatId,
+        channelTitle: chatMetadata.telegramChatTitle,
+        channelUsername: chatMetadata.telegramChatUsername,
+        chatType: chatMetadata.telegramChatType,
+        channelName:
+          chatMetadata.telegramChatTitle ||
+          (chatMetadata.telegramChatUsername
+            ? `@${chatMetadata.telegramChatUsername}`
+            : null),
+        active: true,
+        linkedAt: new Date(),
+        disconnectedAt: null,
+      };
+
+      const existingIndex = channels.findIndex(
+        (channel) => channel.chatId === boundChatId,
+      );
+
+      if (existingIndex >= 0) {
+        channels[existingIndex] = {
+          ...channels[existingIndex],
+          ...linkedChannel,
+          linkedAt: channels[existingIndex].linkedAt || linkedChannel.linkedAt,
+        };
+      } else {
+        channels.push(linkedChannel);
+      }
+
+      const admin = await adminModel
+        .findOneAndUpdate(
+          { telegramLinkCode: code },
+          {
+            $set: {
+              telegramChatId: channels[0]?.chatId || boundChatId,
+              telegramChatTitle:
+                channels[0]?.channelTitle || chatMetadata.telegramChatTitle,
+              telegramChatUsername:
+                channels[0]?.channelUsername ||
+                chatMetadata.telegramChatUsername,
+              telegramChatType: channels[0]?.chatType || chatMetadata.telegramChatType,
+              telegramChannels: this._serializeChannels(channels),
+              telegramLinkCode: null,
+            },
           },
-        },
-        { new: false },
-      ).select("_id").lean();
+          { new: false },
+        )
+        .select("_id")
+        .lean();
+
       if (!admin) {
         logger.warn(`[TELEGRAM] link code not found or already used: ${code}`);
         return { ok: true, matched: false };
@@ -239,7 +445,7 @@ class TelegramService {
         matched: true,
         adminId: String(admin._id),
         chatId: boundChatId,
-        channelName: chatMetadata.telegramChatTitle,
+        channelName: linkedChannel.channelName,
       };
     } catch (err) {
       logger.error(`[TELEGRAM] handleUpdate error: ${err?.message || err}`);
@@ -247,67 +453,74 @@ class TelegramService {
     }
   }
 
-  // Enqueue an incident alert for the admin's own Telegram channel. Only sends
-  // if the admin has BOTH telegramBotToken and telegramChatId configured;
-  // otherwise silently skips (no global fallback). Fire-and-forget: the alert
-  // flow is never blocked or crashed by Telegram — sends are queued per chat and
-  // rate-limited to respect Telegram's ~1 msg/sec/chat limit (avoids 429 storms).
-  async sendIncident(incident, nvrData = {}, channelData = {}, adminId = null, timezone = null) {
+  async sendIncident(
+    incident,
+    nvrData = {},
+    channelData = {},
+    adminId = null,
+    timezone = null,
+  ) {
     try {
-      const { token, chat } = await this._resolveIncidentTelegram(adminId);
-      if (!token || !chat) return; // admin has no bot/channel configured
-      const message = buildIncidentTelegramMessage(incident, nvrData, channelData, timezone);
+      const { token, chats } = await this._resolveIncidentTelegram(adminId);
+      if (!token || !chats?.length) return;
+
+      const message = buildIncidentTelegramMessage(
+        incident,
+        nvrData,
+        channelData,
+        timezone,
+      );
       const imageUrl = buildIncidentImageUrl(incident);
-      // Makes "why was this alert text-only" diagnosable: no Image on the
-      // incident means the alert can never carry a photo.
+
       if (!imageUrl) {
-        logger.warn(`[TELEGRAM] incident ${incident?._id} has no Image — sending text-only alert`);
+        logger.warn(
+          `[TELEGRAM] incident ${incident?._id} has no Image - sending text-only alert`,
+        );
       }
-      this._enqueue(chat, { token, chat, message, imageUrl });
+
+      for (const chat of chats) {
+        this._enqueue(chat, { token, chat, message, imageUrl });
+      }
     } catch (err) {
       logger.error(`[TELEGRAM] sendIncident enqueue error: ${err?.message || err}`);
     }
   }
 
-  // Add a job to the per-chat queue and start the worker if idle. Caps the queue
-  // so a burst of incidents can't grow memory unbounded (drops oldest).
   _enqueue(chat, job) {
-    let q = this._queues.get(chat);
-    if (!q) {
-      q = { jobs: [], running: false };
-      this._queues.set(chat, q);
+    let queue = this._queues.get(chat);
+    if (!queue) {
+      queue = { jobs: [], running: false };
+      this._queues.set(chat, queue);
     }
-    if (q.jobs.length >= this._MAX_QUEUE) {
-      q.jobs.shift(); // drop oldest to bound memory
-      logger.warn(`[TELEGRAM] queue full for ${chat} — dropped oldest alert`);
+
+    if (queue.jobs.length >= this._MAX_QUEUE) {
+      queue.jobs.shift();
+      logger.warn(`[TELEGRAM] queue full for ${chat} - dropped oldest alert`);
     }
-    q.jobs.push(job);
-    if (!q.running) this._drain(chat, q);
+
+    queue.jobs.push(job);
+    if (!queue.running) this._drain(chat, queue);
   }
 
-  // Process one chat's queue serially, pacing sends and honoring retry_after.
-  async _drain(chat, q) {
-    q.running = true;
-    while (q.jobs.length) {
-      const job = q.jobs.shift();
+  async _drain(chat, queue) {
+    queue.running = true;
+    while (queue.jobs.length) {
+      const job = queue.jobs.shift();
       await this._deliver(job);
-      // Pace to stay under Telegram's ~1 msg/sec per-chat limit.
-      await new Promise((r) => setTimeout(r, this._MIN_GAP_MS));
+      await new Promise((resolve) => setTimeout(resolve, this._MIN_GAP_MS));
     }
-    q.running = false;
+    queue.running = false;
   }
 
-  // Deliver one job: sendPhoto (with caption) or sendMessage. Retries once on a
-  // 429 after retry_after. Falls back to text only on a non-429 photo error.
   async _deliver(job, isRetry = false) {
     const { token, chat, message, imageUrl } = job;
+
     try {
       if (imageUrl) {
-        // Caption capped at 1024; drop a trailing lone backslash so we never cut
-        // mid-escape (would break MarkdownV2).
         let caption = message.slice(0, 1024);
         const trailing = caption.length - caption.replace(/\\+$/, "").length;
         if (trailing % 2 === 1) caption = caption.slice(0, -1);
+
         await axios.post(`https://api.telegram.org/bot${token}/sendPhoto`, {
           chat_id: chat,
           photo: imageUrl,
@@ -324,41 +537,41 @@ class TelegramService {
       }
     } catch (error) {
       const data = error?.response?.data;
-      // 429: wait the requested time and retry ONCE (don't also fire fallback —
-      // that doubles the request rate and worsens throttling).
+
       if (data?.error_code === 429 && !isRetry) {
         const wait = ((data?.parameters?.retry_after || 1) + 1) * 1000;
-        logger.warn(`[TELEGRAM] 429 for ${chat} — retrying after ${wait}ms`);
-        await new Promise((r) => setTimeout(r, wait));
+        logger.warn(`[TELEGRAM] 429 for ${chat} - retrying after ${wait}ms`);
+        await new Promise((resolve) => setTimeout(resolve, wait));
         return this._deliver(job, true);
       }
+
       const reason = data ? JSON.stringify(data) : error?.message || String(error);
       logger.error(
-        `[TELEGRAM] Failed to send incident to ${chat}: ${reason}${imageUrl ? ` (image: ${imageUrl})` : ""}`,
+        `[TELEGRAM] Failed to send incident to ${chat}: ${reason}${
+          imageUrl ? ` (image: ${imageUrl})` : ""
+        }`,
       );
-      // A dead/unknown chat will never work — clear the stale binding so we stop
-      // erroring on every future incident (self-heals; the admin re-links).
+
       if (this._isDeadChatError(data)) {
         await this._clearDeadChat(chat);
-        return; // no point trying the text fallback to the same dead chat
+        return;
       }
-      // Telegram fetches imageUrl itself, and a just-created snapshot may not
-      // be downloadable yet (upload race / NFS visibility lag / SFTP blip).
-      // Retry the photo on a short-then-long schedule before degrading to text.
+
       if (imageUrl && this._isPhotoFetchError(data)) {
         const attempt = job._photoAttempt || 0;
         if (attempt < this._PHOTO_RETRY_DELAYS_MS.length) {
           job._photoAttempt = attempt + 1;
           const wait = this._PHOTO_RETRY_DELAYS_MS[attempt];
           logger.warn(
-            `[TELEGRAM] photo fetch failed for ${chat} — retry ${attempt + 1}/${this._PHOTO_RETRY_DELAYS_MS.length} in ${wait / 1000}s`,
+            `[TELEGRAM] photo fetch failed for ${chat} - retry ${attempt + 1}/${this._PHOTO_RETRY_DELAYS_MS.length} in ${
+              wait / 1000
+            }s`,
           );
-          await new Promise((r) => setTimeout(r, wait));
+          await new Promise((resolve) => setTimeout(resolve, wait));
           return this._deliver(job, isRetry);
         }
       }
-      // Fall back to plain text only if the PHOTO failed for a non-429 reason
-      // (e.g. Telegram couldn't fetch the image URL).
+
       if (imageUrl && data?.error_code !== 429) {
         try {
           await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -367,58 +580,73 @@ class TelegramService {
             parse_mode: "MarkdownV2",
             disable_web_page_preview: false,
           });
-        } catch (fbErr) {
-          const fbData = fbErr?.response?.data;
-          const fbReason = fbData ? JSON.stringify(fbData) : fbErr?.message || String(fbErr);
-          logger.error(`[TELEGRAM] Fallback text also failed for ${chat}: ${fbReason}`);
-          if (this._isDeadChatError(fbData)) await this._clearDeadChat(chat);
+        } catch (fallbackError) {
+          const fallbackData = fallbackError?.response?.data;
+          const fallbackReason = fallbackData
+            ? JSON.stringify(fallbackData)
+            : fallbackError?.message || String(fallbackError);
+          logger.error(
+            `[TELEGRAM] Fallback text also failed for ${chat}: ${fallbackReason}`,
+          );
+          if (this._isDeadChatError(fallbackData)) {
+            await this._clearDeadChat(chat);
+          }
         }
       }
     }
   }
 
-  // Telegram errors that mean it couldn't download the photo URL (file not
-  // there yet / bad content type) — worth one retry before the text fallback.
   _isPhotoFetchError(data) {
-    const d = String(data?.description || "").toLowerCase();
+    const description = String(data?.description || "").toLowerCase();
     return (
       data?.error_code === 400 &&
-      (d.includes("failed to get http url content") ||
-        d.includes("wrong file identifier") ||
-        d.includes("wrong type of the web page content"))
+      (description.includes("failed to get http url content") ||
+        description.includes("wrong file identifier") ||
+        description.includes("wrong type of the web page content"))
     );
   }
 
-  // Telegram errors that mean the chat is permanently unusable (bot removed,
-  // channel deleted, wrong id) — as opposed to transient issues.
   _isDeadChatError(data) {
-    const d = String(data?.description || "").toLowerCase();
+    const description = String(data?.description || "").toLowerCase();
     return (
       data?.error_code === 400 &&
-      (d.includes("chat not found") ||
-        d.includes("bot was kicked") ||
-        d.includes("bot is not a member") ||
-        d.includes("chat was deleted"))
+      (description.includes("chat not found") ||
+        description.includes("bot was kicked") ||
+        description.includes("bot is not a member") ||
+        description.includes("chat was deleted"))
     );
   }
 
-  // Null out a stale telegramChatId so incidents stop targeting a dead chat.
   async _clearDeadChat(chat) {
     try {
-      const res = await adminModel.updateOne(
-        { telegramChatId: String(chat) },
-        {
-          $set: {
-            telegramChatId: null,
-            telegramChatTitle: null,
-            telegramChatUsername: null,
-            telegramChatType: null,
-          },
-        },
+      const admin = await adminModel
+        .findOne({
+          $or: [
+            { telegramChatId: String(chat) },
+            { "telegramChannels.chatId": String(chat) },
+          ],
+        })
+        .select(
+          "_id telegramChatId telegramChatTitle telegramChatUsername telegramChatType telegramChannels",
+        )
+        .lean();
+
+      if (!admin) return;
+
+      const nextChannels = this._extractChannels(admin).map((channel) =>
+        channel.chatId === String(chat)
+          ? {
+              ...channel,
+              active: false,
+              disconnectedAt: new Date(),
+            }
+          : channel,
       );
-      if (res.modifiedCount > 0) {
-        logger.warn(`[TELEGRAM] cleared stale telegramChatId ${chat} (chat unreachable)`);
-      }
+
+      await this._syncChannelState(admin._id, nextChannels);
+      logger.warn(
+        `[TELEGRAM] cleared stale telegram chat ${chat} (chat unreachable)`,
+      );
     } catch (err) {
       logger.error(`[TELEGRAM] failed to clear stale chat ${chat}: ${err?.message}`);
     }
@@ -426,7 +654,7 @@ class TelegramService {
 
   async sendDomainRegistration(domainName, ip, port) {
     const message = `
-        🌐 *New Domain Registration*
+        *New Domain Registration*
         Domain: ${domainName}
         IP: ${ip}
         Port: ${port}

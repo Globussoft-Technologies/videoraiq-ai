@@ -62,6 +62,20 @@ const adminSchema = new mongoose.Schema({
   telegramChatTitle: { type: String, default: null },
   telegramChatUsername: { type: String, default: null },
   telegramChatType: { type: String, default: null },
+  telegramChannels: {
+    type: [
+      {
+        chatId: { type: String, default: null },
+        title: { type: String, default: null },
+        username: { type: String, default: null },
+        chatType: { type: String, default: null },
+        active: { type: Boolean, default: true },
+        linkedAt: { type: Date, default: Date.now },
+        disconnectedAt: { type: Date, default: null },
+      }
+    ],
+    default: [],
+  },
   // Global per-admin alert kill-switches. When false, the sender skips the
   // channel entirely even if a detection has recipients configured.
   emailAlertsEnabled: { type: Boolean, default: true },
