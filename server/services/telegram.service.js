@@ -67,17 +67,58 @@ class TelegramService {
   async getLinkCode(adminId) {
     const isObjectId = /^[a-f\d]{24}$/i.test(String(adminId));
     const query = isObjectId ? { _id: adminId } : { user_id: String(adminId) };
-    const admin = await adminModel.findOne(query).select("telegramLinkCode telegramChatId").lean();
+    let admin = await adminModel
+      .findOne(query)
+      .select("telegramLinkCode telegramChatId telegramChatTitle telegramChatUsername telegramChatType")
+      .lean();
     if (!admin) return null;
+    if (admin.telegramChatId && !admin.telegramChatTitle) {
+      admin = await this._backfillChatMetadata(admin);
+    }
+    const linkStatus = {
+      linked: !!admin.telegramChatId,
+      chatId: admin.telegramChatId || null,
+      channelName: admin.telegramChatTitle || null,
+      channelUsername: admin.telegramChatUsername || null,
+      chatType: admin.telegramChatType || null,
+    };
     if (admin.telegramLinkCode) {
-      return { code: admin.telegramLinkCode, linked: !!admin.telegramChatId, chatId: admin.telegramChatId || null };
+      return { code: admin.telegramLinkCode, ...linkStatus };
     }
     // No active code (never generated, or consumed after a successful link).
     // Generate a fresh single-use code, but report the real link status —
     // telegramChatId may already be set from a prior link.
     const code = `VRIQ-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
     await adminModel.updateOne({ _id: admin._id }, { $set: { telegramLinkCode: code } });
-    return { code, linked: !!admin.telegramChatId, chatId: admin.telegramChatId || null };
+    return { code, ...linkStatus };
+  }
+
+  _chatMetadata(chat = {}) {
+    const privateName = [chat.first_name, chat.last_name].filter(Boolean).join(" ").trim();
+    return {
+      telegramChatTitle: chat.title || privateName || (chat.username ? `@${chat.username}` : null),
+      telegramChatUsername: chat.username || null,
+      telegramChatType: chat.type || null,
+    };
+  }
+
+  async _backfillChatMetadata(admin) {
+    try {
+      const response = await axios.post(`https://api.telegram.org/bot${platformBotToken}/getChat`, {
+        chat_id: admin.telegramChatId,
+      });
+      const chat = response?.data?.result;
+      if (!chat) return admin;
+
+      const metadata = this._chatMetadata(chat);
+      await adminModel.updateOne({ _id: admin._id }, { $set: metadata });
+      return { ...admin, ...metadata };
+    } catch (err) {
+      logger.warn(
+        `[TELEGRAM] could not backfill chat metadata for ${admin.telegramChatId}: ${err?.message || err}`,
+      );
+      return admin;
+    }
   }
 
   // Unlink: clear the bound channel + rotate the code, and make the bot leave
@@ -94,7 +135,13 @@ class TelegramService {
       .lean();
 
     const res = await adminModel.updateOne(query, {
-      $set: { telegramChatId: null, telegramLinkCode: null },
+      $set: {
+        telegramChatId: null,
+        telegramChatTitle: null,
+        telegramChatUsername: null,
+        telegramChatType: null,
+        telegramLinkCode: null,
+      },
     });
 
     // Ask Telegram to remove the bot from the channel (best-effort). Always the
@@ -138,6 +185,7 @@ class TelegramService {
       const chat = msg.chat;
       if (!chat?.id) return { ok: true, matched: false };
       const boundChatId = String(chat.id);
+      const chatMetadata = this._chatMetadata(chat);
 
       // The code must belong to an admin before anything is sent to the chat.
       const candidate = await adminModel.findOne({ telegramLinkCode: code }).select("_id").lean();
@@ -170,7 +218,13 @@ class TelegramService {
       // Prevents a leaked/re-posted code from re-binding another channel later.
       const admin = await adminModel.findOneAndUpdate(
         { telegramLinkCode: code },
-        { $set: { telegramChatId: boundChatId, telegramLinkCode: null } },
+        {
+          $set: {
+            telegramChatId: boundChatId,
+            ...chatMetadata,
+            telegramLinkCode: null,
+          },
+        },
         { new: false },
       ).select("_id").lean();
       if (!admin) {
@@ -180,7 +234,13 @@ class TelegramService {
 
       logger.info(`[TELEGRAM] linked admin ${admin._id} -> chat ${boundChatId}`);
 
-      return { ok: true, matched: true, adminId: String(admin._id), chatId: boundChatId };
+      return {
+        ok: true,
+        matched: true,
+        adminId: String(admin._id),
+        chatId: boundChatId,
+        channelName: chatMetadata.telegramChatTitle,
+      };
     } catch (err) {
       logger.error(`[TELEGRAM] handleUpdate error: ${err?.message || err}`);
       return { ok: true, matched: false };
@@ -347,7 +407,14 @@ class TelegramService {
     try {
       const res = await adminModel.updateOne(
         { telegramChatId: String(chat) },
-        { $set: { telegramChatId: null } },
+        {
+          $set: {
+            telegramChatId: null,
+            telegramChatTitle: null,
+            telegramChatUsername: null,
+            telegramChatType: null,
+          },
+        },
       );
       if (res.modifiedCount > 0) {
         logger.warn(`[TELEGRAM] cleared stale telegramChatId ${chat} (chat unreachable)`);

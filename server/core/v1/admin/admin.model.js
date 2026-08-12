@@ -59,6 +59,9 @@ const adminSchema = new mongoose.Schema({
   // if BOTH are set (no global fallback); otherwise this admin gets no Telegram.
   telegramBotToken: { type: String, default: null },
   telegramChatId: { type: String, default: null },
+  telegramChatTitle: { type: String, default: null },
+  telegramChatUsername: { type: String, default: null },
+  telegramChatType: { type: String, default: null },
   // Global per-admin alert kill-switches. When false, the sender skips the
   // channel entirely even if a detection has recipients configured.
   emailAlertsEnabled: { type: Boolean, default: true },

@@ -25,6 +25,7 @@ beforeEach(() => {
   axios.post.mockReset();
   adminModel.findOne.mockReset();
   adminModel.findOneAndUpdate.mockReset();
+  adminModel.updateOne.mockReset();
 });
 
 describe("TelegramService.sendMessage", () => {
@@ -93,7 +94,12 @@ describe("TelegramService._deliver photo-fetch retry", () => {
 });
 
 describe("TelegramService.handleUpdate linking", () => {
-  const update = { channel_post: { text: "VRIQ-ABCDEF12", chat: { id: -100123 } } };
+  const update = {
+    channel_post: {
+      text: "VRIQ-ABCDEF12",
+      chat: { id: -100123, type: "channel", title: "Personal Tracker", username: "personal_tracker" },
+    },
+  };
 
   it("does NOT bind the channel when the bot cannot post the confirmation", async () => {
     adminModel.findOne.mockReturnValueOnce(chainResolving({ _id: "a1" }));
@@ -116,13 +122,97 @@ describe("TelegramService.handleUpdate linking", () => {
 
     const res = await TelegramService.handleUpdate(update);
 
-    expect(res).toMatchObject({ ok: true, matched: true, adminId: "a1", chatId: "-100123" });
+    expect(res).toMatchObject({
+      ok: true,
+      matched: true,
+      adminId: "a1",
+      chatId: "-100123",
+      channelName: "Personal Tracker",
+    });
     expect(axios.post.mock.calls[0][0]).toMatch(/sendMessage$/);
     expect(adminModel.findOneAndUpdate).toHaveBeenCalledWith(
       { telegramLinkCode: "VRIQ-ABCDEF12" },
-      { $set: { telegramChatId: "-100123", telegramLinkCode: null } },
+      {
+        $set: {
+          telegramChatId: "-100123",
+          telegramChatTitle: "Personal Tracker",
+          telegramChatUsername: "personal_tracker",
+          telegramChatType: "channel",
+          telegramLinkCode: null,
+        },
+      },
       { new: false },
     );
+  });
+});
+
+describe("TelegramService.getLinkCode metadata", () => {
+  it("returns stored channel metadata without calling Telegram", async () => {
+    adminModel.findOne.mockReturnValueOnce(chainResolving({
+      _id: "a1",
+      telegramLinkCode: "VRIQ-ABCDEF12",
+      telegramChatId: "-100123",
+      telegramChatTitle: "Personal Tracker",
+      telegramChatUsername: "personal_tracker",
+      telegramChatType: "channel",
+    }));
+
+    const result = await TelegramService.getLinkCode("admin-user-id");
+
+    expect(result).toMatchObject({
+      linked: true,
+      chatId: "-100123",
+      channelName: "Personal Tracker",
+      channelUsername: "personal_tracker",
+      chatType: "channel",
+    });
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it("backfills metadata for an existing linked channel", async () => {
+    adminModel.findOne.mockReturnValueOnce(chainResolving({
+      _id: "a1",
+      telegramLinkCode: "VRIQ-ABCDEF12",
+      telegramChatId: "-100123",
+      telegramChatTitle: null,
+    }));
+    axios.post.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        result: { id: -100123, type: "channel", title: "Personal Tracker", username: "personal_tracker" },
+      },
+    });
+    adminModel.updateOne.mockResolvedValueOnce({ modifiedCount: 1 });
+
+    const result = await TelegramService.getLinkCode("admin-user-id");
+
+    expect(axios.post.mock.calls[0][0]).toMatch(/getChat$/);
+    expect(adminModel.updateOne).toHaveBeenCalledWith(
+      { _id: "a1" },
+      {
+        $set: {
+          telegramChatTitle: "Personal Tracker",
+          telegramChatUsername: "personal_tracker",
+          telegramChatType: "channel",
+        },
+      },
+    );
+    expect(result).toMatchObject({ linked: true, channelName: "Personal Tracker" });
+  });
+
+  it("keeps an existing channel linked when metadata backfill fails", async () => {
+    adminModel.findOne.mockReturnValueOnce(chainResolving({
+      _id: "a1",
+      telegramLinkCode: "VRIQ-ABCDEF12",
+      telegramChatId: "-100123",
+      telegramChatTitle: null,
+    }));
+    axios.post.mockRejectedValueOnce(new Error("Telegram unavailable"));
+
+    const result = await TelegramService.getLinkCode("admin-user-id");
+
+    expect(result).toMatchObject({ linked: true, chatId: "-100123", channelName: null });
+    expect(adminModel.updateOne).not.toHaveBeenCalled();
   });
 });
 
