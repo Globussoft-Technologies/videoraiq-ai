@@ -538,11 +538,8 @@ export default function Detections() {
   const [resettingThresholds, setResettingThresholds] = useState(false);
   const [cameraTypeSaving, setCameraTypeSaving] = useState(false);
   const incidentRequestIdRef = useRef(0);
-
-  if (permissionsLoading) return null;
-  if (!canViewDetections) {
-    return <AccessDenied message="You don't have permission to view Detections." />;
-  }
+  const autoSelectFirstCameraRef = useRef(false);
+  const suppressCameraParamExitRef = useRef(false);
 
   const typesApi = useApi(() => getDetectionTypes(), [], { initialData: {} });
   const incidentFilterTypesApi = useApi(
@@ -989,6 +986,10 @@ export default function Detections() {
 
   useEffect(() => {
     if (!detailCameraId && enteredDetections) {
+      if (suppressCameraParamExitRef.current) {
+        suppressCameraParamExitRef.current = false;
+        return;
+      }
       setEnteredDetections(false);
       setZoneCamera(null);
       setSelectedNvrIds([]);
@@ -1046,17 +1047,21 @@ export default function Detections() {
 
   const handleNvrFilterChange = (nextIds) => {
     const normalizedIds = nextIds.map(String);
+    autoSelectFirstCameraRef.current = normalizedIds.length > 0;
     setSelectedNvrIds(normalizedIds);
-    const currentNvrId = nvrIdOf(zoneCamera?.nvrId);
-    if (normalizedIds.length > 0 && currentNvrId && !normalizedIds.includes(String(currentNvrId))) {
-      setSelectedFilterCameraId('');
-      setZoneCamera(null);
-      setZoneSettingsOpen(false);
-      setIncidentItems([]);
-      setIncidentTotalCount(0);
-      setIncidentLoading(false);
-      setIncidentError(null);
-    }
+    setSelectedFilterCameraId('');
+    setZoneCamera(null);
+    setZoneSettingsOpen(false);
+    setIncidentItems([]);
+    setIncidentTotalCount(0);
+    setIncidentLoading(normalizedIds.length > 0);
+    setIncidentError(null);
+    suppressCameraParamExitRef.current = normalizedIds.length > 0;
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete('camera');
+      return next;
+    }, { replace: true });
   };
 
   const handleCameraFilterChange = async (cameraId) => {
@@ -1105,6 +1110,26 @@ export default function Detections() {
     }
   };
 
+  useEffect(() => {
+    if (!enteredDetections || !autoSelectFirstCameraRef.current || filterCamerasApi.loading) return;
+    autoSelectFirstCameraRef.current = false;
+    const firstCamera = filterCameraOptions[0];
+    if (firstCamera?.id) {
+      handleCameraFilterChange(firstCamera.id);
+      return;
+    }
+    setSelectedFilterCameraId('');
+    setZoneCamera(null);
+    setZoneSettingsOpen(false);
+    setIncidentItems([]);
+    setIncidentTotalCount(0);
+    setIncidentLoading(false);
+    setIncidentError(null);
+  // `handleCameraFilterChange` intentionally stays inline with the latest
+  // camera options and selected setting type for this render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enteredDetections, filterCamerasApi.loading, filterCameraOptions]);
+
   const refreshZoneCamera = async () => {
     if (!zoneCameraNvrId) return;
     try {
@@ -1152,6 +1177,11 @@ export default function Detections() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSettingType, zoneCamera?._id, zoneCameraNvrId]);
+
+  if (permissionsLoading) return null;
+  if (!canViewDetections) {
+    return <AccessDenied message="You don't have permission to view Detections." />;
+  }
 
   if (!enteredDetections) {
     return <DetectionSettingsCameraList onOpenCamera={enterDetections} />;
@@ -1503,16 +1533,7 @@ export default function Detections() {
                       zoneSettingsOpen={zoneSettingsOpen}
                       onZoneSettingsClose={() => setZoneSettingsOpen(false)}
                     />
-                  ) : (
-                    <div style={{ textAlign: 'center', color: 'var(--tx3)' }}>
-                      <div style={{ fontFamily: 'var(--disp)', fontSize: 15, fontWeight: 600, color: 'var(--tx)', marginBottom: 7 }}>
-                        Zone Editor
-                      </div>
-                      <div style={{ fontSize: 12 }}>
-                        {selectedSettingType ? 'Select a camera from the list to load the editor.' : 'Loading detection types...'}
-                      </div>
-                    </div>
-                  )}
+                  ) : null}
                 </div>
                 <DetectionDetailPanel
                   model={selected}

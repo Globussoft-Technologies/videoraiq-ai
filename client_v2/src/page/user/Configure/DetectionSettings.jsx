@@ -243,7 +243,7 @@ function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionReq
             </button>
           </span>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--tx3)', display: 'block' }}>
-            {camera.ipAddress || '—'}
+            {camera.ipAddress || ''}
           </span>
         </span>
       </span>
