@@ -4505,6 +4505,7 @@ export let loiteringDetectionTemplate = (incidentData, nvrData, channelData, tim
     severity,
     description,
     Image,
+    count,
     loiteringThreshold,
     _id,
   } = incidentData;
@@ -4610,6 +4611,19 @@ export let loiteringDetectionTemplate = (incidentData, nvrData, channelData, tim
 
               <table width="100%" cellpadding="0" cellspacing="0"
                      style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;">
+                <tr>
+                  <td style="padding:12px 16px;font-size:14px;color:#0F172A;">
+                    <strong>Loitering Count:</strong>
+                    <span style="
+                      font-size:16px;
+                      font-weight:bold;
+                      color:#1D4ED8;
+                      margin-left:6px;
+                    ">
+                      ${count ?? 0}
+                    </span>
+                  </td>
+                </tr>
                 <tr>
                   <td style="padding:12px 16px;font-size:14px;color:#0F172A;">
                     <strong>Loitering Threshold:</strong>

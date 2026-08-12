@@ -128,6 +128,23 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
     const adminTz = await adminModel.findById(adminId).select("timezone").lean()
       .then(a => a?.timezone || "Asia/Kolkata")
       .catch(() => "Asia/Kolkata");
+    const resolveZoneThreshold = (zoneConfigs = [], incidentZone) => {
+      const zoneName = String(incidentZone || "").trim().toLowerCase();
+      if (!zoneName) return null;
+
+      const matchedZone = (Array.isArray(zoneConfigs) ? zoneConfigs : []).find(
+        (zoneConfig) => String(zoneConfig?.name || "").trim().toLowerCase() === zoneName,
+      );
+
+      const threshold = matchedZone?.threshold_sec;
+      return Number.isFinite(Number(threshold)) ? Number(threshold) : null;
+    };
+    const zoneConfigs = matchedDetection?.id?.settings?.zone_configs || [];
+    const loiteringThreshold = resolveZoneThreshold(zoneConfigs, incidentData?.zone || saved?.zone);
+    if (detectionType === "loiteringDetection") {
+      if (incidentData) incidentData.loiteringThreshold = loiteringThreshold;
+      if (saved) saved.loiteringThreshold = loiteringThreshold;
+    }
       // Step 4: Group alerts by recipientModel
       const groupedAlerts = matchedDetection?.id?.alerts
 
@@ -201,6 +218,8 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
         } else if(detectionType==="vehicleTypeDetection"){
           let mailResponse = await MailResponse.vehicleTypeDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="loiteringDetection"){
+          if (incidentData) incidentData.loiteringThreshold = loiteringThreshold;
+          if (saved) saved.loiteringThreshold = loiteringThreshold;
           let mailResponse = await MailResponse.loiteringDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="tableOccupancyDetection"){
           let mailResponse = await MailResponse.tableOccupancyDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
