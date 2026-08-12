@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, ChevronLeft, ChevronRight, Maximize2, Minimize2, SkipBack, SkipForward, RotateCcw, RotateCw } from 'lucide-react';
 import BufferingIndicator from './BufferingIndicator';
+import FullscreenZoomSurface from './FullscreenZoomSurface';
 import { fetchIncidents } from '../helpers/incidents';
 import {
   getPlaybackUrl,
@@ -376,7 +377,18 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
           never live. Sized larger in true browser fullscreen (no toolbar
           competing for space anymore) than in the normal in-page layout. */}
       <div className="vq-pbtl-video" style={{ position: 'relative', flex: '1 1 auto', minHeight: isExpanded ? 0 : 300, background: '#000', borderRadius: 10, overflow: 'hidden' }}>
-        <video ref={videoRef} muted playsInline style={{ width: '100%', height: '100%', objectFit: 'contain', display: videoState === 'ready' ? 'block' : 'none' }} />
+        {isExpanded ? (
+          <FullscreenZoomSurface enabled={isExpanded} resetKey={`${channelId || 'camera'}-${+day}`}>
+            <video
+              ref={videoRef}
+              muted
+              playsInline
+              style={{ width: '100%', height: '100%', objectFit: 'contain', display: videoState === 'ready' ? 'block' : 'none' }}
+            />
+          </FullscreenZoomSurface>
+        ) : (
+          <video ref={videoRef} muted playsInline style={{ width: '100%', height: '100%', objectFit: 'contain', display: videoState === 'ready' ? 'block' : 'none' }} />
+        )}
         {videoState !== 'ready' && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#2563EB', fontSize: 13, padding: 12, textAlign: 'center' }}>
             {videoState === 'loading' && <BufferingIndicator />}

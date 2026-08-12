@@ -126,9 +126,18 @@ function FullscreenCameraView({
 }) {
   const camName = channel?.customName || channel?.name || 'Camera';
   const site    = channel?.location   || channel?.locationName || channel?.site || '';
+  const handleDoubleClick = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (onClose) onClose();
+    else if (onExpand) onExpand();
+  }, [onClose, onExpand]);
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000' }}>
+    <div
+      onDoubleClick={handleDoubleClick}
+      style={{ position: 'relative', width: '100%', height: '100%', background: '#000' }}
+    >
       <CameraStream
         channel={channel}
         minH={0}
@@ -138,6 +147,9 @@ function FullscreenCameraView({
         active={active}
         priority={PRIORITY_FULLSCREEN}
         immediate
+        isFullscreen
+        enableFullscreenZoom
+        zoomToolbarStyle={{ right: 62 }}
       />
       <LiveCameraLogsOverlay channel={channel} />
 

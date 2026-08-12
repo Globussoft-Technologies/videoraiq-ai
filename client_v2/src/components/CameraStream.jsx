@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { cloneElement, isValidElement, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Maximize2, Minimize2, VideoOff } from 'lucide-react';
 import useHlsPlayer from '../hooks/useHlsPlayer';
 import useStreamSlot from '../hooks/useStreamSlot';
 import { streamUrl } from '../lib/stream';
+import FullscreenZoomSurface from './FullscreenZoomSurface';
 
 /* How long a tile may hold the shared start slot before the next camera goes.
    The camera is NOT torn down at this point — it keeps connecting; it just
@@ -85,6 +86,8 @@ export default function CameraStream({
   immediate = false,  // user explicitly asked for THIS camera — skip the queue
   requireVisible = false, // don't even queue until the tile is actually in view
   slotId,             // scheduler key; defaults to the channel id
+  enableFullscreenZoom = false,
+  zoomToolbarStyle,
 }) {
   const videoRef = useRef(null);
   const hostRef  = useRef(null);
@@ -208,6 +211,18 @@ export default function CameraStream({
     : error  ? 'Stream unavailable'
     : `${name} · connecting…`;
 
+  const videoElement = (
+    <video
+      ref={videoRef}
+      muted
+      autoPlay
+      playsInline
+      onPlaying={handlePlaying}
+      onWaiting={() => setPlaying(false)}
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, display: url && enabled ? 'block' : 'none' }}
+    />
+  );
+
   return (
     <div
       ref={hostRef}
@@ -223,15 +238,20 @@ export default function CameraStream({
         cursor: onMaximize ? 'pointer' : 'default',
       }}
     >
-      <video
-        ref={videoRef}
-        muted
-        autoPlay
-        playsInline
-        onPlaying={handlePlaying}
-        onWaiting={() => setPlaying(false)}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, display: url && enabled ? 'block' : 'none' }}
-      />
+      {enableFullscreenZoom ? (
+        <FullscreenZoomSurface enabled={isFullscreen} resetKey={streamId} toolbarStyle={zoomToolbarStyle}>
+          {isValidElement(videoElement)
+            ? cloneElement(videoElement, {
+                style: {
+                  ...videoElement.props.style,
+                  pointerEvents: 'none',
+                },
+              })
+            : videoElement}
+        </FullscreenZoomSurface>
+      ) : (
+        videoElement
+      )}
 
       {/* Offline / queued / connecting placeholder */}
       {(!url || !enabled || error || !playing) && (
