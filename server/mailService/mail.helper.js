@@ -79,10 +79,7 @@ const legacyIconAsset = (url) => (
     }
 );
 
-const inlineEmailAttachment = ({ contentId, ...asset }) => ({
-    ...asset,
-    content_id: contentId,
-});
+const toInlineDataUri = (asset) => `data:${asset.type};base64,${asset.content}`;
 
 const DEFAULT_EMAIL_TIMEZONE = "Asia/Kolkata";
 const resolveEmailTimezone = (timezone) => {
@@ -151,7 +148,7 @@ class MailHelper {
 
                 const { asset, label } = legacyIconAsset(url);
                 inlineIcons.set(asset.contentId, asset);
-                const iconTag = tag.replace(url, `cid:${asset.contentId}`);
+                const iconTag = tag.replace(url, toInlineDataUri(asset));
                 if (/\balt\s*=\s*(["'])[^"']*\1/i.test(iconTag)) {
                     return iconTag.replace(/\balt\s*=\s*(["'])[^"']*\1/i, `alt="${label}"`);
                 }
@@ -160,18 +157,7 @@ class MailHelper {
         );
 
         email.html = html;
-        if (inlineIcons.size) {
-            const attachments = Array.isArray(email.attachments) ? email.attachments : [];
-            const existingContentIds = new Set(
-                attachments.map(({ contentId, content_id: contentIdJson }) => contentId || contentIdJson),
-            );
-            email.attachments = [
-                ...attachments,
-                ...[...inlineIcons.values()]
-                    .filter(({ contentId }) => !existingContentIds.has(contentId))
-                    .map(inlineEmailAttachment),
-            ];
-        }
+        // Data URIs keep the icons visible without creating downloadable MIME attachments.
     }
 
     _renderIncidentTemplate(templateFn, timezone, ...templateArgs) {
