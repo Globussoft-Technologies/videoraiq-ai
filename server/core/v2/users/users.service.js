@@ -1056,12 +1056,11 @@ class UsersService {
             return res.send(Response.userFailResp("Invalid or expired token", "Validation Failed!"));
           }
 
-          // Update password (will auto-encrypt due to pre-save hook)
-          user.password = newPassword;
-          user.resetPasswordToken = null;
-          user.resetPasswordExpires = null;
-
-          await user.save();
+          await authorizedUsersModel.findByIdAndUpdate(user._id, {
+            password: encrypt(newPassword),
+            resetPasswordToken: null,
+            resetPasswordExpires: null,
+          });
 
           return res.status(200).json(Response.userSuccessResp("Password reset successfully"));
         } catch (error) {
