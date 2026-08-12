@@ -1668,6 +1668,7 @@ export const crowdDetectionTemplate = (incidentData, nvrData, channelData, timez
     description,
     Image,
     count,
+    croudCount,
   } = incidentData;
 
   const getSeverityStyles = (level = "low") => {
@@ -1781,7 +1782,7 @@ export const crowdDetectionTemplate = (incidentData, nvrData, channelData, timez
                       color:#1D4ED8;
                       margin-left:6px;
                     ">
-                      ${count ?? 0}
+                      ${count ?? croudCount ?? 0}
                     </span>
                   </td>
                 </tr>

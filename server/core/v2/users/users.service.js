@@ -243,7 +243,7 @@ class UsersService {
       try {
         const data = req?.verified?.userData;
         let { user_id, adminId ,memberId} = req?.verified?.userData;
-        const {userName, firstName, lastName, email, profilePics ,roleIds,designation,branch,password,confirmPassword,authorizedChannelsData} = req.body;
+        const {userName, firstName, lastName, email, profilePics ,roleIds,designation,branch,password,confirmPassword,authorizedChannelsData,vehicleNumber} = req.body;
 
         // const { error ,value} = AuthUsersValidator.createAuthUser(req?.body);
 
@@ -398,6 +398,7 @@ class UsersService {
             profilePics,
             designation,
             branch,
+            vehicleNumber,
             password
           });
           
@@ -466,6 +467,7 @@ class UsersService {
             profilePics,
             designation,
             branch,
+            vehicleNumber,
             password
           });
           let authorizedChannels = await authorizedChannelsModel.create({
@@ -495,7 +497,7 @@ class UsersService {
           const data = req?.verified?.userData;
            let { user_id, adminId ,memberId} = req?.verified?.userData;
           const { userId } = req.query;
-          const { firstName, lastName, email, profilePics ,roleIds, userName,authorizedChannelsData,password} = req.body;
+          const { firstName, lastName, email, profilePics ,roleIds, userName,authorizedChannelsData,password,vehicleNumber} = req.body;
       
           if (!userId) {
             return res.status(400).json(Response.userFailResp("Missing userId in query"));
@@ -556,6 +558,7 @@ class UsersService {
             }
           }
           let dataToUpdate = { userName,firstName, lastName, email, profilePics ,adminId:isAdminExist?._id,roleIds};
+          if (vehicleNumber !== undefined) dataToUpdate.vehicleNumber = vehicleNumber;
 
           // 🔹 Password update: only update if a new (plain-text) password is provided
           let newPlainPassword = null; // track for email notification

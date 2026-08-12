@@ -53,6 +53,7 @@ class UsersValidator {
         roleIds: Joi.array(),
 
         location: Joi.string().default(null),
+        vehicleNumber: Joi.string().trim().allow(null).optional(),
 
         // ✅ departmentId as single ObjectId
         departmentId: Joi.alternatives().try(
@@ -127,6 +128,7 @@ class UsersValidator {
         roleIds: Joi.array(),
 
         location: Joi.string().default(null),
+        vehicleNumber: Joi.string().trim().allow(null).optional(),
 
 
     });

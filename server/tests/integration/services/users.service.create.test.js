@@ -356,6 +356,7 @@ describe("UsersService.createAuthUser — validation branches", () => {
         roleIds: [validRole._id.toString()],
         firstName: "New",
         lastName: "Person",
+        vehicleNumber: "KA01AB1234",
         authorizedChannelsData: fullChannelsData(),
       },
     });
@@ -364,6 +365,7 @@ describe("UsersService.createAuthUser — validation branches", () => {
     expect(payload(res).status).toBe("success");
     const created = await Users.findOne({ email: "new@test.com" });
     expect(created).toBeTruthy();
+    expect(created.vehicleNumber).toBe("KA01AB1234");
     const ch = await AuthorizedChannels.findOne({ userId: created._id });
     expect(ch).toBeTruthy();
   });
@@ -390,6 +392,7 @@ describe("UsersService.createAuthUser — validation branches", () => {
     expect(payload(res).status).toBe("success");
     const created = await Users.findOne({ email: "bio@test.com" });
     expect(created).toBeTruthy();
+    expect(created.vehicleNumber).toBeNull();
     const ch = await AuthorizedChannels.findOne({ userId: created._id });
     expect(ch.channels).toEqual([]);
     expect(ch.nvrIds).toEqual([]);

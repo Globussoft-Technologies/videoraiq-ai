@@ -345,6 +345,7 @@ const doc = {
       roleIds: ["68c1386d29ecd6979fd0494f"],
       password: "SecurePass123",
       confirmPassword: "SecurePass123",
+      vehicleNumber: "KA01AB1234",
       authorizedChannelsData: {
         locations: ["Banglore"],
         nvrIds: ["68493b14b176a495112b6522", "68493b15b176a495112b6524"],
@@ -372,6 +373,7 @@ const doc = {
       lastName: "Doe",
       email: "jane@example.com",
       roleIds: ["68493b15b176a495112b6524"],
+      vehicleNumber: "KA01AB1234",
       authorizedChannelsData: {
         locations: ["Banglore"],
         nvrIds: ["68493b14b176a495112b6522", "68493b15b176a495112b6524"],

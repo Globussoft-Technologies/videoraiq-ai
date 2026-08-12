@@ -273,6 +273,7 @@ describe("UsersService.updateAuthUser — happy paths", () => {
         userName: "first-updated",
         firstName: "FirstUpdated",
         lastName: "LastUpdated",
+        vehicleNumber: "KA02CD5678",
       },
     });
     await UsersService.updateAuthUser(req, res, next);
@@ -280,6 +281,7 @@ describe("UsersService.updateAuthUser — happy paths", () => {
     const reloaded = await Users.findById(existing._id);
     expect(reloaded.userName).toBe("first-updated");
     expect(reloaded.firstName).toBe("FirstUpdated");
+    expect(reloaded.vehicleNumber).toBe("KA02CD5678");
     // No password change → MailHelper.sendPasswordUpdatedEmail should NOT fire.
     expect(sendPasswordUpdatedEmailMock).not.toHaveBeenCalled();
   });
@@ -292,6 +294,7 @@ describe("UsersService.updateAuthUser — happy paths", () => {
       userName: "stable",
       firstName: "A",
       lastName: "B",
+      vehicleNumber: "KA03EF9012",
       // Users.create runs a pre-save hook that calls encrypt() — pass plain text.
       password: "samepass",
     });
@@ -309,6 +312,7 @@ describe("UsersService.updateAuthUser — happy paths", () => {
     expect(res.statusCode).toBe(200);
     const reloaded = await Users.findById(existing._id);
     expect(reloaded.password).toBe(before); // unchanged
+    expect(reloaded.vehicleNumber).toBe("KA03EF9012");
     expect(sendPasswordUpdatedEmailMock).not.toHaveBeenCalled();
   });
 

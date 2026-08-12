@@ -48,6 +48,10 @@ const usersSchema = new mongoose.Schema({
     type:String,
     default:null
   },
+  vehicleNumber: {
+    type: String,
+    default: null
+  },
   address1:{
     type:String,
     default:null
