@@ -520,6 +520,7 @@ class DetectionSettingService {
           ...detectionSetting.settings,
           ...value.settings,
         };
+        detectionSetting.markModified("settings");
       }
 
       const saved = [];
