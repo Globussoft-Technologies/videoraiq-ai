@@ -5,12 +5,37 @@ import { toast } from 'sonner';
 import ZoneScheduleFields, { TimezoneField, scheduleError } from '../../ZoneScheduleFields';
 import { PRIORITY_OPTIONS } from '../constants';
 
-export default function SaveDetectionAreaModal({ initialName, initialPriority, zones, extraFields, isLineCrossing = false, saving, onCancel, onSubmit }) {
+function normalizeTelegramChannels(channels = []) {
+  return (Array.isArray(channels) ? channels : [])
+    .filter((channel) => channel?.chatId)
+    .map((channel) => ({
+      chatId: String(channel.chatId),
+      label:
+        channel.channelName ||
+        channel.channelTitle ||
+        (channel.channelUsername ? `@${channel.channelUsername}` : null) ||
+        String(channel.chatId),
+    }));
+}
+
+export default function SaveDetectionAreaModal({
+  initialName,
+  initialPriority,
+  zones,
+  extraFields,
+  isLineCrossing = false,
+  saving,
+  onCancel,
+  onSubmit,
+  telegramChannels = [],
+}) {
   const [detectionName, setDetectionName] = useState(initialName || '');
   const [priority, setPriority] = useState(initialPriority || 'moderate');
   const [zoneDrafts, setZoneDrafts] = useState(zones);
   const [errors, setErrors] = useState({});
   const areaLabel = isLineCrossing ? 'Line' : 'Zone';
+  const channelOptions = normalizeTelegramChannels(telegramChannels);
+  const shouldRequireTelegramChannel = channelOptions.length > 1;
 
   const updateZoneField = (index, field, value) => {
     setZoneDrafts(prev => prev.map((z, i) => (i === index ? { ...z, [field]: value } : z)));
@@ -27,6 +52,9 @@ export default function SaveDetectionAreaModal({ initialName, initialPriority, z
       }
       if (extraFields.includes('threshold') && String(z.threshold ?? '').trim() === '') {
         nextErrors[`zone-${i}-threshold`] = true;
+      }
+      if (shouldRequireTelegramChannel && !String(z.telegramChatId || '').trim()) {
+        nextErrors[`zone-${i}-telegramChatId`] = true;
       }
     });
     if (Object.keys(nextErrors).length) {
@@ -136,8 +164,39 @@ export default function SaveDetectionAreaModal({ initialName, initialPriority, z
                     fontSize: 12.5, color: 'var(--tx)', outline: 'none',
                   }}
                 />
-                {errors[`zone-${i}-name`] && (
+              {errors[`zone-${i}-name`] && (
                   <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{areaLabel} Name is required.</div>
+                )}
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>
+                  Telegram Channel{shouldRequireTelegramChannel ? ' *' : ''}
+                </label>
+                <select
+                  value={z.telegramChatId || ''}
+                  onChange={e => updateZoneField(i, 'telegramChatId', e.target.value)}
+                  disabled={!channelOptions.length}
+                  style={{
+                    width: '100%', height: 36, padding: '0 11px', borderRadius: 8, boxSizing: 'border-box',
+                    background: 'var(--bg2)',
+                    border: `1px solid ${errors[`zone-${i}-telegramChatId`] ? 'var(--danger, #ef4444)' : 'var(--bd)'}`,
+                    fontSize: 12.5, color: channelOptions.length ? 'var(--tx)' : 'var(--tx3)', outline: 'none',
+                    cursor: channelOptions.length ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  <option value="">
+                    {channelOptions.length
+                      ? 'Select Telegram channel'
+                      : 'No Telegram channel connected'}
+                  </option>
+                  {channelOptions.map((channel) => (
+                    <option key={channel.chatId} value={channel.chatId}>
+                      {channel.label}
+                    </option>
+                  ))}
+                </select>
+                {errors[`zone-${i}-telegramChatId`] && (
+                  <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>Telegram Channel is required.</div>
                 )}
               </div>
               {isLineCrossing && (

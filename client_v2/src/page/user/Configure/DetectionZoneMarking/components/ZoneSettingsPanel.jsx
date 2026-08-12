@@ -2,11 +2,39 @@ import { useState } from 'react';
 import { ChevronDown, Save, Trash2 } from 'lucide-react';
 import ZoneScheduleFields, { TimezoneField } from '../../ZoneScheduleFields';
 
-export default function ZoneSettingsPanel({ zones, extraFields, isLineCrossing = false, activeIndex, onSetActive, onUpdateField, onSave, onDelete, savingIndex, canDelete, errors = {} }) {
+function normalizeTelegramChannels(channels = []) {
+  return (Array.isArray(channels) ? channels : [])
+    .filter(channel => channel?.chatId)
+    .map(channel => ({
+      chatId: String(channel.chatId),
+      label:
+        channel.channelName ||
+        channel.channelTitle ||
+        (channel.channelUsername ? `@${channel.channelUsername}` : null) ||
+        String(channel.chatId),
+    }));
+}
+
+export default function ZoneSettingsPanel({
+  zones,
+  extraFields,
+  isLineCrossing = false,
+  activeIndex,
+  onSetActive,
+  onUpdateField,
+  onSave,
+  onDelete,
+  savingIndex,
+  canDelete,
+  errors = {},
+  telegramChannels = [],
+}) {
   const [expanded, setExpanded] = useState(null);
   const areaLabel = isLineCrossing ? 'line' : 'zone';
   const areaTitle = isLineCrossing ? 'Line Settings' : 'Zone Settings';
   const nameLabel = isLineCrossing ? 'Line Name' : 'Zone Name';
+  const channelOptions = normalizeTelegramChannels(telegramChannels);
+  const shouldRequireTelegramChannel = channelOptions.length > 1;
 
   if (zones.length === 0) return null;
 
@@ -63,6 +91,35 @@ export default function ZoneSettingsPanel({ zones, extraFields, isLineCrossing =
                     />
                     {errors[`zone-${i}-name`] && (
                       <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{errors[`zone-${i}-name`]}</div>
+                    )}
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>
+                      Telegram Channel{shouldRequireTelegramChannel ? ' *' : ''}
+                    </label>
+                    <select
+                      value={z.telegramChatId || ''}
+                      onChange={e => onUpdateField(i, 'telegramChatId', e.target.value)}
+                      disabled={!channelOptions.length}
+                      style={{
+                        width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
+                        background: 'var(--bg2)',
+                        border: `1px solid ${errors[`zone-${i}-telegramChatId`] ? '#ef4444' : 'var(--bd)'}`,
+                        fontSize: 12, color: channelOptions.length ? 'var(--tx)' : 'var(--tx3)', outline: 'none',
+                        cursor: channelOptions.length ? 'pointer' : 'not-allowed',
+                      }}
+                    >
+                      <option value="">
+                        {channelOptions.length ? 'Select Telegram channel' : 'No Telegram channel connected'}
+                      </option>
+                      {channelOptions.map(channel => (
+                        <option key={channel.chatId} value={channel.chatId}>
+                          {channel.label}
+                        </option>
+                      ))}
+                    </select>
+                    {errors[`zone-${i}-telegramChatId`] && (
+                      <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{errors[`zone-${i}-telegramChatId`]}</div>
                     )}
                   </div>
                   {isLineCrossing && (

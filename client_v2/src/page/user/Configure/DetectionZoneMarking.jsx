@@ -15,6 +15,7 @@ import ZoneToolbar from './DetectionZoneMarking/components/ZoneToolbar';
 import ZoneSettingsPanel from './DetectionZoneMarking/components/ZoneSettingsPanel';
 import SaveDetectionAreaModal from './DetectionZoneMarking/dialogs/SaveDetectionAreaModal';
 import ConfirmDialog from './DetectionZoneMarking/dialogs/ConfirmDialog';
+import { getTelegramLinkCode } from '../../../helpers/telegram';
 import {
   createZoneDetectionSetting,
   deleteZoneDetectionSetting,
@@ -52,6 +53,17 @@ export default function DetectionZoneMarking({
 
   const typesApi = useApi(() => fetchDetectionTypes(), []);
   const typeLabels = typesApi.data || {};
+  const telegramApi = useApi(() => getTelegramLinkCode(), []);
+  const telegramChannels = useMemo(
+    () =>
+      (telegramApi.data?.linkedChannels || []).filter(
+        channel => channel?.chatId && channel?.active !== false,
+      ),
+    [telegramApi.data],
+  );
+  const defaultTelegramChatId = telegramChannels.length === 1
+    ? String(telegramChannels[0].chatId)
+    : '';
 
   const allTypes = useMemo(() => allTypesFor(camera, typeLabels), [camera, typeLabels]);
   // No auto-select â€” the dropdown starts on its "Select Detection Type"
@@ -203,6 +215,7 @@ export default function DetectionZoneMarking({
     name: `Zone ${index + 1}`,
     capacity: '',
     threshold: '',
+    telegramChatId: defaultTelegramChatId,
     countMode: isLineCrossing ? 'entry' : '',
     schedule: emptySchedule(),
     insideReferencePoint: isLineCrossing && zonePoints[2] ? zonePoints[2] : null,
@@ -299,6 +312,9 @@ export default function DetectionZoneMarking({
     if (!String(zone?.name || '').trim()) nextErrors[`zone-${index}-name`] = `${nameLabel} is required.`;
     if (fields.includes('capacity') && String(zone?.capacity ?? '').trim() === '') nextErrors[`zone-${index}-capacity`] = 'Capacity is required.';
     if (fields.includes('threshold') && String(zone?.threshold ?? '').trim() === '') nextErrors[`zone-${index}-threshold`] = 'Threshold is required.';
+    if (telegramChannels.length > 1 && !String(zone?.telegramChatId || '').trim()) {
+      nextErrors[`zone-${index}-telegramChatId`] = 'Telegram Channel is required.';
+    }
     return nextErrors;
   };
 
@@ -313,6 +329,7 @@ export default function DetectionZoneMarking({
       : null;
     const zoneConfigs = nextZones.map(z => ({
       name: z.name,
+      telegramChatId: z.telegramChatId || undefined,
       ...(fields.includes('capacity') ? { capacity: z.capacity === '' ? undefined : Number(z.capacity) } : {}),
       ...(fields.includes('threshold') ? { threshold_sec: z.threshold === '' ? undefined : Number(z.threshold) } : {}),
       // startTime/endTime added only when fully selected in the schedule picker.
@@ -320,6 +337,11 @@ export default function DetectionZoneMarking({
     }));
     if (activeType.settingId) {
       const setting = activeType.setting;
+      const fallbackTelegramChatId =
+        nextZones.find(zone => String(zone?.telegramChatId || '').trim())?.telegramChatId ||
+        defaultTelegramChatId ||
+        setting?.settings?.telegramChatId ||
+        undefined;
       await updateZoneDetectionSetting(activeType.settingId, {
         name: detectionName ?? setting.name,
         enabled: setting.enabled,
@@ -331,12 +353,17 @@ export default function DetectionZoneMarking({
           levelOfImportance: priority ?? setting.settings?.levelOfImportance,
           referencePoints: { ...setting.settings?.referencePoints, [camera._id]: polygons },
           zone_configs: zoneConfigs,
+          telegramChatId: fallbackTelegramChatId,
           ...(lineInsideReferencePoint ? { inside_reference_point: lineInsideReferencePoint } : {}),
           ...(lineCountMode ? { count_mode: lineCountMode } : {}),
           videoResolution: [videoSize.w, videoSize.h],
         },
       });
     } else {
+      const fallbackTelegramChatId =
+        nextZones.find(zone => String(zone?.telegramChatId || '').trim())?.telegramChatId ||
+        defaultTelegramChatId ||
+        undefined;
       await createZoneDetectionSetting({
         name: detectionName,
         settingType: activeType.settingType,
@@ -347,6 +374,7 @@ export default function DetectionZoneMarking({
           levelOfImportance: priority,
           referencePoints: { [camera._id]: polygons },
           zone_configs: zoneConfigs,
+          telegramChatId: fallbackTelegramChatId,
           ...(lineInsideReferencePoint ? { inside_reference_point: lineInsideReferencePoint } : {}),
           ...(lineCountMode ? { count_mode: lineCountMode } : {}),
           videoResolution: [videoSize.w, videoSize.h],
@@ -897,6 +925,7 @@ export default function DetectionZoneMarking({
                 canDelete={canDeleteDetection}
                 errors={zoneFieldErrors}
                 isLineCrossing={isLineCrossing}
+                telegramChannels={telegramChannels}
               />
             )}
 
@@ -1017,6 +1046,7 @@ export default function DetectionZoneMarking({
                 canDelete={canDeleteDetection}
                 errors={zoneFieldErrors}
                 isLineCrossing={isLineCrossing}
+                telegramChannels={telegramChannels}
               />
             ) : (
               <div style={{ border: '1px solid var(--bd)', borderRadius: 12, padding: '30px 18px', textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5 }}>
@@ -1036,9 +1066,10 @@ export default function DetectionZoneMarking({
           extraFields={extraFieldsFor(activeType.settingType)}
           isLineCrossing={isLineCrossing}
           saving={saving}
-          onCancel={() => setShowSaveModal(false)}
-          onSubmit={handleSubmitSave}
-        />
+      onCancel={() => setShowSaveModal(false)}
+      onSubmit={handleSubmitSave}
+      telegramChannels={telegramChannels}
+    />
       )}
 
       <ConfirmDialog
