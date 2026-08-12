@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Mail, Lock } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { userLoginSchema } from "./Schema/UserLoginSchema";
-import { userLogin } from "./api/post/Index";
+import { userLoginByPass } from "./api/post/Index";
 import logo from "@/assets/logo.svg";
 import AuthLoader from "./AuthLoader";
 import AuthHero from "./AuthHero";
@@ -21,23 +21,6 @@ const accessCookieName = () =>
   url === "dev" ? "dev-access-token" : url === "prod" ? "prod-access-token" : "access-token";
 
 const REMEMBER_COOKIE = "admin_remember_me";
-
-function normalizeUserLoginResponse(response) {
-  const body = response?.data?.body;
-  const data = body?.data || {};
-  if (body?.status === "success" && data?.token) {
-    return {
-      ok: true,
-      token: data.token,
-      user: data.userData || data.user || null,
-      msg: body.message,
-    };
-  }
-  return {
-    ok: false,
-    msg: body?.message || response?.data?.message,
-  };
-}
 
 const LoginForm = () => {
   const navigate = useNavigate();
@@ -88,12 +71,12 @@ const LoginForm = () => {
     validationSchema: userLoginSchema,
     onSubmit: async (values, { setSubmitting }) => {
       try {
-        // User login flow (POST /users/login), matching forgot/reset password.
-        const response = await userLogin({
-          usernameOrEmail: values.usernameOrEmail,
-          password: values.password,
+        // aMember login flow (POST /auth/by-login-pass).
+        const response = await userLoginByPass({
+          login: values.usernameOrEmail,
+          pass: values.password,
         });
-        const result = normalizeUserLoginResponse(response);
+        const result = response?.data;
 
         if (result?.ok && result?.token) {
           // V1 hardcodes secure:true; we only require it over HTTPS so the

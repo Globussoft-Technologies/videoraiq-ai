@@ -218,7 +218,7 @@ function RowDetectionTypes({ recipient, detectionTypes, canEdit, onSaved }) {
 function RecipientRow({ recipient, detectionTypes, canEdit, canDelete, onVerify, onDelete, onSaved }) {
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: '1.4fr 1.6fr 1.2fr 44px',
+      display: 'grid', gridTemplateColumns: '1.4fr 1.6fr .8fr 44px',
       alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--bd)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
@@ -247,7 +247,6 @@ function RecipientRow({ recipient, detectionTypes, canEdit, canDelete, onVerify,
             Unverified
           </span>
         )}
-        <RowDetectionTypes recipient={recipient} detectionTypes={detectionTypes} canEdit={canEdit} onSaved={onSaved} />
       </div>
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         {canDelete && (
@@ -315,13 +314,6 @@ function RecipientMobileCard({ recipient, detectionTypes, canEdit, canDelete, on
             Unverified
           </span>
         )}
-      </div>
-
-      <div>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)', marginBottom: 6 }}>
-          DETECTIONS
-        </div>
-        <RowDetectionTypes recipient={recipient} detectionTypes={detectionTypes} canEdit={canEdit} onSaved={onSaved} />
       </div>
     </div>
   );
@@ -528,10 +520,10 @@ export default function AlertRecipients() {
         <div className="vq-recipients-desktop">
         <HScrollHint minWidth={660} fadeColor="var(--bg1)">
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.6fr 1.2fr 44px', padding: '10px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.6fr .8fr 44px', padding: '10px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)' }}>
               <span>NAME</span>
               <span>EMAIL ID</span>
-              <span>STATUS &amp; DETECTIONS</span>
+              <span>STATUS</span>
               <span />
             </div>
 
