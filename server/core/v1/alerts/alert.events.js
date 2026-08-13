@@ -55,6 +55,11 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
     const adminTz = await adminModel.findById(adminId).select("timezone").lean()
       .then(a => a?.timezone || "Asia/Kolkata")
       .catch(() => "Asia/Kolkata");
+    const adminFlags = await adminModel
+      .findById(adminId)
+      .select("emailAlertsEnabled telegramAlertsEnabled")
+      .lean()
+      .catch(() => null);
     const resolveZoneThreshold = (zoneConfigs = [], incidentZone) => {
       const zoneName = String(incidentZone || "").trim().toLowerCase();
       if (!zoneName) return null;
@@ -83,7 +88,6 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
 
     // Send Email
     try {
-      const adminFlags = await adminModel.findById(adminId).select("emailAlertsEnabled telegramAlertsEnabled").lean();
       const [emailRecipientsFromAlerts, emailRecipientsFromIncidentType] = await Promise.all([
         RecipientModel.find({ _id: { $in: groupedAlerts }, type: 'email' })
           .select('value -_id')

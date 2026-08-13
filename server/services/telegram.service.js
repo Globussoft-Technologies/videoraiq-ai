@@ -202,7 +202,17 @@ class TelegramService {
 
   async _resolveSelectedIncidentTelegram(adminId, preferredChatIds = []) {
     const { token, chats } = await this._resolveIncidentTelegram(adminId);
-    if (!token || !chats?.length) return { token: "", chats: [] };
+    if (!token || !chats?.length) {
+      logger.warn(`[TELEGRAM_TRACE] No active telegram chats resolved`, {
+        adminId: adminId ? String(adminId) : null,
+        preferredChatIds: (Array.isArray(preferredChatIds) ? preferredChatIds : [preferredChatIds])
+          .map((chatId) => String(chatId || "").trim())
+          .filter(Boolean),
+        resolvedChats: chats || [],
+        hasToken: Boolean(token),
+      });
+      return { token: "", chats: [] };
+    }
 
     const preferred = new Set(
       (Array.isArray(preferredChatIds) ? preferredChatIds : [preferredChatIds])
@@ -210,10 +220,27 @@ class TelegramService {
         .filter(Boolean),
     );
 
-    if (!preferred.size) return { token, chats };
+    if (!preferred.size) {
+      logger.info(`[TELEGRAM_TRACE] Using all active telegram chats`, {
+        adminId: adminId ? String(adminId) : null,
+        resolvedChats: chats,
+      });
+      return { token, chats };
+    }
 
     const targetedChats = chats.filter((chatId) => preferred.has(String(chatId)));
-    return { token, chats: targetedChats.length ? targetedChats : chats };
+    const finalChats = targetedChats.length ? targetedChats : chats;
+
+    logger.info(`[TELEGRAM_TRACE] Resolved preferred telegram chats`, {
+      adminId: adminId ? String(adminId) : null,
+      preferredChatIds: [...preferred],
+      resolvedChats: chats,
+      matchedChats: targetedChats,
+      fallbackToAllChats: !targetedChats.length,
+      finalChats,
+    });
+
+    return { token, chats: finalChats };
   }
 
   async getLinkCode(adminId) {
@@ -482,7 +509,14 @@ class TelegramService {
         adminId,
         options?.preferredChatIds || [],
       );
-      if (!token || !chats?.length) return;
+      if (!token || !chats?.length) {
+        logger.warn(`[TELEGRAM_TRACE] sendIncident skipped - no token/chats`, {
+          incidentId: incident?._id ? String(incident._id) : null,
+          adminId: adminId ? String(adminId) : null,
+          preferredChatIds: options?.preferredChatIds || [],
+        });
+        return;
+      }
 
       const message = buildIncidentTelegramMessage(
         incident,
@@ -497,6 +531,14 @@ class TelegramService {
           `[TELEGRAM] incident ${incident?._id} has no Image - sending text-only alert`,
         );
       }
+
+      logger.info(`[TELEGRAM_TRACE] Queueing telegram incident`, {
+        incidentId: incident?._id ? String(incident._id) : null,
+        adminId: adminId ? String(adminId) : null,
+        preferredChatIds: options?.preferredChatIds || [],
+        targetChats: chats,
+        hasImage: Boolean(imageUrl),
+      });
 
       for (const chat of chats) {
         this._enqueue(chat, { token, chat, message, imageUrl });
@@ -519,6 +561,11 @@ class TelegramService {
     }
 
     queue.jobs.push(job);
+    logger.info(`[TELEGRAM_TRACE] Enqueued telegram job`, {
+      chat: String(chat),
+      pendingJobs: queue.jobs.length,
+      hasImage: Boolean(job?.imageUrl),
+    });
     if (!queue.running) this._drain(chat, queue);
   }
 
@@ -555,6 +602,12 @@ class TelegramService {
           disable_web_page_preview: false,
         });
       }
+
+      logger.info(`[TELEGRAM_TRACE] Telegram delivery success`, {
+        chat: String(chat),
+        mode: imageUrl ? "photo" : "text",
+        retry: Boolean(isRetry),
+      });
     } catch (error) {
       const data = error?.response?.data;
 
