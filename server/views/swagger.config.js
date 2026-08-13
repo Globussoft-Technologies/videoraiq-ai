@@ -1155,6 +1155,7 @@ const doc = {
       branch: "Bangalore",
       shiftId: "665f2b1c8e4a9d0012ab3422",
       numberPlate: "KA01AB1234",
+      vehicleNumber: "KA01AB1234",
       orgId: 434,
       emp_id: 32631,
       empRoleId: 1613,

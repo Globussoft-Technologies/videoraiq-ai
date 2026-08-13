@@ -93,6 +93,10 @@ const authorizedUsersSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  vehicleNumber: {
+    type: String,
+    default: null
+  },
   tag: {
     type: Boolean,
     default: false

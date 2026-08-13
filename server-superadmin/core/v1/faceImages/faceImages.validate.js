@@ -93,6 +93,7 @@ class FaceImagesValidator {
       shiftId: Joi.string().trim().regex(objectIdPattern).allow(null, '')
         .messages({ 'string.pattern.base': 'shiftId must be a valid id' }),
       numberPlate: Joi.string().trim().allow(null, ''),
+      vehicleNumber: Joi.string().trim().allow(null, ''),
       orgId: Joi.number().allow(null),
       emp_id: Joi.number().allow(null),
       empRoleId: Joi.number().allow(null),

@@ -204,7 +204,7 @@ class FaceImagesService {
       }
 
       const {
-        dsId, email: rawEmail, departmentId, designation, branch, shiftId, numberPlate,
+        dsId, email: rawEmail, departmentId, designation, branch, shiftId, numberPlate, vehicleNumber,
         orgId, emp_id, empRoleId, permission, location, locationId,
         phoneNumber, address1, timezone, profilePics,
       } = req.body;
@@ -253,6 +253,7 @@ class FaceImagesService {
         designation: designation || null,
         branch: branch || null,
         numberPlate: numberPlate || null,
+        vehicleNumber: vehicleNumber || null,
         orgId: orgId ?? null,
         emp_id: emp_id ?? null,
         empRoleId: empRoleId ?? null,
