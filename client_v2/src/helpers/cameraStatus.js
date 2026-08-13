@@ -100,18 +100,24 @@ function targetGroups(targets) {
 
 function mergeSummaries(summaries) {
   const cameraMap = new Map();
-  let serverNetwork = null;
+  const serverNetworks = [];
 
   summaries.forEach((summary) => {
     (summary?.cameras || []).forEach((camera) => {
       if (camera?.id) cameraMap.set(camera.id, camera);
     });
-    if (!serverNetwork && summary?.server_network) serverNetwork = summary.server_network;
+    if (summary?.server_network) {
+      serverNetworks.push({
+        ...summary.server_network,
+        baseUrl: summary.server_network.baseUrl || summary.baseUrl || '',
+      });
+    }
   });
 
   return {
     cameras: [...cameraMap.values()],
-    server_network: serverNetwork,
+    server_network: serverNetworks[0] || null,
+    server_networks: serverNetworks,
   };
 }
 
@@ -131,7 +137,10 @@ export const getCamerasStatus = async (targets) => {
   const responses = await Promise.all(
     groups.map(async ({ baseUrl, ids }) => {
       const res = await axios.post(statusUrl(baseUrl, '/api/cameras/status'), ids.length ? { ids } : {});
-      return res?.data || {};
+      return {
+        ...(res?.data || {}),
+        baseUrl,
+      };
     })
   );
 
@@ -192,6 +201,8 @@ export function subscribeCamerasStatus(targets, { onData, onError, onClose } = {
             if (!frame.startsWith('data: ')) continue;
             try {
               latestByBase.set(baseUrl, JSON.parse(frame.slice(6)));
+              const latestSummary = latestByBase.get(baseUrl);
+              if (latestSummary && !latestSummary.baseUrl) latestSummary.baseUrl = baseUrl;
               onData?.(mergeSummaries([...latestByBase.values()]));
             } catch {
               // malformed frame — skip it, the connection is still good

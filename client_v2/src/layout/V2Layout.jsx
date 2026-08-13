@@ -187,6 +187,10 @@ function Shell() {
   );
   const networkStatusApi = useCameraStatusStream(probeChannel ? [probeChannel] : [], { enabled: !!probeChannel });
   useEffect(() => {
+    if (networkStatusApi.data?.server_networks?.length) {
+      setServerNetwork(networkStatusApi.data.server_networks);
+      return;
+    }
     if (networkStatusApi.data?.server_network) setServerNetwork(networkStatusApi.data.server_network);
   }, [networkStatusApi.data]);
   useEffect(() => {

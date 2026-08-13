@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Search, Video, ChevronRight, ChevronDown, Play, X } from 'lucide-react';
+import { Search, Video, ChevronRight, ChevronDown, Play, X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import ConfirmationModal from '../../../components/DeleteConfirmation';
@@ -88,6 +88,242 @@ function appliedTypesFor(camera, typeLabels) {
     if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
     return a.order - b.order;
   });
+}
+
+function enabledTypesFor(camera, typeLabels) {
+  return appliedTypesFor(camera, typeLabels).filter(type => type.enabled);
+}
+
+function detectionInitials(label) {
+  if (!label || typeof label !== 'string') return '';
+  return label
+    .split(/[\s&/-]+/)
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(part => part[0]?.toUpperCase())
+    .join('');
+}
+
+function EngineChip({ label }) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <span
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{ position: 'relative', display: 'inline-flex' }}
+    >
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          minHeight: 24,
+          minWidth: 38,
+          padding: '0 9px',
+          borderRadius: 999,
+          border: '1px solid rgba(59,130,246,.2)',
+          background: 'rgba(59,130,246,.08)',
+          color: 'var(--tx2)',
+          fontSize: 11.5,
+          fontWeight: 600,
+          whiteSpace: 'nowrap',
+          justifyContent: 'center',
+        }}
+      >
+        {detectionInitials(label)}
+      </span>
+      {hovered && (
+        <span
+          style={{
+            position: 'absolute',
+            left: '50%',
+            bottom: 'calc(100% + 10px)',
+            transform: 'translateX(-50%)',
+            zIndex: 20,
+            maxWidth: 220,
+            padding: '7px 10px',
+            borderRadius: 10,
+            background: 'var(--tooltip)',
+            color: 'var(--tx)',
+            border: '1px solid var(--bd2)',
+            fontSize: 11.5,
+            fontWeight: 600,
+            lineHeight: 1.35,
+            textAlign: 'center',
+            boxShadow: '0 12px 28px rgba(15,23,42,.24)',
+            pointerEvents: 'none',
+            whiteSpace: 'normal',
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          {label}
+          <span
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '100%',
+              width: 10,
+              height: 10,
+              background: 'var(--tooltip)',
+              borderRight: '1px solid var(--bd2)',
+              borderBottom: '1px solid var(--bd2)',
+              transform: 'translateX(-50%) rotate(45deg)',
+              marginTop: -5,
+              backdropFilter: 'blur(8px)',
+            }}
+          />
+        </span>
+      )}
+    </span>
+  );
+}
+
+function EngineFilterDropdown({ value, options, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const selectedValues = Array.isArray(value) ? value : [];
+  const selectedOptions = options.filter(option => selectedValues.includes(option.value));
+  const filteredOptions = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return options;
+    return options.filter(option => option.label.toLowerCase().includes(normalizedQuery));
+  }, [options, query]);
+  const triggerLabel = !selectedOptions.length
+    ? 'All Engines'
+    : selectedOptions.length === 1
+      ? selectedOptions[0].label
+      : `${selectedOptions.length} Engines Selected`;
+
+  const toggleValue = (nextValue) => {
+    if (selectedValues.includes(nextValue)) {
+      onChange(selectedValues.filter(valueItem => valueItem !== nextValue));
+      return;
+    }
+    onChange([...selectedValues, nextValue]);
+  };
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) setQuery('');
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          style={{
+            height: 40,
+            minWidth: 150,
+            padding: '0 34px 0 13px',
+            borderRadius: 10,
+            background: 'var(--bg2)',
+            border: '1px solid var(--bd)',
+            fontSize: 13,
+            color: selectedOptions.length ? 'var(--tx)' : 'var(--tx3)',
+            cursor: 'pointer',
+            position: 'relative',
+            textAlign: 'left',
+          }}
+        >
+          <span style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {triggerLabel}
+          </span>
+          <ChevronDown size={14} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" sideOffset={6}>
+        <div style={{ width: 290, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ position: 'relative' }}>
+            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx3)' }} />
+            <input
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+              placeholder="Search engines..."
+              style={{
+                width: '100%',
+                height: 34,
+                padding: '0 10px 0 32px',
+                borderRadius: 8,
+                border: '1px solid var(--bd)',
+                background: 'var(--bg2)',
+                color: 'var(--tx)',
+                fontSize: 12.5,
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+          <div style={{ maxHeight: 190, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <button
+              type="button"
+              onClick={() => {
+                onChange([]);
+              }}
+              style={{
+                minHeight: 34,
+                padding: '0 10px',
+                borderRadius: 8,
+                border: 'none',
+                background: selectedValues.length === 0 ? 'rgba(59,130,246,.12)' : 'transparent',
+                color: 'var(--tx)',
+                fontSize: 12.5,
+                textAlign: 'left',
+                cursor: 'pointer',
+              }}
+            >
+              All Engines
+            </button>
+            {filteredOptions.length ? filteredOptions.map(option => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => toggleValue(option.value)}
+                style={{
+                  minHeight: 34,
+                  padding: '0 10px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: selectedValues.includes(option.value) ? 'rgba(59,130,246,.12)' : 'transparent',
+                  color: 'var(--tx)',
+                  fontSize: 12.5,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                }}
+              >
+                <span>{option.label}</span>
+                <span style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: 4,
+                  border: '1px solid rgba(59,130,246,.35)',
+                  background: selectedValues.includes(option.value) ? 'var(--blue)' : 'transparent',
+                  color: '#fff',
+                  fontSize: 11,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  {selectedValues.includes(option.value) ? '✓' : ''}
+                </span>
+              </button>
+            )) : (
+              <div style={{ minHeight: 34, padding: '8px 10px', color: 'var(--tx3)', fontSize: 12.5 }}>
+                No engines found
+              </div>
+            )}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 /** Popover: toggle each detection type on/off for this one camera. Rendered in a
  * body portal (see Popover.jsx) so it isn't clipped by the table's overflow:hidden. */
@@ -192,12 +428,14 @@ function CameraPreviewModal({ camera, onClose }) {
 }
 
 function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionRequest, onCheckTypeChange, checkTypeSaving, canEdit = false }) {
+  const enabledTypes = enabledTypesFor(camera, typeLabels);
+
   return (
     <div
       className="vq-row"
       onClick={onOpen}
       style={{
-        display: 'grid', gridTemplateColumns: 'minmax(200px,1.6fr) 190px 150px 44px',
+        display: 'grid', gridTemplateColumns: 'minmax(200px,1.35fr) minmax(240px,1.2fr) 190px 150px 44px',
         gap: 0, padding: '13px 18px', borderBottom: '1px solid var(--bd)',
         alignItems: 'center', fontSize: 13, cursor: 'pointer', transition: 'background .12s',
       }}
@@ -248,6 +486,18 @@ function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionReq
         </span>
       </span>
 
+      <span style={{ minWidth: 0 }}>
+        {enabledTypes.length ? (
+          <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {enabledTypes.map(type => (
+              <EngineChip key={type.key} label={type.label} />
+            ))}
+          </span>
+        ) : (
+          <span style={{ fontSize: 12, color: 'var(--tx3)' }}>No detections enabled</span>
+        )}
+      </span>
+
       <span style={{ display: 'flex', justifyContent: 'center' }} onClick={e => e.stopPropagation()}>
         <AppliedTypesPopover camera={camera} typeLabels={typeLabels} onToggleRequest={onToggleDetectionRequest} disabled={!canEdit} />
       </span>
@@ -261,8 +511,8 @@ function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionReq
             style={{
               height: 32, padding: '0 26px 0 11px', borderRadius: 8,
               background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12,
-              outline: 'none', cursor: checkTypeSaving ? 'wait' : (canEdit ? 'pointer' : 'not-allowed'), color: 'var(--tx)', appearance: 'none',
-              opacity: (checkTypeSaving || !canEdit) ? 0.72 : 1,
+              outline: 'none', cursor: canEdit ? 'pointer' : 'not-allowed', color: 'var(--tx)', appearance: 'none',
+              opacity: canEdit ? 1 : 0.72,
             }}
           >
             {CHECK_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -286,6 +536,7 @@ export function DetectionSettingsCameraList({ onOpenCamera }) {
   const [search, setSearch] = useState('');
   const [nvrFilter, setNvrFilter] = useState('');
   const [camTypeFilter, setCamTypeFilter] = useState('');
+  const [engineFilter, setEngineFilter] = useState([]);
   const [page, setPage] = useState(0);
   const [detectionConfirm, setDetectionConfirm] = useState(null);
   const [detectionActionLoading, setDetectionActionLoading] = useState(false);
@@ -305,7 +556,31 @@ export function DetectionSettingsCameraList({ onOpenCamera }) {
   const cameras = channelsApi.data?.channels ?? [];
   const total = channelsApi.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / LIMIT));
+  const engineOptions = useMemo(() => {
+    const entries = Array.isArray(typeLabels)
+      ? typeLabels.map((type, index) => ({
+          value: type?.settingType || type?.detectionType || type?.key || type?.id || `type-${index}`,
+          label: detectionTypeLabel(type, `Type ${index + 1}`),
+        }))
+      : Object.entries(typeLabels || {}).map(([key, value]) => ({
+          value: key,
+          label: detectionTypeLabel(value, key),
+        }));
 
+    const cameraOnlyEntries = cameras
+      .flatMap(camera => Object.keys(camera?.detections || {}))
+      .filter(Boolean)
+      .filter((key, index, list) => list.indexOf(key) === index)
+      .filter(key => !entries.some(entry => entry.value === key))
+      .map(key => ({ value: key, label: key }));
+
+    return [...entries, ...cameraOnlyEntries].sort((a, b) => a.label.localeCompare(b.label));
+  }, [typeLabels, cameras]);
+
+  const filteredCameras = useMemo(() => {
+    if (!engineFilter.length) return cameras;
+    return cameras.filter(camera => engineFilter.some(engine => isTypeEnabled(camera, engine)));
+  }, [cameras, engineFilter]);
   // Matches V1: a single toggle endpoint for on/off; 404s if the type was
   // never linked to this camera (no auto-create — same as V1's real behavior).
 const handleToggleDetection = async (camera, detectionType, enable) => {
@@ -439,18 +714,26 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
           </select>
           <ChevronDown size={14} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--tx3)' }} />
         </div>
+        <div style={{ position: 'relative' }}>
+          <EngineFilterDropdown
+            value={engineFilter}
+            options={engineOptions}
+            onChange={setEngineFilter}
+          />
+        </div>
         <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>
-          {total} total
+          {filteredCameras.length} of {total} total
         </span>
       </div>
 
-      <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, overflow: 'hidden' }}>
+      <div style={{ position: 'relative', background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, overflow: 'hidden' }}>
         <div style={{
-          display: 'grid', gridTemplateColumns: 'minmax(200px,1.6fr) 190px 150px 44px', gap: 0,
+          display: 'grid', gridTemplateColumns: 'minmax(200px,1.35fr) minmax(240px,1.2fr) 190px 150px 44px', gap: 0,
           padding: '12px 18px', borderBottom: '1px solid var(--bd)',
           fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)', alignItems: 'center',
         }}>
           <span>CAMERA NAME</span>
+          <span>ENGINES</span>
           <span style={{ textAlign: 'center' }}>ENABLE DETECTION</span>
           <span style={{ textAlign: 'center' }}>CAMERA TYPE</span>
           <span />
@@ -458,12 +741,12 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
         <AsyncBoundary
           loading={channelsApi.loading}
           error={channelsApi.error}
-          isEmpty={!channelsApi.loading && !channelsApi.error && cameras.length === 0}
+          isEmpty={!channelsApi.loading && !channelsApi.error && filteredCameras.length === 0}
           onRetry={channelsApi.refetch}
           minH={160}
           emptyLabel="No cameras found"
         >
-          {() => cameras.map(camera => (
+          {() => filteredCameras.map(camera => (
             <CameraRow
               key={camera._id}
               camera={camera}
@@ -478,6 +761,43 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
           ))}
         </AsyncBoundary>
       </div>
+      {checkTypeSavingId && (
+        <div
+          aria-live="polite"
+          aria-busy="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 30,
+            display: 'grid',
+            placeItems: 'center',
+            padding: 24,
+            pointerEvents: 'none',
+          }}
+        >
+          <div
+            style={{
+              minWidth: 190,
+              maxWidth: 300,
+              padding: '11px 15px',
+              borderRadius: 12,
+              background: 'var(--bg1solid)',
+              border: '1px solid var(--bd2)',
+              boxShadow: '0 18px 40px rgba(15,23,42,.24)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              color: 'var(--tx)',
+              fontSize: 12.5,
+              fontWeight: 600,
+            }}
+          >
+            <Loader2 size={14} className="animate-spin" style={{ color: 'var(--blue)', flexShrink: 0 }} />
+            <span>Updating camera...</span>
+          </div>
+        </div>
+      )}
       {previewCamera && (
         <CameraPreviewModal camera={previewCamera} onClose={() => setPreviewCamera(null)} />
       )}

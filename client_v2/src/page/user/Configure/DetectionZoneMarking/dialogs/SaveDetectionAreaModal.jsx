@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, X } from 'lucide-react';
 import { toast } from 'sonner';
-import ZoneScheduleFields, { TimezoneField, scheduleError } from '../../ZoneScheduleFields';
+import ZoneScheduleFields, { TimezoneField, scheduleError, emptySchedule, formatTime } from '../../ZoneScheduleFields';
+import TelegramChannelMultiSelect from '../components/TelegramChannelMultiSelect';
 import { PRIORITY_OPTIONS } from '../constants';
 
 function normalizeTelegramChannels(channels = []) {
@@ -34,11 +35,30 @@ export default function SaveDetectionAreaModal({
   const [zoneDrafts, setZoneDrafts] = useState(zones);
   const [errors, setErrors] = useState({});
   const areaLabel = isLineCrossing ? 'Line' : 'Zone';
-  const channelOptions = normalizeTelegramChannels(telegramChannels);
-  const shouldRequireTelegramChannel = channelOptions.length > 1;
+  const channelOptions = normalizeTelegramChannels(telegramChannels).map((channel) => ({
+    value: channel.chatId,
+    label: channel.label,
+  }));
 
   const updateZoneField = (index, field, value) => {
-    setZoneDrafts(prev => prev.map((z, i) => (i === index ? { ...z, [field]: value } : z)));
+    setZoneDrafts(prev => prev.map((z, i) => {
+      if (i !== index) return z;
+      if (field === 'telegramChatIds') {
+        const selectedChatIds = Array.isArray(value)
+          ? [...new Set(value.map((item) => String(item || '').trim()).filter(Boolean))]
+          : [];
+        return {
+          ...z,
+          telegramChatIds: selectedChatIds,
+          telegramChatId: selectedChatIds[0] || '',
+          schedule: selectedChatIds.length ? z.schedule : emptySchedule(),
+        };
+      }
+      if (field === 'telegramChatId' && !String(value || '').trim()) {
+        return { ...z, telegramChatId: value, telegramChatIds: [], schedule: emptySchedule() };
+      }
+      return { ...z, [field]: value };
+    }));
     setErrors(er => ({ ...er, [`zone-${index}-${field}`]: false }));
   };
 
@@ -46,6 +66,12 @@ export default function SaveDetectionAreaModal({
     const nextErrors = {};
     if (!detectionName.trim()) nextErrors.detectionName = true;
     zoneDrafts.forEach((z, i) => {
+      const selectedTelegramChatIds = Array.isArray(z?.telegramChatIds)
+        ? z.telegramChatIds.map((chatId) => String(chatId || '').trim()).filter(Boolean)
+        : (String(z?.telegramChatId || '').trim() ? [String(z.telegramChatId).trim()] : []);
+      const hasTelegramChannel = selectedTelegramChatIds.length > 0;
+      const hasSchedule =
+        Boolean(formatTime(z.schedule?.from)) && Boolean(formatTime(z.schedule?.to));
       if (!String(z.name || '').trim()) nextErrors[`zone-${i}-name`] = true;
       if (extraFields.includes('capacity') && String(z.capacity ?? '').trim() === '') {
         nextErrors[`zone-${i}-capacity`] = true;
@@ -53,8 +79,11 @@ export default function SaveDetectionAreaModal({
       if (extraFields.includes('threshold') && String(z.threshold ?? '').trim() === '') {
         nextErrors[`zone-${i}-threshold`] = true;
       }
-      if (shouldRequireTelegramChannel && !String(z.telegramChatId || '').trim()) {
+      if (hasSchedule && !hasTelegramChannel) {
         nextErrors[`zone-${i}-telegramChatId`] = true;
+      }
+      if (hasTelegramChannel && !hasSchedule) {
+        nextErrors[`zone-${i}-schedule`] = 'Please select a schedule when a Telegram channel is selected.';
       }
     });
     if (Object.keys(nextErrors).length) {
@@ -170,33 +199,23 @@ export default function SaveDetectionAreaModal({
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>
-                  Telegram Channel{shouldRequireTelegramChannel ? ' *' : ''}
+                  Telegram Channels
                 </label>
-                <select
-                  value={z.telegramChatId || ''}
-                  onChange={e => updateZoneField(i, 'telegramChatId', e.target.value)}
+                <TelegramChannelMultiSelect
+                  value={Array.isArray(z.telegramChatIds)
+                    ? z.telegramChatIds
+                    : (String(z.telegramChatId || '').trim() ? [String(z.telegramChatId).trim()] : [])}
+                  options={channelOptions}
+                  onChange={(selected) => updateZoneField(i, 'telegramChatIds', selected)}
                   disabled={!channelOptions.length}
-                  style={{
-                    width: '100%', height: 36, padding: '0 11px', borderRadius: 8, boxSizing: 'border-box',
-                    background: 'var(--bg2)',
-                    border: `1px solid ${errors[`zone-${i}-telegramChatId`] ? 'var(--danger, #ef4444)' : 'var(--bd)'}`,
-                    fontSize: 12.5, color: channelOptions.length ? 'var(--tx)' : 'var(--tx3)', outline: 'none',
-                    cursor: channelOptions.length ? 'pointer' : 'not-allowed',
-                  }}
-                >
-                  <option value="">
-                    {channelOptions.length
-                      ? 'Select Telegram channel'
-                      : 'No Telegram channel connected'}
-                  </option>
-                  {channelOptions.map((channel) => (
-                    <option key={channel.chatId} value={channel.chatId}>
-                      {channel.label}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Select Telegram channels"
+                  noOptionsLabel="No Telegram channel connected"
+                  error={Boolean(errors[`zone-${i}-telegramChatId`])}
+                />
                 {errors[`zone-${i}-telegramChatId`] && (
-                  <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>Telegram Channel is required.</div>
+                  <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>
+                    Please select at least one Telegram channel when a schedule is configured.
+                  </div>
                 )}
               </div>
               {isLineCrossing && (
@@ -257,7 +276,16 @@ export default function SaveDetectionAreaModal({
               <ZoneScheduleFields
                 value={z.schedule}
                 onChange={schedule => updateZoneField(i, 'schedule', schedule)}
+                disabled={!(Array.isArray(z.telegramChatIds)
+                  ? z.telegramChatIds.length
+                  : String(z.telegramChatId || '').trim())}
+                disabledMessage="Please select at least one Telegram channel before setting a schedule."
               />
+              {errors[`zone-${i}-schedule`] && (
+                <div style={{ marginTop: -4, fontSize: 10.5, color: '#ef4444' }}>
+                  {errors[`zone-${i}-schedule`]}
+                </div>
+              )}
             </div>
           ))}
         </div>

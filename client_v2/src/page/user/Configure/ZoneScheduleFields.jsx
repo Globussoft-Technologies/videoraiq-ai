@@ -275,7 +275,12 @@ function TimeSelect({ value = emptyTime(), onChange, disabled }) {
  * Collapsible per-zone "Schedule" with a From–To time range. `value` is a
  * schedule object (see emptySchedule); `onChange` receives the full updated one.
  */
-export default function ZoneScheduleFields({ value = emptySchedule(), onChange, disabled }) {
+export default function ZoneScheduleFields({
+  value = emptySchedule(),
+  onChange,
+  disabled,
+  disabledMessage = 'Please select a Telegram channel before configuring a Telegram schedule.',
+}) {
   const schedule = value || emptySchedule();
   const patch = (partial) => onChange({ ...schedule, ...partial });
   const [expanded, setExpanded] = useState(false);
@@ -292,10 +297,16 @@ export default function ZoneScheduleFields({ value = emptySchedule(), onChange, 
     <div style={{ borderRadius: 10, border: '1px solid var(--bd)', overflow: 'hidden' }}>
       <button
         type="button"
-        onClick={() => setExpanded((e) => !e)}
+        onClick={() => {
+          if (disabled) {
+            toast.error(disabledMessage);
+            return;
+          }
+          setExpanded((e) => !e);
+        }}
         style={{
           width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-          padding: '8px 11px', textAlign: 'left', background: 'var(--bg2)', border: 'none', cursor: 'pointer',
+          padding: '8px 11px', textAlign: 'left', background: 'var(--bg2)', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
         }}
         aria-expanded={expanded}
       >

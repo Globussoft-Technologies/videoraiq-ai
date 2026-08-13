@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, Save, Trash2 } from 'lucide-react';
 import ZoneScheduleFields, { TimezoneField } from '../../ZoneScheduleFields';
+import TelegramChannelMultiSelect from './TelegramChannelMultiSelect';
 
 function normalizeTelegramChannels(channels = []) {
   return (Array.isArray(channels) ? channels : [])
@@ -33,8 +34,10 @@ export default function ZoneSettingsPanel({
   const areaLabel = isLineCrossing ? 'line' : 'zone';
   const areaTitle = isLineCrossing ? 'Line Settings' : 'Zone Settings';
   const nameLabel = isLineCrossing ? 'Line Name' : 'Zone Name';
-  const channelOptions = normalizeTelegramChannels(telegramChannels);
-  const shouldRequireTelegramChannel = channelOptions.length > 1;
+  const channelOptions = normalizeTelegramChannels(telegramChannels).map((channel) => ({
+    value: channel.chatId,
+    label: channel.label,
+  }));
 
   if (zones.length === 0) return null;
 
@@ -95,29 +98,19 @@ export default function ZoneSettingsPanel({
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>
-                      Telegram Channel{shouldRequireTelegramChannel ? ' *' : ''}
+                      Telegram Channels
                     </label>
-                    <select
-                      value={z.telegramChatId || ''}
-                      onChange={e => onUpdateField(i, 'telegramChatId', e.target.value)}
+                    <TelegramChannelMultiSelect
+                      value={Array.isArray(z.telegramChatIds)
+                        ? z.telegramChatIds
+                        : (String(z.telegramChatId || '').trim() ? [String(z.telegramChatId).trim()] : [])}
+                      options={channelOptions}
+                      onChange={(selected) => onUpdateField(i, 'telegramChatIds', selected)}
                       disabled={!channelOptions.length}
-                      style={{
-                        width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
-                        background: 'var(--bg2)',
-                        border: `1px solid ${errors[`zone-${i}-telegramChatId`] ? '#ef4444' : 'var(--bd)'}`,
-                        fontSize: 12, color: channelOptions.length ? 'var(--tx)' : 'var(--tx3)', outline: 'none',
-                        cursor: channelOptions.length ? 'pointer' : 'not-allowed',
-                      }}
-                    >
-                      <option value="">
-                        {channelOptions.length ? 'Select Telegram channel' : 'No Telegram channel connected'}
-                      </option>
-                      {channelOptions.map(channel => (
-                        <option key={channel.chatId} value={channel.chatId}>
-                          {channel.label}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Select Telegram channels"
+                      noOptionsLabel="No Telegram channel connected"
+                      error={Boolean(errors[`zone-${i}-telegramChatId`])}
+                    />
                     {errors[`zone-${i}-telegramChatId`] && (
                       <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{errors[`zone-${i}-telegramChatId`]}</div>
                     )}
@@ -180,7 +173,16 @@ export default function ZoneSettingsPanel({
                   <ZoneScheduleFields
                     value={z.schedule}
                     onChange={schedule => onUpdateField(i, 'schedule', schedule)}
+                    disabled={!(Array.isArray(z.telegramChatIds)
+                      ? z.telegramChatIds.length
+                      : String(z.telegramChatId || '').trim())}
+                    disabledMessage="Please select at least one Telegram channel before setting a schedule."
                   />
+                  {errors[`zone-${i}-schedule`] && (
+                    <div style={{ marginTop: -4, fontSize: 10.5, color: '#ef4444' }}>
+                      {errors[`zone-${i}-schedule`]}
+                    </div>
+                  )}
                   <button
                     onClick={() => onSave(i)}
                     disabled={savingIndex === i}

@@ -57,6 +57,16 @@ const HeaderClock = memo(function HeaderClock({ compact = false }) {
   return <div style={compact ? centeredClockStyle : clockStyle}>{clock}</div>;
 });
 
+function networkLabelForCard(network) {
+  if (!network?.baseUrl) return 'Server';
+  try {
+    const parsed = new URL(network.baseUrl);
+    return parsed.hostname || parsed.origin || network.baseUrl;
+  } catch {
+    return network.baseUrl;
+  }
+}
+
 function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange, serverNetwork = null, notifications = [], unreadCount, onMarkNotificationsRead, onSearch, onMenuClick }) {
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
@@ -109,7 +119,14 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
   const hideTheme = headerW < 540;
   const hideNetwork = headerW < 760;
 
-  const { rating: networkRating, color: networkColor, label: networkRatingLabel } = networkRatingInfo(serverNetwork);
+  const serverNetworks = useMemo(() => {
+    if (Array.isArray(serverNetwork)) return serverNetwork.filter(Boolean);
+    if (Array.isArray(serverNetwork?.server_networks)) return serverNetwork.server_networks.filter(Boolean);
+    return serverNetwork ? [serverNetwork] : [];
+  }, [serverNetwork]);
+  const primaryServerNetwork = serverNetworks[0] || null;
+  const { rating: networkRating, color: networkColor, label: networkRatingLabel } = networkRatingInfo(primaryServerNetwork);
+  const networkPillLabel = serverNetworks.length > 1 ? `${serverNetworks.length} servers` : networkRatingLabel;
 
   // Close each dropdown on an outside click / Escape (replaces the fixed-overlay
   // backdrops, which are trapped inside the header's backdrop-filter box).
@@ -299,7 +316,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
       {/* Server network status — this server's own internet uplink (see
           Sidebar's footer widget, which shows the same reading). Hidden on
           narrower headers, same as the clock/theme controls. */}
-      {serverNetwork && !hideNetwork && (
+      {serverNetworks.length > 0 && !hideNetwork && (
         <div ref={networkRef} style={{ position: 'relative', flex: '0 0 auto' }}>
           <div
             onClick={() => setNetworkOpen((o) => !o)}
@@ -328,7 +345,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
               }}
             />
             <span style={{ fontSize: 12, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>
-              Server network: <span style={{ color: 'var(--tx)', fontWeight: 500 }}>{networkRatingLabel}</span>
+              Server network: <span style={{ color: 'var(--tx)', fontWeight: 500 }}>{networkPillLabel}</span>
             </span>
             <ChevronDown
               size={12}
@@ -343,41 +360,64 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
                 position: 'absolute',
                 top: 44,
                 left: 0,
-                width: 240,
+                width: 272,
                 background: 'var(--bg1solid)',
                 border: '1px solid var(--bd2)',
                 borderRadius: 12,
                 boxShadow: '0 18px 50px rgba(0,0,0,.6)',
                 zIndex: 60,
                 padding: 14,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <span style={{ width: 9, height: 9, borderRadius: '50%', background: networkColor, boxShadow: `0 0 8px ${networkColor}`, flex: '0 0 auto' }} />
-                <span style={{ fontSize: 13, fontWeight: 700 }}>{networkRatingLabel}</span>
-              </div>
-              {serverNetwork.description && (
-                <div style={{ fontSize: 11.5, color: 'var(--tx2)', lineHeight: 1.5, marginBottom: 10 }}>
-                  {serverNetwork.description}
-                </div>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 10.5 }}>
-                <div>
-                  <div style={{ color: 'var(--tx3)', marginBottom: 2, letterSpacing: '.06em' }}>LATENCY</div>
-                  <div style={{ fontFamily: 'var(--mono)', fontWeight: 600 }}>
-                    {serverNetwork.latency_ms != null ? `${serverNetwork.latency_ms} ms` : '—'}
+              {serverNetworks.map((network, index) => {
+                const { color, label } = networkRatingInfo(network);
+                return (
+                  <div
+                    key={`${network.baseUrl || 'server'}-${index}`}
+                    style={{
+                      padding: 12,
+                      borderRadius: 12,
+                      border: '1px solid var(--bd)',
+                      background: 'var(--bg2)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        <span style={{ width: 9, height: 9, borderRadius: '50%', background: color, boxShadow: `0 0 8px ${color}`, flex: '0 0 auto' }} />
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>{label}</span>
+                      </div>
+                      <span style={{ fontSize: 10, color: 'var(--tx3)', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>
+                        {networkLabelForCard(network)}
+                      </span>
+                    </div>
+                    {network.description && (
+                      <div style={{ fontSize: 11.5, color: 'var(--tx2)', lineHeight: 1.5, marginBottom: 10 }}>
+                        {network.description}
+                      </div>
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 10.5 }}>
+                      <div>
+                        <div style={{ color: 'var(--tx3)', marginBottom: 2, letterSpacing: '.06em' }}>LATENCY</div>
+                        <div style={{ fontFamily: 'var(--mono)', fontWeight: 600 }}>
+                          {network.latency_ms != null ? `${network.latency_ms} ms` : '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ color: 'var(--tx3)', marginBottom: 2, letterSpacing: '.06em' }}>STATUS</div>
+                        <div style={{ fontFamily: 'var(--mono)', fontWeight: 600, textTransform: 'capitalize' }}>
+                          {network.status || 'unknown'}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 10, fontSize: 10, color: 'var(--tx3)' }}>
+                      Checked {timeAgo(network.last_checked)}
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <div style={{ color: 'var(--tx3)', marginBottom: 2, letterSpacing: '.06em' }}>STATUS</div>
-                  <div style={{ fontFamily: 'var(--mono)', fontWeight: 600, textTransform: 'capitalize' }}>
-                    {serverNetwork.status || 'unknown'}
-                  </div>
-                </div>
-              </div>
-              <div style={{ marginTop: 10, fontSize: 10, color: 'var(--tx3)' }}>
-                Checked {timeAgo(serverNetwork.last_checked)}
-              </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -602,7 +642,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
       {/* Overflow menu — holds whatever the header drops on narrow widths
           (clock, network status, theme toggle) so nothing becomes unreachable
           on mobile. */}
-      {(hideTheme || hideClock || (hideNetwork && serverNetwork)) && (
+      {(hideTheme || hideClock || (hideNetwork && serverNetworks.length > 0)) && (
         <div ref={moreRef} style={{ position: 'relative', flex: '0 0 auto' }}>
           <button type="button" onClick={() => setMoreOpen((o) => !o)} aria-label="Theme and more" title="Theme" style={iconBtn}>
             <SunMoon size={17} strokeWidth={1.7} style={{ color: 'var(--tx2)' }} />
@@ -615,14 +655,14 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
               {hideClock && (
                 <HeaderClock compact />
               )}
-              {hideNetwork && serverNetwork && (
+              {hideNetwork && serverNetworks.length > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                   <span
                     className={networkRating !== 'unknown' ? 'vq-glowpulse' : undefined}
                     style={{ width: 7, height: 7, borderRadius: '50%', background: networkColor, boxShadow: networkRating !== 'unknown' ? `0 0 8px ${networkColor}` : 'none', flex: '0 0 auto' }}
                   />
                   <span style={{ fontSize: 11.5, color: 'var(--tx2)' }}>
-                    Server network: <span style={{ color: 'var(--tx)', fontWeight: 500 }}>{networkRatingLabel}</span>
+                    Server network: <span style={{ color: 'var(--tx)', fontWeight: 500 }}>{networkPillLabel}</span>
                   </span>
                 </div>
               )}
