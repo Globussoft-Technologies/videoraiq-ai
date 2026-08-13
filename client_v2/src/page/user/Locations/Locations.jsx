@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import axios from 'axios';
 import { Search, CirclePlus, Trash, ArrowUp, ArrowDown } from 'lucide-react';
 import { FiEdit3 } from "react-icons/fi";
 import { toast } from 'sonner';
@@ -34,45 +35,64 @@ const Locations = () => {
   const canDelete = permissions?.locations?.delete;
   const canCreate = permissions?.locations?.create;
   
-  const loadLocations = useCallback(async (page = currentPage, search = searchInput) => {
-    setOnLoading(true);
-    try {
-      const skip = (page - 1) * limit;
-      const resp = await fetchLocations(skip, limit, search);
-      if (resp?.data?.statusCode === 200) {
-        const data = resp?.data?.body?.data;
-        setLocations(data.locations || []);
-        setTotal(data.totalCount || 0);
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to fetch locations');
-    } finally {
-      setOnLoading(false);
-    }
-  }, [limit]);
-
+  // Debounced separately from searchInput so typing doesn't fire a request
+  // per keystroke; the fetch effect below depends on this, not on
+  // searchInput directly.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   useEffect(() => {
-    loadLocations(currentPage, searchInput);
-  }, [currentPage, sortOrder]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (currentPage === 1) {
-        loadLocations(1, searchInput);
-      } else {
-        setCurrentPage(1);
-      }
-    }, 500);
+    const timer = setTimeout(() => setDebouncedSearch(searchInput), 500);
     return () => clearTimeout(timer);
   }, [searchInput]);
+
+  // A fresh search should read from page 1. Resetting currentPage here (kept
+  // in sync with debouncedSearch, not searchInput) means this only fires
+  // once the debounce above has already settled, instead of racing the fetch
+  // effect for a second, overlapping request.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch]);
+
+  // Bumped on every mutation (create/edit/delete) to ask the effect below to
+  // reload the current page+search+sort without changing any of them.
+  const [reloadTick, setReloadTick] = useState(0);
+
+  // Single source of truth for fetching: one effect owns every trigger
+  // (page, sort, settled search, and post-mutation reloads) instead of
+  // separate effects racing each other. Its cleanup aborts whatever request
+  // is still in flight before the next one starts, so a re-run of this
+  // effect for the same conceptual navigation (e.g. React StrictMode's
+  // dev-only double-invoke) can never leave two requests racing to write
+  // `locations` — the superseded one is cancelled outright, not just ignored.
+  useEffect(() => {
+    const controller = new AbortController();
+    setOnLoading(true);
+    (async () => {
+      try {
+        const skip = (currentPage - 1) * limit;
+        const resp = await fetchLocations(skip, limit, debouncedSearch, controller.signal);
+        if (resp?.data?.statusCode === 200) {
+          const data = resp?.data?.body?.data;
+          setLocations(data.locations || []);
+          setTotal(data.totalCount || 0);
+        }
+      } catch (err) {
+        if (axios.isCancel?.(err) || err?.code === 'ERR_CANCELED') return;
+        console.error(err);
+        toast.error('Failed to fetch locations');
+      } finally {
+        if (!controller.signal.aborted) setOnLoading(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [currentPage, sortOrder, debouncedSearch, limit, reloadTick]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   const handleLocationSaved = useCallback(() => {
-    loadLocations();
+    setReloadTick((n) => n + 1);
     refreshSites?.();
-  }, [loadLocations, refreshSites]);
+  }, [refreshSites]);
 
   const handlePageChange = (page) => {
     setCurrentPage(page);

@@ -22,6 +22,8 @@ import {
 import SearchableSelect from '../../../components/SearchableSelect';
 import { useApi } from '../../../hooks/useApi';
 import { setLogOrderEnabled, useLogOrder } from '../../../lib/logOrder';
+import { fetchMyAccount, fetchAuthorizedUserById } from '../../../pages/MyProfile/Api';
+import { useAuth } from '../../../context/AuthContext';
 import {
   fetchAdmin,
   fetchTimezone,
@@ -582,6 +584,10 @@ function LogOrderPanel() {
 export default function SystemSettings() {
   const navigate = useNavigate();
   const audio = useAttendanceSocket() || {};
+  const { user } = useAuth();
+  // memberId only shows up on a sub-user's token, never the tenant admin's
+  // (same convention MyProfile.jsx relies on).
+  const isAdmin = !user?.memberId;
   const { permissions } = usePermissions();
   const settingsPermissions = permissions?.settings || {};
   const hasSettingsPermission = (key) => settingsPermissions === true || settingsPermissions?.[key] === true;
@@ -592,6 +598,16 @@ export default function SystemSettings() {
   const canEnableSetting = canCreateSettings || canEditSettings;
   const canDisableSetting = canDeleteSettings || canEditSettings;
   const adminApi = useApi(() => fetchAdmin(), []);
+  // Same self-service account summary (name, email) shown on My Profile.
+  // Admins resolve from their own token (no id needed); sub-users aren't in
+  // that tenant summary, so their own /users/fetch record is used instead —
+  // same isAdmin split MyProfile.jsx uses.
+  const myAccountApi = useApi(() => fetchMyAccount(), [], { enabled: isAdmin });
+  const selfUserApi = useApi(
+    () => fetchAuthorizedUserById(user?.memberId),
+    [user?.memberId],
+    { enabled: !isAdmin && !!user?.memberId },
+  );
   const timezoneApi = useApi(() => fetchTimezone(), []);
   const timezonesApi = useApi(() => getTimezones(), []);
   const emailRecipientsApi = useApi(() => getRecipients('email', '', 'All', 0, 100), []);
@@ -621,9 +637,12 @@ export default function SystemSettings() {
   const [inAppNotifications, setInAppNotifications] = useState(() => inAppNotificationsEnabled());
 
   const admin = adminApi.data || {};
-  const adminName = [admin.name_f, admin.name_l].filter(Boolean).join(' ') || admin.login || 'Admin account';
+  const myAccount = myAccountApi.data || {};
+  const selfUser = selfUserApi.data || {};
+  const selfUserName = [selfUser.firstName, selfUser.lastName].filter(Boolean).join(' ');
+  const adminName = myAccount.name || selfUserName || [admin.name_f, admin.name_l].filter(Boolean).join(' ') || admin.login || 'Admin account';
   const orgName = admin.orgName || admin.organizationName || admin.orgId || adminName;
-  const email = admin.email || '-';
+  const email = myAccount.email || selfUser.email || admin.email || '-';
   const savedTimezone = timezoneApi.data || admin.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
   const timezones = Array.isArray(timezonesApi.data) ? timezonesApi.data : [];
   const timezoneOptions = useMemo(() => {
@@ -887,7 +906,7 @@ export default function SystemSettings() {
     }
   };
 
-  const loadingMain = adminApi.loading || audio.audioLoading || timezoneApi.loading;
+  const loadingMain = adminApi.loading || myAccountApi.loading || selfUserApi.loading || audio.audioLoading || timezoneApi.loading;
 
   return (
     <div
@@ -914,7 +933,7 @@ export default function SystemSettings() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 11 }}>
               <div>
-                <FieldLabel>Admin Name</FieldLabel>
+                <FieldLabel>{isAdmin ? 'Admin Name' : 'User Name'}</FieldLabel>
                 <ReadOnlyField value={adminName} />
               </div>
               <div>

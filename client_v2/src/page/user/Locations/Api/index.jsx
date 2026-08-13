@@ -2,7 +2,7 @@ import axios from "axios";
 import getAccessToken from "@/utils/getAccessToken";
 const Api_url = import.meta.env.VITE_BACKEND;
 
-export const fetchLocations = async (skip = 0, limit = 10, search = "") => {
+export const fetchLocations = async (skip = 0, limit = 10, search = "", signal) => {
   const token = getAccessToken();
   return await axios.post(
     `${Api_url}/locations/fetch?skip=${skip}&limit=${limit}&search=${search}`,
@@ -12,6 +12,7 @@ export const fetchLocations = async (skip = 0, limit = 10, search = "") => {
         'Content-Type': 'application/json',
         'x-access-token': token,
       },
+      signal,
     }
   );
 };
