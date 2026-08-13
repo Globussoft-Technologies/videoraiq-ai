@@ -229,6 +229,31 @@ const normalizeTelegramSettings = (settings = {}) => {
   };
 };
 
+const applyNormalizedTelegramSettings = (target, incomingSettings = {}) => {
+  const normalizedSettings = normalizeTelegramSettings(incomingSettings);
+  target.settings = {
+    ...(target.settings?.toObject?.() || target.settings || {}),
+    ...normalizedSettings,
+  };
+
+  target.markModified("settings");
+  target.markModified("settings.telegramChatIds");
+  target.markModified("settings.telegramChatId");
+  target.markModified("settings.zone_configs");
+
+  return normalizedSettings;
+};
+
+const buildNormalizedDetectionSettingResponse = (detectionSetting) => {
+  if (!detectionSetting) return detectionSetting;
+
+  const serialized = detectionSetting?.toObject?.() || detectionSetting?._doc || detectionSetting;
+  return {
+    ...serialized,
+    settings: normalizeTelegramSettings(serialized?.settings || {}),
+  };
+};
+
 const handleDetectionStartStopWithRetry = async (args) => {
   let lastError;
 
@@ -432,8 +457,6 @@ class DetectionSettingService {
       throw new Error(`Unsupported detection type: ${settingType}`);
     }
 
-    const normalizedSettings = normalizeTelegramSettings(settings);
-
     const savedDetections = [];
     const skippedChannels = [];
 
@@ -457,8 +480,10 @@ class DetectionSettingService {
     const detectionDoc = new Model({
       ...baseData,
       settingType,
-      settings: normalizedSettings,
+      settings: {},
     });
+
+    applyNormalizedTelegramSettings(detectionDoc, settings);
 
     const savedDetection = await detectionDoc.save();
 
@@ -596,12 +621,7 @@ class DetectionSettingService {
 
       // Update nested settings
       if (value.settings && typeof value.settings === "object") {
-        const normalizedSettings = normalizeTelegramSettings(value.settings);
-        detectionSetting.settings = {
-          ...detectionSetting.settings,
-          ...normalizedSettings,
-        };
-        detectionSetting.markModified("settings");
+        applyNormalizedTelegramSettings(detectionSetting, value.settings);
       }
 
       const saved = [];
@@ -1092,7 +1112,7 @@ class DetectionSettingService {
       return res.status(200).json(
         Response.userSuccessResp("Detection settings fetched successfully", {
           detectionSetting: {
-            ...detectionSetting._doc,
+            ...buildNormalizedDetectionSettingResponse(detectionSetting),
             detectionName: DETECTION_TYPES[detectionSetting.settingType],
           },
           linkedCameras: linkedChannels || null,
@@ -1146,6 +1166,10 @@ class DetectionSettingService {
         })
         .lean();
 
+      const normalizedDetectionSettings = detectionSettings.map(
+        buildNormalizedDetectionSettingResponse,
+      );
+
       // --- Resolve relevant channel IDs based on nvrIds and channelIds ---
       let resolvedChannelIds = null;
       if (nvrIds || channelIds) {
@@ -1172,7 +1196,7 @@ class DetectionSettingService {
       // --- Populate linked cameras per detection setting ---
       const resultsWithCamera = [];
 
-      for (const setting of detectionSettings) {
+      for (const setting of normalizedDetectionSettings) {
         const query = {
           [`detections.${setting.settingType}.id`]: setting._id,
           // [`detections.${setting.settingType}.enabled`]: true,

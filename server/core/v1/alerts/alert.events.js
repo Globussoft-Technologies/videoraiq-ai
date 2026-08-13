@@ -7,35 +7,12 @@ import channelsModel from '../channels/channels.model.js';
 import RecipientModel from '../verifyRecipients/recipients.model.js';
 import { Incident } from '../incidents/incidents.model.js';
 import adminModel from '../admin/admin.model.js';
-import { isTelegramWindowOpen } from '../../../utils/telegramWindow.js';
 import logger from '../../../utils/logger.js';
-
-const findMatchingZoneConfig = (incidentZone, zoneConfigs = []) => {
-  if (!incidentZone || !Array.isArray(zoneConfigs)) return null;
-
-  return (
-    zoneConfigs.find(
-      zone =>
-        String(zone?.name || '').trim().toLowerCase() ===
-        String(incidentZone || '').trim().toLowerCase(),
-    ) || null
-  );
-};
-
-const resolvePreferredTelegramChatIds = ({ matchingZoneConfig, detectionSettings }) => {
-  const candidates = [
-    matchingZoneConfig?.telegramChatId,
-    detectionSettings?.telegramChatId,
-  ];
-
-  return [
-    ...new Set(
-      candidates
-        .map((chatId) => String(chatId || '').trim())
-        .filter(Boolean),
-    ),
-  ];
-};
+import {
+  resolveTelegramZoneConfig,
+  isIncidentWithinZoneWindow,
+  resolvePreferredTelegramChatIds,
+} from '../../../utils/telegramAlertRouting.js';
 
 
 export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,saved,adminId}) => {
@@ -209,28 +186,37 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
       });
     }
 
-    // Telegram: send to the admin's channel ONLY if the incident's zone has a
-    // per-zone time window on this detection setting AND the incident's local
-    // time (UTC -> admin's timezone) falls inside it. No matching window -> skip.
+    // Telegram: send to every channel configured for this detection/zone.
+    // Keep per-zone window support when it can be evaluated (both startTime
+    // and endTime set on the matched zone), but don't silently drop alerts
+    // just because the incident arrived without a reliable zone/time payload
+    // or the zone has no schedule configured — default to open in that case.
     try {
       const telegramIncident = incidentData || saved;
       const detectionSettings = matchedDetection?.id?.settings || {};
       const zoneConfigs = detectionSettings?.zone_configs || [];
-      const matchingZoneConfig =
-        findMatchingZoneConfig(
-          telegramIncident?.zone || telegramIncident?.zoneName,
-          zoneConfigs,
-        ) || (zoneConfigs.length === 1 ? zoneConfigs[0] : null);
+      const matchingZoneConfig = resolveTelegramZoneConfig({
+        incidentZone: telegramIncident?.zone || telegramIncident?.zoneName,
+        zoneConfigs,
+        timeOfIncidentUTC: telegramIncident?.timeOfIncident,
+        adminTimezone: adminTz,
+      });
       const preferredChatIds = resolvePreferredTelegramChatIds({
         matchingZoneConfig,
         detectionSettings,
       });
-      const windowOpen = isTelegramWindowOpen({
-        incidentZone: telegramIncident?.zone || telegramIncident?.zoneName,
-        timeOfIncidentUTC: telegramIncident?.timeOfIncident,
-        zoneConfigs,
-        adminTimezone: adminTz,
-      });
+      const hasEvaluableWindow =
+        Boolean(matchingZoneConfig?.startTime) &&
+        Boolean(matchingZoneConfig?.endTime) &&
+        Boolean(telegramIncident?.timeOfIncident) &&
+        Boolean(adminTz);
+      const windowOpen = hasEvaluableWindow
+        ? isIncidentWithinZoneWindow(
+            matchingZoneConfig,
+            telegramIncident?.timeOfIncident,
+            adminTz,
+          )
+        : true;
       if (windowOpen && adminFlags?.telegramAlertsEnabled !== false) {
         await TelegramService.sendIncident(
           telegramIncident,

@@ -35,7 +35,7 @@ class TelegramController {
       if (!adminId) {
         return res.status(400).json(Response.userFailResp("Admin context missing"));
       }
-      await TelegramService.unlink(adminId);
+      await TelegramService.unlink(adminId, req?.body?.chatId || null);
       return res.status(200).json(Response.userSuccessResp("Telegram channel unlinked", {}));
     } catch (err) {
       logger.error(`telegram unlink: ${err.message}`);

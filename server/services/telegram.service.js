@@ -25,6 +25,25 @@ class TelegramService {
     this._PHOTO_RETRY_DELAYS_MS = [3000, 15000];
   }
 
+  async _sendLinkCodeExpiredMessage(chatId) {
+    if (!chatId) return;
+
+    try {
+      await axios.post(`https://api.telegram.org/bot${platformBotToken}/sendMessage`, {
+        chat_id: chatId,
+        text: "This link code has expired or is already used. Please copy the latest code from VideoeraIQ and try again.",
+      });
+    } catch (error) {
+      logger.warn(
+        `[TELEGRAM] failed to send expired link code message to ${chatId}: ${
+          error?.response?.data
+            ? JSON.stringify(error.response.data)
+            : error?.message || String(error)
+        }`,
+      );
+    }
+  }
+
   async sendMessage(message) {
     try {
       await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -117,7 +136,11 @@ class TelegramService {
   }
 
   _buildLinkStatus(admin = {}) {
-    const channels = this._extractChannels(admin);
+    const channels = this._extractChannels(admin).sort((a, b) => {
+      const aTime = a?.linkedAt ? new Date(a.linkedAt).getTime() : 0;
+      const bTime = b?.linkedAt ? new Date(b.linkedAt).getTime() : 0;
+      return bTime - aTime;
+    });
     const linkedChannels = channels.filter((channel) => channel.active !== false);
     const primary = linkedChannels[0] || null;
 
@@ -348,16 +371,9 @@ class TelegramService {
     const disconnectedChannels = targetChatId
       ? allChannels.filter((channel) => channel.chatId === targetChatId)
       : allChannels;
-    const nextChannels = allChannels.map((channel) => {
-      if (targetChatId && channel.chatId !== targetChatId) {
-        return channel;
-      }
-      return {
-        ...channel,
-        active: false,
-        disconnectedAt: new Date(),
-      };
-    });
+    const nextChannels = targetChatId
+      ? allChannels.filter((channel) => channel.chatId !== targetChatId)
+      : [];
 
     await this._syncChannelState(admin._id, nextChannels, { clearCode: true });
 
@@ -412,6 +428,7 @@ class TelegramService {
         .lean();
       if (!candidate) {
         logger.warn(`[TELEGRAM] link code not found or already used: ${code}`);
+        await this._sendLinkCodeExpiredMessage(boundChatId);
         return { ok: true, matched: false };
       }
 
@@ -484,6 +501,7 @@ class TelegramService {
 
       if (!admin) {
         logger.warn(`[TELEGRAM] link code not found or already used: ${code}`);
+        await this._sendLinkCodeExpiredMessage(boundChatId);
         return { ok: true, matched: false };
       }
 
