@@ -202,45 +202,51 @@ class TelegramService {
 
   async _resolveSelectedIncidentTelegram(adminId, preferredChatIds = []) {
     const { token, chats } = await this._resolveIncidentTelegram(adminId);
-    if (!token || !chats?.length) {
-      logger.warn(`[TELEGRAM_TRACE] No active telegram chats resolved`, {
-        adminId: adminId ? String(adminId) : null,
-        preferredChatIds: (Array.isArray(preferredChatIds) ? preferredChatIds : [preferredChatIds])
-          .map((chatId) => String(chatId || "").trim())
-          .filter(Boolean),
-        resolvedChats: chats || [],
-        hasToken: Boolean(token),
-      });
-      return { token: "", chats: [] };
-    }
-
     const preferred = new Set(
       (Array.isArray(preferredChatIds) ? preferredChatIds : [preferredChatIds])
         .map((chatId) => String(chatId || "").trim())
         .filter(Boolean),
     );
 
+    if (!token || !chats?.length) {
+      logger.warn(`[TELEGRAM_TRACE] No active telegram chats resolved`, {
+        adminId: adminId ? String(adminId) : null,
+        preferredChatIds: [...preferred],
+        resolvedChats: chats || [],
+        hasToken: Boolean(token),
+      });
+      return { token: "", chats: [] };
+    }
+
     if (!preferred.size) {
-      logger.info(`[TELEGRAM_TRACE] Using all active telegram chats`, {
+      logger.info(`[TELEGRAM_TRACE] No preferred telegram chats selected for this alert`, {
         adminId: adminId ? String(adminId) : null,
         resolvedChats: chats,
       });
-      return { token, chats };
+      return { token: "", chats: [] };
     }
 
     const targetedChats = chats.filter((chatId) => preferred.has(String(chatId)));
-    const finalChats = targetedChats.length ? targetedChats : chats;
 
     logger.info(`[TELEGRAM_TRACE] Resolved preferred telegram chats`, {
       adminId: adminId ? String(adminId) : null,
       preferredChatIds: [...preferred],
       resolvedChats: chats,
       matchedChats: targetedChats,
-      fallbackToAllChats: !targetedChats.length,
-      finalChats,
+      fallbackToAllChats: false,
+      finalChats: targetedChats,
     });
 
-    return { token, chats: finalChats };
+    if (!targetedChats.length) {
+      logger.warn(`[TELEGRAM_TRACE] Preferred telegram chats did not match any active linked chats`, {
+        adminId: adminId ? String(adminId) : null,
+        preferredChatIds: [...preferred],
+        resolvedChats: chats,
+      });
+      return { token: "", chats: [] };
+    }
+
+    return { token, chats: targetedChats };
   }
 
   async getLinkCode(adminId) {

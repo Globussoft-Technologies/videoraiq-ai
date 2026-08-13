@@ -7,6 +7,8 @@ const baseOptions = { discriminatorKey: "settingType", timestamps: true };
 
 // Shared per-zone config, available on every detection's `settings`.
 const zoneConfigsField = {
+  telegramChatId: { type: String, default: null },
+  telegramChatIds: { type: [String], default: [] },
   zone_configs: [
     {
       name: { type: String },
@@ -19,6 +21,7 @@ const zoneConfigsField = {
       startTime: { type: String, default: null },
       endTime: { type: String, default: null },
       telegramChatId: { type: String, default: null },
+      telegramChatIds: { type: [String], default: [] },
     },
   ],
 };

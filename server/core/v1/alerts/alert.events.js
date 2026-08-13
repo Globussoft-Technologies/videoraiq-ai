@@ -10,6 +10,33 @@ import adminModel from '../admin/admin.model.js';
 import { isTelegramWindowOpen } from '../../../utils/telegramWindow.js';
 import logger from '../../../utils/logger.js';
 
+const findMatchingZoneConfig = (incidentZone, zoneConfigs = []) => {
+  if (!incidentZone || !Array.isArray(zoneConfigs)) return null;
+
+  return (
+    zoneConfigs.find(
+      zone =>
+        String(zone?.name || '').trim().toLowerCase() ===
+        String(incidentZone || '').trim().toLowerCase(),
+    ) || null
+  );
+};
+
+const resolvePreferredTelegramChatIds = ({ matchingZoneConfig, detectionSettings }) => {
+  const candidates = [
+    matchingZoneConfig?.telegramChatId,
+    detectionSettings?.telegramChatId,
+  ];
+
+  return [
+    ...new Set(
+      candidates
+        .map((chatId) => String(chatId || '').trim())
+        .filter(Boolean),
+    ),
+  ];
+};
+
 
 export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,saved,adminId}) => {
   try {
@@ -187,15 +214,32 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
     // time (UTC -> admin's timezone) falls inside it. No matching window -> skip.
     try {
       const telegramIncident = incidentData || saved;
-      const zoneConfigs = matchedDetection?.id?.settings?.zone_configs || [];
+      const detectionSettings = matchedDetection?.id?.settings || {};
+      const zoneConfigs = detectionSettings?.zone_configs || [];
+      const matchingZoneConfig =
+        findMatchingZoneConfig(
+          telegramIncident?.zone || telegramIncident?.zoneName,
+          zoneConfigs,
+        ) || (zoneConfigs.length === 1 ? zoneConfigs[0] : null);
+      const preferredChatIds = resolvePreferredTelegramChatIds({
+        matchingZoneConfig,
+        detectionSettings,
+      });
       const windowOpen = isTelegramWindowOpen({
-        incidentZone: telegramIncident?.zone,
+        incidentZone: telegramIncident?.zone || telegramIncident?.zoneName,
         timeOfIncidentUTC: telegramIncident?.timeOfIncident,
         zoneConfigs,
         adminTimezone: adminTz,
       });
       if (windowOpen && adminFlags?.telegramAlertsEnabled !== false) {
-        await TelegramService.sendIncident(telegramIncident, nvrData, channelData, adminId, adminTz);
+        await TelegramService.sendIncident(
+          telegramIncident,
+          nvrData,
+          channelData,
+          adminId,
+          adminTz,
+          { preferredChatIds },
+        );
       }
     } catch (err) {
       logger.error(`[ALERT_TELEGRAM_ERROR] Telegram alert failed`, {

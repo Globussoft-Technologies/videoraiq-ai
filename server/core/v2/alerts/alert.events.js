@@ -105,8 +105,23 @@ const resolvePreferredTelegramChatIds = ({
   matchingZoneConfig,
   detectionSettings,
 }) => {
-  const candidates = [
+  const zoneLevelCandidates = [
+    ...(Array.isArray(matchingZoneConfig?.telegramChatIds)
+      ? matchingZoneConfig.telegramChatIds
+      : []),
     matchingZoneConfig?.telegramChatId,
+  ]
+    .map((chatId) => String(chatId || "").trim())
+    .filter(Boolean);
+
+  if (zoneLevelCandidates.length) {
+    return [...new Set(zoneLevelCandidates)];
+  }
+
+  const candidates = [
+    ...(Array.isArray(detectionSettings?.telegramChatIds)
+      ? detectionSettings.telegramChatIds
+      : []),
     detectionSettings?.telegramChatId,
   ];
 
