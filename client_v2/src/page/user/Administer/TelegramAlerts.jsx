@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Copy, Check, Loader2, Send, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Copy, Check, Loader2, Send, CheckCircle2, RefreshCw, BellRing } from 'lucide-react';
 import { getTelegramLinkCode, unlinkTelegram } from '../../../helpers/telegram';
+import DeleteConfirmation from '../../../components/DeleteConfirmation';
 
 const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT || '@VideoraIQDEVAlertsbot';
 const POLL_INTERVAL_MS = 3000;
@@ -74,6 +75,7 @@ export default function TelegramAlerts({
   const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [unlinkingChatId, setUnlinkingChatId] = useState(null);
+  const [disconnectTarget, setDisconnectTarget] = useState(null);
 
   const pollTimer = useRef(null);
   const pollStopAt = useRef(0);
@@ -180,7 +182,14 @@ export default function TelegramAlerts({
         }]
       : [];
 
-  async function handleUnlink(chatId) {
+  function requestUnlink(channel, displayName) {
+    setDisconnectTarget({ chatId: channel?.chatId || null, displayName });
+  }
+
+  async function confirmUnlink() {
+    if (!disconnectTarget) return;
+
+    const chatId = disconnectTarget.chatId;
     setUnlinkingChatId(chatId || '__all__');
     try {
       const res = await unlinkTelegram(chatId);
@@ -194,6 +203,7 @@ export default function TelegramAlerts({
       toast.error(e?.response?.data?.body?.message || 'Failed to disconnect');
     } finally {
       setUnlinkingChatId(null);
+      setDisconnectTarget(null);
     }
   }
 
@@ -291,7 +301,7 @@ export default function TelegramAlerts({
                             </p>
 
                             <button
-                              onClick={() => handleUnlink(channel.chatId)}
+                              onClick={() => requestUnlink(channel, displayName)}
                               disabled={isUnlinking}
                               style={{
                                 ...btnBase, marginTop: 16,
@@ -328,6 +338,20 @@ export default function TelegramAlerts({
             </div>
           )}
       </div>
+
+      <DeleteConfirmation
+        open={!!disconnectTarget}
+        title="Disconnect Telegram Channel"
+        message={`Are you sure you want to disconnect ${
+          disconnectTarget?.displayName || 'this channel'
+        }? It will stop receiving Telegram alerts. This action cannot be undone.`}
+        icon={<BellRing className="w-6 h-6 text-red-500" />}
+        confirmLabel="Disconnect"
+        cancelLabel="Cancel"
+        onClose={() => setDisconnectTarget(null)}
+        onConfirm={confirmUnlink}
+        loading={unlinkingChatId === (disconnectTarget?.chatId || '__all__') && !!disconnectTarget}
+      />
     </div>
   );
 }

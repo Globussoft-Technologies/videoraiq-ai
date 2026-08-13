@@ -654,7 +654,7 @@ function TelegramChannelRow({
 
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         <button
-          onClick={() => onDisconnect(channel.chatId)}
+          onClick={() => onDisconnect(channel)}
           disabled={isUnlinking}
           style={{
             display: 'inline-flex',
@@ -764,7 +764,7 @@ function TelegramChannelMobileCard({
 
       <div>
         <button
-          onClick={() => onDisconnect(channel.chatId)}
+          onClick={() => onDisconnect(channel)}
           disabled={isUnlinking}
           style={{
             display: 'inline-flex',
@@ -806,6 +806,7 @@ export default function AlertRecipients() {
   const [telegramStatus, setTelegramStatus] = useState(null);
   const [telegramLoading, setTelegramLoading] = useState(true);
   const [telegramUnlinkingChatId, setTelegramUnlinkingChatId] = useState(null);
+  const [telegramDisconnectTarget, setTelegramDisconnectTarget] = useState(null);
   const [telegramSearch, setTelegramSearch] = useState('');
   const [telegramPage, setTelegramPage] = useState(1);
   const debounceRef = useRef(null);
@@ -942,7 +943,14 @@ export default function AlertRecipients() {
     }
   }
 
-  async function handleTelegramDisconnect(chatId) {
+  function requestTelegramDisconnect(channel) {
+    setTelegramDisconnectTarget(channel);
+  }
+
+  async function confirmTelegramDisconnect() {
+    if (!telegramDisconnectTarget) return;
+
+    const chatId = telegramDisconnectTarget.chatId;
     setTelegramUnlinkingChatId(chatId);
     try {
       const result = await unlinkTelegram(chatId);
@@ -956,6 +964,7 @@ export default function AlertRecipients() {
       toast.error(error?.response?.data?.body?.message || 'Failed to disconnect');
     } finally {
       setTelegramUnlinkingChatId(null);
+      setTelegramDisconnectTarget(null);
     }
   }
 
@@ -1435,7 +1444,7 @@ export default function AlertRecipients() {
                               (telegramPage - 1) * TELEGRAM_CHANNELS_PER_PAGE + index
                             }
                             unlinkingChatId={telegramUnlinkingChatId}
-                            onDisconnect={handleTelegramDisconnect}
+                            onDisconnect={requestTelegramDisconnect}
                           />
                         ))}
                       </div>
@@ -1459,7 +1468,7 @@ export default function AlertRecipients() {
                           (telegramPage - 1) * TELEGRAM_CHANNELS_PER_PAGE + index
                         }
                         unlinkingChatId={telegramUnlinkingChatId}
-                        onDisconnect={handleTelegramDisconnect}
+                        onDisconnect={requestTelegramDisconnect}
                       />
                     ))}
                   </div>
@@ -1500,6 +1509,23 @@ export default function AlertRecipients() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
         loading={deleting}
+      />
+
+      <DeleteConfirmation
+        open={!!telegramDisconnectTarget}
+        title="Disconnect Telegram Channel"
+        message={`Are you sure you want to disconnect ${
+          telegramDisconnectTarget?.channelName ||
+          telegramDisconnectTarget?.channelTitle ||
+          telegramDisconnectTarget?.channelUsername ||
+          telegramDisconnectTarget?.chatId
+        }? It will stop receiving Telegram alerts. This action cannot be undone.`}
+        icon={<BellRing className="w-6 h-6 text-red-500" />}
+        confirmLabel="Disconnect"
+        cancelLabel="Cancel"
+        onClose={() => setTelegramDisconnectTarget(null)}
+        onConfirm={confirmTelegramDisconnect}
+        loading={telegramUnlinkingChatId === telegramDisconnectTarget?.chatId}
       />
     </div>
   );
