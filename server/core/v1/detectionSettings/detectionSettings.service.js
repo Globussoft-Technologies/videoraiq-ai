@@ -33,6 +33,7 @@ import pythonService from "../../../services/python.service.js";
 import logger from "../../../utils/logger.js";
 import Response from "../../../utils/response.js";
 import DetectionSettingsValidation from "./detectionSettings.validate.js";
+import { sendPayloadToUser } from "../../../socket.js";
 import {
   CountPersonsDetectionSetting,
   GenericObjectDetectionSetting,
@@ -197,6 +198,32 @@ const buildScheduleRunnerReq = (channel) => ({
     },
   },
 });
+
+const emitDetectionScheduleState = async (
+  req,
+  channel,
+  detectionSetting,
+  source,
+) => {
+  const adminId = req?.verified?.userData?.adminId;
+  const userId = req?.verified?.userData?.user_id;
+  const settingType = detectionSetting?.settingType;
+  const link = channel?.detections?.[settingType];
+
+  if (!adminId || !userId || !channel?._id || !detectionSetting?._id || !link) {
+    return;
+  }
+
+  await sendPayloadToUser(userId, `detectionSchedule_${adminId}`, {
+    source,
+    ...buildSchedulePayload(channel, settingType),
+    channelId: channel._id.toString(),
+    channelName: channel.customName || channel.name,
+    detectionSettingId: detectionSetting._id.toString(),
+    settingType,
+    enabled: link.enabled === true,
+  });
+};
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -976,6 +1003,7 @@ class DetectionSettingService {
     channel,
     detectionSetting,
     targetState,
+    stateChangeSource,
   ) {
     try {
       if (!channel || !detectionSetting) return;
@@ -1021,6 +1049,14 @@ class DetectionSettingService {
       link.enabled = shouldEnable;
       channel.markModified(`detections.${settingType}.enabled`);
       await channel.save();
+      if (stateChangeSource) {
+        await emitDetectionScheduleState(
+          req,
+          channel,
+          detectionSetting,
+          stateChangeSource,
+        );
+      }
     } catch (error) {
       logger.error(
         `Failed to apply scheduled detection state for channel ${channel?._id}:`,
@@ -1054,6 +1090,8 @@ class DetectionSettingService {
             buildScheduleRunnerReq(channel),
             channel,
             detectionSetting,
+            undefined,
+            "schedule-runner",
           );
         }
       }
