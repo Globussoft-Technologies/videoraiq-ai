@@ -30,7 +30,7 @@ export const getCamerasByNvr = async (nvrId) => {
   return data?.channels ?? data?.data ?? [];
 };
 
-export const getChannels = async ({ skip = 0, limit = 100, nvrId = '', search = '', camType = '' } = {}) => {
+export const getChannels = async ({ skip = 0, limit = 100, nvrId = '', search = '', camType = '', engines = '' } = {}) => {
   const token = getAccessToken();
   const params = new URLSearchParams({
     nvrId,
@@ -39,6 +39,7 @@ export const getChannels = async ({ skip = 0, limit = 100, nvrId = '', search = 
     search,
   });
   if (camType) params.set('camType', Array.isArray(camType) ? camType.filter(Boolean).join(',') : camType);
+  if (engines) params.set('engines', Array.isArray(engines) ? engines.filter(Boolean).join(',') : engines);
   const res = await axios.get(`${Api_url}/channel/?${params.toString()}`, {
     headers: { 'x-access-token': token },
   });

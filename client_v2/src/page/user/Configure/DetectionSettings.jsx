@@ -203,6 +203,15 @@ function EngineFilterDropdown({ value, options, onChange }) {
     onChange([...selectedValues, nextValue]);
   };
 
+  const selectAllFiltered = () => {
+    const merged = [...new Set([...selectedValues, ...filteredOptions.map(option => option.value)])];
+    onChange(merged);
+  };
+
+  const clearAll = () => {
+    onChange([]);
+  };
+
   return (
     <Popover
       open={open}
@@ -236,6 +245,38 @@ function EngineFilterDropdown({ value, options, onChange }) {
       </PopoverTrigger>
       <PopoverContent align="start" sideOffset={6}>
         <div style={{ width: 290, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '2px 2px 0' }}>
+            <button
+              type="button"
+              onClick={selectAllFiltered}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                padding: 0,
+                fontSize: 12.5,
+                fontWeight: 700,
+                color: 'var(--tx2)',
+                cursor: 'pointer',
+              }}
+            >
+              Select All
+            </button>
+            <button
+              type="button"
+              onClick={clearAll}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                padding: 0,
+                fontSize: 12.5,
+                fontWeight: 700,
+                color: 'var(--crit)',
+                cursor: 'pointer',
+              }}
+            >
+              Clear All
+            </button>
+          </div>
           <div style={{ position: 'relative' }}>
             <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx3)' }} />
             <input
@@ -257,25 +298,6 @@ function EngineFilterDropdown({ value, options, onChange }) {
             />
           </div>
           <div style={{ maxHeight: 190, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <button
-              type="button"
-              onClick={() => {
-                onChange([]);
-              }}
-              style={{
-                minHeight: 34,
-                padding: '0 10px',
-                borderRadius: 8,
-                border: 'none',
-                background: selectedValues.length === 0 ? 'rgba(59,130,246,.12)' : 'transparent',
-                color: 'var(--tx)',
-                fontSize: 12.5,
-                textAlign: 'left',
-                cursor: 'pointer',
-              }}
-            >
-              All Engines
-            </button>
             {filteredOptions.length ? filteredOptions.map(option => (
               <button
                 key={option.value}
@@ -550,8 +572,8 @@ export function DetectionSettingsCameraList({ onOpenCamera }) {
   const typeLabels = typesApi.data || {};
 
   const channelsApi = useApi(
-    () => getChannels({ skip: page * LIMIT, limit: LIMIT, nvrId: nvrFilter, search, camType: camTypeFilter }),
-    [page, nvrFilter, search, camTypeFilter],
+    () => getChannels({ skip: page * LIMIT, limit: LIMIT, nvrId: nvrFilter, search, camType: camTypeFilter, engines: engineFilter }),
+    [page, nvrFilter, search, camTypeFilter, engineFilter],
   );
   const cameras = channelsApi.data?.channels ?? [];
   const total = channelsApi.data?.total ?? 0;
@@ -577,10 +599,6 @@ export function DetectionSettingsCameraList({ onOpenCamera }) {
     return [...entries, ...cameraOnlyEntries].sort((a, b) => a.label.localeCompare(b.label));
   }, [typeLabels, cameras]);
 
-  const filteredCameras = useMemo(() => {
-    if (!engineFilter.length) return cameras;
-    return cameras.filter(camera => engineFilter.some(engine => isTypeEnabled(camera, engine)));
-  }, [cameras, engineFilter]);
   // Matches V1: a single toggle endpoint for on/off; 404s if the type was
   // never linked to this camera (no auto-create — same as V1's real behavior).
 const handleToggleDetection = async (camera, detectionType, enable) => {
@@ -718,11 +736,14 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
           <EngineFilterDropdown
             value={engineFilter}
             options={engineOptions}
-            onChange={setEngineFilter}
+            onChange={(nextValue) => {
+              setEngineFilter(nextValue);
+              setPage(0);
+            }}
           />
         </div>
         <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>
-          {filteredCameras.length} of {total} total
+          {total} total
         </span>
       </div>
 
@@ -741,12 +762,12 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
         <AsyncBoundary
           loading={channelsApi.loading}
           error={channelsApi.error}
-          isEmpty={!channelsApi.loading && !channelsApi.error && filteredCameras.length === 0}
+          isEmpty={!channelsApi.loading && !channelsApi.error && cameras.length === 0}
           onRetry={channelsApi.refetch}
           minH={160}
           emptyLabel="No cameras found"
         >
-          {() => filteredCameras.map(camera => (
+          {() => cameras.map(camera => (
             <CameraRow
               key={camera._id}
               camera={camera}
