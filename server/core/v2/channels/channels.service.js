@@ -244,6 +244,7 @@ class ChannelService {
         location = "",
         department = "",
         camType = "",
+        engines = "",
       } = req.query;
 
       let adminData = await adminModel.findOne({ _id: adminId });
@@ -262,6 +263,24 @@ class ChannelService {
         const types = camType.split(",").map((t) => t.trim());
 
         filter.checkType = types.length === 1 ? types[0] : { $in: types };
+      }
+
+      if (engines) {
+        const selectedEngines = (Array.isArray(engines) ? engines : engines.split(","))
+          .map((engine) => String(engine || "").trim())
+          .filter(Boolean)
+          .filter((engine) => Object.prototype.hasOwnProperty.call(DETECTION_TYPES, engine));
+
+        if (selectedEngines.length > 0) {
+          filter.$and = [
+            ...(Array.isArray(filter.$and) ? filter.$and : []),
+            {
+              $or: selectedEngines.map((engine) => ({
+                [`detections.${engine}.enabled`]: true,
+              })),
+            },
+          ];
+        }
       }
 
       if (_id) {

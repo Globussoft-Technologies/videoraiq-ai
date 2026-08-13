@@ -187,6 +187,48 @@ const isScheduleActiveNow = (schedule) => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const normalizeTelegramChatIds = (ids, fallbackId = null) => {
+  const normalizedIds = Array.isArray(ids)
+    ? [...new Set(ids.map((id) => String(id || "").trim()).filter(Boolean))]
+    : [];
+
+  if (normalizedIds.length) return normalizedIds;
+
+  const normalizedFallback = String(fallbackId || "").trim();
+  return normalizedFallback ? [normalizedFallback] : [];
+};
+
+const normalizeTelegramSettings = (settings = {}) => {
+  if (!settings || typeof settings !== "object") return settings;
+
+  const telegramChatIds = normalizeTelegramChatIds(
+    settings.telegramChatIds,
+    settings.telegramChatId,
+  );
+
+  const zoneConfigs = Array.isArray(settings.zone_configs)
+    ? settings.zone_configs.map((zoneConfig) => {
+        const zoneTelegramChatIds = normalizeTelegramChatIds(
+          zoneConfig?.telegramChatIds,
+          zoneConfig?.telegramChatId,
+        );
+
+        return {
+          ...zoneConfig,
+          telegramChatIds: zoneTelegramChatIds,
+          telegramChatId: zoneTelegramChatIds[0] || null,
+        };
+      })
+    : settings.zone_configs;
+
+  return {
+    ...settings,
+    telegramChatIds,
+    telegramChatId: telegramChatIds[0] || null,
+    zone_configs: zoneConfigs,
+  };
+};
+
 const handleDetectionStartStopWithRetry = async (args) => {
   let lastError;
 
@@ -390,6 +432,8 @@ class DetectionSettingService {
       throw new Error(`Unsupported detection type: ${settingType}`);
     }
 
+    const normalizedSettings = normalizeTelegramSettings(settings);
+
     const savedDetections = [];
     const skippedChannels = [];
 
@@ -413,7 +457,7 @@ class DetectionSettingService {
     const detectionDoc = new Model({
       ...baseData,
       settingType,
-      settings,
+      settings: normalizedSettings,
     });
 
     const savedDetection = await detectionDoc.save();
@@ -552,9 +596,10 @@ class DetectionSettingService {
 
       // Update nested settings
       if (value.settings && typeof value.settings === "object") {
+        const normalizedSettings = normalizeTelegramSettings(value.settings);
         detectionSetting.settings = {
           ...detectionSetting.settings,
-          ...value.settings,
+          ...normalizedSettings,
         };
         detectionSetting.markModified("settings");
       }
