@@ -67,8 +67,6 @@ function TelegramConnectSteps({ status, copied, onCopy, onRefresh, refreshing })
 export default function TelegramAlerts({
   showConnectedChannels = true,
   initiallyExpanded = true,
-  reconnectHint = null,
-  reconnectTargetChatId = null,
   onStatusChange = null,
 }) {
   const [loading, setLoading] = useState(true);
@@ -80,6 +78,7 @@ export default function TelegramAlerts({
   const pollTimer = useRef(null);
   const pollStopAt = useRef(0);
   const copyTimer = useRef(null);
+  const connectAttemptBaselineRef = useRef(0);
 
   const clearPoll = () => {
     if (pollTimer.current) {
@@ -88,20 +87,24 @@ export default function TelegramAlerts({
     }
   };
 
+  const getActiveLinkedChannelCount = (data) =>
+    Array.isArray(data?.linkedChannels)
+      ? data.linkedChannels.filter((channel) => channel?.active !== false).length
+      : data?.linked
+        ? 1
+        : 0;
+
   const isTargetChannelConnected = (data) => {
     if (!data) return false;
-    if (!reconnectTargetChatId) return Boolean(data.linked);
-
-    const matchingChannel = (data.linkedChannels || []).find(
-      (channel) => String(channel?.chatId || '') === String(reconnectTargetChatId),
-    );
-
-    return matchingChannel?.active !== false;
+    return getActiveLinkedChannelCount(data) > connectAttemptBaselineRef.current;
   };
 
-  const load = async () => {
+  const load = async ({ preserveConnectBaseline = false } = {}) => {
     const data = await getTelegramLinkCode();
     setStatus(data);
+    if (!preserveConnectBaseline) {
+      connectAttemptBaselineRef.current = getActiveLinkedChannelCount(data);
+    }
     if (typeof onStatusChange === 'function') {
       onStatusChange(data);
     }
@@ -138,7 +141,7 @@ export default function TelegramAlerts({
       }
     }, POLL_INTERVAL_MS);
     return clearPoll;
-  }, [loading, status?.linked, status?.code, reconnectTargetChatId]);
+  }, [loading, status?.linked, status?.code]);
 
   async function handleCopy() {
     if (!status?.code) return;
@@ -153,11 +156,13 @@ export default function TelegramAlerts({
   }
 
   async function handleRefresh() {
+    connectAttemptBaselineRef.current = getActiveLinkedChannelCount(status);
     setRefreshing(true);
-    const data = await load();
+    const data = await load({ preserveConnectBaseline: true });
     setRefreshing(false);
     if (isTargetChannelConnected(data)) {
       toast.success('Telegram channel connected');
+      connectAttemptBaselineRef.current = getActiveLinkedChannelCount(data);
     } else {
       toast.info('Not connected yet. Make sure you posted the code in your channel.');
     }
@@ -224,21 +229,6 @@ export default function TelegramAlerts({
             <div style={{ background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 10, padding: 18 }}>
               <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap' }}>
                 <div style={{ flex: '1 1 520px', minWidth: 320 }}>
-                  {reconnectHint && (
-                    <div style={{
-                      marginBottom: 14,
-                      padding: '10px 12px',
-                      borderRadius: 10,
-                      border: '1px solid rgba(99,102,241,.24)',
-                      background: 'rgba(99,102,241,.08)',
-                      fontSize: 12,
-                      color: 'var(--tx2)',
-                    }}>
-                      Reconnecting channel:{' '}
-                      <strong style={{ color: 'var(--tx)' }}>{reconnectHint}</strong>.
-                      Add the bot to that Telegram channel again if needed, then post the code shown below.
-                    </div>
-                  )}
                   {!showConnectedChannels && (
                     <div style={{
                       marginBottom: 14,
@@ -327,23 +317,6 @@ export default function TelegramAlerts({
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: 13, color: 'var(--tx)' }}>
                 <Send size={15} style={{ color: 'var(--blue)' }} /> Connect Telegram Alerts
               </div>
-
-              {reconnectHint && (
-                <div style={{
-                  marginTop: 14,
-                  marginBottom: 4,
-                  padding: '10px 12px',
-                  borderRadius: 10,
-                  border: '1px solid rgba(99,102,241,.24)',
-                  background: 'rgba(99,102,241,.08)',
-                  fontSize: 12,
-                  color: 'var(--tx2)',
-                }}>
-                  Reconnecting channel:{' '}
-                  <strong style={{ color: 'var(--tx)' }}>{reconnectHint}</strong>.
-                  Add the bot to that Telegram channel again if needed, then post the code shown below.
-                </div>
-              )}
 
               <TelegramConnectSteps
                 status={status}

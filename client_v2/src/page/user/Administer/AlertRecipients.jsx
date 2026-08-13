@@ -46,12 +46,6 @@ const RECIPIENT_VIEWS = [
   { key: 'telegram', label: 'Telegram' },
 ];
 
-const TELEGRAM_STATUS_FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'connected', label: 'Connected' },
-  { key: 'disconnected', label: 'Disconnected' },
-];
-
 const TELEGRAM_CHANNELS_PER_PAGE = 4;
 
 function Avatar({ name }) {
@@ -572,7 +566,6 @@ function TelegramChannelRow({
   index,
   unlinkingChatId,
   onDisconnect,
-  onReconnect,
 }) {
   const displayName =
     channel.channelName ||
@@ -581,9 +574,8 @@ function TelegramChannelRow({
     channel.chatId ||
     `Channel ${index + 1}`;
   const isConnected = channel.active !== false;
-  const isUnlinking = isConnected && unlinkingChatId === channel.chatId;
+  const isUnlinking = unlinkingChatId === channel.chatId;
   const connectedAt = formatTelegramDateTime(channel.linkedAt);
-  const disconnectedAt = formatTelegramDateTime(channel.disconnectedAt);
 
   return (
     <div
@@ -623,7 +615,7 @@ function TelegramChannelRow({
               fontSize: 11,
             }}
           >
-            <CheckCircle2 size={13} /> {isConnected ? 'Connected' : 'Disconnected'}
+            <CheckCircle2 size={13} /> Connected
           </div>
         </div>
       </div>
@@ -648,67 +640,42 @@ function TelegramChannelRow({
             alignItems: 'center',
             fontSize: 10.5,
             fontWeight: 700,
-            color: isConnected ? 'var(--ok)' : 'var(--tx3)',
-            border: `1px solid ${isConnected ? 'var(--ok)' : 'var(--bd2)'}`,
+            color: 'var(--ok)',
+            border: '1px solid var(--ok)',
             borderRadius: 20,
             padding: '4px 10px',
           }}
         >
-          {isConnected ? 'Connected' : 'Disconnected'}
+          Connected
         </span>
       </div>
 
       <div style={{ fontSize: 12, color: 'var(--tx2)' }}>{connectedAt}</div>
 
-      <div style={{ fontSize: 12, color: 'var(--tx2)' }}>{disconnectedAt}</div>
-
       <div style={{ display: 'flex', justifyContent: 'center' }}>
-        {isConnected ? (
-          <button
-            onClick={() => onDisconnect(channel.chatId)}
-            disabled={isUnlinking}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 7,
-              fontSize: 12,
-              fontWeight: 600,
-              color: 'var(--crit)',
-              background: 'none',
-              border: '1px solid rgba(255,77,77,.4)',
-              borderRadius: 9,
-              padding: '8px 12px',
-              cursor: isUnlinking ? 'wait' : 'pointer',
-              opacity: isUnlinking ? 0.6 : 1,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {isUnlinking && <Loader2 size={13} className="animate-spin" />}
-            Disconnect
-          </button>
-        ) : (
-          <button
-            onClick={() => onReconnect(channel, displayName)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 7,
-              fontSize: 12,
-              fontWeight: 600,
-              color: '#fff',
-              background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-              border: 'none',
-              borderRadius: 9,
-              padding: '8px 12px',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Connect Again
-          </button>
-        )}
+        <button
+          onClick={() => onDisconnect(channel.chatId)}
+          disabled={isUnlinking}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 7,
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--crit)',
+            background: 'none',
+            border: '1px solid rgba(255,77,77,.4)',
+            borderRadius: 9,
+            padding: '8px 12px',
+            cursor: isUnlinking ? 'wait' : 'pointer',
+            opacity: isUnlinking ? 0.6 : 1,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {isUnlinking && <Loader2 size={13} className="animate-spin" />}
+          Disconnect
+        </button>
       </div>
     </div>
   );
@@ -719,7 +686,6 @@ function TelegramChannelMobileCard({
   index,
   unlinkingChatId,
   onDisconnect,
-  onReconnect,
 }) {
   const displayName =
     channel.channelName ||
@@ -728,7 +694,7 @@ function TelegramChannelMobileCard({
     channel.chatId ||
     `Channel ${index + 1}`;
   const isConnected = channel.active !== false;
-  const isUnlinking = isConnected && unlinkingChatId === channel.chatId;
+  const isUnlinking = unlinkingChatId === channel.chatId;
 
   return (
     <div
@@ -783,7 +749,7 @@ function TelegramChannelMobileCard({
             STATUS
           </div>
           <div style={{ marginTop: 4, fontSize: 12.5, color: isConnected ? 'var(--ok)' : 'var(--tx3)', fontWeight: 600 }}>
-            {isConnected ? 'Connected' : 'Disconnected'}
+            Connected
           </div>
         </div>
         <div>
@@ -794,61 +760,31 @@ function TelegramChannelMobileCard({
             {formatTelegramDateTime(channel.linkedAt)}
           </div>
         </div>
-        <div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '.07em', color: 'var(--tx3)' }}>
-            DISCONNECTED AT
-          </div>
-          <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--tx2)' }}>
-            {formatTelegramDateTime(channel.disconnectedAt)}
-          </div>
-        </div>
       </div>
 
       <div>
-        {isConnected ? (
-          <button
-            onClick={() => onDisconnect(channel.chatId)}
-            disabled={isUnlinking}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 7,
-              fontSize: 12.5,
-              fontWeight: 600,
-              color: 'var(--crit)',
-              background: 'none',
-              border: '1px solid rgba(255,77,77,.4)',
-              borderRadius: 9,
-              padding: '9px 14px',
-              cursor: isUnlinking ? 'wait' : 'pointer',
-              opacity: isUnlinking ? 0.6 : 1,
-            }}
-          >
-            {isUnlinking && <Loader2 size={13} className="animate-spin" />}
-            Disconnect
-          </button>
-        ) : (
-          <button
-            onClick={() => onReconnect(channel, displayName)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 7,
-              fontSize: 12.5,
-              fontWeight: 600,
-              color: '#fff',
-              background: 'linear-gradient(135deg,var(--blue),var(--violet))',
-              border: 'none',
-              borderRadius: 9,
-              padding: '9px 14px',
-              cursor: 'pointer',
-            }}
-          >
-            Connect Again
-          </button>
-        )}
+        <button
+          onClick={() => onDisconnect(channel.chatId)}
+          disabled={isUnlinking}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 7,
+            fontSize: 12.5,
+            fontWeight: 600,
+            color: 'var(--crit)',
+            background: 'none',
+            border: '1px solid rgba(255,77,77,.4)',
+            borderRadius: 9,
+            padding: '9px 14px',
+            cursor: isUnlinking ? 'wait' : 'pointer',
+            opacity: isUnlinking ? 0.6 : 1,
+          }}
+        >
+          {isUnlinking && <Loader2 size={13} className="animate-spin" />}
+          Disconnect
+        </button>
       </div>
     </div>
   );
@@ -871,10 +807,7 @@ export default function AlertRecipients() {
   const [telegramLoading, setTelegramLoading] = useState(true);
   const [telegramUnlinkingChatId, setTelegramUnlinkingChatId] = useState(null);
   const [telegramSearch, setTelegramSearch] = useState('');
-  const [telegramStatusFilter, setTelegramStatusFilter] = useState('all');
   const [telegramPage, setTelegramPage] = useState(1);
-  const [telegramReconnectHint, setTelegramReconnectHint] = useState(null);
-  const [telegramReconnectTargetChatId, setTelegramReconnectTargetChatId] = useState(null);
   const debounceRef = useRef(null);
   const telegramSetupRef = useRef(null);
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -912,7 +845,7 @@ export default function AlertRecipients() {
   const verifiedCount = recipients.filter((recipient) => recipient.verified).length;
 
   const linkedTelegramChannels = telegramStatus?.linkedChannels?.length
-    ? telegramStatus.linkedChannels
+    ? telegramStatus.linkedChannels.filter((channel) => channel?.active !== false)
     : telegramStatus?.linked
       ? [
           {
@@ -926,11 +859,6 @@ export default function AlertRecipients() {
       : [];
 
   const filteredTelegramChannels = linkedTelegramChannels.filter((channel) => {
-    const statusMatches =
-      telegramStatusFilter === 'all' ||
-      (telegramStatusFilter === 'connected' && channel.active !== false) ||
-      (telegramStatusFilter === 'disconnected' && channel.active === false);
-
     const haystack = [
       channel.channelName,
       channel.channelTitle,
@@ -945,7 +873,7 @@ export default function AlertRecipients() {
       !telegramSearch.trim() ||
       haystack.includes(telegramSearch.trim().toLowerCase());
 
-    return statusMatches && searchMatches;
+    return searchMatches;
   });
 
   const telegramTotalPages = Math.max(
@@ -959,7 +887,7 @@ export default function AlertRecipients() {
 
   useEffect(() => {
     setTelegramPage(1);
-  }, [telegramSearch, telegramStatusFilter]);
+  }, [telegramSearch]);
 
   useEffect(() => {
     if (telegramPage > telegramTotalPages) {
@@ -1029,12 +957,6 @@ export default function AlertRecipients() {
     } finally {
       setTelegramUnlinkingChatId(null);
     }
-  }
-
-  function handleTelegramReconnect(channel, displayName) {
-    setTelegramReconnectHint(displayName);
-    setTelegramReconnectTargetChatId(channel?.chatId ? String(channel.chatId) : null);
-    telegramSetupRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   if (!canView) {
@@ -1161,8 +1083,6 @@ export default function AlertRecipients() {
           <TelegramAlerts
             showConnectedChannels={false}
             initiallyExpanded={true}
-            reconnectHint={telegramReconnectHint}
-            reconnectTargetChatId={telegramReconnectTargetChatId}
             onStatusChange={setTelegramStatus}
           />
         </div>
@@ -1430,40 +1350,6 @@ export default function AlertRecipients() {
               />
             </div>
 
-            <div
-              className="vq-recipients-status"
-              style={{
-                display: 'flex',
-                gap: 4,
-                background: 'var(--bg2)',
-                border: '1px solid var(--bd)',
-                borderRadius: 9,
-                padding: 3,
-              }}
-            >
-              {TELEGRAM_STATUS_FILTERS.map((filter) => (
-                <button
-                  key={filter.key}
-                  onClick={() => setTelegramStatusFilter(filter.key)}
-                  style={{
-                    padding: '6px 13px',
-                    borderRadius: 6,
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    background:
-                      telegramStatusFilter === filter.key
-                        ? 'var(--blue)'
-                        : 'transparent',
-                    color:
-                      telegramStatusFilter === filter.key ? '#fff' : 'var(--tx2)',
-                  }}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div
@@ -1494,7 +1380,7 @@ export default function AlertRecipients() {
               Connected Telegram Channels
             </span>
             <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>
-              {filteredTelegramChannels.length} shown · {linkedTelegramChannels.filter((channel) => channel.active !== false).length} connected
+              {filteredTelegramChannels.length} shown · {linkedTelegramChannels.length} connected
             </span>
           </div>
 
@@ -1506,7 +1392,7 @@ export default function AlertRecipients() {
               onRetry={reloadTelegramStatus}
               minH={180}
               emptyLabel={
-                telegramSearch.trim() || telegramStatusFilter !== 'all'
+                telegramSearch.trim()
                   ? 'No Telegram channels match the selected filters'
                   : 'No Telegram channels found yet'
               }
@@ -1550,7 +1436,6 @@ export default function AlertRecipients() {
                             }
                             unlinkingChatId={telegramUnlinkingChatId}
                             onDisconnect={handleTelegramDisconnect}
-                            onReconnect={handleTelegramReconnect}
                           />
                         ))}
                       </div>
@@ -1575,7 +1460,6 @@ export default function AlertRecipients() {
                         }
                         unlinkingChatId={telegramUnlinkingChatId}
                         onDisconnect={handleTelegramDisconnect}
-                        onReconnect={handleTelegramReconnect}
                       />
                     ))}
                   </div>
