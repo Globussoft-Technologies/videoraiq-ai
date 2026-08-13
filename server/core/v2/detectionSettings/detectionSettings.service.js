@@ -225,6 +225,40 @@ const updateModelThresholds = async (detectionSetting, backendResponse) => {
   await detectionSetting.save();
 };
 
+const resetDetectorAliasesBySettingType = {
+  foodServicePPEDetectionSettings: "foodServicePPEDetection",
+  unauthorizedAccessSettings: "zoneIntrusionSettings",
+  deskAbsenceSettings: "deskAbsenceDetection",
+  tableOccupancyDetectionSettings: "tableOccupancySettings",
+  vehicleDetectionSettings: "numberPlateDetectionSettings",
+};
+
+const getResetDetectorName = (settingType) =>
+  resetDetectorAliasesBySettingType[settingType] || settingType;
+
+const applyResetThresholds = async (detectionSetting, thresholds) => {
+  if (!Object.keys(thresholds).length) return;
+
+  const currentSettings =
+    detectionSetting.settings?.toObject?.() || detectionSetting.settings || {};
+  const currentModelThresholds =
+    detectionSetting.modelThresholds?.toObject?.()
+    || detectionSetting.modelThresholds
+    || {};
+
+  detectionSetting.settings = {
+    ...currentSettings,
+    ...thresholds,
+  };
+  detectionSetting.modelThresholds = {
+    ...currentModelThresholds,
+    ...thresholds,
+  };
+  detectionSetting.markModified("settings");
+  detectionSetting.markModified("modelThresholds");
+  await detectionSetting.save();
+};
+
 class DetectionSettingService {
   async getDetectionTypes(req, res, _next) {
     try {
@@ -1368,15 +1402,7 @@ class DetectionSettingService {
         );
       }
 
-      const currentSettings =
-        detectionSetting.settings?.toObject?.() || detectionSetting.settings || {};
-
-      detectionSetting.settings = {
-        ...currentSettings,
-        ...thresholds,
-      };
-      detectionSetting.markModified("settings");
-      await detectionSetting.save();
+      await applyResetThresholds(detectionSetting, thresholds);
 
       const linkedChannels = await Channel.find({
         [`detections.${settingType}.id`]: id,
@@ -1386,14 +1412,22 @@ class DetectionSettingService {
         .populate(toPopulateDetections);
 
       const adminId = req?.verified?.userData?.adminId;
+      let resetThresholds = thresholds;
       for (const channel of linkedChannels) {
         try {
-          await pythonService.resetDetectionConfidence({
+          const backendResponse = await pythonService.resetDetectionConfidence({
             camera_id: channel._id.toString(),
             nvr_id: channel?.nvrId?._id?.toString(),
             admin_id: adminId,
-            detectors: [settingType],
+            detectors: [getResetDetectorName(settingType)],
           });
+          const backendThresholds = DetectionSettingsValidation.extractModelThresholds(
+            settingType,
+            backendResponse?.model_thresholds,
+          );
+          if (Object.keys(backendThresholds).length) {
+            resetThresholds = backendThresholds;
+          }
         } catch (error) {
           logger.error(
             `Failed to re-push reset thresholds for channel ${channel?._id}:`,
@@ -1402,10 +1436,14 @@ class DetectionSettingService {
         }
       }
 
+      if (resetThresholds !== thresholds) {
+        await applyResetThresholds(detectionSetting, resetThresholds);
+      }
+
       return res.status(200).json(
         Response.userSuccessResp("Detection thresholds reset successfully", {
           detectionSetting,
-          resetThresholds: thresholds,
+          resetThresholds,
         }),
       );
     } catch (error) {
