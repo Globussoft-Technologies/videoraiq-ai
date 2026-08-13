@@ -3,6 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { logout } from '@/hooks/logout';
 import { useAuth } from '@/context/AuthContext';
 
+const envValue = (key) => String(import.meta.env[key] || '').trim();
+const isLocalSetup = () => envValue('VITE_LOCAL_SETUP').toLowerCase() === 'true';
+const logoutRedirectUrl = () => {
+  const memberUrl = envValue('VITE_AMEMBER_MEMBER_URL');
+  if (memberUrl) return memberUrl;
+
+  const frontendUrl = envValue('VITE_FRONTEND');
+  return frontendUrl ? `${frontendUrl.replace(/\/$/, '')}/member/index` : '/admin-login';
+};
+
 /**
  * Clears the session and returns to the login page. Mirrors V1's Logout
  * component; the sidebar "Sign Out" button routes here (/logout).
@@ -14,7 +24,11 @@ export default function Logout() {
   useEffect(() => {
     logout();
     setUser(null);
-    navigate('/admin-login', { replace: true });
+    if (isLocalSetup()) {
+      navigate('/admin-login', { replace: true });
+    } else {
+      window.location.href = logoutRedirectUrl();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
