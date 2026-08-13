@@ -581,7 +581,7 @@ function TelegramChannelRow({
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '1.2fr 1.2fr .8fr 1fr 1fr 120px',
+        gridTemplateColumns: '1.2fr 1.2fr .8fr 1fr 120px',
         alignItems: 'center',
         gap: 12,
         padding: '12px 16px',
@@ -1414,7 +1414,7 @@ export default function AlertRecipients() {
                         <div
                           style={{
                             display: 'grid',
-                            gridTemplateColumns: '1.2fr 1.2fr .8fr 1fr 1fr 120px',
+                            gridTemplateColumns: '1.2fr 1.2fr .8fr 1fr 120px',
                             padding: '10px 16px',
                             borderBottom: '1px solid var(--bd)',
                             fontFamily: 'var(--mono)',
@@ -1427,7 +1427,6 @@ export default function AlertRecipients() {
                           <span>CHANNEL ID</span>
                           <span>STATUS</span>
                           <span>CONNECTED AT</span>
-                          <span>DISCONNECTED AT</span>
                           <span style={{ textAlign: 'center' }}>ACTION</span>
                         </div>
 

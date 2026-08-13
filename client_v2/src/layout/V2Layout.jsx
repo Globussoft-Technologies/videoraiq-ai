@@ -173,19 +173,31 @@ function Shell() {
       return null;
     }
   });
-  // `server_network` rides along on every Camera Status API response
-  // regardless of which camera(s) it's scoped to, so one arbitrary id is
-  // enough to get it — no need to query the whole fleet (see below). This
-  // one-off lookup just supplies that id.
+  // `server_network` rides along on every Camera Status API response,
+  // scoped to whichever NVR domain answered it — so one arbitrary camera is
+  // only enough when the whole fleet lives behind a single domain. Admins can
+  // have cameras spread across multiple NVR domains (see nvr.model.js), each
+  // with its own uplink health, so we probe one representative camera per
+  // distinct domain rather than just the first one found — the grouping in
+  // cameraStatus.js then fires one request per domain and Header renders one
+  // card per resulting server_network entry.
   // Some channels have no streamingUrl yet (backend registration pending),
   // so cameraStatusId() returns null for them — pull enough candidates that
-  // at least one is very likely to resolve.
+  // every domain is very likely to have at least one that resolves.
   const probeChannelsApi = useApi(() => getChannels({ limit: 30 }), []);
-  const probeChannel = useMemo(
-    () => (probeChannelsApi.data || []).find((channel) => !!cameraStatusId(channel)) || null,
-    [probeChannelsApi.data]
-  );
-  const networkStatusApi = useCameraStatusStream(probeChannel ? [probeChannel] : [], { enabled: !!probeChannel });
+  const probeChannels = useMemo(() => {
+    const seenDomains = new Set();
+    const picked = [];
+    for (const channel of probeChannelsApi.data || []) {
+      if (!cameraStatusId(channel)) continue;
+      const domainKey = channel?.nvrId?.domain || channel?.nvrId?._id || channel?.nvrId || 'default';
+      if (seenDomains.has(domainKey)) continue;
+      seenDomains.add(domainKey);
+      picked.push(channel);
+    }
+    return picked;
+  }, [probeChannelsApi.data]);
+  const networkStatusApi = useCameraStatusStream(probeChannels, { enabled: probeChannels.length > 0 });
   useEffect(() => {
     if (networkStatusApi.data?.server_networks?.length) {
       setServerNetwork(networkStatusApi.data.server_networks);

@@ -44,9 +44,9 @@ function TelegramConnectSteps({ status, copied, onCopy, onRefresh, refreshing })
         </button>
       </div>
 
-      <p style={{ marginTop: 12, fontSize: 11.5, color: 'var(--tx3)' }}>
+      {/* <p style={{ marginTop: 12, fontSize: 11.5, color: 'var(--tx3)' }}>
         Once posted, this page will update to "Connected" automatically.
-      </p>
+      </p> */}
 
       <button
         onClick={onRefresh}

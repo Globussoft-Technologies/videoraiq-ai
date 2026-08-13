@@ -384,14 +384,23 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
                       background: 'var(--bg2)',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                        <span style={{ width: 9, height: 9, borderRadius: '50%', background: color, boxShadow: `0 0 8px ${color}`, flex: '0 0 auto' }} />
-                        <span style={{ fontSize: 13, fontWeight: 700 }}>{label}</span>
-                      </div>
-                      <span style={{ fontSize: 10, color: 'var(--tx3)', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>
-                        {networkLabelForCard(network)}
-                      </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                      <span style={{ width: 9, height: 9, borderRadius: '50%', background: color, boxShadow: `0 0 8px ${color}`, flex: '0 0 auto' }} />
+                      <span style={{ fontSize: 13, fontWeight: 700 }}>{label}</span>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        color: 'var(--tx3)',
+                        fontFamily: 'var(--mono)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        marginBottom: 4,
+                      }}
+                      title={networkLabelForCard(network)}
+                    >
+                      {networkLabelForCard(network)}
                     </div>
                     {network.description && (
                       <div style={{ fontSize: 11.5, color: 'var(--tx2)', lineHeight: 1.5, marginBottom: 10 }}>
