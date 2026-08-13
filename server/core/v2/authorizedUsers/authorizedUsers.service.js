@@ -666,6 +666,7 @@ async updateAuthUser(req, res, _next) {
       branch,
       shiftId,
       numberPlate,
+      vehicleNumber,
       location
     } = req.body;
 
@@ -819,6 +820,7 @@ async updateAuthUser(req, res, _next) {
         branch,
         shiftId,
         numberPlate,
+        vehicleNumber,
         location
       },
       { new: true }

@@ -108,6 +108,7 @@ class AuthUsersValidator {
         ),
         designation: Joi.string().default(null),
         branch: Joi.string().default(null),
+        vehicleNumber: Joi.string().trim().allow(null, "").optional(),
         
         // ✅ roles as array of ObjectIds
         roleIds: Joi.array(),

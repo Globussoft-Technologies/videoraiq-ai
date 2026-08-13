@@ -21,6 +21,7 @@ const buildAdminQuery = (adminId) => {
     : { user_id: normalized };
 };
 
+
 const getAlertAdminContext = async (adminId) => {
   const query = buildAdminQuery(adminId);
   if (!query) {
@@ -314,7 +315,36 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
         )
         : true;
 
+      logger.info(`[ALERT_TELEGRAM_TRACE] Evaluated telegram alert routing`, {
+        detectionType,
+        channelId,
+        nvrId,
+        adminId,
+        resolvedAdminId,
+        incidentId: telegramIncident?._id,
+        incidentZone: telegramIncident?.zone || telegramIncident?.zoneName || null,
+        adminTimezone: adminTz,
+        telegramAlertsEnabled: alertAdminContext?.telegramAlertsEnabled,
+        detectionTelegramChatId: detectionSettings?.telegramChatId || null,
+        matchingZoneName: matchingZoneConfig?.name || null,
+        matchingZoneTelegramChatId: matchingZoneConfig?.telegramChatId || null,
+        preferredChatIds,
+        hasEvaluableWindow,
+        windowOpen,
+        timeOfIncidentUTC: telegramIncident?.timeOfIncident || null,
+      });
+
       if (alertAdminContext?.telegramAlertsEnabled !== false && windowOpen) {
+        logger.info(`[ALERT_TELEGRAM_TRACE] Calling TelegramService.sendIncident`, {
+          detectionType,
+          channelId,
+          nvrId,
+          adminId,
+          resolvedAdminId,
+          incidentId: telegramIncident?._id,
+          preferredChatIds,
+        });
+
         await TelegramService.sendIncident(
           telegramIncident,
           nvrData,
@@ -325,6 +355,28 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
             preferredChatIds,
           },
         );
+
+        logger.info(`[ALERT_TELEGRAM_TRACE] TelegramService.sendIncident completed`, {
+          detectionType,
+          channelId,
+          nvrId,
+          adminId,
+          resolvedAdminId,
+          incidentId: telegramIncident?._id,
+          preferredChatIds,
+        });
+      } else {
+        logger.warn(`[ALERT_TELEGRAM_TRACE] Skipped telegram alert`, {
+          detectionType,
+          channelId,
+          nvrId,
+          adminId,
+          resolvedAdminId,
+          incidentId: telegramIncident?._id,
+          telegramAlertsEnabled: alertAdminContext?.telegramAlertsEnabled,
+          windowOpen,
+          preferredChatIds,
+        });
       }
     } catch (err) {
       logger.error(`[ALERT_TELEGRAM_ERROR] Telegram alert failed`, {
