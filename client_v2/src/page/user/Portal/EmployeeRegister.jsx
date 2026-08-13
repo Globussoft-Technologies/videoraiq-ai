@@ -109,6 +109,7 @@ export default function EmployeeRegister() {
     designation: "",
     location: "",
     department: "",
+    vehicleNumber: "",
     ...savedDraft?.form,
   });
   const [photos, setPhotos] = useState({});
@@ -288,7 +289,7 @@ export default function EmployeeRegister() {
   };
 
   const resetForm = () => {
-    setForm({ firstName: "", lastName: "", email: "", designation: "", location: "", department: "" });
+    setForm({ firstName: "", lastName: "", email: "", designation: "", location: "", department: "", vehicleNumber: "" });
     setPhotos({});
     setErrors({});
     setStep(1);
@@ -313,6 +314,7 @@ export default function EmployeeRegister() {
     formData.append("designation", form.designation);
     formData.append("location", form.location);
     formData.append("departmentId", form.department);
+    formData.append("vehicleNumber", form.vehicleNumber.trim());
     PHOTO_SLOTS.forEach((s) => {
       const pic = photos[s.key];
       if (pic?.file) formData.append("file", pic.file);
@@ -501,6 +503,10 @@ export default function EmployeeRegister() {
                       preferUp
                     />
                     {errors.department && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.department}</div>}
+                  </div>
+                  <div className="flex flex-col gap-[7px]">
+                    <label className="text-[12.5px] font-semibold text-[#334155]">Vehicle Number</label>
+                    <PInput name="vehicleNumber" placeholder="e.g. KA01AB1234" value={form.vehicleNumber} onChange={set("vehicleNumber")} />
                   </div>
                 </div>
 

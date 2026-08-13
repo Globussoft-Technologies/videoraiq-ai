@@ -169,7 +169,7 @@ export const VIEW_META = {
   users: { title: 'User Role Detail', sub: 'Manage users and their assigned roles' },
   roles: { title: 'Roles & Permission', sub: 'Define roles and per-module access' },
   recipients: { title: 'Alert Recipients', sub: 'Who gets notified for each detection type' },
-  settings: { title: 'Settings', sub: 'Platform, alerts, privacy & integrations' },
+  settings: { title: 'Settings', sub: 'Platform, alerts, privacy and integrations' },
   profile: { title: 'My Profile', sub: 'Your account, activity & preferences' },
   'admin-profile': { title: 'Detection Profile', sub: 'Your account and detection configuration' },
   locations: { title: 'Locations', sub: 'Locations' },

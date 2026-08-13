@@ -45,6 +45,7 @@ const TagFolderModal = ({ open, folder, onClose, onTagged }) => {
     designation: '',
     locationId: '',
     departmentId: '',
+    vehicleNumber: '',
   });
   const [errors, setErrors] = useState({});
   const [departments, setDepartments] = useState([]);
@@ -69,6 +70,7 @@ const TagFolderModal = ({ open, folder, onClose, onTagged }) => {
       designation: '',
       locationId: '',
       departmentId: '',
+      vehicleNumber: '',
     });
     setErrors({});
   }, [open]);
@@ -186,6 +188,7 @@ const TagFolderModal = ({ open, folder, onClose, onTagged }) => {
     if (form.email.trim()) payload.email = form.email.trim();
     if (form.designation.trim()) payload.designation = form.designation.trim();
     if (form.departmentId) payload.departmentId = form.departmentId;
+    if (form.vehicleNumber.trim()) payload.vehicleNumber = form.vehicleNumber.trim();
     if (form.locationId) {
       const loc = locations.find((l) => l._id === form.locationId);
       if (loc) {
@@ -446,6 +449,16 @@ const TagFolderModal = ({ open, folder, onClose, onTagged }) => {
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--tx3)] pointer-events-none" />
                 </div>
+              </div>
+
+              <div>
+                <label className={labelCls}>Vehicle Number</label>
+                <input
+                  value={form.vehicleNumber}
+                  onChange={(e) => setField('vehicleNumber', e.target.value)}
+                  placeholder="e.g. KA01AB1234"
+                  className={fieldCls}
+                />
               </div>
             </div>
 
