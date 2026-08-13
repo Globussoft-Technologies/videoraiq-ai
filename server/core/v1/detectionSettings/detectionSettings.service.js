@@ -100,6 +100,10 @@ const DEFAULT_DETECTION_SCHEDULE = { mode: "always" };
 const DEFAULT_SCHEDULE_TIMEZONE = "Asia/Kolkata";
 const SCHEDULE_TOGGLE_RETRY_ATTEMPTS = 4;
 const SCHEDULE_TOGGLE_RETRY_DELAY_MS = 10000;
+const SCHEDULE_RUNNER_INTERVAL_MS = 60 * 1000;
+
+let scheduleRunnerTimer = null;
+let scheduleRunnerActive = false;
 
 const getDetectionSchedule = (channel, settingType) =>
   channel?.detections?.[settingType]?.schedule || DEFAULT_DETECTION_SCHEDULE;
@@ -184,6 +188,15 @@ const isScheduleActiveNow = (schedule) => {
       minutes < timeToMinutes(window.end),
   );
 };
+
+const buildScheduleRunnerReq = (channel) => ({
+  verified: {
+    userData: {
+      adminId: channel?.userId,
+      user_id: channel?.userId,
+    },
+  },
+});
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -931,7 +944,12 @@ class DetectionSettingService {
         .populate("nvrId")
         .populate(toPopulateDetections);
 
-      await this.applyDetectionScheduleState(req, populatedChannel, detectionSetting);
+      await this.applyDetectionScheduleState(
+        req,
+        populatedChannel,
+        detectionSetting,
+        false,
+      );
 
       return res.status(200).json(
         Response.userSuccessResp("Detection schedule reset successfully", {
@@ -953,7 +971,12 @@ class DetectionSettingService {
     }
   }
 
-  async applyDetectionScheduleState(req, channel, detectionSetting) {
+  async applyDetectionScheduleState(
+    req,
+    channel,
+    detectionSetting,
+    targetState,
+  ) {
     try {
       if (!channel || !detectionSetting) return;
 
@@ -962,7 +985,10 @@ class DetectionSettingService {
       const link = channel?.detections?.[settingType];
       if (!link?.id) return;
 
-      const shouldEnable = isScheduleActiveNow(link.schedule);
+      const shouldEnable =
+        typeof targetState === "boolean"
+          ? targetState
+          : isScheduleActiveNow(link.schedule);
       const currentStatus = link.enabled === true;
       if (currentStatus === shouldEnable) return;
 
@@ -1001,6 +1027,55 @@ class DetectionSettingService {
         error,
       );
     }
+  }
+
+  async applyAllDetectionSchedules() {
+    if (scheduleRunnerActive) return;
+    scheduleRunnerActive = true;
+
+    try {
+      const customScheduleFilters = Object.keys(DETECTION_TYPES).map((settingType) => ({
+        [`detections.${settingType}.id`]: { $ne: null },
+        [`detections.${settingType}.schedule.mode`]: "custom",
+      }));
+
+      const channels = await Channel.find({ $or: customScheduleFilters })
+        .populate("nvrId")
+        .populate(toPopulateDetections);
+
+      for (const channel of channels) {
+        for (const settingType of Object.keys(DETECTION_TYPES)) {
+          const detectionSetting = channel?.detections?.[settingType]?.id;
+          if (!detectionSetting || !channel?.detections?.[settingType]?.schedule) {
+            continue;
+          }
+
+          await this.applyDetectionScheduleState(
+            buildScheduleRunnerReq(channel),
+            channel,
+            detectionSetting,
+          );
+        }
+      }
+    } catch (error) {
+      logger.error("Failed to apply detection schedules:", error);
+    } finally {
+      scheduleRunnerActive = false;
+    }
+  }
+
+  startDetectionScheduleRunner() {
+    if (scheduleRunnerTimer) return scheduleRunnerTimer;
+
+    this.applyAllDetectionSchedules();
+    scheduleRunnerTimer = setInterval(
+      () => this.applyAllDetectionSchedules(),
+      SCHEDULE_RUNNER_INTERVAL_MS,
+    );
+    scheduleRunnerTimer.unref?.();
+    logger.info("Detection schedule runner started");
+
+    return scheduleRunnerTimer;
   }
 
   async getDetectionSettings(req, res, _next) {

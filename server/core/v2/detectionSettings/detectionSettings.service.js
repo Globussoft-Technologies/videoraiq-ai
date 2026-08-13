@@ -979,7 +979,12 @@ class DetectionSettingService {
         .populate("nvrId")
         .populate(toPopulateDetections);
 
-      await this.applyDetectionScheduleState(req, populatedChannel, detectionSetting);
+      await this.applyDetectionScheduleState(
+        req,
+        populatedChannel,
+        detectionSetting,
+        false,
+      );
 
       return res.status(200).json(
         Response.userSuccessResp("Detection schedule reset successfully", {
@@ -1001,7 +1006,12 @@ class DetectionSettingService {
     }
   }
 
-  async applyDetectionScheduleState(req, channel, detectionSetting) {
+  async applyDetectionScheduleState(
+    req,
+    channel,
+    detectionSetting,
+    targetState,
+  ) {
     try {
       if (!channel || !detectionSetting) return;
 
@@ -1010,7 +1020,10 @@ class DetectionSettingService {
       const link = channel?.detections?.[settingType];
       if (!link?.id) return;
 
-      const shouldEnable = isScheduleActiveNow(link.schedule);
+      const shouldEnable =
+        typeof targetState === "boolean"
+          ? targetState
+          : isScheduleActiveNow(link.schedule);
       const currentStatus = link.enabled === true;
       if (currentStatus === shouldEnable) return;
 

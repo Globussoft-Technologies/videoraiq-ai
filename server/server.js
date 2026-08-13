@@ -25,6 +25,7 @@ import { mustRunInsideContainer } from "./scripts/check.js";
 import { prometheusMiddleware } from "./middlewares/prometheusMiddleware.js";
 import { metricsHandler } from "./utils/prometheus.js";
 import { scheduleRetentionSweep } from "./services/retention.service.js";
+import DetectionSettingService from "./core/v1/detectionSettings/detectionSettings.service.js";
 
 if (process.env.T === "D") mustRunInsideContainer();
 
@@ -133,6 +134,7 @@ const startServer = async () => {
 
     // Data-retention sweeper (no-op unless DataRetention.enabled). Never throws.
     scheduleRetentionSweep();
+    DetectionSettingService.startDetectionScheduleRunner();
   } catch (error) {
     logger.error(`❗ Failed to start server: ${error.message}`);
     process.exit(1);

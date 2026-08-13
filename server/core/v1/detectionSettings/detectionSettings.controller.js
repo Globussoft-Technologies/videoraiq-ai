@@ -220,7 +220,7 @@ class DetectionSettingsController {
   }
   async resetCameraDetectionSchedule(req, res, next) {
     /* #swagger.tags = ['Detection Settings']
-       #swagger.description = 'Reset one camera detection schedule back to always active'
+       #swagger.description = 'Remove one camera detection schedule and disable the detection until it is manually started'
        #swagger.parameters['id'] = {
            in: 'path',
            description: 'Detection setting ID',
@@ -245,7 +245,7 @@ class DetectionSettingsController {
                settingType: 'personalProtectiveEquipmentSettings',
                channelId: '684954f488ba3228238e466f',
                channelName: 'Entrance Camera',
-               enabled: true,
+               enabled: false,
                schedule: { mode: 'always' }
              }
            }
