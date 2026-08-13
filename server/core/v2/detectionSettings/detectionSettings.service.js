@@ -1109,6 +1109,23 @@ class DetectionSettingService {
         // [`detections.${settingType}.enabled`]: true,
       }).populate("nvrId");
 
+      // appliedCameras/activeCameras reflect every camera on the account
+      // with this detection TYPE turned on, not just the cameras sharing
+      // this exact settings document (a camera can own its own document).
+      const [appliedCameras, activeCameras] = await Promise.all([
+        Channel.countDocuments({
+          userId: user_id,
+          [`detections.${settingType}.id`]: { $ne: null },
+        }),
+        Channel.countDocuments({
+          userId: user_id,
+          [`detections.${settingType}.enabled`]: true,
+        }),
+      ]);
+      const uiData = buildFetchUiData(detectionSetting, linkedChannels || []);
+      uiData.appliedCameras = appliedCameras;
+      uiData.activeCameras = activeCameras;
+
       return res.status(200).json(
         Response.userSuccessResp("Detection settings fetched successfully", {
           detectionSetting: {
@@ -1116,7 +1133,7 @@ class DetectionSettingService {
             detectionName: DETECTION_TYPES[detectionSetting.settingType],
           },
           linkedCameras: linkedChannels || null,
-          uiData: buildFetchUiData(detectionSetting, linkedChannels || []),
+          uiData,
         }),
       );
     } catch (error) {
@@ -1195,32 +1212,59 @@ class DetectionSettingService {
 
       // --- Populate linked cameras per detection setting ---
       const resultsWithCamera = [];
+      // A camera can own its own independent DetectionSetting document per
+      // type (rather than sharing one), so "applied/active cameras" has to be
+      // tallied per settingType across every camera on the account, not just
+      // the cameras pointing at this one document's _id. Cached per type
+      // since multiple documents of the same settingType can appear in one
+      // response page.
+      const typeCameraCountCache = new Map();
+      const getTypeCameraCounts = async (settingType) => {
+        if (typeCameraCountCache.has(settingType)) {
+          return typeCameraCountCache.get(settingType);
+        }
+        const countsPromise = Promise.all([
+          Channel.countDocuments({
+            userId: user_id,
+            [`detections.${settingType}.id`]: { $ne: null },
+          }),
+          Channel.countDocuments({
+            userId: user_id,
+            [`detections.${settingType}.enabled`]: true,
+          }),
+        ]).then(([applied, active]) => ({ applied, active }));
+        typeCameraCountCache.set(settingType, countsPromise);
+        return countsPromise;
+      };
 
       for (const setting of normalizedDetectionSettings) {
-        const query = {
+        // Fetch every camera this exact setting document is linked to (used
+        // for linkedCameras / schedule — those stay scoped to this document).
+        const allLinkedCameras = await Channel.find({
           [`detections.${setting.settingType}.id`]: setting._id,
           // [`detections.${setting.settingType}.enabled`]: true,
-        };
+        })
+          .populate("nvrId")
+          .lean();
 
+        let linkedCameras = allLinkedCameras;
         if (
           Array.isArray(resolvedChannelIds) &&
           resolvedChannelIds.length > 0
         ) {
-          query._id = { $in: resolvedChannelIds };
+          const resolvedChannelIdSet = new Set(resolvedChannelIds);
+          linkedCameras = allLinkedCameras.filter((channel) =>
+            resolvedChannelIdSet.has(channel._id.toString()),
+          );
+
+          // Skip this detection setting if resolvedChannelIds were provided and no linked cameras found
+          if (linkedCameras.length === 0) continue;
         }
 
-        const linkedCameras = await Channel.find(query)
-          .populate("nvrId")
-          .lean();
-
-        // Skip this detection setting if resolvedChannelIds were provided and no linked cameras found
-        if (
-          Array.isArray(resolvedChannelIds) &&
-          resolvedChannelIds.length > 0 &&
-          linkedCameras.length === 0
-        ) {
-          continue;
-        }
+        const uiData = buildFetchUiData(setting, allLinkedCameras);
+        const typeCounts = await getTypeCameraCounts(setting.settingType);
+        uiData.appliedCameras = typeCounts.applied;
+        uiData.activeCameras = typeCounts.active;
 
         resultsWithCamera.push({
           detectionSetting: {
@@ -1228,7 +1272,7 @@ class DetectionSettingService {
             detectionName: DETECTION_TYPES[setting.settingType],
           },
           linkedCameras,
-          uiData: buildFetchUiData(setting, linkedCameras),
+          uiData,
         });
       }
 
