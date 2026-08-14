@@ -9,6 +9,7 @@ import {
   describe,
   it,
   expect,
+  vi,
   beforeAll,
   afterAll,
   beforeEach,
@@ -30,7 +31,9 @@ const {
   MotionDetectionSetting,
   DetectionSetting,
   PersonalProtectiveEquipmentSetting,
+  VehiclDetectionSetting,
 } = detectionModels;
+const { default: pythonService } = await import("../../../services/python.service.js");
 await import("../../../core/v1/NVR/nvr.model.js");
 await import("../../../core/v1/verifyRecipients/recipients.model.js");
 await import("../../../core/v1/authorizedUsers/authorizedUsers.model.js");
@@ -81,6 +84,18 @@ function makeChannel(over = {}) {
     localChannelId: "1",
     name: "Cam-A",
     isAdded: true,
+    ...over,
+  });
+}
+
+async function makeVehicleSetting(over = {}) {
+  return VehiclDetectionSetting.create({
+    name: "number-plate-1",
+    settingType: "vehicleDetectionSettings",
+    userId: "u1",
+    enabled: true,
+    settings: { plate_confidence: 0.8, ocr_min_confidence: 0.7 },
+    alerts: [],
     ...over,
   });
 }
@@ -362,6 +377,62 @@ describe("DetectionSettingsService.resetDetectionThresholds", () => {
       vest_threshold: 0.7,
       helmet_threshold: 0.6,
     });
+  });
+});
+
+describe("DetectionSettingsService.resetCameraDetectionThresholds", () => {
+  it("uses one DS request for multiple enabled settings and saves each returned default", async () => {
+    const ppe = await makePpeSetting({
+      modelThresholds: { person_threshold: 0.8, vest_threshold: 0.7, helmet_threshold: 0.6 },
+    });
+    const numberPlate = await makeVehicleSetting({
+      modelThresholds: { plate_confidence: 0.8, ocr_min_confidence: 0.7 },
+    });
+    const channel = await makeChannel({
+      detections: {
+        personalProtectiveEquipmentSettings: { id: ppe._id, enabled: true },
+        vehicleDetectionSettings: { id: numberPlate._id, enabled: true },
+      },
+    });
+    const resetSpy = vi.spyOn(pythonService, "resetDetectionConfidence").mockResolvedValue({
+      model_thresholds: {
+        personalProtectiveEquipmentSettings: { person_threshold: 0.4, vest_threshold: 0.25, helmet_threshold: 0.25 },
+        numberPlateDetectionSettings: { plate_confidence: 0.25, ocr_min_confidence: 0.5 },
+      },
+    });
+    const { req, res, next } = serviceCtx({
+      user_id: "u1",
+      adminId: new mongoose.Types.ObjectId(),
+      body: { channelId: channel._id.toString(), detectionSettingIds: [ppe._id.toString(), numberPlate._id.toString()] },
+    });
+
+    await DetectionSettingsService.resetCameraDetectionThresholds(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(resetSpy).toHaveBeenCalledTimes(1);
+    expect(resetSpy).toHaveBeenCalledWith(expect.objectContaining({
+      camera_id: channel._id.toString(),
+      detectors: ["personalProtectiveEquipmentSettings", "numberPlateDetectionSettings"],
+    }));
+    expect(payload(res).data.resetSettings).toHaveLength(2);
+    expect((await DetectionSetting.findById(ppe._id)).modelThresholds).toMatchObject({ person_threshold: 0.4, vest_threshold: 0.25, helmet_threshold: 0.25 });
+    expect((await DetectionSetting.findById(numberPlate._id)).modelThresholds).toMatchObject({ plate_confidence: 0.25, ocr_min_confidence: 0.5 });
+    resetSpy.mockRestore();
+  });
+
+  it("rejects a setting that is not enabled on the selected camera", async () => {
+    const ppe = await makePpeSetting();
+    const channel = await makeChannel({
+      detections: { personalProtectiveEquipmentSettings: { id: ppe._id, enabled: false } },
+    });
+    const { req, res, next } = serviceCtx({
+      user_id: "u1",
+      body: { channelId: channel._id.toString(), detectionSettingIds: [ppe._id.toString()] },
+    });
+
+    await DetectionSettingsService.resetCameraDetectionThresholds(req, res, next);
+
+    expect(res.statusCode).toBe(400);
   });
 });
 

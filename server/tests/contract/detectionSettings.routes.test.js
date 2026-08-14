@@ -10,6 +10,7 @@ vi.mock("../../core/v1/detectionSettings/detectionSettings.controller.js", () =>
     getDetectionSettings: vi.fn(async (req, res) => res.status(200).json({ success: true, data: { _id: req.params.id } })),
     updateDetectionSettings: vi.fn(async (req, res) => res.status(200).json({ success: true })),
     resetDetectionThresholds: vi.fn(async (req, res) => res.status(200).json({ success: true })),
+    resetCameraDetectionThresholds: vi.fn(async (req, res) => res.status(200).json({ success: true })),
     deleteDetectionSettings: vi.fn(async (req, res) => res.status(200).json({ success: true })),
     getDetectionSchedule: vi.fn(async (req, res) => res.status(200).json({ success: true, data: { detectionSettingId: req.params.id, schedules: [] } })),
     getCameraDetectionSchedule: vi.fn(async (req, res) => res.status(200).json({ success: true, data: { detectionSettingId: req.params.id, channelId: req.params.channelId, schedule: { mode: "always" } } })),
@@ -114,6 +115,15 @@ describe("PUT /api/v1/detection-settings/:id", () => {
     const res = await request(app)
       .put("/api/v1/detection-settings/ds123")
       .send({ config: { threshold: 0.8 } });
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("PUT /api/v1/detection-settings/reset-thresholds/batch", () => {
+  it("returns 200 when resetting multiple settings for one camera", async () => {
+    const res = await request(app)
+      .put("/api/v1/detection-settings/reset-thresholds/batch")
+      .send({ channelId: "ch1", detectionSettingIds: ["ds1", "ds2"] });
     expect(res.status).toBe(200);
   });
 });

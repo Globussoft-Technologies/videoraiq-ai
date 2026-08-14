@@ -439,6 +439,26 @@ class DetectionSettingsController {
         */
     return DetectionSettingService.resetDetectionThresholds(req, res, next);
   }
+
+  async resetCameraDetectionThresholds(req, res, next) {
+    /* #swagger.tags = ['Detection Settings']
+         #swagger.description = 'Reset default confidence thresholds for multiple enabled detection settings on one camera. The backend makes one Detection Service reset-confidence call with all requested detectors and saves each returned default threshold set.'
+         #swagger.parameters['data'] = {
+           in: 'body',
+           required: true,
+           schema: {
+             channelId: '69ce7069d5b1b9d2ca500464',
+             detectionSettingIds: ['69ce7069d5b1b9d2ca500465', '69ce7069d5b1b9d2ca500466']
+           }
+         }
+         #swagger.responses[200] = { description: 'Thresholds reset successfully for the camera' }
+         #swagger.responses[400] = { description: 'Invalid input, unlinked/disabled setting, or missing saved thresholds' }
+         #swagger.responses[404] = { description: 'Channel or one or more detection settings not found' }
+         #swagger.responses[500] = { description: 'Detection Service reset failed' }
+         #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return DetectionSettingService.resetCameraDetectionThresholds(req, res, next);
+  }
 }
 
 export default new DetectionSettingsController();
