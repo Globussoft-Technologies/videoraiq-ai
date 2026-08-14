@@ -435,14 +435,6 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
   }, [selectedLocations, selectedNvrs]);
 
   useEffect(() => {
-    const validChannelIds = new Set((channelOptions || []).map(channel => channel?._id).filter(Boolean));
-    setSelectedChannels((previous) => {
-      const next = previous.filter(id => validChannelIds.has(id));
-      return next.length === previous.length ? previous : next;
-    });
-  }, [channelOptions]);
-
-  useEffect(() => {
     let cancelled = false;
     (async () => {
       const depts = await getDepartmentsForUserAccess({ channelsIds: selectedChannels, employeeLocations });
@@ -511,9 +503,13 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
             ? { password: password.trim(), confirmPassword: confirmPassword.trim() }
             : {}),
           // Same shape V1's edit sends — without this the access fields would
-          // render but silently discard any change on save.
+          // render but silently discard any change on save. Always send the
+          // real array (even empty) rather than `undefined` when cleared —
+          // an `undefined` value is dropped from the request body entirely,
+          // so the backend's $set skips the field and the previously saved
+          // employeeLocations silently survives instead of being cleared.
           authorizedChannelsData: {
-            employeeLocations: employeeLocations.length ? employeeLocations : undefined,
+            employeeLocations,
             locations: selectedLocations,
             nvrIds: selectedNvrs,
             departmentIds: selectedDepartments,
@@ -532,7 +528,7 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
           // V1 always sends this object shape on create — locations/employeeLocations
           // are location NAME strings, nvrIds/channelIds/departmentIds are ObjectIds.
           authorizedChannelsData: {
-            employeeLocations: employeeLocations.length ? employeeLocations : undefined,
+            employeeLocations,
             locations: selectedLocations,
             nvrIds: selectedNvrs,
             departmentIds: selectedDepartments,
@@ -563,7 +559,6 @@ function UserFormModal({ mode, user, roles, rolesLoading, onClose, onSave }) {
 
       out.push({ id: `nvr-header-${nvrId}`, label: group.nvrName, isHeader: true });
       group.channels.forEach((c) => {
-        console.log('channel for user access', c);
         out.push({ id: c._id, label: c.customName || c.name || 'Unnamed Channel' });
       });
     });
@@ -1073,7 +1068,7 @@ export default function UsersPage() {
             email: u.email || '',
             roleIds: [role._id],
             authorizedChannelsData: {
-              employeeLocations: toIds(access.employeeLocations).length ? toIds(access.employeeLocations) : undefined,
+              employeeLocations: toIds(access.employeeLocations),
               locations: toIds(access.locations),
               nvrIds: toIds(access.nvrIds),
               departmentIds: toIds(access.departmentIds),

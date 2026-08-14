@@ -20,6 +20,13 @@
   caret-color: #e9edf7;
 }
 
+/* Password fields already have a custom eye toggle (EyeToggle) — hide
+   Edge/IE's built-in reveal + clear buttons so they don't double up next to it. */
+.vqlogin input[type='password']::-ms-reveal,
+.vqlogin input[type='password']::-ms-clear {
+  display: none;
+}
+
 /* focus ring for text inputs */
 .vqlogin-input:focus {
   border-color: #3b82f6 !important;
