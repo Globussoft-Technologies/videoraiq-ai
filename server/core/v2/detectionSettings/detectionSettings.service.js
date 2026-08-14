@@ -64,6 +64,8 @@ import {
   MobilePhoneDetectionSetting
 } from "./detectionSettings.model.js";
 import Channel from "../channels/channels.model.js";
+import { resolveDesiredDetectionState } from "../../../services/detectionSchedule.resolver.js";
+import { sendPayloadToUser } from "../../../socket.js";
 import mongoose, { Types } from "mongoose";
 
 const modelMap = {
@@ -147,42 +149,40 @@ const getAdminScheduleTimezone = async (adminId) => {
   return admin?.timezone || DEFAULT_SCHEDULE_TIMEZONE;
 };
 
-const timeToMinutes = (time) => {
-  const [hours, minutes] = time.split(":").map(Number);
-  return hours * 60 + minutes;
-};
+/**
+ * Mirrors the v1 emitter so a save/update made through v2 is visible in the UI
+ * with the same DS call trace. Kept local and additive — the v2 execution flow
+ * is otherwise untouched.
+ */
+const emitDetectionScheduleState = async (req, channel, detectionSetting, source, ds = {}) => {
+  try {
+    const adminId = req?.verified?.userData?.adminId;
+    const userId = req?.verified?.userData?.user_id;
+    const settingType = detectionSetting?.settingType;
+    const link = channel?.detections?.[settingType];
 
-const getNowInScheduleTimezone = (timezone) => {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    weekday: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date());
+    if (!adminId || !userId || !channel?._id || !detectionSetting?._id || !link) return;
 
-  const getPart = (type) => parts.find((part) => part.type === type)?.value;
-
-  return {
-    day: getPart("weekday")?.toLowerCase(),
-    minutes: Number(getPart("hour")) * 60 + Number(getPart("minute")),
-  };
-};
-
-const isScheduleActiveNow = (schedule) => {
-  if (!schedule || schedule.mode === "always") return true;
-  if (schedule.mode !== "custom") return true;
-
-  const { day, minutes } = getNowInScheduleTimezone(
-    schedule.timezone || DEFAULT_SCHEDULE_TIMEZONE,
-  );
-  const windows = schedule.days?.[day] || [];
-
-  return windows.some(
-    (window) =>
-      minutes >= timeToMinutes(window.start) &&
-      minutes < timeToMinutes(window.end),
-  );
+    await sendPayloadToUser(userId, `detectionSchedule_${adminId}`, {
+      source,
+      ...buildSchedulePayload(channel, settingType),
+      channelId: channel._id.toString(),
+      channelName: channel.customName || channel.name,
+      detectionSettingId: detectionSetting._id.toString(),
+      settingType,
+      detectionName: DETECTION_TYPES[settingType] || settingType,
+      enabled: link.enabled === true,
+      at: new Date().toISOString(),
+      operation: ds.operation ?? null,
+      status: ds.status ?? "success",
+      scheduleSource: ds.scheduleSource ?? null,
+      dsEndpoint: ds.endpoint ?? null,
+      dsResponse: ds.response ?? null,
+      dsError: ds.error ?? null,
+    });
+  } catch (error) {
+    logger.error(`[DETECTION_SCHEDULE] emit failed: ${error?.message}`);
+  }
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -1040,10 +1040,17 @@ class DetectionSettingService {
       const link = channel?.detections?.[settingType];
       if (!link?.id) return;
 
-      const shouldEnable =
-        typeof targetState === "boolean"
-          ? targetState
-          : isScheduleActiveNow(link.schedule);
+      // Same resolver the v1 one-minute runner uses, so an immediate save and
+      // the next tick always agree: global (NVR-level) schedule takes priority,
+      // falling back to this camera's own schedule.
+      let shouldEnable = targetState;
+      let scheduleSource = "explicit";
+      if (typeof shouldEnable !== "boolean") {
+        const desired = await resolveDesiredDetectionState(channel, settingType);
+        shouldEnable = desired.active;
+        scheduleSource = desired.source;
+      }
+
       const currentStatus = link.enabled === true;
       if (currentStatus === shouldEnable) return;
 
@@ -1058,24 +1065,64 @@ class DetectionSettingService {
       const confidence_thresholds = detectionSetting?.settings || {};
       const line_crossing_settings = detectionSetting?.settings || {};
 
-      const backendResponse = await handleDetectionStartStopWithRetry([
-        channel,
-        adminId,
-        shouldEnable,
-        settingType,
-        zones,
-        zone_configs,
-        videoResolution,
-        obstruction_threshold_sec,
-        severity,
-        confidence_thresholds,
-        line_crossing_settings,
-      ]);
+      const operation = shouldEnable ? "resume" : "stop";
+      const logContext =
+        `operation=${operation} adminId=${adminId} ` +
+        `nvrId=${channel?.nvrId?._id || channel?.nvrId} cameraId=${cameraId} ` +
+        `detector=${settingType} scheduleSource=${scheduleSource}`;
+
+      logger.info(`[DETECTION_SCHEDULE] DS request — ${logContext}`);
+
+      let backendResponse;
+      try {
+        backendResponse = await handleDetectionStartStopWithRetry([
+          channel,
+          adminId,
+          shouldEnable,
+          settingType,
+          zones,
+          zone_configs,
+          videoResolution,
+          obstruction_threshold_sec,
+          severity,
+          confidence_thresholds,
+          line_crossing_settings,
+        ]);
+      } catch (error) {
+        // The DS response decides success, not the fact that we sent a request.
+        logger.error(
+          `[DETECTION_SCHEDULE] DS request FAILED — ${logContext} ` +
+            `error=${error?.message} response=${JSON.stringify(error?.response?.data ?? null)}`,
+        );
+        await emitDetectionScheduleState(req, channel, detectionSetting, "apply", {
+          operation,
+          status: "failed",
+          scheduleSource,
+          endpoint: shouldEnable ? "POST /stream (start)" : "POST /stream/stop",
+          error: error?.message,
+          response: error?.response?.data ?? null,
+        });
+        return;
+      }
+
+      logger.info(
+        `[DETECTION_SCHEDULE] DS response OK — ${logContext} ` +
+          `response=${JSON.stringify(backendResponse ?? null)}`,
+      );
+
       await updateModelThresholds(detectionSetting, backendResponse);
 
       link.enabled = shouldEnable;
       channel.markModified(`detections.${settingType}.enabled`);
       await channel.save();
+
+      await emitDetectionScheduleState(req, channel, detectionSetting, "apply", {
+        operation,
+        status: "success",
+        scheduleSource,
+        endpoint: shouldEnable ? "POST /stream (start)" : "POST /stream/stop",
+        response: backendResponse ?? null,
+      });
     } catch (error) {
       logger.error(
         `Failed to apply scheduled detection state for channel ${channel?._id}:`,

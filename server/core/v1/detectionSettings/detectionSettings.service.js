@@ -65,6 +65,10 @@ import {
   MobilePhoneDetectionSetting
 } from "./detectionSettings.model.js";
 import Channel from "../channels/channels.model.js";
+import {
+  buildGlobalScheduleIndex,
+  resolveDesiredDetectionState,
+} from "../../../services/detectionSchedule.resolver.js";
 import mongoose, { Types } from "mongoose";
 
 const modelMap = {
@@ -152,44 +156,6 @@ const getAdminScheduleTimezone = async (adminId) => {
   return admin?.timezone || DEFAULT_SCHEDULE_TIMEZONE;
 };
 
-const timeToMinutes = (time) => {
-  const [hours, minutes] = time.split(":").map(Number);
-  return hours * 60 + minutes;
-};
-
-const getNowInScheduleTimezone = (timezone) => {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    weekday: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date());
-
-  const getPart = (type) => parts.find((part) => part.type === type)?.value;
-
-  return {
-    day: getPart("weekday")?.toLowerCase(),
-    minutes: Number(getPart("hour")) * 60 + Number(getPart("minute")),
-  };
-};
-
-const isScheduleActiveNow = (schedule) => {
-  if (!schedule || schedule.mode === "always") return true;
-  if (schedule.mode !== "custom") return true;
-
-  const { day, minutes } = getNowInScheduleTimezone(
-    schedule.timezone || DEFAULT_SCHEDULE_TIMEZONE,
-  );
-  const windows = schedule.days?.[day] || [];
-
-  return windows.some(
-    (window) =>
-      minutes >= timeToMinutes(window.start) &&
-      minutes < timeToMinutes(window.end),
-  );
-};
-
 const buildScheduleRunnerReq = (channel) => ({
   verified: {
     userData: {
@@ -199,11 +165,19 @@ const buildScheduleRunnerReq = (channel) => ({
   },
 });
 
+/**
+ * Push a schedule state change to the UI.
+ *
+ * `ds` carries the outcome of the DS call that caused it — operation, status,
+ * and the raw response or error — so the frontend can show whether DS was
+ * actually hit and what it replied, instead of only "camera started".
+ */
 const emitDetectionScheduleState = async (
   req,
   channel,
   detectionSetting,
   source,
+  ds = {},
 ) => {
   const adminId = req?.verified?.userData?.adminId;
   const userId = req?.verified?.userData?.user_id;
@@ -221,7 +195,16 @@ const emitDetectionScheduleState = async (
     channelName: channel.customName || channel.name,
     detectionSettingId: detectionSetting._id.toString(),
     settingType,
+    detectionName: DETECTION_TYPES[settingType] || settingType,
     enabled: link.enabled === true,
+    at: new Date().toISOString(),
+    // DS call trace
+    operation: ds.operation ?? null,
+    status: ds.status ?? "success",
+    scheduleSource: ds.scheduleSource ?? null,
+    dsEndpoint: ds.endpoint ?? null,
+    dsResponse: ds.response ?? null,
+    dsError: ds.error ?? null,
   });
 };
 
@@ -1004,6 +987,7 @@ class DetectionSettingService {
     detectionSetting,
     targetState,
     stateChangeSource,
+    globalScheduleIndex,
   ) {
     try {
       if (!channel || !detectionSetting) return;
@@ -1013,10 +997,20 @@ class DetectionSettingService {
       const link = channel?.detections?.[settingType];
       if (!link?.id) return;
 
-      const shouldEnable =
-        typeof targetState === "boolean"
-          ? targetState
-          : isScheduleActiveNow(link.schedule);
+      // Global (NVR-level) schedule takes priority; with none applicable this
+      // resolves to the camera's own schedule, i.e. the previous behaviour.
+      let shouldEnable = targetState;
+      let scheduleSource = "explicit";
+      if (typeof shouldEnable !== "boolean") {
+        const desired = await resolveDesiredDetectionState(channel, settingType, {
+          index: globalScheduleIndex,
+        });
+        shouldEnable = desired.active;
+        scheduleSource = desired.source;
+      }
+
+      // Idempotency: `enabled` is the last-known DS state, so a camera already
+      // in the desired state costs nothing and issues no DS call this tick.
       const currentStatus = link.enabled === true;
       if (currentStatus === shouldEnable) return;
 
@@ -1031,32 +1025,73 @@ class DetectionSettingService {
       const confidence_thresholds = detectionSetting?.settings || {};
       const line_crossing_settings = detectionSetting?.settings || {};
 
-      const backendResponse = await handleDetectionStartStopWithRetry([
-        channel,
-        adminId,
-        shouldEnable,
-        settingType,
-        zones,
-        zone_configs,
-        videoResolution,
-        obstruction_threshold_sec,
-        severity,
-        confidence_thresholds,
-        line_crossing_settings,
-      ]);
+      const operation = shouldEnable ? "resume" : "stop";
+      const logContext =
+        `operation=${operation} adminId=${adminId} ` +
+        `nvrId=${channel?.nvrId?._id || channel?.nvrId} cameraId=${cameraId} ` +
+        `detector=${settingType} scheduleSource=${scheduleSource}`;
+
+      logger.info(`[DETECTION_SCHEDULE] DS request — ${logContext}`);
+
+      let backendResponse;
+      try {
+        backendResponse = await handleDetectionStartStopWithRetry([
+          channel,
+          adminId,
+          shouldEnable,
+          settingType,
+          zones,
+          zone_configs,
+          videoResolution,
+          obstruction_threshold_sec,
+          severity,
+          confidence_thresholds,
+          line_crossing_settings,
+        ]);
+      } catch (error) {
+        // The DS response decides success, not the fact that we sent a request.
+        // Leaving `enabled` untouched means the next tick retries this camera
+        // instead of us recording a state change that never happened.
+        logger.error(
+          `[DETECTION_SCHEDULE] DS request FAILED — ${logContext} ` +
+            `error=${error?.message} response=${JSON.stringify(error?.response?.data ?? null)}`,
+        );
+        // Surface the failure to the UI too — otherwise a camera that DS
+        // refused to start is invisible outside the logs.
+        await emitDetectionScheduleState(req, channel, detectionSetting, stateChangeSource || "apply", {
+          operation,
+          status: "failed",
+          scheduleSource,
+          endpoint: shouldEnable ? "POST /stream (start)" : "POST /stream/stop",
+          error: error?.message,
+          response: error?.response?.data ?? null,
+        });
+        return;
+      }
+
+      logger.info(
+        `[DETECTION_SCHEDULE] DS response OK — ${logContext} ` +
+          `response=${JSON.stringify(backendResponse ?? null)}`,
+      );
+
       await updateSettingsWithModelThresholds(detectionSetting, backendResponse);
 
       link.enabled = shouldEnable;
       channel.markModified(`detections.${settingType}.enabled`);
       await channel.save();
-      if (stateChangeSource) {
-        await emitDetectionScheduleState(
-          req,
-          channel,
-          detectionSetting,
-          stateChangeSource,
-        );
-      }
+      await emitDetectionScheduleState(
+        req,
+        channel,
+        detectionSetting,
+        stateChangeSource || "apply",
+        {
+          operation,
+          status: "success",
+          scheduleSource,
+          endpoint: shouldEnable ? "POST /stream (start)" : "POST /stream/stop",
+          response: backendResponse ?? null,
+        },
+      );
     } catch (error) {
       logger.error(
         `Failed to apply scheduled detection state for channel ${channel?._id}:`,
@@ -1070,21 +1105,42 @@ class DetectionSettingService {
     scheduleRunnerActive = true;
 
     try {
+      // Loaded once per tick and reused for every camera below, so the whole
+      // sweep costs a single global-schedule query.
+      const globalScheduleIndex = await buildGlobalScheduleIndex();
+
       const customScheduleFilters = Object.keys(DETECTION_TYPES).map((settingType) => ({
         [`detections.${settingType}.id`]: { $ne: null },
         [`detections.${settingType}.schedule.mode`]: "custom",
       }));
 
-      const channels = await Channel.find({ $or: customScheduleFilters })
+      // Cameras with their own custom schedule (as before) OR covered by a
+      // global schedule. Without the second arm a globally-scheduled camera
+      // left at the default "always" would never be selected, so its global
+      // schedule would never run.
+      const scheduleFilters = [...customScheduleFilters];
+      if (globalScheduleIndex.channelIds.length) {
+        scheduleFilters.push({ _id: { $in: globalScheduleIndex.channelIds } });
+      }
+
+      const channels = await Channel.find({ $or: scheduleFilters })
         .populate("nvrId")
         .populate(toPopulateDetections);
 
       for (const channel of channels) {
         for (const settingType of Object.keys(DETECTION_TYPES)) {
           const detectionSetting = channel?.detections?.[settingType]?.id;
-          if (!detectionSetting || !channel?.detections?.[settingType]?.schedule) {
-            continue;
-          }
+          if (!detectionSetting) continue;
+
+          // Evaluate a detector only if some schedule governs it — its own, or
+          // a global one. Detectors with neither stay untouched, as before.
+          const hasCameraSchedule = Boolean(
+            channel?.detections?.[settingType]?.schedule,
+          );
+          const hasGlobalSchedule = Boolean(
+            globalScheduleIndex.find(channel, settingType),
+          );
+          if (!hasCameraSchedule && !hasGlobalSchedule) continue;
 
           await this.applyDetectionScheduleState(
             buildScheduleRunnerReq(channel),
@@ -1092,6 +1148,7 @@ class DetectionSettingService {
             detectionSetting,
             undefined,
             "schedule-runner",
+            globalScheduleIndex,
           );
         }
       }

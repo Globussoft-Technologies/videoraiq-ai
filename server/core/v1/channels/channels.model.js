@@ -5,6 +5,34 @@ const APP_ENV = config.get("APP_ENV");
 
 let ChannelSchema;
 
+// The {mode, timezone, days} shape used by the per-camera detection schedule
+// below. Exported (not inlined) so the NVR-level global schedule in
+// core/v1/globalSchedule/globalSchedule.model.js persists the identical shape
+// instead of redeclaring it — the two are evaluated by the same resolver.
+export const detectionScheduleSchema = new mongoose.Schema(
+  {
+    mode: {
+      type: String,
+      enum: ["always", "custom"],
+      default: "always",
+    },
+    timezone: {
+      type: String,
+      default: null,
+    },
+    days: {
+      monday: [{ start: String, end: String, _id: false }],
+      tuesday: [{ start: String, end: String, _id: false }],
+      wednesday: [{ start: String, end: String, _id: false }],
+      thursday: [{ start: String, end: String, _id: false }],
+      friday: [{ start: String, end: String, _id: false }],
+      saturday: [{ start: String, end: String, _id: false }],
+      sunday: [{ start: String, end: String, _id: false }],
+    },
+  },
+  { _id: false },
+);
+
 const detectionSettingSchema = new mongoose.Schema(
   {
     id: {
@@ -14,29 +42,7 @@ const detectionSettingSchema = new mongoose.Schema(
     },
     enabled: Boolean,
     schedule: {
-      type: new mongoose.Schema(
-        {
-          mode: {
-            type: String,
-            enum: ["always", "custom"],
-            default: "always",
-          },
-          timezone: {
-            type: String,
-            default: null,
-          },
-          days: {
-            monday: [{ start: String, end: String, _id: false }],
-            tuesday: [{ start: String, end: String, _id: false }],
-            wednesday: [{ start: String, end: String, _id: false }],
-            thursday: [{ start: String, end: String, _id: false }],
-            friday: [{ start: String, end: String, _id: false }],
-            saturday: [{ start: String, end: String, _id: false }],
-            sunday: [{ start: String, end: String, _id: false }],
-          },
-        },
-        { _id: false },
-      ),
+      type: detectionScheduleSchema,
       default: undefined,
     },
   },

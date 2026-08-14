@@ -69,7 +69,10 @@ const daysSchema = Joi.object(
   }, {}),
 ).default({});
 
-const scheduleSchema = Joi.object({
+// Exported so the NVR-level global schedule validates by exactly the same
+// rules as a camera schedule (HH:mm, no overlaps, at least one window in
+// custom mode) instead of a second, drifting copy.
+export const scheduleSchema = Joi.object({
   mode: Joi.string().valid("always", "custom").required(),
   timezone: Joi.when("mode", {
     is: "custom",
