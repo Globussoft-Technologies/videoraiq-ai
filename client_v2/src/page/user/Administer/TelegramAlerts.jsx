@@ -171,7 +171,7 @@ export default function TelegramAlerts({
   }
 
   const linkedChannels = status?.linkedChannels?.length
-    ? status.linkedChannels
+    ? status.linkedChannels.filter((channel) => channel?.active !== false)
     : status?.linked
       ? [{
           chatId: status.chatId,
