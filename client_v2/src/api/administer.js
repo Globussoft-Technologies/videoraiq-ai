@@ -26,6 +26,16 @@ export async function createAuthorizedUser(payload) {
   return unwrap(res);
 }
 
+export async function getAuthorizedUsers({ skip = 0, limit = 100, search = '' } = {}) {
+  const res = await api.post(
+    `/authorizedUsers/fetch?skip=${skip}&limit=${limit}&search=${encodeURIComponent(search)}`,
+    {},
+  );
+  const data = unwrap(res);
+  const users = data?.users ?? data?.data ?? (Array.isArray(data) ? data : []);
+  return { users, total: data?.totalCount ?? data?.total ?? users.length };
+}
+
 export async function getDepartments({ skip = 0, limit = 100 } = {}) {
   const res = await api.post('/departments/get', { skip, limit });
   const data = unwrap(res);

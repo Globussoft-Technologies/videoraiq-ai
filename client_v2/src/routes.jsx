@@ -15,6 +15,7 @@ import Detections from './page/user/Configure/Detections/Detections';
 import UsersPage from './page/user/Administer/UsersPage';
 import SystemSettings from './page/user/Administer/SystemSettings';
 import AlertRecipients from './page/user/Administer/AlertRecipients';
+import AutoEmailReports from './page/user/Administer/AutoEmailReports';
 import Placeholder from './page/user/Administer/Placeholder';
 import Departments from './page/user/Departments/Departments';
 import Locations from './page/user/Locations/Locations';
@@ -110,6 +111,7 @@ export const v2Routes = (
     <Route path="camera-settings" element={<CameraSettings />} />
     {/* <Route path="engines" element={guard('detectionSettings', undefined, <DetectionSettings />)} /> */}
     <Route path="recipients" element={guard('recipients', undefined, <AlertRecipients />)} />
+    <Route path="auto-email-reports" element={<AutoEmailReports />} />
     {/* Administer */}
     <Route path="users" element={guard('Users', undefined, <UsersPage />)} />
     <Route path="settings" element={guard('settings', undefined, <SystemSettings />)} />

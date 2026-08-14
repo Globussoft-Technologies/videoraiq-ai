@@ -20,6 +20,7 @@ import {
   UserPlus,
   ShieldCheck,
   Bell,
+  MailPlus,
   Container,
   OctagonAlert,
   CarFront,
@@ -128,6 +129,7 @@ export const NAV_GROUPS = [
     items: [
       // { key: 'engines', label: 'Detection Settings', path: 'engines', icon: SlidersHorizontal, permissionKey: 'detectionSettings' },
       { key: 'recipients', label: 'Alert Recipients', path: 'recipients', icon: Bell, permissionKey: 'recipients' },
+      { key: 'auto-email-reports', label: 'Auto Email Reports', path: 'auto-email-reports', icon: MailPlus },
     ],
   },
 ];
@@ -169,6 +171,7 @@ export const VIEW_META = {
   users: { title: 'User Role Detail', sub: 'Manage users and their assigned roles' },
   roles: { title: 'Roles & Permission', sub: 'Define roles and per-module access' },
   recipients: { title: 'Alert Recipients', sub: 'Who gets notified for each detection type' },
+  'auto-email-reports': { title: 'Auto Email Reports', sub: 'Schedule attendance logs for verified recipients' },
   settings: { title: 'Settings', sub: 'Platform, alerts, privacy and integrations' },
   profile: { title: 'My Profile', sub: 'Your account, activity & preferences' },
   'admin-profile': { title: 'Detection Profile', sub: 'Your account and detection configuration' },
