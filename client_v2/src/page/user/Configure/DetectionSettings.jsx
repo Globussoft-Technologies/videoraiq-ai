@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Search, Video, ChevronRight, ChevronDown, Play, X, Loader2 } from 'lucide-react';
+import { Search, Video, ChevronRight, ChevronDown, Play, X, Loader2, ListRestart } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import ConfirmationModal from '../../../components/DeleteConfirmation';
 import { useApi } from '../../../hooks/useApi';
 import { usePermissions } from '@/context/PermissionContext';
-import { getChannels, getNvrs, getDetectionTypes, toggleChannelDetection, updateChannel, getCamerasByNvr } from '../../../helpers/configure';
+import { getChannels, getNvrs, getDetectionTypes, toggleChannelDetection, updateChannel, getCamerasByNvr, resetDetectionThresholdsBatch } from '../../../helpers/configure';
 import { Popover, PopoverTrigger, PopoverContent } from '../../../pages/AttendanceLogs/components/Popover';
+import MultiSelect from '../../../components/MultiSelect';
 import CameraStream from '../../../components/CameraStream';
 import DetectionZoneMarking from './DetectionZoneMarking';
 
@@ -53,9 +54,18 @@ function isTypeEnabled(camera, key) {
   return !!camera?.detections?.[key]?.enabled;
 }
 
+function detectionSettingFromEntry(entry) {
+  return entry?.id && typeof entry.id === 'object' ? entry.id : null;
+}
+
+function detectionSettingIdFromEntry(entry) {
+  const setting = detectionSettingFromEntry(entry);
+  return setting?._id || setting?.id || entry?.detectionSettingId || (typeof entry?.id === 'string' ? entry.id : '');
+}
+
 function detectionTypeLabel(value, fallback) {
   if (typeof value === 'string') return value;
-  return value?.displayName || value?.label || value?.name || fallback;
+  return value?.displayName || value?.label || value?.name || value?.id?.displayName || value?.id?.name || fallback;
 }
 
 function appliedTypesFor(camera, typeLabels) {
@@ -80,6 +90,7 @@ function appliedTypesFor(camera, typeLabels) {
     key,
     label: detectionTypeLabel(value, key),
     enabled: isTypeEnabled(camera, key),
+    settingId: detectionSettingIdFromEntry(camera?.detections?.[key]),
     order,
   }))
     .filter(type => type.key && type.label);
@@ -92,6 +103,80 @@ function appliedTypesFor(camera, typeLabels) {
 
 function enabledTypesFor(camera, typeLabels) {
   return appliedTypesFor(camera, typeLabels).filter(type => type.enabled);
+}
+
+function resettableTypesFor(camera, typeLabels) {
+  return enabledTypesFor(camera, typeLabels).filter(type => type.settingId);
+}
+
+function resetBatchEntries(result) {
+  const data = result?.data || result?.body?.data || result || {};
+  const entries = data.resetSettings || data.results || data.resetResults || data.detectionSettings || data.settings || data.items || [];
+  return Array.isArray(entries) ? entries : [];
+}
+
+function resetThresholdsFromEntry(entry) {
+  const detectionSetting = entry?.detectionSetting || entry?.setting || entry;
+  return entry?.resetThresholds || entry?.thresholds || detectionSetting?.modelThresholds || detectionSetting?.settings || {};
+}
+
+function patchCameraWithResetThresholds(camera, result) {
+  const entries = resetBatchEntries(result);
+  if (!entries.length) return camera;
+
+  const nextDetections = { ...(camera?.detections || {}) };
+  let changed = false;
+
+  entries.forEach((entry) => {
+    const detectionSetting = entry?.detectionSetting || entry?.setting || entry;
+    const settingId = detectionSetting?._id || detectionSetting?.id || entry?.detectionSettingId || entry?.id;
+    const settingType = detectionSetting?.settingType || entry?.settingType;
+    if (!settingId && !settingType) return;
+
+    const match = Object.entries(nextDetections).find(([key, value]) => {
+      if (settingType && key === settingType) return true;
+      return String(detectionSettingIdFromEntry(value)) === String(settingId);
+    });
+    if (!match) return;
+
+    const [key, currentEntry] = match;
+    const currentSetting = detectionSettingFromEntry(currentEntry);
+    const resetThresholds = resetThresholdsFromEntry(entry);
+    const nextSetting = currentSetting || detectionSetting
+      ? {
+          ...(currentSetting || {}),
+          ...(detectionSetting || {}),
+          settings: {
+            ...(currentSetting?.settings || {}),
+            ...(detectionSetting?.settings || {}),
+            ...(resetThresholds || {}),
+          },
+          modelThresholds: {
+            ...(currentSetting?.modelThresholds || {}),
+            ...(detectionSetting?.modelThresholds || {}),
+            ...(resetThresholds || {}),
+          },
+          uiData: {
+            ...(currentSetting?.uiData || {}),
+            ...(detectionSetting?.uiData || {}),
+            settings: {
+              ...(currentSetting?.uiData?.settings || {}),
+              ...(detectionSetting?.uiData?.settings || {}),
+              ...(detectionSetting?.settings || {}),
+              ...(resetThresholds || {}),
+            },
+          },
+        }
+      : currentEntry?.id;
+
+    nextDetections[key] = {
+      ...(typeof currentEntry === 'object' ? currentEntry : {}),
+      id: nextSetting,
+    };
+    changed = true;
+  });
+
+  return changed ? { ...camera, detections: nextDetections } : camera;
 }
 
 function detectionInitials(label) {
@@ -371,9 +456,10 @@ function AppliedTypesPopover({ camera, typeLabels, onToggleRequest, disabled = f
             display: 'flex', alignItems: 'center', gap: 6, height: 30, padding: '0 10px 0 12px',
             borderRadius: 20, background: 'rgba(59,130,246,.1)', border: '1px solid rgba(59,130,246,.32)',
             fontSize: 11.5, fontWeight: 500, color: 'var(--blue)', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.65 : 1,
+            whiteSpace: 'nowrap',
           }}
         >
-          Applied Types
+          <span style={{ whiteSpace: 'nowrap' }}>Applied Types</span>
           <ChevronDown size={13} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
         </button>
       </PopoverTrigger>
@@ -449,15 +535,16 @@ function CameraPreviewModal({ camera, onClose }) {
   );
 }
 
-function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionRequest, onCheckTypeChange, checkTypeSaving, canEdit = false }) {
+function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionRequest, onResetThresholdsRequest, onCheckTypeChange, checkTypeSaving, resetLoading = false, canEdit = false }) {
   const enabledTypes = enabledTypesFor(camera, typeLabels);
+  const resettableTypes = resettableTypesFor(camera, typeLabels);
 
   return (
     <div
       className="vq-row"
       onClick={onOpen}
       style={{
-        display: 'grid', gridTemplateColumns: 'minmax(200px,1.35fr) minmax(240px,1.2fr) 190px 150px 44px',
+        display: 'grid', gridTemplateColumns: 'minmax(200px,1.35fr) minmax(240px,1.2fr) 150px 210px 150px 44px',
         gap: 0, padding: '13px 18px', borderBottom: '1px solid var(--bd)',
         alignItems: 'center', fontSize: 13, cursor: 'pointer', transition: 'background .12s',
       }}
@@ -525,6 +612,39 @@ function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionReq
       </span>
 
       <span style={{ display: 'flex', justifyContent: 'center' }} onClick={e => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={() => onResetThresholdsRequest?.(camera)}
+          disabled={resetLoading}
+          title={!canEdit ? 'You only have view access for detections' : (resettableTypes.length === 0 ? 'No enabled detections to reset' : 'Reset enabled detection thresholds')}
+          style={{
+            height: 32,
+            padding: '0 10px',
+            borderRadius: 8,
+            border: '1px solid rgba(168,85,247,.28)',
+            background: resettableTypes.length ? 'rgba(168,85,247,.1)' : 'var(--bg2)',
+            color: (!canEdit || resetLoading || resettableTypes.length === 0) ? 'var(--tx3)' : 'var(--violet)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: resetLoading ? 'not-allowed' : 'pointer',
+            opacity: resetLoading ? 0.7 : 1,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {resetLoading ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : (
+            <ListRestart size={13} />
+          )}
+          reset detection thresholds
+        </button>
+      </span>
+
+      <span style={{ display: 'flex', justifyContent: 'center' }} onClick={e => e.stopPropagation()}>
         <span style={{ position: 'relative' }}>
           <select
             value={camera.checkType || 'none'}
@@ -564,6 +684,9 @@ export function DetectionSettingsCameraList({ onOpenCamera }) {
   const [detectionActionLoading, setDetectionActionLoading] = useState(false);
   const [previewCamera, setPreviewCamera] = useState(null);
   const [checkTypeSavingId, setCheckTypeSavingId] = useState(null);
+  const [resetModal, setResetModal] = useState(null);
+  const [resetSelection, setResetSelection] = useState([]);
+  const [resetLoadingId, setResetLoadingId] = useState('');
 
   const nvrsApi = useApi(() => getNvrs(0, 100), []);
   const nvrs = nvrsApi.data?.nvrs ?? [];
@@ -635,6 +758,58 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
   const handleDetectionToggleRequest = (camera, detectionType, label, currentlyEnabled) => {
     if (!canEditDetections) return;
     setDetectionConfirm({ camera, detectionType, label, currentlyEnabled });
+  };
+
+  const handleResetThresholdsRequest = (camera) => {
+    if (!canEditDetections) return;
+    const options = resettableTypesFor(camera, typeLabels);
+    if (options.length === 0) {
+      toast.error('No enabled detections to reset');
+      return;
+    }
+    setResetModal({ camera, options });
+    setResetSelection([]);
+  };
+
+  const closeResetModal = () => {
+    if (resetLoadingId) return;
+    setResetModal(null);
+    setResetSelection([]);
+  };
+
+  const handleConfirmResetThresholds = async () => {
+    if (!resetModal?.camera?._id) return;
+    if (resetSelection.length === 0) {
+      toast.error('Select at least one enabled detection to reset.');
+      return;
+    }
+
+    setResetLoadingId(resetModal.camera._id);
+    try {
+      const result = await resetDetectionThresholdsBatch({
+        channelId: resetModal.camera._id,
+        detectionSettingIds: resetSelection,
+      });
+      channelsApi.setData((previous) => {
+        const updateCamera = (item) => item?._id === resetModal.camera._id
+          ? patchCameraWithResetThresholds(item, result)
+          : item;
+        if (Array.isArray(previous)) return previous.map(updateCamera);
+        if (Array.isArray(previous?.channels)) {
+          return { ...previous, channels: previous.channels.map(updateCamera) };
+        }
+        return previous;
+      });
+      setResetModal(null);
+      setResetSelection([]);
+      toast.success('Detection thresholds reset successfully.');
+      channelsApi.refetch({ silent: true });
+    } catch (err) {
+      const msg = err?.response?.data?.body?.message || err?.response?.data?.message || err?.message || 'Failed to reset detection thresholds.';
+      toast.error(msg);
+    } finally {
+      setResetLoadingId('');
+    }
   };
 
   const handleConfirmDetectionToggle = async () => {
@@ -749,13 +924,14 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
 
       <div style={{ position: 'relative', background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, overflow: 'hidden' }}>
         <div style={{
-          display: 'grid', gridTemplateColumns: 'minmax(200px,1.35fr) minmax(240px,1.2fr) 190px 150px 44px', gap: 0,
+          display: 'grid', gridTemplateColumns: 'minmax(200px,1.35fr) minmax(240px,1.2fr) 150px 210px 150px 44px', gap: 0,
           padding: '12px 18px', borderBottom: '1px solid var(--bd)',
           fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)', alignItems: 'center',
         }}>
           <span>CAMERA NAME</span>
           <span>ENGINES</span>
           <span style={{ textAlign: 'center' }}>ENABLE DETECTION</span>
+          <span style={{ textAlign: 'center' }}>RESET DETECTION THRESHOLDS</span>
           <span style={{ textAlign: 'center' }}>CAMERA TYPE</span>
           <span />
         </div>
@@ -775,8 +951,10 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
               onOpen={() => onOpenCamera?.(camera)}
               onPreview={setPreviewCamera}
               onToggleDetectionRequest={handleDetectionToggleRequest}
+              onResetThresholdsRequest={handleResetThresholdsRequest}
               onCheckTypeChange={handleCheckTypeChange}
               checkTypeSaving={checkTypeSavingId === camera._id}
+              resetLoading={resetLoadingId === camera._id}
               canEdit={canEditDetections}
             />
           ))}
@@ -822,6 +1000,37 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
       {previewCamera && (
         <CameraPreviewModal camera={previewCamera} onClose={() => setPreviewCamera(null)} />
       )}
+
+      <ConfirmationModal
+        open={!!resetModal}
+        title="Reset Detection"
+        message={resetModal && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, textAlign: 'left' }}>
+            <div style={{ fontSize: 12, color: 'var(--tx2)' }}>
+              Camera: <span style={{ fontWeight: 700, color: 'var(--tx)' }}>{resetModal.camera?.customName || resetModal.camera?.name || 'Camera'}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx2)' }}>Select detection type to reset</span>
+              <MultiSelect
+                options={resetModal.options.map(type => ({ id: type.settingId, label: type.label }))}
+                value={resetSelection}
+                onChange={setResetSelection}
+                placeholder="Select enabled detections"
+                searchPlaceholder="Search detections..."
+                msg="No enabled detections found"
+                maxHeight="max-h-44"
+                tint="#a855f7"
+              />
+            </div>
+          </div>
+        )}
+        confirmLabel={resetLoadingId ? 'Resetting...' : 'Reset'}
+        cancelLabel="Cancel"
+        onClose={closeResetModal}
+        onConfirm={handleConfirmResetThresholds}
+        loading={!!resetLoadingId}
+        confirmClass="bg-[var(--violet)] text-white hover:opacity-90 shadow-sm shadow-[var(--violet)]/20 disabled:opacity-70"
+      />
 
       {pages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: 4 }}>

@@ -596,7 +596,11 @@ export default function Detections() {
       const cameraEntry = zoneCamera?.detections?.[settingType];
       const setting = settingFromEntry(cameraEntry);
       const uiData = setting?.uiData || {};
-      const apiSettings = uiData.settings || setting?.settings || {};
+      const apiSettings = {
+        ...(uiData.settings || {}),
+        ...(setting?.settings || {}),
+        ...(setting?.modelThresholds || {}),
+      };
       const cameraEnabled = typeof cameraEntry === 'object' ? cameraEntry?.enabled : cameraEntry;
       const settingEnabled = setting?.active ?? setting?.enabled;
       const cameraScopedActive = zoneCamera?._id
@@ -994,10 +998,7 @@ export default function Detections() {
             ...prev,
             [selected.id]: {
               ...current,
-              thresholds: {
-                ...(current.thresholds || {}),
-                ...uiThresholds,
-              },
+              thresholds: uiThresholds,
               ...(firstThreshold != null ? { sensitivity: firstThreshold } : {}),
             },
           };
@@ -1083,6 +1084,7 @@ export default function Detections() {
     });
     setSelectedFilterCameraId(nextCameraId);
     if (nextNvrId) setSelectedNvrIds([String(nextNvrId)]);
+    setEdits({});
     setZoneCamera(camera);
     // Show the loader in the first rendered frame; the filter effect below
     // performs the request once enteredDetections becomes active.
@@ -1138,6 +1140,7 @@ export default function Detections() {
 
   const handleCameraFilterChange = async (cameraId) => {
     setSelectedFilterCameraId(cameraId);
+    setEdits({});
     if (!cameraId) {
       setZoneCamera(null);
       setZoneSettingsOpen(false);

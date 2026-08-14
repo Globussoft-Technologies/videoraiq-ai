@@ -102,6 +102,17 @@ export const resetDetectionThresholds = async (id) => {
   return unwrap(res);
 };
 
+export const resetDetectionThresholdsBatch = async ({ channelId, detectionSettingIds }) => {
+  const token = getAccessToken();
+  const res = await axios.put(`${Api_url}/detection-settings/reset-thresholds/batch`, {
+    channelId,
+    detectionSettingIds,
+  }, {
+    headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+  });
+  return unwrap(res);
+};
+
 /** Create a brand-new DetectionSetting for a camera that has never had this
  * type configured — same POST /detection-settings V1 uses on first save. */
 export const createDetectionSetting = async (data) => {
