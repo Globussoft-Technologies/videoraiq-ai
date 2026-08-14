@@ -1,0 +1,1102 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import {
+  CalendarClock,
+  Calendar,
+  Clock,
+  Globe,
+  Info,
+  Plus,
+  Server,
+  Trash2,
+  Loader2,
+} from 'lucide-react';
+import SearchableSelect from '../../../components/SearchableSelect';
+import { getNvrs } from '../../../helpers/configure';
+import { useTimezones } from '../Configure/ZoneScheduleFields';
+import useDetectionScheduleEvents from '../../../hooks/useDetectionScheduleEvents';
+import {
+  createGlobalSchedule,
+  deleteGlobalSchedule,
+  getGlobalSchedules,
+  getNvrCamerasForGlobalSchedule,
+  globalScheduleErrorMessage,
+  updateGlobalSchedule,
+} from '../../../helpers/globalSchedule';
+
+/**
+ * Global Detection Scheduling — Settings section.
+ *
+ * Flow: pick an NVR -> see which of its cameras are configured for detection
+ * (only those can be scheduled) -> enrol some of them -> define one schedule
+ * that governs all of them.
+ *
+ * Two things this UI must not blur:
+ *   1. Enrolling a camera is NOT the same as its detection running right now.
+ *      The checkbox controls enrolment; live detection state is shown
+ *      separately, as read-only context.
+ *   2. Saving does not take effect instantly. The existing one-minute
+ *      detection scheduler applies the change on its next tick, so the copy
+ *      says so in the banner, next to Save, and in the success toast.
+ */
+
+const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+const SCHEDULER_LAG_NOTE =
+  'Schedule changes are applied by the existing detection scheduler on its next run — normally within about 1 minute.';
+
+const DEFAULT_TIMEZONE = 'Asia/Kolkata';
+
+const emptyDays = () => DAYS.reduce((acc, day) => ({ ...acc, [day]: [] }), {});
+
+const defaultForm = () => ({
+  mode: 'custom',
+  timezone: DEFAULT_TIMEZONE,
+  days: emptyDays(),
+});
+
+const titleCase = (value) => value.charAt(0).toUpperCase() + value.slice(1);
+
+const toMinutes = (time) => {
+  const [hours, minutes] = String(time || '').split(':').map(Number);
+  return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : NaN;
+};
+
+/**
+ * Mirrors the server's Joi rules so an obvious mistake is caught before a round
+ * trip. The server stays the authority — anything this misses still surfaces as
+ * a toast from the API response.
+ */
+const validateForm = (form, cameraCount) => {
+  if (!cameraCount) return 'Select at least one configured camera to schedule.';
+  if (form.mode === 'always') return null;
+  if (!form.timezone) return 'Select a time zone.';
+
+  let total = 0;
+  for (const day of DAYS) {
+    const ranges = form.days?.[day] || [];
+    const sorted = [...ranges].sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
+
+    for (let i = 0; i < sorted.length; i += 1) {
+      const { start, end } = sorted[i];
+      total += 1;
+      if (!start || !end) return `${titleCase(day)}: fill in both start and end times.`;
+      if (toMinutes(start) >= toMinutes(end)) {
+        return `${titleCase(day)}: start time must be before end time.`;
+      }
+      const next = sorted[i + 1];
+      if (next && toMinutes(end) > toMinutes(next.start)) {
+        return `${titleCase(day)}: time ranges cannot overlap.`;
+      }
+    }
+  }
+
+  if (!total) return 'Custom mode needs at least one time range.';
+  return null;
+};
+
+/** Strip empty days so the payload matches what the API expects. */
+const buildSchedulePayload = (form) => {
+  if (form.mode === 'always') return { mode: 'always' };
+  return {
+    mode: 'custom',
+    timezone: form.timezone,
+    days: DAYS.reduce((acc, day) => ({ ...acc, [day]: form.days?.[day] || [] }), {}),
+  };
+};
+
+function Panel({ children, style }) {
+  return (
+    <section
+      style={{
+        background: 'var(--bg1)',
+        border: '1px solid var(--bd)',
+        borderRadius: 14,
+        padding: 18,
+        minWidth: 0,
+        ...style,
+      }}
+    >
+      {children}
+    </section>
+  );
+}
+
+function PanelHeader({ icon: Icon, title, sub, action }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, minWidth: 0 }}>
+        {Icon && (
+          <span
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(59,130,246,.1)',
+              color: 'var(--blue)',
+              flexShrink: 0,
+            }}
+          >
+            <Icon size={16} strokeWidth={1.8} />
+          </span>
+        )}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14, color: 'var(--tx)' }}>{title}</div>
+          {sub && <div style={{ marginTop: 3, fontSize: 11.5, color: 'var(--tx3)', lineHeight: 1.35 }}>{sub}</div>}
+        </div>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function FieldLabel({ children }) {
+  return <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 6 }}>{children}</div>;
+}
+
+/** The "applied within ~1 minute" note, styled as an informational callout. */
+function SchedulerNote({ style }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 9,
+        padding: '10px 12px',
+        borderRadius: 10,
+        background: 'rgba(59,130,246,.08)',
+        border: '1px solid rgba(59,130,246,.22)',
+        ...style,
+      }}
+    >
+      <Info size={14} style={{ color: 'var(--blue)', flexShrink: 0, marginTop: 1 }} />
+      <div style={{ fontSize: 11.5, lineHeight: 1.5, color: 'var(--tx2)' }}>{SCHEDULER_LAG_NOTE}</div>
+    </div>
+  );
+}
+
+function TabButton({ active, disabled, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        padding: '7px 14px',
+        borderRadius: 9,
+        border: `1px solid ${active ? 'var(--blue)' : 'var(--bd)'}`,
+        background: active ? 'rgba(59,130,246,.1)' : 'transparent',
+        color: active ? 'var(--blue)' : 'var(--tx2)',
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * The detectors actually applied to a camera, as chips.
+ *
+ * The API only returns applied detectors (enabled, or with zones drawn for this
+ * camera) — never the merely-linked ones a camera accumulates when a detection
+ * setting is saved against several channels. Even so, a busy camera can have a
+ * handful, so the list collapses past MAX_VISIBLE rather than wrapping into a
+ * wall of text.
+ */
+const MAX_VISIBLE_DETECTORS = 4;
+
+function DetectorChips({ detectors = [] }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!detectors.length) {
+    return <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 3 }}>No detections applied</div>;
+  }
+
+  const visible = expanded ? detectors : detectors.slice(0, MAX_VISIBLE_DETECTORS);
+  const hidden = detectors.length - visible.length;
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+      {visible.map((detector) => (
+        <span
+          key={detector.settingType}
+          title={detector.enabled ? 'Running' : 'Configured, currently stopped'}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: 10,
+            padding: '2px 7px',
+            borderRadius: 999,
+            background: 'var(--bg1solid, var(--bg1))',
+            border: '1px solid var(--bd)',
+            color: 'var(--tx2)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <span
+            style={{
+              width: 5,
+              height: 5,
+              borderRadius: '50%',
+              background: detector.enabled ? '#16a34a' : 'var(--tx3)',
+              flexShrink: 0,
+            }}
+          />
+          {detector.detectionName}
+        </span>
+      ))}
+      {(hidden > 0 || expanded) && (
+        <button
+          type="button"
+          onClick={(event) => {
+            // The row is a <label>; without this the click toggles the checkbox.
+            event.preventDefault();
+            event.stopPropagation();
+            setExpanded((current) => !current);
+          }}
+          style={{
+            fontSize: 10,
+            padding: '2px 7px',
+            borderRadius: 999,
+            background: 'transparent',
+            border: '1px dashed var(--bd)',
+            color: 'var(--tx3)',
+            cursor: 'pointer',
+          }}
+        >
+          {expanded ? 'Show less' : `+${hidden} more`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Live DS call trace. Every start/stop the backend performs shows up here with
+ * the endpoint it hit and what DS replied — the quickest way to confirm the
+ * scheduler is actually firing, and to see the response when it is not.
+ */
+function SchedulerActivity({ events, onClear }) {
+  const [openKey, setOpenKey] = useState(null);
+
+  return (
+    <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--bd)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>
+            Scheduler activity {events.length ? `(${events.length})` : ''}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
+            Live DS start/stop calls. Click a row to see the raw response.
+          </div>
+        </div>
+        {events.length > 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            style={{
+              border: '1px solid var(--bd)',
+              background: 'transparent',
+              color: 'var(--tx2)',
+              borderRadius: 8,
+              padding: '5px 10px',
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {events.length === 0 ? (
+        <div style={{ fontSize: 11.5, color: 'var(--tx3)', padding: '8px 0' }}>
+          Nothing yet. A transition appears here the moment the scheduler starts or stops a detection — within about a
+          minute of a schedule boundary.
+        </div>
+      ) : (
+        <div className="customscrollbar" style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {events.map((event) => {
+            const failed = event.status === 'failed';
+            const open = openKey === event.key;
+            return (
+              <div
+                key={event.key}
+                style={{
+                  borderRadius: 9,
+                  border: `1px solid ${failed ? 'rgba(239,68,68,.35)' : 'var(--bd)'}`,
+                  background: failed ? 'rgba(239,68,68,.06)' : 'var(--bg2)',
+                  overflow: 'hidden',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setOpenKey(open ? null : event.key)}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '7px 10px',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 9.5,
+                      fontWeight: 700,
+                      padding: '2px 6px',
+                      borderRadius: 4,
+                      flexShrink: 0,
+                      background: failed
+                        ? 'rgba(239,68,68,.15)'
+                        : event.enabled
+                          ? 'rgba(34,197,94,.14)'
+                          : 'rgba(148,163,184,.18)',
+                      color: failed ? '#dc2626' : event.enabled ? '#16a34a' : 'var(--tx3)',
+                    }}
+                  >
+                    {failed ? 'FAILED' : (event.operation || '').toUpperCase()}
+                  </span>
+                  <span style={{ fontSize: 11.5, color: 'var(--tx)', fontWeight: 600, minWidth: 0, flex: 1 }}>
+                    {event.channelName}
+                    <span style={{ color: 'var(--tx3)', fontWeight: 400 }}> · {event.detectionName}</span>
+                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--tx3)', fontFamily: 'var(--mono)', flexShrink: 0 }}>
+                    {new Date(event.at).toLocaleTimeString()}
+                  </span>
+                </button>
+
+                {open && (
+                  <div style={{ padding: '0 10px 9px', fontSize: 10.5, color: 'var(--tx2)' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 6, color: 'var(--tx3)' }}>
+                      <span>trigger: {event.source || '—'}</span>
+                      <span>schedule: {event.scheduleSource || '—'}</span>
+                      <span>endpoint: {event.dsEndpoint || '—'}</span>
+                    </div>
+                    <pre
+                      style={{
+                        margin: 0,
+                        padding: 8,
+                        borderRadius: 7,
+                        background: 'var(--bg1solid, var(--bg1))',
+                        border: '1px solid var(--bd)',
+                        fontSize: 10,
+                        fontFamily: 'var(--mono)',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        maxHeight: 180,
+                        overflow: 'auto',
+                      }}
+                    >
+                      {JSON.stringify(event.dsError ? { error: event.dsError, response: event.dsResponse } : event.dsResponse, null, 2) ||
+                        'no response body'}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const TIME_INPUT_STYLE = {
+  border: '1px solid var(--bd2, var(--bd))',
+  borderRadius: 8,
+  padding: '4px 8px',
+  fontSize: 12.5,
+  fontWeight: 500,
+  color: 'var(--tx)',
+  background: 'var(--bg1solid, var(--bg1))',
+  outline: 'none',
+};
+
+export default function GlobalDetectionScheduling({ canEdit = true }) {
+  const timezones = useTimezones();
+  // Subscribed panel-wide, not per NVR: transitions for any camera are
+  // worth seeing while verifying.
+  const { events: scheduleEvents, clear: clearScheduleEvents } = useDetectionScheduleEvents();
+
+  const [nvrs, setNvrs] = useState([]);
+  const [nvrsLoading, setNvrsLoading] = useState(true);
+  const [selectedNvrId, setSelectedNvrId] = useState('');
+
+  const [nvrData, setNvrData] = useState(null);
+  const [camerasLoading, setCamerasLoading] = useState(false);
+
+  const [existingSchedule, setExistingSchedule] = useState(null);
+  // The API allows several schedules per NVR (e.g. detector-scoped ones created
+  // directly against the API); this panel edits one. Tracked so we can say so
+  // rather than silently appearing to be the whole picture.
+  const [otherScheduleCount, setOtherScheduleCount] = useState(0);
+  const [enrolled, setEnrolled] = useState(() => new Set());
+  const [form, setForm] = useState(defaultForm);
+
+  const [tab, setTab] = useState('nvr');
+  const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    getNvrs(0, 200)
+      .then((result) => alive && setNvrs(result?.nvrs || []))
+      .catch((error) => alive && toast.error(globalScheduleErrorMessage(error, 'Failed to load NVRs')))
+      .finally(() => alive && setNvrsLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const nvrLabels = useMemo(
+    () => nvrs.map((nvr) => nvr.nvrName || nvr.deviceName || nvr._id),
+    [nvrs],
+  );
+
+  const selectedNvrLabel = useMemo(() => {
+    const nvr = nvrs.find((item) => item._id === selectedNvrId);
+    return nvr ? nvr.nvrName || nvr.deviceName || nvr._id : '';
+  }, [nvrs, selectedNvrId]);
+
+  /**
+   * Load an NVR's cameras and any schedule it already has. An existing schedule
+   * seeds the form and the enrolment checkboxes so this reads as "edit", not
+   * "create a duplicate".
+   */
+  const loadNvr = useCallback(async (nvrId) => {
+    setCamerasLoading(true);
+    try {
+      const [cameras, schedules] = await Promise.all([
+        getNvrCamerasForGlobalSchedule(nvrId),
+        getGlobalSchedules(nvrId),
+      ]);
+
+      setNvrData(cameras);
+
+      // The list comes back newest-first; this panel edits the most recent.
+      const schedule = schedules?.[0] || null;
+      setExistingSchedule(schedule);
+      setOtherScheduleCount(Math.max(0, (schedules?.length || 0) - 1));
+
+      if (schedule) {
+        setEnrolled(
+          new Set(
+            (schedule.cameras || [])
+              .filter((camera) => camera.enabled !== false)
+              .map((camera) => String(camera.channelId)),
+          ),
+        );
+        setForm({
+          mode: schedule.schedule?.mode || 'custom',
+          timezone: schedule.schedule?.timezone || DEFAULT_TIMEZONE,
+          days: { ...emptyDays(), ...(schedule.schedule?.days || {}) },
+        });
+      } else {
+        setEnrolled(new Set());
+        setForm(defaultForm());
+      }
+    } catch (error) {
+      toast.error(globalScheduleErrorMessage(error, 'Failed to load cameras for this NVR'));
+      setNvrData(null);
+      setExistingSchedule(null);
+      setOtherScheduleCount(0);
+    } finally {
+      setCamerasLoading(false);
+    }
+  }, []);
+
+  const handleNvrChange = (label) => {
+    const nvr = nvrs.find((item) => (item.nvrName || item.deviceName || item._id) === label);
+    if (!nvr) return;
+    setSelectedNvrId(nvr._id);
+    setTab('nvr');
+    loadNvr(nvr._id);
+  };
+
+  const toggleEnrolled = (channelId) => {
+    setEnrolled((current) => {
+      const next = new Set(current);
+      if (next.has(channelId)) next.delete(channelId);
+      else next.add(channelId);
+      return next;
+    });
+  };
+
+  const configuredCameras = nvrData?.configuredCameras || [];
+  const nonConfiguredCameras = nvrData?.nonConfiguredCameras || [];
+
+  const allConfiguredSelected =
+    configuredCameras.length > 0 && configuredCameras.every((camera) => enrolled.has(String(camera.channelId)));
+
+  const toggleAll = () => {
+    setEnrolled(
+      allConfiguredSelected ? new Set() : new Set(configuredCameras.map((camera) => String(camera.channelId))),
+    );
+  };
+
+  const addRange = (day) => {
+    setForm((current) => ({
+      ...current,
+      days: { ...current.days, [day]: [...(current.days?.[day] || []), { start: '09:00', end: '18:00' }] },
+    }));
+  };
+
+  const updateRange = (day, index, field, value) => {
+    setForm((current) => ({
+      ...current,
+      days: {
+        ...current.days,
+        [day]: (current.days?.[day] || []).map((range, i) => (i === index ? { ...range, [field]: value } : range)),
+      },
+    }));
+  };
+
+  const removeRange = (day, index) => {
+    setForm((current) => ({
+      ...current,
+      days: { ...current.days, [day]: (current.days?.[day] || []).filter((_, i) => i !== index) },
+    }));
+  };
+
+  /** Copy Monday's ranges to every other day — the common "office hours" case. */
+  const copyMondayToAll = () => {
+    setForm((current) => {
+      const monday = current.days?.monday || [];
+      if (!monday.length) return current;
+      return {
+        ...current,
+        days: DAYS.reduce((acc, day) => ({ ...acc, [day]: monday.map((range) => ({ ...range })) }), {}),
+      };
+    });
+  };
+
+  const handleSave = async () => {
+    const enrolledIds = [...enrolled];
+    const validationError = validateForm(form, enrolledIds.length);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    // Cameras previously enrolled but now unchecked are kept as disabled rows
+    // rather than dropped, so un-enrolling is explicit and reversible.
+    const previouslyEnrolled = (existingSchedule?.cameras || []).map((camera) => String(camera.channelId));
+    const unenrolled = previouslyEnrolled.filter((id) => !enrolled.has(id));
+
+    const payload = {
+      schedule: buildSchedulePayload(form),
+      cameras: [
+        ...enrolledIds.map((channelId) => ({ channelId, enabled: true })),
+        ...unenrolled.map((channelId) => ({ channelId, enabled: false })),
+      ],
+    };
+
+    setSaving(true);
+    try {
+      if (existingSchedule?._id) {
+        await updateGlobalSchedule(existingSchedule._id, payload);
+      } else {
+        await createGlobalSchedule({
+          ...payload,
+          nvrId: selectedNvrId,
+          name: `${selectedNvrLabel} global schedule`,
+        });
+      }
+      toast.success(`Global schedule saved. ${SCHEDULER_LAG_NOTE}`);
+      await loadNvr(selectedNvrId);
+    } catch (error) {
+      toast.error(globalScheduleErrorMessage(error, 'Failed to save global schedule'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!existingSchedule?._id) return;
+    setRemoving(true);
+    try {
+      await deleteGlobalSchedule(existingSchedule._id);
+      toast.success(
+        `Global schedule removed. These cameras go back to their own schedules. ${SCHEDULER_LAG_NOTE}`,
+      );
+      await loadNvr(selectedNvrId);
+    } catch (error) {
+      toast.error(globalScheduleErrorMessage(error, 'Failed to remove global schedule'));
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  const busy = saving || removing;
+
+  return (
+    <Panel>
+      <PanelHeader
+        icon={CalendarClock}
+        title="Global Detection Scheduling"
+        sub="Configure one detection schedule for many cameras on an NVR, instead of editing each camera individually. A global schedule takes priority over a camera's own schedule."
+        action={
+          existingSchedule ? (
+            <span
+              style={{
+                fontSize: 10.5,
+                fontWeight: 700,
+                padding: '4px 9px',
+                borderRadius: 999,
+                background: existingSchedule.enabled ? 'rgba(34,197,94,.12)' : 'rgba(148,163,184,.16)',
+                color: existingSchedule.enabled ? '#16a34a' : 'var(--tx3)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {existingSchedule.enabled ? 'ACTIVE' : 'DISABLED'}
+            </span>
+          ) : null
+        }
+      />
+
+      <SchedulerNote style={{ marginBottom: 14 }} />
+
+      <div style={{ marginBottom: 14 }}>
+        <FieldLabel>NVR</FieldLabel>
+        <SearchableSelect
+          value={selectedNvrLabel}
+          options={nvrLabels}
+          onChange={handleNvrChange}
+          disabled={!canEdit || nvrsLoading || !nvrLabels.length}
+          placeholder={nvrsLoading ? 'Loading NVRs…' : 'Select an NVR'}
+          searchPlaceholder="Search NVRs…"
+          emptyLabel="No NVRs found"
+        />
+      </div>
+
+      {!selectedNvrId ? (
+        <div style={{ padding: '18px 4px', fontSize: 12, color: 'var(--tx3)' }}>
+          Select an NVR to see its cameras and configure a global schedule.
+        </div>
+      ) : camerasLoading ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '18px 4px', fontSize: 12, color: 'var(--tx3)' }}>
+          <Loader2 size={14} className="animate-spin" /> Loading cameras…
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            <TabButton active={tab === 'nvr'} onClick={() => setTab('nvr')}>
+              1. Cameras
+            </TabButton>
+            <TabButton active={tab === 'schedule'} onClick={() => setTab('schedule')}>
+              2. Schedule
+            </TabButton>
+          </div>
+
+          {otherScheduleCount > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 9,
+                padding: '10px 12px',
+                borderRadius: 10,
+                marginBottom: 14,
+                background: 'rgba(234,179,8,.09)',
+                border: '1px solid rgba(234,179,8,.25)',
+              }}
+            >
+              <Info size={14} style={{ color: '#ca8a04', flexShrink: 0, marginTop: 1 }} />
+              <div style={{ fontSize: 11.5, lineHeight: 1.5, color: 'var(--tx2)' }}>
+                This NVR has {otherScheduleCount + 1} global schedules. You are editing the most recent one; the other
+                {otherScheduleCount === 1 ? '' : 's'} stay as they are and may also govern some of these cameras.
+              </div>
+            </div>
+          )}
+
+          {tab === 'nvr' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {nvrData?.nvr && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '10px 12px',
+                    borderRadius: 10,
+                    background: 'var(--bg2)',
+                    border: '1px solid var(--bd)',
+                  }}
+                >
+                  <Server size={15} style={{ color: 'var(--tx3)', flexShrink: 0 }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--tx)' }}>{nvrData.nvr.nvrName}</div>
+                    <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
+                      {[nvrData.nvr.brand, nvrData.nvr.location].filter(Boolean).join(' · ')}
+                      {` · ${nvrData.nvr.cameraCount} camera${nvrData.nvr.cameraCount === 1 ? '' : 's'}`}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>
+                      Configured Cameras ({configuredCameras.length})
+                    </div>
+                    {/* The distinction the backend is careful about, said plainly. */}
+                    <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
+                      Tick a camera to put it on this global schedule. This controls which schedule applies — it does not
+                      start or stop detection by itself. Only detections actually applied to a camera are listed.
+                    </div>
+                  </div>
+                  {configuredCameras.length > 0 && canEdit && (
+                    <button
+                      type="button"
+                      onClick={toggleAll}
+                      style={{
+                        border: '1px solid var(--bd)',
+                        background: 'transparent',
+                        color: 'var(--tx2)',
+                        borderRadius: 8,
+                        padding: '5px 10px',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {allConfiguredSelected ? 'Clear all' : 'Select all'}
+                    </button>
+                  )}
+                </div>
+
+                {configuredCameras.length === 0 ? (
+                  <div style={{ fontSize: 11.5, color: 'var(--tx3)', padding: '10px 0' }}>
+                    No cameras on this NVR are configured for detection yet, so there is nothing to schedule.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {configuredCameras.map((camera) => {
+                      const id = String(camera.channelId);
+                      const isEnrolled = enrolled.has(id);
+                      const runningCount = (camera.configuredDetectors || []).filter((d) => d.enabled).length;
+                      return (
+                        <label
+                          key={id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            padding: '9px 11px',
+                            borderRadius: 10,
+                            border: `1px solid ${isEnrolled ? 'var(--blue)' : 'var(--bd)'}`,
+                            background: isEnrolled ? 'rgba(59,130,246,.06)' : 'var(--bg2)',
+                            cursor: canEdit ? 'pointer' : 'not-allowed',
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isEnrolled}
+                            disabled={!canEdit}
+                            onChange={() => toggleEnrolled(id)}
+                            style={{ width: 15, height: 15, accentColor: 'var(--blue)', flexShrink: 0 }}
+                          />
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)' }}>{camera.name}</div>
+                            <DetectorChips detectors={camera.configuredDetectors} />
+                          </div>
+                          {/* Read-only live state, kept visually distinct from the checkbox. */}
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: '3px 8px',
+                              borderRadius: 999,
+                              background: runningCount ? 'rgba(34,197,94,.12)' : 'rgba(148,163,184,.16)',
+                              color: runningCount ? '#16a34a' : 'var(--tx3)',
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
+                            }}
+                            title="Current detection state, reported by the detection service"
+                          >
+                            {runningCount ? `${runningCount} running` : 'stopped'}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {nonConfiguredCameras.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)', marginBottom: 4 }}>
+                    Non-Configured Cameras ({nonConfiguredCameras.length})
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 8 }}>
+                    These have no detection configured, so they cannot be added to a global schedule.
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {nonConfiguredCameras.map((camera) => (
+                      <span
+                        key={String(camera.channelId)}
+                        style={{
+                          fontSize: 11.5,
+                          padding: '6px 10px',
+                          borderRadius: 8,
+                          border: '1px dashed var(--bd)',
+                          color: 'var(--tx3)',
+                        }}
+                      >
+                        {camera.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
+                <div>
+                  <FieldLabel>
+                    <Globe size={11} style={{ verticalAlign: -1, marginRight: 4 }} />
+                    Time zone
+                  </FieldLabel>
+                  <SearchableSelect
+                    value={form.timezone}
+                    options={timezones}
+                    onChange={(tz) => setForm((current) => ({ ...current, timezone: tz }))}
+                    disabled={!canEdit || form.mode === 'always' || !timezones.length}
+                    placeholder={timezones.length ? 'Select time zone' : 'Loading time zones…'}
+                    searchPlaceholder="Search time zones…"
+                    emptyLabel="No time zones found"
+                  />
+                </div>
+                <div>
+                  <FieldLabel>
+                    <Clock size={11} style={{ verticalAlign: -1, marginRight: 4 }} />
+                    Mode
+                  </FieldLabel>
+                  <SearchableSelect
+                    value={form.mode === 'always' ? 'Always' : 'Custom'}
+                    options={['Always', 'Custom']}
+                    onChange={(value) => setForm((current) => ({ ...current, mode: value.toLowerCase() }))}
+                    disabled={!canEdit}
+                    placeholder="Select mode"
+                  />
+                </div>
+              </div>
+
+              {form.mode === 'always' ? (
+                <div
+                  style={{
+                    padding: '14px 16px',
+                    borderRadius: 10,
+                    background: 'var(--bg2)',
+                    border: '1px solid var(--bd)',
+                  }}
+                >
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--tx)', marginBottom: 5 }}>Always mode</div>
+                  <div style={{ fontSize: 11.5, lineHeight: 1.6, color: 'var(--tx2)' }}>
+                    Detection stays on continuously for every enrolled camera. Daily time ranges are not needed. Switch to
+                    Custom to define active days and times.
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      onClick={copyMondayToAll}
+                      disabled={!canEdit || !(form.days?.monday || []).length}
+                      style={{
+                        border: '1px solid var(--bd)',
+                        background: 'transparent',
+                        color: 'var(--tx2)',
+                        borderRadius: 8,
+                        padding: '5px 10px',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: (form.days?.monday || []).length && canEdit ? 'pointer' : 'not-allowed',
+                        opacity: (form.days?.monday || []).length && canEdit ? 1 : 0.5,
+                      }}
+                    >
+                      Copy Monday to all days
+                    </button>
+                  </div>
+
+                  {DAYS.map((day) => {
+                    const ranges = form.days?.[day] || [];
+                    return (
+                      <div
+                        key={day}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 12,
+                          padding: '10px 12px',
+                          background: 'var(--bg2)',
+                          border: '1px solid var(--bd)',
+                          borderRadius: 10,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 9, width: 130, flexShrink: 0, paddingTop: 3 }}>
+                          <Calendar size={14} style={{ color: 'var(--tx3)' }} />
+                          <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)' }}>{titleCase(day)}</span>
+                        </div>
+
+                        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {ranges.length === 0 ? (
+                            <span style={{ fontSize: 11.5, color: 'var(--tx3)', paddingTop: 4 }}>No ranges — detection stays off</span>
+                          ) : (
+                            ranges.map((range, index) => (
+                              <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <input
+                                  type="time"
+                                  value={range.start || ''}
+                                  disabled={!canEdit}
+                                  onChange={(event) => updateRange(day, index, 'start', event.target.value)}
+                                  style={TIME_INPUT_STYLE}
+                                />
+                                <span style={{ fontSize: 12, color: 'var(--tx2)' }}>to</span>
+                                <input
+                                  type="time"
+                                  value={range.end || ''}
+                                  disabled={!canEdit}
+                                  onChange={(event) => updateRange(day, index, 'end', event.target.value)}
+                                  style={TIME_INPUT_STYLE}
+                                />
+                                {canEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeRange(day, index)}
+                                    title="Remove time range"
+                                    style={{
+                                      display: 'grid',
+                                      placeItems: 'center',
+                                      width: 28,
+                                      height: 28,
+                                      borderRadius: 8,
+                                      border: '1px solid var(--bd)',
+                                      background: 'transparent',
+                                      color: '#ef4444',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => addRange(day)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 5,
+                              border: '1px solid var(--bd)',
+                              background: 'transparent',
+                              color: 'var(--tx2)',
+                              borderRadius: 8,
+                              padding: '5px 10px',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <Plus size={12} /> Add
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+              marginTop: 16,
+              paddingTop: 14,
+              borderTop: '1px solid var(--bd)',
+            }}
+          >
+            <div style={{ fontSize: 11, color: 'var(--tx3)', minWidth: 0 }}>
+              {enrolled.size} camera{enrolled.size === 1 ? '' : 's'} on this schedule · takes effect within ~1 minute
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {existingSchedule?._id && canEdit && (
+                <button
+                  type="button"
+                  onClick={handleRemove}
+                  disabled={busy}
+                  style={{
+                    border: '1px solid var(--bd)',
+                    background: 'transparent',
+                    color: '#ef4444',
+                    borderRadius: 9,
+                    padding: '8px 14px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: busy ? 'not-allowed' : 'pointer',
+                    opacity: busy ? 0.6 : 1,
+                  }}
+                >
+                  {removing ? 'Removing…' : 'Remove global schedule'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={!canEdit || busy}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  border: 'none',
+                  background: 'var(--blue)',
+                  color: '#fff',
+                  borderRadius: 9,
+                  padding: '8px 16px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: !canEdit || busy ? 'not-allowed' : 'pointer',
+                  opacity: !canEdit || busy ? 0.6 : 1,
+                }}
+              >
+                {saving ? <Loader2 size={13} className="animate-spin" /> : <CalendarClock size={13} />}
+                {saving ? 'Saving…' : existingSchedule ? 'Update global schedule' : 'Save global schedule'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      <SchedulerActivity events={scheduleEvents} onClear={clearScheduleEvents} />
+    </Panel>
+  );
+}

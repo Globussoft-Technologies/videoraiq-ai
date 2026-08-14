@@ -20,6 +20,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import SearchableSelect from '../../../components/SearchableSelect';
+import GlobalDetectionScheduling from './GlobalDetectionScheduling';
 import { useApi } from '../../../hooks/useApi';
 import { setLogOrderEnabled, useLogOrder } from '../../../lib/logOrder';
 import { fetchMyAccount, fetchAuthorizedUserById } from '../../../pages/MyProfile/Api';
@@ -1239,6 +1240,8 @@ export default function SystemSettings() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
+        <GlobalDetectionScheduling canEdit={canEditSettings} />
+
         <Panel>
           <PanelHeader
             icon={SlidersHorizontal}
