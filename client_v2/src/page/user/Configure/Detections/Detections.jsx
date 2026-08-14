@@ -500,6 +500,13 @@ function percentToApiValue(value) {
   return Math.max(0, Math.min(1, num / 100));
 }
 
+function resetThresholdPayload(result) {
+  const data = result?.data || result?.body?.data || result || {};
+  const detectionSetting = data.detectionSetting || result?.detectionSetting || null;
+  const resetThresholds = data.resetThresholds || detectionSetting?.modelThresholds || {};
+  return { detectionSetting, resetThresholds };
+}
+
 /**
  * Detections catalogue. The master detection list is fetched from
  * GET /detection-settings/types; per-camera toggles persist through
@@ -553,7 +560,6 @@ export default function Detections() {
     [selectedNvrIds.join(',')],
     { initialData: { channels: [] } },
   );
-
   const nvrOptions = useMemo(
     () => (nvrsApi.data?.nvrs || []).map((nvr) => ({ id: String(nvr._id || nvr.id), label: nvrLabel(nvr) })),
     [nvrsApi.data],
@@ -964,7 +970,7 @@ export default function Detections() {
   };
 
   const handleResetThresholds = async () => {
-    if (!selectedDetectionSettingId) {
+    if (!selected?.id || !selectedSettingType || !selectedDetectionSettingId) {
       toast.error('No detection settings found to reset thresholds.');
       setShowResetThresholdConfirm(false);
       return;
@@ -972,11 +978,77 @@ export default function Detections() {
 
     setResettingThresholds(true);
     try {
-      await resetDetectionThresholds(selectedDetectionSettingId);
+      const result = await resetDetectionThresholds(selectedDetectionSettingId);
+      const { detectionSetting, resetThresholds } = resetThresholdPayload(result);
+      const uiThresholds = Object.fromEntries(
+        Object.entries(resetThresholds || {})
+          .map(([key, value]) => [key, toPercent(value)])
+          .filter(([, value]) => value != null),
+      );
+      const firstThreshold = Object.values(uiThresholds)[0];
+
+      if (Object.keys(uiThresholds).length > 0) {
+        setEdits((prev) => {
+          const current = prev[selected.id] || {};
+          return {
+            ...prev,
+            [selected.id]: {
+              ...current,
+              thresholds: {
+                ...(current.thresholds || {}),
+                ...uiThresholds,
+              },
+              ...(firstThreshold != null ? { sensitivity: firstThreshold } : {}),
+            },
+          };
+        });
+      }
+
+      setZoneCamera((prev) => {
+        if (!prev) return prev;
+        const currentEntry = prev.detections?.[selectedSettingType] || {};
+        const currentSetting = settingFromEntry(currentEntry);
+        const nextSetting = currentSetting || detectionSetting
+          ? {
+              ...(currentSetting || {}),
+              ...(detectionSetting || {}),
+              settings: {
+                ...(currentSetting?.settings || {}),
+                ...(detectionSetting?.settings || {}),
+                ...(resetThresholds || {}),
+              },
+              modelThresholds: {
+                ...(currentSetting?.modelThresholds || {}),
+                ...(detectionSetting?.modelThresholds || {}),
+                ...(resetThresholds || {}),
+              },
+              uiData: {
+                ...(currentSetting?.uiData || {}),
+                ...(detectionSetting?.uiData || {}),
+                settings: {
+                  ...(currentSetting?.uiData?.settings || {}),
+                  ...(detectionSetting?.uiData?.settings || {}),
+                  ...(detectionSetting?.settings || {}),
+                  ...(resetThresholds || {}),
+                },
+              },
+            }
+          : currentEntry?.id;
+
+        return {
+          ...prev,
+          detections: {
+            ...(prev.detections || {}),
+            [selectedSettingType]: {
+              ...(typeof currentEntry === 'object' ? currentEntry : {}),
+              id: nextSetting,
+            },
+          },
+        };
+      });
       setShowResetThresholdConfirm(false);
       toast.success('Detection thresholds reset successfully.');
       await refreshZoneCamera();
-      detectionSettingsApi.refetch({ silent: true });
     } catch (err) {
       toast.error(err?.response?.data?.body?.message || err?.response?.data?.message || 'Failed to reset detection thresholds.');
     } finally {

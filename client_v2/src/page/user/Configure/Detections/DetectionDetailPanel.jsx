@@ -525,6 +525,9 @@ export default function DetectionDetailPanel({
   const scheduleFallback = formatScheduleMode(model.scheduleMode || model.schedule, 'N/A');
   const thresholdKeys = model.thresholds ? Object.keys(model.thresholds) : [];
   const usesThresholds = thresholdKeys.length > 0;
+  const thresholdsBlockedByInactive = !model.active;
+  const thresholdsBlockedByAccess = !canEdit;
+  const resetThresholdActionDisabled = resetThresholdDisabled || thresholdsBlockedByAccess || thresholdsBlockedByInactive;
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleError, setScheduleError] = useState('');
@@ -586,6 +589,20 @@ export default function DetectionDetailPanel({
     setScheduleOpen(false);
     setScheduleForm(null);
     setScheduleError('');
+  }
+
+  function explainThresholdControl(action) {
+    if (thresholdsBlockedByInactive) {
+      toast.error(action === 'reset'
+        ? 'Please enable the detection to reset the threshold.'
+        : 'Please enable the detection first to set the threshold.');
+      return true;
+    }
+    if (thresholdsBlockedByAccess) {
+      toast.error('You only have view access for detections.');
+      return true;
+    }
+    return false;
   }
 
   function validateScheduleForm() {
@@ -737,29 +754,44 @@ export default function DetectionDetailPanel({
             {category?.label} · {model.subtitle}
           </span>
         </span>
-        <span style={{ flex: '0 0 auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-          {/* <button
+        <span style={{ flex: '0 0 auto', display: 'inline-flex', alignItems: 'center', gap: 16 }}>
+          <button
             type="button"
-            onClick={onResetThresholds}
-            disabled={resetThresholdDisabled}
-            title={resetThresholdDisabled ? 'No saved setting for this detection type' : 'Reset detection thresholds'}
+            onClick={() => {
+              if (explainThresholdControl('reset')) return;
+              if (resetThresholdDisabled) return;
+              onResetThresholds();
+            }}
+            disabled={resetThresholdDisabled && !thresholdsBlockedByInactive && !thresholdsBlockedByAccess}
+            aria-disabled={resetThresholdActionDisabled}
+            title={thresholdsBlockedByInactive
+              ? 'Enable this detection to reset thresholds'
+              : resetThresholdDisabled
+                ? 'No saved setting for this detection type'
+                : 'Reset detection thresholds'}
             style={{
-              width: 30,
               height: 30,
+              maxWidth: 210,
+              padding: '0 10px',
               borderRadius: 8,
               border: '1px solid var(--bd)',
               background: 'var(--bg2)',
-              color: resetThresholdDisabled ? 'var(--tx3)' : '#ec4899',
+              color: resetThresholdActionDisabled ? 'var(--tx3)' : '#ec4899',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: resetThresholdDisabled ? 'not-allowed' : 'pointer',
-              opacity: resetThresholdDisabled ? 0.6 : 1,
+              gap: 6,
+              cursor: resetThresholdActionDisabled ? 'not-allowed' : 'pointer',
+              opacity: resetThresholdActionDisabled ? 0.6 : 1,
+              fontSize: 11.5,
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
             }}
             aria-label="Reset detection thresholds"
           >
-            <ListRestart size={15} />
-          </button> */}
+            <ListRestart size={15} style={{ flex: '0 0 auto' }} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Reset detection thresholds</span>
+          </button>
           <Toggle on={model.active} onChange={onToggle} disabled={toggleDisabled} />
         </span>
       </div>
@@ -782,22 +814,40 @@ export default function DetectionDetailPanel({
                 >
                   {label}
                 </span>
-                <input
-                  type="range"
-                  className="vq-det-range"
-                  min={0}
-                  max={100}
-                  value={value}
-                  disabled={!model.active || !canEdit}
-                  onChange={(e) => onThresholdChange(key, Number(e.target.value))}
-                  aria-label={`${model.name} ${label}`}
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    background: `linear-gradient(to right, #7c3aed ${value}%, var(--sliderrest, rgba(148,163,184,0.45)) ${value}%)`,
-                    opacity: model.active ? 1 : 0.5,
+                <span
+                  onPointerDownCapture={(event) => {
+                    if (!thresholdsBlockedByInactive && !thresholdsBlockedByAccess) return;
+                    event.preventDefault();
+                    explainThresholdControl('set');
                   }}
-                />
+                  style={{ flex: 1, minWidth: 0, display: 'flex' }}
+                >
+                  <input
+                    type="range"
+                    className="vq-det-range"
+                    min={0}
+                    max={100}
+                    value={value}
+                    disabled={thresholdsBlockedByInactive || thresholdsBlockedByAccess}
+                    onChange={(e) => {
+                      if (explainThresholdControl('set')) return;
+                      onThresholdChange(key, Number(e.target.value));
+                    }}
+                    onKeyDown={(event) => {
+                      if (!thresholdsBlockedByInactive && !thresholdsBlockedByAccess) return;
+                      event.preventDefault();
+                      explainThresholdControl('set');
+                    }}
+                    aria-label={`${model.name} ${label}`}
+                    title={thresholdsBlockedByInactive ? 'Enable this detection to set thresholds' : undefined}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      background: `linear-gradient(to right, #7c3aed ${value}%, var(--sliderrest, rgba(148,163,184,0.45)) ${value}%)`,
+                      opacity: model.active ? 1 : 0.5,
+                    }}
+                  />
+                </span>
                 <span
                   style={{
                     flex: '0 0 auto',
