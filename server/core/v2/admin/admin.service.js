@@ -15,6 +15,7 @@ import users from "./../users/users.model.js"
 import { isAllowedRetentionSpec, RETENTION_OPTION_MONTHS } from "../../../services/retention.service.js";
 import Channel from "../channels/channels.model.js";
 import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
+import AttendanceAutoEmailReport from "../attendanceAutoEmailReport/attendanceAutoEmailReport.model.js";
 
 async function runWithConcurrency(tasks, limit) {
   const executing = new Set();
@@ -895,10 +896,15 @@ class AdminService {
         updatedAdmin.user_id,
         updatedAdmin.timezone,
       );
+      const attendanceReportsUpdate = await AttendanceAutoEmailReport.updateMany(
+        { adminId: updatedAdmin._id },
+        { $set: { timezone: updatedAdmin.timezone, lastRunKey: null } },
+      );
       return res.send(
         Response.userSuccessResp("Timezone updated successfully.", {
           timezone: updatedAdmin.timezone,
           schedulesUpdated,
+          attendanceReportsUpdated: attendanceReportsUpdate.modifiedCount || 0,
         }),
       );
     } catch (error) {
