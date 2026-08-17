@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import moment from 'moment-timezone';
 import {
   Clock3,
   Edit3,
@@ -15,8 +16,11 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useApi } from '../../../hooks/useApi';
+import { usePermissions } from '../../../context/PermissionContext';
 import MultiSelect from '../../../components/MultiSelect';
 import ConfirmationModal from '../../../components/DeleteConfirmation';
+import AccessDenied from '../../../components/AccessDenied';
+import PageLoader from '../../../components/PageLoader';
 import { getRecipients } from '../../../api/administer';
 import { fetchTimezone, getTimezones, updateTimezone } from '../../../helpers/administer';
 import {
@@ -81,12 +85,35 @@ function departmentLabel(department) {
   return department?.name || department?.departmentName || department?.title || 'Unnamed department';
 }
 
-function frequencyLabel(schedule = {}) {
+function scheduleTimezone(timezone) {
+  return timezone && moment.tz.zone(timezone) ? timezone : moment.tz.guess();
+}
+
+function formatCustomDate(value, timezone) {
+  if (!value) return '-';
+  const zone = scheduleTimezone(timezone);
+  const parsed = moment.utc(value).tz(zone);
+  return parsed.isValid() ? parsed.format('D MMM YYYY') : String(value);
+}
+
+function dateInputValue(value, timezone) {
+  if (!value) return '';
+  const zone = scheduleTimezone(timezone);
+  const parsed = moment.utc(value).tz(zone);
+  return parsed.isValid() ? parsed.format('YYYY-MM-DD') : '';
+}
+
+function frequencyLabel(schedule = {}, timezone) {
   const frequency = FREQUENCIES.find((item) => item.value === schedule.frequency)?.label || 'Not set';
-  if (schedule.frequency === 'weekly') return `${frequency}, ${WEEKDAYS[Number(schedule.weekday) || 0]} ${schedule.time || '00:00'}`;
-  if (schedule.frequency === 'monthly') return `${frequency}, day ${schedule.dayOfMonth || 1} ${schedule.time || '00:00'}`;
-  if (schedule.frequency === 'custom') return `${frequency}, ${schedule.startDate || '-'} to ${schedule.endDate || '-'}`;
-  return `${frequency}, ${schedule.time || '00:00'}`;
+  const timeLabel = moment(schedule.time || '00:00', 'HH:mm').format('hh:mm A');
+  if (schedule.frequency === 'daily') return `${frequency}, ${timeLabel}`;
+  if (schedule.frequency === 'weekly') return `${frequency}, ${WEEKDAYS[Number(schedule.weekday) || 0]} ${moment(schedule.time || '00:00', 'HH:mm').format('hh:mm A')}`;
+  if (schedule.frequency === 'monthly') return `${frequency}, day ${schedule.dayOfMonth || 1} ${moment(schedule.time || '00:00', 'HH:mm').format('hh:mm A')}`;
+  if (schedule.frequency === 'custom') {
+    const zone = scheduleTimezone(timezone);
+    return `${formatCustomDate(schedule.startDate, zone)} – ${formatCustomDate(schedule.endDate, zone)}, ${moment(schedule.time || '00:00', 'HH:mm').format('hh:mm A')} (${moment.tz(zone).format('z')})`;
+  }
+  return `${frequency}, ${timeLabel}`;
 }
 
 function recipientsLabel(recipients = []) {
@@ -103,6 +130,7 @@ function formFromReport(report = {}) {
   const schedule = report.schedule || {};
   const target = report.target || {};
   const formats = Array.isArray(report.formats) ? report.formats : [];
+  const timezone = report.timezone;
 
   return {
     title: report.title || '',
@@ -111,8 +139,8 @@ function formFromReport(report = {}) {
     time: schedule.time || '00:00',
     weekday: Number.isInteger(schedule.weekday) ? schedule.weekday : 1,
     dayOfMonth: schedule.dayOfMonth || 1,
-    startDate: schedule.startDate || '',
-    endDate: schedule.endDate || '',
+    startDate: dateInputValue(schedule.startDate, timezone),
+    endDate: dateInputValue(schedule.endDate, timezone),
     scope: target.scope || 'organization',
     employeeIds: (target.employeeIds || []).map(String),
     departmentIds: (target.departmentIds || []).map(String),
@@ -425,11 +453,17 @@ export default function AutoEmailReports() {
   const [preview, setPreview] = useState(null);
   const [busyActionId, setBusyActionId] = useState('');
 
-  const reportsApi = useApi(() => getAutoEmailReports({ page, limit: PAGE_SIZE, search }), [page, search]);
-  const recipientsApi = useApi(() => getRecipients({ alertType: 'email', filterByStatus: 'verified', skip: 0, limit: 100 }), []);
-  const timezoneApi = useApi(() => fetchTimezone(), []);
-  const timezonesApi = useApi(() => getTimezones('asia'), [], { enabled: !timezoneApi.data });
-  const audienceApi = useApi(() => getAttendanceAudienceOptions({ search: '' }), [formOpen], { enabled: formOpen });
+  const { permissions, loading: permissionsLoading } = usePermissions();
+  const canViewReports = permissions?.autoEmailReports?.view === true;
+  const canCreateReports = permissions?.autoEmailReports?.create === true;
+  const canEditReports = permissions?.autoEmailReports?.edit === true;
+  const canDeleteReports = permissions?.autoEmailReports?.delete === true;
+
+  const reportsApi = useApi(() => getAutoEmailReports({ page, limit: PAGE_SIZE, search }), [page, search], { enabled: canViewReports });
+  const recipientsApi = useApi(() => getRecipients({ alertType: 'email', filterByStatus: 'verified', skip: 0, limit: 100 }), [], { enabled: canViewReports });
+  const timezoneApi = useApi(() => fetchTimezone(), [], { enabled: canViewReports });
+  const timezonesApi = useApi(() => getTimezones('asia'), [], { enabled: canViewReports && !timezoneApi.data });
+  const audienceApi = useApi(() => getAttendanceAudienceOptions({ search: '' }), [formOpen], { enabled: formOpen && (canCreateReports || canEditReports) });
 
   const reports = reportsApi.data?.reports || [];
   const total = reportsApi.data?.total || 0;
@@ -440,7 +474,11 @@ export default function AutoEmailReports() {
   const adminTimezone = timezoneApi.data || '';
   const timezones = Array.isArray(timezonesApi.data) ? timezonesApi.data : [];
 
+  if (permissionsLoading) return <PageLoader />;
+  if (!canViewReports) return <AccessDenied message="You don't have permission to view Auto Email Reports." />;
+
   const openCreate = () => {
+    if (!canCreateReports) return;
     setEditingReport(null);
     setEditingBasePayload(null);
     setForm(emptyForm());
@@ -449,6 +487,7 @@ export default function AutoEmailReports() {
   };
 
   const openEdit = async (report) => {
+    if (!canEditReports) return;
     setBusyActionId(`edit:${report._id}`);
     try {
       const detail = await getAutoEmailReport(report._id);
@@ -467,6 +506,7 @@ export default function AutoEmailReports() {
   };
 
   const saveTimezone = async () => {
+    if (!canCreateReports && !canEditReports) return;
     if (!timezoneValue) return;
     setSavingTimezone(true);
     try {
@@ -481,6 +521,7 @@ export default function AutoEmailReports() {
   };
 
   const saveReport = async (payload) => {
+    if (editingReport?._id ? !canEditReports : !canCreateReports) return;
     if (!adminTimezone) {
       toast.error('Timezone setup required.');
       return;
@@ -509,6 +550,7 @@ export default function AutoEmailReports() {
   };
 
   const deleteReport = async () => {
+    if (!canDeleteReports) return;
     if (!deleteTarget?._id) return;
     setDeleting(true);
     try {
@@ -525,6 +567,7 @@ export default function AutoEmailReports() {
   };
 
   const toggleReport = async (report) => {
+    if (!canEditReports) return;
     setBusyActionId(`toggle:${report._id}`);
     try {
       await updateAutoEmailReport(report._id, { enabled: !report.enabled });
@@ -538,6 +581,7 @@ export default function AutoEmailReports() {
   };
 
   const sendNow = async (report) => {
+    if (!canEditReports) return;
     setBusyActionId(`send:${report._id}`);
     try {
       await sendAutoEmailReportNow(report._id);
@@ -550,6 +594,7 @@ export default function AutoEmailReports() {
   };
 
   const previewReport = async (report) => {
+    if (!canViewReports) return;
     setBusyActionId(`preview:${report._id}`);
     try {
       const data = await previewAutoEmailReport(report._id);
@@ -563,7 +608,7 @@ export default function AutoEmailReports() {
 
   const tableRows = useMemo(() => reports.map((report) => ({
     ...report,
-    frequencyLabel: frequencyLabel(report.schedule),
+    frequencyLabel: frequencyLabel(report.schedule, report.timezone || adminTimezone),
     recipientsLabel: recipientsLabel(report.recipients),
     attendanceLabel: formatsLabel(report.formats),
   })), [reports]);
@@ -571,7 +616,11 @@ export default function AutoEmailReports() {
   return (
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
       <div className="vq-auto-report-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <button type="button" onClick={openCreate} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 36, padding: '0 15px', border: 0, borderRadius: 9, background: 'linear-gradient(135deg,var(--blue),var(--violet))', color: '#fff', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, boxShadow: '0 8px 18px rgba(59,130,246,.22)' }}><Plus size={15} /> Create New Report</button>
+        {canCreateReports && (
+          <button type="button" onClick={openCreate} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 36, padding: '0 15px', border: 0, borderRadius: 9, background: 'linear-gradient(135deg,var(--blue),var(--violet))', color: '#fff', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, boxShadow: '0 8px 18px rgba(59,130,246,.22)' }}>
+            <Plus size={15} /> Create New Report
+          </button>
+        )}
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, width: 'min(100%, 330px)', height: 36, padding: '0 11px', border: '1px solid var(--bd)', borderRadius: 9, background: 'var(--bg2)' }}>
           <Search size={14} style={{ color: 'var(--tx3)', flexShrink: 0 }} />
@@ -598,10 +647,16 @@ export default function AutoEmailReports() {
                 <span style={{ color: 'var(--tx2)' }}>{report.attendanceLabel}</span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                   <IconButton title="Preview" busy={busyActionId === `preview:${report._id}`} onClick={() => previewReport(report)}><Eye size={14} /></IconButton>
-                  <IconButton title="Send test mail" busy={busyActionId === `send:${report._id}`} onClick={() => sendNow(report)}><Send size={14} /></IconButton>
-                  <IconButton title={report.enabled ? 'Pause report' : 'Enable report'} busy={busyActionId === `toggle:${report._id}`} onClick={() => toggleReport(report)}>{report.enabled ? <PauseCircle size={14} /> : <PlayCircle size={14} />}</IconButton>
-                  <IconButton title="Edit report" busy={busyActionId === `edit:${report._id}`} onClick={() => openEdit(report)}><Edit3 size={14} /></IconButton>
-                  <button type="button" onClick={() => setDeleteTarget(report)} title="Delete report" aria-label={`Delete ${report.title}`} style={{ ...iconButtonStyle, border: '1px solid rgba(255,77,77,.25)', background: 'rgba(255,77,77,.08)', color: 'var(--crit)' }}><Trash2 size={14} /></button>
+                  {canEditReports && (
+                    <>
+                      <IconButton title="Send test mail" busy={busyActionId === `send:${report._id}`} onClick={() => sendNow(report)}><Send size={14} /></IconButton>
+                      <IconButton title={report.enabled ? 'Pause report' : 'Enable report'} busy={busyActionId === `toggle:${report._id}`} onClick={() => toggleReport(report)}>{report.enabled ? <PauseCircle size={14} /> : <PlayCircle size={14} />}</IconButton>
+                      <IconButton title="Edit report" busy={busyActionId === `edit:${report._id}`} onClick={() => openEdit(report)}><Edit3 size={14} /></IconButton>
+                    </>
+                  )}
+                  {canDeleteReports && (
+                    <button type="button" onClick={() => setDeleteTarget(report)} title="Delete report" aria-label={`Delete ${report.title}`} style={{ ...iconButtonStyle, border: '1px solid rgba(255,77,77,.25)', background: 'rgba(255,77,77,.08)', color: 'var(--crit)', cursor: 'pointer' }}><Trash2 size={14} /></button>
+                  )}
                 </span>
               </div>
             ))}
@@ -640,7 +695,9 @@ export default function AutoEmailReports() {
         />
       )}
       {preview && <PreviewModal preview={preview} onClose={() => setPreview(null)} />}
-      <ConfirmationModal open={!!deleteTarget} title="Delete Attendance Email Report" message={<>Delete <strong>{deleteTarget?.title}</strong>? This action cannot be undone.</>} confirmLabel="Delete" onClose={() => setDeleteTarget(null)} onConfirm={deleteReport} loading={deleting} />
+      {canDeleteReports && (
+        <ConfirmationModal open={!!deleteTarget} title="Delete Attendance Email Report" message={<>Delete <strong>{deleteTarget?.title}</strong>? This action cannot be undone.</>} confirmLabel="Delete" onClose={() => setDeleteTarget(null)} onConfirm={deleteReport} loading={deleting} />
+      )}
     </div>
   );
 }

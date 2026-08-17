@@ -22,7 +22,7 @@ import { getRoles, createRole, renameRole, updateRolePermission, deleteRole, upd
 const PERMISSION_MODULES = [
   'NVR', 'channels', 'LIVE', 'dashboard', 'alerts', 'analytics', 'incidents', 'Users',
   'roles', 'settings', 'departments', 'detectionSettings', 'profiles', 'recipients',
-  'locations', 'playbacks',
+  'locations', 'playbacks', 'autoEmailReports',
 ];
 // Every sub-module the backend seeds under permissionConfig.logs (see
 // server/core/v1/permission/permissions.config.js's completeConfig.logs) —
@@ -53,7 +53,7 @@ const MODULE_LABELS = {
   conveyorLogs: 'Conveyor Logs', vehicleObstructionLogs: 'Vehicle Obstruction Logs',
   vehicleCountLogs: 'Vehicle Count Logs', crusherLogs: 'Crusher Logs',
   lineCrossingLogs: 'Line Crossing Logs', waterSpillLogs: 'Water Spill Logs',
-  unauthorizedAccessLogs: 'Unauthorized Access Logs',
+  unauthorizedAccessLogs: 'Unauthorized Access Logs', autoEmailReports: 'Auto Email Reports',
 };
 
 const LEGACY_SETTINGS_BY_ROLE = {

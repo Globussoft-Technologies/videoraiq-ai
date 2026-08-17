@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import {
   CalendarClock,
   Calendar,
   Clock,
+  CopyPlus,
   Globe,
   Info,
   Plus,
@@ -426,6 +428,122 @@ const TIME_INPUT_STYLE = {
   outline: 'none',
 };
 
+/**
+ * Icon-only trigger that opens a small popover listing days with a time range
+ * to copy from. Replaces a native <select> so the day list can be searched
+ * visually without eating horizontal space next to the ranges.
+ */
+function CopyFromButton({ options, onPick, disabled, title }) {
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+
+  const place = () => {
+    const el = btnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setCoords({ top: r.bottom + 6, left: Math.max(8, r.left) });
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+    place();
+    const onDocClick = (event) => {
+      if (
+        btnRef.current && !btnRef.current.contains(event.target) &&
+        menuRef.current && !menuRef.current.contains(event.target)
+      ) setOpen(false);
+    };
+    const onKey = (event) => event.key === 'Escape' && setOpen(false);
+    window.addEventListener('resize', place);
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('resize', place);
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        ref={btnRef}
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        title={title}
+        style={{
+          display: 'grid',
+          placeItems: 'center',
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          border: `1px solid ${open ? 'var(--blue)' : 'var(--bd)'}`,
+          background: open ? 'rgba(59,130,246,.1)' : 'transparent',
+          color: disabled ? 'var(--tx3)' : open ? 'var(--blue)' : 'var(--tx2)',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.5 : 1,
+        }}
+      >
+        <CopyPlus size={13} />
+      </button>
+
+      {open && !disabled && createPortal(
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            top: coords.top,
+            left: coords.left,
+            minWidth: 150,
+            zIndex: 10000,
+            borderRadius: 10,
+            border: '1px solid var(--bd)',
+            background: 'var(--bg1solid, var(--bg1))',
+            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.18)',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ padding: '7px 10px', fontSize: 10.5, fontWeight: 700, color: 'var(--tx3)', borderBottom: '1px solid var(--bd)' }}>
+            Copy from…
+          </div>
+          <div style={{ maxHeight: 200, overflowY: 'auto', padding: 4 }}>
+            {options.map((sourceDay) => (
+              <button
+                key={sourceDay}
+                type="button"
+                onClick={() => {
+                  onPick(sourceDay);
+                  setOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '7px 9px',
+                  borderRadius: 7,
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--tx)',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg2)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                {titleCase(sourceDay)}
+              </button>
+            ))}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
 export default function GlobalDetectionScheduling({ canEdit = true }) {
   const timezones = useTimezones();
   // Subscribed panel-wide, not per NVR: transitions for any camera are
@@ -572,16 +690,20 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
     }));
   };
 
-  /** Copy Monday's ranges to every other day — the common "office hours" case. */
-  const copyMondayToAll = () => {
+  const copyRangesFromDay = (sourceDay, targetDay) => {
+    if (!sourceDay || sourceDay === targetDay) return;
     setForm((current) => {
-      const monday = current.days?.monday || [];
-      if (!monday.length) return current;
+      const sourceRanges = current.days?.[sourceDay] || [];
+      if (!sourceRanges.length) return current;
       return {
         ...current,
-        days: DAYS.reduce((acc, day) => ({ ...acc, [day]: monday.map((range) => ({ ...range })) }), {}),
+        days: {
+          ...current.days,
+          [targetDay]: sourceRanges.map((range) => ({ ...range })),
+        },
       };
     });
+    toast.success(`${titleCase(sourceDay)} schedule copied to ${titleCase(targetDay)}.`);
   };
 
   const handleSave = async () => {
@@ -916,46 +1038,37 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
                 </div>
               ) : (
                 <div style={{ display: 'grid', gap: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button
-                      type="button"
-                      onClick={copyMondayToAll}
-                      disabled={!canEdit || !(form.days?.monday || []).length}
-                      style={{
-                        border: '1px solid var(--bd)',
-                        background: 'transparent',
-                        color: 'var(--tx2)',
-                        borderRadius: 8,
-                        padding: '5px 10px',
-                        fontSize: 11,
-                        fontWeight: 600,
-                        cursor: (form.days?.monday || []).length && canEdit ? 'pointer' : 'not-allowed',
-                        opacity: (form.days?.monday || []).length && canEdit ? 1 : 0.5,
-                      }}
-                    >
-                      Copy Monday to all days
-                    </button>
-                  </div>
-
                   {DAYS.map((day) => {
                     const ranges = form.days?.[day] || [];
+                    const copyOptions = DAYS.filter((sourceDay) => sourceDay !== day && (form.days?.[sourceDay] || []).length);
                     return (
                       <div
                         key={day}
                         style={{
                           display: 'flex',
                           alignItems: 'flex-start',
-                          gap: 12,
+                          gap: 4,
                           padding: '10px 12px',
                           background: 'var(--bg2)',
                           border: '1px solid var(--bd)',
                           borderRadius: 10,
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 9, width: 130, flexShrink: 0, paddingTop: 3 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 9, width: 100, flexShrink: 0, paddingTop: 3 }}>
                           <Calendar size={14} style={{ color: 'var(--tx3)' }} />
                           <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)' }}>{titleCase(day)}</span>
                         </div>
+
+                        {canEdit && (
+                          <div style={{ paddingTop: 1, marginRight: 10, flexShrink: 0 }}>
+                            <CopyFromButton
+                              options={copyOptions}
+                              disabled={copyOptions.length === 0}
+                              onPick={(sourceDay) => copyRangesFromDay(sourceDay, day)}
+                              title={copyOptions.length ? `Copy another day's schedule to ${titleCase(day)}` : 'No other day has a time range to copy'}
+                            />
+                          </div>
+                        )}
 
                         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
                           {ranges.length === 0 ? (

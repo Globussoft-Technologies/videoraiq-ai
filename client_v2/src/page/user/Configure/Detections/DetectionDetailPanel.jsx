@@ -1,6 +1,6 @@
 import {
   Activity, AlertCircle, Armchair, Box, Briefcase, Calendar, CalendarCheck,
-  Car, CarFront, CircleOff, Clock, Clock3, DoorOpen, Factory, Flame,
+  Car, CarFront, CircleOff, Clock, Clock3, CopyPlus, DoorOpen, Factory, Flame,
   GitCommitHorizontal, Globe, Hammer, HardHat, Lightbulb, ListRestart, Plus,
   ScanFace, ScanLine, ShieldAlert, ShieldOff, Smartphone, Table2, Trash2,
   Users, UtensilsCrossed, Waves, X, ChevronDown,
@@ -64,6 +64,12 @@ const DETECTION_ICONS = {
 
 function detectionIconFor(model, fallbackIcon) {
   return DETECTION_ICONS[model?.settingType || model?.id] || fallbackIcon;
+}
+
+const SCHEDULE_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+function titleCase(value) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function StatBox({ label, value, color = 'var(--tx)' }) {
@@ -490,6 +496,122 @@ function ScheduleFieldDropdown({
 }
 
 /**
+ * Icon-only trigger that opens a small popover listing days with a time range
+ * to copy from. Replaces the native <select> so the day list doesn't compete
+ * for width with the time inputs next to it.
+ */
+function CopyFromButton({ options, onPick, disabled, title }) {
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+
+  const place = () => {
+    const el = btnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setCoords({ top: r.bottom + 6, left: Math.max(8, r.left) });
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+    place();
+    const onDocClick = (event) => {
+      if (
+        btnRef.current && !btnRef.current.contains(event.target) &&
+        menuRef.current && !menuRef.current.contains(event.target)
+      ) setOpen(false);
+    };
+    const onKey = (event) => event.key === 'Escape' && setOpen(false);
+    window.addEventListener('resize', place);
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('resize', place);
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        ref={btnRef}
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        title={title}
+        style={{
+          display: 'grid',
+          placeItems: 'center',
+          width: 32,
+          height: 32,
+          borderRadius: 8,
+          border: `1px solid ${open ? 'var(--violet)' : 'var(--bd)'}`,
+          background: open ? 'color-mix(in srgb, var(--violet) 12%, var(--bg2))' : 'transparent',
+          color: disabled ? 'var(--tx3)' : '#7c3aed',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.55 : 1,
+        }}
+      >
+        <CopyPlus size={15} />
+      </button>
+
+      {open && !disabled && createPortal(
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            top: coords.top,
+            left: coords.left,
+            minWidth: 150,
+            zIndex: 10000,
+            borderRadius: 10,
+            border: '1px solid var(--bd)',
+            background: 'var(--bg1solid)',
+            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.18)',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ padding: '7px 10px', fontSize: 10.5, fontWeight: 700, color: 'var(--tx3)', borderBottom: '1px solid var(--bd)' }}>
+            Copy from…
+          </div>
+          <div style={{ maxHeight: 200, overflowY: 'auto', padding: 4 }}>
+            {options.map((sourceDay) => (
+              <button
+                key={sourceDay}
+                type="button"
+                onClick={() => {
+                  onPick(sourceDay);
+                  setOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '7px 9px',
+                  borderRadius: 7,
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--tx)',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg2)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                {titleCase(sourceDay)}
+              </button>
+            ))}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+/**
  * Detail card for the selected detection: identity + enable toggle, sensitivity
  * slider, the four config stats and the two configure actions.
  *
@@ -654,6 +776,23 @@ export default function DetectionDetailPanel({
       const next = (days[day] || []).map((it, i) => (i === idx ? { ...it, [field]: value } : it));
       return { ...s, days: { ...days, [day]: next } };
     });
+  }
+
+  function copyIntervalFromDay(sourceDay, targetDay) {
+    if (!sourceDay || sourceDay === targetDay) return;
+    setScheduleForm((s) => {
+      const days = ensureDays(s.days);
+      const sourceRanges = days[sourceDay] || [];
+      if (!sourceRanges.length) return s;
+      return {
+        ...s,
+        days: {
+          ...days,
+          [targetDay]: sourceRanges.slice(0, 1).map((range) => ({ ...range })),
+        },
+      };
+    });
+    toast.success(`${titleCase(sourceDay)} schedule copied to ${titleCase(targetDay)}.`);
   }
 
   async function submitSchedule() {
@@ -1113,9 +1252,10 @@ export default function DetectionDetailPanel({
                       </div>
                     </div>
                   ) : (
-                    ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => {
+                    SCHEDULE_DAYS.map((day) => {
                       const ranges = scheduleForm?.days?.[day] || [];
                       const hasRange = ranges.length > 0;
+                      const copyOptions = SCHEDULE_DAYS.filter((sourceDay) => sourceDay !== day && (scheduleForm?.days?.[sourceDay] || []).length);
                       return (
                         <div
                           key={day}
@@ -1146,8 +1286,16 @@ export default function DetectionDetailPanel({
                               <Calendar size={16} />
                             </div>
                             <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--tx)', width: 90, flexShrink: 0 }}>
-                              {day.charAt(0).toUpperCase() + day.slice(1)}
+                              {titleCase(day)}
                             </span>
+                            <div style={{ marginRight: 4 }}>
+                              <CopyFromButton
+                                options={copyOptions}
+                                disabled={scheduleLoading || copyOptions.length === 0}
+                                onPick={(sourceDay) => copyIntervalFromDay(sourceDay, day)}
+                                title={copyOptions.length ? `Copy another day's schedule to ${titleCase(day)}` : 'No other day has a time range to copy'}
+                              />
+                            </div>
                             <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
                               {!hasRange ? (
                                 <span style={{ fontSize: 13, color: 'var(--tx3)' }}>No ranges</span>

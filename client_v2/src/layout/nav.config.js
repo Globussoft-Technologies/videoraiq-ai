@@ -129,7 +129,7 @@ export const NAV_GROUPS = [
     items: [
       // { key: 'engines', label: 'Detection Settings', path: 'engines', icon: SlidersHorizontal, permissionKey: 'detectionSettings' },
       { key: 'recipients', label: 'Alert Recipients', path: 'recipients', icon: Bell, permissionKey: 'recipients' },
-      { key: 'auto-email-reports', label: 'Auto Email Reports', path: 'auto-email-reports', icon: MailPlus },
+      { key: 'auto-email-reports', label: 'Auto Email Reports', path: 'auto-email-reports', icon: MailPlus, permissionKey: 'autoEmailReports' },
     ],
   },
 ];

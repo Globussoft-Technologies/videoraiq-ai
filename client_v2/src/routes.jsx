@@ -111,7 +111,8 @@ export const v2Routes = (
     <Route path="camera-settings" element={<CameraSettings />} />
     {/* <Route path="engines" element={guard('detectionSettings', undefined, <DetectionSettings />)} /> */}
     <Route path="recipients" element={guard('recipients', undefined, <AlertRecipients />)} />
-    <Route path="auto-email-reports" element={<AutoEmailReports />} />
+    <Route path="auto-email-reports" element={guard('autoEmailReports', undefined, <AutoEmailReports />)} />
+  
     {/* Administer */}
     <Route path="users" element={guard('Users', undefined, <UsersPage />)} />
     <Route path="settings" element={guard('settings', undefined, <SystemSettings />)} />
