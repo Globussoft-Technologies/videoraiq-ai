@@ -483,7 +483,11 @@ function scheduleModeFrom(value) {
 
 function thresholdsFromSettings(settingType, baseThresholds, settings) {
   const next = { ...(baseThresholds || {}) };
-  const keys = DETECTION_THRESHOLDS[settingType] || Object.keys(next);
+  const configuredKeys = DETECTION_THRESHOLDS[settingType] || [];
+  const settingsKeys = settings && typeof settings === 'object'
+    ? Object.keys(settings).filter((key) => Object.prototype.hasOwnProperty.call(next, key) || configuredKeys.includes(key))
+    : [];
+  const keys = Array.from(new Set([...configuredKeys, ...Object.keys(next), ...settingsKeys]));
   for (const key of keys) {
     if (settings && Object.prototype.hasOwnProperty.call(settings, key)) {
       next[key] = toPercent(settings[key]) ?? next[key] ?? 70;
@@ -597,9 +601,9 @@ export default function Detections() {
       const setting = settingFromEntry(cameraEntry);
       const uiData = setting?.uiData || {};
       const apiSettings = {
+        ...(setting?.modelThresholds || {}),
         ...(uiData.settings || {}),
         ...(setting?.settings || {}),
-        ...(setting?.modelThresholds || {}),
       };
       const cameraEnabled = typeof cameraEntry === 'object' ? cameraEntry?.enabled : cameraEntry;
       const settingEnabled = setting?.active ?? setting?.enabled;
@@ -852,6 +856,10 @@ export default function Detections() {
               ...currentSetting,
               settings: {
                 ...(currentSetting.settings || {}),
+                [key]: apiValue,
+              },
+              modelThresholds: {
+                ...(currentSetting.modelThresholds || {}),
                 [key]: apiValue,
               },
               uiData: {
