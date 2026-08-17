@@ -14,6 +14,7 @@ export let completeConfig = {
     detectionSettings: { view: false, create: false, edit: false, delete: false },
     profiles: { view: false, create: false, edit: false, delete: false },
     recipients: { view: false, create: false, edit: false, delete: false },
+    autoEmailReports: { view: false, create: false, edit: false, delete: false },
     logs: {
         global: { view: false, create: false, edit: false, delete: false },
         accessLogs: { view: false, create: false, edit: false, delete: false },
@@ -56,6 +57,7 @@ export let adminConfig = {
     recipients: { view: true, create: true, edit: true, delete: true },
     profiles: { view: true, create: true, edit: true, delete: true },
     detectionSettings: { view: true, create: true, edit: true, delete: true },
+    autoEmailReports: { view: true, create: true, edit: true, delete: true },
     logs: {
         global: { view: true, create: true, edit: true, delete: true },
         accessLogs: { view: true, create: true, edit: true, delete: true },
@@ -98,6 +100,7 @@ export let readConfig = {
     detectionSettings: { view: true, create: false, edit: false, delete: false },
     profiles: { view: true, create: false, edit: false, delete: false },
     recipients: { view: true, create: false, edit: false, delete: false },
+    autoEmailReports: { view: true, create: false, edit: false, delete: false },
     logs: {
         global: { view: true, create: false, edit: false, delete: false },
         accessLogs: { view: true, create: false, edit: false, delete: false },
@@ -140,6 +143,7 @@ export let writeConfig = {
     detectionSettings: { view: true, create: true, edit: true, delete: false },
     profiles: { view: true, create: true, edit: true, delete: false },
     recipients: { view: true, create: true, edit: true, delete: false },
+    autoEmailReports: { view: true, create: true, edit: true, delete: false },
     logs: {
         global: { view: true, create: true, edit: true, delete: false },
         accessLogs: { view: true, create: true, edit: true, delete: false },

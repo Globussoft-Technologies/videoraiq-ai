@@ -40,7 +40,7 @@ const viewPathMap = [
     { path: '/roles', module: 'roles' },
     { path: '/recipients', module: 'recipients' },
     { path: '/attendance', module: 'logs' },
-    { path: '/attendance-auto-email-reports', module: 'logs' },
+    { path: '/attendance-auto-email-reports', module: 'autoEmailReports' },
     { path: '/accessLogs', module: 'logs' },
     { path: '/entry', module: 'logs' },
     { path: '/vehicle', module: 'logs' },
@@ -64,7 +64,7 @@ const createPathMap = [
     { path: '/roles', module: 'roles' },
     { path: '/recipients', module: 'recipients' },
     { path: '/shifts', module: 'shifts' },
-    { path: '/attendance-auto-email-reports', module: 'logs' },
+    { path: '/attendance-auto-email-reports', module: 'autoEmailReports' },
     { path: '/faceImages', module: 'Users' },
   ]),
 ];
@@ -86,7 +86,7 @@ const editPathMap = [
     { path: '/roles', module: 'roles' },
     { path: '/recipients', module: 'recipients' },
     { path: '/shifts', module: 'shifts' },
-    { path: '/attendance-auto-email-reports', module: 'logs' },
+    { path: '/attendance-auto-email-reports', module: 'autoEmailReports' },
     { path: '/faceImages', module: 'Users' },
   ]),
 ];
@@ -109,7 +109,7 @@ const deletePathMap = [
     { path: '/roles', module: 'roles' },
     { path: '/recipients', module: 'recipients' },
     { path: '/shifts', module: 'shifts' },
-    { path: '/attendance-auto-email-reports', module: 'logs' },
+    { path: '/attendance-auto-email-reports', module: 'autoEmailReports' },
     { path: '/faceImages', module: 'Users' },
   ]),
 ];

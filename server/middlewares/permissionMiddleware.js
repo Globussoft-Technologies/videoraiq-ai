@@ -2,6 +2,10 @@ import Response from '../utils/response.js';
 import { PermissionMiddlewareMessage } from '../language/language.translator.js';
 import { viewPermissionConfigChecker, createPermissionConfigChecker, editPermissionConfigChecker, deletePermissionConfigChecker } from './permissionConfigChecker.js';
 
+const permissionRow = (permissionConfig = {}, pathCheck = '') => (
+    pathCheck.split('.').reduce((current, key) => current?.[key], permissionConfig)
+);
+
 async function viewAccessCheck(req, res, next) {
     try {
         const result = req.verified;
@@ -31,7 +35,7 @@ async function createAccessCheck(req, res, next) {
             let pathCheck = createPermissionConfigChecker(mainPath);
             const roleWithPermission = req.verified.permissionConfig;
             const permissionConfig = roleWithPermission[0]?.permissionConfig;
-            if (!pathCheck || !permissionConfig[pathCheck]?.create) {
+            if (!pathCheck || !permissionRow(permissionConfig, pathCheck)?.create) {
                 return res.status(400).send(Response.accessDeniedResp(`${PermissionMiddlewareMessage['CREATE_ACCESS_DENIED']['en']} ${pathCheck} module ⚠️.`));
             }
         }
@@ -48,7 +52,7 @@ async function editAccessCheck(req, res, next) {
             let pathCheck = editPermissionConfigChecker(mainPath);
             const roleWithPermission = req.verified.permissionConfig;
             const permissionConfig = roleWithPermission[0]?.permissionConfig;
-            if (!pathCheck || !permissionConfig[pathCheck]?.edit) {
+            if (!pathCheck || !permissionRow(permissionConfig, pathCheck)?.edit) {
                 return res.status(400).send(Response.accessDeniedResp(`${PermissionMiddlewareMessage['EDIT_ACCESS_DENIED']['en']} ${pathCheck} module ⚠️.`));
             }
         }
@@ -66,7 +70,7 @@ async function deleteAccessCheck(req, res, next) {
             let pathCheck = deletePermissionConfigChecker(mainPath);
             const roleWithPermission = req.verified.permissionConfig;
             const permissionConfig = roleWithPermission[0]?.permissionConfig;
-            if (!pathCheck || !permissionConfig[pathCheck]?.delete) {
+            if (!pathCheck || !permissionRow(permissionConfig, pathCheck)?.delete) {
                 return res.status(400).send(Response.accessDeniedResp(`${PermissionMiddlewareMessage['DELETE_ACCESS_DENIED']['en']} ${pathCheck} module ⚠️.`));
             }
         }
