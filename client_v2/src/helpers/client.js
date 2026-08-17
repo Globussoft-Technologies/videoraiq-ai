@@ -33,4 +33,12 @@ export function unwrap(res) {
   return body;
 }
 
+/** Like `unwrap`, but also keeps the backend's `message` alongside the data. */
+export function unwrapWithMessage(res) {
+  const body = res?.data?.body;
+  if (body == null) return { data: res?.data, message: undefined };
+  if (Object.prototype.hasOwnProperty.call(body, 'data')) return { data: body.data, message: body.message };
+  return { data: body, message: body.message };
+}
+
 export default api;

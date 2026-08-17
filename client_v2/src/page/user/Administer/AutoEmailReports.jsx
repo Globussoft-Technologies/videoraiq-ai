@@ -151,7 +151,7 @@ function formFromReport(report = {}) {
   };
 }
 
-function buildPayload(form, { includeSendTestMail = true } = {}) {
+function buildPayload(form) {
   const schedule = {
     frequency: form.frequency,
     time: form.time || '00:00',
@@ -174,8 +174,8 @@ function buildPayload(form, { includeSendTestMail = true } = {}) {
     target,
     formats: [form.pdf && 'pdf', form.csv && 'csv'].filter(Boolean),
     enabled: form.enabled,
+    sendTestMail: Boolean(form.sendTestMail),
   };
-  if (includeSendTestMail) payload.sendTestMail = Boolean(form.sendTestMail);
   return payload;
 }
 
@@ -385,19 +385,17 @@ function ReportFormModal({
                 <input type="checkbox" checked={form.enabled} onChange={(event) => setForm((current) => ({ ...current, enabled: event.target.checked }))} />
                 Enabled
               </label>
-              {!report && (
-                <label style={checkboxRowStyle}>
-                  <input type="checkbox" checked={form.sendTestMail} onChange={(event) => setForm((current) => ({ ...current, sendTestMail: event.target.checked }))} />
-                  Send Test Mail
-                </label>
-              )}
+              <label style={checkboxRowStyle}>
+                <input type="checkbox" checked={form.sendTestMail} onChange={(event) => setForm((current) => ({ ...current, sendTestMail: event.target.checked }))} />
+                Send Test Mail
+              </label>
             </div>
           </Section>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 9, padding: '13px 18px', borderTop: '1px solid var(--bd)', background: 'var(--bg1)' }}>
           <button type="button" onClick={onClose} style={{ minHeight: 36, padding: '0 14px', border: '1px solid var(--bd)', borderRadius: 8, background: 'var(--bg2)', color: 'var(--tx2)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>Cancel</button>
-          <button type="button" disabled={!canSave || saving} onClick={() => onSave(buildPayload(form, { includeSendTestMail: !report }))} style={{ minHeight: 36, padding: '0 16px', border: 0, borderRadius: 8, background: canSave && !saving ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg3)', color: canSave && !saving ? '#fff' : 'var(--tx3)', cursor: canSave && !saving ? 'pointer' : 'not-allowed', fontSize: 12.5, fontWeight: 700 }}>{saving ? 'Saving...' : report ? 'Update Report' : 'Save Report'}</button>
+          <button type="button" disabled={!canSave || saving} onClick={() => onSave(buildPayload(form))} style={{ minHeight: 36, padding: '0 16px', border: 0, borderRadius: 8, background: canSave && !saving ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg3)', color: canSave && !saving ? '#fff' : 'var(--tx3)', cursor: canSave && !saving ? 'pointer' : 'not-allowed', fontSize: 12.5, fontWeight: 700 }}>{saving ? 'Saving...' : report ? 'Update Report' : 'Save Report'}</button>
         </div>
       </div>
     </div>
@@ -494,7 +492,7 @@ export default function AutoEmailReports() {
       const hydratedReport = detail?.report || detail;
       const nextForm = formFromReport(hydratedReport);
       setEditingReport(hydratedReport);
-      setEditingBasePayload(buildPayload(nextForm, { includeSendTestMail: false }));
+      setEditingBasePayload(buildPayload(nextForm));
       setForm(nextForm);
       setTimezoneValue('');
       setFormOpen(true);
@@ -528,6 +526,7 @@ export default function AutoEmailReports() {
     }
     setSaving(true);
     try {
+      let result;
       if (editingReport?._id) {
         const changes = diffPayload(editingBasePayload, payload);
         if (!Object.keys(changes).length) {
@@ -535,11 +534,15 @@ export default function AutoEmailReports() {
           setSaving(false);
           return;
         }
-        await updateAutoEmailReport(editingReport._id, changes);
+        result = await updateAutoEmailReport(editingReport._id, changes);
       } else {
-        await createAutoEmailReport(payload);
+        result = await createAutoEmailReport(payload);
       }
-      toast.success(editingReport ? 'Attendance email report updated.' : 'Attendance email report created.');
+      if (result?.data?.testMailError) {
+        toast.warning(result.message);
+      } else {
+        toast.success(result?.message);
+      }
       setFormOpen(false);
       await reportsApi.refetch();
     } catch (error) {

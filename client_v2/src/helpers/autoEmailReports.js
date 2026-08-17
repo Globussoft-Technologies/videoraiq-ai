@@ -1,4 +1,4 @@
-import api, { unwrap } from './client';
+import api, { unwrap, unwrapWithMessage } from './client';
 
 const BASE = '/attendance-auto-email-reports';
 
@@ -23,12 +23,12 @@ export async function getAutoEmailReport(id) {
 
 export async function createAutoEmailReport(payload) {
   const res = await api.post(BASE, payload);
-  return unwrap(res);
+  return unwrapWithMessage(res);
 }
 
 export async function updateAutoEmailReport(id, payload) {
   const res = await api.put(`${BASE}/${id}`, payload);
-  return unwrap(res);
+  return unwrapWithMessage(res);
 }
 
 export async function deleteAutoEmailReport(id) {
