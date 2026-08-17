@@ -29,7 +29,11 @@ function adminIdFrom(req) {
 
 function validTimezone(value) {
   try {
-    return Intl.DateTimeFormat("en-US", { timeZone: value }).resolvedOptions().timeZone;
+    // Intl resolves to its own canonical alias (e.g. Asia/Kolkata -> Asia/Calcutta),
+    // which reads oddly to admins who picked the modern name. Keep the value they
+    // selected as long as it's a recognised zone.
+    Intl.DateTimeFormat("en-US", { timeZone: value }).resolvedOptions().timeZone;
+    return value;
   } catch {
     return null;
   }
@@ -141,7 +145,7 @@ async function reportRows(report, reference) {
     query.employee = { $in: employees };
   }
 
-  const [attendance, settings] = await Promise.all([
+  const [attendanceRaw, settings] = await Promise.all([
     Attendance.find(query)
       .populate({ path: "employee", populate: { path: "departmentId", select: "departmentName" } })
       .populate({ path: "events.channel", select: "name customName" })
@@ -149,6 +153,14 @@ async function reportRows(report, reference) {
       .lean(),
     AttendanceSettings.findOne({ adminId: report.adminId }).lean(),
   ]);
+
+  // The Attendance Logs UI joins employee via an aggregation $lookup +
+  // $unwind (no preserveNullAndEmptyArrays), which drops any record whose
+  // employee reference doesn't resolve — e.g. a deleted employee, or an
+  // unauthorized/unrecognised detection with no linked employee. .populate()
+  // instead leaves `employee` null for those, so without this filter the
+  // exported report includes "Unknown employee" rows the UI never shows.
+  const attendance = attendanceRaw.filter((item) => item.employee);
 
   const rules = { fullDayHours: settings?.fullDayHours || 8, halfDayHours: settings?.halfDayHours || 4 };
   const rows = attendance.map((item) => {
@@ -201,7 +213,7 @@ function buildCsv({ report, rows, label, timezone }) {
 async function buildPdf({ report, rows, label, timezone }) {
   const logo = await logoBuffer();
   return new Promise((resolve, reject) => {
-    const document = new PDFDocument({ size: "A2", layout: "landscape", margin: 32 });
+    const document = new PDFDocument({ size: "A3", layout: "landscape", margin: 32 });
     const chunks = [];
     document.on("data", (chunk) => chunks.push(chunk));
     document.on("error", reject);
@@ -209,45 +221,47 @@ async function buildPdf({ report, rows, label, timezone }) {
 
     const pageWidth = document.page.width - 64;
     const columns = [
-      ["Date", 76], ["Employee", 130], ["Department", 96], ["Email", 155], ["Location", 74],
-      ["Check-in", 112], ["Check-out", 112], ["Duration", 56], ["Status", 70], ["Cameras", 145],
+      ["Date", 82], ["Employee", 144], ["Department", 104], ["Email", 170], ["Location", 80],
+      ["Check-in", 122], ["Check-out", 122], ["Duration", 62], ["Status", 77], ["Cameras", 158],
     ];
     const drawHeader = () => {
+      const titleBlockWidth = 300;
+      const purpleX = document.page.width - titleBlockWidth;
       document.rect(0, 0, document.page.width, 102).fill(V2_BLUE);
-      document.rect(document.page.width * 0.56, 0, document.page.width * 0.44, 102).fill(V2_PURPLE);
+      document.rect(purpleX, 0, titleBlockWidth, 102).fill(V2_PURPLE);
       if (logo) document.image(logo, 36, 25, { fit: [145, 48] });
-      document.fillColor("#ffffff").font("Helvetica-Bold").fontSize(22).text("Attendance Report", 0, 29, { width: document.page.width - 42, align: "right" });
-      document.font("Helvetica").fontSize(10).text(report.title, 0, 58, { width: document.page.width - 42, align: "right" });
+      document.fillColor("#ffffff").font("Helvetica-Bold").fontSize(20).text("Attendance Report", purpleX, 29, { width: titleBlockWidth - 32, align: "right" });
+      document.font("Helvetica").fontSize(9).text(report.title, purpleX, 57, { width: titleBlockWidth - 32, align: "right" });
       document.fillColor("#273657").font("Helvetica-Bold").fontSize(13).text(label, 32, 122);
       document.font("Helvetica").fontSize(9).fillColor("#61708f").text(`Timezone: ${timezone}  •  ${rows.length} attendance record${rows.length === 1 ? "" : "s"}`, 32, 142);
     };
     const drawTableHeader = (y) => {
       let x = 32;
-      document.fillColor("#eef5ff").rect(x, y, pageWidth, 23).fill();
-      document.fillColor("#173b83").font("Helvetica-Bold").fontSize(7.5);
+      document.fillColor("#eef5ff").rect(x, y, pageWidth, 30).fill();
+      document.fillColor("#173b83").font("Helvetica-Bold").fontSize(10.5);
       for (const [heading, width] of columns) {
-        document.text(heading, x + 4, y + 7, { width: width - 8, ellipsis: true });
+        document.text(heading, x + 6, y + 10, { width: width - 12, ellipsis: true });
         x += width;
       }
-      return y + 23;
+      return y + 30;
     };
     const rowValues = (row) => [row.date, `${row.employee}\n#${row.employeeId} • ${row.designation}`, row.department, `${row.email}\n${row.phone}`, row.location, row.checkIn, row.checkOut, row.duration, row.status, `${row.checkInCamera}\n${row.checkOutCamera}`];
 
     drawHeader();
     let y = drawTableHeader(165);
     for (const [index, row] of rows.entries()) {
-      const height = 30;
+      const height = 42;
       if (y + height > document.page.height - 40) {
-        document.addPage({ size: "A2", layout: "landscape", margin: 32 });
+        document.addPage({ size: "A3", layout: "landscape", margin: 32 });
         drawHeader();
         y = drawTableHeader(165);
       }
       if (index % 2 === 0) document.fillColor("#f9fbff").rect(32, y, pageWidth, height).fill();
       let x = 32;
-      document.font("Helvetica").fontSize(7).fillColor("#2e3b55");
+      document.font("Helvetica").fontSize(10).fillColor("#2e3b55");
       rowValues(row).forEach((value, columnIndex) => {
         const width = columns[columnIndex][1];
-        document.text(value, x + 4, y + 7, { width: width - 8, height: 18, ellipsis: true, lineBreak: false });
+        document.text(value, x + 6, y + 9, { width: width - 12, height: 26, ellipsis: true, lineBreak: true });
         x += width;
       });
       document.strokeColor("#e6ecf7").lineWidth(0.4).moveTo(32, y + height).lineTo(32 + pageWidth, y + height).stroke();
@@ -326,8 +340,19 @@ class AttendanceAutoEmailReportService {
       data.timezone = timezone;
       data.schedule = normalizeSchedule(data.schedule, timezone);
       const report = await Report.create({ ...data, adminId, createdBy: req.verified?.userData?.memberId || null });
-      if (sendTestMail) await deliver(report);
-      return res.status(201).json(Response.userSuccessResp("Attendance auto email report created", report));
+      let testMailError = null;
+      if (sendTestMail) {
+        try {
+          await deliver(report);
+        } catch (deliverError) {
+          logger.error(`[ATTENDANCE_AUTO_EMAIL_REPORT] Test mail failed after create: ${deliverError.message}`);
+          testMailError = deliverError.message;
+        }
+      }
+      const message = testMailError
+        ? "Attendance auto email report created, but the test mail failed to send"
+        : "Attendance auto email report created";
+      return res.status(201).json(Response.userSuccessResp(message, { ...report.toObject(), testMailError }));
     } catch (error) {
       if (error?.code === 11000) return res.status(409).json(Response.validationFailResp("A report with this title already exists"));
       logger.error(`[ATTENDANCE_AUTO_EMAIL_REPORT] Create failed: ${error.message}`);
@@ -397,10 +422,23 @@ class AttendanceAutoEmailReportService {
       if (!current) return res.status(404).json(Response.notFoundResp("Attendance auto email report not found"));
       const timezone = await savedAdminTimezone(adminIdFrom(req));
       if (!timezone) return res.status(400).json(Response.validationFailResp("Timezone setup required", "Select and save the organisation timezone through PUT /api/v2/admin/timezone before saving an attendance auto email report."));
-      if (value.schedule) value.schedule = normalizeSchedule(value.schedule, timezone);
-      Object.assign(current, value, { timezone, lastRunKey: null });
+      const { sendTestMail, ...data } = value;
+      if (data.schedule) data.schedule = normalizeSchedule(data.schedule, timezone);
+      Object.assign(current, data, { timezone, lastRunKey: null });
       await current.save();
-      return res.json(Response.userSuccessResp("Attendance auto email report updated", current));
+      let testMailError = null;
+      if (sendTestMail) {
+        try {
+          await deliver(current);
+        } catch (deliverError) {
+          logger.error(`[ATTENDANCE_AUTO_EMAIL_REPORT] Test mail failed after update: ${deliverError.message}`);
+          testMailError = deliverError.message;
+        }
+      }
+      const message = testMailError
+        ? "Attendance auto email report updated, but the test mail failed to send"
+        : "Attendance auto email report updated";
+      return res.json(Response.userSuccessResp(message, { ...current.toObject(), testMailError }));
     } catch (error) {
       if (error?.code === 11000) return res.status(409).json(Response.validationFailResp("A report with this title already exists"));
       return res.status(400).json(Response.validationFailResp("Failed to update attendance auto email report", error.message));

@@ -54,4 +54,5 @@ export const updateReportSchema = Joi.object({
   target,
   formats: Joi.array().items(Joi.string().valid("pdf", "csv")).min(1).unique(),
   enabled: Joi.boolean(),
+  sendTestMail: Joi.boolean(),
 }).min(1);
