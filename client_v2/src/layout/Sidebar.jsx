@@ -56,7 +56,11 @@ function isItemVisible(item, permissions) {
   if (!item.permissionKey) return true;
   if (!permissions || Object.keys(permissions).length === 0) return true;
   if (item.permissionSubKey) {
-    return permissions?.[item.permissionKey]?.[item.permissionSubKey]?.view === true;
+    const module = permissions?.[item.permissionKey];
+    if (module?.[item.permissionSubKey]?.view === true) return true;
+    if (module?.global?.view === true) return true;
+    if (module?.view === true) return true;
+    return false;
   }
   return permissions?.[item.permissionKey]?.view === true;
 }
