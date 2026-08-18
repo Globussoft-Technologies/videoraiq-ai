@@ -171,10 +171,11 @@ function detectionSettingRecord(entry) {
 
 function isDetectionEnabled(entry) {
   if (entry === true) return true;
+  if (!entry || typeof entry !== 'object') return false;
+
   const setting = detectionSettingRecord(entry);
-  if (setting?.enabled === true) return true;
-  if (entry?.enabled === true && setting?.enabled !== false) return true;
-  return false;
+  if (setting?.enabled === false || setting?.active === false) return false;
+  return entry.enabled === true;
 }
 
 function enabledEnginesFor(channel) {
