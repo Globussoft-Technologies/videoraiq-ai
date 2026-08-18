@@ -17,6 +17,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const h = vi.hoisted(() => ({
   nvrFindOne: null,
   channelFind: null,
+  channelCountDocuments: null,
   gsFind: null,
   gsFindOne: null,
   gsCreate: null,
@@ -43,7 +44,10 @@ vi.mock("../../../core/v2/globalSchedule/globalSchedule.model.js", () => ({
 }));
 
 vi.mock("../../../core/v2/channels/channels.model.js", () => ({
-  default: { find: (...args) => h.channelFind(...args) },
+  default: {
+    find: (...args) => h.channelFind(...args),
+    countDocuments: (...args) => h.channelCountDocuments(...args),
+  },
 }));
 
 vi.mock("../../../core/v2/NVR/nvr.model.js", () => ({
@@ -182,6 +186,7 @@ beforeEach(() => {
     chain(_id === NVR_ID && userId === ADMIN ? nvrDoc : null),
   );
   h.channelFind = vi.fn(() => chain([]));
+  h.channelCountDocuments = vi.fn(async () => 0);
   h.gsFind = vi.fn(() => chain([]));
   h.gsFindOne = vi.fn(() => chain(null));
   h.gsCreate = vi.fn(async (doc) => ({ _id: SCHEDULE_ID, ...doc }));
@@ -190,6 +195,7 @@ beforeEach(() => {
 
 describe("getNvrCameras — Tab 1 of the UI", () => {
   it("splits cameras into configured and non-configured", async () => {
+    h.channelCountDocuments = vi.fn(async () => 3);
     h.channelFind = vi.fn(() =>
       chain([
         configuredChannel(CAM_CONFIGURED, "Camera 01"),
@@ -206,6 +212,28 @@ describe("getNvrCameras — Tab 1 of the UI", () => {
     expect(data.nvr).toMatchObject({ nvrName: "NVR-01", cameraCount: 3 });
     expect(data.configuredCameras.map((c) => c.name)).toEqual(["Camera 01", "Camera 02"]);
     expect(data.nonConfiguredCameras.map((c) => c.name)).toEqual(["Camera 05"]);
+  });
+
+  it("passes camera search through to the backend channel query", async () => {
+    h.channelCountDocuments = vi.fn(async () => 3);
+    h.channelFind = vi.fn(() => chain([configuredChannel(CAM_CONFIGURED, "Entrance")]));
+
+    const res = makeRes();
+    await service.getNvrCameras(makeReq({ params: { nvrId: NVR_ID }, query: { search: "cam-02" } }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(h.channelCountDocuments).toHaveBeenCalledWith({ nvrId: NVR_ID, userId: ADMIN });
+    expect(h.channelFind).toHaveBeenCalledWith({
+      nvrId: NVR_ID,
+      userId: ADMIN,
+      $or: [
+        { name: expect.any(RegExp) },
+        { customName: expect.any(RegExp) },
+        { channelId: expect.any(RegExp) },
+        { localChannelId: expect.any(RegExp) },
+      ],
+    });
+    expect(h.channelFind.mock.calls[0][0].$or[0].name.test("CAM-02")).toBe(true);
   });
 
   it("reports which detectors a configured camera has, and their live state", async () => {

@@ -62,6 +62,8 @@ const appliedDetectors = (channel) =>
 const isConfiguredForDetection = (channel) =>
   DETECTOR_TYPES.some((settingType) => isDetectorApplied(channel, settingType));
 
+const escapeRegex = (value = "") => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const toCameraSummary = (channel) => ({
   channelId: channel._id,
   name: channel.customName || channel.name,
@@ -140,13 +142,27 @@ class GlobalScheduleService {
     try {
       const user_id = req?.verified?.userData?.user_id;
       const { nvrId } = req.params;
+      const search = String(req.query?.search || "").trim();
 
       const nvr = await findOwnedNvr(nvrId, user_id);
       if (!nvr) {
         return res.status(404).json(Response.userFailResp("NVR not found"));
       }
 
-      const channels = await Channel.find({ nvrId, userId: user_id })
+      const baseFilter = { nvrId, userId: user_id };
+      const totalCameraCount = await Channel.countDocuments(baseFilter);
+      const channelFilter = { ...baseFilter };
+      if (search) {
+        const regex = new RegExp(escapeRegex(search), "i");
+        channelFilter.$or = [
+          { name: regex },
+          { customName: regex },
+          { channelId: regex },
+          { localChannelId: regex },
+        ];
+      }
+
+      const channels = await Channel.find(channelFilter)
         .populate(toPopulateDetections)
         .lean();
 
@@ -180,7 +196,7 @@ class GlobalScheduleService {
             nvrName: nvr.nvrName,
             brand: nvr.brand,
             location: nvr.location,
-            cameraCount: channels.length,
+            cameraCount: totalCameraCount,
           },
           configuredCameras: configured,
           nonConfiguredCameras: nonConfigured,
