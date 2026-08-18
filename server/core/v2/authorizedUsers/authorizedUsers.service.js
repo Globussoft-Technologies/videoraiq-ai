@@ -1524,6 +1524,43 @@ async bulkImportAuthUser(req, res, next) {
     }
   }
 
+  async updateUserStatus(req, res, _next) {
+    try {
+      const data = req?.verified?.userData;
+      const { userId } = req.query;
+      const { status } = req.body;
+
+      if (!userId) {
+        return res.status(400).json(Response.userFailResp("Missing userId in query", "Validation Failed!"));
+      }
+      if (!['active', 'suspended'].includes(status)) {
+        return res.status(400).json(Response.userFailResp("status must be 'active' or 'suspended'", "Validation Failed!"));
+      }
+
+      const isAdminExist = await this.resolveAdminFromVerifiedUser(data);
+      if (!isAdminExist) {
+        return res.status(404).json(Response.userFailResp("Admin not found!", "Validation Failed!"));
+      }
+
+      const updatedUser = await authorizedUsersModel.findOneAndUpdate(
+        { _id: userId, adminId: isAdminExist._id },
+        { status },
+        { new: true },
+      );
+      if (!updatedUser) {
+        return res.status(404).json(Response.userFailResp("Authorized user not found", "Validation Failed!"));
+      }
+
+      return res.status(200).json(Response.userSuccessResp(
+        `Authorized user ${status === 'suspended' ? 'suspended' : 'reactivated'} successfully`,
+        updatedUser,
+      ));
+    } catch (error) {
+      logger.error(error);
+      return res.status(500).json(Response.errorResp("Failed to update authorized user status.", error.message));
+    }
+  }
+
 }
 
 

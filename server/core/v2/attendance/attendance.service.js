@@ -173,6 +173,7 @@ class AttendanceService {
 
     const rosterQuery = {
       adminId: asObjectId(adminId),
+      status: { $ne: 'suspended' },
     };
 
     const locationMatch = buildLocationMatch(employeeLocations);
@@ -796,7 +797,8 @@ class AttendanceService {
       if (locationMatch) {
         fetchAllEmployeeswithAuthorizedLocations = await authorizedUsersModel.find({
           location: locationMatch,
-          adminId: new mongoose.Types.ObjectId(adminId)
+          adminId: new mongoose.Types.ObjectId(adminId),
+          status: { $ne: 'suspended' }
         }).distinct("_id");
       }
 

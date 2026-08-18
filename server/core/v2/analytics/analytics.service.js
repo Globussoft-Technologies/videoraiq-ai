@@ -354,7 +354,7 @@ class AnalyticsService {
     //                 employee from another department is still authorized, so
     //                 classifying access against the department-scoped set
     //                 would brand them unauthorized.
-    const roster = await AuthorizedUser.find({ adminId })
+    const roster = await AuthorizedUser.find({ adminId, status: { $ne: 'suspended' } })
       .setOptions({ memberId: data.memberId })
       .select("_id departmentId location")
       .lean();

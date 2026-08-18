@@ -78,6 +78,11 @@ const authorizedUsersSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  status: {
+    type: String,
+    enum: ['active', 'suspended'],
+    default: 'active',
+  },
   profilePics: {
     type: [String],
     default: [],
@@ -110,6 +115,7 @@ authorizedUsersSchema.index(
   { adminId: 1, email: 1 },
   { unique: true }
 );
+authorizedUsersSchema.index({ adminId: 1, status: 1 });
 
 // Encrypt password before save
 authorizedUsersSchema.pre("save", function (next) {

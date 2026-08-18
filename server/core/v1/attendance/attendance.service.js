@@ -317,7 +317,8 @@ class AttendanceService {
       if(employeeLocations?.length){
         fetchAllEmployeeswithAuthorizedLocations = await authorizedUsersModel.find({
           location: { $in: employeeLocations },
-          adminId: new mongoose.Types.ObjectId(adminId)
+          adminId: new mongoose.Types.ObjectId(adminId),
+          status: { $ne: 'suspended' }
         }).distinct("_id");
       }
 

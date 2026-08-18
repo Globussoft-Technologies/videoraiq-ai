@@ -365,6 +365,31 @@ class AuthUserController {
     return authorizedUsersService.clearAutoTaggedAccessLogs(req, res, next);
   }
 
+  async updateUserStatus(req, res, next) {
+    /*
+    #swagger.tags = ['AuthorizedUsers']
+    #swagger.description = 'Set an authorized user\'s account status to active or suspended.'
+    #swagger.parameters['userId'] = {
+      in: 'query',
+      description: 'Authorized user _id to update',
+      required: true,
+      type: 'string',
+    }
+    #swagger.parameters['data'] = {
+      in: 'body',
+      required: true,
+      schema: {
+        status: 'suspended'
+      }
+    }
+    #swagger.responses[200] = { description: 'Authorized user status updated successfully' }
+    #swagger.responses[400] = { description: 'Validation error - missing userId or invalid status' }
+    #swagger.responses[404] = { description: 'Admin or authorized user not found' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return authorizedUsersService.updateUserStatus(req, res, next);
+  }
+
   async verifyUser(req,res,next){
     /* 
     #swagger.tags = ['AuthorizedUsers']

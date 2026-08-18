@@ -123,7 +123,10 @@ class RolesServices{
                 if (role) {
                     // const rolesDetails = await roleModel.findOne({ roleName: role });
                     const rolesDetails = await rolesModel.find({ roleName: { $regex: role, $options: 'i' } }).select('-createdBy');
-                    const assignedRole = await userModel.aggregate([{ $match: { $and: [{ role: role }] } }, {
+                    // NOTE: `role` doesn't exist on the authorizedUsers schema — this match is
+                    // currently always empty (pre-existing, unrelated to suspension). `status`
+                    // filter added defensively for when that's fixed.
+                    const assignedRole = await userModel.aggregate([{ $match: { $and: [{ role: role }, { status: { $ne: 'suspended' } }] } }, {
                         $project: userObj
                     },
                     ]);
@@ -160,7 +163,9 @@ class RolesServices{
                 let data = await Promise.all(
                     rolesData.map(async item => {
                         let temp = item.toJSON()
-                        let assignedRole = await userModel.aggregate([{ $match:  {roleId: temp?._id}},
+                        // NOTE: `roleId` doesn't exist on the authorizedUsers schema — see the
+                        // matching note above. `status` filter added defensively.
+                        let assignedRole = await userModel.aggregate([{ $match:  {roleId: temp?._id, status: { $ne: 'suspended' }}},
                         {
                             $project: userObj
                         },
