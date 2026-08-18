@@ -100,7 +100,7 @@ const modelMap = {
   tableOccupancyDetectionSettings: TableOccupancyDetectionSetting,
   mobilePhoneDetectionSettings: MobilePhoneDetectionSetting,
   foodServicePPEDetectionSettings: FoodServicePPEDetectionSetting,
-  carModelDetectionSchemaSettings: carModelDetectionSchemaSetting,
+  carModelDetectionSettings: carModelDetectionSchemaSetting,
 };
 
 const DEFAULT_DETECTION_SCHEDULE = { mode: "always" };
