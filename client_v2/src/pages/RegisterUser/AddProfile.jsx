@@ -9,6 +9,8 @@ import {
   LayoutGrid,
   List,
   Link as LinkIcon,
+  CircleAlert,
+  CircleCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
@@ -35,8 +37,10 @@ import {
   delete_user,
   delete_all_users,
   bulkUploadUsers,
+  updateAuthorizedUserStatus,
 } from './Api';
-import { stripPlaceholderEmail } from './displayEmail';
+import { stripPlaceholderEmail, displayEmail } from './displayEmail';
+import { getUserStatus } from './UserListItems';
 
 const nasUrl = import.meta.env.VITE_BACKEND;
 /* Decode a JWT payload without a dependency. */
@@ -80,6 +84,9 @@ const AddProfile = () => {
   const [deleting, setDeleting] = useState(false);
   const [openDeleteAllConfirm, setOpenDeleteAllConfirm] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
+
+  const [statusConfirm, setStatusConfirm] = useState(null); // { userId, name, email, currentStatus }
+  const [statusActionLoading, setStatusActionLoading] = useState(false);
 
   const [showImportModal, setShowImportModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
@@ -196,6 +203,40 @@ const AddProfile = () => {
     }
     setDeleteTargetIds([userId]);
     setOpenDeleteConfirm(true);
+  };
+
+  const handleRequestStatusChange = (user) => {
+    if (!canEditUsers) {
+      toast.error("You don't have permission to edit Users.");
+      return;
+    }
+    setStatusConfirm({
+      userId: user._id,
+      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'this user',
+      email: displayEmail(user.email),
+      currentStatus: getUserStatus(user),
+    });
+  };
+
+  const handleConfirmStatusChange = async () => {
+    if (!statusConfirm) return;
+    setStatusActionLoading(true);
+    const nextStatus = statusConfirm.currentStatus === 'active' ? 'suspended' : 'active';
+    try {
+      await updateAuthorizedUserStatus(statusConfirm.userId, nextStatus);
+      toast.success(
+        nextStatus === 'suspended'
+          ? `${statusConfirm.name} has been suspended`
+          : `${statusConfirm.name} has been reactivated`
+      );
+      setStatusConfirm(null);
+      fetchUsers();
+    } catch (error) {
+      console.error('Failed to update user status', error);
+      toast.error(error?.response?.data?.body?.message || 'Failed to update user status');
+    } finally {
+      setStatusActionLoading(false);
+    }
   };
 
   const handleBulkDelete = () => {
@@ -459,6 +500,7 @@ const AddProfile = () => {
           toggleUserSelection={toggleUserSelection}
           handleEdit={handleEdit}
           handleDelete={handleDelete}
+          onRequestStatusChange={handleRequestStatusChange}
           setSelectedUser={setSelectedUser}
           setIsUserModalOpen={setIsUserModalOpen}
           canEdit={canEditUsers}
@@ -532,6 +574,39 @@ const AddProfile = () => {
         onConfirm={confirmDeleteAll}
         onClose={() => setOpenDeleteAllConfirm(false)}
         loading={deletingAll}
+      />
+
+      <ConfirmationModal
+        open={!!statusConfirm}
+        title={statusConfirm?.currentStatus === 'active' ? 'Suspend User' : 'Reactivate User'}
+        icon={
+          statusConfirm?.currentStatus === 'active'
+            ? <CircleAlert className="w-7 h-7 text-[var(--crit)]" />
+            : <CircleCheck className="w-7 h-7 text-[var(--ok)]" />
+        }
+        message={
+          statusConfirm && (
+            statusConfirm.currentStatus === 'active'
+              ? <>Suspending will prevent <strong>{statusConfirm.name}</strong> ({statusConfirm.email}) from being treated as an active user. They will remain in your records but lose active-user privileges until reactivated.</>
+              : <>Reactivating will restore <strong>{statusConfirm.name}</strong> ({statusConfirm.email}) as an active user.</>
+          )
+        }
+        confirmLabel={
+          statusActionLoading
+            ? (statusConfirm?.currentStatus === 'active' ? 'Suspending...' : 'Reactivating...')
+            : (statusConfirm?.currentStatus === 'active' ? 'Suspend' : 'Reactivate')
+        }
+        cancelLabel="Cancel"
+        onConfirm={handleConfirmStatusChange}
+        onClose={() => {
+          if (!statusActionLoading) setStatusConfirm(null);
+        }}
+        loading={statusActionLoading}
+        confirmClass={
+          statusConfirm?.currentStatus === 'active'
+            ? 'bg-[var(--crit)] text-white hover:opacity-90 shadow-sm shadow-[var(--crit)]/20'
+            : 'bg-[var(--blue)] text-white hover:opacity-90 shadow-sm shadow-[var(--blue)]/20'
+        }
       />
 
       {isUserModalOpen && selectedUser && (

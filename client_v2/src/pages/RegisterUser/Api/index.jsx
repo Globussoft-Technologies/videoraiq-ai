@@ -41,6 +41,16 @@ export const updateUserDetails = async (employeeId, payload) => {
   return response.data;
 };
 
+/** Set an authorized user's account status to 'active' or 'suspended'. */
+export const updateAuthorizedUserStatus = async (userId, status) => {
+  const response = await axios.patch(
+    `${Api_url}/authorizedUsers/status?userId=${userId}`,
+    { status },
+    { headers: authHeaders({ 'Content-Type': 'application/json' }) }
+  );
+  return response.data;
+};
+
 /** Delete a single authorized user. */
 export const delete_user = async (userId) => {
   return axios.delete(`${Api_url}/authorizedUsers/delete`, {

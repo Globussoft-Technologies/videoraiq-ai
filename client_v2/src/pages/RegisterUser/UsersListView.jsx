@@ -16,6 +16,7 @@ const UsersListView = ({
   toggleUserSelection,
   handleEdit,
   handleDelete,
+  onRequestStatusChange,
   setSelectedUser,
   setIsUserModalOpen,
   canEdit = true,
@@ -49,6 +50,7 @@ const UsersListView = ({
                   user={user}
                   handleEdit={handleEdit}
                   handleDelete={handleDelete}
+                  onRequestStatusChange={onRequestStatusChange}
                   selectedUserIds={selectedUserIds}
                   toggleUserSelection={toggleUserSelection}
                   setSelectedUser={setSelectedUser}
@@ -121,6 +123,7 @@ const UsersListView = ({
                     limit={limit}
                     handleEdit={handleEdit}
                     handleDelete={handleDelete}
+                    onRequestStatusChange={onRequestStatusChange}
                     selectedUserIds={selectedUserIds}
                     toggleUserSelection={toggleUserSelection}
                     setSelectedUser={setSelectedUser}

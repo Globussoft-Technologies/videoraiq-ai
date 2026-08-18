@@ -24,6 +24,52 @@ export const getInitialsPlaceholder = (firstName, lastName, size = 128) => {
 
 const isUserVerified = (verified) => verified === true || verified === 'true' || verified === 1 || verified === '1';
 
+/** Defaults to 'active' when the field is absent so pre-rollout records never render as suspended. */
+export const getUserStatus = (user) => (user?.status === 'suspended' ? 'suspended' : 'active');
+
+/** Small switch, ported from CommandCenter/SystemControls.jsx's MiniToggle for visual consistency. */
+function MiniToggle({ value, onChange }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={value}
+      onClick={onChange}
+      style={{
+        width: 34, height: 19, borderRadius: 11, flex: '0 0 auto', border: 'none',
+        cursor: onChange ? 'pointer' : 'default', padding: 0,
+        background: value ? 'linear-gradient(90deg,var(--blue),var(--violet))' : 'var(--toggleoff)',
+        position: 'relative', transition: 'background .18s',
+      }}
+    >
+      <span
+        style={{
+          position: 'absolute', top: 2, left: value ? 17 : 2,
+          width: 15, height: 15, borderRadius: '50%', background: '#fff',
+          transition: 'left .18s', boxShadow: '0 1px 3px rgba(0,0,0,.35)',
+        }}
+      />
+    </button>
+  );
+}
+
+/** Account active/suspended toggle + caption. Distinct from StatusBadge (face-verification). */
+const AccountStatusControl = ({ status, onToggle, canEdit }) => {
+  if (!canEdit) return null;
+  const isActive = status === 'active';
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className="text-[10px] font-semibold"
+        style={{ color: isActive ? 'var(--ok)' : 'var(--crit)' }}
+      >
+        {isActive ? 'Active' : 'Suspended'}
+      </span>
+      <MiniToggle value={isActive} onChange={onToggle} />
+    </div>
+  );
+};
+
 export const StatusBadge = ({ verified, variant = 'table' }) => {
   const isVerified = isUserVerified(verified);
   const styles =
@@ -49,7 +95,7 @@ export const StatusBadge = ({ verified, variant = 'table' }) => {
 };
 
 /* ─────────────── Card ─────────────── */
-export const UserCard = ({ user, handleEdit, handleDelete, setSelectedUser, setIsUserModalOpen, selectedUserIds, toggleUserSelection, canEdit = true, canDelete = true }) => {
+export const UserCard = ({ user, handleEdit, handleDelete, onRequestStatusChange, setSelectedUser, setIsUserModalOpen, selectedUserIds, toggleUserSelection, canEdit = true, canDelete = true }) => {
   const [imgIdx, setImgIdx] = useState(0);
   const pics = user.profilePics || [];
   const many = pics.length > 1;
@@ -190,13 +236,28 @@ export const UserCard = ({ user, handleEdit, handleDelete, setSelectedUser, setI
             </span>
           </div>
         ))}
+        {canEdit && (
+          <div className="flex items-center justify-between pt-2.5 mt-1 border-t border-[var(--bd)]">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--tx3)]">
+              Account
+            </span>
+            <AccountStatusControl
+              status={getUserStatus(user)}
+              canEdit={canEdit}
+              onToggle={(e) => {
+                e.stopPropagation();
+                onRequestStatusChange(user);
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 /* ─────────────── Table row ─────────────── */
-export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, handleDelete, setSelectedUser, setIsUserModalOpen, selectedUserIds, toggleUserSelection, canEdit = true, canDelete = true }) => {
+export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, handleDelete, onRequestStatusChange, setSelectedUser, setIsUserModalOpen, selectedUserIds, toggleUserSelection, canEdit = true, canDelete = true }) => {
   const pics = user.profilePics || [];
   const avatar = pics.length > 0 ? `${nasUrl}/uploads/${pics[0]}` : getInitialsPlaceholder(user.firstName, user.lastName, 40);
 
@@ -258,7 +319,17 @@ export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, hand
         <span className="block text-xs text-[var(--tx2)] truncate">{user.location || '-'}</span>
       </td>
       <td className="px-3 py-3 text-center">
-        <StatusBadge verified={user.verified} />
+        <div className="flex flex-col items-center gap-1.5">
+          <StatusBadge verified={user.verified} />
+          <AccountStatusControl
+            status={getUserStatus(user)}
+            canEdit={canEdit}
+            onToggle={(e) => {
+              e.stopPropagation();
+              onRequestStatusChange(user);
+            }}
+          />
+        </div>
       </td>
       <td className="px-3 py-3 text-center">
         <div className="flex items-center justify-center gap-2">

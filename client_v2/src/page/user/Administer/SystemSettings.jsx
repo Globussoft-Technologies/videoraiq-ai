@@ -568,7 +568,7 @@ function LogOrderPanel() {
       <PanelHeader
         icon={ListOrdered}
         title="Log Order"
-        sub="Rearrange the LOGS & RECORDS section of the sidebar. Saved in this browser only."
+        sub="Rearrange the LOGS & RECORDS section of the sidebar."
       />
       <ToggleRow
         icon={ListOrdered}
@@ -1321,14 +1321,6 @@ export default function SystemSettings() {
             tone={phoneRecipients.length > 0 ? 'ok' : 'off'}
             onManage={() => navigate('/recipients')}
           /> */}
-          <IntegrationRow
-            icon={Radio}
-            title="Telegram"
-            desc={telegramLinked ? `Chat id ${telegramChatId || 'linked'}` : telegramApi.loading ? 'Checking link status' : 'Use Alert Recipients to link a channel'}
-            status={telegramLinked ? 'Linked' : 'Not linked'}
-            tone={telegramLinked ? 'ok' : 'off'}
-            onManage={() => navigate('/recipients')}
-          />
           <IntegrationRow
             icon={SlidersHorizontal}
             title="Detection Settings"
