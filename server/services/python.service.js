@@ -239,8 +239,8 @@ class PythonService {
           zones: zones || [],
           severity,
         });
-        console.log(zones,'detectors');
-        
+        console.log(zones, 'detectors');
+
       }
 
       if (detection_modes?.includes("ANPR")) {
@@ -316,7 +316,7 @@ class PythonService {
         });
       }
 
-      if( detection_modes?.includes("loitering")) {
+      if (detection_modes?.includes("loitering")) {
         detectors.push({
           name: "loiteringDetectionSettings",
           zone_configs,
@@ -333,8 +333,8 @@ class PythonService {
           zones: zones || [],
         });
       }
-      if( detection_modes?.includes("tableOccupancySettings")) {
-        
+      if (detection_modes?.includes("tableOccupancySettings")) {
+
         detectors.push({
           name: "tableOccupancySettings",
           zone_configs,
@@ -343,7 +343,7 @@ class PythonService {
         });
       }
 
-      if( detection_modes?.includes("foodServicePPEDetection")) {
+      if (detection_modes?.includes("foodServicePPEDetection")) {
         detectors.push({
           name: "foodServicePPEDetectionSettings",
           zone_configs,
@@ -351,15 +351,15 @@ class PythonService {
         });
       }
 
-      if( detection_modes?.includes("desk_absence")) {
+      if (detection_modes?.includes("desk_absence")) {
         detectors.push({
           name: "deskAbsenceDetectionSettings",
           zones: zones || [],
           zone_configs
         });
-      }  
-      
-      if( detection_modes?.includes("mobilePhoneDetection")) {
+      }
+
+      if (detection_modes?.includes("mobilePhoneDetection")) {
         detectors.push({
           name: "mobilePhoneDetectionSettings",
           zones: zones || [],
@@ -367,14 +367,14 @@ class PythonService {
         });
       }
 
-      if( detection_modes?.includes("carModelDetection")) {
+      if (detection_modes?.includes("carModelDetection")) {
         detectors.push({
-          name: "carModelDetectionSchemaSetting",
+          name: "carModelDetectionSettings",
           zones: zones || [],
           zone_configs
         });
       }
-        
+
 
       // ❗️ Validation
       if (!detectors.length) {
@@ -395,7 +395,7 @@ class PythonService {
         nvr_id,
         admin_id,
         detectors: detectorsWithThresholds,
-      };      
+      };
       console.log('newPayload', JSON.stringify(newPayload, null, 2));
 
       // include stream_url only if present
@@ -544,7 +544,7 @@ class PythonService {
         });
       }
 
-      if( detection_modes?.includes("loitering")) {
+      if (detection_modes?.includes("loitering")) {
         detectors.push({
           name: "loiteringDetectionSettings",
           zone_configs,
@@ -560,7 +560,7 @@ class PythonService {
           zones: zones || [],
         });
       }
-      if( detection_modes?.includes("tableOccupancySettings")) {
+      if (detection_modes?.includes("tableOccupancySettings")) {
         detectors.push({
           name: "tableOccupancySettings",
           zone_configs,
@@ -569,15 +569,15 @@ class PythonService {
         });
       }
 
-      if( detection_modes?.includes("desk_absence")) {
+      if (detection_modes?.includes("desk_absence")) {
         detectors.push({
           name: "deskAbsenceDetection",
           zones: zones || [],
           zone_configs,
         });
       }
-      
-      if( detection_modes?.includes("mobilePhoneDetection")) {
+
+      if (detection_modes?.includes("mobilePhoneDetection")) {
         detectors.push({
           name: "mobilePhoneDetectionSettings",
           zones: zones || [],
@@ -586,9 +586,9 @@ class PythonService {
         });
       }
 
-      if( detection_modes?.includes("carModelDetection")) {
+      if (detection_modes?.includes("carModelDetection")) {
         detectors.push({
-          name: "carModelDetectionSchemaSetting",
+          name: "carModelDetectionSettings",
           zones: zones || [],
           zone_configs
         });
@@ -614,7 +614,7 @@ class PythonService {
         admin_id,
         detectors: detectorsWithThresholds,
       };
-      
+
       // include stream_url only if present
       if (stream_url) {
         newPayload.stream_url = stream_url;
@@ -761,21 +761,21 @@ class PythonService {
         detectors.push("numberPlateDetectionSettings");
       }
 
-      if( detectionModes?.includes("loitering")) {
+      if (detectionModes?.includes("loitering")) {
         detectors.push("loiteringDetectionSettings");
       }
 
       if (detectionModes?.includes("vehicleType")) {
         detectors.push("vehicleTypeDetectionSettings");
       }
-      if( detectionModes?.includes("tableOccupancySettings")) {
+      if (detectionModes?.includes("tableOccupancySettings")) {
         detectors.push("tableOccupancyDetectionSettings");
       }
 
-      if( detectionModes?.includes("desk_absence")) {
+      if (detectionModes?.includes("desk_absence")) {
         detectors.push("deskAbsenceSettings");
       }
-      if( detectionModes?.includes("mobilePhoneDetection")) {
+      if (detectionModes?.includes("mobilePhoneDetection")) {
         detectors.push("mobilePhoneDetectionSettings");
       }
       // 🔹 Build payload
