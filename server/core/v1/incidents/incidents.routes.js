@@ -107,6 +107,11 @@ router.post(
   viewAccessCheck,
   incidentsController.getDeskAbsenceLogs,
 );
+router.post(
+  "/logs/car-model-detection",
+  viewAccessCheck,
+  incidentsController.getCarModelDetectionLogs,
+);
 
 router.get(
   "/logs/desk-absence/filter/zone-names",

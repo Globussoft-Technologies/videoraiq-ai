@@ -366,6 +366,14 @@ class PythonService {
           zone_configs
         });
       }
+
+      if( detection_modes?.includes("carModelDetection")) {
+        detectors.push({
+          name: "carModelDetectionSchemaSetting",
+          zones: zones || [],
+          zone_configs
+        });
+      }
         
 
       // ❗️ Validation
@@ -575,6 +583,14 @@ class PythonService {
           zones: zones || [],
           zone_name,
           zone_configs,
+        });
+      }
+
+      if( detection_modes?.includes("carModelDetection")) {
+        detectors.push({
+          name: "carModelDetectionSchemaSetting",
+          zones: zones || [],
+          zone_configs
         });
       }
 

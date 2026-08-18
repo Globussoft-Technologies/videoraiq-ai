@@ -39,7 +39,8 @@ import {
   LoiteringDetectionIncident,
   TableOccupancyDetectionIncident,
   FoodServicePPEDetectionIncident,
-  MobilePhoneDetectionIncident
+  MobilePhoneDetectionIncident,
+  CarModelDetectionIncident
 } from "./incidents.model.js";
 const modelMap = {
   countPersons: CountPersonIncident,
@@ -66,7 +67,8 @@ const modelMap = {
   loiteringDetection: LoiteringDetectionIncident,
   tableOccupancyDetection: TableOccupancyDetectionIncident,
   foodServicePPEDetection: FoodServicePPEDetectionIncident,
-  mobilePhoneDetection: MobilePhoneDetectionIncident
+  mobilePhoneDetection: MobilePhoneDetectionIncident,
+  carModelDetection: CarModelDetectionIncident
 };
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
@@ -470,6 +472,10 @@ class IncidentsService {
 
           },
         });
+      }else if(incidentType === "carModelDetection"){
+        newIncident.timeOfIncident = req?.body?.timeOfIncident;
+        newIncident.Image = req?.body?.Image;
+        newIncident.model_name = req?.body?.model_name;
       }
 
 
@@ -2790,6 +2796,31 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch vehicle detection logs", 500));
+    }
+  }
+
+  async getCarModelDetectionLogs(req, res, next) {
+    try {
+      const { model_name } = req.query;
+      const extraMatch = {};
+      if (model_name) {
+        const escaped = model_name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        extraMatch.$or = [
+          { model_name: { $regex: escaped, $options: "i" } },
+          { incidentName: { $regex: escaped, $options: "i" } },
+        ];
+      }
+      return await this._fetchIncidentLogs({
+        req,
+        res,
+        incidentType: "carModelDetection",
+        extraMatch,
+        searchFields: ["incidentName", "description", "zone", "model_name"],
+        postLookupSearch: true,
+      });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch car model detection logs", 500));
     }
   }
 

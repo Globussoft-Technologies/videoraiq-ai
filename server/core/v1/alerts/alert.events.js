@@ -138,6 +138,8 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
           let mailResponse = await MailResponse.bagDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="vehicleDetection"){
           let mailResponse = await MailResponse.vehicleDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
+        } else if(detectionType==="carModelDetection"){
+          let mailResponse = await MailResponse.carModelDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="deskAbsence"){
           let mailResponse = await MailResponse.deskAbsence(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="guardAbsence"){

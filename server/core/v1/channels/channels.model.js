@@ -80,6 +80,7 @@ const detectionFields = {
   foodServicePPEDetectionSettings: detectionSettingSchema,
   vehicleObstructionSettings: detectionSettingSchema,
   mobilePhoneDetectionSettings: detectionSettingSchema,
+  carModelDetectionSettings: detectionSettingSchema,
 };
 
 // ! old

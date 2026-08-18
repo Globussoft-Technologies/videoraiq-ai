@@ -526,6 +526,13 @@ const mobilePhoneDetectionSchema = new Schema({
 });
 const MobilePhoneDetectionIncident = Incident.discriminator('mobilePhoneDetection', mobilePhoneDetectionSchema);
 
+// Cylinder Stack Height Detection
+const carModelDetectionSchema = new Schema({
+  count: {type:Number,default:0},
+  model_name: { type: String, default: null },
+  triggerNotification: { type: Boolean, default: true }
+});
+const CarModelDetectionIncident = Incident.discriminator('carModelDetection', carModelDetectionSchema);
 
 
 export  {
@@ -554,5 +561,6 @@ export  {
   LoiteringDetectionIncident,
   TableOccupancyDetectionIncident,
   FoodServicePPEDetectionIncident,
-  MobilePhoneDetectionIncident
+  MobilePhoneDetectionIncident,
+  CarModelDetectionIncident
 };
