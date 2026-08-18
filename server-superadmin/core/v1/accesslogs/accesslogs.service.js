@@ -553,7 +553,7 @@ async getLogs(req, res, next) {
         // Fetch authorized employees by location
         let authorizedEmployeeIds = [];
         if(employeeLocations?.length){
-          authorizedEmployeeIds = await userModel.find({employeeLocationId:{$in:employeeLocations},adminId:new ObjectId(adminId)}).distinct("_id");
+          authorizedEmployeeIds = await userModel.find({employeeLocationId:{$in:employeeLocations},adminId:new ObjectId(adminId),status:{$ne:'suspended'}}).distinct("_id");
         }
 
         // Convert department IDs to ObjectIds
