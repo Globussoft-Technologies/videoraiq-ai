@@ -47,6 +47,7 @@ import CrusherLogs from '@/page/user/EmployeeLogs/CrusherLogs';
 import ConveyorLogs from '@/page/user/EmployeeLogs/ConveyorLogs';
 import VehicleObstructionLogs from '@/page/user/EmployeeLogs/VehicleObstructionLogs';
 import VehicleCountLogs from '@/page/user/EmployeeLogs/VehicleCountLogs';
+import CarLogs from '@/page/user/EmployeeLogs/CarLogs';
 import LineCrossingLogs from '@/page/user/EmployeeLogs/LineCrossingLogs';
 import Departments from '@/page/user/Departments/Departments';
 import WaterSpillageLogs from '@/page/user/EmployeeLogs/WaterSpillageLogs';
@@ -133,6 +134,7 @@ export const routes = createBrowserRouter(
         <Route path="logs/conveyor" element={<ConveyorLogs />} />
         <Route path="logs/vehicle-obstruction" element={<VehicleObstructionLogs />} />
         <Route path="logs/vehicle-count" element={<VehicleCountLogs />} />
+        <Route path="logs/car" element={<CarLogs />} />
         <Route path="logs/line-crossing" element={<LineCrossingLogs />} />
         <Route path="logs/water-spill" element={<WaterSpillageLogs />} />
          <Route path="logs/unauthorized-access" element={<UnauthorizedAccess />} />

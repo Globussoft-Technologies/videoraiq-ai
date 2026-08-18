@@ -24,6 +24,7 @@ const vehicleClientItems = [
   { label: 'Tagged Users', icon: Tags, route: '/logs/tagged-users', permissionKey: 'accessLogs' },
   { label: 'Detected Users', icon: Users, route: '/logs/flagged-users', permissionKey: 'accessLogs' },
   { label: 'ANPR Logs', icon: null, img: ANPRIcon, route: '/logs/ANPR', permissionKey: 'ANPRLogs' },
+  { label: 'Car Logs', icon: Car, route: '/logs/car', permissionKey: 'carLogs' },
   { label: 'Desk Absence Logs', icon: Armchair, route: '/logs/desk-absence', permissionKey: 'accessLogs' },
   // { label: 'Track Logs', icon: Activity, route: '/logs/track', permissionKey: 'trackLogs' },
   // { label: 'Desk Logs', icon: Activity, route: '/logs/desk', permissionKey: 'deskLogs' },
@@ -40,6 +41,7 @@ const defaultClientItems = [
   { label: 'Person Count Logs', icon: UserCheck, route: '/logs/person-count', permissionKey: 'accessLogs' },
   { label: 'Desk Absence Logs', icon: Armchair, route: '/logs/desk-absence', permissionKey: 'accessLogs' },
   { label: 'ANPR Logs', icon: null, img: ANPRIcon, route: '/logs/ANPR', permissionKey: 'ANPRLogs' },
+  { label: 'Car Logs', icon: Car, route: '/logs/car', permissionKey: 'carLogs' },
   // { label: 'Vehcile  Logs', icon: Activity, route: '/logs/track', permissionKey: 'trackLogs' },
   // { label: 'Guard Logs', icon: Activity, route: '/logs/guard', permissionKey: 'guardLogs' },
   // { label: 'Track Logs', icon: Activity, route: '/logs/desk', permissionKey: 'deskLogs' },
@@ -65,6 +67,9 @@ const hasLogSectionView = (permissions, sectionKey) => {
   if (!logs || typeof logs !== 'object') return false;
   if (logs[sectionKey] && typeof logs[sectionKey] === 'object') {
     return !!logs[sectionKey].view;
+  }
+  if (logs.global && typeof logs.global === 'object') {
+    return !!logs.global.view;
   }
   const hasNestedSections = Object.values(logs).some(
     (v) => v && typeof v === 'object'
