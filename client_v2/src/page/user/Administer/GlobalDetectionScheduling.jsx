@@ -562,6 +562,11 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
   // directly against the API); this panel edits one. Tracked so we can say so
   // rather than silently appearing to be the whole picture.
   const [otherScheduleCount, setOtherScheduleCount] = useState(0);
+  // Other global schedules on this NVR that also enrol a camera this one
+  // does — those cameras' actual runtime state is decided by whichever
+  // schedule the resolver's "most specific, then most recently updated" tie
+  // break picks, which can silently disagree with the schedule shown here.
+  const [overlappingSchedules, setOverlappingSchedules] = useState([]);
   const [enrolled, setEnrolled] = useState(() => new Set());
   const [form, setForm] = useState(defaultForm);
 
@@ -580,6 +585,22 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
     };
   }, []);
 
+  /**
+   * With no NVR picked yet (or after closing out of one back to the picker),
+   * there's no per-camera polling running — but the NVR list itself can still
+   * go stale while the admin sits on this screen. Keep it current too, silent
+   * so it doesn't flash the loading state under them.
+   */
+  useEffect(() => {
+    if (selectedNvrId) return undefined;
+    const interval = setInterval(() => {
+      getNvrs(0, 200)
+        .then((result) => setNvrs(result?.nvrs || []))
+        .catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [selectedNvrId]);
+
   const nvrLabels = useMemo(
     () => nvrs.map((nvr) => nvr.nvrName || nvr.deviceName || nvr._id),
     [nvrs],
@@ -594,9 +615,14 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
    * Load an NVR's cameras and any schedule it already has. An existing schedule
    * seeds the form and the enrolment checkboxes so this reads as "edit", not
    * "create a duplicate".
+   *
+   * `silent` skips the loading spinner and leaves the editable form/enrolment
+   * state alone — used for background refreshes (e.g. a scheduler event
+   * coming in) so an in-progress edit is never clobbered or interrupted by a
+   * full reload, only the read-only running/stopped badges are refreshed.
    */
-  const loadNvr = useCallback(async (nvrId) => {
-    setCamerasLoading(true);
+  const loadNvr = useCallback(async (nvrId, { silent = false } = {}) => {
+    if (!silent) setCamerasLoading(true);
     try {
       const [cameras, schedules] = await Promise.all([
         getNvrCamerasForGlobalSchedule(nvrId),
@@ -604,11 +630,36 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
       ]);
 
       setNvrData(cameras);
+      if (silent) return;
 
       // The list comes back newest-first; this panel edits the most recent.
       const schedule = schedules?.[0] || null;
       setExistingSchedule(schedule);
-      setOtherScheduleCount(Math.max(0, (schedules?.length || 0) - 1));
+      const others = (schedules || []).slice(1);
+      setOtherScheduleCount(others.length);
+
+      // Which of THIS schedule's enrolled cameras are also enrolled (enabled)
+      // in one of those other schedules — those cameras' actual on/off state
+      // is decided by the resolver's tie break, not necessarily by what's
+      // shown here, so call that out by name rather than only by count.
+      const nameByChannelId = new Map(
+        [...(cameras?.configuredCameras || []), ...(cameras?.nonConfiguredCameras || [])]
+          .map((camera) => [String(camera.channelId), camera.name]),
+      );
+      const thisEnrolledIds = new Set(
+        (schedule?.cameras || [])
+          .filter((camera) => camera.enabled !== false)
+          .map((camera) => String(camera.channelId)),
+      );
+      const overlaps = others
+        .map((other) => {
+          const sharedNames = (other.cameras || [])
+            .filter((camera) => camera.enabled !== false && thisEnrolledIds.has(String(camera.channelId)))
+            .map((camera) => nameByChannelId.get(String(camera.channelId)) || String(camera.channelId));
+          return sharedNames.length ? { schedule: other, sharedNames } : null;
+        })
+        .filter(Boolean);
+      setOverlappingSchedules(overlaps);
 
       if (schedule) {
         setEnrolled(
@@ -628,12 +679,14 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
         setForm(defaultForm());
       }
     } catch (error) {
+      if (silent) return;
       toast.error(globalScheduleErrorMessage(error, 'Failed to load cameras for this NVR'));
       setNvrData(null);
       setExistingSchedule(null);
       setOtherScheduleCount(0);
+      setOverlappingSchedules([]);
     } finally {
-      setCamerasLoading(false);
+      if (!silent) setCamerasLoading(false);
     }
   }, []);
 
@@ -644,6 +697,39 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
     setTab('nvr');
     loadNvr(nvr._id);
   };
+
+  /**
+   * The "running"/"stopped" badges reflect detection state as of the last
+   * fetch, so a schedule boundary firing in the background (the cron runner
+   * starting/stopping a camera) would otherwise only show up after a manual
+   * page refresh. Each scheduler event is a live signal that state changed,
+   * so re-fetch the open NVR — debounced, since one boundary can flip several
+   * cameras at once and each fires its own event.
+   */
+  useEffect(() => {
+    if (!scheduleEvents.length || !selectedNvrId) return undefined;
+    const timer = setTimeout(() => {
+      loadNvr(selectedNvrId, { silent: true });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [scheduleEvents, selectedNvrId, loadNvr]);
+
+  /**
+   * Primary mechanism for keeping the running/stopped badges live: the socket
+   * event above depends on the connection being authenticated and the event
+   * actually being delivered, which is too many moving parts to rely on
+   * alone. Polling on a short, unconditional interval is what actually
+   * guarantees this camera list reflects the server-side schedule runner
+   * (which ticks every ~60s) without the admin needing to reload the page —
+   * for both a camera starting and a camera stopping.
+   */
+  useEffect(() => {
+    if (!selectedNvrId) return undefined;
+    const interval = setInterval(() => {
+      loadNvr(selectedNvrId, { silent: true });
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [selectedNvrId, loadNvr]);
 
   const toggleEnrolled = (channelId) => {
     setEnrolled((current) => {
@@ -833,14 +919,33 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
                 padding: '10px 12px',
                 borderRadius: 10,
                 marginBottom: 14,
-                background: 'rgba(234,179,8,.09)',
-                border: '1px solid rgba(234,179,8,.25)',
+                background: overlappingSchedules.length ? 'rgba(239,68,68,.08)' : 'rgba(234,179,8,.09)',
+                border: `1px solid ${overlappingSchedules.length ? 'rgba(239,68,68,.28)' : 'rgba(234,179,8,.25)'}`,
               }}
             >
-              <Info size={14} style={{ color: '#ca8a04', flexShrink: 0, marginTop: 1 }} />
+              <Info size={14} style={{ color: overlappingSchedules.length ? '#dc2626' : '#ca8a04', flexShrink: 0, marginTop: 1 }} />
               <div style={{ fontSize: 11.5, lineHeight: 1.5, color: 'var(--tx2)' }}>
-                This NVR has {otherScheduleCount + 1} global schedules. You are editing the most recent one; the other
-                {otherScheduleCount === 1 ? '' : 's'} stay as they are and may also govern some of these cameras.
+                <div>
+                  This NVR has {otherScheduleCount + 1} global schedules. You are editing the most recent one; the other
+                  {otherScheduleCount === 1 ? '' : 's'} stay as they are and may also govern some of these cameras.
+                </div>
+                {overlappingSchedules.length > 0 && (
+                  <div style={{ marginTop: 6 }}>
+                    <strong style={{ color: '#dc2626' }}>
+                      Conflict: the following camera{overlappingSchedules.some((o) => o.sharedNames.length > 1) ? 's are' : ' is'} also enrolled in another schedule.
+                      Whichever schedule actually applies is decided by priority rules, so the running/stopped state may not match this one.
+                    </strong>
+                    {overlappingSchedules.map(({ schedule: other, sharedNames }) => (
+                      <div key={other._id} style={{ marginTop: 4 }}>
+                        <span style={{ fontWeight: 700, color: 'var(--tx)' }}>
+                          "{other.name || 'Untitled schedule'}"
+                        </span>
+                        {' '}({other.enabled ? 'active' : 'disabled'}, {other.schedule?.mode === 'always' ? 'Always' : 'Custom'}) also enrols:{' '}
+                        {sharedNames.join(', ')}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

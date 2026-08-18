@@ -63,12 +63,26 @@ export function SocketProvider({ children }) {
       path: SOCKET_PATH,
       auth: { token },
       reconnection: true,
-      reconnectionAttempts: 5,
+      // Unbounded: this page can sit open for a long time waiting on a
+      // scheduled boundary, and a capped attempt count (previously 5) meant a
+      // network blip or server restart could permanently kill live updates
+      // until the user manually reloaded — reconnectionAttempts: Infinity
+      // keeps socket.io retrying (with its built-in backoff) indefinitely.
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
     });
     socketRef.current = socket;
 
     socket.on('connect', () => setConnected(true));
     socket.on('disconnect', () => setConnected(false));
+    // A fresh auth token on reconnect, in case the old one expired while the
+    // socket was down — socket.io reuses the `auth` object from connect time
+    // otherwise, so a long-lived page could reconnect with a stale token.
+    socket.io.on('reconnect_attempt', () => {
+      const freshToken = getAccessToken();
+      if (freshToken) socket.auth = { token: freshToken };
+    });
 
     return () => {
       if (socketRef.current) {
