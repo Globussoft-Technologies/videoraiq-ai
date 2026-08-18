@@ -233,7 +233,7 @@ class AuthUsersService {
           const data = req?.verified?.userData;
           
           const { userId, skip = 0, limit = 10, search = '',verified } = req.query;
-          const { roleIds,departmentIds:selectedDepartments ,locations} = req.body;
+          const { roleIds, departmentIds: selectedDepartments, locations, status } = req.body;
           
           let authorizedChannel = req?.verified?.authorizedChannel?.channels || [];
           let authorizedNVRs = req?.verified?.authorizedChannel?.nvrIds || [];
@@ -293,6 +293,22 @@ class AuthUsersService {
 
           if(verified){
             filter.verified = verified;
+          }
+
+          if (status === 'active') {
+            filter.$and = [
+              ...(filter.$and || []),
+              {
+                $or: [
+                  { status: 'active' },
+                  { status: { $exists: false } },
+                  { status: null },
+                  { status: '' },
+                ],
+              },
+            ];
+          } else if (status === 'suspended') {
+            filter.status = 'suspended';
           }
 
           // Apply role filter

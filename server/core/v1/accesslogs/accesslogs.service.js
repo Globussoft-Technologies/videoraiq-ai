@@ -595,7 +595,6 @@ async getLogs(req, res, next) {
             userModel.distinct("_id", {
               adminId: new ObjectId(adminId),
               location: { $in: locationRegexes },
-              status: { $ne: 'suspended' },
             }),
             nvrModel.distinct("_id", {
               userId: String(accountUserId),
@@ -626,7 +625,7 @@ async getLogs(req, res, next) {
             }]
           : [];
         const authorizedUserIds = shouldRemoveUnknown
-          ? await userModel.distinct("_id", { adminId: new ObjectId(adminId), status: { $ne: 'suspended' } })
+          ? await userModel.distinct("_id", { adminId: new ObjectId(adminId) })
           : [];
 
         // Convert department IDs to ObjectIds
