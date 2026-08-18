@@ -7,10 +7,10 @@ const envValue = (key) => String(import.meta.env[key] || '').trim();
 const isLocalSetup = () => envValue('VITE_LOCAL_SETUP').toLowerCase() === 'true';
 const logoutRedirectUrl = () => {
   const memberUrl = envValue('VITE_AMEMBER_MEMBER_URL');
-  if (memberUrl) return memberUrl;
+  if (memberUrl) return memberUrl.replace(/\/login\/?$/, '/member');
 
   const frontendUrl = envValue('VITE_FRONTEND');
-  return frontendUrl ? `${frontendUrl.replace(/\/$/, '')}/member/index` : '/admin-login';
+  return frontendUrl ? `${frontendUrl.replace(/\/$/, '')}/member` : '/admin-login';
 };
 
 /**

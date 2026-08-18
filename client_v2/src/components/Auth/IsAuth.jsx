@@ -1,10 +1,39 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import Cookies from 'js-cookie';
 import getAccessToken from '@/utils/getAccessToken';
 import { useAuth } from '@/context/AuthContext';
 import { logout } from '@/hooks/logout';
 
 const HOST = import.meta.env.VITE_BACKEND;
+const envValue = (key) => String(import.meta.env[key] || '').trim();
+const isLocalSetup = () => envValue('VITE_LOCAL_SETUP').toLowerCase() === 'true';
+
+const accessCookieName = () => {
+  const env = envValue('VITE_ENV');
+  if (env === 'dev') return 'dev-access-token';
+  if (env === 'prod') return 'prod-access-token';
+  return 'access-token';
+};
+
+const loginRedirectUrl = () => {
+  const loginUrl = envValue('VITE_AMEMBER_LOGIN_URL');
+  if (loginUrl) return loginUrl;
+
+  const memberUrl = envValue('VITE_AMEMBER_MEMBER_URL');
+  if (memberUrl) return memberUrl.replace(/\/member\/?$/, '/login');
+
+  return '/admin-login';
+};
+
+function deleteCookie(name, path = '/') {
+  document.cookie = `${name}=; path=${path}; expires=Thu, 01 Jan 1970 00:00:00 UTC;`;
+  const parts = window.location.hostname.split('.');
+  if (parts.length > 1) {
+    const domain = `.${parts.slice(-2).join('.')}`;
+    document.cookie = `${name}=; domain=${domain}; path=${path}; expires=Thu, 01 Jan 1970 00:00:00 UTC;`;
+  }
+}
 
 /**
  * Route guard for the V2 app — same method as the V1 IsAuth
@@ -22,12 +51,20 @@ export default function IsAuth({ children }) {
   const { setUser } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
 
-  const toLogin = () =>
-    navigate('/admin-login', { replace: true, state: { from: location } });
+  const toLogin = () => {
+    if (isLocalSetup()) {
+      navigate('/admin-login', { replace: true, state: { from: location } });
+      return;
+    }
+    window.location.replace(loginRedirectUrl());
+  };
 
   useEffect(() => {
+    const amemberLogin = Cookies.get('amember_login');
+    const amemberPass = Cookies.get('amember_pass');
     const token = getAccessToken();
-    if (!token) {
+
+    if (!token && !(amemberLogin && amemberPass)) {
       setIsLoading(false);
       toLogin();
       return;
@@ -35,6 +72,33 @@ export default function IsAuth({ children }) {
 
     async function checkAccess() {
       try {
+        if (amemberLogin && amemberPass) {
+          const response = await fetch(`${HOST}/auth/by-login-pass`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ login: amemberLogin, pass: amemberPass }),
+          });
+          const result = await response.json();
+
+          if (!result?.ok || !result?.token) {
+            logout();
+            setIsLoading(false);
+            toLogin();
+            return;
+          }
+
+          Cookies.set(accessCookieName(), result.token, {
+            expires: 1,
+            secure: window.location.protocol === 'https:',
+            path: '/',
+          });
+          deleteCookie('amember_login');
+          deleteCookie('amember_pass');
+          setUser(result.user);
+          setIsLoading(false);
+          return;
+        }
+
         const response = await fetch(`${HOST}/auth/by-login-token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
