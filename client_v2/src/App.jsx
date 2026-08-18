@@ -1,5 +1,4 @@
 import { createBrowserRouter, createRoutesFromElements, Navigate, Outlet, Route } from 'react-router-dom';
-import { useEffect } from 'react';
 import { v2Routes } from './routes';
 import LoginForm from '@/page/user/Users/UserForm';
 import ForgotPassword from '@/page/user/Users/ForgotPassword';
@@ -10,26 +9,8 @@ import IsAuth from '@/components/Auth/IsAuth';
 import Logout from '@/components/Auth/Logout';
 import VerifyRecipient from '@/page/user/Administer/VerifyRecipient';
 
-const envValue = (key) => String(import.meta.env[key] || '').trim();
-const isLocalSetup = () => envValue('VITE_LOCAL_SETUP').toLowerCase() === 'true';
-const loginRedirectUrl = () => {
-  const loginUrl = envValue('VITE_AMEMBER_LOGIN_URL');
-  if (loginUrl) return loginUrl;
-
-  const memberUrl = envValue('VITE_AMEMBER_MEMBER_URL');
-  if (memberUrl) return memberUrl.replace(/\/member\/?$/, '/login');
-
-  return '/admin-login';
-};
-
 function LoginRoute() {
-  useEffect(() => {
-    if (!isLocalSetup()) {
-      window.location.replace(loginRedirectUrl());
-    }
-  }, []);
-
-  return isLocalSetup() ? <LoginForm /> : null;
+  return <LoginForm />;
 }
 
 /**
