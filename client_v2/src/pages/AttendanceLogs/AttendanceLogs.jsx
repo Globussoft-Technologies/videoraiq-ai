@@ -484,7 +484,7 @@ const AttendanceLogs = () => {
       // are read against. It is not range-scoped like they are, so it isn't
       // filterable by status.
       {
-        label: 'Total Employees',
+        label: 'Total Active Employees',
         value: totalEmployees || 0,
         color: 'var(--tx)',
         active: !statusFilter,

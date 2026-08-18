@@ -77,6 +77,7 @@ const AddProfile = () => {
   const [formDepartments, setFormDepartments] = useState([]);
   const [selectedLocations, setSelectedLocations] = useState([]);
   const [selectedDepartments, setSelectedDepartments] = useState([]);
+  const [statusFilter, setStatusFilter] = useState('active');
 
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [openDeleteConfirm, setOpenDeleteConfirm] = useState(false);
@@ -150,6 +151,7 @@ const AddProfile = () => {
       const data = {};
       if (selectedLocations.length > 0) data.locations = selectedLocations;
       if (selectedDepartments.length > 0) data.departmentIds = selectedDepartments;
+      if (statusFilter) data.status = statusFilter;
       const result = await authorizedUsers(skip, limit, debouncedSearch, data);
       if (result?.body?.status === 'success') {
         const count = result.body.data.totalCount || 0;
@@ -176,7 +178,7 @@ const AddProfile = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, [currentPage, debouncedSearch, selectedLocations, selectedDepartments, limit]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentPage, debouncedSearch, selectedLocations, selectedDepartments, statusFilter, limit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const allUsersSelected = users.length > 0 && users.every((u) => selectedUserIds.includes(u._id));
 
@@ -367,7 +369,7 @@ const AddProfile = () => {
       <div className="w-full flex-1 flex flex-col p-6 bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px]">
         {/* Top bar */}
         <div className="flex flex-wrap items-center gap-3 justify-between">
-          <div className="relative w-full md:w-64">
+          <div className="relative w-full md:w-56">
             <Input
               type="text"
               placeholder="Search employees..."
@@ -379,6 +381,31 @@ const AddProfile = () => {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center rounded-[14px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10 shadow-sm">
+              {[
+                { value: 'active', label: 'Active' },
+                { value: 'suspended', label: 'Suspended' },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    setStatusFilter(option.value);
+                    setCurrentPage(1);
+                  }}
+                  className={`min-w-[92px] rounded-[11px] px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                    statusFilter === option.value
+                      ? option.value === 'active'
+                        ? 'bg-[var(--ok)] text-white'
+                        : 'bg-[var(--crit)] text-white'
+                      : 'text-[var(--tx2)] hover:bg-[var(--bg3)]'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
             <div className="w-40 xl:w-48">
               <MultiSelect
                 options={locations}
