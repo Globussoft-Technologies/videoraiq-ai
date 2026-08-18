@@ -25,8 +25,12 @@ export const globalScheduleErrorMessage = (error, fallback = 'Something went wro
 };
 
 /** NVR details + its cameras split into configured / non-configured (Tab 1). */
-export const getNvrCamerasForGlobalSchedule = async (nvrId) => {
-  const res = await axios.get(`${Api_url}/global-schedules/nvr/${nvrId}/cameras`, {
+export const getNvrCamerasForGlobalSchedule = async (nvrId, { search = '' } = {}) => {
+  const params = new URLSearchParams();
+  if (search.trim()) params.set('search', search.trim());
+
+  const query = params.toString();
+  const res = await axios.get(`${Api_url}/global-schedules/nvr/${nvrId}/cameras${query ? `?${query}` : ''}`, {
     headers: authHeaders(),
   });
   return unwrap(res);

@@ -9,9 +9,11 @@ import {
   Globe,
   Info,
   Plus,
+  Search,
   Server,
   Trash2,
   Loader2,
+  X,
 } from 'lucide-react';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { getNvrs } from '../../../helpers/configure';
@@ -556,6 +558,9 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
 
   const [nvrData, setNvrData] = useState(null);
   const [camerasLoading, setCamerasLoading] = useState(false);
+  const [cameraSearch, setCameraSearch] = useState('');
+  const [debouncedCameraSearch, setDebouncedCameraSearch] = useState('');
+  const [cameraSearchLoading, setCameraSearchLoading] = useState(false);
 
   const [existingSchedule, setExistingSchedule] = useState(null);
   // The API allows several schedules per NVR (e.g. detector-scoped ones created
@@ -621,11 +626,11 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
    * coming in) so an in-progress edit is never clobbered or interrupted by a
    * full reload, only the read-only running/stopped badges are refreshed.
    */
-  const loadNvr = useCallback(async (nvrId, { silent = false } = {}) => {
+  const loadNvr = useCallback(async (nvrId, { silent = false, search = '' } = {}) => {
     if (!silent) setCamerasLoading(true);
     try {
       const [cameras, schedules] = await Promise.all([
-        getNvrCamerasForGlobalSchedule(nvrId),
+        getNvrCamerasForGlobalSchedule(nvrId, { search }),
         getGlobalSchedules(nvrId),
       ]);
 
@@ -695,8 +700,29 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
     if (!nvr) return;
     setSelectedNvrId(nvr._id);
     setTab('nvr');
+    setCameraSearch('');
+    setDebouncedCameraSearch('');
     loadNvr(nvr._id);
   };
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedCameraSearch(cameraSearch.trim()), 400);
+    return () => clearTimeout(timer);
+  }, [cameraSearch]);
+
+  useEffect(() => {
+    if (!selectedNvrId) return undefined;
+    setCameraSearchLoading(true);
+    let alive = true;
+    loadNvr(selectedNvrId, { silent: true, search: debouncedCameraSearch })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setCameraSearchLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [selectedNvrId, debouncedCameraSearch, loadNvr]);
 
   /**
    * The "running"/"stopped" badges reflect detection state as of the last
@@ -709,10 +735,10 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
   useEffect(() => {
     if (!scheduleEvents.length || !selectedNvrId) return undefined;
     const timer = setTimeout(() => {
-      loadNvr(selectedNvrId, { silent: true });
+      loadNvr(selectedNvrId, { silent: true, search: debouncedCameraSearch });
     }, 600);
     return () => clearTimeout(timer);
-  }, [scheduleEvents, selectedNvrId, loadNvr]);
+  }, [scheduleEvents, selectedNvrId, debouncedCameraSearch, loadNvr]);
 
   /**
    * Primary mechanism for keeping the running/stopped badges live: the socket
@@ -726,10 +752,10 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
   useEffect(() => {
     if (!selectedNvrId) return undefined;
     const interval = setInterval(() => {
-      loadNvr(selectedNvrId, { silent: true });
+      loadNvr(selectedNvrId, { silent: true, search: debouncedCameraSearch });
     }, 10000);
     return () => clearInterval(interval);
-  }, [selectedNvrId, loadNvr]);
+  }, [selectedNvrId, debouncedCameraSearch, loadNvr]);
 
   const toggleEnrolled = (channelId) => {
     setEnrolled((current) => {
@@ -747,9 +773,13 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
     configuredCameras.length > 0 && configuredCameras.every((camera) => enrolled.has(String(camera.channelId)));
 
   const toggleAll = () => {
-    setEnrolled(
-      allConfiguredSelected ? new Set() : new Set(configuredCameras.map((camera) => String(camera.channelId))),
-    );
+    setEnrolled((current) => {
+      const next = new Set(current);
+      const visibleIds = configuredCameras.map((camera) => String(camera.channelId));
+      if (allConfiguredSelected) visibleIds.forEach((id) => next.delete(id));
+      else visibleIds.forEach((id) => next.add(id));
+      return next;
+    });
   };
 
   const addRange = (day) => {
@@ -825,7 +855,7 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
         });
       }
       toast.success(`Global schedule saved. ${SCHEDULER_LAG_NOTE}`);
-      await loadNvr(selectedNvrId);
+      await loadNvr(selectedNvrId, { search: debouncedCameraSearch });
     } catch (error) {
       toast.error(globalScheduleErrorMessage(error, 'Failed to save global schedule'));
     } finally {
@@ -841,7 +871,7 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
       toast.success(
         `Global schedule removed. These cameras go back to their own schedules. ${SCHEDULER_LAG_NOTE}`,
       );
-      await loadNvr(selectedNvrId);
+      await loadNvr(selectedNvrId, { search: debouncedCameraSearch });
     } catch (error) {
       toast.error(globalScheduleErrorMessage(error, 'Failed to remove global schedule'));
     } finally {
@@ -878,17 +908,93 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
 
       <SchedulerNote style={{ marginBottom: 14 }} />
 
-      <div style={{ marginBottom: 14 }}>
-        <FieldLabel>NVR</FieldLabel>
-        <SearchableSelect
-          value={selectedNvrLabel}
-          options={nvrLabels}
-          onChange={handleNvrChange}
-          disabled={!canEdit || nvrsLoading || !nvrLabels.length}
-          placeholder={nvrsLoading ? 'Loading NVRs…' : 'Select an NVR'}
-          searchPlaceholder="Search NVRs…"
-          emptyLabel="No NVRs found"
-        />
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          flexWrap: 'wrap',
+          gap: 12,
+          marginBottom: 14,
+        }}
+      >
+        <div style={{ flex: '1 1 260px', minWidth: 220 }}>
+          <FieldLabel>NVR</FieldLabel>
+          <SearchableSelect
+            value={selectedNvrLabel}
+            options={nvrLabels}
+            onChange={handleNvrChange}
+            disabled={!canEdit || nvrsLoading || !nvrLabels.length}
+            placeholder={nvrsLoading ? 'Loading NVRs…' : 'Select an NVR'}
+            searchPlaceholder="Search NVRs…"
+            emptyLabel="No NVRs found"
+          />
+        </div>
+
+        {selectedNvrId && tab === 'nvr' && (
+          <div style={{ flex: '1 1 260px', minWidth: 220 }}>
+            <FieldLabel>Camera</FieldLabel>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                height: 38,
+                padding: '0 10px',
+                borderRadius: 9,
+                background: 'var(--bg2)',
+                border: '1px solid var(--bd)',
+                opacity: camerasLoading ? 0.7 : 1,
+              }}
+            >
+              {cameraSearchLoading ? (
+                <Loader2 size={14} className="animate-spin" style={{ color: 'var(--tx3)', flexShrink: 0 }} />
+              ) : (
+                <Search size={14} style={{ color: 'var(--tx3)', flexShrink: 0 }} />
+              )}
+              <input
+                type="text"
+                value={cameraSearch}
+                onChange={(event) => setCameraSearch(event.target.value)}
+                disabled={camerasLoading}
+                placeholder="Search cameras..."
+                aria-label="Search cameras"
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  border: 0,
+                  outline: 'none',
+                  background: 'transparent',
+                  color: 'var(--tx)',
+                  fontSize: 12.5,
+                  cursor: camerasLoading ? 'not-allowed' : 'text',
+                }}
+              />
+              {cameraSearch && (
+                <button
+                  type="button"
+                  onClick={() => setCameraSearch('')}
+                  disabled={camerasLoading}
+                  title="Clear camera search"
+                  aria-label="Clear camera search"
+                  style={{
+                    display: 'grid',
+                    placeItems: 'center',
+                    width: 24,
+                    height: 24,
+                    borderRadius: 7,
+                    border: '1px solid var(--bd)',
+                    background: 'transparent',
+                    color: 'var(--tx3)',
+                    cursor: camerasLoading ? 'not-allowed' : 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {!selectedNvrId ? (
@@ -1010,7 +1116,9 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
 
                 {configuredCameras.length === 0 ? (
                   <div style={{ fontSize: 11.5, color: 'var(--tx3)', padding: '10px 0' }}>
-                    No cameras on this NVR are configured for detection yet, so there is nothing to schedule.
+                    {debouncedCameraSearch
+                      ? `No configured cameras match "${debouncedCameraSearch}".`
+                      : 'No cameras on this NVR are configured for detection yet, so there is nothing to schedule.'}
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
