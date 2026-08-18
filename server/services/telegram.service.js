@@ -232,40 +232,40 @@ class TelegramService {
     );
 
     if (!token || !chats?.length) {
-      logger.warn(`[TELEGRAM_TRACE] No active telegram chats resolved`, {
-        adminId: adminId ? String(adminId) : null,
-        preferredChatIds: [...preferred],
-        resolvedChats: chats || [],
-        hasToken: Boolean(token),
-      });
+      // logger.warn(`[TELEGRAM_TRACE] No active telegram chats resolved`, {
+      //   adminId: adminId ? String(adminId) : null,
+      //   preferredChatIds: [...preferred],
+      //   resolvedChats: chats || [],
+      //   hasToken: Boolean(token),
+      // });
       return { token: "", chats: [] };
     }
 
     if (!preferred.size) {
-      logger.info(`[TELEGRAM_TRACE] No preferred telegram chats selected for this alert`, {
-        adminId: adminId ? String(adminId) : null,
-        resolvedChats: chats,
-      });
+      // logger.info(`[TELEGRAM_TRACE] No preferred telegram chats selected for this alert`, {
+      //   adminId: adminId ? String(adminId) : null,
+      //   resolvedChats: chats,
+      // });
       return { token: "", chats: [] };
     }
 
     const targetedChats = chats.filter((chatId) => preferred.has(String(chatId)));
 
-    logger.info(`[TELEGRAM_TRACE] Resolved preferred telegram chats`, {
-      adminId: adminId ? String(adminId) : null,
-      preferredChatIds: [...preferred],
-      resolvedChats: chats,
-      matchedChats: targetedChats,
-      fallbackToAllChats: false,
-      finalChats: targetedChats,
-    });
+    // logger.info(`[TELEGRAM_TRACE] Resolved preferred telegram chats`, {
+    //   adminId: adminId ? String(adminId) : null,
+    //   preferredChatIds: [...preferred],
+    //   resolvedChats: chats,
+    //   matchedChats: targetedChats,
+    //   fallbackToAllChats: false,
+    //   finalChats: targetedChats,
+    // });
 
     if (!targetedChats.length) {
-      logger.warn(`[TELEGRAM_TRACE] Preferred telegram chats did not match any active linked chats`, {
-        adminId: adminId ? String(adminId) : null,
-        preferredChatIds: [...preferred],
-        resolvedChats: chats,
-      });
+      // logger.warn(`[TELEGRAM_TRACE] Preferred telegram chats did not match any active linked chats`, {
+      //   adminId: adminId ? String(adminId) : null,
+      //   preferredChatIds: [...preferred],
+      //   resolvedChats: chats,
+      // });
       return { token: "", chats: [] };
     }
 
@@ -534,11 +534,11 @@ class TelegramService {
         options?.preferredChatIds || [],
       );
       if (!token || !chats?.length) {
-        logger.warn(`[TELEGRAM_TRACE] sendIncident skipped - no token/chats`, {
-          incidentId: incident?._id ? String(incident._id) : null,
-          adminId: adminId ? String(adminId) : null,
-          preferredChatIds: options?.preferredChatIds || [],
-        });
+        // logger.warn(`[TELEGRAM_TRACE] sendIncident skipped - no token/chats`, {
+        //   incidentId: incident?._id ? String(incident._id) : null,
+        //   adminId: adminId ? String(adminId) : null,
+        //   preferredChatIds: options?.preferredChatIds || [],
+        // });
         return;
       }
 
@@ -556,13 +556,13 @@ class TelegramService {
         );
       }
 
-      logger.info(`[TELEGRAM_TRACE] Queueing telegram incident`, {
-        incidentId: incident?._id ? String(incident._id) : null,
-        adminId: adminId ? String(adminId) : null,
-        preferredChatIds: options?.preferredChatIds || [],
-        targetChats: chats,
-        hasImage: Boolean(imageUrl),
-      });
+      // logger.info(`[TELEGRAM_TRACE] Queueing telegram incident`, {
+      //   incidentId: incident?._id ? String(incident._id) : null,
+      //   adminId: adminId ? String(adminId) : null,
+      //   preferredChatIds: options?.preferredChatIds || [],
+      //   targetChats: chats,
+      //   hasImage: Boolean(imageUrl),
+      // });
 
       for (const chat of chats) {
         this._enqueue(chat, { token, chat, message, imageUrl });
@@ -585,11 +585,11 @@ class TelegramService {
     }
 
     queue.jobs.push(job);
-    logger.info(`[TELEGRAM_TRACE] Enqueued telegram job`, {
-      chat: String(chat),
-      pendingJobs: queue.jobs.length,
-      hasImage: Boolean(job?.imageUrl),
-    });
+    // logger.info(`[TELEGRAM_TRACE] Enqueued telegram job`, {
+    //   chat: String(chat),
+    //   pendingJobs: queue.jobs.length,
+    //   hasImage: Boolean(job?.imageUrl),
+    // });
     if (!queue.running) this._drain(chat, queue);
   }
 
@@ -627,11 +627,11 @@ class TelegramService {
         });
       }
 
-      logger.info(`[TELEGRAM_TRACE] Telegram delivery success`, {
-        chat: String(chat),
-        mode: imageUrl ? "photo" : "text",
-        retry: Boolean(isRetry),
-      });
+      // logger.info(`[TELEGRAM_TRACE] Telegram delivery success`, {
+      //   chat: String(chat),
+      //   mode: imageUrl ? "photo" : "text",
+      //   retry: Boolean(isRetry),
+      // });
     } catch (error) {
       const data = error?.response?.data;
 
