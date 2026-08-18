@@ -245,7 +245,23 @@ async function buildPdf({ report, rows, label, timezone }) {
       }
       return y + 30;
     };
-    const rowValues = (row) => [row.date, `${row.employee}\n#${row.employeeId} • ${row.designation}`, row.department, `${row.email}\n${row.phone}`, row.location, row.checkIn, row.checkOut, row.duration, row.status, `${row.checkInCamera}\n${row.checkOutCamera}`];
+    // Sub-lines (employee ID/designation, phone, cameras) are only appended when
+    // there is real data — otherwise a row with none of it saved would render
+    // literal placeholder junk like "#- • -" instead of a clean blank line.
+    const joinSub = (...parts) => parts.filter((part) => part && part !== "-").join(" • ");
+    const withSub = (main, sub) => (sub ? `${main}\n${sub}` : main);
+    const rowValues = (row) => [
+      row.date,
+      withSub(row.employee, joinSub(row.employeeId !== "-" ? `#${row.employeeId}` : "", row.designation)),
+      row.department,
+      withSub(row.email, row.phone !== "-" ? row.phone : ""),
+      row.location,
+      row.checkIn,
+      row.checkOut,
+      row.duration,
+      row.status,
+      withSub(row.checkInCamera, row.checkOutCamera !== "-" ? row.checkOutCamera : ""),
+    ];
 
     drawHeader();
     let y = drawTableHeader(165);

@@ -106,6 +106,10 @@ const DEFAULT_SCHEDULE_TIMEZONE = "Asia/Kolkata";
 const SCHEDULE_TOGGLE_RETRY_ATTEMPTS = 4;
 const SCHEDULE_TOGGLE_RETRY_DELAY_MS = 10000;
 const SCHEDULE_RUNNER_INTERVAL_MS = 60 * 1000;
+// How many camera+detector DS calls the schedule runner issues at once per
+// tick. Bounded so a schedule boundary covering many cameras starts/stops
+// them together instead of one at a time, without unboundedly hammering DS.
+const SCHEDULE_RUNNER_CONCURRENCY = 8;
 
 let scheduleRunnerTimer = null;
 let scheduleRunnerActive = false;
@@ -1012,7 +1016,15 @@ class DetectionSettingService {
       // Idempotency: `enabled` is the last-known DS state, so a camera already
       // in the desired state costs nothing and issues no DS call this tick.
       const currentStatus = link.enabled === true;
-      if (currentStatus === shouldEnable) return;
+      if (currentStatus === shouldEnable) {
+        if (stateChangeSource === "schedule-runner") {
+          logger.info(
+            `[DETECTION_SCHEDULE] No-op — channel=${channel._id} detector=${settingType} ` +
+              `currentStatus=${currentStatus} shouldEnable=${shouldEnable} scheduleSource=${scheduleSource}`,
+          );
+        }
+        return;
+      }
 
       const cameraId = channel._id.toString();
       const zones = detectionSetting?.settings?.referencePoints?.[cameraId] || [];
@@ -1127,6 +1139,28 @@ class DetectionSettingService {
         .populate("nvrId")
         .populate(toPopulateDetections);
 
+      // Temporary tick-level trace to diagnose reports of cameras never
+      // starting/stopping on a global schedule — pinpoints whether the
+      // camera is missing from the query, or dropped later in the loop.
+      logger.info(
+        `[DETECTION_SCHEDULE] Tick — globalSchedules=${globalScheduleIndex.size} ` +
+          `globalScheduleChannelIds=${globalScheduleIndex.channelIds.length} ` +
+          `candidateChannels=${channels.length}`,
+      );
+
+      // Group work per channel — several detectors on the same camera must
+      // still run one at a time, since applyDetectionScheduleState() calls
+      // channel.save() on the shared in-memory document per detector, and
+      // concurrent saves on the same doc can race (Mongoose VersionError, or
+      // one write clobbering another). Different cameras are independent
+      // documents, so those run in parallel with bounded concurrency.
+      //
+      // This is what actually fixes cameras not starting/stopping together:
+      // the previous single `for` loop awaited every camera+detector one at a
+      // time, so a schedule boundary covering many cameras trickled out over
+      // tens of seconds (worse with retries — up to 60s of backoff per
+      // failing camera) instead of firing together.
+      const workByChannel = new Map();
       for (const channel of channels) {
         for (const settingType of Object.keys(DETECTION_TYPES)) {
           const detectionSetting = channel?.detections?.[settingType]?.id;
@@ -1137,21 +1171,47 @@ class DetectionSettingService {
           const hasCameraSchedule = Boolean(
             channel?.detections?.[settingType]?.schedule,
           );
-          const hasGlobalSchedule = Boolean(
-            globalScheduleIndex.find(channel, settingType),
-          );
+          const matchedGlobalSchedule = globalScheduleIndex.find(channel, settingType);
+          const hasGlobalSchedule = Boolean(matchedGlobalSchedule);
+
+          if (globalScheduleIndex.channelIds.includes(String(channel._id))) {
+            logger.info(
+              `[DETECTION_SCHEDULE] Evaluating channel=${channel._id} name="${channel.customName || channel.name}" ` +
+                `detector=${settingType} hasCameraSchedule=${hasCameraSchedule} hasGlobalSchedule=${hasGlobalSchedule} ` +
+                `matchedGlobalScheduleId=${matchedGlobalSchedule?._id || "none"}`,
+            );
+          }
+
           if (!hasCameraSchedule && !hasGlobalSchedule) continue;
 
-          await this.applyDetectionScheduleState(
-            buildScheduleRunnerReq(channel),
-            channel,
-            detectionSetting,
-            undefined,
-            "schedule-runner",
-            globalScheduleIndex,
-          );
+          const key = String(channel._id);
+          if (!workByChannel.has(key)) workByChannel.set(key, { channel, detectionSettings: [] });
+          workByChannel.get(key).detectionSettings.push(detectionSetting);
         }
       }
+
+      const channelWork = [...workByChannel.values()];
+      let cursor = 0;
+      const runNext = async () => {
+        while (cursor < channelWork.length) {
+          const { channel, detectionSettings } = channelWork[cursor];
+          cursor += 1;
+          // Sequential within the camera — see comment above.
+          for (const detectionSetting of detectionSettings) {
+            await this.applyDetectionScheduleState(
+              buildScheduleRunnerReq(channel),
+              channel,
+              detectionSetting,
+              undefined,
+              "schedule-runner",
+              globalScheduleIndex,
+            );
+          }
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(SCHEDULE_RUNNER_CONCURRENCY, channelWork.length) }, runNext),
+      );
     } catch (error) {
       logger.error("Failed to apply detection schedules:", error);
     } finally {

@@ -68,37 +68,35 @@ export const getIO = () => {
   return io;
 };
 
-// export const sendPayloadToUser = async (userId, channel, payload) => {
-//   try {
-//     const socketId = await redis.get(`socket:${userId}`);
-    
-//     if (!socketId) {
-//       logger.warn(`No active socket found for user ${userId}`);
-//       return;
-//     }
-    
-//     const io = getIO();
-//     const socket = io.sockets.sockets.get(socketId);
-//     if (!socket) {
-//       logger.warn(`Socket ID ${socketId} not found in active connections for user ${userId}`);
-//       return;
-//     }
-    
-//     socket.emit(channel, payload);
-//     logger.info(`Payload sent to user ${userId} via socket ${socketId}`);
-//   } catch (error) {
-//     console.log(error,'error');
-//     logger.error(`Error sending payload to user ${userId}: ${error.message}`);
-//   }
-// };
+/**
+ * Emit to exactly the connected socket(s) belonging to `userId`, not a global
+ * broadcast. Falls back to a broadcast only when there's no Redis record for
+ * the user (e.g. Redis unavailable) so an event is never silently dropped —
+ * every listener still filters by the channel name (e.g.
+ * `detectionSchedule_${adminId}`), so a fallback broadcast is only ever
+ * wasteful, not incorrect.
+ */
 export const sendPayloadToUser = async (userId, channel, payload) => {
   try {
     const io = getIO();
+    const socketId = await redis.get(`socket:${userId}`);
 
-    io.emit(channel, payload); // broadcast to all connected clients
+    if (!socketId) {
+      logger.warn(`No active socket found for user ${userId} — broadcasting '${channel}' instead`);
+      io.emit(channel, payload);
+      return;
+    }
 
-    logger.info(`Broadcasted payload on channel '${channel}'`);
+    const socket = io.sockets.sockets.get(socketId);
+    if (!socket) {
+      logger.warn(`Socket ID ${socketId} not found in active connections for user ${userId} — broadcasting '${channel}' instead`);
+      io.emit(channel, payload);
+      return;
+    }
+
+    socket.emit(channel, payload);
+    logger.info(`Payload sent to user ${userId} via socket ${socketId} on channel '${channel}'`);
   } catch (error) {
-    logger.error(`Error broadcasting payload on channel '${channel}': ${error.message}`);
+    logger.error(`Error sending payload to user ${userId} on channel '${channel}': ${error.message}`);
   }
 };
