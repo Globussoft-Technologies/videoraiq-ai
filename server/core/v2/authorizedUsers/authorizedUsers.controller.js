@@ -46,12 +46,6 @@ class AuthUserController {
               required: false,
               type: 'Number',
     }
-    #swagger.parameters['verified'] = {
-              in: 'query',
-              description: 'Provide verified status true or false',
-              required: false,
-              type: 'boolean',
-    }
     #swagger.parameters['search'] = {
     in: 'query',
     required: false,
@@ -60,7 +54,7 @@ class AuthUserController {
   }
     #swagger.parameters['data'] = {
       in: 'body',
-      description: 'Provide Filters',
+      description: 'Provide Filters including status and verified',
       required: true,
       schema: { $ref: '#/definitions/fetchAuthUser' }
     }

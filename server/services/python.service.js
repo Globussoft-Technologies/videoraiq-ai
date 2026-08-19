@@ -66,6 +66,58 @@ const pickLineCrossingSettings = (settings = {}) => {
 };
 
 class PythonService {
+  async toggleCamerasBulk(admin_id, camera_ids = [], enable = true) {
+    try {
+      if (!admin_id) {
+        throw new Error("admin_id is required");
+      }
+
+      const normalizedCameraIds = (Array.isArray(camera_ids) ? camera_ids : [camera_ids])
+        .map((cameraId) => String(cameraId || "").trim())
+        .filter(Boolean);
+
+      const payload = {
+        admin_id: String(admin_id),
+      };
+
+      if (normalizedCameraIds.length === 1) {
+        payload.camera_id = normalizedCameraIds[0];
+      } else if (normalizedCameraIds.length > 1) {
+        payload.camera_id = normalizedCameraIds;
+      }
+
+      const { detectionUrl, attendanceUrl } = await resolveAdminEndpoints(admin_id);
+      const detectionEndpoint = enable ? `${detectionUrl}/stream/resume-all` : `${detectionUrl}/stream/stop-all`;
+      const attendanceEndpoint = enable
+        ? `${attendanceUrl}/api/v1/cameras/resume-all`
+        : `${attendanceUrl}/api/v1/cameras/stop-all`;
+
+      const [detectionResponse, attendanceResponse] = await Promise.all([
+        axios.post(detectionEndpoint, payload, {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }),
+        axios.post(attendanceEndpoint, payload, {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }),
+      ]);
+
+      return {
+        detection: detectionResponse?.data ?? null,
+        attendance: attendanceResponse?.data ?? null,
+      };
+    } catch (error) {
+      logger.error(
+        `Error toggling cameras in bulk:`,
+        error?.response?.data || error.message,
+      );
+      throw error;
+    }
+  }
+
   // attendance
   async registerChannel(channel, type, admin_id) {
     try {

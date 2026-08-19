@@ -232,8 +232,14 @@ class AuthUsersService {
         try {
           const data = req?.verified?.userData;
           
-          const { userId, skip = 0, limit = 10, search = '',verified } = req.query;
-          const { roleIds, departmentIds: selectedDepartments, locations, status } = req.body;
+          const { userId, skip = 0, limit = 10, search = '', verified: verifiedQuery } = req.query;
+          const {
+            roleIds,
+            departmentIds: selectedDepartments,
+            locations,
+            status,
+            verified: verifiedBody,
+          } = req.body;
           
           let authorizedChannel = req?.verified?.authorizedChannel?.channels || [];
           let authorizedNVRs = req?.verified?.authorizedChannel?.nvrIds || [];
@@ -291,8 +297,10 @@ class AuthUsersService {
           // Build filter condition dynamically
           const filter = { adminId: data?.adminId };
 
-          if(verified){
-            filter.verified = verified;
+          if (typeof verifiedBody === "boolean") {
+            filter.verified = verifiedBody;
+          } else if (verifiedQuery === "true" || verifiedQuery === "false") {
+            filter.verified = verifiedQuery === "true";
           }
 
           if (status === 'active') {

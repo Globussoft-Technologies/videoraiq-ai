@@ -31,6 +31,24 @@ import config from "config"
 const APP_ENV = config.get("APP_ENV");
 const rtsp_host = config.get("RTSPStream.host");
 
+const isMongoObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").trim());
+
+const resolveAdminObjectId = async ({
+  adminId,
+  userId,
+  channelUserId,
+}) => {
+  if (isMongoObjectId(adminId)) return String(adminId);
+
+  const resolvedUserId = [userId, channelUserId]
+    .map((value) => String(value || "").trim())
+    .find(Boolean);
+  if (!resolvedUserId) return adminId ? String(adminId) : undefined;
+
+  const admin = await adminModel.findOne({ user_id: resolvedUserId }).select("_id").lean();
+  return admin?._id ? String(admin._id) : (adminId ? String(adminId) : undefined);
+};
+
 const updateSettingsWithModelThresholds = async (detectionSetting, backendResponse) => {
   const thresholds = DetectionSettingsValidation.extractModelThresholds(
     detectionSetting?.settingType,
@@ -1345,7 +1363,10 @@ class ChannelService {
   async toggleDetection(req, res, _next) {
     try {
       const { channelId, detectionType, enable } = req.body;
-      const adminId = req?.verified?.userData?.adminId;
+      const adminId = await resolveAdminObjectId({
+        adminId: req?.verified?.userData?.adminId,
+        userId: req?.verified?.userData?.user_id,
+      });
       const userId = req?.verified?.userData?.user_id;
       if (!channelId || !detectionType || typeof enable !== "boolean") {
         return res
@@ -1402,7 +1423,11 @@ class ChannelService {
 
         const beResponse = await pythonService.handleDetectionStartStop(
           channel,
-          adminId,
+          await resolveAdminObjectId({
+            adminId,
+            userId: req?.verified?.userData?.user_id,
+            channelUserId: channel?.userId,
+          }),
           enable,
           detectionType,
           zones,

@@ -28,6 +28,13 @@ vi.mock("../../../utils/rtspStream.js", () => ({
   buildStreamingUrl: vi.fn().mockResolvedValue("stream.m3u8"),
 }));
 
+vi.mock("../../../utils/adminEndpoints.js", () => ({
+  resolveAdminEndpoints: vi.fn(async () => ({
+    detectionUrl: "http://detection.test",
+    attendanceUrl: "http://attendance.test",
+  })),
+}));
+
 const axios = (await import("axios")).default;
 const { default: NVR } = await import("../../../core/v1/NVR/nvr.model.js");
 const { buildStreamingUrl } = await import("../../../utils/rtspStream.js");
@@ -75,6 +82,82 @@ describe("PythonService.stopDetection", () => {
   it("rethrows on axios failure", async () => {
     axios.post.mockRejectedValueOnce(new Error("nope"));
     await expect(PythonService.stopDetection("cam-3")).rejects.toThrow("nope");
+  });
+});
+
+describe("PythonService.toggleCamerasBulk", () => {
+  it("sends admin_id + a single camera_id to both resume-all endpoints", async () => {
+    axios.post
+      .mockResolvedValueOnce({ data: { status: "ok", resumed: ["cam-1:crowd"] } })
+      .mockResolvedValueOnce({ data: { success: true, resumed: ["cam-1:face_auth"] } });
+
+    const out = await PythonService.toggleCamerasBulk("admin-1", "cam-1", true);
+
+    expect(out).toEqual({
+      detection: { status: "ok", resumed: ["cam-1:crowd"] },
+      attendance: { success: true, resumed: ["cam-1:face_auth"] },
+    });
+    expect(axios.post).toHaveBeenCalledTimes(2);
+    expect(axios.post).toHaveBeenNthCalledWith(
+      1,
+      "http://detection.test/stream/resume-all",
+      { admin_id: "admin-1", camera_id: "cam-1" },
+      expect.objectContaining({
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    expect(axios.post).toHaveBeenNthCalledWith(
+      2,
+      "http://attendance.test/api/v1/cameras/resume-all",
+      { admin_id: "admin-1", camera_id: "cam-1" },
+      expect.objectContaining({
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  });
+
+  it("sends admin_id + a camera_id array to both stop-all endpoints", async () => {
+    axios.post
+      .mockResolvedValueOnce({ data: { status: "ok", stopped: ["cam-1:crowd", "cam-2:line"] } })
+      .mockResolvedValueOnce({ data: { success: true, stopped: ["cam-1:face_auth", "cam-2:face_auth"] } });
+
+    const out = await PythonService.toggleCamerasBulk(
+      "admin-2",
+      ["cam-1", "cam-2"],
+      false,
+    );
+
+    expect(out).toEqual({
+      detection: { status: "ok", stopped: ["cam-1:crowd", "cam-2:line"] },
+      attendance: {
+        success: true,
+        stopped: ["cam-1:face_auth", "cam-2:face_auth"],
+      },
+    });
+    expect(axios.post).toHaveBeenCalledTimes(2);
+    expect(axios.post).toHaveBeenNthCalledWith(
+      1,
+      "http://detection.test/stream/stop-all",
+      { admin_id: "admin-2", camera_id: ["cam-1", "cam-2"] },
+      expect.objectContaining({
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    expect(axios.post).toHaveBeenNthCalledWith(
+      2,
+      "http://attendance.test/api/v1/cameras/stop-all",
+      { admin_id: "admin-2", camera_id: ["cam-1", "cam-2"] },
+      expect.objectContaining({
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  });
+
+  it("throws when admin_id is missing", async () => {
+    await expect(
+      PythonService.toggleCamerasBulk("", ["cam-1"], true),
+    ).rejects.toThrow("admin_id is required");
+    expect(axios.post).not.toHaveBeenCalled();
   });
 });
 

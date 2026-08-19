@@ -68,6 +68,7 @@ import {
 import Channel from "../channels/channels.model.js";
 import {
   buildGlobalScheduleIndex,
+  SCHEDULE_SOURCE,
   resolveDesiredDetectionState,
 } from "../../../services/detectionSchedule.resolver.js";
 import mongoose, { Types } from "mongoose";
@@ -162,14 +163,37 @@ const getAdminScheduleTimezone = async (adminId) => {
   return admin?.timezone || DEFAULT_SCHEDULE_TIMEZONE;
 };
 
-const buildScheduleRunnerReq = (channel) => ({
+const isMongoObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").trim());
+
+const resolveAdminObjectId = async ({
+  adminId,
+  userId,
+  channelUserId,
+}) => {
+  if (isMongoObjectId(adminId)) return String(adminId);
+
+  const resolvedUserId = [userId, channelUserId]
+    .map((value) => String(value || "").trim())
+    .find(Boolean);
+  if (!resolvedUserId) return adminId ? String(adminId) : undefined;
+
+  const admin = await Admin.findOne({ user_id: resolvedUserId }).select("_id").lean();
+  return admin?._id ? String(admin._id) : (adminId ? String(adminId) : undefined);
+};
+
+const buildScheduleRunnerReq = (channel, adminId) => ({
   verified: {
     userData: {
-      adminId: channel?.userId,
+      adminId: adminId ? String(adminId) : undefined,
       user_id: channel?.userId,
     },
   },
 });
+
+const GLOBAL_SCHEDULE_BULK_ENDPOINTS = {
+  resume: "POST /stream/resume-all + POST /api/v1/cameras/resume-all",
+  stop: "POST /stream/stop-all + POST /api/v1/cameras/stop-all",
+};
 
 /**
  * Push a schedule state change to the UI.
@@ -353,7 +377,11 @@ class DetectionSettingService {
       }
 
       // 2. Check if admin is allowed to use this detection type
-      const adminId = req?.verified?.userData?.adminId;
+      const adminId = await resolveAdminObjectId({
+        adminId: req?.verified?.userData?.adminId,
+        userId: req?.verified?.userData?.user_id,
+        channelUserId: channel?.userId,
+      });
       const admin = await Admin.findById(adminId).select("detectionConfig").lean();
       const config = admin?.detectionConfig;
       // if (config && Object.keys(config).length > 0 && !(value.settingType in config)) {
@@ -671,7 +699,11 @@ class DetectionSettingService {
       await detectionSetting.save();
 
       // Notify Python for all linked and enabled channels
-      const adminId = req?.verified?.userData?.adminId;
+      const adminId = await resolveAdminObjectId({
+        adminId: req?.verified?.userData?.adminId,
+        userId: req?.verified?.userData?.user_id,
+        channelUserId: channel?.userId,
+      });
       const linkedChannels = await Channel.find({
         [`detections.${settingType}.id`]: id,
         [`detections.${settingType}.enabled`]: true,
@@ -998,7 +1030,11 @@ class DetectionSettingService {
     try {
       if (!channel || !detectionSetting) return;
 
-      const adminId = req?.verified?.userData?.adminId;
+      const adminId = await resolveAdminObjectId({
+        adminId: req?.verified?.userData?.adminId,
+        userId: req?.verified?.userData?.user_id,
+        channelUserId: channel?.userId,
+      });
       const settingType = detectionSetting.settingType;
       const link = channel?.detections?.[settingType];
       if (!link?.id) return;
@@ -1140,6 +1176,19 @@ class DetectionSettingService {
       const channels = await Channel.find({ $or: scheduleFilters })
         .populate("nvrId")
         .populate(toPopulateDetections);
+      const adminUserIds = [...new Set(
+        channels
+          .map((channel) => String(channel?.userId || "").trim())
+          .filter(Boolean),
+      )];
+      const adminRecords = adminUserIds.length
+        ? await Admin.find({ user_id: { $in: adminUserIds } })
+          .select("_id user_id")
+          .lean()
+        : [];
+      const adminIdByUserId = new Map(
+        adminRecords.map((admin) => [String(admin.user_id), String(admin._id)]),
+      );
 
       // Temporary tick-level trace to diagnose reports of cameras never
       // starting/stopping on a global schedule — pinpoints whether the
@@ -1163,6 +1212,7 @@ class DetectionSettingService {
       // tens of seconds (worse with retries — up to 60s of backoff per
       // failing camera) instead of firing together.
       const workByChannel = new Map();
+      const globalBulkOps = new Map();
       for (const channel of channels) {
         for (const settingType of Object.keys(DETECTION_TYPES)) {
           const detectionSetting = channel?.detections?.[settingType]?.id;
@@ -1186,9 +1236,131 @@ class DetectionSettingService {
 
           if (!hasCameraSchedule && !hasGlobalSchedule) continue;
 
+          const adminId = adminIdByUserId.get(String(channel?.userId || ""));
+          const desired = await resolveDesiredDetectionState(channel, settingType, {
+            index: globalScheduleIndex,
+          });
+          const shouldEnable = desired.active;
+          const scheduleSource = desired.source;
+          const currentStatus = channel?.detections?.[settingType]?.enabled === true;
+
+          if (currentStatus === shouldEnable) continue;
+
+          const req = buildScheduleRunnerReq(channel, adminId);
+
+          if (scheduleSource === SCHEDULE_SOURCE.GLOBAL) {
+            if (!adminId) {
+              logger.error(
+                `[DETECTION_SCHEDULE] Missing adminId for global bulk action ` +
+                  `channel=${channel?._id} userId=${channel?.userId} detector=${settingType}`,
+              );
+              continue;
+            }
+
+            const operation = shouldEnable ? "resume" : "stop";
+            const bulkKey = `${adminId}:${operation}`;
+            if (!globalBulkOps.has(bulkKey)) {
+              globalBulkOps.set(bulkKey, {
+                adminId,
+                operation,
+                cameraIds: new Set(),
+                items: [],
+              });
+            }
+
+            const group = globalBulkOps.get(bulkKey);
+            group.cameraIds.add(String(channel._id));
+            group.items.push({
+              req,
+              channel,
+              detectionSetting,
+              settingType,
+              shouldEnable,
+              scheduleSource,
+            });
+            continue;
+          }
+
           const key = String(channel._id);
-          if (!workByChannel.has(key)) workByChannel.set(key, { channel, detectionSettings: [] });
+          if (!workByChannel.has(key)) {
+            workByChannel.set(key, { channel, req, detectionSettings: [] });
+          }
           workByChannel.get(key).detectionSettings.push(detectionSetting);
+        }
+      }
+
+      for (const group of globalBulkOps.values()) {
+        const endpoint = GLOBAL_SCHEDULE_BULK_ENDPOINTS[group.operation];
+        const enable = group.operation === "resume";
+        const cameraIds = [...group.cameraIds];
+
+        logger.info(
+          `[DETECTION_SCHEDULE] Bulk ${group.operation} - adminId=${group.adminId} ` +
+            `cameras=${cameraIds.length} endpoint="${endpoint}"`,
+        );
+
+        try {
+          const backendResponse = await pythonService.toggleCamerasBulk(
+            group.adminId,
+            cameraIds,
+            enable,
+          );
+
+          const channelsToSave = new Map();
+          for (const item of group.items) {
+            const channelKey = String(item.channel._id);
+            const link = item.channel?.detections?.[item.settingType];
+            if (!link) continue;
+
+            link.enabled = item.shouldEnable;
+            item.channel.markModified(`detections.${item.settingType}.enabled`);
+
+            if (!channelsToSave.has(channelKey)) {
+              channelsToSave.set(channelKey, item.channel);
+            }
+          }
+
+          for (const channelToSave of channelsToSave.values()) {
+            await channelToSave.save();
+          }
+
+          for (const item of group.items) {
+            await emitDetectionScheduleState(
+              item.req,
+              item.channel,
+              item.detectionSetting,
+              "schedule-runner",
+              {
+                operation: group.operation,
+                status: "success",
+                scheduleSource: item.scheduleSource,
+                endpoint,
+                response: backendResponse ?? null,
+              },
+            );
+          }
+        } catch (error) {
+          logger.error(
+            `[DETECTION_SCHEDULE] Bulk ${group.operation} failed for admin ${group.adminId}:`,
+            error,
+          );
+
+          for (const item of group.items) {
+            await emitDetectionScheduleState(
+              item.req,
+              item.channel,
+              item.detectionSetting,
+              "schedule-runner",
+              {
+                operation: group.operation,
+                status: "failed",
+                scheduleSource: item.scheduleSource,
+                endpoint,
+                error: error?.message,
+                response: error?.response?.data ?? null,
+              },
+            );
+          }
         }
       }
 
@@ -1196,12 +1368,12 @@ class DetectionSettingService {
       let cursor = 0;
       const runNext = async () => {
         while (cursor < channelWork.length) {
-          const { channel, detectionSettings } = channelWork[cursor];
+          const { channel, req, detectionSettings } = channelWork[cursor];
           cursor += 1;
           // Sequential within the camera — see comment above.
           for (const detectionSetting of detectionSettings) {
             await this.applyDetectionScheduleState(
-              buildScheduleRunnerReq(channel),
+              req,
               channel,
               detectionSetting,
               undefined,

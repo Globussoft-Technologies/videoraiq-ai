@@ -105,6 +105,24 @@ const DEFAULT_SCHEDULE_TIMEZONE = "Asia/Kolkata";
 const SCHEDULE_TOGGLE_RETRY_ATTEMPTS = 4;
 const SCHEDULE_TOGGLE_RETRY_DELAY_MS = 10000;
 
+const isMongoObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").trim());
+
+const resolveAdminObjectId = async ({
+  adminId,
+  userId,
+  channelUserId,
+}) => {
+  if (isMongoObjectId(adminId)) return String(adminId);
+
+  const resolvedUserId = [userId, channelUserId]
+    .map((value) => String(value || "").trim())
+    .find(Boolean);
+  if (!resolvedUserId) return adminId ? String(adminId) : undefined;
+
+  const admin = await Admin.findOne({ user_id: resolvedUserId }).select("_id").lean();
+  return admin?._id ? String(admin._id) : (adminId ? String(adminId) : undefined);
+};
+
 const getDetectionSchedule = (channel, settingType) =>
   channel?.detections?.[settingType]?.schedule || DEFAULT_DETECTION_SCHEDULE;
 
@@ -395,7 +413,11 @@ class DetectionSettingService {
       }
 
       // 2. Check if admin is allowed to use this detection type
-      const adminId = req?.verified?.userData?.adminId;
+      const adminId = await resolveAdminObjectId({
+        adminId: req?.verified?.userData?.adminId,
+        userId: req?.verified?.userData?.user_id,
+        channelUserId: channel?.userId,
+      });
       const admin = await Admin.findById(adminId).select("detectionConfig").lean();
       const config = admin?.detectionConfig;
       // if (config && Object.keys(config).length > 0 && !(value.settingType in config)) {
@@ -711,7 +733,11 @@ class DetectionSettingService {
       await detectionSetting.save();
 
       // Notify Python for all linked and enabled channels
-      const adminId = req?.verified?.userData?.adminId;
+      const adminId = await resolveAdminObjectId({
+        adminId: req?.verified?.userData?.adminId,
+        userId: req?.verified?.userData?.user_id,
+        channelUserId: channel?.userId,
+      });
       const linkedChannels = await Channel.find({
         [`detections.${settingType}.id`]: id,
         [`detections.${settingType}.enabled`]: true,
@@ -1037,7 +1063,11 @@ class DetectionSettingService {
     try {
       if (!channel || !detectionSetting) return;
 
-      const adminId = req?.verified?.userData?.adminId;
+      const adminId = await resolveAdminObjectId({
+        adminId: req?.verified?.userData?.adminId,
+        userId: req?.verified?.userData?.user_id,
+        channelUserId: channel?.userId,
+      });
       const settingType = detectionSetting.settingType;
       const link = channel?.detections?.[settingType];
       if (!link?.id) return;
