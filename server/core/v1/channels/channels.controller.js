@@ -90,6 +90,80 @@ class ChannelController {
     return await ChannelService.getAllChannels(req, res, next);
   }
 
+  async getNvrCameraDetections(req, res, next) {
+    /* #swagger.tags = ['Channel']
+    #swagger.description = 'Get running cameras grouped by NVR for a specific admin. Only cameras with at least one enabled detection and control=1 are returned.'
+    #swagger.parameters['adminId'] = {
+        in: 'path',
+        description: 'Admin ID whose registered NVRs/cameras should be fetched',
+        required: true,
+        type: 'string',
+        example: '66b1f0c9d5e4a123456789ab'
+    }
+    #swagger.responses[200] = {
+        description: 'Grouped NVR camera detection data',
+        schema: {
+          status: 'success',
+          message: 'NVR camera detections retrieved successfully',
+          data: {
+            totalNvrs: 2,
+            nvrs: [
+              {
+                nvrId: '66b1f11ad5e4a123456789ac',
+                nvrName: 'NVR-A',
+                cameras: [
+                  {
+                    cameraId: '66b1f16bd5e4a123456789ad',
+                    cameraName: 'Front Gate',
+                    detections: ['Count Persons Detection']
+                  },
+                  {
+                    cameraId: '66b1f18ed5e4a123456789ae',
+                    cameraName: 'Lobby Custom',
+                    detections: ['ANPR Detection']
+                  }
+                ]
+              },
+              {
+                nvrId: '66b1f1a7d5e4a123456789af',
+                nvrName: 'NVR-B',
+                cameras: [
+                  {
+                    cameraId: '66b1f1c8d5e4a123456789b0',
+                    cameraName: 'Warehouse',
+                    detections: ['Crowd Detection', 'Light Detection']
+                  }
+                ]
+              }
+            ]
+          }
+        }
+    }
+    #swagger.responses[400] = {
+        description: 'Missing required adminId',
+        schema: {
+          status: 'failed',
+          message: 'Missing required adminId',
+          error: 'Missing required adminId'
+        }
+    }
+    #swagger.responses[404] = {
+        description: 'Admin not found',
+        schema: {
+          status: 'failed',
+          message: 'Admin not found'
+        }
+    }
+    #swagger.responses[500] = {
+        description: 'Internal server error'
+    }
+    #swagger.security = [{
+    "EncryptedAuthToken": []
+    }]
+    */
+    return await ChannelService.getNvrCameraDetections(req, res, next);
+  }
+
   async getAllChannelsByNvrId(req, res, next) {
     /* #swagger.tags = ['Channel']
     #swagger.description = 'Get all camera channels by NVR ID (Frontend team should not use this API)'

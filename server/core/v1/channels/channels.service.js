@@ -1263,6 +1263,85 @@ class ChannelService {
         );
     }
   }
+
+  async getNvrCameraDetections(req, res, _next) {
+    try {
+      const requestedAdminId = req?.params?.adminId || req?.query?.adminId;
+      let { memberId } = req?.verified?.userData || {};
+      const authorizedChannel = req?.verified?.authorizedChannel?.channels || [];
+
+      if (!requestedAdminId) {
+        return res
+          .status(400)
+          .json(Response.errorResp("Missing required adminId"));
+      }
+
+      const adminData = await adminModel.findOne({ _id: requestedAdminId });
+      const userId = adminData?.user_id;
+
+      if (!userId) {
+        return res
+          .status(404)
+          .json(Response.notFoundResp("Admin not found"));
+      }
+
+      const filter = { userId };
+
+      if (authorizedChannel.length > 0 && memberId) {
+        filter._id = { $in: authorizedChannel };
+      }
+
+      const channels = await Channel.find(filter)
+        .sort({ createdAt: 1, _id: 1 })
+        .populate("nvrId", "_id nvrName")
+        .lean();
+
+      const groupedByNvr = new Map();
+
+      for (const channel of channels) {
+        const detections = Object.entries(channel?.detections || {})
+          .filter(([, detectionConfig]) => detectionConfig?.enabled === true)
+          .map(([detectionKey]) => DETECTION_TYPES[detectionKey] || detectionKey);
+
+        if (channel?.control !== 1 || detections.length === 0) {
+          continue;
+        }
+
+        const nvrId = channel?.nvrId?._id?.toString() || "unassigned";
+
+        if (!groupedByNvr.has(nvrId)) {
+          groupedByNvr.set(nvrId, {
+            nvrId: channel?.nvrId?._id || null,
+            nvrName: channel?.nvrId?.nvrName || "Unknown NVR",
+            cameras: [],
+          });
+        }
+
+        groupedByNvr.get(nvrId).cameras.push({
+          cameraId: channel?._id,
+          cameraName: channel?.customName || channel?.name || "Unnamed Camera",
+          detections,
+        });
+      }
+
+      return res.status(200).json(
+        Response.userSuccessResp("NVR camera detections retrieved successfully", {
+          totalNvrs: groupedByNvr.size,
+          nvrs: Array.from(groupedByNvr.values()),
+        })
+      );
+    } catch (error) {
+      logger.error(error);
+      return res
+        .status(500)
+        .json(
+          Response.errorResp(
+            "Failed to retrieve NVR camera detections",
+            error.message
+          )
+        );
+    }
+  }
   async toggleDetection(req, res, _next) {
     try {
       const { channelId, detectionType, enable } = req.body;

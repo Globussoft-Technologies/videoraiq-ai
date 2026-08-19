@@ -23,6 +23,7 @@ vi.mock("../../../core/v1/channels/channels.service.js", () => ({
   default: {
     updateChannel: vi.fn(),
     getAllChannels: vi.fn(),
+    getNvrCameraDetections: vi.fn(),
     getChannelsByNvr: vi.fn(),
     deleteChannel: vi.fn(),
     bulkUpdateChannels: vi.fn(),
@@ -45,6 +46,7 @@ import { makeReqRes } from "../../helpers/factory.js";
 const ALL_METHODS = [
   "updateChannel",
   "getAllChannels",
+  "getNvrCameraDetections",
   "getChannelsByNvr",
   "deleteChannel",
   "bulkUpdateChannels",
@@ -134,6 +136,41 @@ describe("ChannelController", () => {
       await expect(
         channelController.getAllChannels(req, res, next)
       ).rejects.toThrow("query failed");
+    });
+  });
+
+  describe("getNvrCameraDetections", () => {
+    it("delegates to ChannelService.getNvrCameraDetections and returns its result", async () => {
+      ChannelService.getNvrCameraDetections.mockResolvedValueOnce({
+        data: [{ nvrId: "n1", cameras: [{ cameraName: "Lobby" }] }],
+      });
+      const { req, res, next } = makeReqRes();
+
+      const out = await channelController.getNvrCameraDetections(
+        req,
+        res,
+        next
+      );
+
+      expect(out).toEqual({
+        data: [{ nvrId: "n1", cameras: [{ cameraName: "Lobby" }] }],
+      });
+      expect(ChannelService.getNvrCameraDetections).toHaveBeenCalledWith(
+        req,
+        res,
+        next
+      );
+      expectOnlyCalled("getNvrCameraDetections");
+    });
+
+    it("propagates rejections from the service", async () => {
+      ChannelService.getNvrCameraDetections.mockRejectedValueOnce(
+        new Error("grouping failed")
+      );
+      const { req, res, next } = makeReqRes();
+      await expect(
+        channelController.getNvrCameraDetections(req, res, next)
+      ).rejects.toThrow("grouping failed");
     });
   });
 

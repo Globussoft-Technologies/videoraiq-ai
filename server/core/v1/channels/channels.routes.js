@@ -6,6 +6,8 @@ import { viewAccessCheck, editAccessCheck, createAccessCheck, deleteAccessCheck 
 const router = express.Router();
 
 router.get("/", viewAccessCheck,ChannelControllerontroller.getAllChannels);
+router.get("/nvr-camera-detections", viewAccessCheck, ChannelControllerontroller.getNvrCameraDetections);
+router.get("/nvr-camera-detections/:adminId", viewAccessCheck, ChannelControllerontroller.getNvrCameraDetections);
 router.get("/nvr/:nvrId",viewAccessCheck, ChannelControllerontroller.getAllChannelsByNvrId);
 router.put("/detection/toggle", editAccessCheck, ChannelControllerontroller.toggleDetection);
 router.put("/:id",editAccessCheck,ChannelControllerontroller.updateChannel) 
