@@ -14,6 +14,7 @@ import { deleteLineCrossingLogs, fetchIncidentLogs } from '@/pages/IncidentLogs/
 import DateRangePicker from '@/pages/AttendanceLogs/components/DateRangePicker';
 import SystemControls from '@/page/user/CommandCenter/SystemControls';
 import MultiSelect from '@/components/MultiSelect';
+import './lineCrossingLogs.css';
 
 const IST_ZONE = 'Asia/Kolkata';
 const ENDPOINT = '/incidents/logs/line-crossing';
@@ -196,30 +197,29 @@ function movementStatCard({ kind, value, rows, dropdownOpen, onToggle }) {
   }, [dropdownOpen, onToggle]);
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative', height: 164, background: `linear-gradient(135deg, ${soft}, var(--bg1) 58%, ${soft})`, border: `1px solid ${color}30`, borderRadius: 12, minWidth: 0, boxShadow: `0 12px 26px ${color}10` }}>
+    <div ref={wrapRef} className="vq-lcl-movement-card" style={{ background: `linear-gradient(135deg, ${soft}, var(--bg1) 58%, ${soft})`, border: `1px solid ${color}30`, borderRadius: '0 12px 12px 0', minWidth: 0, boxShadow: `0 12px 26px ${color}10` }}>
       <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: color, boxShadow: `0 0 18px ${color}55` }} />
-      <div style={{ display: 'grid', gridTemplateColumns: '168px minmax(0,1fr)', height: '100%' }}>
-        <div style={{ padding: '16px 14px 12px 22px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '32px minmax(0,1fr)', alignItems: 'center', gap: 9 }}>
-            <span style={{ width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center', background: `${color}18`, color, flexShrink: 0 }}>
-              <Icon size={17} />
-            </span>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 850, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{title}</div>
-              <div style={{ marginTop: 3, fontFamily: 'var(--disp)', fontSize: 25, lineHeight: 1, fontWeight: 900, color, whiteSpace: 'nowrap' }}>{value}</div>
-            </div>
+      <div className="vq-lcl-movement-card-summary">
+        <div style={{ display: 'grid', gridTemplateColumns: '32px minmax(0,1fr)', alignItems: 'center', gap: 9 }}>
+          <span style={{ width: 32, height: 32, borderRadius: '50%', display: 'grid', placeItems: 'center', background: `${color}18`, color, flexShrink: 0 }}>
+            <Icon size={17} />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 850, color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{title}</div>
+            <div style={{ marginTop: 3, fontFamily: 'var(--disp)', fontSize: 25, lineHeight: 1, fontWeight: 900, color, whiteSpace: 'nowrap' }}>{value}</div>
           </div>
-          <div style={{ fontSize: 11, lineHeight: 1.35, color: 'var(--tx3)' }}>{sub}</div>
         </div>
-        <div style={{ position: 'relative', borderLeft: '1px solid var(--bd)', padding: '10px 10px 8px', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(56px,1fr) 36px 32px', gap: 5, padding: '0 0 6px', borderBottom: '1px solid var(--bd)', fontSize: 10, fontWeight: 850, color: 'var(--tx2)' }}>
+        <div style={{ fontSize: 11, lineHeight: 1.35, color: 'var(--tx3)' }}>{sub}</div>
+      </div>
+      <div className="vq-lcl-movement-card-table">
+          <div className="vq-lcl-movement-card-table-row" style={{ padding: '0 0 6px', borderBottom: '1px solid var(--bd)', fontSize: 10, fontWeight: 850, color: 'var(--tx2)' }}>
             <div>Camera Name</div>
             <div>Mode</div>
             <div style={{ textAlign: 'right', color: headerColor }}>{columnLabel}</div>
           </div>
           <div style={{ display: 'grid', flex: '1 1 auto' }}>
             {visibleRows.length ? visibleRows.map((row) => (
-              <div key={`${kind}-${row.camera}-${row.mode}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(56px,1fr) 36px 32px', gap: 5, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--bd)', fontSize: 11 }}>
+              <div key={`${kind}-${row.camera}-${row.mode}`} className="vq-lcl-movement-card-table-row" style={{ alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--bd)', fontSize: 11 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, color: 'var(--tx)' }}>
                   <span style={{ width: 16, height: 16, borderRadius: 5, display: 'grid', placeItems: 'center', background: `${color}12`, color, flexShrink: 0 }}>
                     <Camera size={10} />
@@ -241,7 +241,6 @@ function movementStatCard({ kind, value, rows, dropdownOpen, onToggle }) {
             View all
             {dropdownOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
-        </div>
       </div>
       {dropdownOpen && (
         <div style={{ position: 'absolute', right: 12, top: 'calc(100% + 6px)', zIndex: 60, width: 340, maxWidth: 'calc(100vw - 80px)', maxHeight: 260, overflowY: 'auto', background: 'var(--bg1solid)', border: `1px solid ${color}40`, borderRadius: 12, boxShadow: '0 24px 64px rgba(15,23,42,.28)', padding: 10 }}>
@@ -277,7 +276,7 @@ function movementStatCard({ kind, value, rows, dropdownOpen, onToggle }) {
 function movementTotalCard(value) {
   const color = '#2563eb';
   return (
-    <div style={{ position: 'relative', height: 164, overflow: 'hidden', background: `linear-gradient(135deg, ${color}12 0%, var(--bg1) 58%, ${color}08 100%)`, border: `1px solid ${color}2f`, borderRadius: 12, padding: 22, minWidth: 0, boxShadow: `0 12px 26px ${color}10`, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+    <div style={{ position: 'relative', minHeight: 164, height: '100%', overflow: 'hidden', background: `linear-gradient(135deg, ${color}12 0%, var(--bg1) 58%, ${color}08 100%)`, border: `1px solid ${color}2f`, borderRadius: 12, padding: 22, minWidth: 0, boxShadow: `0 12px 26px ${color}10`, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
       <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: color, boxShadow: `0 0 18px ${color}55` }} />
       <div style={{ display: 'grid', gridTemplateColumns: '38px minmax(0,1fr)', alignItems: 'center', gap: 12 }}>
         <span style={{ width: 38, height: 38, borderRadius: '50%', display: 'grid', placeItems: 'center', background: `${color}18`, color, flexShrink: 0 }}>
@@ -1103,7 +1102,7 @@ export default function LineCrossingLogs() {
             Filter line-crossing logs by date and review camera, hourly, and heatmap analytics.
           </div>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <MultiSelect
             options={nvrOptions}
             value={analyticsNvrIds}
@@ -1129,7 +1128,7 @@ export default function LineCrossingLogs() {
             maxHeight="max-h-[210px]"
             tint="#2563eb"
           />
-          <div style={{ width: 250 }}>
+          <div style={{ width: 250, maxWidth: '100%' }}>
             <DateRangePicker
               startDate={dateFilter.startDate ? moment.tz(dateFilter.startDate, IST_ZONE).toDate() : null}
               endDate={dateFilter.endDate ? moment.tz(dateFilter.endDate, IST_ZONE).toDate() : null}
@@ -1160,7 +1159,7 @@ export default function LineCrossingLogs() {
 
       <section style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12, padding: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--tx)', marginBottom: 8 }}>People Movement</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, alignItems: 'stretch' }}>
+        <div className="vq-lcl-movement-grid">
           {movementStatCard({
             kind: 'entry',
             value: movementStats.totalEntry,
@@ -1183,7 +1182,7 @@ export default function LineCrossingLogs() {
 
       <section style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12, padding: 14 }}>
         <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--tx)', marginBottom: 10 }}>Other Metrics</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
+        <div className="vq-lcl-metrics-grid">
           {statCard('Total Logs', displayedTotalLogs, 'Events returned for the selected date range', Activity, '#7c3aed')}
           {statCard('Enabled Cameras', filteredEnabledCameras.length, 'Cameras configured for line crossing', Camera, '#06b6d4')}
           {statCard('Highest Camera Count', highestCamera?.camera || '--', highestCamera ? `${highestCamera.entry} entry / ${highestCamera.exit} exit` : 'No camera activity in this range', Trophy, '#f59e0b')}
@@ -1191,8 +1190,8 @@ export default function LineCrossingLogs() {
         </div>
       </section>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(620px, 1.18fr) minmax(360px, .82fr)', gap: 14, alignItems: 'stretch' }}>
-        <section style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12, padding: 16, boxShadow: '0 14px 34px rgba(15,23,42,.06)' }}>
+      <div className="vq-lcl-live-controls-grid">
+        <section style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12, padding: 16, boxShadow: '0 14px 34px rgba(15,23,42,.06)', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff5b5b', boxShadow: '0 0 10px rgba(255,91,91,.7)' }} />
             <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--tx)' }}>Live Camera</div>
@@ -1282,7 +1281,7 @@ export default function LineCrossingLogs() {
         <SystemControls />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(560px, 1.08fr) minmax(420px, .92fr)', gap: 14, alignItems: 'stretch' }}>
+      <div className="vq-lcl-charts-grid-primary">
         <section style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12, padding: 14, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
             <div>
@@ -1340,7 +1339,7 @@ export default function LineCrossingLogs() {
           }))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14 }}>
+      <div className="vq-lcl-charts-grid-pair">
         {chartShell('Camera Wise Crossing Graph', 'Compare which cameras recorded the most entry and exit movement', BarChart3,
           cameraMetrics.length ? (
             <ReactApexChart
@@ -1402,7 +1401,7 @@ export default function LineCrossingLogs() {
           }))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(280px, .85fr)', gap: 14 }}>
+      <div className="vq-lcl-charts-grid-top">
         {chartShell('Top Cameras', 'Ranks cameras by total crossings so busy feeds stand out quickly', Trophy,
           topCameras.length ? (
             <ReactApexChart

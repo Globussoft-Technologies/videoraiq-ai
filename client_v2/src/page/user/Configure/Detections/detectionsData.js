@@ -88,7 +88,7 @@ export function thresholdLabel(key) {
 
 const CATEGORY_MATCHERS = [
   ['safety', ['ppe', 'protective', 'safety', 'helmet', 'vest', 'fire', 'smoke', 'weapon']],
-  ['vehicles', ['vehicle', 'traffic', 'anpr', 'plate']],
+  ['vehicles', ['vehicle', 'traffic', 'anpr', 'plate', 'car']],
   ['industrial', ['conveyor', 'crusher', 'spillage', 'spill', 'light']],
   ['perimeter', ['intrusion', 'unauthorized', 'access', 'line', 'crossing', 'loiter', 'bag', 'baggage']],
   ['people', ['person', 'people', 'crowd', 'face']],

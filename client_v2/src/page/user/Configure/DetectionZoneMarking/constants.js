@@ -8,6 +8,7 @@ export const DETECTION_FIELD_KEYS = [
   'conveyorDetectionSettings', 'crusherDetectionSettings', 'waterSpillageDetectionSettings',
   'vehicleTypeDetectionSettings', 'loiteringDetectionSettings', 'vehicleObstructionSettings',
   'tableOccupancyDetectionSettings', 'foodServicePPEDetectionSettings', 'mobilePhoneDetectionSettings',
+  'carModelDetectionSettings',
 ];
 
 export const DEFAULT_MAX_POINTS = 4;
