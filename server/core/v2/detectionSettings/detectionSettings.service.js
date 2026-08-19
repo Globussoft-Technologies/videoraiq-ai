@@ -169,6 +169,11 @@ const getAdminScheduleTimezone = async (adminId) => {
   return admin?.timezone || DEFAULT_SCHEDULE_TIMEZONE;
 };
 
+const GLOBAL_SCHEDULE_BULK_ENDPOINTS = {
+  resume: "POST /stream/resume-all + POST /api/v1/cameras/resume-all",
+  stop: "POST /stream/stop-all + POST /api/v1/cameras/stop-all",
+};
+
 /**
  * Mirrors the v1 emitter so a save/update made through v2 is visible in the UI
  * with the same DS call trace. Kept local and additive — the v2 execution flow
@@ -1106,20 +1111,34 @@ class DetectionSettingService {
       logger.info(`[DETECTION_SCHEDULE] DS request — ${logContext}`);
 
       let backendResponse;
+      const dsEndpoint =
+        scheduleSource === SCHEDULE_SOURCE.GLOBAL
+          ? GLOBAL_SCHEDULE_BULK_ENDPOINTS[operation]
+          : shouldEnable
+            ? "POST /stream (start)"
+            : "POST /stream/stop";
       try {
-        backendResponse = await handleDetectionStartStopWithRetry([
-          channel,
-          adminId,
-          shouldEnable,
-          settingType,
-          zones,
-          zone_configs,
-          videoResolution,
-          obstruction_threshold_sec,
-          severity,
-          confidence_thresholds,
-          line_crossing_settings,
-        ]);
+        if (scheduleSource === SCHEDULE_SOURCE.GLOBAL) {
+          backendResponse = await pythonService.toggleCamerasBulk(
+            adminId,
+            cameraId,
+            shouldEnable,
+          );
+        } else {
+          backendResponse = await handleDetectionStartStopWithRetry([
+            channel,
+            adminId,
+            shouldEnable,
+            settingType,
+            zones,
+            zone_configs,
+            videoResolution,
+            obstruction_threshold_sec,
+            severity,
+            confidence_thresholds,
+            line_crossing_settings,
+          ]);
+        }
       } catch (error) {
         // The DS response decides success, not the fact that we sent a request.
         logger.error(
@@ -1130,7 +1149,7 @@ class DetectionSettingService {
           operation,
           status: "failed",
           scheduleSource,
-          endpoint: shouldEnable ? "POST /stream (start)" : "POST /stream/stop",
+          endpoint: dsEndpoint,
           error: error?.message,
           response: error?.response?.data ?? null,
         });
@@ -1152,7 +1171,7 @@ class DetectionSettingService {
         operation,
         status: "success",
         scheduleSource,
-        endpoint: shouldEnable ? "POST /stream (start)" : "POST /stream/stop",
+        endpoint: dsEndpoint,
         response: backendResponse ?? null,
       });
     } catch (error) {

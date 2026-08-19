@@ -185,6 +185,12 @@ class ChannelService {
             .json(Response.userFailResp("This operation is not allowed."));
         }
 
+        const attendanceAdminId = await resolveAdminObjectId({
+          adminId: req?.verified?.userData?.adminId,
+          userId: req?.verified?.userData?.user_id,
+          channelUserId: existingChannel?.userId,
+        });
+
         existingChannel.checkType = updates.checkType;
 
         // if (updates.checkType !== "none") {
@@ -195,12 +201,12 @@ class ChannelService {
           await pythonService.registerChannel(
             existingChannel,
             updates.checkType,
-            req?.verified?.userData?.adminId
+            attendanceAdminId
           );
         }
 
         if (updates.checkType === "none") {
-          await pythonService.stopDetection(cameraId, req?.verified?.userData?.adminId);
+          await pythonService.stopDetection(cameraId, attendanceAdminId);
         }
 
         delete updates.checkType;

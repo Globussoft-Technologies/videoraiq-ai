@@ -1084,20 +1084,34 @@ class DetectionSettingService {
       logger.info(`[DETECTION_SCHEDULE] DS request — ${logContext}`);
 
       let backendResponse;
+      const dsEndpoint =
+        scheduleSource === SCHEDULE_SOURCE.GLOBAL
+          ? GLOBAL_SCHEDULE_BULK_ENDPOINTS[operation]
+          : shouldEnable
+            ? "POST /stream (start)"
+            : "POST /stream/stop";
       try {
-        backendResponse = await handleDetectionStartStopWithRetry([
-          channel,
-          adminId,
-          shouldEnable,
-          settingType,
-          zones,
-          zone_configs,
-          videoResolution,
-          obstruction_threshold_sec,
-          severity,
-          confidence_thresholds,
-          line_crossing_settings,
-        ]);
+        if (scheduleSource === SCHEDULE_SOURCE.GLOBAL) {
+          backendResponse = await pythonService.toggleCamerasBulk(
+            adminId,
+            cameraId,
+            shouldEnable,
+          );
+        } else {
+          backendResponse = await handleDetectionStartStopWithRetry([
+            channel,
+            adminId,
+            shouldEnable,
+            settingType,
+            zones,
+            zone_configs,
+            videoResolution,
+            obstruction_threshold_sec,
+            severity,
+            confidence_thresholds,
+            line_crossing_settings,
+          ]);
+        }
       } catch (error) {
         // The DS response decides success, not the fact that we sent a request.
         // Leaving `enabled` untouched means the next tick retries this camera
@@ -1112,7 +1126,7 @@ class DetectionSettingService {
           operation,
           status: "failed",
           scheduleSource,
-          endpoint: shouldEnable ? "POST /stream (start)" : "POST /stream/stop",
+          endpoint: dsEndpoint,
           error: error?.message,
           response: error?.response?.data ?? null,
         });
@@ -1138,7 +1152,7 @@ class DetectionSettingService {
           operation,
           status: "success",
           scheduleSource,
-          endpoint: shouldEnable ? "POST /stream (start)" : "POST /stream/stop",
+          endpoint: dsEndpoint,
           response: backendResponse ?? null,
         },
       );
