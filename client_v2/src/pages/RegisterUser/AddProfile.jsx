@@ -78,6 +78,7 @@ const AddProfile = () => {
   const [selectedLocations, setSelectedLocations] = useState([]);
   const [selectedDepartments, setSelectedDepartments] = useState([]);
   const [statusFilter, setStatusFilter] = useState('active');
+  const [verificationFilter, setVerificationFilter] = useState(null);
 
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [openDeleteConfirm, setOpenDeleteConfirm] = useState(false);
@@ -152,6 +153,8 @@ const AddProfile = () => {
       if (selectedLocations.length > 0) data.locations = selectedLocations;
       if (selectedDepartments.length > 0) data.departmentIds = selectedDepartments;
       if (statusFilter) data.status = statusFilter;
+      if (verificationFilter === 'verified') data.verified = true;
+      if (verificationFilter === 'not_verified') data.verified = false;
       const result = await authorizedUsers(skip, limit, debouncedSearch, data);
       if (result?.body?.status === 'success') {
         const count = result.body.data.totalCount || 0;
@@ -178,7 +181,7 @@ const AddProfile = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, [currentPage, debouncedSearch, selectedLocations, selectedDepartments, statusFilter, limit]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentPage, debouncedSearch, selectedLocations, selectedDepartments, statusFilter, verificationFilter, limit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const allUsersSelected = users.length > 0 && users.every((u) => selectedUserIds.includes(u._id));
 
@@ -404,6 +407,34 @@ const AddProfile = () => {
                   {option.label}
                 </button>
               ))}
+            </div>
+
+            <div className="flex items-center rounded-[14px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10 shadow-sm">
+              {[
+                { value: 'verified', label: 'Verified' },
+                { value: 'not_verified', label: 'Not Verified' },
+              ].map((option) => {
+                const isActive = verificationFilter === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      setVerificationFilter((prev) => (prev === option.value ? null : option.value));
+                      setCurrentPage(1);
+                    }}
+                    className={`min-w-[110px] rounded-[11px] px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                      isActive
+                        ? option.value === 'verified'
+                          ? 'bg-[var(--blue)] text-white'
+                          : 'bg-[var(--warn)] text-white'
+                        : 'text-[var(--tx2)] hover:bg-[var(--bg3)]'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="w-40 xl:w-48">

@@ -10,10 +10,16 @@ const authHeaders = (extra = {}) => ({
 
 /* ─────────────── Authorized users (employees) ─────────────── */
 
-/** Paginated employee list with optional location/department filters. */
+/** Paginated employee list with optional location/department/verification filters. */
 export const authorizedUsers = async (skip = 0, limit = 10, search = '', data = {}) => {
+  const params = new URLSearchParams({
+    skip: String(skip),
+    limit: String(limit),
+    search: search || '',
+  });
+
   const response = await axios.post(
-    `${Api_url}/authorizedUsers/fetch?skip=${skip}&limit=${limit}&search=${search}`,
+    `${Api_url}/authorizedUsers/fetch?${params.toString()}`,
     data,
     { headers: authHeaders({ 'Content-Type': 'application/json' }) }
   );
