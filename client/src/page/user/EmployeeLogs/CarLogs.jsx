@@ -4,6 +4,7 @@ import moment from 'moment-timezone';
 import { Filter, Image, RotateCcw, X } from 'lucide-react';
 import getAccessToken from '@/utils/getAccessToken';
 import ReusableTablePage from './ReusableTablePage';
+import AutoRefreshComponent from './components/AutoRefreshComponent';
 import { Button } from '@/components/ui/button';
 import MultiSelect from '@/components/ui/multiselect';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -35,6 +36,9 @@ const getModelName = (item) =>
   '--';
 
 const getYear = (item) => item.year || item.modelYear || item.carYear || '--';
+
+const REFRESH_KEY = 'car_model_logs_auto_refresh_enabled';
+const INTERVAL_KEY = 'car_model_logs_auto_refresh_interval';
 
 const fetchCarLogs = async ({
   skip,
@@ -92,6 +96,15 @@ const CarLogs = () => {
   const [channelIds, setChannelIds] = useState([]);
   const [previewImage, setPreviewImage] = useState(null);
   const [previewImageLoading, setPreviewImageLoading] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(() => {
+    const saved = localStorage.getItem(REFRESH_KEY);
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [refreshInterval, setRefreshInterval] = useState(() => {
+    const parsed = parseInt(localStorage.getItem(INTERVAL_KEY), 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
+  });
+  const [manualTrigger, setManualTrigger] = useState(0);
   const [viewMode, setViewMode] = useState(() => {
     const saved = localStorage.getItem('car_logs_view_mode');
     return saved === 'grid' || saved === 'table' ? saved : 'table';
@@ -122,6 +135,8 @@ const CarLogs = () => {
           imageUrl: getCarImageUrl(item),
           modelName: getModelName(item),
           year: getYear(item),
+          nvrName: item.nvrData?.nvrName || '--',
+          channelName: item.channelData?.name || '--',
         }))
       );
       setTotalCount(data?.totalCount || 0);
@@ -135,7 +150,25 @@ const CarLogs = () => {
 
   useEffect(() => {
     fetchLogs();
-  }, [fetchLogs]);
+  }, [fetchLogs, manualTrigger]);
+
+  useEffect(() => {
+    localStorage.setItem(REFRESH_KEY, autoRefresh);
+  }, [autoRefresh]);
+
+  useEffect(() => {
+    localStorage.setItem(INTERVAL_KEY, refreshInterval);
+  }, [refreshInterval]);
+
+  useEffect(() => {
+    let intervalId;
+    if (autoRefresh && refreshInterval > 0) {
+      intervalId = setInterval(fetchLogs, refreshInterval * 1000);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [autoRefresh, refreshInterval, fetchLogs]);
 
   useEffect(() => {
     const fetchNvrs = async () => {
@@ -224,6 +257,24 @@ const CarLogs = () => {
         ),
         cell: ({ row }) => (
           <span className="text-[#333333] text-xs font-normal">{row.original.year}</span>
+        ),
+      },
+      {
+        accessorKey: 'nvrName',
+        header: () => (
+          <button onClick={() => toggleSort('nvrData.nvrName')} className="cursor-pointer">
+            NVR Name
+          </button>
+        ),
+        cell: ({ row }) => (
+          <span className="text-[#333333] text-xs font-normal">{row.original.nvrName}</span>
+        ),
+      },
+      {
+        accessorKey: 'channelName',
+        header: 'Camera Name',
+        cell: ({ row }) => (
+          <span className="text-[#333333] text-xs font-normal">{row.original.channelName}</span>
         ),
       },
     ],
@@ -329,6 +380,14 @@ const CarLogs = () => {
           <p className="text-[10px] font-medium text-[#888] uppercase tracking-wide">Year</p>
           <p className="text-xs text-[#333333] truncate">{row.year}</p>
         </div>
+        <div>
+          <p className="text-[10px] font-medium text-[#888] uppercase tracking-wide">NVR Name</p>
+          <p className="text-xs text-[#333333] truncate">{row.nvrName}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-medium text-[#888] uppercase tracking-wide">Camera Name</p>
+          <p className="text-xs text-[#333333] truncate">{row.channelName}</p>
+        </div>
       </div>
     </div>
   ), []);
@@ -375,7 +434,7 @@ const CarLogs = () => {
       )}
 
       <ReusableTablePage
-        title="Car Logs"
+        title="Car Model Logs"
         data={rows}
         columns={columns}
         loading={loading}
@@ -388,7 +447,7 @@ const CarLogs = () => {
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         gridCard={renderCarCard}
-        searchKeys={['modelName', 'year']}
+        searchKeys={['modelName', 'year', 'nvrName', 'channelName']}
         searchQuery={searchInput}
         onSearchChange={setSearchInput}
         startDate={startDate}
@@ -401,6 +460,13 @@ const CarLogs = () => {
         }}
       >
         {filterPopover}
+        <AutoRefreshComponent
+          isActive={autoRefresh}
+          onActiveChange={setAutoRefresh}
+          refreshInterval={refreshInterval}
+          onIntervalChange={setRefreshInterval}
+          onManualRefresh={() => setManualTrigger((prev) => prev + 1)}
+        />
       </ReusableTablePage>
     </>
   );
