@@ -2,6 +2,22 @@ import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useAllDetections } from "@/context/Sockets/AllDetectionContext";
 
+const INCIDENT_ROUTE_MAP = {
+  linecrossing: "/logs/line-crossing",
+  unauthorizedaccess: "/logs/unauthorized-access",
+  countpersons: "/logs/person-count",
+  vehicleobstruction: "/logs/vehicle-obstruction",
+  countvehicles: "/logs/vehicle-count",
+  anpr: "/logs/ANPR",
+  deskabsence: "/logs/desk-absence",
+};
+
+const normalizeIncidentType = (incidentType = "") =>
+  String(incidentType).replace(/[^a-z0-9]/gi, "").toLowerCase();
+
+export const getIncidentNavigationPath = (incidentType) =>
+  INCIDENT_ROUTE_MAP[normalizeIncidentType(incidentType)] || "/dashboard";
+
 const UnauthorizedWatcher = () => {
   const { allDetections } = useAllDetections();
 
@@ -65,9 +81,12 @@ const UnauthorizedWatcher = () => {
           body: description,
         });
 
-        // Optional: focus tab when clicked
         notification.onclick = () => {
+          const targetPath = getIncidentNavigationPath(incidentType);
           window.focus();
+          if (window.location.pathname !== targetPath) {
+            window.location.assign(targetPath);
+          }
         };
       } else {
         toastFn(title, {
