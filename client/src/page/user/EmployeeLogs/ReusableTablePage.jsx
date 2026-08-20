@@ -19,7 +19,7 @@ import { DateRangePickerComponent } from '@/components/ui/calendar';
 import moment from 'moment';
 import notfound from '@/assets/notfound.svg';
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+const PAGE_SIZE_OPTIONS = [12, 20, 60, 100];
 
 const ReusableTablePage = ({
   title,
@@ -287,13 +287,13 @@ const ReusableTablePage = ({
           )}
         </div>
         {!loading && (paginated || []).length > 0 && (
-          <div className="mt-6 grid grid-cols-3 items-center gap-4">
+          <div className="mt-6 pt-4 border-t border-[#EEEEEE] grid grid-cols-3 items-center gap-4">
             <div
-              className={`text-sm text-[#333333] bg-[#F5F5F5] px-3 py-1.5 font-[400] rounded-[5px] w-42 inline-flex items-center gap-2 
+              className={`ml-6 text-sm text-[#333333] bg-[#F5F5F5] border border-[#E5E5E5] px-3 py-1.5 font-[400] rounded-[5px] w-fit max-w-full inline-flex items-center gap-2 whitespace-nowrap
            ${from === 'visibility' ? "invisible" : ""}`}
             >
-              Total logs -{" "}
-              <span className="text-[#07486A] font-medium bg-[#E3F5FF] px-2.5 py-1 rounded-md">
+              <span className="truncate">Total logs -</span>
+              <span className="shrink-0 text-white font-semibold bg-[#07486A] px-2.5 py-1 rounded-md">
                 {useServerPagination
                   ? attendanceLogsCount ?? 0
                   : (filtered || []).length}

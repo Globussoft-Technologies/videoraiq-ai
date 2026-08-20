@@ -273,18 +273,20 @@ export default function MultiSiteNetwork({
         }
         .vq-msn .vq-msn-node:hover,
         .vq-msn .vq-msn-node:focus-within {
-          z-index: 30 !important;
-        }
-        .vq-msn .vq-msn-node:hover .vq-msn-node-label,
-        .vq-msn .vq-msn-node:focus-within .vq-msn-node-label {
-          z-index: 1 !important;
+          z-index: 40 !important;
         }
         .vq-msn .vq-msn-node:hover .vq-msn-tooltip,
         .vq-msn .vq-msn-node:focus-within .vq-msn-tooltip {
           opacity: 1;
           visibility: visible;
           transform: translateY(0);
-          z-index: 40;
+          z-index: 5;
+          /* Once visible, the tooltip must accept hover/scroll itself — a
+             mouse moving off the tiny node dot and into the tooltip's own
+             area would otherwise pass straight through (pointer-events: none
+             above) onto whatever's behind it, un-hovering .vq-msn-node and
+             closing the tooltip before the list inside it could be reached. */
+          pointer-events: auto;
         }
         @keyframes vq-msn-ring {
           0% { transform: translate(-50%, -50%) scale(.72); opacity: .9; }
@@ -391,6 +393,9 @@ export default function MultiSiteNetwork({
           {nodes.map((node) => {
             const openLeft = node.x >= 45;
             const labelLeft = node.x <= 74;
+            // Only scroll once there's enough to actually need it — under that,
+            // the tooltip sizes to its content like before.
+            const scrollTooltip = node.detectionDetails.length > 5;
             return (
             <div
               key={node.id}
@@ -405,6 +410,25 @@ export default function MultiSiteNetwork({
                 height: 14,
               }}
             >
+              {/* Invisible hover bridge: the label/tooltip are absolutely
+                  positioned children that visually start well outside this
+                  14px dot (label at top:-9/20px, tooltip at top:-18/28px) —
+                  without something covering that gap, a mouse path drifting
+                  through it (rather than landing exactly on a child) drops
+                  the hover mid-transit, which is why the tooltip only showed
+                  up intermittently. This sits underneath everything else
+                  (zIndex -1) so it only ever extends the hit area, never
+                  the visuals. */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: -36,
+                  left: -36,
+                  right: -36,
+                  bottom: -36,
+                  zIndex: -1,
+                }}
+              />
               <div
                 style={{
                   position: 'absolute',
@@ -476,14 +500,25 @@ export default function MultiSiteNetwork({
                 )}
               </div>
               <div
-                className="vq-msn-tooltip"
+                className={`vq-msn-tooltip${scrollTooltip ? ' customscrollbar' : ''}`}
                 style={{
                   position: 'absolute',
                   left: openLeft ? 'auto' : 28,
                   right: openLeft ? 28 : 'auto',
-                  top: -18,
+                  // Clear of the label's own box (top:-9, ~50-70px tall)
+                  // instead of overlapping it — that overlap was the actual
+                  // cause of both the hover flakiness and the label losing
+                  // its clickable cursor whenever a workaround tried to
+                  // punch a pointer-events hole through it.
+                  top: 46,
                   width: 300,
                   maxWidth: 'min(300px, calc(100vw - 48px))',
+                  // Fixed px, not a %-based calc: the nearest positioned
+                  // ancestor here is the 14px node dot, not the panel, so a
+                  // percentage height would resolve against that instead.
+                  ...(scrollTooltip
+                    ? { maxHeight: 280, overflowY: 'auto', overflowX: 'hidden' }
+                    : null),
                   borderRadius: 10,
                   background: 'var(--bg1solid)',
                   border: '1px solid var(--bd)',
@@ -491,7 +526,9 @@ export default function MultiSiteNetwork({
                   boxShadow: '0 20px 48px rgba(0,0,0,.28)',
                   padding: '18px 20px',
                   zIndex: 6,
+                  cursor: 'pointer',
                 }}
+                onClick={() => navigate('/incidents')}
               >
                 <div
                   style={{

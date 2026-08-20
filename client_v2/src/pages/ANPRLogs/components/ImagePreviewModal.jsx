@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 
@@ -8,6 +8,13 @@ import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
  * and not an edge-to-edge takeover. Spinner only shows while genuinely loading.
  */
 const ImagePreviewModal = ({ previewImage, onClose }) => {
+  useEffect(() => {
+    if (!previewImage) return undefined;
+    const onKeyDown = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [previewImage, onClose]);
+
   if (!previewImage) return null;
   return (
     <div

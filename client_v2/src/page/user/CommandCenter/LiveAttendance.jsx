@@ -435,7 +435,7 @@ export default function LiveAttendance() {
                         setAnnouncementMode(option.key);
                         setSettingsOpen(false);
                       }}
-                      className="w-full h-9 px-2 rounded-lg flex items-center justify-between gap-2 text-left text-[12px] font-semibold transition-colors hover:bg-[var(--bg2)]"
+                      className="w-full h-9 px-2 rounded-lg flex items-center justify-between gap-2 text-left text-[12px] font-semibold transition-colors hover:bg-[var(--bg2)] cursor-pointer"
                       style={{ color: active ? 'var(--blue)' : 'var(--tx2)' }}
                     >
                       <span>{option.label}</span>

@@ -202,6 +202,18 @@ const CarLogs = () => {
     localStorage.setItem('car_logs_view_mode', viewMode);
   }, [viewMode]);
 
+  useEffect(() => {
+    if (!previewImage) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setPreviewImage(null);
+        setPreviewImageLoading(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [previewImage]);
+
   const toggleSort = (field) => {
     setSortField(field);
     setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));

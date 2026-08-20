@@ -15,6 +15,20 @@ const PRESERVED_STORAGE_KEYS = [
   'incidents_auto_refresh',
   'incidents_refresh_interval',
   'selectedGrid',
+  // Settings ▸ Alert Channels / Log Order — browser-local display preferences
+  // (see context/DetectionNotificationContext.jsx and lib/logOrder.js), kept
+  // across logout same as the other display/refresh prefs above.
+  'vq_desktop_notifications_enabled',
+  'vq_inapp_notifications_enabled',
+  'logs-order-enabled',
+  'logs-order',
+  // Command Center ▸ Live Attendance — announcement mode (department vs.
+  // person name), see page/user/CommandCenter/LiveAttendance.jsx.
+  'vq_live_attendance_announcement_mode',
+  // Header ▸ Audio Controls — Line Crossing mute state (Live Attendance's own
+  // mute is server-backed via logsSound/updateLogsSound, so it already
+  // survives logout without this list; see context/AttendanceSocketContext.jsx).
+  'lineCrossingAudioMuted',
 ];
 
 const shouldPreserveStorageKey = (key) =>
