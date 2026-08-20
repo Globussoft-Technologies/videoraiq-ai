@@ -19,6 +19,17 @@ import { useAuth } from '../context/AuthContext';
  */
 const MAX_EVENTS = 50;
 
+/**
+ * The actual reason DS gave for a failed call, for the toast — pulled from
+ * the real response body rather than paraphrased, so e.g. "System at
+ * capacity: GPU 0 VRAM at 96.6% (threshold: 92.0%)" is still visible instead
+ * of a generic line. The full raw JSON stays available in the Scheduler
+ * Activity panel's "Show raw response" toggle for anyone who needs it.
+ */
+function dsFailureDetail(dsError, dsResponse) {
+  return dsResponse?.detail || dsResponse?.message || dsError || 'no response from the detection service';
+}
+
 export function useDetectionScheduleEvents({ enabled = true } = {}) {
   const { socket } = useSocket() || {};
   const { user } = useAuth();
@@ -53,8 +64,8 @@ export function useDetectionScheduleEvents({ enabled = true } = {}) {
 
       if (event.status === 'failed') {
         toast.error(
-          `DS ${event.operation} failed — ${event.channelName} / ${event.detectionName}: ${
-            event.dsError || 'no response'
+          `Could not ${event.operation} ${event.channelName} / ${event.detectionName} — ${
+            dsFailureDetail(event.dsError, event.dsResponse)
           }`,
         );
         return;

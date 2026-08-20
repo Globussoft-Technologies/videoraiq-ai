@@ -546,14 +546,19 @@ function ComplianceRow({ label, desc, enabled, last }) {
  * sidebar returns to the shipped order and can be switched back on unchanged.
  * That doubles as the way back to the default, so there's no separate reset.
  *
- * Not gated on canEditSettings: this is a browser-local display preference
- * (see lib/logOrder.js), reaching this page already requires `settings` view,
- * and an operator rearranging their own sidebar affects nobody else.
+ * Gated on the same `settings` permission as the rest of this page: enabling
+ * requires create/edit, disabling requires delete/edit — same rule every
+ * other toggle here follows.
  */
-function LogOrderPanel() {
+function LogOrderPanel({ canEnable, canDisable }) {
   const { enabled } = useLogOrder();
 
   const handleToggle = (next) => {
+    const allowed = next ? canEnable : canDisable;
+    if (!allowed) {
+      toast.error("You don't have permission to edit settings");
+      return;
+    }
     setLogOrderEnabled(next);
     toast.success(
       next
@@ -576,6 +581,7 @@ function LogOrderPanel() {
         desc={enabled ? 'Drag the logs in the sidebar to reorder them' : 'Sidebar logs use the default order'}
         value={enabled}
         onChange={handleToggle}
+        disabled={enabled ? !canDisable : !canEnable}
         last
       />
     </Panel>
@@ -592,12 +598,15 @@ export default function SystemSettings() {
   const { permissions } = usePermissions();
   const settingsPermissions = permissions?.settings || {};
   const hasSettingsPermission = (key) => settingsPermissions === true || settingsPermissions?.[key] === true;
-  const canCreateSettings = hasSettingsPermission('create');
   const canEditSettings = hasSettingsPermission('edit') || hasSettingsPermission('update');
-  const canDeleteSettings = hasSettingsPermission('delete');
-  const canWriteSettings = canCreateSettings || canEditSettings || canDeleteSettings;
-  const canEnableSetting = canCreateSettings || canEditSettings;
-  const canDisableSetting = canDeleteSettings || canEditSettings;
+  // Every toggle/save action on this page — Alert Channels, Log Order, Sound,
+  // In-App/Desktop notifications, Retention, Timezone, Attendance Rules,
+  // Global Detection Scheduling — is gated on `edit` alone, same as every
+  // other module's Roles & Permission convention (View + Edit is the minimum
+  // to change something). Create/Delete on `settings` do not independently
+  // grant the ability to flip these switches.
+  const canEnableSetting = canEditSettings;
+  const canDisableSetting = canEditSettings;
   const adminApi = useApi(() => fetchAdmin(), []);
   // Same self-service account summary (name, email) shown on My Profile.
   // Admins resolve from their own token (no id needed); sub-users aren't in
@@ -762,11 +771,16 @@ export default function SystemSettings() {
   const retentionValuesChanged = RETENTION_DATASETS.some((item) => (
     retentionMonths[item.key] !== storedRetentionMonthValues[item.key]
   ));
-  const canApplyRetention = canWriteSettings;
-  const canAdjustRetention = canWriteSettings;
+  const canApplyRetention = canEditSettings;
+  const canAdjustRetention = canEditSettings;
   const canSaveRetention = !!adminUserId && !retentionSaving && canApplyRetention && (retentionModeChanged || retentionValuesChanged);
 
   const handleAlertSwitchToggle = async (key, next) => {
+    const allowed = next ? canEnableSetting : canDisableSetting;
+    if (!allowed) {
+      toast.error(`You don't have permission to ${next ? 'enable' : 'disable'} settings`);
+      return;
+    }
     const updateFn = key === 'email' ? updateEmailAlertSwitch : updateTelegramAlertSwitch;
     setAlertSwitchOverrides((prev) => ({ ...prev, [key]: next }));
     setAlertSwitchSaving(key);
@@ -977,7 +991,7 @@ export default function SystemSettings() {
             desc={"Email alerts are sent to all verified recipients"}
             value={emailAlertsEnabled}
             onChange={(next) => handleAlertSwitchToggle('email', next)}
-            disabled={alertSwitchSaving === 'email'}
+            disabled={alertSwitchSaving === 'email' || (emailAlertsEnabled ? !canDisableSetting : !canEnableSetting)}
             loading={alertSwitchSaving === 'email'}
           />
           {/* <ToggleRow
@@ -994,7 +1008,7 @@ export default function SystemSettings() {
             desc={"Telegram alerts are sent to the linked channel"}
             value={telegramAlertsEnabled}
             onChange={(next) => handleAlertSwitchToggle('telegram', next)}
-            disabled={alertSwitchSaving === 'telegram'}
+            disabled={alertSwitchSaving === 'telegram' || (telegramAlertsEnabled ? !canDisableSetting : !canEnableSetting)}
             loading={alertSwitchSaving === 'telegram'}
           />
           <ToggleRow
@@ -1339,7 +1353,7 @@ export default function SystemSettings() {
           />
         </Panel>
 
-        <LogOrderPanel />
+        <LogOrderPanel canEnable={canEnableSetting} canDisable={canDisableSetting} />
       </div>
     </div>
   );

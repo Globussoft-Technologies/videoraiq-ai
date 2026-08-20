@@ -284,6 +284,23 @@ function DetectorChips({ detectors = [] }) {
 }
 
 /**
+ * Turn a DS call failure into a short, professional sentence instead of
+ * surfacing the raw JSON verbatim in the UI — but built from the real API
+ * response (the `detail`/`message` DS actually sent), not a canned line, so
+ * the specific reason (e.g. "System at capacity: GPU 0 VRAM at 96.6%
+ * (threshold: 92.0%)") is still visible, just phrased as prose and paired
+ * with which camera/detector it happened for.
+ */
+function friendlyDsFailureMessage(event) {
+  const status = Number(String(event?.dsError || '').match(/status code (\d+)/i)?.[1]) || null;
+  const detail = event?.dsResponse?.detail || event?.dsResponse?.message || event?.dsError || 'No response from the detection service.';
+  const who = [event?.channelName, event?.detectionName].filter(Boolean).join(' · ');
+  const statusLabel = status ? ` (HTTP ${status})` : '';
+
+  return `Could not ${event?.operation || 'update'} ${who || 'this detector'}${statusLabel}: ${detail}`;
+}
+
+/**
  * Live DS call trace. Every start/stop the backend performs shows up here with
  * the endpoint it hit and what DS replied — the quickest way to confirm the
  * scheduler is actually firing, and to see the response when it is not.
@@ -299,7 +316,7 @@ function SchedulerActivity({ events, onClear }) {
             Scheduler activity {events.length ? `(${events.length})` : ''}
           </div>
           <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
-            Live DS start/stop calls. Click a row to see the raw response.
+            Live DS start/stop calls. Click a row to see details.
           </div>
         </div>
         {events.length > 0 && (
@@ -336,6 +353,7 @@ function SchedulerActivity({ events, onClear }) {
               <div
                 key={event.key}
                 style={{
+                  flexShrink: 0,
                   borderRadius: 9,
                   border: `1px solid ${failed ? 'rgba(239,68,68,.35)' : 'var(--bd)'}`,
                   background: failed ? 'rgba(239,68,68,.06)' : 'var(--bg2)',
@@ -385,29 +403,24 @@ function SchedulerActivity({ events, onClear }) {
 
                 {open && (
                   <div style={{ padding: '0 10px 9px', fontSize: 10.5, color: 'var(--tx2)' }}>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 6, color: 'var(--tx3)' }}>
-                      <span>trigger: {event.source || '—'}</span>
-                      <span>schedule: {event.scheduleSource || '—'}</span>
-                      <span>endpoint: {event.dsEndpoint || '—'}</span>
-                    </div>
-                    <pre
-                      style={{
-                        margin: 0,
-                        padding: 8,
-                        borderRadius: 7,
-                        background: 'var(--bg1solid, var(--bg1))',
-                        border: '1px solid var(--bd)',
-                        fontSize: 10,
-                        fontFamily: 'var(--mono)',
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                        maxHeight: 180,
-                        overflow: 'auto',
-                      }}
-                    >
-                      {JSON.stringify(event.dsError ? { error: event.dsError, response: event.dsResponse } : event.dsResponse, null, 2) ||
-                        'no response body'}
-                    </pre>
+                    {failed && (
+                      <div
+                        className="customscrollbar"
+                        style={{
+                          padding: '8px 10px',
+                          borderRadius: 7,
+                          background: 'rgba(239,68,68,.08)',
+                          border: '1px solid rgba(239,68,68,.22)',
+                          fontSize: 11,
+                          lineHeight: 1.5,
+                          color: 'var(--tx)',
+                          maxHeight: 120,
+                          overflowY: 'auto',
+                        }}
+                      >
+                        {friendlyDsFailureMessage(event)}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

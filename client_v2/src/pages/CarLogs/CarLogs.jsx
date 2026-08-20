@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import moment from 'moment-timezone';
-import { Filter, Image, RotateCcw } from 'lucide-react';
+import { Calendar, Car, Filter, Image, RotateCcw, Server, Video } from 'lucide-react';
 import getAccessToken from '@/utils/getAccessToken';
 import { Button } from '@/components/ui/button';
 import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePage';
@@ -9,6 +9,7 @@ import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 import MultiSelect from '@/pages/AttendanceLogs/components/MultiSelect';
 import { Popover, PopoverContent, PopoverTrigger } from '@/pages/AttendanceLogs/components/Popover';
 import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
+import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
 
 const HOST = import.meta.env.VITE_BACKEND;
 
@@ -41,6 +42,9 @@ const getModelName = (item) =>
   '--';
 
 const getYear = (item) => item.year || item.modelYear || item.carYear || '--';
+
+const REFRESH_KEY = 'v2_car_logs_auto_refresh_enabled';
+const INTERVAL_KEY = 'v2_car_logs_auto_refresh_interval';
 
 const fetchCarLogs = ({
   skip,
@@ -100,6 +104,15 @@ const CarLogs = () => {
     const saved = localStorage.getItem('v2_car_logs_view_mode');
     return saved === 'grid' || saved === 'table' ? saved : 'table';
   });
+  const [autoRefresh, setAutoRefresh] = useState(() => {
+    const saved = localStorage.getItem(REFRESH_KEY);
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [refreshInterval, setRefreshInterval] = useState(() => {
+    const parsed = parseInt(localStorage.getItem(INTERVAL_KEY), 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
+  });
+  const [manualTrigger, setManualTrigger] = useState(0);
 
   const skip = (currentPage - 1) * limit;
 
@@ -127,6 +140,8 @@ const CarLogs = () => {
           imageUrl: getCarImageUrl(item),
           modelName: getModelName(item),
           year: getYear(item),
+          nvrName: item.nvrData?.nvrName || '--',
+          channelName: item.channelData?.name || '--',
         }))
       );
       setTotalCount(data?.totalCount || 0);
@@ -140,7 +155,25 @@ const CarLogs = () => {
 
   useEffect(() => {
     fetchLogs();
-  }, [fetchLogs]);
+  }, [fetchLogs, manualTrigger]);
+
+  useEffect(() => {
+    localStorage.setItem(REFRESH_KEY, autoRefresh);
+  }, [autoRefresh]);
+
+  useEffect(() => {
+    localStorage.setItem(INTERVAL_KEY, refreshInterval);
+  }, [refreshInterval]);
+
+  useEffect(() => {
+    let intervalId;
+    if (autoRefresh && refreshInterval > 0) {
+      intervalId = setInterval(fetchLogs, refreshInterval * 1000);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [autoRefresh, refreshInterval, fetchLogs]);
 
   useEffect(() => {
     const fetchNvrs = async () => {
@@ -235,6 +268,27 @@ const CarLogs = () => {
         ),
         cell: ({ row }) => <span className="text-[13px] text-[var(--tx)]">{row.original.year}</span>,
       },
+      {
+        accessorKey: 'nvrName',
+        header: () => (
+          <button
+            onClick={() => toggleSort('nvrData.nvrName')}
+            className="cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
+          >
+            NVR Name
+          </button>
+        ),
+        cell: ({ row }) => <span className="text-[13px] text-[var(--tx)]">{row.original.nvrName}</span>,
+      },
+      {
+        accessorKey: 'channelName',
+        header: () => (
+          <span className="uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] [font-family:var(--mono)]">
+            Camera Name
+          </span>
+        ),
+        cell: ({ row }) => <span className="text-[13px] text-[var(--tx)]">{row.original.channelName}</span>,
+      },
     ],
     []
   );
@@ -273,9 +327,43 @@ const CarLogs = () => {
             <Image className="w-10 h-10 text-[var(--tx3)]" />
           )}
         </div>
-        <div className="p-[11px]">
-          <div className="text-[12.5px] font-semibold text-[var(--tx)] truncate">{row.modelName}</div>
-          <div className="text-[11px] text-[var(--tx3)] mt-[4px] truncate">{row.year}</div>
+        <div className="p-[11px] space-y-[9px]">
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <Car className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
+              Model
+            </span>
+            <span className="text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0">
+              {row.modelName}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <Calendar className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
+              Year
+            </span>
+            <span className="text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0">
+              {row.year}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <Server className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
+              NVR
+            </span>
+            <span className="text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0">
+              {row.nvrName}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <Video className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
+              Camera
+            </span>
+            <span className="text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0">
+              {row.channelName}
+            </span>
+          </div>
         </div>
       </div>
     ),
@@ -300,7 +388,7 @@ const CarLogs = () => {
         onPageChange={setCurrentPage}
         limit={limit}
         onLimitChange={setLimit}
-        searchKeys={['modelName', 'year']}
+        searchKeys={['modelName', 'year', 'nvrName', 'channelName']}
         searchQuery={searchInput}
         onSearchChange={setSearchInput}
         startDate={startDate}
@@ -378,6 +466,13 @@ const CarLogs = () => {
             </div>
           </PopoverContent>
         </Popover>
+        <AutoRefreshComponent
+          isActive={autoRefresh}
+          onActiveChange={setAutoRefresh}
+          refreshInterval={refreshInterval}
+          onIntervalChange={setRefreshInterval}
+          onManualRefresh={() => setManualTrigger((prev) => prev + 1)}
+        />
       </ReusableTablePage>
     </div>
   );

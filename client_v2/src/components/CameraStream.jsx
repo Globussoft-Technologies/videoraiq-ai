@@ -89,6 +89,9 @@ export default function CameraStream({
   slotId,             // scheduler key; defaults to the channel id
   enableFullscreenZoom = false,
   zoomToolbarStyle,
+  clickToMaximize = true, // false → a single click on the tile no longer calls onMaximize (only the explicit maximize icon and onDoubleClick, if wired by the caller, do)
+  onDoubleClick,
+  enableZoom = false, // scroll-to-zoom + drag-to-pan even when the tile isn't in true fullscreen (isFullscreen still only swaps the maximize/restore icon)
 }) {
   const videoRef = useRef(null);
   const hostRef  = useRef(null);
@@ -234,7 +237,8 @@ export default function CameraStream({
   return (
     <div
       ref={hostRef}
-      onClick={onMaximize}
+      onClick={clickToMaximize ? onMaximize : undefined}
+      onDoubleClick={onDoubleClick}
       style={{
         position: 'relative',
         width: '100%',
@@ -243,11 +247,11 @@ export default function CameraStream({
         background: '#07090c',
         borderRadius: rounded ? 10 : 0,
         overflow: 'hidden',
-        cursor: onMaximize ? 'pointer' : 'default',
+        cursor: clickToMaximize && onMaximize ? 'grab' : 'default',
       }}
     >
       {enableFullscreenZoom ? (
-        <FullscreenZoomSurface enabled={isFullscreen} resetKey={streamId} toolbarStyle={zoomToolbarStyle}>
+        <FullscreenZoomSurface enabled={isFullscreen || enableZoom} resetKey={streamId} toolbarStyle={zoomToolbarStyle}>
           {streamContent}
         </FullscreenZoomSurface>
       ) : (

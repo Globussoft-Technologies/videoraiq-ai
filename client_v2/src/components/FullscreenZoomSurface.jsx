@@ -149,7 +149,11 @@ export default function FullscreenZoomSurface({
         inset: 0,
         overflow: 'hidden',
         touchAction: enabled ? 'none' : 'auto',
-        cursor: enabled && scale > MIN_SCALE ? (dragging ? 'grabbing' : 'grab') : 'default',
+        // Only claim the cursor while actually panning (zoomed in); otherwise
+        // stay transparent to it so the tile underneath (e.g. its "click to
+        // expand" hand cursor) shows through instead of being overridden by
+        // this overlay's own 'default'.
+        cursor: enabled && scale > MIN_SCALE ? (dragging ? 'grabbing' : 'grab') : 'inherit',
       }}
     >
       {enabled && (

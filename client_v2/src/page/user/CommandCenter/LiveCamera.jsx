@@ -209,6 +209,12 @@ export default function LiveCamera({ channels = [], loading, latestByChannel = {
             key={activeKey}
             channel={active}
             onMaximize={toggleTileFullscreen}
+            // Entering fullscreen is a single click (hand cursor over the video
+            // invites it); once fullscreen, a single click would be too easy to
+            // hit by accident while panning/reviewing the feed, so leaving
+            // fullscreen requires a double click instead.
+            clickToMaximize={!isFullscreen}
+            onDoubleClick={isFullscreen ? toggleTileFullscreen : undefined}
             isFullscreen={isFullscreen}
             minH={isFullscreen ? 0 : 220}
             rounded={!isFullscreen}

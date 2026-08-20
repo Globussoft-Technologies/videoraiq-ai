@@ -1238,6 +1238,10 @@ export default function LineCrossingLogs() {
                     camLabel={`LC-${streamPage * streamsPerPage + index + 1}`}
                     minH={0}
                     onMaximize={() => openFullscreenCamera(camera)}
+                    clickToMaximize={false}
+                    onDoubleClick={() => openFullscreenCamera(camera)}
+                    enableFullscreenZoom
+                    enableZoom
                   />
                   <LineCrossingOverlay camera={camera} fit="cover" />
                 </div>
