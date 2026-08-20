@@ -35,7 +35,7 @@ const LOG_SUBMODULES = [
   'trackLogs',
   'visibilityLogs', 'guardLogs', 'conveyorLogs', 'vehicleObstructionLogs',
   'vehicleCountLogs', 'crusherLogs', 'lineCrossingLogs', 'waterSpillLogs',
-  'unauthorizedAccessLogs',
+  'unauthorizedAccessLogs', 'carLogs',
 ];
 
 const MODULE_LABELS = {
@@ -54,6 +54,7 @@ const MODULE_LABELS = {
   vehicleCountLogs: 'Vehicle Count Logs', crusherLogs: 'Crusher Logs',
   lineCrossingLogs: 'Line Crossing Logs', waterSpillLogs: 'Water Spill Logs',
   unauthorizedAccessLogs: 'Unauthorized Access Logs', autoEmailReports: 'Auto Email Reports',
+  carLogs: 'Car Logs',
 };
 
 const LEGACY_SETTINGS_BY_ROLE = {
