@@ -50,6 +50,7 @@ const {
   VehiclDetectionSetting,
   DeskAbsenceDetectionSetting,
   UnattendedBaggageDetectionSetting,
+  carModelDetectionSchemaSetting,
 } = await import(
   "../../../core/v1/detectionSettings/detectionSettings.model.js"
 );
@@ -198,6 +199,113 @@ describe("IncidentsService.createIncidents — vehicleDetection", () => {
     expect(stored.Image).toBe("img/vehicle.jpg");
 
     expect(triggerAlertOnIncident).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("IncidentsService.createIncidents — carModelDetection", () => {
+  const carScene = () =>
+    seedScene({
+      SettingModel: carModelDetectionSchemaSetting,
+      settingType: "carModelDetectionSettings",
+      channelDetections: (s) => ({
+        carModelDetectionSettings: { id: s._id, enabled: true },
+      }),
+    });
+
+  it("persists model_name plus colour / company / year", async () => {
+    const { admin, nvrId, channel } = await carScene();
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "carModelDetection",
+        incidentName: "Car Model Detection",
+        nvrId: nvrId.toString(),
+        channelId: channel._id.toString(),
+        adminId: admin._id.toString(),
+        Image: "img/car.png",
+        model_name: "Toyota Corolla",
+        color: "White",
+        company: "Toyota",
+        year: 2021,
+        timeOfIncident: new Date(),
+      },
+    });
+    await IncidentsService.createIncidents(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    const stored = await Incident.findOne({ channelId: channel._id });
+    expect(stored.incidentType).toBe("carModelDetection");
+    expect(stored.model_name).toBe("Toyota Corolla");
+    expect(stored.color).toBe("White");
+    expect(stored.company).toBe("Toyota");
+    expect(stored.year).toBe(2021);
+  });
+
+  it("accepts the British `colour` spelling and a stringified year", async () => {
+    const { admin, nvrId, channel } = await carScene();
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "carModelDetection",
+        incidentName: "Car Model Detection",
+        nvrId: nvrId.toString(),
+        channelId: channel._id.toString(),
+        adminId: admin._id.toString(),
+        model_name: "Honda Civic",
+        colour: "Silver",
+        company: "Honda",
+        year: "2019",
+        timeOfIncident: new Date(),
+      },
+    });
+    await IncidentsService.createIncidents(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    const stored = await Incident.findOne({ channelId: channel._id });
+    expect(stored.color).toBe("Silver");
+    expect(stored.year).toBe(2019);
+  });
+
+  it("drops an unparseable year instead of failing the incident", async () => {
+    const { admin, nvrId, channel } = await carScene();
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "carModelDetection",
+        incidentName: "Car Model Detection",
+        nvrId: nvrId.toString(),
+        channelId: channel._id.toString(),
+        adminId: admin._id.toString(),
+        model_name: "Honda Civic",
+        year: "unknown",
+        timeOfIncident: new Date(),
+      },
+    });
+    await IncidentsService.createIncidents(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    const stored = await Incident.findOne({ channelId: channel._id });
+    expect(stored.year).toBeNull();
+  });
+
+  it("leaves the three attributes null when the payload omits them", async () => {
+    const { admin, nvrId, channel } = await carScene();
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "carModelDetection",
+        incidentName: "Car Model Detection",
+        nvrId: nvrId.toString(),
+        channelId: channel._id.toString(),
+        adminId: admin._id.toString(),
+        model_name: "Honda Civic",
+        timeOfIncident: new Date(),
+      },
+    });
+    await IncidentsService.createIncidents(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    const stored = await Incident.findOne({ channelId: channel._id });
+    expect(stored.model_name).toBe("Honda Civic");
+    expect(stored.color).toBeNull();
+    expect(stored.company).toBeNull();
+    expect(stored.year).toBeNull();
   });
 });
 

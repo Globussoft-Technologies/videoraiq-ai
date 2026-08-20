@@ -530,6 +530,11 @@ const MobilePhoneDetectionIncident = Incident.discriminator('mobilePhoneDetectio
 const carModelDetectionSchema = new Schema({
   count: {type:Number,default:0},
   model_name: { type: String, default: null },
+  // Vehicle attributes sent alongside the model read. All optional — a payload
+  // that omits them keeps the null defaults.
+  color: { type: String, default: null },
+  company: { type: String, default: null },
+  year: { type: Number, default: null },
   triggerNotification: { type: Boolean, default: true }
 });
 const CarModelDetectionIncident = Incident.discriminator('carModelDetection', carModelDetectionSchema);

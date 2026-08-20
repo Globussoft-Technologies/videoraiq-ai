@@ -11,7 +11,7 @@
     "swagger:v2": "node ./views/swagger-v2.config.js",
     "swagger:all": "node ./views/swagger.config.js && node ./views/swagger-v2.config.js",
     "production": "node bootstrap.js",
-    "build": "rm -rf dist && rm -rf obf_src && npm run obfuscate && npm run encrypt",
+    "build": "npm run obfuscate && npm run encrypt",
     "obfuscate": "node ./scripts/copy_for_obfuscation.js && javascript-obfuscator obf_src --output dist --config ./obfuscator-strong.json",
     "encrypt": "node scripts/encrypt.js",
     "clone:incidents": "node scripts/clone-incidents-by-type.js",

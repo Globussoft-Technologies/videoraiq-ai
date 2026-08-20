@@ -118,6 +118,15 @@ const normalizeVehicleObstructionPayload = (body = {}) => {
   }
 };
 
+// carModelDetection ships a manufacture year that may arrive as a number or a
+// string. Parse it, and drop unusable values ("unknown", "N/A") to null rather
+// than letting a NaN cast fail the whole incident save.
+const toModelYear = (value) => {
+  if (value === undefined || value === null || String(value).trim() === "") return null;
+  const year = Number.parseInt(String(value).trim(), 10);
+  return Number.isFinite(year) ? year : null;
+};
+
 const cacheDir = path.join("/tmp", "media-cache"); // You can change this to './cache' or any path
 if (!fs.existsSync(cacheDir)) {
   fs.mkdirSync(cacheDir, {
@@ -476,6 +485,11 @@ class IncidentsService {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.Image = req?.body?.Image;
         newIncident.model_name = req?.body?.model_name;
+        // `colour` accepted alongside `color` so either spelling from the DS
+        // payload lands on the same field.
+        newIncident.color = req?.body?.color ?? req?.body?.colour ?? null;
+        newIncident.company = req?.body?.company ?? null;
+        newIncident.year = toModelYear(req?.body?.year);
       }
 
 
