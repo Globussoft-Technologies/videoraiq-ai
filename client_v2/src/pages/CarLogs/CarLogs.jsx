@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import moment from 'moment-timezone';
-import { Calendar, Car, Filter, Image, RotateCcw, Server, Video } from 'lucide-react';
+import { Calendar, Car, Factory, Filter, Image, Palette, RotateCcw, Server, Video } from 'lucide-react';
 import getAccessToken from '@/utils/getAccessToken';
 import { Button } from '@/components/ui/button';
 import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePage';
@@ -42,6 +42,10 @@ const getModelName = (item) =>
   '--';
 
 const getYear = (item) => item.year || item.modelYear || item.carYear || '--';
+
+const getColor = (item) => item.color || item.colour || item.carColor || '--';
+
+const getCompany = (item) => item.company || item.make || item.carCompany || '--';
 
 const REFRESH_KEY = 'v2_car_logs_auto_refresh_enabled';
 const INTERVAL_KEY = 'v2_car_logs_auto_refresh_interval';
@@ -139,6 +143,8 @@ const CarLogs = () => {
           _id: item._id,
           imageUrl: getCarImageUrl(item),
           modelName: getModelName(item),
+          color: getColor(item),
+          company: getCompany(item),
           year: getYear(item),
           nvrName: item.nvrData?.nvrName || '--',
           channelName: item.channelData?.name || '--',
@@ -209,7 +215,12 @@ const CarLogs = () => {
 
   const toggleSort = (field) => {
     setSortField(field);
-    setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    // Toggle only when re-clicking the column that is already sorted. Clicking
+    // a different header used to inherit the previous column's direction, so
+    // the first click on Company could land on descending for no visible
+    // reason -- invisible while the server ignored sortField, obvious now that
+    // it honours it.
+    setSortOrder((prev) => (field === sortField && prev === 'asc' ? 'desc' : 'asc'));
   };
 
   const openPreview = (url) => {
@@ -257,6 +268,32 @@ const CarLogs = () => {
         cell: ({ row }) => <span className="text-[13px] text-[var(--tx)]">{row.original.modelName}</span>,
       },
       {
+        accessorKey: 'company',
+        header: () => (
+          <button
+            onClick={() => toggleSort('company')}
+            className="cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
+          >
+            Company
+          </button>
+        ),
+        cell: ({ row }) => <span className="text-[13px] text-[var(--tx)]">{row.original.company}</span>,
+      },
+      {
+        accessorKey: 'color',
+        header: () => (
+          <button
+            onClick={() => toggleSort('color')}
+            className="cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
+          >
+            Colour
+          </button>
+        ),
+        cell: ({ row }) => (
+          <span className="text-[13px] text-[var(--tx)] capitalize">{row.original.color}</span>
+        ),
+      },
+      {
         accessorKey: 'year',
         header: () => (
           <button
@@ -290,7 +327,7 @@ const CarLogs = () => {
         cell: ({ row }) => <span className="text-[13px] text-[var(--tx)]">{row.original.channelName}</span>,
       },
     ],
-    []
+    [sortField]
   );
 
   const nvrOptions = useMemo(
@@ -335,6 +372,24 @@ const CarLogs = () => {
             </span>
             <span className="text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0">
               {row.modelName}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <Factory className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
+              Company
+            </span>
+            <span className="text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0">
+              {row.company}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <Palette className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
+              Colour
+            </span>
+            <span className="text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0 capitalize">
+              {row.color}
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs min-w-0">
@@ -388,7 +443,7 @@ const CarLogs = () => {
         onPageChange={setCurrentPage}
         limit={limit}
         onLimitChange={setLimit}
-        searchKeys={['modelName', 'year', 'nvrName', 'channelName']}
+        searchKeys={['modelName', 'company', 'color', 'year', 'nvrName', 'channelName']}
         searchQuery={searchInput}
         onSearchChange={setSearchInput}
         startDate={startDate}

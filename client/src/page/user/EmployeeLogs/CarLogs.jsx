@@ -37,6 +37,10 @@ const getModelName = (item) =>
 
 const getYear = (item) => item.year || item.modelYear || item.carYear || '--';
 
+const getColor = (item) => item.color || item.colour || item.carColor || '--';
+
+const getCompany = (item) => item.company || item.make || item.carCompany || '--';
+
 const REFRESH_KEY = 'car_model_logs_auto_refresh_enabled';
 const INTERVAL_KEY = 'car_model_logs_auto_refresh_interval';
 
@@ -134,6 +138,8 @@ const CarLogs = () => {
           _id: item._id,
           imageUrl: getCarImageUrl(item),
           modelName: getModelName(item),
+          company: getCompany(item),
+          color: getColor(item),
           year: getYear(item),
           nvrName: item.nvrData?.nvrName || '--',
           channelName: item.channelData?.name || '--',
@@ -216,7 +222,12 @@ const CarLogs = () => {
 
   const toggleSort = (field) => {
     setSortField(field);
-    setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    // Toggle only when re-clicking the column that is already sorted. Clicking
+    // a different header used to inherit the previous column's direction, so
+    // the first click on Company could land on descending for no visible
+    // reason -- invisible while the server ignored sortField, obvious now that
+    // it honours it.
+    setSortOrder((prev) => (field === sortField && prev === 'asc' ? 'desc' : 'asc'));
   };
 
   const columns = useMemo(
@@ -258,6 +269,28 @@ const CarLogs = () => {
         ),
         cell: ({ row }) => (
           <span className="text-[#333333] text-xs font-normal">{row.original.modelName}</span>
+        ),
+      },
+      {
+        accessorKey: 'company',
+        header: () => (
+          <button onClick={() => toggleSort('company')} className="cursor-pointer">
+            Company
+          </button>
+        ),
+        cell: ({ row }) => (
+          <span className="text-[#333333] text-xs font-normal">{row.original.company}</span>
+        ),
+      },
+      {
+        accessorKey: 'color',
+        header: () => (
+          <button onClick={() => toggleSort('color')} className="cursor-pointer">
+            Colour
+          </button>
+        ),
+        cell: ({ row }) => (
+          <span className="text-[#333333] text-xs font-normal capitalize">{row.original.color}</span>
         ),
       },
       {
@@ -389,6 +422,14 @@ const CarLogs = () => {
           <p className="text-xs font-semibold text-[#07486A] truncate">{row.modelName}</p>
         </div>
         <div>
+          <p className="text-[10px] font-medium text-[#888] uppercase tracking-wide">Company</p>
+          <p className="text-xs text-[#333333] truncate">{row.company}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-medium text-[#888] uppercase tracking-wide">Colour</p>
+          <p className="text-xs text-[#333333] truncate capitalize">{row.color}</p>
+        </div>
+        <div>
           <p className="text-[10px] font-medium text-[#888] uppercase tracking-wide">Year</p>
           <p className="text-xs text-[#333333] truncate">{row.year}</p>
         </div>
@@ -459,7 +500,7 @@ const CarLogs = () => {
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         gridCard={renderCarCard}
-        searchKeys={['modelName', 'year', 'nvrName', 'channelName']}
+        searchKeys={['modelName', 'company', 'color', 'year', 'nvrName', 'channelName']}
         searchQuery={searchInput}
         onSearchChange={setSearchInput}
         startDate={startDate}
