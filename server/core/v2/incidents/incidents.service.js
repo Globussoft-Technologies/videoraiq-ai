@@ -127,6 +127,42 @@ const toModelYear = (value) => {
   return Number.isFinite(year) ? year : null;
 };
 
+// Attribute values arrive from the DS under several spellings and sometimes
+// as explicit placeholders. Take the first usable one and treat placeholder
+// text as absent, so the logs UI shows a real value or "--", never "unknown".
+const firstFilled = (...values) => {
+  for (const value of values) {
+    if (value === undefined || value === null) continue;
+    const text = String(value).trim();
+    if (text && !/^(unknown|undefined|null|none|n\/?a)$/i.test(text)) return text;
+  }
+  return null;
+};
+
+// Sortable log columns: the id the client sends -> the real document path.
+// A whitelist rather than the raw query value, so a caller can't push an
+// arbitrary path into $sort, and so UI column ids (modelName, nvrName) map
+// onto the fields those columns actually render.
+const LOG_SORT_FIELDS = {
+  timeOfIncident: "timeOfIncident",
+  severity: "severity",
+  incidentName: "incidentName",
+  description: "description",
+  zone: "zone",
+  resolved: "resolved",
+  vehicleNumber: "vehicleNumber",
+  modelName: "model_name",
+  model_name: "model_name",
+  company: "company",
+  color: "color",
+  colour: "color",
+  year: "year",
+  nvrName: "nvrData.nvrName",
+  "nvrData.nvrName": "nvrData.nvrName",
+  channelName: "channelData.name",
+  "channelData.name": "channelData.name",
+};
+
 const cacheDir = path.join("/tmp", "media-cache"); // You can change this to './cache' or any path
 if (!fs.existsSync(cacheDir)) {
   fs.mkdirSync(cacheDir, {
@@ -485,11 +521,21 @@ class IncidentsService {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.Image = req?.body?.Image;
         newIncident.model_name = req?.body?.model_name;
-        // `colour` accepted alongside `color` so either spelling from the DS
-        // payload lands on the same field.
-        newIncident.color = req?.body?.color ?? req?.body?.colour ?? null;
-        newIncident.company = req?.body?.company ?? null;
-        newIncident.year = toModelYear(req?.body?.year);
+        // The DS has shipped these three under different keys across pipeline
+        // versions (`colour`, `make`/`brand`, `model_year`). Accept every
+        // spelling we have seen: the schema keeps one canonical field each,
+        // and an unrecognised key would otherwise be stored as null and render
+        // as "--" in Car Logs even though the DS did send a value.
+        newIncident.color = firstFilled(req?.body?.color, req?.body?.colour);
+        newIncident.company = firstFilled(
+          req?.body?.company,
+          req?.body?.make,
+          req?.body?.brand,
+          req?.body?.manufacturer,
+        );
+        newIncident.year = toModelYear(
+          req?.body?.year ?? req?.body?.model_year ?? req?.body?.manufacture_year,
+        );
       }
 
 
@@ -2621,6 +2667,10 @@ console.log(result,'result');
     // also match joined fields (NVR name, camera name) and a stringified
     // timeOfIncident. Off by default so all other callers are unaffected.
     postLookupSearch = false,
+    // Numeric columns to include in the free-text search. Mongo cannot regex a
+    // number in place, so these are stringified into helper fields first.
+    // Only consulted on the postLookupSearch path.
+    searchNumberFields = [],
   }) {
     const data = req?.verified?.userData;
     if (!data?.user_id) {
@@ -2642,6 +2692,8 @@ console.log(result,'result');
       resolved,
       reportStatus,
       search,
+      sortField,
+      sortOrder,
     } = req.query;
 
     const toArray = (v) =>
@@ -2738,6 +2790,17 @@ console.log(result,'result');
     // and $skip/$limit aggregations filter identically (totalCount stays exact).
     if (escapedSearch && postLookupSearch) {
       const rx = { $regex: escapedSearch, $options: "i" };
+      const searchTextPaths = [
+        ...new Set([
+          "severity",
+          "vehicleNumber",
+          "incidentName",
+          "nvrData.nvrName",
+          "channelData.name",
+          "channelData.customName",
+          ...searchFields,
+        ]),
+      ];
       basePipeline.push(
         {
           $addFields: {
@@ -2751,27 +2814,56 @@ console.log(result,'result');
                 timezone: "Asia/Kolkata",
               },
             },
+            ...Object.fromEntries(
+              searchNumberFields.map((field) => [
+                `_searchNum_${field}`,
+                { $toString: { $ifNull: [`$${field}`, ""] } },
+              ]),
+            ),
           },
         },
         {
           $match: {
             $or: [
               { _searchTime: rx }, // Time of Incident
-              { severity: rx }, // Severity
-              { vehicleNumber: rx }, // Vehicle Number
-              { incidentName: rx }, // Incident Name
-              { "nvrData.nvrName": rx }, // NVR Name (joined)
-              { "channelData.name": rx }, // Camera Name (joined)
-              { "channelData.customName": rx }, // Camera custom name (joined)
+              // Severity, Vehicle Number, Incident Name, NVR Name and Camera
+              // Name (the last three joined), plus the caller's own
+              // searchFields. Those used to apply only on the pre-lookup path,
+              // so opting into postLookupSearch dropped them from the search
+              // entirely -- car logs list model_name/company/color there.
+              ...searchTextPaths.map((field) => ({ [field]: rx })),
+              ...searchNumberFields.map((field) => ({
+                [`_searchNum_${field}`]: rx,
+              })),
             ],
           },
         },
-        { $project: { _searchTime: 0 } }, // strip helper â€” response shape unchanged
+        {
+          $project: {
+            _searchTime: 0,
+            ...Object.fromEntries(
+              searchNumberFields.map((field) => [`_searchNum_${field}`, 0]),
+            ),
+          },
+        }, // strip helper â€” response shape unchanged
       );
     }
 
-    // $sort must remain the last stage of basePipeline.
-    basePipeline.push({ $sort: { timeOfIncident: -1 } });
+    // $sort must remain the last stage of basePipeline. Every log page sends
+    // sortField/sortOrder when a column header is clicked; without a
+    // recognised field this keeps the previous behaviour (newest first).
+    const sortPath = LOG_SORT_FIELDS[String(sortField ?? "").trim()];
+    if (sortPath) {
+      const sortStage = { [sortPath]: sortOrder === "asc" ? 1 : -1 };
+      // Tiebreaker: a low-cardinality column (colour, year, company) leaves
+      // most rows tied, and an unstable order between the $count and the
+      // $skip/$limit aggregation lets a row repeat or vanish across pages.
+      if (sortPath !== "timeOfIncident") sortStage.timeOfIncident = -1;
+      sortStage._id = -1;
+      basePipeline.push({ $sort: sortStage });
+    } else {
+      basePipeline.push({ $sort: { timeOfIncident: -1 } });
+    }
 
     const [countResult, logs] = await Promise.all([
       Incident.aggregate([...basePipeline, { $count: "totalCount" }]),
@@ -2803,8 +2895,9 @@ console.log(result,'result');
         res,
         incidentType: "vehicleDetection",
         extraMatch,
-        // Free-text `search` matches Time of Incident, Severity, Vehicle Number,
-        // Incident Name, NVR Name, and Camera Name (see _fetchIncidentLogs).
+        // Free-text `search` matches Time of Incident, Severity, Vehicle
+        // Number, Incident Name, NVR Name and Camera Name, plus the default
+        // searchFields (description, zone) -- see _fetchIncidentLogs.
         postLookupSearch: true,
       });
     } catch (error) {
@@ -2829,7 +2922,17 @@ console.log(result,'result');
         res,
         incidentType: "carModelDetection",
         extraMatch,
-        searchFields: ["incidentName", "description", "zone", "model_name"],
+        // The columns Car Logs renders, so free-text search matches what the
+        // user can actually see in the table.
+        searchFields: [
+          "incidentName",
+          "description",
+          "zone",
+          "model_name",
+          "company",
+          "color",
+        ],
+        searchNumberFields: ["year"],
         postLookupSearch: true,
       });
     } catch (error) {
