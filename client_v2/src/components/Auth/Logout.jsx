@@ -4,7 +4,7 @@ import { logout } from '@/hooks/logout';
 import { useAuth } from '@/context/AuthContext';
 
 const envValue = (key) => String(import.meta.env[key] || '').trim();
-const useAdminLogin = () => ['true', 'false'].includes(envValue('VITE_LOCAL_SETUP').toLowerCase());
+const isLocalSetup = () => envValue('VITE_LOCAL_SETUP').toLowerCase() === 'true';
 const logoutRedirectUrl = () => {
   const memberUrl = envValue('VITE_AMEMBER_MEMBER_URL');
   if (memberUrl) return memberUrl.replace(/\/login\/?$/, '/member');
@@ -24,7 +24,7 @@ export default function Logout() {
   useEffect(() => {
     logout();
     setUser(null);
-    if (useAdminLogin()) {
+    if (isLocalSetup()) {
       navigate('/admin-login', { replace: true });
     } else {
       window.location.href = logoutRedirectUrl();

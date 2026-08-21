@@ -7,7 +7,7 @@ import { logout } from '@/hooks/logout';
 
 const HOST = import.meta.env.VITE_BACKEND;
 const envValue = (key) => String(import.meta.env[key] || '').trim();
-const useAdminLogin = () => ['true', 'false'].includes(envValue('VITE_LOCAL_SETUP').toLowerCase());
+const isLocalSetup = () => envValue('VITE_LOCAL_SETUP').toLowerCase() === 'true';
 
 const accessCookieName = () => {
   const env = envValue('VITE_ENV');
@@ -52,7 +52,7 @@ export default function IsAuth({ children }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const toLogin = () => {
-    if (useAdminLogin()) {
+    if (isLocalSetup()) {
       navigate('/admin-login', { replace: true, state: { from: location } });
       return;
     }
