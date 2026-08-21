@@ -15,6 +15,8 @@ router.delete("/delete",verifyToken,deleteAccessCheck,authUserController.deleteA
 router.delete("/delete-all", verifyToken, deleteAccessCheck, authUserController.deleteAllAuthUsers);
 router.post("/bulk-import",verifyToken,createAccessCheck,authUserController.bulkImportAuthUser);
 router.patch("/tag-user",verifyToken,editAccessCheck,authUserController.tagUser);
+router.patch("/tag-vehicle",verifyToken,editAccessCheck,authUserController.tagVehicleNumber);
+router.patch("/untag-vehicle",verifyToken,editAccessCheck,authUserController.untagVehicleNumber);
 router.patch("/status",verifyToken,editAccessCheck,authUserController.updateUserStatus);
 router.patch("/clear-auto-access-tags",verifyToken,editAccessCheck,authUserController.clearAutoTaggedAccessLogs);
 router.post("/verifyUser",verifyToken,upload.array('file', 3),authUserController.verifyUser);       

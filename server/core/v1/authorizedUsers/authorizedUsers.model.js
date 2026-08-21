@@ -132,6 +132,9 @@ authorizedUsersSchema.index(
   { unique: true, partialFilterExpression: { email: { $exists: true, $gt: '' } } }
 );
 authorizedUsersSchema.index({ adminId: 1, status: 1 });
+// Vehicle-number tagging resolves the owner of every detected plate on each
+// ANPR/incident page load, so that lookup has to stay on an index.
+authorizedUsersSchema.index({ adminId: 1, vehicleNumber: 1 });
 
 // Encrypt password before save
 authorizedUsersSchema.pre("save", function (next) {

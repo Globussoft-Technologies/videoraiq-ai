@@ -11,6 +11,14 @@ import { withSFTPConnection } from "../../../utils/newSFTPConnectionCheck.js";
 import path from "path";
 import fs from "fs";
 import { deletionQueue } from "../jobs/utils/deletionQueue.js";
+import {
+  attachTaggedUsers,
+  findTaggedPlates,
+  vehicleTagStages,
+  stripNormPlateStage,
+  escapeRegex,
+  NORM_PLATE_FIELD,
+} from "../../../utils/vehicleTagging.js";
 import { ALERT_FEED_EXCLUDED_TYPES } from "../../../constants/detectionTypes.js";
 
 import {
@@ -698,6 +706,10 @@ class IncidentsService {
         { $limit: Number(limit) },
       ]);
 
+      // Name the registered user each detected plate belongs to, so a
+      // deep-linked Vehicle Detection incident reads the same as the list.
+      await attachTaggedUsers(data, req?.verified?.userData?.adminId);
+
       // Get total count
       const totalCount = await Incident.countDocuments(filter);
 
@@ -716,6 +728,7 @@ class IncidentsService {
     try {
       let user_id = req?.verified?.userData?.user_id;
       let memberId = req?.verified?.userData?.memberId;
+      const adminId = req?.verified?.userData?.adminId;
 
       let authorizedNvrs = req?.verified?.authorizedNvr?.nvrIds || [];
       let authorizedChannels = req?.verified?.authorizedChannel?.channels || [];
@@ -741,6 +754,11 @@ class IncidentsService {
         incidentTypeFilter,
         severity,
         statusFilter,
+        // Vehicle Detection: free-text over plate + tagged user's name, and
+        // an all/tagged/untagged filter. Both are no-ops for other types,
+        // whose incidents carry no vehicleNumber.
+        search,
+        tagStatus,
       } = req.body;
 
       // Shared with the Analytics overview breakdown so the "why is this in the
@@ -1038,6 +1056,38 @@ class IncidentsService {
         };
       }
 
+      // Vehicle tagging (Vehicle Detection incidents): filter by
+      // tagged/untagged and search by plate or by the tagged user's name.
+      // Built once and reused by the count aggregation below so the severity /
+      // status chips can never disagree with the grid they sit above.
+      const wantsTagFilter = tagStatus === "tagged" || tagStatus === "untagged";
+      const searchTerm = typeof search === "string" ? search.trim() : "";
+      const vehicleStages = [];
+
+      if (wantsTagFilter || searchTerm) {
+        const taggedPlates = wantsTagFilter ? await findTaggedPlates(adminId) : [];
+        vehicleStages.push(...vehicleTagStages(tagStatus, taggedPlates));
+
+        if (searchTerm) {
+          // The owner's name lives on the user record, so searching by name
+          // has to resolve to the plates those users hold first.
+          const ownerPlates = await findTaggedPlates(adminId, { search: searchTerm });
+          const rx = { $regex: escapeRegex(searchTerm), $options: "i" };
+          vehicleStages.push({
+            $match: {
+              $or: [
+                { vehicleNumber: rx },
+                ...(ownerPlates.length
+                  ? [{ [NORM_PLATE_FIELD]: { $in: ownerPlates } }]
+                  : []),
+              ],
+            },
+          });
+        }
+
+        vehicleStages.push(stripNormPlateStage);
+      }
+
       // Aggregated paginated data
       const data = await Incident.aggregate([
         // 1ï¸âƒ£ Match early (uses index)
@@ -1046,6 +1096,7 @@ class IncidentsService {
             ...matchStage,
           },
         },
+        ...vehicleStages,
 
         // 2) Sort by the most relevant action time for the current bucket.
         // Resolved uses resolution time, Reported uses reported time, Active uses incident/created time.
@@ -1110,9 +1161,14 @@ class IncidentsService {
           },
         },
       ]);
-      
+
+      // Vehicle Detection incidents carry only a plate; resolve who it
+      // belongs to so the Incident Center can show plate + tagged user.
+      await attachTaggedUsers(data, req?.verified?.userData?.adminId);
+
       const [countStats = {}] = await Incident.aggregate([
         { $match: { ...matchStage } },
+        ...vehicleStages,
         {
           $group: {
             _id: null,
@@ -2671,6 +2727,12 @@ console.log(result,'result');
     // number in place, so these are stringified into helper fields first.
     // Only consulted on the postLookupSearch path.
     searchNumberFields = [],
+    // Opt-in: resolve the registered user behind each row's vehicleNumber
+    // and attach it as `taggedUser`. Only the plate-bearing log pages need
+    // it, so it costs the others nothing. Also enables the `tagStatus`
+    // (all/tagged/untagged) filter and lets free-text `search` match the
+    // tagged user's name, not just the plate.
+    attachVehicleOwners = false,
   }) {
     const data = req?.verified?.userData;
     if (!data?.user_id) {
@@ -2694,7 +2756,17 @@ console.log(result,'result');
       search,
       sortField,
       sortOrder,
+      tagStatus,
     } = req.query;
+
+    // Plates already claimed by a registered user, needed by the
+    // tagged/untagged filter. Only fetched for the pages that opted in, and
+    // only when the filter is actually set.
+    const wantsTagFilter =
+      attachVehicleOwners && (tagStatus === "tagged" || tagStatus === "untagged");
+    const taggedPlates = wantsTagFilter
+      ? await findTaggedPlates(data?.adminId)
+      : [];
 
     const toArray = (v) =>
       v ? v.split(",").map((x) => x.trim()).filter(Boolean) : [];
@@ -2750,6 +2822,13 @@ console.log(result,'result');
       escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     }
 
+    // Searching by a tagged user's name has to resolve to plates first — the
+    // owner's name lives on the user record, not on the incident.
+    const searchOwnerPlates =
+      attachVehicleOwners && escapedSearch
+        ? await findTaggedPlates(data?.adminId, { search })
+        : [];
+
     // Default path (all callers except the opt-in one): search the incident-doc
     // fields inside matchStage, before the $lookups â€” unchanged behavior.
     if (escapedSearch && !postLookupSearch) {
@@ -2783,6 +2862,13 @@ console.log(result,'result');
       },
       { $unwind: { path: "$channelData", preserveNullAndEmptyArrays: true } },
     ];
+
+    // Tagged/untagged filtering runs inside basePipeline so the $count and the
+    // $skip/$limit aggregations narrow identically and totalCount stays exact.
+    // Added before the search block below, which reads the same helper field.
+    if (attachVehicleOwners) {
+      basePipeline.push(...vehicleTagStages(tagStatus, taggedPlates));
+    }
 
     // Opt-in path: search across incident-doc fields, joined NVR/camera names,
     // and a stringified timeOfIncident. Must run after the $lookups (those
@@ -2826,6 +2912,11 @@ console.log(result,'result');
           $match: {
             $or: [
               { _searchTime: rx }, // Time of Incident
+              // Tagged user's name — matched through the plates those owners
+              // hold, since the name itself isn't on the incident document.
+              ...(searchOwnerPlates.length
+                ? [{ [NORM_PLATE_FIELD]: { $in: searchOwnerPlates } }]
+                : []),
               // Severity, Vehicle Number, Incident Name, NVR Name and Camera
               // Name (the last three joined), plus the caller's own
               // searchFields. Those used to apply only on the pre-lookup path,
@@ -2848,6 +2939,9 @@ console.log(result,'result');
         }, // strip helper â€” response shape unchanged
       );
     }
+
+    // Drop the tagging helper field once every stage that reads it has run.
+    if (attachVehicleOwners) basePipeline.push(stripNormPlateStage);
 
     // $sort must remain the last stage of basePipeline. Every log page sends
     // sortField/sortOrder when a column header is clicked; without a
@@ -2874,6 +2968,10 @@ console.log(result,'result');
       ]),
     ]);
 
+    if (attachVehicleOwners) {
+      await attachTaggedUsers(logs, data?.adminId);
+    }
+
     return res.status(200).json(
       Response.userSuccessResp(`${incidentType} logs fetched successfully`, {
         totalCount: countResult[0]?.totalCount || 0,
@@ -2895,6 +2993,9 @@ console.log(result,'result');
         res,
         incidentType: "vehicleDetection",
         extraMatch,
+        // ANPR Logs shows "Vehicle Number + Tagged User", and offers
+        // Tag User for any plate that has no owner yet.
+        attachVehicleOwners: true,
         // Free-text `search` matches Time of Incident, Severity, Vehicle
         // Number, Incident Name, NVR Name and Camera Name, plus the default
         // searchFields (description, zone) -- see _fetchIncidentLogs.

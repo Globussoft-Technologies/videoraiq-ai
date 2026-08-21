@@ -377,10 +377,23 @@ class DetectionSettingService {
       }
 
       // 2. Check if admin is allowed to use this detection type
+      // resolveAdminObjectId falls back to the owning channel's user_id when
+      // the token carries neither a valid adminId nor a user_id. There is no
+      // `channel` binding in this function -- and optional chaining guards a
+      // null/undefined VALUE, not an undeclared identifier -- so `channel?.x`
+      // threw ReferenceError and every create 500'd as "Detection settings
+      // creation failed". Load the channel the setting is being attached to.
+      const targetChannel = await Channel.findOne({
+        _id: { $in: [].concat(value.channelId || []) },
+        nvrId: value.NVRId,
+      })
+        .select("userId")
+        .lean();
+
       const adminId = await resolveAdminObjectId({
         adminId: req?.verified?.userData?.adminId,
         userId: req?.verified?.userData?.user_id,
-        channelUserId: channel?.userId,
+        channelUserId: targetChannel?.userId,
       });
       const admin = await Admin.findById(adminId).select("detectionConfig").lean();
       const config = admin?.detectionConfig;
@@ -702,7 +715,11 @@ class DetectionSettingService {
       const adminId = await resolveAdminObjectId({
         adminId: req?.verified?.userData?.adminId,
         userId: req?.verified?.userData?.user_id,
-        channelUserId: channel?.userId,
+        // Same ReferenceError as the create path: the only `channel` in this
+        // function is the `const channel` inside the link loop above, which is
+        // block-scoped and gone by here. The setting itself carries the owning
+        // user_id, which is exactly what this fallback wanted.
+        channelUserId: detectionSetting?.userId,
       });
       const linkedChannels = await Channel.find({
         [`detections.${settingType}.id`]: id,

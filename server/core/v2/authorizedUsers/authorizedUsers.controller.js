@@ -348,6 +348,46 @@ class AuthUserController {
     return authorizedUsersService.tagUser(req, res, next);
   }
 
+  async tagVehicleNumber(req, res, next) {
+    /*
+    #swagger.tags = ['AuthorizedUsers']
+    #swagger.description = 'Tag a detected vehicle number (from an ANPR log or a Vehicle Detection incident) onto a registered user. The plate is stored on the user, so every past and future detection of that plate resolves to this user.'
+    #swagger.parameters['data'] = {
+      in: 'body',
+      required: true,
+      schema: {
+        userId: '664f1a2b3c4d5e6f7a8b9c0d',
+        vehicleNumber: 'KA02MP9657'
+      }
+    }
+    #swagger.responses[200] = { description: 'Vehicle number tagged successfully' }
+    #swagger.responses[400] = { description: 'Validation error, or the plate already belongs to another user' }
+    #swagger.responses[404] = { description: 'Admin or authorized user not found' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return authorizedUsersService.tagVehicleNumber(req, res, next);
+  }
+
+  async untagVehicleNumber(req, res, next) {
+    /*
+    #swagger.tags = ['AuthorizedUsers']
+    #swagger.description = 'Remove a vehicle number from the registered user it was tagged to. The plate then reads as untagged everywhere and Tag User becomes available again.'
+    #swagger.parameters['data'] = {
+      in: 'body',
+      required: true,
+      schema: {
+        userId: '664f1a2b3c4d5e6f7a8b9c0d',
+        vehicleNumber: 'KA02MP9657'
+      }
+    }
+    #swagger.responses[200] = { description: 'Vehicle number untagged successfully' }
+    #swagger.responses[400] = { description: 'Validation error, or the user is not tagged to that plate' }
+    #swagger.responses[404] = { description: 'Admin or authorized user not found' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return authorizedUsersService.untagVehicleNumber(req, res, next);
+  }
+
   async clearAutoTaggedAccessLogs(req, res, next) {
     /* 
     #swagger.tags = ['AuthorizedUsers']

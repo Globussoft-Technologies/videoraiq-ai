@@ -94,6 +94,26 @@ function seedEmployee(over = {}) {
 // fetchAuthUser — additional branches
 // ----------------------------------------------------------------------------
 describe("AuthUsersService.fetchAuthUser — deeper branches", () => {
+  it("joins the department on a single-user fetch", async () => {
+    // The Tagged User details card (ANPR Logs / Incident Center) fetches one
+    // user by id. Without the join it could only ever render Department as
+    // N/A, while the list branch beside it resolved the name fine.
+    const dept = await Department.create({
+      adminId: admin._id,
+      departmentName: "Logistics",
+    });
+    const user = await seedEmployee({ departmentId: dept._id });
+
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      query: { userId: user._id.toString() },
+    });
+    await AuthUsersService.fetchAuthUser(req, res, next);
+
+    const [fetched] = payload(res).data.users;
+    expect(fetched.departmentId.departmentName).toBe("Logistics");
+  });
+
   it("rejects invalid roleIds (mismatch with rolesCount)", async () => {
     const { req, res, next } = serviceCtx({
       adminId: admin._id,

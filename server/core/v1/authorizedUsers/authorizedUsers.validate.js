@@ -128,6 +128,37 @@ class AuthUsersValidator {
   }
 
 
+
+  tagVehicleNumber(body) {
+    const schema = Joi.object({
+      userId: Joi.string()
+        .trim()
+        .custom((value, helpers) =>
+          mongoose.Types.ObjectId.isValid(value) ? value : helpers.error('any.invalid')
+        )
+        .required()
+        .messages({
+          'any.invalid': 'userId must be a valid user id',
+          'string.empty': 'Please select a user to tag',
+          'any.required': 'Please select a user to tag',
+        }),
+
+      vehicleNumber: Joi.string()
+        .trim()
+        .min(2)
+        .max(32)
+        .required()
+        .messages({
+          'string.empty': 'Vehicle number is required',
+          'string.min': 'Vehicle number must be at least 2 characters',
+          'string.max': 'Vehicle number must be at most 32 characters',
+          'any.required': 'Vehicle number is required',
+        }),
+    });
+
+    return schema.validate(body, { abortEarly: false });
+  }
+
   createAuthUserBulk(body) {
     const schema = Joi.object({
       users: Joi.array().items({

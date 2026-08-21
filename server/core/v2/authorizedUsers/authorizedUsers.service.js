@@ -23,6 +23,7 @@ import shiftModel from "./../shifts/shifts.model.js"
 import channelsModel from "../channels/channels.model.js";
 import LocationModel from "../locations/location.model.js";
 import OptimizedAccessLogs from "../accesslogs/newAccessLogs.model.js";
+import { normalizePlate, findVehicleOwners, TAGGED_USER_FIELDS } from "../../../utils/vehicleTagging.js";
 import faceImagesModel from "../faceImages/faceImages.model.js";
 
 
@@ -255,7 +256,12 @@ class AuthUsersService {
           }
           
           if (userId) {            
-            const user = await authorizedUsersModel.findById(userId, null, { memberId: data?.memberId });
+            // Same department join the list branch does — without it a
+            // single-user fetch (the Tagged User details card on ANPR Logs and
+            // the Incident Center) can only ever render Department as N/A.
+            const user = await authorizedUsersModel
+              .findById(userId, null, { memberId: data?.memberId })
+              .populate("departmentId", "departmentName empDepartmentId");
       
             if (!user) {
               return res.status(200).json(Response.userSuccessResp("Authorized user not found", {
@@ -1022,6 +1028,183 @@ async updateAuthUser(req, res, _next) {
     );
   }
 }
+
+
+  /**
+   * Tag a detected vehicle number onto a registered user.
+   *
+   * Backs the "Tag User" action on ANPR Logs and Vehicle Detection incidents,
+   * for people who were registered before the Vehicle Number field existed.
+   * Writing the plate onto the user is the whole operation — every log and
+   * incident resolves its owner from that field at read time, so the tag
+   * applies retroactively and to all future detections at once.
+   */
+  async tagVehicleNumber(req, res, _next) {
+    try {
+      const data = req?.verified?.userData;
+      const { userId, vehicleNumber } = req.body || {};
+
+      const { error } = AuthUsersValidator.tagVehicleNumber(req.body || {});
+      if (error) {
+        return res.status(400).json(
+          Response.validationFailResp(
+            error.details.map((detail) => detail.message).join(", "),
+            "Validation Failed!"
+          )
+        );
+      }
+
+      const plate = String(vehicleNumber).trim();
+      // Guards against a plate of only separators ("--", " / ") slipping past
+      // Joi's length check and tagging a user to nothing matchable.
+      if (!normalizePlate(plate)) {
+        return res.status(400).json(
+          Response.userFailResp(
+            "A readable vehicle number is required to tag a user.",
+            "Validation Failed!"
+          )
+        );
+      }
+
+      const isAdminExist = await this.resolveAdminFromVerifiedUser(data);
+      if (!isAdminExist) {
+        return res.status(404).json(
+          Response.userFailResp("Admin not found!", "Validation Failed!")
+        );
+      }
+
+      // Same location scoping the Tag User dialog's list goes through, so a
+      // member can only tag someone they are allowed to see in the first place.
+      const user = await authorizedUsersModel.findOne(
+        { _id: userId, adminId: isAdminExist._id },
+        null,
+        { memberId: data?.memberId }
+      );
+      if (!user) {
+        return res.status(404).json(
+          Response.userFailResp("Authorized user not found", "Validation Failed!")
+        );
+      }
+
+      // One plate, one owner — refuse the duplicate instead of leaving two
+      // users claiming the same detection.
+      const owners = await findVehicleOwners([plate], isAdminExist._id);
+      const currentOwner = owners.get(normalizePlate(plate));
+      if (currentOwner && currentOwner._id.toString() !== user._id.toString()) {
+        const ownerName =
+          currentOwner.userName ||
+          [currentOwner.firstName, currentOwner.lastName].filter(Boolean).join(" ") ||
+          "another user";
+        return res.status(400).json(
+          Response.userFailResp(
+            `Vehicle number ${plate} is already tagged to ${ownerName}.`,
+            "Already tagged"
+          )
+        );
+      }
+
+      const previousVehicleNumber = user.vehicleNumber || null;
+
+      // $set rather than save(): records created before today's schema would
+      // fail full-document validation on an unrelated field.
+      const updatedUser = await authorizedUsersModel
+        .findOneAndUpdate(
+          { _id: user._id, adminId: isAdminExist._id },
+          { $set: { vehicleNumber: plate } },
+          { new: true, projection: TAGGED_USER_FIELDS }
+        )
+        .lean();
+
+      return res.status(200).json(
+        Response.userSuccessResp("Vehicle number tagged successfully", {
+          user: updatedUser,
+          vehicleNumber: plate,
+          previousVehicleNumber,
+        })
+      );
+    } catch (error) {
+      logger.error(error);
+      return res.status(500).json(
+        Response.errorResp("Failed to tag vehicle number.", error.message)
+      );
+    }
+  }
+
+
+  /**
+   * Remove a vehicle number from the user it was tagged to.
+   *
+   * Takes the plate as well as the user id so a stale list — one rendered
+   * before someone else re-tagged the plate — can't clear a number the user no
+   * longer holds. Afterwards the detection falls back to the untagged state
+   * and offers Tag User again.
+   */
+  async untagVehicleNumber(req, res, _next) {
+    try {
+      const data = req?.verified?.userData;
+      const { userId, vehicleNumber } = req.body || {};
+
+      const { error } = AuthUsersValidator.tagVehicleNumber(req.body || {});
+      if (error) {
+        return res.status(400).json(
+          Response.validationFailResp(
+            error.details.map((detail) => detail.message).join(", "),
+            "Validation Failed!"
+          )
+        );
+      }
+
+      const isAdminExist = await this.resolveAdminFromVerifiedUser(data);
+      if (!isAdminExist) {
+        return res.status(404).json(
+          Response.userFailResp("Admin not found!", "Validation Failed!")
+        );
+      }
+
+      const user = await authorizedUsersModel.findOne(
+        { _id: userId, adminId: isAdminExist._id },
+        null,
+        { memberId: data?.memberId }
+      );
+      if (!user) {
+        return res.status(404).json(
+          Response.userFailResp("Authorized user not found", "Validation Failed!")
+        );
+      }
+
+      const plate = String(vehicleNumber).trim();
+      if (normalizePlate(user.vehicleNumber) !== normalizePlate(plate)) {
+        return res.status(400).json(
+          Response.userFailResp(
+            `${user.userName || "This user"} is not tagged to vehicle number ${plate}.`,
+            "Not tagged"
+          )
+        );
+      }
+
+      // $set rather than save(): records created before today's schema would
+      // fail full-document validation on an unrelated field.
+      const updatedUser = await authorizedUsersModel
+        .findOneAndUpdate(
+          { _id: user._id, adminId: isAdminExist._id },
+          { $set: { vehicleNumber: null } },
+          { new: true, projection: TAGGED_USER_FIELDS }
+        )
+        .lean();
+
+      return res.status(200).json(
+        Response.userSuccessResp("Vehicle number untagged successfully", {
+          user: updatedUser,
+          vehicleNumber: plate,
+        })
+      );
+    } catch (error) {
+      logger.error(error);
+      return res.status(500).json(
+        Response.errorResp("Failed to untag vehicle number.", error.message)
+      );
+    }
+  }
 
 
     async deleteAuthUser(req, res, _next) {
