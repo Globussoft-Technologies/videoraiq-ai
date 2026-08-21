@@ -20,6 +20,7 @@ import {
   generatePlayBackUrl,
   getStreamingUrl,
   killCurrentPlayBack,
+  resolvePlaybackHost,
 } from "../../../utils/rtspStream.js";
 import adminModel from "../admin/admin.model.js";
 import departmentsModel from "../departments/departments.model.js";
@@ -29,7 +30,6 @@ import DetectionSettingsValidation from "../detectionSettings/detectionSettings.
 import Recipient from "../verifyRecipients/recipients.model.js";
 import config from "config"
 const APP_ENV = config.get("APP_ENV");
-const rtsp_host = config.get("RTSPStream.host");
 
 const isMongoObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").trim());
 
@@ -915,17 +915,34 @@ class ChannelService {
       // await Promise.all(
       //   allChannels.map((ch) => killCurrentPlayBack(`${ch.nvrId}-${ch._id}`))
       // );
+      // An admin can own NVRs across several sites, each fronted by its own
+      // stream server, so target the host this NVR actually lives on rather
+      // than the single account-level streamHost.
+      const streamHost = await resolvePlaybackHost(channel?.userId, nvr?.domain);
+
       const rtspUrl = await generatePlayBackUrl(
         sessionId,
         camera_id,
         startTime,
         endTime,
-        channel?.userId
+        channel?.userId,
+        streamHost
       );
+
+      if (!rtspUrl) {
+        return res
+          .status(502)
+          .json(
+            Response.errorResp(
+              "Failed to retrieve playback URL",
+              `Stream server ${streamHost} returned no playback url for camera ${camera_id}`
+            )
+          );
+      }
 
       return res.status(200).json(
         Response.userSuccessResp("Playback URL retrieved successfully", {
-          playbackUrl: APP_ENV === 'local' ? `${rtsp_host}/${rtspUrl}` : rtspUrl,
+          playbackUrl: APP_ENV === 'local' ? `${streamHost}/${rtspUrl}` : rtspUrl,
         })
       );
     } catch (error) {

@@ -209,16 +209,46 @@ describe("generatePlayBackUrl", () => {
     expect(url).toBe("rtsp://playback.test/p");
   });
 
-  it("returns empty string when playback_url is missing", async () => {
+  it("returns null when playback_url is missing", async () => {
     axios.post.mockResolvedValueOnce({ data: {} });
     const url = await rtsp.generatePlayBackUrl("s", "c", "a", "b");
-    expect(url).toBe("");
+    expect(url).toBeNull();
   });
 
-  it("returns undefined on axios error", async () => {
+  it("returns null on axios error", async () => {
     axios.post.mockRejectedValueOnce(new Error("oops"));
     const url = await rtsp.generatePlayBackUrl("s", "c", "a", "b");
-    expect(url).toBeUndefined();
+    expect(url).toBeNull();
+  });
+
+  it("targets the host override ahead of the resolved stream host", async () => {
+    axios.post.mockResolvedValueOnce({
+      data: { playback_url: "playback/pb-cam-z-1/playlist.m3u8" },
+    });
+    await rtsp.generatePlayBackUrl(
+      "session-1",
+      "cam-z",
+      "a",
+      "b",
+      undefined,
+      "https://site-b.example.com/api-stream/",
+    );
+    const [url] = axios.post.mock.calls[0];
+    expect(url).toBe("https://site-b.example.com/api-stream/api/playback/start");
+  });
+});
+
+describe("resolvePlaybackHost", () => {
+  it("prefers the NVR domain and strips trailing slashes", async () => {
+    await expect(
+      rtsp.resolvePlaybackHost("34", "https://site-b.example.com/api-stream/"),
+    ).resolves.toBe("https://site-b.example.com/api-stream");
+  });
+
+  it("falls back to the resolved host when the NVR has no domain", async () => {
+    await expect(rtsp.resolvePlaybackHost(undefined, null)).resolves.toBe(
+      "http://rtsp.test",
+    );
   });
 });
 

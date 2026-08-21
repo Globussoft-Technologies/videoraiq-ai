@@ -32,6 +32,17 @@ export const resolveStream = async (userId) => {
 // Convenience wrapper for callers that only need the host (e.g. display URLs).
 export const resolveHost = async (userId) => (await resolveStream(userId)).host;
 
+// Hosts are stored with and without a trailing slash depending on where they
+// came from, so normalise before joining a path onto one.
+const trimHost = (host) => String(host || "").replace(/\/+$/, "");
+
+// Pick the media server that actually holds this NVR's footage. One admin can
+// own NVRs across several sites (each with its own stream box), so the NVR's
+// own domain wins; admin.streamHost / the global config are the fallback for
+// records that predate per-NVR domains.
+export const resolvePlaybackHost = async (userId, nvrDomain) =>
+  nvrDomain ? trimHost(nvrDomain) : trimHost(await resolveHost(userId));
+
 export const getStreamingUrl = async (id, rtspUrl, userId) => {
   const redisKey = `stream_url:${id}`;
   let streamUrl = await redis.get(redisKey);
@@ -93,11 +104,13 @@ export const generatePlayBackUrl = async (
   startTime,
   endTime,
   userId,
+  hostOverride,
 ) => {
+  const { host, token } = await resolveStream(userId);
+  const target = trimHost(hostOverride || host);
   try {
-    const { host, token } = await resolveStream(userId);
     const response = await axios.post(
-      `${host}/api/playback/start`,
+      `${target}/api/playback/start`,
       {
         session_id,
         camera_id,
@@ -111,10 +124,18 @@ export const generatePlayBackUrl = async (
         },
       },
     );
-    // console.log(response, "generated");
-    return response.data?.playback_url || "";
+    return response.data?.playback_url || null;
   } catch (error) {
-    logger.error(`Failed to generate playback url`, error.message);
+    // Surface the upstream reason (wrong stream host, unparseable rtsp url,
+    // camera not registered) instead of returning undefined and letting the
+    // caller splice it into a URL string.
+    const detail = error?.response?.data
+      ? JSON.stringify(error.response.data)
+      : error?.code || error?.message || String(error);
+    logger.error(
+      `Failed to generate playback url for ${camera_id} via ${target}: ${detail}`,
+    );
+    return null;
   }
 };
 
