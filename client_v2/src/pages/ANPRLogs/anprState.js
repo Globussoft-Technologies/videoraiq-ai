@@ -39,6 +39,8 @@ export const initialState = {
   vehicleNumber: '',
   vehicleNumberList: [],
   vehicleNumberSearch: '',
+  // '' = all, 'tagged', 'untagged'
+  tagStatus: '',
 
   // pagination
   limit: 12,
@@ -90,12 +92,14 @@ export function reducer(state, action) {
       return { ...state, vehicleNumberList: action.value };
     case 'SET_VEHICLE_NUMBER_SEARCH':
       return { ...state, vehicleNumberSearch: action.value };
+    case 'SET_TAG_STATUS':
+      return { ...state, tagStatus: action.value };
 
     case 'SET_LIMIT':
       return { ...state, limit: action.value, currentPage: 1 };
 
     case 'RESET_FILTERS':
-      return { ...state, nvrIds: [], channelIds: [], severity: '' };
+      return { ...state, nvrIds: [], channelIds: [], severity: '', tagStatus: '' };
 
     default:
       return state;

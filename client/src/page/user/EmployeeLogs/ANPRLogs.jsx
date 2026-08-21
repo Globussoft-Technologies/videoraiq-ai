@@ -6,7 +6,7 @@ import React, {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
-import { ArrowDownUp, ArrowUp, ArrowDown, X, Image, LayoutGrid, List, Filter, RotateCcw, Search, ChevronDown, Pencil } from 'lucide-react';
+import { ArrowDownUp, ArrowUp, ArrowDown, X, Image, LayoutGrid, List, Filter, RotateCcw, Search, ChevronDown, Pencil, UserPlus, UserCheck, UserMinus } from 'lucide-react';
 import AccessDenied from '@/components/AccessDenied';
 import { Input } from '@/components/ui/input';
 import { DateRangePickerComponent } from '@/components/ui/calendar';
@@ -15,6 +15,14 @@ import Month from '@/assets/Calendar.svg';
 import ReusableTablePage from './ReusableTablePage';
 import AutoRefreshComponent from './components/AutoRefreshComponent';
 import EditANPRLogDialog from './components/EditANPRLogDialog';
+import TagUserModal, { UntagUserModal } from '@/components/TagUserModal';
+import TaggedUserDetailsModal from '@/components/TaggedUserDetailsModal';
+import {
+  taggedUserName,
+  hasReadablePlate,
+  formatPlate,
+  TAG_STATUS_OPTIONS,
+} from '@/helpers/vehicleTagging';
 import {
   Popover,
   PopoverTrigger,
@@ -58,6 +66,7 @@ const fetchVehicleObstructionLogs = async ({
   resolved,
   reportStatus,
   vehicleNumber,
+  tagStatus,
   search,
 }) => {
   const token = getAccessToken();
@@ -75,6 +84,7 @@ const fetchVehicleObstructionLogs = async ({
       ...(resolved !== '' && resolved !== undefined && { resolved }),
       ...(reportStatus !== '' && reportStatus !== undefined && { reportStatus }),
       ...(vehicleNumber && { vehicleNumber }),
+      ...(tagStatus && { tagStatus }),
       ...(search && { search }),
     },
     headers: {
@@ -135,6 +145,15 @@ const ANPRLogs = () => {
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
   const [editRow, setEditRow] = useState(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  // Row whose plate the Tag User dialog is currently linking to a user.
+  const [tagRow, setTagRow] = useState(null);
+  // Row whose existing tag the Untag dialog is about to remove.
+  const [untagRow, setUntagRow] = useState(null);
+  // Tagged user whose full details card is open. Viewing is read-only, so
+  // unlike Tag/Untag it is not gated on the edit permission.
+  const [viewUser, setViewUser] = useState(null);
+  // '' = all, 'tagged', 'untagged'
+  const [tagStatus, setTagStatus] = useState('');
     const { permissions, loading: permissionsLoading } = usePermissions();
       const canEdit = permissions?.logs?.ANPRLogs?.edit;
   const navigate = useNavigate();
@@ -189,6 +208,7 @@ const ANPRLogs = () => {
         ...(resolved !== '' && resolved !== undefined && { resolved }),
         ...(reportStatus !== '' && reportStatus !== undefined && { reportStatus }),
         ...(vehicleNumber && { vehicleNumber }),
+        ...(tagStatus && { tagStatus }),
         ...(searchInput && { search: searchInput }),
       },
       headers: { Accept: 'application/json', 'x-access-token': token },
@@ -200,6 +220,7 @@ const ANPRLogs = () => {
       nvrName: item.nvrData?.nvrName || '--',
       channelName: item.channelData?.name || '--',
       vehicleNumber: item.vehicleNumber || '--',
+      taggedUser: taggedUserName(item.taggedUser) || '--',
       createdAt: item.timeOfIncident || item.createdAt
         ? moment.utc(item.timeOfIncident || item.createdAt).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A')
         : '--',
@@ -220,13 +241,14 @@ const ANPRLogs = () => {
       doc.setFontSize(9);
       doc.text(`Generated on: ${moment().format('DD/MM/YYYY HH:mm')}`, 14, 18);
 
-      const headers = ['#', 'Incident Name', 'NVR Name', 'Camera Name', 'Vehicle Number', 'Created At', 'Severity', 'Image'];
+      const headers = ['#', 'Incident Name', 'NVR Name', 'Camera Name', 'Vehicle Number', 'Tagged User', 'Created At', 'Severity', 'Image'];
       const tableRows = allLogs.map((row, i) => [
         i + 1,
         row.incidentName,
         row.nvrName,
         row.channelName,
         row.vehicleNumber,
+        row.taggedUser,
         row.createdAt,
         row.severity,
         '',
@@ -237,9 +259,9 @@ const ANPRLogs = () => {
         body: tableRows,
         startY: 24,
         styles: { fontSize: 7 },
-        columnStyles: { 7: { cellWidth: 40 } },
+        columnStyles: { 8: { cellWidth: 40 } },
         didDrawCell: (data) => {
-          if (data.column.index === 7 && data.section === 'body') {
+          if (data.column.index === 8 && data.section === 'body') {
             const url = allLogs[data.row.index]?.incidentImageUrl;
             if (url) {
               doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url });
@@ -273,6 +295,7 @@ const ANPRLogs = () => {
         'NVR Name': row.nvrName,
         'Camera Name': row.channelName,
         'Vehicle Number': row.vehicleNumber,
+        'Tagged User': row.taggedUser,
         'Created At': row.createdAt,
         'Severity': row.severity,
         'Image': '',
@@ -282,7 +305,7 @@ const ANPRLogs = () => {
 
       allLogs.forEach((row, i) => {
         if (row.incidentImageUrl) {
-          const cellRef = XLSX.utils.encode_cell({ r: i + 1, c: 7 });
+          const cellRef = XLSX.utils.encode_cell({ r: i + 1, c: 8 });
           worksheet[cellRef] = { t: 'f', f: `HYPERLINK("${row.incidentImageUrl}", "View Image")` };
         }
       });
@@ -357,7 +380,7 @@ const ANPRLogs = () => {
   // Reset to page 1 when filters or page size change
   useEffect(() => {
     setCurrentPage(1);
-  }, [nvrIds, channelIds, severity, resolved, reportStatus, vehicleNumber, limit]);
+  }, [nvrIds, channelIds, severity, resolved, reportStatus, vehicleNumber, tagStatus, limit]);
 
   const skip = (currentPage - 1) * limit;
 
@@ -379,6 +402,7 @@ const ANPRLogs = () => {
         resolved,
         reportStatus,
         vehicleNumber,
+        tagStatus,
         search: searchInput,
       });
 
@@ -400,6 +424,9 @@ const ANPRLogs = () => {
         imageUrl: item.Image ? `${HOST}${item.Image}` : null,
         incidentImageUrl: item.Image ? `${INCIDENT_URL}${item.Image}` : null,
         vehicleNumber: item.vehicleNumber || '--',
+        // Resolved server-side from the plate, so it is already correct for
+        // detections that predate the tag.
+        taggedUser: item.taggedUser || null,
         severity: item.severity || '--',
         resolved: item.resolved,
         reportStatus: item.reportStatus,
@@ -413,7 +440,7 @@ const ANPRLogs = () => {
     } finally {
       setLoading(false);
     }
-  }, [skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, resolved, reportStatus, vehicleNumber, searchInput]);
+  }, [skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, resolved, reportStatus, vehicleNumber, tagStatus, searchInput]);
 
   useEffect(() => {
     fetchLogs();
@@ -455,6 +482,33 @@ const ANPRLogs = () => {
     setEditRow(row);
     setEditDialogOpen(true);
   };
+
+  // All / Tagged / Not Tagged segmented control, dropped into both the list
+  // and grid toolbars so the two views filter the same way.
+  const TagStatusSelect = (
+    <div
+      className="inline-flex items-center h-9 md:h-10 rounded-lg border border-[#C7C7C7] bg-white overflow-hidden"
+      role="group"
+      aria-label="Filter by tagged state"
+    >
+      {TAG_STATUS_OPTIONS.map((opt) => {
+        const active = tagStatus === opt.key;
+        return (
+          <button
+            key={opt.key || 'all'}
+            type="button"
+            onClick={() => setTagStatus(opt.key)}
+            aria-pressed={active}
+            className={`px-3 h-full text-xs font-medium whitespace-nowrap cursor-pointer transition-colors ${
+              active ? 'bg-[#07486A] text-white' : 'text-[#595959] hover:bg-gray-50'
+            }`}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 
   const VehicleNumberSelect = (
     <Popover open={vehicleNumberOpen} onOpenChange={setVehicleNumberOpen}>
@@ -651,6 +705,55 @@ const ANPRLogs = () => {
         ),
       },
       {
+        // A plate that already belongs to a registered user shows their name;
+        // one that doesn't offers Tag User so an admin can link it at any time.
+        // Rows where no plate was read get neither — nothing to tag a user to.
+        accessorKey: 'taggedUser',
+        header: 'Tagged User',
+        cell: ({ row }) => {
+          const item = row.original;
+          if (item.taggedUser) {
+            return (
+              <span className="inline-flex items-center gap-1.5 text-xs text-[#333333] max-w-[200px]">
+                <UserCheck className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                {/* The name opens the registered user full details card
+                    without leaving the log. */}
+                <button
+                  onClick={() => setViewUser(item.taggedUser)}
+                  className="truncate text-left underline decoration-dotted underline-offset-2 hover:text-[#07486A] cursor-pointer"
+                  title={`View ${taggedUserName(item.taggedUser)}'s details`}
+                >
+                  {taggedUserName(item.taggedUser)}
+                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => setUntagRow(item)}
+                    className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border border-transparent text-[#888] hover:text-[#CE241C] hover:border-[#CE241C] cursor-pointer transition-colors"
+                    title={`Untag ${taggedUserName(item.taggedUser)} from this vehicle`}
+                    aria-label="Untag user"
+                  >
+                    <UserMinus className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </span>
+            );
+          }
+          if (!hasReadablePlate(item.vehicleNumber) || !canEdit) {
+            return <span className={styles.text}>--</span>;
+          }
+          return (
+            <button
+              onClick={() => setTagRow(item)}
+              className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-md border border-[#C7C7C7] text-[#07486A] hover:bg-[#E3F5FF] hover:border-[#07486A] cursor-pointer transition-colors"
+              title="Tag this vehicle number to a registered user"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              Tag User
+            </button>
+          );
+        },
+      },
+      {
         accessorKey: 'severity',
         header: 'Severity',
         cell: ({ row }) => {
@@ -752,6 +855,29 @@ const ANPRLogs = () => {
 
   return (
     <>
+      <TagUserModal
+        open={!!tagRow}
+        vehicleNumber={tagRow?.vehicleNumber}
+        onClose={() => setTagRow(null)}
+        // Refetch rather than patching one row: the same plate can appear on
+        // several rows of this page, and all of them are now tagged.
+        onTagged={() => setManualTrigger((prev) => prev + 1)}
+      />
+
+      <TaggedUserDetailsModal
+        open={!!viewUser}
+        taggedUser={viewUser}
+        onClose={() => setViewUser(null)}
+      />
+
+      <UntagUserModal
+        open={!!untagRow}
+        vehicleNumber={untagRow?.vehicleNumber}
+        taggedUser={untagRow?.taggedUser}
+        onClose={() => setUntagRow(null)}
+        onUntagged={() => setManualTrigger((prev) => prev + 1)}
+      />
+
       <EditANPRLogDialog
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
@@ -817,6 +943,7 @@ const ANPRLogs = () => {
             setEndDate(end ? toIso(end) : '');
           }}
         >
+          {TagStatusSelect}
           {VehicleNumberSelect}
           {canEdit && (
             <Button
@@ -904,6 +1031,7 @@ const ANPRLogs = () => {
                   calendarClassName="p-3 bg-white shadow-lg border border-[#D8D8D8]"
                 />
                 <div className="w-full md:flex md:items-center md:ml-auto md:w-auto gap-3 flex flex-wrap">
+                  {TagStatusSelect}
                   {VehicleNumberSelect}
                   {canEdit && (
                     <Button
@@ -1006,6 +1134,48 @@ const ANPRLogs = () => {
                           </p>
                          
                         </div>
+                        {/* Who the plate belongs to — or Tag User when nobody
+                            has claimed it yet. */}
+                        {hasReadablePlate(row.vehicleNumber) && (
+                          <div className="flex items-center gap-2">
+                            <p className="text-[10px] font-medium text-[#888] uppercase tracking-wide leading-none">
+                              Tagged User
+                            </p>
+                            {row.taggedUser ? (
+                              <span className="inline-flex items-center gap-1.5 text-xs text-[#333333] min-w-0">
+                                <UserCheck className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                                <button
+                                  onClick={() => setViewUser(row.taggedUser)}
+                                  className="truncate text-left underline decoration-dotted underline-offset-2 hover:text-[#07486A] cursor-pointer"
+                                  title={`View ${taggedUserName(row.taggedUser)}'s details`}
+                                >
+                                  {taggedUserName(row.taggedUser)}
+                                </button>
+                                {canEdit && (
+                                  <button
+                                    onClick={() => setUntagRow(row)}
+                                    className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border border-transparent text-[#888] hover:text-[#CE241C] hover:border-[#CE241C] cursor-pointer transition-colors"
+                                    title={`Untag ${taggedUserName(row.taggedUser)} from this vehicle`}
+                                    aria-label="Untag user"
+                                  >
+                                    <UserMinus className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </span>
+                            ) : canEdit ? (
+                              <button
+                                onClick={() => setTagRow(row)}
+                                className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-md border border-[#C7C7C7] text-[#07486A] hover:bg-[#E3F5FF] hover:border-[#07486A] cursor-pointer transition-colors"
+                                title="Tag this vehicle number to a registered user"
+                              >
+                                <UserPlus className="w-3.5 h-3.5" />
+                                Tag User
+                              </button>
+                            ) : (
+                              <span className="text-xs text-[#888]">--</span>
+                            )}
+                          </div>
+                        )}
                         <div className="flex items-center gap-2">
   <p className="text-[10px] font-medium text-[#888] uppercase tracking-wide leading-none">
     Severity

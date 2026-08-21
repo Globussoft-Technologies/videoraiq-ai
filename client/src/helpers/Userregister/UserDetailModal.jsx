@@ -148,9 +148,9 @@ const UserDetailModalContent = ({ user, nasUrl, onClose }) => {
               <DetailItem icon={Briefcase} label="Designation" value={user.designation} />
               <DetailItem icon={MapPin} label="Location" value={user.location} />
               <DetailItem icon={Briefcase} label="Department" value={user.departmentId?.departmentName} />
-              {/* <DetailItem icon={Phone} label="Phone Number" value={user.phoneNumber} /> */}
               <DetailItem icon={User} label="User Name" value={user.userName} />
-              {/* <DetailItem icon={Tag} label="Number Plate" value={user.numberPlate} /> */}
+              <DetailItem icon={Phone} label="Phone Number" value={user.phoneNumber} />
+              <DetailItem icon={Tag} label="Vehicle Number" value={user.vehicleNumber} />
               <DetailItem icon={Home} label="Address" value={user.address1} />
             </div>
 

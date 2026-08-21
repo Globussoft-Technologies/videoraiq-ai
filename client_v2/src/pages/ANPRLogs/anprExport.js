@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 import { fetchVehicleObstructionLogs } from './Api';
+import { taggedUserName } from '@/helpers/vehicleTagging';
 
 /**
  * Fetch the full (unpaginated) result set for export using the current filters,
@@ -21,6 +22,7 @@ const fetchAllForExport = async (params) => {
     resolved,
     reportStatus,
     vehicleNumber,
+    tagStatus,
     searchInput,
   } = params;
 
@@ -37,6 +39,7 @@ const fetchAllForExport = async (params) => {
     resolved,
     reportStatus,
     vehicleNumber,
+    tagStatus,
     search: searchInput,
   });
 
@@ -47,6 +50,7 @@ const fetchAllForExport = async (params) => {
     nvrName: item.nvrData?.nvrName || '--',
     channelName: item.channelData?.name || '--',
     vehicleNumber: item.vehicleNumber || '--',
+    taggedUser: taggedUserName(item.taggedUser) || '--',
     createdAt: item.createdAt
       ? moment.utc(item.createdAt).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A')
       : '--',
@@ -70,13 +74,14 @@ const exportToPDF = async (params) => {
     doc.setFontSize(9);
     doc.text(`Generated on: ${moment().format('DD/MM/YYYY HH:mm')}`, 14, 18);
 
-    const headers = ['#', 'Incident Name', 'NVR Name', 'Camera Name', 'Vehicle Number', 'Created At', 'Severity', 'Image'];
+    const headers = ['#', 'Incident Name', 'NVR Name', 'Camera Name', 'Vehicle Number', 'Tagged User', 'Created At', 'Severity', 'Image'];
     const tableRows = allLogs.map((row, i) => [
       i + 1,
       row.incidentName,
       row.nvrName,
       row.channelName,
       row.vehicleNumber,
+      row.taggedUser,
       row.createdAt,
       row.severity,
       '',
@@ -87,9 +92,9 @@ const exportToPDF = async (params) => {
       body: tableRows,
       startY: 24,
       styles: { fontSize: 7 },
-      columnStyles: { 7: { cellWidth: 40 } },
+      columnStyles: { 8: { cellWidth: 40 } },
       didDrawCell: (data) => {
-        if (data.column.index === 7 && data.section === 'body') {
+        if (data.column.index === 8 && data.section === 'body') {
           const url = allLogs[data.row.index]?.incidentImageUrl;
           if (url) {
             doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url });
@@ -126,6 +131,7 @@ const exportToExcel = async (params) => {
       'NVR Name': row.nvrName,
       'Camera Name': row.channelName,
       'Vehicle Number': row.vehicleNumber,
+      'Tagged User': row.taggedUser,
       'Created At': row.createdAt,
       Severity: row.severity,
       Image: '',
@@ -135,7 +141,7 @@ const exportToExcel = async (params) => {
 
     allLogs.forEach((row, i) => {
       if (row.incidentImageUrl) {
-        const cellRef = XLSX.utils.encode_cell({ r: i + 1, c: 7 });
+        const cellRef = XLSX.utils.encode_cell({ r: i + 1, c: 8 });
         worksheet[cellRef] = { t: 'f', f: `HYPERLINK("${row.incidentImageUrl}", "View Image")` };
       }
     });

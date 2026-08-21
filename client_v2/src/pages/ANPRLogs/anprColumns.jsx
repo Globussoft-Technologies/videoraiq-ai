@@ -1,8 +1,9 @@
 import React from 'react';
 import moment from 'moment-timezone';
-import { Image, Pencil } from 'lucide-react';
+import { Image, Pencil, UserPlus, UserCheck, UserMinus } from 'lucide-react';
 import { styles } from './anprState';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
+import { taggedUserName, hasReadablePlate } from '@/helpers/vehicleTagging';
 
 const severityClass = (severity) => {
   const s = (severity || '--').toLowerCase();
@@ -42,10 +43,71 @@ const formatPlate = (value) => {
 };
 
 /**
- * Build the ANPR log table columns. `onSort(field)` toggles sort for the
- * sortable headers, `onPreview(url)` opens the incident image modal.
+ * Tagged-user cell/badge. A plate that already belongs to a registered user
+ * shows their name; one that doesn't offers Tag User, so an admin can link it
+ * at any time. Rows where the detector read no plate at all get neither —
+ * there is nothing to tag a user to.
  */
-export const buildColumns = ({ onSort, onPreview, onEdit }) => [
+const TaggedUserCell = ({ row, onTagUser, onUntagUser, onViewUser }) => {
+  if (row.taggedUser) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[12px] text-[var(--tx)] max-w-[200px]">
+        <UserCheck className="w-3.5 h-3.5 text-[var(--ok)] shrink-0" />
+        {/* The name opens the registered user's full details without leaving
+            the log. Falls back to plain text where viewing isn't wired up. */}
+        {typeof onViewUser === 'function' ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewUser(row.taggedUser);
+            }}
+            className="truncate text-left underline decoration-dotted underline-offset-2 hover:text-[var(--brand)] cursor-pointer"
+            title={`View ${taggedUserName(row.taggedUser)}'s details`}
+          >
+            {taggedUserName(row.taggedUser)}
+          </button>
+        ) : (
+          <span className="truncate">{taggedUserName(row.taggedUser)}</span>
+        )}
+        {typeof onUntagUser === 'function' && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onUntagUser(row);
+            }}
+            className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-[5px] border border-transparent text-[var(--tx3)] hover:text-[var(--crit)] hover:border-[var(--crit)] transition-colors cursor-pointer"
+            title={`Untag ${taggedUserName(row.taggedUser)} from this vehicle`}
+            aria-label="Untag user"
+          >
+            <UserMinus className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </span>
+    );
+  }
+
+  if (!hasReadablePlate(row.vehicleNumber) || typeof onTagUser !== 'function') {
+    return <span className={styles.text}>--</span>;
+  }
+
+  return (
+    <button
+      onClick={() => onTagUser(row)}
+      className="inline-flex items-center gap-1.5 text-[11.5px] font-medium px-2.5 py-1 rounded-[6px] border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] hover:text-[var(--brand)] hover:border-[var(--brand)] transition-colors cursor-pointer"
+      title="Tag this vehicle number to a registered user"
+    >
+      <UserPlus className="w-3.5 h-3.5" />
+      Tag User
+    </button>
+  );
+};
+
+/**
+ * Build the ANPR log table columns. `onSort(field)` toggles sort for the
+ * sortable headers, `onPreview(url)` opens the incident image modal, and
+ * `onTagUser(row)` opens the Tag User dialog for an untagged plate.
+ */
+export const buildColumns = ({ onSort, onPreview, onEdit, onTagUser, onUntagUser, onViewUser }) => [
   {
     accessorKey: 'snap',
     header: 'Snap',
@@ -82,6 +144,18 @@ export const buildColumns = ({ onSort, onPreview, onEdit }) => [
       >
         {formatPlate(row.original.vehicleNumber)}
       </span>
+    ),
+  },
+  {
+    accessorKey: 'taggedUser',
+    header: 'Tagged User',
+    cell: ({ row }) => (
+      <TaggedUserCell
+        row={row.original}
+        onTagUser={onTagUser}
+        onUntagUser={onUntagUser}
+        onViewUser={onViewUser}
+      />
     ),
   },
   {
@@ -162,9 +236,9 @@ export const buildColumns = ({ onSort, onPreview, onEdit }) => [
  * Grid-view card for a single ANPR log row — image-forward "plate overlay"
  * layout ported from the VideoraIQ prototype. Clicking the snapshot opens the
  * full-size image preview modal (ANPR's existing "big mode").
- * `ctx` = { onPreview }.
+ * `ctx` = { onPreview, onEdit, onTagUser, onUntagUser, onViewUser }.
  */
-export const renderANPRCard = (row, { onPreview, onEdit }) => (
+export const renderANPRCard = (row, { onPreview, onEdit, onTagUser, onUntagUser, onViewUser }) => (
   <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[13px] overflow-hidden hover:border-[var(--bd2)] transition-colors h-full w-full min-w-0">
     {/* Snapshot fills the top of the card */}
     <div
@@ -219,14 +293,26 @@ export const renderANPRCard = (row, { onPreview, onEdit }) => (
 
     {/* Details */}
     <div className="p-[11px]">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[12px] text-[var(--tx2)] truncate">{row.incidentName}</span>
+      {/* Tagged user sits directly under the plate overlay — the plate and who
+          it belongs to are the two things this card exists to show. The
+          timestamp shares this row rather than the one below, which left it
+          stranded low against an empty gap beside the tag control. */}
+      <div className="flex items-center justify-between gap-2 min-h-[24px]">
+        <TaggedUserCell
+          row={row}
+          onTagUser={onTagUser}
+          onUntagUser={onUntagUser}
+          onViewUser={onViewUser}
+        />
         <span
-          className="text-[11px] text-[var(--tx3)] whitespace-nowrap"
+          className="text-[11px] text-[var(--tx3)] whitespace-nowrap shrink-0"
           style={{ fontFamily: 'var(--mono)' }}
         >
           {formatTime(row.createdAt)}
         </span>
+      </div>
+      <div className="flex items-center justify-between gap-2 mt-[5px]">
+        <span className="text-[12px] text-[var(--tx2)] truncate">{row.incidentName}</span>
       </div>
       <div
         className="text-[12.5px] font-semibold mt-[5px] capitalize truncate"

@@ -13,6 +13,8 @@ import {
   Briefcase,
   MapPin,
   Home,
+  Phone,
+  Car,
   UserCircle,
 } from 'lucide-react';
 import { displayEmail } from './displayEmail';
@@ -142,6 +144,8 @@ const UserDetailModal = ({ user, isOpen, onClose, nasUrl }) => {
                   value={user.departmentId?.departmentName}
                 />
                 <DetailItem icon={User} label="User Name" value={user.userName} />
+                <DetailItem icon={Phone} label="Phone Number" value={user.phoneNumber} />
+                <DetailItem icon={Car} label="Vehicle Number" value={user.vehicleNumber} />
                 <DetailItem icon={Home} label="Address" value={user.address1} />
               </div>
             </div>

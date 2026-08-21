@@ -57,6 +57,7 @@ export const fetchVehicleObstructionLogs = async ({
   resolved,
   reportStatus,
   vehicleNumber,
+  tagStatus,
   search,
 }) => {
   return axios.get(`${HOST}/incidents/logs/vehicle-detection`, {
@@ -73,6 +74,7 @@ export const fetchVehicleObstructionLogs = async ({
       ...(resolved !== '' && resolved !== undefined && { resolved }),
       ...(reportStatus !== '' && reportStatus !== undefined && { reportStatus }),
       ...(vehicleNumber && { vehicleNumber }),
+      ...(tagStatus && { tagStatus }),
       ...(search && { search }),
     },
     headers: getHeaders(),

@@ -1,4 +1,5 @@
-import { TriangleAlert, Flag } from 'lucide-react';
+import { TriangleAlert, Flag, UserPlus, UserCheck, UserMinus } from 'lucide-react';
+import { taggedUserName, formatPlate, hasReadablePlate } from '@/helpers/vehicleTagging';
 import CameraCanvas from '../../Streams/CameraCanvas';
 import { formatFromToTimestamps } from '@/utils/UtcConverter';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -12,6 +13,9 @@ const IncidentCard = ({
   onMarkResolved,
   canEdit,
   onReport,
+  onTagUser,
+  onUntagUser,
+  onViewUser,
   deleteMode,
   selectedForDelete,
   onToggleDelete,
@@ -128,6 +132,67 @@ const IncidentCard = ({
 
       {/* Metadata block */}
       <div className="bg-[#F9F9F9] p-2.5 md:p-3 2xl:p-4">
+        {/* Plate + who it belongs to, for Vehicle Detection and the other
+            plate-bearing detections. An untagged plate offers Tag User so an
+            admin can link it to a registered user at any time. */}
+        {hasReadablePlate(item.vehicleNumber) && (
+          <div
+            className="flex items-center gap-2 flex-wrap mb-1.5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="font-mono text-[10px] md:text-[11px] font-bold tracking-wide text-[#333333] bg-white border border-[#E4E4E4] px-2 py-0.5 rounded">
+              {formatPlate(item.vehicleNumber)}
+            </span>
+            {item.taggedUser ? (
+              <span className="flex items-center gap-1 text-[10px] md:text-[11px] text-[#333333] min-w-0">
+                <UserCheck className="w-3 h-3 text-green-600 shrink-0" />
+                {/* The name opens the registered user full details card
+                    without leaving the Incident Center. */}
+                {typeof onViewUser === 'function' ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onViewUser(item.taggedUser);
+                    }}
+                    className="truncate text-left underline decoration-dotted underline-offset-2 hover:text-[#07486A] cursor-pointer"
+                    title={`View ${taggedUserName(item.taggedUser)}'s details`}
+                  >
+                    {taggedUserName(item.taggedUser)}
+                  </button>
+                ) : (
+                  <span className="truncate">{taggedUserName(item.taggedUser)}</span>
+                )}
+                {canEdit && typeof onUntagUser === 'function' && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUntagUser(item);
+                    }}
+                    className="shrink-0 flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border border-[#E4E4E4] text-[#888] hover:text-[#CE241C] hover:border-[#CE241C] cursor-pointer transition-colors"
+                    title={`Untag ${taggedUserName(item.taggedUser)} from this vehicle`}
+                  >
+                    <UserMinus className="w-3 h-3" />
+                    Untag
+                  </button>
+                )}
+              </span>
+            ) : canEdit && typeof onTagUser === 'function' ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTagUser(item);
+                }}
+                className="flex items-center gap-1 text-[10px] md:text-[11px] font-medium px-2 py-0.5 rounded border border-[#C7C7C7] text-[#07486A] hover:bg-[#E3F5FF] hover:border-[#07486A] cursor-pointer transition-colors"
+                title="Tag this vehicle number to a registered user"
+              >
+                <UserPlus className="w-3 h-3" />
+                Tag User
+              </button>
+            ) : (
+              <span className="text-[10px] md:text-[11px] text-[#7A7A7A]">Not tagged</span>
+            )}
+          </div>
+        )}
         <div className="flex items-center justify-between mb-0.5 md:mb-0.5 2xl:mb-1">
           <p className="text-[10px] md:text-[11px] 2xl:text-xs text-[#7A7A7A] font-normal">
             {/* {item?.incidentType ?? ''} */}

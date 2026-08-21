@@ -15,6 +15,9 @@ import ANPRFilterPopover from './components/ANPRFilterPopover';
 import VehicleNumberSelect from './components/VehicleNumberSelect';
 import ImagePreviewModal from './components/ImagePreviewModal';
 import EditIncidentDialog from '@/pages/IncidentLogs/components/EditIncidentDialog';
+import TagUserModal, { UntagUserModal } from '@/components/TagUserModal';
+import TagStatusFilter from '@/components/TagStatusFilter';
+import TaggedUserDetailsModal from '@/components/TaggedUserDetailsModal';
 import {
   getNVRs,
   getchannels,
@@ -50,6 +53,7 @@ const ANPRLogs = () => {
     vehicleNumber,
     vehicleNumberList,
     vehicleNumberSearch,
+    tagStatus,
     limit,
   } = state;
 
@@ -66,6 +70,12 @@ const ANPRLogs = () => {
   const [previewImage, setPreviewImage] = useState(null);
   const [previewImageLoading, setPreviewImageLoading] = useState(false);
   const [editRow, setEditRow] = useState(null);
+  // Row whose plate the Tag User dialog is currently linking to a user.
+  const [tagRow, setTagRow] = useState(null);
+  // Row whose existing tag the Untag dialog is about to remove.
+  const [untagRow, setUntagRow] = useState(null);
+  // Tagged user whose full details card is open.
+  const [viewUser, setViewUser] = useState(null);
 
   const { permissions, loading: permissionsLoading } = usePermissions();
   const navigate = useNavigate();
@@ -146,7 +156,7 @@ const ANPRLogs = () => {
   // Reset to page 1 when filters or page size change.
   useEffect(() => {
     dispatch({ type: 'SET_CURRENT_PAGE', value: 1 });
-  }, [nvrIds, channelIds, severity, resolved, reportStatus, vehicleNumber, limit]);
+  }, [nvrIds, channelIds, severity, resolved, reportStatus, vehicleNumber, tagStatus, limit]);
 
   const skip = (currentPage - 1) * limit;
 
@@ -168,6 +178,7 @@ const ANPRLogs = () => {
         resolved,
         reportStatus,
         vehicleNumber,
+        tagStatus,
         search: searchInput,
       });
 
@@ -190,6 +201,9 @@ const ANPRLogs = () => {
         imageUrl: item.Image ? `${HOST}${item.Image}` : null,
         incidentImageUrl: item.Image ? `${INCIDENT_URL}${item.Image}` : null,
         vehicleNumber: item.vehicleNumber || '--',
+        // Resolved server-side from the plate, so it is already correct for
+        // detections that predate the tag.
+        taggedUser: item.taggedUser || null,
         severity: item.severity || '--',
         resolved: item.resolved,
         reportStatus: item.reportStatus,
@@ -216,6 +230,7 @@ const ANPRLogs = () => {
     resolved,
     reportStatus,
     vehicleNumber,
+    tagStatus,
     searchInput,
   ]);
 
@@ -265,14 +280,31 @@ const ANPRLogs = () => {
   // Stable api object so the edit dialog's fetch effects don't re-run each render.
   const editApi = useMemo(() => ({ getNVRs, getchannels, editIncidentDetails }), []);
 
+  // Tagging edits a registered user, so it follows the same edit permission
+  // the Edit action does.
+  const onTagUser = useMemo(
+    () => (canEdit ? (r) => setTagRow(r) : undefined),
+    [canEdit]
+  );
+
+  const onUntagUser = useMemo(
+    () => (canEdit ? (r) => setUntagRow(r) : undefined),
+    [canEdit]
+  );
+
+  // Viewing a tagged user is read-only, so unlike Tag/Untag it isn't gated on
+  // the edit permission — anyone who can see the log can see who it belongs to.
+  const onViewUser = useCallback((user) => setViewUser(user), []);
+
   const columns = useMemo(
-    () => buildColumns({ onSort, onPreview: openPreview, onEdit }),
-    [onSort, openPreview, onEdit]
+    () => buildColumns({ onSort, onPreview: openPreview, onEdit, onTagUser, onUntagUser, onViewUser }),
+    [onSort, openPreview, onEdit, onTagUser, onUntagUser, onViewUser]
   );
 
   const gridCard = useCallback(
-    (item) => renderANPRCard(item, { onPreview: openPreview, onEdit }),
-    [openPreview, onEdit]
+    (item) =>
+      renderANPRCard(item, { onPreview: openPreview, onEdit, onTagUser, onUntagUser, onViewUser }),
+    [openPreview, onEdit, onTagUser, onUntagUser, onViewUser]
   );
 
   // KPI tiles — derived from the loaded page + server total (no placeholder data).
@@ -283,11 +315,17 @@ const ANPRLogs = () => {
     const uniquePlates = new Set(
       list.map((r) => r.vehicleNumber).filter((v) => v && v !== '--')
     ).size;
+    const untagged = new Set(
+      list
+        .filter((r) => !r.taggedUser && r.vehicleNumber && r.vehicleNumber !== '--')
+        .map((r) => r.vehicleNumber)
+    ).size;
     return [
       { label: 'Incidents', value: totalCount ?? 0, color: 'var(--blue)' },
       { label: 'High Severity (page)', value: high, color: 'var(--crit)' },
       { label: 'Resolved (page)', value: resolvedCount, color: 'var(--ok)' },
       { label: 'Unique Plates (page)', value: uniquePlates, color: 'var(--cyan)' },
+      { label: 'Untagged Plates (page)', value: untagged, color: 'var(--warn)' },
     ];
   }, [rows, totalCount]);
 
@@ -303,6 +341,7 @@ const ANPRLogs = () => {
       resolved,
       reportStatus,
       vehicleNumber,
+      tagStatus,
       searchInput,
     });
 
@@ -324,6 +363,29 @@ const ANPRLogs = () => {
         loading={previewImageLoading}
         setLoading={setPreviewImageLoading}
         onClose={closePreview}
+      />
+
+      <TagUserModal
+        open={!!tagRow}
+        vehicleNumber={tagRow?.vehicleNumber}
+        onClose={() => setTagRow(null)}
+        // Refetch rather than patching one row: the same plate can appear on
+        // several rows of this page, and all of them are now tagged.
+        onTagged={() => setManualTrigger((prev) => prev + 1)}
+      />
+
+      <TaggedUserDetailsModal
+        open={!!viewUser}
+        taggedUser={viewUser}
+        onClose={() => setViewUser(null)}
+      />
+
+      <UntagUserModal
+        open={!!untagRow}
+        vehicleNumber={untagRow?.vehicleNumber}
+        taggedUser={untagRow?.taggedUser}
+        onClose={() => setUntagRow(null)}
+        onUntagged={() => setManualTrigger((prev) => prev + 1)}
       />
 
       <EditIncidentDialog
@@ -379,6 +441,11 @@ const ANPRLogs = () => {
           dispatch({ type: 'SET_END_DATE', value: e });
         }}
       >
+        <TagStatusFilter
+          value={tagStatus}
+          onChange={(v) => dispatch({ type: 'SET_TAG_STATUS', value: v })}
+        />
+
         <VehicleNumberSelect
           vehicleNumber={vehicleNumber}
           setVehicleNumber={(v) => dispatch({ type: 'SET_VEHICLE_NUMBER', value: v })}

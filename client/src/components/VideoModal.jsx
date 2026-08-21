@@ -15,7 +15,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Flag,
+  UserPlus,
+  UserCheck,
+  UserMinus,
 } from 'lucide-react';
+import { taggedUserName, formatPlate, hasReadablePlate } from '@/helpers/vehicleTagging';
 import 'react-loading-skeleton/dist/skeleton.css';
 import moment from 'moment';
 import { object } from 'yup';
@@ -80,7 +84,13 @@ const VideoModal = ({
     currentPage,
   pageSize,
   onNavigateByIndex,
-  onReport
+  onReport,
+  onTagUser,
+  onUntagUser,
+  onViewUser,
+  // The Tag/Untag User dialogs render above this modal and own the keyboard
+  // while open — otherwise arrow keys navigate incidents behind them.
+  tagOpen = false,
 }) => {
   let totalCounts = {};
   let totalDetected = 0;
@@ -149,7 +159,7 @@ useEffect(() => {
   if (!isOpen) return;
 
   const handleKeyDown = (e) => {
-    if (isNavigating) return;
+    if (isNavigating || tagOpen) return;
 
     switch (e.key) {
       case "ArrowLeft":
@@ -172,7 +182,7 @@ useEffect(() => {
   return () => {
     window.removeEventListener("keydown", handleKeyDown);
   };
-}, [isOpen, isNavigating, globalIndex, totalIncidents]);
+}, [isOpen, isNavigating, globalIndex, totalIncidents, tagOpen]);
 
 
  if (!videoData) {
@@ -301,6 +311,53 @@ useEffect(() => {
           <p className="text-sm font-medium text-white/60">
             {videoData.alertText}
           </p>
+
+          {/* Vehicle Detection: the plate and who it belongs to, with Tag User
+              inline for a plate nobody owns yet. */}
+          {hasReadablePlate(videoData.vehicleNumber) && (
+            <div className="flex items-center gap-2.5 flex-wrap mt-2">
+              <span className="font-mono text-[13px] font-bold tracking-widest text-white bg-white/10 border border-white/25 px-2.5 py-1 rounded-md">
+                {formatPlate(videoData.vehicleNumber)}
+              </span>
+              {videoData.taggedUser ? (
+                <span className="flex items-center gap-2 text-[13px] text-white/85 min-w-0">
+                  <UserCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  {typeof onViewUser === 'function' ? (
+                    <button
+                      onClick={() => onViewUser(videoData.taggedUser)}
+                      className="truncate text-left underline decoration-dotted underline-offset-2 hover:text-white cursor-pointer"
+                      title={`View ${taggedUserName(videoData.taggedUser)}'s details`}
+                    >
+                      {taggedUserName(videoData.taggedUser)}
+                    </button>
+                  ) : (
+                    <span className="truncate">{taggedUserName(videoData.taggedUser)}</span>
+                  )}
+                  {canEdit && typeof onUntagUser === 'function' && (
+                    <button
+                      onClick={() => onUntagUser(videoData)}
+                      className="shrink-0 flex items-center gap-1.5 cursor-pointer text-xs font-semibold px-3 py-1.5 rounded-md border border-red-500/50 bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                      title={`Untag ${taggedUserName(videoData.taggedUser)} from this vehicle`}
+                    >
+                      <UserMinus className="w-3.5 h-3.5" />
+                      Untag
+                    </button>
+                  )}
+                </span>
+              ) : canEdit && typeof onTagUser === 'function' ? (
+                <button
+                  onClick={() => onTagUser(videoData)}
+                  className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold px-3 py-1.5 rounded-md border border-blue-500/50 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
+                  title="Tag this vehicle number to a registered user"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  Tag User
+                </button>
+              ) : (
+                <span className="text-[13px] text-white/50">Not tagged</span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* RESOLVE SECTION */}

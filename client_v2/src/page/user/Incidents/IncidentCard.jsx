@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ImageOff, Maximize2, X, Flag, Check } from 'lucide-react';
+import { ImageOff, Maximize2, X, Flag, Check, UserPlus, UserCheck, UserMinus } from 'lucide-react';
 import { detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
+import { taggedUserName, formatPlate, hasReadablePlate } from '../../../helpers/vehicleTagging';
 import axios from 'axios';
 import getAccessToken from '../../../utils/getAccessToken';
 
@@ -19,6 +20,99 @@ const SEV_LABEL = {
   moderate: 'MEDIUM', medium: 'MEDIUM',
   low: 'LOW',
 };
+
+/**
+ * Plate + who it belongs to, for detections that carry a vehicle number
+ * (Vehicle Detection and the other plate-bearing types). An untagged plate
+ * offers Tag User so an admin can link it to a registered user at any time;
+ * a detection with no readable plate renders nothing.
+ *
+ * Exported so the Incident Center lightbox shows exactly the same thing.
+ */
+export function VehicleTagStrip({ item, onTagUser, onUntagUser, onViewUser, variant = 'card' }) {
+  if (!hasReadablePlate(item?.vehicleNumber)) return null;
+
+  const dark = variant === 'lightbox';
+  const plateStyle = dark
+    ? { fontFamily: 'monospace', fontSize: 13, fontWeight: 700, letterSpacing: '.08em', color: '#fff', background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.25)', padding: '3px 9px', borderRadius: 6 }
+    : { fontFamily: 'var(--mono, monospace)', fontSize: 11, fontWeight: 700, letterSpacing: '.06em', color: 'var(--tx)', background: 'var(--bg2)', border: '1px solid var(--bd)', padding: '3px 8px', borderRadius: 6 };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+      <span style={plateStyle}>{formatPlate(item.vehicleNumber)}</span>
+
+      {item.taggedUser ? (
+        <span style={{
+          display: 'flex', alignItems: 'center', gap: 5, minWidth: 0,
+          fontSize: dark ? 13 : 11.5,
+          color: dark ? 'rgba(255,255,255,.85)' : 'var(--tx2)',
+        }}>
+          <UserCheck size={dark ? 14 : 12} color={dark ? '#34d399' : 'var(--ok)'} style={{ flexShrink: 0 }} />
+          {/* The name opens the registered user's full details without leaving
+              the Incident Center. */}
+          {typeof onViewUser === 'function' ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); onViewUser(item.taggedUser); }}
+              title={`View ${taggedUserName(item.taggedUser)}'s details`}
+              style={{
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                font: 'inherit', color: 'inherit',
+                textDecoration: 'underline dotted', textUnderlineOffset: 2,
+              }}
+            >
+              {taggedUserName(item.taggedUser)}
+            </button>
+          ) : (
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {taggedUserName(item.taggedUser)}
+            </span>
+          )}
+          {typeof onUntagUser === 'function' && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onUntagUser(item); }}
+              title={`Untag ${taggedUserName(item.taggedUser)} from this vehicle`}
+              aria-label="Untag user"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, cursor: 'pointer',
+                marginLeft: 2,
+                fontSize: dark ? 11.5 : 10.5, fontWeight: 600,
+                padding: dark ? '4px 9px' : '2px 6px', borderRadius: 5,
+                background: dark ? 'rgba(239,68,68,.18)' : 'transparent',
+                border: `1px solid ${dark ? 'rgba(239,68,68,.45)' : 'var(--bd2)'}`,
+                color: dark ? '#f87171' : 'var(--tx3)',
+              }}
+            >
+              <UserMinus size={dark ? 12 : 11} />
+              Untag
+            </button>
+          )}
+        </span>
+      ) : typeof onTagUser === 'function' ? (
+        <button
+          onClick={(e) => { e.stopPropagation(); onTagUser(item); }}
+          title="Tag this vehicle number to a registered user"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
+            fontSize: dark ? 12 : 11, fontWeight: 600,
+            padding: dark ? '5px 12px' : '3px 9px', borderRadius: 6,
+            background: dark ? 'rgba(59,130,246,.2)' : 'transparent',
+            border: `1px solid ${dark ? 'rgba(59,130,246,.5)' : 'var(--bd2)'}`,
+            color: dark ? '#60a5fa' : 'var(--blue)',
+            transition: 'background .15s',
+          }}
+        >
+          <UserPlus size={dark ? 13 : 12} />
+          Tag User
+        </button>
+      ) : (
+        <span style={{ fontSize: 11.5, color: dark ? 'rgba(255,255,255,.5)' : 'var(--tx3)' }}>
+          Not tagged
+        </span>
+      )}
+    </div>
+  );
+}
 
 function statusOf(item) {
   if (item.resolved) return { label: 'Resolved', color: 'var(--ok)' };
@@ -177,7 +271,7 @@ function Spinner({ size = 14, color = '#fff' }) {
 }
 
 /* ── Card ─────────────────────────────────────────────────────────────────── */
-export default function IncidentCard({ item, onClick, onRefresh, onResolvedChange, onOpenLightbox, deleteMode, selectedForDelete, onToggleDelete }) {
+export default function IncidentCard({ item, onClick, onRefresh, onResolvedChange, onOpenLightbox, onTagUser, onUntagUser, onViewUser, deleteMode, selectedForDelete, onToggleDelete }) {
   const [reportOpen,   setReportOpen]   = useState(false);
   const [resolving,    setResolving]    = useState(false);
   const [localResolved, setLocalResolved] = useState(item.resolved || false);
@@ -394,6 +488,8 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
 
         {/* Info row */}
         <div style={{ padding: '11px 13px 12px', display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
+          {/* Plate + tagged user, for Vehicle Detection and friends. */}
+          <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
             {item.incidentName || det}
           </div>

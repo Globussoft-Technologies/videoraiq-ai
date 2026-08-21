@@ -12,12 +12,16 @@ import {
   Maximize2,
   Minimize2,
   Trash2,
+  X,
 } from 'lucide-react';
 import { ChevronDown } from 'lucide-react';
 import VideoModal from '@/components/VideoModal';
 import IncidentCard from './components/IncidentCard';
 import IncidentPagination from './components/IncidentPagination';
 import ReportIncidentModal from './components/ReportIncidentModal';
+import TagUserModal, { UntagUserModal } from '@/components/TagUserModal';
+import TaggedUserDetailsModal from '@/components/TaggedUserDetailsModal';
+import { PLATE_BEARING_TYPES, TAG_STATUS_OPTIONS } from '@/helpers/vehicleTagging';
 import DeleteConfirmation from '../Detection/components/DeleteConfirmation';
 import { Button } from '@/components/ui/button';
 import { fetchAllIncidents, fetchIncidentsStats, deleteIncidentsByIds } from './Api/post';
@@ -91,6 +95,18 @@ const Incidents = () => {
   const [manualTrigger, setManualTrigger] = useState(0);
   const [selectedIncidentType, setSelectedIncidentType] = useState([]);
   const [reportModalOpen, setReportModalOpen] = useState(false);
+  // Incident whose plate the Tag User dialog is currently linking to a user.
+  const [tagIncident, setTagIncident] = useState(null);
+  // Incident whose existing tag the Untag dialog is about to remove.
+  const [untagIncident, setUntagIncident] = useState(null);
+  // Tagged user whose full details card is open. Viewing is read-only, so
+  // unlike Tag/Untag it is not gated on the edit permission.
+  const [viewUser, setViewUser] = useState(null);
+  // Vehicle Detection only: free-text over plate + tagged user's name, and the
+  // all/tagged/untagged filter.
+  const [vehicleSearch, setVehicleSearch] = useState('');
+  const [debouncedVehicleSearch, setDebouncedVehicleSearch] = useState('');
+  const [tagStatus, setTagStatus] = useState('');
   const [reportingIncidentId, setReportingIncidentId] = useState(null);
   const [options, setOptions] = useState([]);
   const [isIncidentsFullscreen, setIsIncidentsFullscreen] = useState(false);
@@ -287,6 +303,40 @@ const Incidents = () => {
     return payload;
   };
 
+  // The plate controls only make sense once the selection is limited to
+  // detection types that actually carry a vehicle number.
+  const showsVehicleControls = useMemo(
+    () =>
+      Array.isArray(selectedIncidentType) &&
+      selectedIncidentType.length > 0 &&
+      selectedIncidentType.every((t) => PLATE_BEARING_TYPES.includes(t)),
+    [selectedIncidentType]
+  );
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedVehicleSearch(vehicleSearch), 400);
+    return () => clearTimeout(t);
+  }, [vehicleSearch]);
+
+  // Leaving Vehicle Detection drops the plate filters rather than silently
+  // applying them to a selection they can't match.
+  useEffect(() => {
+    if (showsVehicleControls) return;
+    setVehicleSearch('');
+    setDebouncedVehicleSearch('');
+    setTagStatus('');
+  }, [showsVehicleControls]);
+
+  // Only sent for plate-bearing detection types — elsewhere they'd filter
+  // everything out, since no other incident carries a vehicle number.
+  const vehicleFilter = useMemo(() => {
+    if (!showsVehicleControls) return {};
+    const f = {};
+    if (debouncedVehicleSearch.trim()) f.search = debouncedVehicleSearch.trim();
+    if (tagStatus) f.tagStatus = tagStatus;
+    return f;
+  }, [showsVehicleControls, debouncedVehicleSearch, tagStatus]);
+
   const fetchStatsData = async (filterData) => {
     let currentFilter = filterData;
 
@@ -330,7 +380,7 @@ const Incidents = () => {
     setLoading(true);
 
     // const payload = buildIncidentPayload(selectedIncidentType);
-    const payload = { incidentTypeFilter:selectedIncidentType };
+    const payload = { incidentTypeFilter:selectedIncidentType, ...vehicleFilter };
 
     let filter = undefined;
     if (dateRange.start && dateRange.end) {
@@ -358,6 +408,7 @@ const Incidents = () => {
     selectedIncidentType,
     nvrIds,
     channelIds,
+    vehicleFilter,
   ]);
 
   // Effect 1: Manual/Filter trigger
@@ -380,7 +431,7 @@ const Incidents = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [dateRange, selectedIncidentType, nvrIds, channelIds, selectedDepartment, selectedLocation]);
+  }, [dateRange, selectedIncidentType, nvrIds, channelIds, selectedDepartment, selectedLocation, vehicleFilter]);
 
   // Delete-selection is scoped to whatever page is currently visible (see
   // handleToggleSelectAll) — carrying selections across a page change would
@@ -543,7 +594,7 @@ const Incidents = () => {
 
       // wait for incidents to load
       const skip = (page - 1) * PAGE_SIZE;
-      let filter = { incidentTypeFilter: selectedIncidentType };
+      let filter = { incidentTypeFilter: selectedIncidentType, ...vehicleFilter };
       if (dateRange.start && dateRange.end) {
         const startDate = new Date(dateRange.start);
         startDate.setHours(0, 0, 0, 0);
@@ -699,6 +750,57 @@ const Incidents = () => {
             className="w-full md:w-56"
             maxHeight="max-h-48"
           />
+
+          {/* Vehicle Detection only: search by plate or tagged user name, plus
+              the all/tagged/untagged filter. Hidden for detection types that
+              carry no vehicle number, where they'd match nothing. */}
+          {showsVehicleControls && (
+            <>
+              <div className="relative w-full md:w-56">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#595959] pointer-events-none" />
+                <input
+                  type="text"
+                  value={vehicleSearch}
+                  onChange={(e) => setVehicleSearch(e.target.value)}
+                  placeholder="Search plate or tagged user"
+                  className="w-full h-10 pl-9 pr-8 text-xs border border-[#C7C7C7] rounded-lg text-[#595959] bg-white focus:outline-none focus:ring-1 focus:ring-[#07486A]"
+                />
+                {vehicleSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setVehicleSearch('')}
+                    title="Clear search"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[#888] hover:text-[#333333] cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div
+                className="inline-flex items-center h-10 rounded-lg border border-[#C7C7C7] bg-white overflow-hidden"
+                role="group"
+                aria-label="Filter by tagged state"
+              >
+                {TAG_STATUS_OPTIONS.map((opt) => {
+                  const active = tagStatus === opt.key;
+                  return (
+                    <button
+                      key={opt.key || 'all'}
+                      type="button"
+                      onClick={() => setTagStatus(opt.key)}
+                      aria-pressed={active}
+                      className={`px-3 h-full text-xs font-medium whitespace-nowrap cursor-pointer transition-colors ${
+                        active ? 'bg-[#07486A] text-white' : 'text-[#595959] hover:bg-gray-50'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
           <DateRangePickerComponent
             startDate={dateRange.start}
             endDate={dateRange.end}
@@ -843,6 +945,9 @@ const Incidents = () => {
               // button is still meant to view the incident.
               onExpand={() => setSelectedIncident(item)}
               onReport={() => handleReportIncident(item.id)}
+              onTagUser={setTagIncident}
+              onUntagUser={setUntagIncident}
+              onViewUser={setViewUser}
               canEdit={canEdit}
               deleteMode={isDeleteMode}
               selectedForDelete={selectedForDelete.includes(item.id)}
@@ -879,7 +984,51 @@ const Incidents = () => {
             handleReportIncident(selectedIncident.id);
           }
         }}
+        onTagUser={setTagIncident}
+        onUntagUser={setUntagIncident}
+        onViewUser={setViewUser}
+        tagOpen={!!tagIncident || !!untagIncident || !!viewUser}
         canEdit={canEdit}
+      />
+
+      <TaggedUserDetailsModal
+        open={!!viewUser}
+        taggedUser={viewUser}
+        onClose={() => setViewUser(null)}
+      />
+
+      <UntagUserModal
+        open={!!untagIncident}
+        vehicleNumber={untagIncident?.vehicleNumber}
+        taggedUser={untagIncident?.taggedUser}
+        onClose={() => setUntagIncident(null)}
+        // The open lightbox keeps its own copy of the incident, so clear its
+        // tag directly rather than waiting for the refetch to reach it.
+        onUntagged={() => {
+          setSelectedIncident((prev) =>
+            prev && prev.id === untagIncident?.id ? { ...prev, taggedUser: null } : prev
+          );
+          loadData();
+        }}
+      />
+
+      <TagUserModal
+        open={!!tagIncident}
+        vehicleNumber={tagIncident?.vehicleNumber}
+        onClose={() => setTagIncident(null)}
+        // Refetch instead of patching one incident: the same plate can appear
+        // on several incidents in view, and all of them are now tagged. The
+        // open lightbox holds its own copy of the incident, so patch that one
+        // directly rather than waiting for the refetch to reach it.
+        onTagged={(data) => {
+          const taggedUser = data?.user || null;
+          if (taggedUser) {
+            setSelectedIncident((prev) =>
+              prev && prev.id === tagIncident?.id ? { ...prev, taggedUser } : prev
+            );
+          }
+          loadData();
+        }}
       />
 
       {/* Report Incident Modal */}
