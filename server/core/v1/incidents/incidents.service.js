@@ -528,6 +528,7 @@ class IncidentsService {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.Image = req?.body?.Image;
         newIncident.model_name = req?.body?.model_name;
+        newIncident.vehicleNumber = req?.body?.vehicleNumber;
         // The DS has shipped these three under different keys across pipeline
         // versions (`colour`, `make`/`brand`, `model_year`). Accept every
         // spelling we have seen: the schema keeps one canonical field each,

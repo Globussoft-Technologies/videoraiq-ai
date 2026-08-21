@@ -8,6 +8,7 @@ import {
   buildIncidentTelegramMessage,
   formatIncidentDay,
 } from "../../../messagingService/message.helper.js";
+import { carModelDetectionTemplate } from "../../../mailService/IncidentsMailTemplates/mail.incidentsTemplate.js";
 
 const base = {
   incidentName: "PPE Testing",
@@ -76,5 +77,23 @@ describe("buildIncidentTelegramMessage", () => {
     const tg = buildIncidentTelegramMessage(incident, {}, {}, "UTC");
     expect(tg).toContain("*Name:* VEHICLE & OBSTRUCTION DETECTION");
     expect(tg).toContain("*Image Link:* [View Image](http://imageview.test/img/obstruction.jpg)");
+  });
+
+  it("includes a car model detection vehicle number in every alert format", () => {
+    const incident = {
+      ...base,
+      incidentType: "carModelDetection",
+      vehicleNumber: "KA01AB1234",
+      model_name: "Toyota Corolla",
+    };
+
+    const wa = buildIncidentWhatsAppMessage(incident, {}, {}, "UTC");
+    expect(wa).toContain("*Vehicle Number:* KA01AB1234");
+
+    const tg = buildIncidentTelegramMessage(incident, {}, {}, "UTC");
+    expect(tg).toContain("*Vehicle Number:* KA01AB1234");
+
+    const email = carModelDetectionTemplate(incident, {}, {}, "UTC");
+    expect(email).toContain("KA01AB1234");
   });
 });

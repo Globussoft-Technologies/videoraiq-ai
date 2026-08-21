@@ -285,7 +285,7 @@ describe("IncidentsService.createIncidents — carModelDetection", () => {
     expect(stored.year).toBeNull();
   });
 
-  it("leaves the three attributes null when the payload omits them", async () => {
+  it("leaves optional vehicle attributes null when the payload omits them", async () => {
     const { admin, nvrId, channel } = await carScene();
     const { req, res, next } = serviceCtx({
       body: {
@@ -303,6 +303,7 @@ describe("IncidentsService.createIncidents — carModelDetection", () => {
     expect(res.statusCode).toBe(200);
     const stored = await Incident.findOne({ channelId: channel._id });
     expect(stored.model_name).toBe("Honda Civic");
+    expect(stored.vehicleNumber).toBeNull();
     expect(stored.color).toBeNull();
     expect(stored.company).toBeNull();
     expect(stored.year).toBeNull();

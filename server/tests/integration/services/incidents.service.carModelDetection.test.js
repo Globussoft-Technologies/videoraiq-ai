@@ -94,13 +94,19 @@ const createCarIncident = async (extraBody = {}) => {
 
 describe("IncidentsService.createIncidents carModelDetection", () => {
   it("creates a carModelDetection incident and fires the alert pipeline", async () => {
-    const { res, stored } = await createCarIncident();
+    const { res, stored } = await createCarIncident({
+      vehicleNumber: "KA01AB1234",
+    });
 
     expect(res.statusCode).toBe(200);
     expect(stored.incidentType).toBe("carModelDetection");
     expect(stored.Image).toBe("img/car-model.jpg");
     expect(stored.model_name).toBe("Toyota Corolla");
+    expect(stored.vehicleNumber).toBe("KA01AB1234");
     expect(triggerAlertOnIncident).toHaveBeenCalledTimes(1);
+    expect(triggerAlertOnIncident.mock.calls[0][0].saved.vehicleNumber).toBe(
+      "KA01AB1234",
+    );
   });
 
   it("stores the vehicle attributes Car Logs renders", async () => {
