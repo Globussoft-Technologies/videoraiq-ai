@@ -3,6 +3,7 @@ import logger from "../utils/logger.js";
 import {
   isValidTimezone,
   isWithinScheduleDays,
+  nextScheduleBoundary,
 } from "../utils/scheduleWindows.js";
 
 /**
@@ -32,6 +33,8 @@ export const SCHEDULE_SOURCE = {
   GLOBAL: "global",
   CAMERA: "camera",
   DEFAULT: "default",
+  // A live manual override outranks every schedule until it lapses.
+  OVERRIDE: "override",
 };
 
 /**
@@ -89,6 +92,51 @@ export const isScheduleActiveNow = (schedule) => {
   );
 
   return isWithinScheduleDays(schedule.days, day, minutes);
+};
+
+/**
+ * Is a manual override still in force?
+ *
+ * Absent fields (every document predating the feature) and a lapsed
+ * overrideUntil both read as "no" — so the schedule governs exactly as it did
+ * before, with no migration.
+ */
+export const isManualOverrideActive = (detection, now = new Date()) => {
+  const until = detection?.overrideUntil;
+  if (!until) return false;
+  const expiry = new Date(until).getTime();
+  return Number.isFinite(expiry) && expiry > now.getTime();
+};
+
+/**
+ * The override to persist when someone toggles a detector by hand.
+ *
+ * Only a toggle that CONTRADICTS the governing schedule is worth remembering;
+ * agreeing with it needs no override and clears any stale one. The expiry is
+ * the moment the schedule would next have flipped the state on its own, so the
+ * override lasts exactly one window and then hands control back — nobody has
+ * to remember to undo it.
+ *
+ * Returns undefined for both fields when no override applies, which is also
+ * how a caller clears one.
+ */
+export const manualOverrideFor = (schedule, enable, now = new Date()) => {
+  // null, not undefined: assigning undefined to a Mongoose path is not a
+  // reliable unset, so clearing has to write an explicit empty value.
+  const none = { overrideState: null, overrideUntil: null };
+
+  // No schedule governs this detector, so the toggle already sticks: the
+  // runner skips detectors nothing schedules.
+  if (!schedule) return none;
+  if (isScheduleActiveNow(schedule) === enable) return none;
+
+  const until = nextScheduleBoundary(schedule, now);
+  // A schedule with no boundary inside a week (always-on, or empty) gives the
+  // override nothing to expire against; leave the schedule in charge rather
+  // than granting an unbounded one.
+  if (!until) return none;
+
+  return { overrideState: enable, overrideUntil: until };
 };
 
 /** nvrId may arrive populated (a document) or raw (an ObjectId). */
@@ -242,6 +290,19 @@ export const resolveDesiredDetectionState = async (
     globalSchedule,
     cameraSchedule,
   });
+
+  // A live manual override outranks the schedule. `schedule` is still
+  // returned so callers can show what will resume, and so the toggle path can
+  // ask the schedule's own verdict without the override answering for it.
+  const detection = channel?.detections?.[settingType];
+  if (isManualOverrideActive(detection)) {
+    return {
+      active: detection.overrideState === true,
+      schedule,
+      source: SCHEDULE_SOURCE.OVERRIDE,
+      overrideUntil: detection.overrideUntil,
+    };
+  }
 
   return { active: isScheduleActiveNow(schedule), schedule, source };
 };

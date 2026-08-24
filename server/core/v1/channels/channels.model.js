@@ -45,6 +45,30 @@ const detectionSettingSchema = new mongoose.Schema(
       type: detectionScheduleSchema,
       default: undefined,
     },
+    /**
+     * MANUAL OVERRIDE — a human toggled this detector against what the
+     * governing schedule wanted.
+     *
+     * Without these two fields a manual toggle is indistinguishable from the
+     * drift the one-minute runner exists to correct, so the runner reverts it
+     * within the minute. Recording the intent, and when it lapses, is what
+     * lets the toggle win for the rest of the current window.
+     *
+     * overrideState  what the human chose (mirrors `enabled` at toggle time)
+     * overrideUntil  the instant the schedule would next have changed the
+     *                state anyway; past that the override is inert and the
+     *                schedule silently takes back over. Absent on every
+     *                document written before this feature, which reads as
+     *                "no override" — existing schedules are unaffected.
+     */
+    overrideState: {
+      type: Boolean,
+      default: undefined,
+    },
+    overrideUntil: {
+      type: Date,
+      default: undefined,
+    },
   },
   { _id: false }, // prevent nested _id creation
 );

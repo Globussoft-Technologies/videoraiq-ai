@@ -239,3 +239,132 @@ export const isValidTimezone = (timezone) => {
     return false;
   }
 };
+
+/* ── Local wall-clock <-> absolute instant ────────────────────────────────
+   Everything above works in (weekday, minute-of-day). Manual overrides need a
+   real expiry timestamp, which means converting a local wall-clock time in an
+   IANA zone back to a UTC instant. Intl only converts the other way, so the
+   offset is recovered by formatting a guess and measuring the drift.        */
+
+/** Zone offset in ms at instant "ts" (positive east of UTC). */
+const timezoneOffsetMs = (ts, timezone) => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date(ts));
+
+  const get = (type) => Number(parts.find((part) => part.type === type)?.value);
+  const asUtc = Date.UTC(
+    get("year"),
+    get("month") - 1,
+    get("day"),
+    get("hour"),
+    get("minute"),
+    get("second"),
+  );
+  return asUtc - ts;
+};
+
+/**
+ * The instant whose local time in the given zone is the supplied wall-clock.
+ *
+ * Two passes: guess using the offset at the naive instant, then re-measure at
+ * the corrected one. That second pass is what makes DST transitions land
+ * correctly, since the offset on one side of a jump is not the offset on the
+ * other. A wall-clock time that a spring-forward skips resolves to the instant
+ * the clock jumps to, which is the behaviour a schedule boundary wants.
+ */
+export const zonedWallClockToUtc = ({ year, month, day, minutes }, timezone) => {
+  const naive = Date.UTC(year, month, day, 0, minutes, 0, 0);
+  const firstPass = naive - timezoneOffsetMs(naive, timezone);
+  const secondOffset = timezoneOffsetMs(firstPass, timezone);
+  return new Date(naive - secondOffset);
+};
+
+/** Local calendar date, weekday and minute-of-day for an instant, in a zone. */
+export const zonedParts = (date, timezone) => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    hourCycle: "h23",
+    weekday: "long",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(date);
+
+  const get = (type) => parts.find((part) => part.type === type)?.value;
+  return {
+    year: Number(get("year")),
+    month: Number(get("month")) - 1,
+    day: Number(get("day")),
+    weekday: get("weekday")?.toLowerCase(),
+    minutes: Number(get("hour")) * 60 + Number(get("minute")),
+  };
+};
+
+/**
+ * When does this schedule's verdict next flip?
+ *
+ * Returns the absolute instant at which isWithinScheduleDays would start
+ * answering differently than it does at "from" — the end of the current ON
+ * window, or the start of the next one. Null when the verdict never changes
+ * within a week (an empty schedule, a non-custom one, or one covering every
+ * minute), which callers read as "no natural expiry".
+ *
+ * This is what gives a manual override a defined lifetime: it holds until the
+ * schedule would next have changed the state anyway, then hands control back.
+ *
+ * Only segment edges can change the answer, so this tests a handful of
+ * candidate minutes rather than walking all 10,080 in a week.
+ */
+export const nextScheduleBoundary = (schedule, from = new Date()) => {
+  if (!schedule || schedule.mode !== "custom") return null;
+
+  const timezone = isValidTimezone(schedule.timezone) ? schedule.timezone : "UTC";
+  const days = schedule.days || {};
+  const segments = expandScheduleSegments(days);
+
+  const origin = zonedParts(from, timezone);
+  if (!WEEKDAYS.includes(origin.weekday)) return null;
+
+  const startVerdict = isWithinScheduleDays(days, origin.weekday, origin.minutes);
+  const startIndex = WEEKDAYS.indexOf(origin.weekday);
+
+  for (let offset = 0; offset <= 7; offset += 1) {
+    const weekday = WEEKDAYS[(startIndex + offset) % WEEKDAYS.length];
+
+    const candidates = [
+      ...new Set(segments[weekday].flatMap((seg) => [seg.start, seg.end])),
+    ]
+      .filter((minute) => minute > 0 && minute < MINUTES_IN_DAY)
+      .sort((a, b) => a - b);
+
+    // Midnight is itself a boundary when the previous day's carry ends there.
+    if (offset > 0) candidates.unshift(0);
+
+    for (const minute of candidates) {
+      if (offset === 0 && minute <= origin.minutes) continue;
+      if (isWithinScheduleDays(days, weekday, minute) === startVerdict) continue;
+
+      return zonedWallClockToUtc(
+        {
+          year: origin.year,
+          month: origin.month,
+          day: origin.day + offset,
+          minutes: minute,
+        },
+        timezone,
+      );
+    }
+  }
+
+  return null;
+};

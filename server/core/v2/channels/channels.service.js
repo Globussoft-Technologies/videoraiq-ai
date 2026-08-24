@@ -25,6 +25,10 @@ import {
 import adminModel from "../admin/admin.model.js";
 import departmentsModel from "../departments/departments.model.js";
 import pythonService from "../../../services/python.service.js";
+import {
+  manualOverrideFor,
+  resolveDesiredDetectionState,
+} from "../../../services/detectionSchedule.resolver.js";
 import DetectionSettingService from "../detectionSettings/detectionSettings.service.js";
 import DetectionSettingsValidation from "../detectionSettings/detectionSettings.validate.js";
 import Recipient from "../verifyRecipients/recipients.model.js";
@@ -1465,6 +1469,24 @@ class ChannelService {
 
         // Linked: Update enabled status
         channel.detections[detectionType].enabled = enable;
+
+        // Record WHY this changed. A schedule-governed detector is force-synced
+        // by the one-minute runner, which cannot tell a deliberate toggle from
+        // the drift it exists to correct — so without this the toggle is
+        // reverted within the minute. The override holds until the schedule
+        // would next have changed the state anyway, then lapses on its own.
+        // Detectors no schedule governs get no override: nothing reverts them.
+        const governing = await resolveDesiredDetectionState(channel, detectionType);
+        const override = manualOverrideFor(governing.schedule, enable);
+        channel.detections[detectionType].overrideState = override.overrideState;
+        channel.detections[detectionType].overrideUntil = override.overrideUntil;
+        if (override.overrideUntil) {
+          logger.info(
+            `[DETECTION_SCHEDULE] Manual override channel=${channelId} ` +
+              `detector=${detectionType} enabled=${enable} ` +
+              `until=${override.overrideUntil.toISOString()}`,
+          );
+        }
         // Send data to python backend
         const detectionSetting = channel?.detections?.[detectionType]?.id;
         const detectionSettingDoc = await DetectionSetting.findById(detectionSetting);
