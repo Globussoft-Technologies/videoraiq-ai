@@ -10,6 +10,8 @@ import MultiSelect from '@/pages/AttendanceLogs/components/MultiSelect';
 import { Popover, PopoverContent, PopoverTrigger } from '@/pages/AttendanceLogs/components/Popover';
 import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
+import ExportButton from '@/pages/AttendanceLogs/components/ExportButton';
+import { handleCarExport } from './carExport';
 
 const HOST = import.meta.env.VITE_BACKEND;
 
@@ -378,6 +380,17 @@ const CarLogs = () => {
     setChannelIds([]);
   };
 
+  const handleExport = (format) =>
+    handleCarExport(format, {
+      startDate,
+      endDate,
+      sortField,
+      sortOrder,
+      nvrIds,
+      channelIds,
+      searchInput,
+    });
+
   const gridCard = useCallback(
     (row) => (
       <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[13px] overflow-hidden hover:border-[var(--bd2)] transition-colors h-full w-full min-w-0">
@@ -517,6 +530,9 @@ const CarLogs = () => {
           setEndDate(e);
         }}
       >
+        <ExportButton onClick={() => handleExport('excel')}>Excel</ExportButton>
+        <ExportButton onClick={() => handleExport('pdf')}>PDF</ExportButton>
+
         <Popover>
           <PopoverTrigger asChild>
             <Button className="flex bg-[var(--violet)]/10 border border-[var(--violet)]/30 rounded-lg text-[var(--violet)] font-semibold hover:bg-[var(--violet)]/15 cursor-pointer items-center gap-2 relative h-10">
