@@ -369,7 +369,7 @@ class AdminService {
       for (const empEmail of emails) {
         try {
           const apiResponse = await axios.post(
-            `${config.get('empDomain')}/auth/info`,
+            `${config.get('empDomain')}auth/info`,
             { email: empEmail },
             { headers: { 'Content-Type': 'application/json', accept: 'application/json' } }
           );

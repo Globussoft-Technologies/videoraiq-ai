@@ -448,7 +448,7 @@ class PythonService {
         admin_id,
         detectors: detectorsWithThresholds,
       };
-      console.log('newPayload', JSON.stringify(newPayload, null, 2));
+      // console.log('newPayload', JSON.stringify(newPayload, null, 2));
 
       // include stream_url only if present
       if (stream_url) {
