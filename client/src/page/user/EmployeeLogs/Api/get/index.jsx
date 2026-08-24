@@ -2,7 +2,7 @@ import getAccessToken from '@/utils/getAccessToken';
 import axios from 'axios';
 const HOST = import.meta.env.VITE_BACKEND;
 
-export const getAttendanceLogs = async function (searchInput, nvrId, cameraId, startDate, endDate, page = 1, limit = 10,sortField = 'name',
+export const getAttendanceLogs = async function (searchInput, nvrId, cameraId, startDate, endDate, page = 1, limit = 12,sortField = 'name',
   sortOrder = 'asc',departmentIds,fromTime,toTime,timeType,isExport,employeeLocations) {
   const token = getAccessToken();
   const skip = (page - 1) * limit;

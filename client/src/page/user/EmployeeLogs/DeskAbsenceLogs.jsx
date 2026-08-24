@@ -584,7 +584,7 @@ const DeskAbsenceLogs = () => {
                 className={`flex items-center justify-center w-8 h-8 rounded ${
                   currentPage === 1
                     ? 'text-gray-400 cursor-not-allowed'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    : 'text-gray-600 hover:bg-gray-100 cursor-pointer'
                 }`}
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -604,8 +604,8 @@ const DeskAbsenceLogs = () => {
                     onClick={() => handlePageChange(page)}
                     className={`flex items-center justify-center w-8 h-8 rounded text-sm font-medium ${
                       currentPage === page
-                        ? 'bg-[#07486A] text-white'
-                        : 'text-gray-600 hover:bg-gray-100'
+                        ? 'bg-[#07486A] text-white cursor-pointer'
+                        : 'text-gray-600 hover:bg-gray-100 cursor-pointer'
                     }`}
                   >
                     {page}
@@ -619,7 +619,7 @@ const DeskAbsenceLogs = () => {
                 className={`flex items-center justify-center w-8 h-8 rounded ${
                   currentPage === totalPages
                     ? 'text-gray-400 cursor-not-allowed'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    : 'text-gray-600 hover:bg-gray-100 cursor-pointer'
                 }`}
               >
                 <ChevronRight className="w-4 h-4" />

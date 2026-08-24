@@ -79,7 +79,7 @@ const fetchConveyorLogs = async ({
 const ConveyorLogs = () => {
   const todayISO = moment().format('YYYY-MM-DD');
   const maxDateDefault = moment().endOf('day').toDate();
-  const limit = 10;
+  const limit = 12;
 
   // Table data
   const [rows, setRows] = useState([]);
@@ -838,7 +838,7 @@ const ConveyorLogs = () => {
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
                     className={`flex items-center justify-center w-8 h-8 rounded ${
-                      currentPage === 1 ? 'text-gray-400 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'
+                      currentPage === 1 ? 'text-gray-400 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100 cursor-pointer'
                     }`}
                   >
                     &#8249;
@@ -861,7 +861,7 @@ const ConveyorLogs = () => {
                           key={page}
                           onClick={() => setCurrentPage(page)}
                           className={`flex items-center justify-center w-8 h-8 rounded text-sm font-medium ${
-                            currentPage === page ? 'bg-[#07486A] text-white' : 'text-gray-600 hover:bg-gray-100'
+                            currentPage === page ? 'bg-[#07486A] text-white cursor-pointer' : 'text-gray-600 hover:bg-gray-100 cursor-pointer'
                           }`}
                         >
                           {page}
@@ -872,7 +872,7 @@ const ConveyorLogs = () => {
                     onClick={() => setCurrentPage((p) => Math.min(Math.ceil(totalCount / limit), p + 1))}
                     disabled={currentPage === Math.ceil(totalCount / limit)}
                     className={`flex items-center justify-center w-8 h-8 rounded ${
-                      currentPage === Math.ceil(totalCount / limit) ? 'text-gray-400 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'
+                      currentPage === Math.ceil(totalCount / limit) ? 'text-gray-400 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100 cursor-pointer'
                     }`}
                   >
                     &#8250;

@@ -216,7 +216,7 @@ function reducer(state, action) {
 const TaggedUsers = () => {
   const nasUrl = import.meta.env.VITE_BACKEND || '';
   const region = moment.tz.guess();
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(12);
   const todayISO = moment().format('YYYY-MM-DD');
   const maxDateDefault = moment().endOf('day').toDate();
 

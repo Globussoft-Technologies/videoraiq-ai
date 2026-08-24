@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import moment from 'moment-timezone';
-import { Filter, Image, RotateCcw, X } from 'lucide-react';
+import { Building2, Calendar, Car, Clock, Filter, Image, Palette, RectangleHorizontal, Video, X, RotateCcw } from 'lucide-react';
 import getAccessToken from '@/utils/getAccessToken';
 import ReusableTablePage from './ReusableTablePage';
 import AutoRefreshComponent from './components/AutoRefreshComponent';
@@ -40,6 +40,9 @@ const getYear = (item) => item.year || item.modelYear || item.carYear || '--';
 const getColor = (item) => item.color || item.colour || item.carColor || '--';
 
 const getCompany = (item) => item.company || item.make || item.carCompany || '--';
+
+const formatIncidentTime = (value) =>
+  value ? moment.utc(value).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A') : '--';
 
 const REFRESH_KEY = 'car_model_logs_auto_refresh_enabled';
 const INTERVAL_KEY = 'car_model_logs_auto_refresh_interval';
@@ -88,7 +91,7 @@ const CarLogs = () => {
   const [error, setError] = useState(null);
   const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(12);
   const [sortField, setSortField] = useState('');
   const [sortOrder, setSortOrder] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -141,6 +144,7 @@ const CarLogs = () => {
           company: getCompany(item),
           color: getColor(item),
           year: getYear(item),
+          incidentTime: formatIncidentTime(item.timeOfIncident || item.createdAt),
           nvrName: item.nvrData?.nvrName || '--',
           channelName: item.channelData?.name || '--',
         }))
@@ -305,6 +309,17 @@ const CarLogs = () => {
         ),
       },
       {
+        accessorKey: 'incidentTime',
+        header: () => (
+          <button onClick={() => toggleSort('timeOfIncident')} className="cursor-pointer">
+            Time
+          </button>
+        ),
+        cell: ({ row }) => (
+          <span className="text-[#333333] text-xs font-normal whitespace-nowrap">{row.original.incidentTime}</span>
+        ),
+      },
+      {
         accessorKey: 'nvrName',
         header: () => (
           <button onClick={() => toggleSort('nvrData.nvrName')} className="cursor-pointer">
@@ -399,51 +414,62 @@ const CarLogs = () => {
     </Popover>
   );
 
-  const renderCarCard = useCallback((row) => (
-    <div className="bg-white border border-[#E5E5E5] rounded-[12px] overflow-hidden shadow-sm hover:shadow-md transition-shadow h-full min-w-0">
-      <div className="relative w-full h-40 bg-[#F0F0F0] flex items-center justify-center">
-        {row.imageUrl ? (
-          <img
-            src={row.imageUrl}
-            alt={row.modelName}
-            className="w-full h-full object-cover cursor-pointer"
-            onClick={() => {
-              setPreviewImageLoading(true);
-              setPreviewImage(row.imageUrl);
-            }}
-          />
-        ) : (
-          <Image className="w-10 h-10 text-[#C7C7C7]" />
-        )}
+  const renderCarCard = useCallback((row) => {
+    const detailRows = [
+      { label: 'Model', value: row.modelName, icon: Car },
+      { label: 'Company', value: row.company, icon: Building2 },
+      { label: 'Colour', value: row.color, icon: Palette, valueClassName: 'capitalize' },
+      { label: 'Year', value: row.year, icon: Calendar },
+      { label: 'Time', value: row.incidentTime, icon: Clock },
+      { label: 'NVR', value: row.nvrName, icon: RectangleHorizontal },
+      { label: 'Camera', value: row.channelName, icon: Video },
+    ];
+
+    return (
+      <div className="bg-white border border-[#DADDE3] rounded-[12px] overflow-hidden shadow-sm hover:shadow-md transition-shadow h-full min-w-0">
+        <button
+          type="button"
+          disabled={!row.imageUrl}
+          onClick={() => {
+            if (!row.imageUrl) return;
+            setPreviewImageLoading(true);
+            setPreviewImage(row.imageUrl);
+          }}
+          className="relative w-full bg-[#080D18] flex items-center justify-center overflow-hidden disabled:cursor-default cursor-pointer"
+          title={row.imageUrl ? 'View car image' : undefined}
+          aria-label={row.imageUrl ? 'View car image' : 'No car image'}
+        >
+          {row.imageUrl ? (
+            <img
+              src={row.imageUrl}
+              alt={row.modelName}
+              className="w-full h-auto object-contain"
+            />
+          ) : (
+            <span className="flex h-44 w-full items-center justify-center">
+              <Image className="w-10 h-10 text-[#6B7280]" />
+            </span>
+          )}
+        </button>
+
+        <div className="px-4 py-3 space-y-2.5">
+          {detailRows.map(({ label, value, icon: Icon, valueClassName = '' }) => (
+            <div key={label} className="grid grid-cols-[minmax(96px,auto)_1fr] items-center gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Icon className="w-4 h-4 text-[#07486A] shrink-0" />
+                <span className="text-[11px] font-semibold uppercase text-[#1F2937] truncate">
+                  {label}
+                </span>
+              </div>
+              <span className={`text-xs text-[#102A5C] text-right truncate ${valueClassName}`}>
+                {value}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
-      <div className="p-3 space-y-2">
-        <div>
-          <p className="text-[10px] font-medium text-[#888] uppercase tracking-wide">Model Name</p>
-          <p className="text-xs font-semibold text-[#07486A] truncate">{row.modelName}</p>
-        </div>
-        <div>
-          <p className="text-[10px] font-medium text-[#888] uppercase tracking-wide">Company</p>
-          <p className="text-xs text-[#333333] truncate">{row.company}</p>
-        </div>
-        <div>
-          <p className="text-[10px] font-medium text-[#888] uppercase tracking-wide">Colour</p>
-          <p className="text-xs text-[#333333] truncate capitalize">{row.color}</p>
-        </div>
-        <div>
-          <p className="text-[10px] font-medium text-[#888] uppercase tracking-wide">Year</p>
-          <p className="text-xs text-[#333333] truncate">{row.year}</p>
-        </div>
-        <div>
-          <p className="text-[10px] font-medium text-[#888] uppercase tracking-wide">NVR Name</p>
-          <p className="text-xs text-[#333333] truncate">{row.nvrName}</p>
-        </div>
-        <div>
-          <p className="text-[10px] font-medium text-[#888] uppercase tracking-wide">Camera Name</p>
-          <p className="text-xs text-[#333333] truncate">{row.channelName}</p>
-        </div>
-      </div>
-    </div>
-  ), []);
+    );
+  }, []);
 
   return (
     <>
@@ -500,7 +526,7 @@ const CarLogs = () => {
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         gridCard={renderCarCard}
-        searchKeys={['modelName', 'company', 'color', 'year', 'nvrName', 'channelName']}
+        searchKeys={['modelName', 'company', 'color', 'year', 'incidentTime', 'nvrName', 'channelName']}
         searchQuery={searchInput}
         onSearchChange={setSearchInput}
         startDate={startDate}

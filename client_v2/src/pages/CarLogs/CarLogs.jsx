@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import moment from 'moment-timezone';
-import { Calendar, Car, Factory, Filter, Image, Palette, RotateCcw, Server, Video } from 'lucide-react';
+import { Building2, Calendar, Car, Clock, Filter, Image, Palette, RotateCcw, Server, Video } from 'lucide-react';
 import getAccessToken from '@/utils/getAccessToken';
 import { Button } from '@/components/ui/button';
 import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePage';
@@ -46,6 +46,9 @@ const getYear = (item) => item.year || item.modelYear || item.carYear || '--';
 const getColor = (item) => item.color || item.colour || item.carColor || '--';
 
 const getCompany = (item) => item.company || item.make || item.carCompany || '--';
+
+const formatIncidentTime = (value) =>
+  value ? moment.utc(value).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A') : '--';
 
 const REFRESH_KEY = 'v2_car_logs_auto_refresh_enabled';
 const INTERVAL_KEY = 'v2_car_logs_auto_refresh_interval';
@@ -146,6 +149,7 @@ const CarLogs = () => {
           color: getColor(item),
           company: getCompany(item),
           year: getYear(item),
+          incidentTime: formatIncidentTime(item.timeOfIncident || item.createdAt),
           nvrName: item.nvrData?.nvrName || '--',
           channelName: item.channelData?.name || '--',
         }))
@@ -306,6 +310,18 @@ const CarLogs = () => {
         cell: ({ row }) => <span className="text-[13px] text-[var(--tx)]">{row.original.year}</span>,
       },
       {
+        accessorKey: 'incidentTime',
+        header: () => (
+          <button
+            onClick={() => toggleSort('timeOfIncident')}
+            className="cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
+          >
+            Time
+          </button>
+        ),
+        cell: ({ row }) => <span className="text-[13px] text-[var(--tx)] whitespace-nowrap">{row.original.incidentTime}</span>,
+      },
+      {
         accessorKey: 'nvrName',
         header: () => (
           <button
@@ -350,7 +366,7 @@ const CarLogs = () => {
   const gridCard = useCallback(
     (row) => (
       <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[13px] overflow-hidden hover:border-[var(--bd2)] transition-colors h-full w-full min-w-0">
-        <div className="relative bg-[#0a0e15] flex items-center justify-center" style={{ aspectRatio: '4 / 3' }}>
+        <div className="relative bg-[#0a0e15] flex items-center justify-center" style={{ aspectRatio: '6 / 3' }}>
           {row.imageUrl ? (
             <ImageWithLoader
               src={row.imageUrl}
@@ -375,7 +391,7 @@ const CarLogs = () => {
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs min-w-0">
-            <Factory className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <Building2 className="w-4 h-4 text-[var(--tx2)] shrink-0" />
             <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
               Company
             </span>
@@ -399,6 +415,15 @@ const CarLogs = () => {
             </span>
             <span className="text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0">
               {row.year}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <Clock className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
+              Time
+            </span>
+            <span className="text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0">
+              {row.incidentTime}
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs min-w-0">
@@ -443,7 +468,7 @@ const CarLogs = () => {
         onPageChange={setCurrentPage}
         limit={limit}
         onLimitChange={setLimit}
-        searchKeys={['modelName', 'company', 'color', 'year', 'nvrName', 'channelName']}
+        searchKeys={['modelName', 'company', 'color', 'year', 'incidentTime', 'nvrName', 'channelName']}
         searchQuery={searchInput}
         onSearchChange={setSearchInput}
         startDate={startDate}
