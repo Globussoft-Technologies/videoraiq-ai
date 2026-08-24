@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import moment from 'moment-timezone';
-import { Building2, Calendar, Car, Clock, Filter, Image, Palette, RotateCcw, Server, Video } from 'lucide-react';
+import { Building2, Calendar, Car, CarFront, Clock, Filter, Image, Palette, RotateCcw, Server, Video } from 'lucide-react';
 import getAccessToken from '@/utils/getAccessToken';
 import { Button } from '@/components/ui/button';
 import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePage';
@@ -146,6 +146,7 @@ const CarLogs = () => {
           _id: item._id,
           imageUrl: getCarImageUrl(item),
           modelName: getModelName(item),
+          vehicleNumber: item.vehicleNumber || '--',
           color: getColor(item),
           company: getCompany(item),
           year: getYear(item),
@@ -272,6 +273,20 @@ const CarLogs = () => {
         cell: ({ row }) => <span className="text-[13px] text-[var(--tx)]">{row.original.modelName}</span>,
       },
       {
+        accessorKey: 'vehicleNumber',
+        header: () => (
+          <button
+            onClick={() => toggleSort('vehicleNumber')}
+            className="cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
+          >
+            Vehicle Number
+          </button>
+        ),
+        cell: ({ row }) => (
+          <span className="text-[13px] text-[var(--tx)] whitespace-nowrap">{row.original.vehicleNumber}</span>
+        ),
+      },
+      {
         accessorKey: 'company',
         header: () => (
           <button
@@ -310,18 +325,6 @@ const CarLogs = () => {
         cell: ({ row }) => <span className="text-[13px] text-[var(--tx)]">{row.original.year}</span>,
       },
       {
-        accessorKey: 'incidentTime',
-        header: () => (
-          <button
-            onClick={() => toggleSort('timeOfIncident')}
-            className="cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
-          >
-            Time
-          </button>
-        ),
-        cell: ({ row }) => <span className="text-[13px] text-[var(--tx)] whitespace-nowrap">{row.original.incidentTime}</span>,
-      },
-      {
         accessorKey: 'nvrName',
         header: () => (
           <button
@@ -341,6 +344,18 @@ const CarLogs = () => {
           </span>
         ),
         cell: ({ row }) => <span className="text-[13px] text-[var(--tx)]">{row.original.channelName}</span>,
+      },
+      {
+        accessorKey: 'incidentTime',
+        header: () => (
+          <button
+            onClick={() => toggleSort('timeOfIncident')}
+            className="cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
+          >
+            Time
+          </button>
+        ),
+        cell: ({ row }) => <span className="text-[13px] text-[var(--tx)] whitespace-nowrap">{row.original.incidentTime}</span>,
       },
     ],
     [sortField]
@@ -391,6 +406,15 @@ const CarLogs = () => {
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs min-w-0">
+            <CarFront className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
+              Vehicle No.
+            </span>
+            <span className="text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0">
+              {row.vehicleNumber}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs min-w-0">
             <Building2 className="w-4 h-4 text-[var(--tx2)] shrink-0" />
             <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
               Company
@@ -418,15 +442,6 @@ const CarLogs = () => {
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs min-w-0">
-            <Clock className="w-4 h-4 text-[var(--tx2)] shrink-0" />
-            <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
-              Time
-            </span>
-            <span className="text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0">
-              {row.incidentTime}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 text-xs min-w-0">
             <Server className="w-4 h-4 text-[var(--tx2)] shrink-0" />
             <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
               NVR
@@ -442,6 +457,15 @@ const CarLogs = () => {
             </span>
             <span className="text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0">
               {row.channelName}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <Clock className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
+              Time
+            </span>
+            <span className="text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0">
+              {row.incidentTime}
             </span>
           </div>
         </div>
@@ -468,7 +492,7 @@ const CarLogs = () => {
         onPageChange={setCurrentPage}
         limit={limit}
         onLimitChange={setLimit}
-        searchKeys={['modelName', 'company', 'color', 'year', 'incidentTime', 'nvrName', 'channelName']}
+        searchKeys={['modelName', 'vehicleNumber', 'company', 'color', 'year', 'incidentTime', 'nvrName', 'channelName']}
         searchQuery={searchInput}
         onSearchChange={setSearchInput}
         startDate={startDate}

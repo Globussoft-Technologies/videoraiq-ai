@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import moment from 'moment-timezone';
-import { Building2, Calendar, Car, Clock, Filter, Image, Palette, RectangleHorizontal, Video, X, RotateCcw } from 'lucide-react';
+import { Building2, Calendar, Car, CarFront, Clock, Filter, Image, Palette, RectangleHorizontal, Video, X, RotateCcw } from 'lucide-react';
 import getAccessToken from '@/utils/getAccessToken';
 import ReusableTablePage from './ReusableTablePage';
 import AutoRefreshComponent from './components/AutoRefreshComponent';
@@ -141,6 +141,7 @@ const CarLogs = () => {
           _id: item._id,
           imageUrl: getCarImageUrl(item),
           modelName: getModelName(item),
+          vehicleNumber: item.vehicleNumber || '--',
           company: getCompany(item),
           color: getColor(item),
           year: getYear(item),
@@ -276,6 +277,17 @@ const CarLogs = () => {
         ),
       },
       {
+        accessorKey: 'vehicleNumber',
+        header: () => (
+          <button onClick={() => toggleSort('vehicleNumber')} className="cursor-pointer">
+            Vehicle Number
+          </button>
+        ),
+        cell: ({ row }) => (
+          <span className="text-[#333333] text-xs font-normal whitespace-nowrap">{row.original.vehicleNumber}</span>
+        ),
+      },
+      {
         accessorKey: 'company',
         header: () => (
           <button onClick={() => toggleSort('company')} className="cursor-pointer">
@@ -309,17 +321,6 @@ const CarLogs = () => {
         ),
       },
       {
-        accessorKey: 'incidentTime',
-        header: () => (
-          <button onClick={() => toggleSort('timeOfIncident')} className="cursor-pointer">
-            Time
-          </button>
-        ),
-        cell: ({ row }) => (
-          <span className="text-[#333333] text-xs font-normal whitespace-nowrap">{row.original.incidentTime}</span>
-        ),
-      },
-      {
         accessorKey: 'nvrName',
         header: () => (
           <button onClick={() => toggleSort('nvrData.nvrName')} className="cursor-pointer">
@@ -335,6 +336,17 @@ const CarLogs = () => {
         header: 'Camera Name',
         cell: ({ row }) => (
           <span className="text-[#333333] text-xs font-normal">{row.original.channelName}</span>
+        ),
+      },
+      {
+        accessorKey: 'incidentTime',
+        header: () => (
+          <button onClick={() => toggleSort('timeOfIncident')} className="cursor-pointer">
+            Time
+          </button>
+        ),
+        cell: ({ row }) => (
+          <span className="text-[#333333] text-xs font-normal whitespace-nowrap">{row.original.incidentTime}</span>
         ),
       },
     ],
@@ -417,12 +429,13 @@ const CarLogs = () => {
   const renderCarCard = useCallback((row) => {
     const detailRows = [
       { label: 'Model', value: row.modelName, icon: Car },
+      { label: 'Vehicle No.', value: row.vehicleNumber, icon: CarFront },
       { label: 'Company', value: row.company, icon: Building2 },
       { label: 'Colour', value: row.color, icon: Palette, valueClassName: 'capitalize' },
       { label: 'Year', value: row.year, icon: Calendar },
-      { label: 'Time', value: row.incidentTime, icon: Clock },
       { label: 'NVR', value: row.nvrName, icon: RectangleHorizontal },
       { label: 'Camera', value: row.channelName, icon: Video },
+      { label: 'Time', value: row.incidentTime, icon: Clock },
     ];
 
     return (
@@ -526,7 +539,7 @@ const CarLogs = () => {
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         gridCard={renderCarCard}
-        searchKeys={['modelName', 'company', 'color', 'year', 'incidentTime', 'nvrName', 'channelName']}
+        searchKeys={['modelName', 'vehicleNumber', 'company', 'color', 'year', 'incidentTime', 'nvrName', 'channelName']}
         searchQuery={searchInput}
         onSearchChange={setSearchInput}
         startDate={startDate}

@@ -50,6 +50,8 @@ const SCHEDULER_LAG_NOTE =
   'Schedule changes are applied by the existing detection scheduler on its next run — normally within about 1 minute.';
 
 const DEFAULT_TIMEZONE = 'Asia/Kolkata';
+const TIME_HOURS_12 = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0'));
+const TIME_MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0'));
 
 const emptyDays = () => DAYS.reduce((acc, day) => ({ ...acc, [day]: [] }), {});
 
@@ -60,6 +62,26 @@ const defaultForm = () => ({
 });
 
 const titleCase = (value) => value.charAt(0).toUpperCase() + value.slice(1);
+
+function parseTime12(value = '09:00') {
+  const [rawHours, rawMinutes] = String(value || '09:00').split(':');
+  const hours24 = Number(rawHours);
+  const minutes = Number(rawMinutes);
+  const safeHours = Number.isFinite(hours24) ? Math.min(Math.max(hours24, 0), 23) : 9;
+  const safeMinutes = Number.isFinite(minutes) ? Math.min(Math.max(minutes, 0), 59) : 0;
+  return {
+    hour: String(safeHours % 12 || 12).padStart(2, '0'),
+    minute: String(safeMinutes).padStart(2, '0'),
+    period: safeHours >= 12 ? 'PM' : 'AM',
+  };
+}
+
+function toTime24(hour, minute, period) {
+  let hours = Number(hour);
+  if (period === 'PM' && hours < 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  return `${String(hours).padStart(2, '0')}:${minute}`;
+}
 
 const toMinutes = (time) => {
   const [hours, minutes] = String(time || '').split(':').map(Number);
@@ -443,14 +465,161 @@ const TIME_INPUT_STYLE = {
   outline: 'none',
 };
 
+function TimeInput12({ value, onChange, disabled }) {
+  const MENU_WIDTH = 180;
+  const MENU_HEIGHT = 216;
+  const parsed = parseTime12(value);
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0, openUp: false });
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+
+  const update = (part, nextValue) => {
+    const next = { ...parsed, [part]: nextValue };
+    onChange(toTime24(next.hour, next.minute, next.period));
+  };
+
+  const place = () => {
+    const el = btnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const maxLeft = Math.max(8, window.innerWidth - MENU_WIDTH - 8);
+    const openUp = r.bottom + 6 + MENU_HEIGHT > window.innerHeight - 8 && r.top > MENU_HEIGHT;
+    setCoords({
+      top: openUp ? r.top - 6 : r.bottom + 6,
+      left: Math.min(Math.max(8, r.left), maxLeft),
+      openUp,
+    });
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+    place();
+    const onDocClick = (event) => {
+      if (
+        btnRef.current && !btnRef.current.contains(event.target) &&
+        menuRef.current && !menuRef.current.contains(event.target)
+      ) setOpen(false);
+    };
+    const onKey = (event) => event.key === 'Escape' && setOpen(false);
+    const onScroll = (event) => {
+      if (menuRef.current && menuRef.current.contains(event.target)) return;
+      const el = btnRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > window.innerHeight) setOpen(false);
+      else place();
+    };
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open, parsed.hour, parsed.minute, parsed.period]);
+
+  const renderColumn = (items, selected, part) => (
+    <div style={{ maxHeight: MENU_HEIGHT, overflowY: 'auto', padding: 4, borderRight: part === 'period' ? 'none' : '1px solid var(--bd)' }}>
+      {items.map((item) => {
+        const active = item === selected;
+        return (
+          <button
+            key={item}
+            type="button"
+            onClick={() => {
+              update(part, item);
+              if (part === 'period') setOpen(false);
+            }}
+            style={{
+              width: '100%',
+              height: 28,
+              border: 'none',
+              borderRadius: 2,
+              background: active ? '#0b84ff' : 'transparent',
+              color: active ? '#fff' : 'var(--tx)',
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: active ? 700 : 500,
+            }}
+          >
+            {item}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        style={{
+          height: 30,
+          minWidth: 112,
+          border: '1px solid var(--bd2, var(--bd))',
+          borderRadius: 8,
+          padding: '0 8px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 6,
+          fontSize: 12.5,
+          fontWeight: 700,
+          color: disabled ? 'var(--tx3)' : 'var(--tx)',
+          background: 'var(--bg1solid, var(--bg1))',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          flexShrink: 0,
+        }}
+      >
+        {parsed.hour}:{parsed.minute} {parsed.period}
+        <Clock size={12} style={{ color: 'var(--tx2)', flexShrink: 0 }} />
+      </button>
+
+      {open && !disabled && createPortal(
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            top: coords.top,
+            left: coords.left,
+            transform: coords.openUp ? 'translateY(-100%)' : 'none',
+            width: MENU_WIDTH,
+            zIndex: 10000,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            border: '1px solid var(--bd)',
+            background: 'var(--bg1solid, var(--bg1))',
+            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.18)',
+            overflow: 'hidden',
+          }}
+        >
+          {renderColumn(TIME_HOURS_12, parsed.hour, 'hour')}
+          {renderColumn(TIME_MINUTES, parsed.minute, 'minute')}
+          {renderColumn(['AM', 'PM'], parsed.period, 'period')}
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
 /**
  * Icon-only trigger that opens a small popover listing days with a time range
  * to copy from. Replaces a native <select> so the day list can be searched
  * visually without eating horizontal space next to the ranges.
  */
 function CopyFromButton({ options, onPick, disabled, title }) {
+  const MENU_WIDTH = 160;
+  const MENU_MAX_HEIGHT = 200;
   const [open, setOpen] = useState(false);
-  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const [coords, setCoords] = useState({ top: 0, left: 0, openUp: false });
   const btnRef = useRef(null);
   const menuRef = useRef(null);
 
@@ -458,7 +627,14 @@ function CopyFromButton({ options, onPick, disabled, title }) {
     const el = btnRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setCoords({ top: r.bottom + 6, left: Math.max(8, r.left) });
+    const maxLeft = Math.max(8, window.innerWidth - MENU_WIDTH - 8);
+    const menuHeight = Math.min(MENU_MAX_HEIGHT, options.length * 34) + 32;
+    const openUp = r.bottom + 6 + menuHeight > window.innerHeight - 8 && r.top > menuHeight;
+    setCoords({
+      top: openUp ? r.top - 6 : r.bottom + 6,
+      left: Math.min(Math.max(8, r.left), maxLeft),
+      openUp,
+    });
   };
 
   useEffect(() => {
@@ -480,6 +656,20 @@ function CopyFromButton({ options, onPick, disabled, title }) {
       document.removeEventListener('keydown', onKey);
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onScroll = (event) => {
+      if (menuRef.current && menuRef.current.contains(event.target)) return;
+      const el = btnRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > window.innerHeight) setOpen(false);
+      else place();
+    };
+    window.addEventListener('scroll', onScroll, true);
+    return () => window.removeEventListener('scroll', onScroll, true);
+  }, [open, options.length]);
 
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -512,7 +702,9 @@ function CopyFromButton({ options, onPick, disabled, title }) {
             position: 'fixed',
             top: coords.top,
             left: coords.left,
-            minWidth: 150,
+            transform: coords.openUp ? 'translateY(-100%)' : 'none',
+            width: MENU_WIDTH,
+            maxWidth: 'calc(100vw - 16px)',
             zIndex: 10000,
             borderRadius: 10,
             border: '1px solid var(--bd)',
@@ -556,6 +748,143 @@ function CopyFromButton({ options, onPick, disabled, title }) {
         document.body,
       )}
     </div>
+  );
+}
+
+function ApplyToAllDaysButton({ options, onPick, disabled, title }) {
+  const MENU_WIDTH = 180;
+  const MENU_MAX_HEIGHT = 200;
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0, openUp: false });
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+
+  const place = () => {
+    const el = btnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const maxLeft = Math.max(8, window.innerWidth - MENU_WIDTH - 8);
+    const menuHeight = Math.min(MENU_MAX_HEIGHT, options.length * 34) + 32;
+    const openUp = r.bottom + 6 + menuHeight > window.innerHeight - 8 && r.top > menuHeight;
+    setCoords({
+      top: openUp ? r.top - 6 : r.bottom + 6,
+      left: Math.min(Math.max(8, r.right - MENU_WIDTH), maxLeft),
+      openUp,
+    });
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+    place();
+    const onDocClick = (event) => {
+      if (
+        btnRef.current && !btnRef.current.contains(event.target) &&
+        menuRef.current && !menuRef.current.contains(event.target)
+      ) setOpen(false);
+    };
+    const onKey = (event) => event.key === 'Escape' && setOpen(false);
+    const onScroll = (event) => {
+      if (menuRef.current && menuRef.current.contains(event.target)) return;
+      const el = btnRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > window.innerHeight) setOpen(false);
+      else place();
+    };
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open, options.length]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        disabled={disabled}
+        title={title}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 7,
+          height: 32,
+          padding: '0 12px',
+          borderRadius: 8,
+          border: '1px solid var(--bd)',
+          background: 'rgba(59,130,246,.1)',
+          color: disabled ? 'var(--tx3)' : 'var(--blue)',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.5 : 1,
+          fontSize: 11.5,
+          fontWeight: 700,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <CopyPlus size={13} />
+        Apply to all days
+      </button>
+
+      {open && !disabled && createPortal(
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            top: coords.top,
+            left: coords.left,
+            transform: coords.openUp ? 'translateY(-100%)' : 'none',
+            width: MENU_WIDTH,
+            maxWidth: 'calc(100vw - 16px)',
+            zIndex: 10000,
+            borderRadius: 10,
+            border: '1px solid var(--bd)',
+            background: 'var(--bg1solid, var(--bg1))',
+            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.18)',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ padding: '7px 10px', fontSize: 10.5, fontWeight: 700, color: 'var(--tx3)', borderBottom: '1px solid var(--bd)' }}>
+            Use schedule from
+          </div>
+          <div style={{ maxHeight: MENU_MAX_HEIGHT, overflowY: 'auto', padding: 4 }}>
+            {options.map((day) => (
+              <button
+                key={day}
+                type="button"
+                onClick={() => {
+                  onPick(day);
+                  setOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '7px 9px',
+                  borderRadius: 7,
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--tx)',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg2)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                {titleCase(day)}
+              </button>
+            ))}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 
@@ -833,6 +1162,20 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
       };
     });
     toast.success(`${titleCase(sourceDay)} schedule copied to ${titleCase(targetDay)}.`);
+  };
+
+  const copyRangesToAllDays = (sourceDay) => {
+    if (!sourceDay) return;
+    setForm((current) => {
+      const sourceRanges = current.days?.[sourceDay] || [];
+      if (!sourceRanges.length) return current;
+      const nextDays = {};
+      DAYS.forEach((day) => {
+        nextDays[day] = sourceRanges.map((range) => ({ ...range }));
+      });
+      return { ...current, days: nextDays };
+    });
+    toast.success(`${titleCase(sourceDay)} schedule copied to all days.`);
   };
 
   const handleSave = async () => {
@@ -1264,6 +1607,14 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
                 </div>
               ) : (
                 <div style={{ display: 'grid', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <ApplyToAllDaysButton
+                      options={DAYS.filter((day) => (form.days?.[day] || []).length)}
+                      disabled={!canEdit || !DAYS.some((day) => (form.days?.[day] || []).length)}
+                      onPick={copyRangesToAllDays}
+                      title="Choose a day schedule to apply to every day"
+                    />
+                  </div>
                   {DAYS.map((day) => {
                     const ranges = form.days?.[day] || [];
                     const copyOptions = DAYS.filter((sourceDay) => sourceDay !== day && (form.days?.[sourceDay] || []).length);
@@ -1302,20 +1653,16 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
                           ) : (
                             ranges.map((range, index) => (
                               <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <input
-                                  type="time"
-                                  value={range.start || ''}
+                                <TimeInput12
+                                  value={range.start || '09:00'}
                                   disabled={!canEdit}
-                                  onChange={(event) => updateRange(day, index, 'start', event.target.value)}
-                                  style={TIME_INPUT_STYLE}
+                                  onChange={(value) => updateRange(day, index, 'start', value)}
                                 />
                                 <span style={{ fontSize: 12, color: 'var(--tx2)' }}>to</span>
-                                <input
-                                  type="time"
-                                  value={range.end || ''}
+                                <TimeInput12
+                                  value={range.end || '18:00'}
                                   disabled={!canEdit}
-                                  onChange={(event) => updateRange(day, index, 'end', event.target.value)}
-                                  style={TIME_INPUT_STYLE}
+                                  onChange={(value) => updateRange(day, index, 'end', value)}
                                 />
                                 {canEdit && (
                                   <button
