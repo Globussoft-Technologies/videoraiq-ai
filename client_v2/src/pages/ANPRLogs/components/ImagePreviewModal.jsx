@@ -97,7 +97,7 @@ const ImagePreviewModal = ({ previewImage, onClose }) => {
         >
           <X className="w-5 h-5 text-[var(--tx)]" />
         </button>
-        <div className="absolute top-5 right-5 z-20 flex items-center gap-1 rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)]/95 p-1 shadow-lg">
+        <div className="absolute top-5 left-5 z-20 flex items-center gap-1 rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)]/95 p-1 shadow-lg">
           <button
             type="button"
             onClick={() => updateZoom((current) => current - 0.2)}
