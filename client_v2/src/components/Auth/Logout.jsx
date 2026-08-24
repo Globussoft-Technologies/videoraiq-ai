@@ -5,12 +5,24 @@ import { useAuth } from '@/context/AuthContext';
 
 const envValue = (key) => String(import.meta.env[key] || '').trim();
 const isLocalSetup = () => envValue('VITE_LOCAL_SETUP').toLowerCase() === 'true';
+
 const logoutRedirectUrl = () => {
+  const loginUrl = envValue('VITE_AMEMBER_LOGIN_URL');
   const memberUrl = envValue('VITE_AMEMBER_MEMBER_URL');
-  if (memberUrl) return memberUrl.replace(/\/login\/?$/, '/member');
+  const amemberUrl = memberUrl || loginUrl;
+
+  if (amemberUrl) {
+    const logoutUrl = new URL(
+      amemberUrl.replace(/\/(?:member|login)\/?$/, '/logout'),
+      window.location.href
+    );
+    const destination = loginUrl || amemberUrl.replace(/\/member\/?$/, '/login');
+    logoutUrl.searchParams.set('amember_redirect_url', destination);
+    return logoutUrl.toString();
+  }
 
   const frontendUrl = envValue('VITE_FRONTEND');
-  return frontendUrl ? `${frontendUrl.replace(/\/$/, '')}/member` : '/admin-login';
+  return frontendUrl ? `${frontendUrl.replace(/\/$/, '')}/logout` : '/admin-login';
 };
 
 /**
@@ -24,10 +36,10 @@ export default function Logout() {
   useEffect(() => {
     logout();
     setUser(null);
-    if (isLocalSetup()) {
+    if (isLocalSetup() && !envValue('VITE_AMEMBER_LOGIN_URL')) {
       navigate('/admin-login', { replace: true });
     } else {
-      window.location.href = logoutRedirectUrl();
+      window.location.replace(logoutRedirectUrl());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

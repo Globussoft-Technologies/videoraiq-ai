@@ -22,6 +22,16 @@ const accessCookieName = () =>
 
 const REMEMBER_COOKIE = "admin_remember_me";
 
+const amemberSignupUrl = () => {
+  const memberUrl = String(import.meta.env.VITE_AMEMBER_MEMBER_URL || "").trim();
+  if (memberUrl) return memberUrl.replace(/\/member\/?$/, "/signup");
+
+  const loginUrl = String(import.meta.env.VITE_AMEMBER_LOGIN_URL || "").trim();
+  if (loginUrl) return loginUrl.replace(/\/login\/?$/, "/signup");
+
+  return "/admin-login";
+};
+
 const LoginForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -122,7 +132,13 @@ const LoginForm = () => {
 
   const loading = formik.isSubmitting || authenticating;
 
-  const switchTo = (m) => () => setMode(m);
+  const switchTo = (m) => () => {
+    if (m === "register") {
+      window.location.assign(amemberSignupUrl());
+      return;
+    }
+    setMode(m);
+  };
 
   // Stable across re-renders so AuthLoader's completion timer (see its effect
   // deps) never restarts mid-animation.
