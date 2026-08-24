@@ -5,19 +5,15 @@ import path from 'path';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const serverHost = env.VITE_SERVER_HOST;
-  const serverPort = Number(env.VITE_SERVER_PORT);
-  const allowedHosts = env.VITE_ALLOWED_HOSTS
-    .split(',')
-    .map((host) => host.trim())
-    .filter(Boolean);
-
+  const serverPort = env.VITE_SERVER_PORT;
+  const allowedHosts = env.VITE_ALLOWED_HOSTS;
   return {
   plugins: [react()],
 
   server: {
-    host: serverHost,
-    port: serverPort,
-    allowedHosts,
+    ...(serverHost ? { host: serverHost } : {}),
+    ...(serverPort ? { port: Number(serverPort) } : {}),
+    ...(allowedHosts ? { allowedHosts: [allowedHosts] } : {}),
   },
 
   resolve: {
