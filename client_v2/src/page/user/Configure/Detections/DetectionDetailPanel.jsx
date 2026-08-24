@@ -1047,6 +1047,23 @@ export default function DetectionDetailPanel({
    * Returns '' (not null) when valid — the callers treat the result as a
    * truthy-or-not error string.
    */
+  /**
+   * The override expiry as a short local string, or '' when none is live.
+   * Recomputed on render rather than memoised: it has to stop showing once
+   * the expiry passes, and a stale-by-a-minute label is the whole problem
+   * this notice exists to prevent.
+   */
+  const overrideResumesAt = (() => {
+    const raw = model?.overrideUntil;
+    if (!raw) return '';
+    const until = new Date(raw);
+    if (Number.isNaN(until.getTime()) || until.getTime() <= Date.now()) return '';
+    const sameDay = until.toDateString() === new Date().toDateString();
+    return until.toLocaleString([], sameDay
+      ? { hour: '2-digit', minute: '2-digit' }
+      : { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  })();
+
   function validateScheduleForm() {
     if (!scheduleForm) return 'Missing schedule data.';
     if (!scheduleForm.timezone) return 'Please select a timezone.';
@@ -1265,6 +1282,34 @@ export default function DetectionDetailPanel({
           <Toggle on={model.active} onChange={onToggle} disabled={toggleDisabled} />
         </span>
       </div>
+
+      {/* A manual toggle that contradicts the schedule holds only until the
+          schedule would next have changed the state anyway. Without saying so,
+          the camera coming back on by itself later reads as a bug. */}
+      {overrideResumesAt && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 8,
+            marginTop: 10,
+            padding: '9px 12px',
+            borderRadius: 9,
+            border: '1px solid rgba(59,130,246,.28)',
+            background: 'rgba(59,130,246,.09)',
+            fontSize: 11.5,
+            lineHeight: 1.45,
+            color: 'var(--tx2)',
+          }}
+        >
+          <Clock3 size={14} style={{ color: 'var(--blue)', flex: '0 0 auto', marginTop: 1 }} />
+          <span>
+            Set manually, overriding the schedule. The schedule resumes at{' '}
+            <strong style={{ color: 'var(--tx)' }}>{overrideResumesAt}</strong>. Toggle it back to hand
+            control over sooner.
+          </span>
+        </div>
+      )}
 
       {/* Dynamic threshold rows: one slider per key from the API. */}
       {usesThresholds && (

@@ -628,6 +628,11 @@ export default function Detections() {
         thresholds,
         sensitivity: edited.sensitivity ?? firstThreshold ?? m.sensitivity,
         active: cameraScopedActive,
+        // When a schedule governs this detector, a manual toggle wins only
+        // until the schedule would next have changed it. Carry the expiry
+        // through so the panel can say so instead of the hold looking like
+        // the schedule silently failing.
+        overrideUntil: (typeof cameraEntry === 'object' ? cameraEntry?.overrideUntil : null) || null,
       };
     }),
     [edits, typesApi.data, zoneCamera],
