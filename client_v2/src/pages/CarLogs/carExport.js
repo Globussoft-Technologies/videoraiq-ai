@@ -259,7 +259,11 @@ const exportToExcel = async (params) => {
     allLogs.forEach((row, i) => {
       if (row.imageUrl) {
         const cellRef = XLSX.utils.encode_cell({ r: i + 5, c: 9 });
-        worksheet[cellRef] = { t: 'f', f: `HYPERLINK("${row.imageUrl}", "View Image")` };
+        worksheet[cellRef] = {
+          t: 's',
+          v: 'View Image',
+          l: { Target: row.imageUrl, Tooltip: 'Open car image' },
+        };
       }
     });
 
