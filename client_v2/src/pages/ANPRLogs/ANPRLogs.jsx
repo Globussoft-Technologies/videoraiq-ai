@@ -296,6 +296,8 @@ const ANPRLogs = () => {
   // the edit permission — anyone who can see the log can see who it belongs to.
   const onViewUser = useCallback((user) => setViewUser(user), []);
 
+  // The list's Tagged User column is read-only text; its tag/untag buttons
+  // live in the Actions column beside Edit.
   const columns = useMemo(
     () => buildColumns({ onSort, onPreview: openPreview, onEdit, onTagUser, onUntagUser, onViewUser }),
     [onSort, openPreview, onEdit, onTagUser, onUntagUser, onViewUser]

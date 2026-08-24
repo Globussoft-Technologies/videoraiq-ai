@@ -44,6 +44,12 @@
   --brand-hover: #33abed;
   /* Filter/search placeholder highlight — slate tone in dark mode. */
   --ph: #98a2bd;
+  /* Affirmative / destructive action inks. --ok and --crit are one value for
+     both themes, which leaves them too pale to read as an icon on white, so
+     tinted action buttons use these instead: brightened here, darkened in
+     light mode. Both clear 4.5:1 against their own theme's surface. */
+  --ok-ink: #4ade80;
+  --crit-ink: #ff6b6b;
 }
 
 [data-vq-theme='light'] {
@@ -71,6 +77,10 @@
   --brand-hover: #063a55;
   /* Filter/search placeholder highlight — slate tone in light mode. */
   --ph: #52607c;
+  /* See the dark block: deepened here so green and red icons stay legible on
+     a white row. */
+  --ok-ink: #15803d;
+  --crit-ink: #c81e1e;
 }
 
 /* ---- Base element styling scoped to the V2 root ---- */

@@ -14,6 +14,7 @@ import { getDetectionSchedule, updateDetectionSchedule, deleteDetectionSchedule 
 import { useTimezones } from '../ZoneScheduleFields';
 import { thresholdLabel } from './detectionsData';
 import { fetchAlertRecipients, updateDetectionAlerts } from '../DetectionZoneMarking/api/detectionZoneApi';
+import { isOvernightRange, validateScheduleDays } from '../../../../lib/detectionSchedule';
 
 // Detection types are API-driven, so use their stable setting type rather than
 // the category icon. Aliases cover the setting-type variants returned by the
@@ -1032,6 +1033,20 @@ export default function DetectionDetailPanel({
     return false;
   }
 
+  /**
+   * Shares lib/detectionSchedule with the Global Detection Scheduling form and
+   * mirrors the server's Joi rules, so the same schedule is judged identically
+   * wherever it is edited.
+   *
+   * A range whose end is before its start is an overnight range (22:00 -> 08:00
+   * = "until 08:00 tomorrow"), not an error. That matters even here, where each
+   * day holds a single range: an overnight Monday range occupies the start of
+   * Tuesday, so it can still collide with Tuesday's own range — a clash the old
+   * per-range `start >= end` check had no way to see.
+   *
+   * Returns '' (not null) when valid — the callers treat the result as a
+   * truthy-or-not error string.
+   */
   function validateScheduleForm() {
     if (!scheduleForm) return 'Missing schedule data.';
     if (!scheduleForm.timezone) return 'Please select a timezone.';
@@ -1039,13 +1054,9 @@ export default function DetectionDetailPanel({
     const mode = scheduleForm.mode || 'always';
     if (mode === 'custom') {
       const days = ensureDays(scheduleForm.days);
-      const ranges = Object.values(days).flat();
-      if (!ranges.length) return 'Please add at least one active time range.';
+      if (!Object.values(days).flat().length) return 'Please add at least one active time range.';
 
-      for (const { start, end } of ranges) {
-        if (!start || !end) return 'Please fill both start and end times for all ranges.';
-        if (start >= end) return 'Please make sure start time is before end time.';
-      }
+      return validateScheduleDays(days) || '';
     }
 
     return '';
@@ -1641,6 +1652,28 @@ export default function DetectionDetailPanel({
                                     disabled={scheduleLoading}
                                     onChange={(value) => updateInterval(day, 0, 'end', value)}
                                   />
+                                  {/* An end before the start is a valid overnight range, not a
+                                      typo. The stored value stays the one {start, end} the user
+                                      typed — this only names what it means. */}
+                                  {isOvernightRange(ranges[0]) && (
+                                    <span
+                                      title={`Detection runs from ${ranges[0].start} to ${ranges[0].end} the following day`}
+                                      style={{
+                                        flexShrink: 0,
+                                        fontSize: 10,
+                                        fontWeight: 700,
+                                        letterSpacing: '.02em',
+                                        color: 'var(--blue)',
+                                        background: 'rgba(59,130,246,.12)',
+                                        border: '1px solid rgba(59,130,246,.28)',
+                                        borderRadius: 5,
+                                        padding: '2px 6px',
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      next day
+                                    </span>
+                                  )}
                                 </div>
                               )}
                             </div>

@@ -43,15 +43,20 @@ const formatPlate = (value) => {
 };
 
 /**
- * Tagged-user cell/badge. A plate that already belongs to a registered user
- * shows their name; one that doesn't offers Tag User, so an admin can link it
- * at any time. Rows where the detector read no plate at all get neither —
- * there is nothing to tag a user to.
+ * Tagged-user badge for the grid card. A plate that already belongs to a
+ * registered user shows their name beside an Untag button; one that doesn't
+ * offers Tag User, so an admin can link it at any time. Both controls are
+ * labelled pills of the same size, so the card reads as one pair of opposite
+ * actions. Rows where the detector read no plate at all get neither — there
+ * is nothing to tag a user to.
+ *
+ * The list view deliberately uses the read-only TaggedUserText below instead:
+ * its Tagged User column shows who a plate resolves to and nothing more.
  */
 const TaggedUserCell = ({ row, onTagUser, onUntagUser, onViewUser }) => {
   if (row.taggedUser) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] text-[var(--tx)] max-w-[200px]">
+      <span className="inline-flex items-center gap-1.5 text-[12px] text-[var(--tx)] max-w-[230px] min-w-0">
         <UserCheck className="w-3.5 h-3.5 text-[var(--ok)] shrink-0" />
         {/* The name opens the registered user's full details without leaving
             the log. Falls back to plain text where viewing isn't wired up. */}
@@ -75,11 +80,11 @@ const TaggedUserCell = ({ row, onTagUser, onUntagUser, onViewUser }) => {
               e.stopPropagation();
               onUntagUser(row);
             }}
-            className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-[5px] border border-transparent text-[var(--tx3)] hover:text-[var(--crit)] hover:border-[var(--crit)] transition-colors cursor-pointer"
+            className="shrink-0 inline-flex items-center gap-1 text-[11.5px] font-medium px-2 py-1 rounded-[6px] border border-[var(--crit-ink)]/40 bg-[var(--crit-ink)]/12 text-[var(--crit-ink)] hover:bg-[var(--crit-ink)]/22 hover:border-[var(--crit-ink)] transition-colors cursor-pointer"
             title={`Untag ${taggedUserName(row.taggedUser)} from this vehicle`}
-            aria-label="Untag user"
           >
             <UserMinus className="w-3.5 h-3.5" />
+            Untag
           </button>
         )}
       </span>
@@ -93,7 +98,7 @@ const TaggedUserCell = ({ row, onTagUser, onUntagUser, onViewUser }) => {
   return (
     <button
       onClick={() => onTagUser(row)}
-      className="inline-flex items-center gap-1.5 text-[11.5px] font-medium px-2.5 py-1 rounded-[6px] border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] hover:text-[var(--brand)] hover:border-[var(--brand)] transition-colors cursor-pointer"
+      className="inline-flex items-center gap-1.5 text-[11.5px] font-medium px-2.5 py-1 rounded-[6px] border border-[var(--ok-ink)]/40 bg-[var(--ok-ink)]/12 text-[var(--ok-ink)] hover:bg-[var(--ok-ink)]/22 hover:border-[var(--ok-ink)] transition-colors cursor-pointer"
       title="Tag this vehicle number to a registered user"
     >
       <UserPlus className="w-3.5 h-3.5" />
@@ -103,11 +108,98 @@ const TaggedUserCell = ({ row, onTagUser, onUntagUser, onViewUser }) => {
 };
 
 /**
+ * Tagged-user cell for the list view — read-only. Its tag and untag controls
+ * moved to the Actions column, so the column states who a plate resolves to
+ * and nothing more: a name when it belongs to someone, "--" when it doesn't.
+ * The name still opens that user's details, which reads rather than edits.
+ */
+const TaggedUserText = ({ row, onViewUser }) => {
+  if (!row.taggedUser) return <span className={styles.text}>--</span>;
+
+  const name = taggedUserName(row.taggedUser);
+
+  if (typeof onViewUser !== 'function') {
+    return <span className={`${styles.text} block max-w-[200px] truncate`}>{name}</span>;
+  }
+
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onViewUser(row.taggedUser);
+      }}
+      className="block max-w-[200px] truncate text-left text-[12px] text-[var(--tx)] underline decoration-dotted underline-offset-2 hover:text-[var(--brand)] cursor-pointer"
+      title={`View ${name}'s details`}
+    >
+      {name}
+    </button>
+  );
+};
+
+// Action buttons in the list's Actions column share the Edit pencil's
+// square-icon shape. Edit keeps the neutral fill; tag and untag are tinted
+// green and red, because person-plus and person-minus are near-identical
+// glyphs at 16px and colour is what tells a tagged row from an untagged one
+// when you scan the column. The inks are per-theme tokens, so both stay
+// legible on a white row and on a near-black one.
+const actionBtn =
+  'w-8 h-8 flex items-center justify-center rounded-lg border transition-colors cursor-pointer';
+
+const editBtn = `${actionBtn} border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] hover:text-[var(--brand)] hover:border-[var(--brand)]`;
+
+const tagBtn = `${actionBtn} border-[var(--ok-ink)]/40 bg-[var(--ok-ink)]/12 text-[var(--ok-ink)] hover:bg-[var(--ok-ink)]/22 hover:border-[var(--ok-ink)]`;
+
+const untagBtn = `${actionBtn} border-[var(--crit-ink)]/40 bg-[var(--crit-ink)]/12 text-[var(--crit-ink)] hover:bg-[var(--crit-ink)]/22 hover:border-[var(--crit-ink)]`;
+
+/**
+ * Tag / untag control for the list's Actions column. It sits beside Edit
+ * rather than inside the Tagged User column, which stays read-only text — a
+ * tagged plate offers Untag, an untagged one offers Tag, and a row the
+ * detector read no plate from offers neither, since there is nothing to tag.
+ */
+const TagAction = ({ row, onTagUser, onUntagUser }) => {
+  if (row.taggedUser) {
+    if (typeof onUntagUser !== 'function') return null;
+    return (
+      <button
+        onClick={() => onUntagUser(row)}
+        className={untagBtn}
+        title={`Untag ${taggedUserName(row.taggedUser)} from this vehicle`}
+        aria-label="Untag user"
+      >
+        <UserMinus className="w-4 h-4" />
+      </button>
+    );
+  }
+
+  if (typeof onTagUser !== 'function' || !hasReadablePlate(row.vehicleNumber)) return null;
+
+  return (
+    <button
+      onClick={() => onTagUser(row)}
+      className={tagBtn}
+      title="Tag this vehicle number to a registered user"
+      aria-label="Tag user"
+    >
+      <UserPlus className="w-4 h-4" />
+    </button>
+  );
+};
+
+/**
  * Build the ANPR log table columns. `onSort(field)` toggles sort for the
  * sortable headers, `onPreview(url)` opens the incident image modal, and
- * `onTagUser(row)` opens the Tag User dialog for an untagged plate.
+ * `onViewUser(user)` opens a tagged user's details. `onTagUser(row)` /
+ * `onUntagUser(row)` back the Actions column's tag and untag buttons.
  */
-export const buildColumns = ({ onSort, onPreview, onEdit, onTagUser, onUntagUser, onViewUser }) => [
+export const buildColumns = ({
+  onSort,
+  onPreview,
+  onEdit,
+  onTagUser,
+  onUntagUser,
+  onViewUser,
+}) => [
   {
     accessorKey: 'snap',
     header: 'Snap',
@@ -149,14 +241,7 @@ export const buildColumns = ({ onSort, onPreview, onEdit, onTagUser, onUntagUser
   {
     accessorKey: 'taggedUser',
     header: 'Tagged User',
-    cell: ({ row }) => (
-      <TaggedUserCell
-        row={row.original}
-        onTagUser={onTagUser}
-        onUntagUser={onUntagUser}
-        onViewUser={onViewUser}
-      />
-    ),
+    cell: ({ row }) => <TaggedUserText row={row.original} onViewUser={onViewUser} />,
   },
   {
     accessorKey: 'incidentName',
@@ -212,20 +297,31 @@ export const buildColumns = ({ onSort, onPreview, onEdit, onTagUser, onUntagUser
     ),
     cell: ({ row }) => <span className={styles.text}>{formatTime(row.original.createdAt)}</span>,
   },
-  ...(typeof onEdit === 'function'
+  ...(typeof onEdit === 'function' ||
+  typeof onTagUser === 'function' ||
+  typeof onUntagUser === 'function'
     ? [
         {
           accessorKey: 'actions',
           header: 'Actions',
           cell: ({ row }) => (
-            <button
-              onClick={() => onEdit(row.original)}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] hover:text-[var(--brand)] hover:border-[var(--brand)] transition-colors cursor-pointer"
-              title="Edit incident"
-              aria-label="Edit incident"
-            >
-              <Pencil className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              {typeof onEdit === 'function' && (
+                <button
+                  onClick={() => onEdit(row.original)}
+                  className={editBtn}
+                  title="Edit incident"
+                  aria-label="Edit incident"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
+              <TagAction
+                row={row.original}
+                onTagUser={onTagUser}
+                onUntagUser={onUntagUser}
+              />
+            </div>
           ),
         },
       ]

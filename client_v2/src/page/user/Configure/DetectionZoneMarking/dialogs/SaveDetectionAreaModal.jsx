@@ -113,16 +113,19 @@ export default function SaveDetectionAreaModal({
               style={{
                 display: 'flex',
                 gap: 8,
-                alignItems: 'center',
+                alignItems: 'flex-start',
                 padding: '10px',
                 borderRadius: 8,
                 border: '1px solid rgba(245, 158, 11, .45)',
                 background: 'rgba(245, 158, 11, .08)',
               }}
             >
-              <AlertTriangle size={17} color="#f59e0b" style={{ flex: '0 0 auto' }} />
-              <div style={{ minWidth: 0, fontSize: 11.5, lineHeight: 1.35, fontWeight: 800, color: 'var(--tx)', whiteSpace: 'nowrap' }}>
-                Please select Time Zone and Time Range for Telegram alerts.
+              <AlertTriangle size={17} color="#f59e0b" style={{ flex: '0 0 auto', marginTop: 1 }} />
+              {/* No nowrap: the modal is capped at 440px, so this message has to wrap
+                  inside the banner — forcing one line overflows the dialog and gives
+                  the whole thing a horizontal scrollbar. */}
+              <div style={{ minWidth: 0, fontSize: 11.5, lineHeight: 1.35, fontWeight: 800, color: 'var(--tx)' }}>
+                Please select the Telegram channel, Time Zone and Time Range for Telegram alerts.
               </div>
             </div>
           </div>

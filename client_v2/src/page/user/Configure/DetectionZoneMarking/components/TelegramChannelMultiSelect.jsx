@@ -1,12 +1,18 @@
 import { createPortal } from 'react-dom';
 import { ChevronDown, Search, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
+
+/* Same source as the Telegram settings tab (TelegramAlerts.jsx), so the handle
+   quoted in the hint can never drift from the one users are told to add. */
+const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT || '@VideoraIQDEVAlertsbot';
 
 export default function TelegramChannelMultiSelect({
   value = [],
   options = [],
   onChange,
   disabled = false,
+  onDisabledClick,
   placeholder = 'Select Telegram channels',
   noOptionsLabel = 'No Telegram channel connected',
   error = false,
@@ -99,13 +105,34 @@ export default function TelegramChannelMultiSelect({
   const selectAll = () => updateValues(options.map((option) => option.value));
   const clearAll = () => updateValues([]);
 
+  /* A natively `disabled` button swallows clicks outright, so the control could
+     never explain why it is unavailable. Keep it enabled, mark it aria-disabled
+     for assistive tech, and answer the click with the steps to connect a channel.
+     The toast carries a fixed id so repeated clicks replace rather than stack. */
+  const handleTriggerClick = () => {
+    if (!disabled) {
+      setOpen((current) => !current);
+      return;
+    }
+    if (onDisabledClick) {
+      onDisabledClick();
+      return;
+    }
+    toast.info('No Telegram channel connected', {
+      id: 'telegram-no-channel',
+      duration: 9000,
+      description:
+        'Open Alert Recipients and switch to the Telegram tab and connect your Telegram channel'
+    });
+  };
+
   return (
     <div style={{ position: 'relative', width: '100%' }}>
       <button
         ref={triggerRef}
         type="button"
-        disabled={disabled}
-        onClick={() => !disabled && setOpen((current) => !current)}
+        aria-disabled={disabled || undefined}
+        onClick={handleTriggerClick}
         style={{
           width: '100%',
           minHeight: 36,

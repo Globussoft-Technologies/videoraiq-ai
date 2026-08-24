@@ -27,6 +27,7 @@ import {
   globalScheduleErrorMessage,
   updateGlobalSchedule,
 } from '../../../helpers/globalSchedule';
+import { isOvernightRange, validateScheduleDays } from '../../../lib/detectionSchedule';
 
 /**
  * Global Detection Scheduling — Settings section.
@@ -83,40 +84,26 @@ function toTime24(hour, minute, period) {
   return `${String(hours).padStart(2, '0')}:${minute}`;
 }
 
-const toMinutes = (time) => {
-  const [hours, minutes] = String(time || '').split(':').map(Number);
-  return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : NaN;
-};
-
 /**
  * Mirrors the server's Joi rules so an obvious mistake is caught before a round
  * trip. The server stays the authority — anything this misses still surfaces as
  * a toast from the API response.
+ *
+ * The rules themselves live in lib/detectionSchedule so this form, the
+ * per-camera schedule editor, and the server's validator cannot drift apart —
+ * which is how an overnight range ends up accepted in one place and rejected in
+ * another. Overnight ranges (22:00 -> 08:00) are valid and are checked against
+ * the following day too; only the "did the user pick any cameras" part is local.
  */
 const validateForm = (form, cameraCount) => {
   if (!cameraCount) return 'Select at least one configured camera to schedule.';
   if (form.mode === 'always') return null;
   if (!form.timezone) return 'Select a time zone.';
 
-  let total = 0;
-  for (const day of DAYS) {
-    const ranges = form.days?.[day] || [];
-    const sorted = [...ranges].sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
+  const scheduleError = validateScheduleDays(form.days || {});
+  if (scheduleError) return scheduleError;
 
-    for (let i = 0; i < sorted.length; i += 1) {
-      const { start, end } = sorted[i];
-      total += 1;
-      if (!start || !end) return `${titleCase(day)}: fill in both start and end times.`;
-      if (toMinutes(start) >= toMinutes(end)) {
-        return `${titleCase(day)}: start time must be before end time.`;
-      }
-      const next = sorted[i + 1];
-      if (next && toMinutes(end) > toMinutes(next.start)) {
-        return `${titleCase(day)}: time ranges cannot overlap.`;
-      }
-    }
-  }
-
+  const total = DAYS.reduce((count, day) => count + (form.days?.[day]?.length || 0), 0);
   if (!total) return 'Custom mode needs at least one time range.';
   return null;
 };
@@ -327,132 +314,132 @@ function friendlyDsFailureMessage(event) {
  * the endpoint it hit and what DS replied — the quickest way to confirm the
  * scheduler is actually firing, and to see the response when it is not.
  */
-function SchedulerActivity({ events, onClear }) {
-  const [openKey, setOpenKey] = useState(null);
+// function SchedulerActivity({ events, onClear }) {
+//   const [openKey, setOpenKey] = useState(null);
 
-  return (
-    <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--bd)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>
-            Scheduler activity {events.length ? `(${events.length})` : ''}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
-            Live DS start/stop calls. Click a row to see details.
-          </div>
-        </div>
-        {events.length > 0 && (
-          <button
-            type="button"
-            onClick={onClear}
-            style={{
-              border: '1px solid var(--bd)',
-              background: 'transparent',
-              color: 'var(--tx2)',
-              borderRadius: 8,
-              padding: '5px 10px',
-              fontSize: 11,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Clear
-          </button>
-        )}
-      </div>
+//   return (
+//     <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--bd)' }}>
+//       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+//         <div>
+//           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--tx)' }}>
+//             Scheduler activity {events.length ? `(${events.length})` : ''}
+//           </div>
+//           <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
+//             Live DS start/stop calls. Click a row to see details.
+//           </div>
+//         </div>
+//         {events.length > 0 && (
+//           <button
+//             type="button"
+//             onClick={onClear}
+//             style={{
+//               border: '1px solid var(--bd)',
+//               background: 'transparent',
+//               color: 'var(--tx2)',
+//               borderRadius: 8,
+//               padding: '5px 10px',
+//               fontSize: 11,
+//               fontWeight: 600,
+//               cursor: 'pointer',
+//             }}
+//           >
+//             Clear
+//           </button>
+//         )}
+//       </div>
 
-      {events.length === 0 ? (
-        <div style={{ fontSize: 11.5, color: 'var(--tx3)', padding: '8px 0' }}>
-          Nothing yet. A transition appears here the moment the scheduler starts or stops a detection — within about a
-          minute of a schedule boundary.
-        </div>
-      ) : (
-        <div className="customscrollbar" style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}>
-          {events.map((event) => {
-            const failed = event.status === 'failed';
-            const open = openKey === event.key;
-            return (
-              <div
-                key={event.key}
-                style={{
-                  flexShrink: 0,
-                  borderRadius: 9,
-                  border: `1px solid ${failed ? 'rgba(239,68,68,.35)' : 'var(--bd)'}`,
-                  background: failed ? 'rgba(239,68,68,.06)' : 'var(--bg2)',
-                  overflow: 'hidden',
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setOpenKey(open ? null : event.key)}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '7px 10px',
-                    background: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 9.5,
-                      fontWeight: 700,
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      flexShrink: 0,
-                      background: failed
-                        ? 'rgba(239,68,68,.15)'
-                        : event.enabled
-                          ? 'rgba(34,197,94,.14)'
-                          : 'rgba(148,163,184,.18)',
-                      color: failed ? '#dc2626' : event.enabled ? '#16a34a' : 'var(--tx3)',
-                    }}
-                  >
-                    {failed ? 'FAILED' : (event.operation || '').toUpperCase()}
-                  </span>
-                  <span style={{ fontSize: 11.5, color: 'var(--tx)', fontWeight: 600, minWidth: 0, flex: 1 }}>
-                    {event.channelName}
-                    <span style={{ color: 'var(--tx3)', fontWeight: 400 }}> · {event.detectionName}</span>
-                  </span>
-                  <span style={{ fontSize: 10, color: 'var(--tx3)', fontFamily: 'var(--mono)', flexShrink: 0 }}>
-                    {new Date(event.at).toLocaleTimeString()}
-                  </span>
-                </button>
+//       {events.length === 0 ? (
+//         <div style={{ fontSize: 11.5, color: 'var(--tx3)', padding: '8px 0' }}>
+//           Nothing yet. A transition appears here the moment the scheduler starts or stops a detection — within about a
+//           minute of a schedule boundary.
+//         </div>
+//       ) : (
+//         <div className="customscrollbar" style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}>
+//           {events.map((event) => {
+//             const failed = event.status === 'failed';
+//             const open = openKey === event.key;
+//             return (
+//               <div
+//                 key={event.key}
+//                 style={{
+//                   flexShrink: 0,
+//                   borderRadius: 9,
+//                   border: `1px solid ${failed ? 'rgba(239,68,68,.35)' : 'var(--bd)'}`,
+//                   background: failed ? 'rgba(239,68,68,.06)' : 'var(--bg2)',
+//                   overflow: 'hidden',
+//                 }}
+//               >
+//                 <button
+//                   type="button"
+//                   onClick={() => setOpenKey(open ? null : event.key)}
+//                   style={{
+//                     width: '100%',
+//                     display: 'flex',
+//                     alignItems: 'center',
+//                     gap: 8,
+//                     padding: '7px 10px',
+//                     background: 'transparent',
+//                     border: 'none',
+//                     cursor: 'pointer',
+//                     textAlign: 'left',
+//                   }}
+//                 >
+//                   <span
+//                     style={{
+//                       fontSize: 9.5,
+//                       fontWeight: 700,
+//                       padding: '2px 6px',
+//                       borderRadius: 4,
+//                       flexShrink: 0,
+//                       background: failed
+//                         ? 'rgba(239,68,68,.15)'
+//                         : event.enabled
+//                           ? 'rgba(34,197,94,.14)'
+//                           : 'rgba(148,163,184,.18)',
+//                       color: failed ? '#dc2626' : event.enabled ? '#16a34a' : 'var(--tx3)',
+//                     }}
+//                   >
+//                     {failed ? 'FAILED' : (event.operation || '').toUpperCase()}
+//                   </span>
+//                   <span style={{ fontSize: 11.5, color: 'var(--tx)', fontWeight: 600, minWidth: 0, flex: 1 }}>
+//                     {event.channelName}
+//                     <span style={{ color: 'var(--tx3)', fontWeight: 400 }}> · {event.detectionName}</span>
+//                   </span>
+//                   <span style={{ fontSize: 10, color: 'var(--tx3)', fontFamily: 'var(--mono)', flexShrink: 0 }}>
+//                     {new Date(event.at).toLocaleTimeString()}
+//                   </span>
+//                 </button>
 
-                {open && (
-                  <div style={{ padding: '0 10px 9px', fontSize: 10.5, color: 'var(--tx2)' }}>
-                    {failed && (
-                      <div
-                        className="customscrollbar"
-                        style={{
-                          padding: '8px 10px',
-                          borderRadius: 7,
-                          background: 'rgba(239,68,68,.08)',
-                          border: '1px solid rgba(239,68,68,.22)',
-                          fontSize: 11,
-                          lineHeight: 1.5,
-                          color: 'var(--tx)',
-                          maxHeight: 120,
-                          overflowY: 'auto',
-                        }}
-                      >
-                        {friendlyDsFailureMessage(event)}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
+//                 {open && (
+//                   <div style={{ padding: '0 10px 9px', fontSize: 10.5, color: 'var(--tx2)' }}>
+//                     {failed && (
+//                       <div
+//                         className="customscrollbar"
+//                         style={{
+//                           padding: '8px 10px',
+//                           borderRadius: 7,
+//                           background: 'rgba(239,68,68,.08)',
+//                           border: '1px solid rgba(239,68,68,.22)',
+//                           fontSize: 11,
+//                           lineHeight: 1.5,
+//                           color: 'var(--tx)',
+//                           maxHeight: 120,
+//                           overflowY: 'auto',
+//                         }}
+//                       >
+//                         {friendlyDsFailureMessage(event)}
+//                       </div>
+//                     )}
+//                   </div>
+//                 )}
+//               </div>
+//             );
+//           })}
+//         </div>
+//       )}
+//     </div>
+//   );
+// }
 
 const TIME_INPUT_STYLE = {
   border: '1px solid var(--bd2, var(--bd))',
@@ -1664,6 +1651,28 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
                                   disabled={!canEdit}
                                   onChange={(value) => updateRange(day, index, 'end', value)}
                                 />
+                                {/* An end earlier than the start is a valid overnight range, not a
+                                    typo. Saying so inline is what stops it reading as a mistake —
+                                    the stored range stays the single {start, end} the user picked. */}
+                                {isOvernightRange(range) && (
+                                  <span
+                                    title={`Detection runs from ${range.start} to ${range.end} the following day`}
+                                    style={{
+                                      flexShrink: 0,
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      letterSpacing: '.02em',
+                                      color: 'var(--blue)',
+                                      background: 'rgba(59,130,246,.12)',
+                                      border: '1px solid rgba(59,130,246,.28)',
+                                      borderRadius: 5,
+                                      padding: '2px 6px',
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    next day
+                                  </span>
+                                )}
                                 {canEdit && (
                                   <button
                                     type="button"
@@ -1782,7 +1791,7 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
         </>
       )}
 
-      <SchedulerActivity events={scheduleEvents} onClear={clearScheduleEvents} />
+      {/* <SchedulerActivity events={scheduleEvents} onClear={clearScheduleEvents} /> */}
     </Panel>
   );
 }
