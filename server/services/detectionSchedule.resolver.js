@@ -1,5 +1,9 @@
 import GlobalSchedule from "../core/v1/globalSchedule/globalSchedule.model.js";
 import logger from "../utils/logger.js";
+import {
+  isValidTimezone,
+  isWithinScheduleDays,
+} from "../utils/scheduleWindows.js";
 
 /**
  * Shared detection-schedule resolution.
@@ -15,8 +19,11 @@ import logger from "../utils/logger.js";
  *   3. Neither -> undefined, which isScheduleActiveNow treats as "always"
  *      (the pre-existing default; unchanged behaviour)
  *
- * isScheduleActiveNow and its two helpers were moved here verbatim from the v1
- * and v2 detectionSettings services, where they were byte-identical copies.
+ * isScheduleActiveNow and its helpers were moved here from the v1 and v2
+ * detectionSettings services, where they were byte-identical copies. Window
+ * coverage now lives one level further down in utils/scheduleWindows.js, shared
+ * with the Joi validators so a schedule can never validate under one rule and
+ * be evaluated under another.
  */
 
 export const DEFAULT_SCHEDULE_TIMEZONE = "Asia/Kolkata";
@@ -27,14 +34,28 @@ export const SCHEDULE_SOURCE = {
   DEFAULT: "default",
 };
 
-const timeToMinutes = (time) => {
-  const [hours, minutes] = time.split(":").map(Number);
-  return hours * 60 + minutes;
-};
-
+/**
+ * Project this instant into the schedule's zone and read off the local weekday
+ * and minute-of-day. Intl does the IANA lookup, so DST transitions are handled
+ * by the runtime rather than by an offset we would have to maintain.
+ *
+ * A zone the runtime rejects would otherwise throw a RangeError out of the
+ * one-minute runner and abort the whole tick for every camera. Rows predating
+ * timezone validation can still hold one, so fall back to the default and say
+ * so rather than taking the sweep down.
+ */
 const getNowInScheduleTimezone = (timezone) => {
+  let zone = timezone;
+  if (!isValidTimezone(zone)) {
+    logger.error(
+      `[DETECTION_SCHEDULE] Unusable schedule timezone "${timezone}" - ` +
+        `falling back to ${DEFAULT_SCHEDULE_TIMEZONE}`,
+    );
+    zone = DEFAULT_SCHEDULE_TIMEZONE;
+  }
+
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
+    timeZone: zone,
     weekday: "long",
     hour: "2-digit",
     minute: "2-digit",
@@ -52,6 +73,12 @@ const getNowInScheduleTimezone = (timezone) => {
 /**
  * True when `schedule` says detection should be running at this instant.
  * No schedule, or mode "always", means always on.
+ *
+ * Coverage is delegated to isWithinScheduleDays, which reads the day's own
+ * windows AND the previous day's overnight windows. That second half is what
+ * makes "Monday 22:00 -> 08:00" stay on through Tuesday 07:59: the minutes
+ * after midnight belong to Tuesday's timeline but were configured on Monday.
+ * Normal windows evaluate exactly as they always did.
  */
 export const isScheduleActiveNow = (schedule) => {
   if (!schedule || schedule.mode === "always") return true;
@@ -60,13 +87,8 @@ export const isScheduleActiveNow = (schedule) => {
   const { day, minutes } = getNowInScheduleTimezone(
     schedule.timezone || DEFAULT_SCHEDULE_TIMEZONE,
   );
-  const windows = schedule.days?.[day] || [];
 
-  return windows.some(
-    (window) =>
-      minutes >= timeToMinutes(window.start) &&
-      minutes < timeToMinutes(window.end),
-  );
+  return isWithinScheduleDays(schedule.days, day, minutes);
 };
 
 /** nvrId may arrive populated (a document) or raw (an ObjectId). */

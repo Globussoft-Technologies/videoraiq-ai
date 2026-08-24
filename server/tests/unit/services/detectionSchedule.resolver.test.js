@@ -187,6 +187,168 @@ describe("isScheduleActiveNow — extracted verbatim from v1/v2", () => {
   });
 });
 
+/**
+ * Overnight ranges through the real evaluator, i.e. with a clock and a
+ * timezone rather than the pure (day, minutes) inputs covered in
+ * tests/unit/utils/scheduleWindows.test.js.
+ */
+describe("isScheduleActiveNow — overnight ranges", () => {
+  const overnight = (timezone = "Asia/Kolkata") => ({
+    mode: "custom",
+    timezone,
+    days: { wednesday: [{ start: "22:00", end: "08:00" }] },
+  });
+
+  /** Pin the clock to a wall-clock time on Thursday 2026-08-13 in Kolkata. */
+  const atKolkataThursday = (hhmm) => {
+    const [hour, minute] = hhmm.split(":").map(Number);
+    vi.setSystemTime(new Date(Date.UTC(2026, 7, 13, hour - 5, minute - 30, 0)));
+  };
+
+  it("is off before the window opens", () => {
+    atKolkata("21:59");
+    expect(isScheduleActiveNow(overnight())).toBe(false);
+  });
+
+  it("turns on at the start and stays on to midnight", () => {
+    atKolkata("22:00");
+    expect(isScheduleActiveNow(overnight())).toBe(true);
+    atKolkata("23:59");
+    expect(isScheduleActiveNow(overnight())).toBe(true);
+  });
+
+  it("stays on past midnight, on a day with no window of its own", () => {
+    // Thursday is empty in this schedule; these minutes belong to Wednesday's
+    // range. Before overnight support this returned false.
+    atKolkataThursday("00:00");
+    expect(isScheduleActiveNow(overnight())).toBe(true);
+    atKolkataThursday("07:59");
+    expect(isScheduleActiveNow(overnight())).toBe(true);
+  });
+
+  it("turns off at the end time on the following day", () => {
+    atKolkataThursday("08:00");
+    expect(isScheduleActiveNow(overnight())).toBe(false);
+    atKolkataThursday("12:00");
+    expect(isScheduleActiveNow(overnight())).toBe(false);
+  });
+
+  it("combines a normal and an overnight range on the same day", () => {
+    const mixed = {
+      mode: "custom",
+      timezone: "Asia/Kolkata",
+      days: {
+        wednesday: [
+          { start: "09:00", end: "12:00" },
+          { start: "22:00", end: "08:00" },
+        ],
+      },
+    };
+
+    atKolkata("10:00");
+    expect(isScheduleActiveNow(mixed)).toBe(true);
+    atKolkata("13:00");
+    expect(isScheduleActiveNow(mixed)).toBe(false);
+    atKolkata("23:00");
+    expect(isScheduleActiveNow(mixed)).toBe(true);
+    atKolkataThursday("03:00");
+    expect(isScheduleActiveNow(mixed)).toBe(true);
+  });
+
+  it("does not treat start === end as a 24-hour window", () => {
+    const zeroLength = {
+      mode: "custom",
+      timezone: "Asia/Kolkata",
+      days: { wednesday: [{ start: "09:00", end: "09:00" }] },
+    };
+
+    atKolkata("09:00");
+    expect(isScheduleActiveNow(zeroLength)).toBe(false);
+    atKolkata("15:00");
+    expect(isScheduleActiveNow(zeroLength)).toBe(false);
+  });
+});
+
+describe("isScheduleActiveNow — overnight ranges across timezones", () => {
+  const wednesdayNight = (timezone) => ({
+    mode: "custom",
+    timezone,
+    days: { wednesday: [{ start: "22:00", end: "08:00" }] },
+  });
+
+  it("evaluates one instant differently per zone", () => {
+    // 18:00Z on Wed 2026-08-12 is Wed 23:30 in Kolkata (inside the window) but
+    // Wed 18:00 in UTC (outside it). Same moment, two verdicts.
+    vi.setSystemTime(new Date(Date.UTC(2026, 7, 12, 18, 0, 0)));
+    expect(isScheduleActiveNow(wednesdayNight("Asia/Kolkata"))).toBe(true);
+    expect(isScheduleActiveNow(wednesdayNight("UTC"))).toBe(false);
+  });
+
+  it("works in UTC itself", () => {
+    vi.setSystemTime(new Date(Date.UTC(2026, 7, 12, 23, 0, 0))); // Wed 23:00 UTC
+    expect(isScheduleActiveNow(wednesdayNight("UTC"))).toBe(true);
+    vi.setSystemTime(new Date(Date.UTC(2026, 7, 13, 3, 0, 0))); // Thu 03:00 UTC
+    expect(isScheduleActiveNow(wednesdayNight("UTC"))).toBe(true);
+    vi.setSystemTime(new Date(Date.UTC(2026, 7, 13, 8, 0, 0))); // Thu 08:00 UTC
+    expect(isScheduleActiveNow(wednesdayNight("UTC"))).toBe(false);
+  });
+
+  /**
+   * DST. The offset changes underneath an overnight range, so anything built
+   * on a fixed offset breaks here; Intl resolves the zone per instant, so the
+   * wall-clock intent ("22:00 to 08:00, local") survives the transition.
+   */
+  describe("America/New_York across both 2026 DST transitions", () => {
+    const saturdayNight = {
+      mode: "custom",
+      timezone: "America/New_York",
+      days: { saturday: [{ start: "22:00", end: "08:00" }] },
+    };
+
+    it("survives clocks going forward (Sun 2026-03-08, 02:00 EST -> 03:00 EDT)", () => {
+      // Sat 22:30 EST — window open, offset still -5.
+      vi.setSystemTime(new Date("2026-03-08T03:30:00Z"));
+      expect(isScheduleActiveNow(saturdayNight)).toBe(true);
+
+      // Sun 05:00 EDT — after the jump, offset now -4, still inside.
+      vi.setSystemTime(new Date("2026-03-08T09:00:00Z"));
+      expect(isScheduleActiveNow(saturdayNight)).toBe(true);
+
+      // Sun 08:00 EDT — closes on local wall-clock, not on elapsed hours.
+      vi.setSystemTime(new Date("2026-03-08T12:00:00Z"));
+      expect(isScheduleActiveNow(saturdayNight)).toBe(false);
+    });
+
+    it("survives clocks going back (Sun 2026-11-01, 02:00 EDT -> 01:00 EST)", () => {
+      // Sat 19:30 EDT — before the window opens.
+      vi.setSystemTime(new Date("2026-10-31T23:30:00Z"));
+      expect(isScheduleActiveNow(saturdayNight)).toBe(false);
+
+      // Sun 06:00 EST — after the repeated hour, still inside.
+      vi.setSystemTime(new Date("2026-11-01T11:00:00Z"));
+      expect(isScheduleActiveNow(saturdayNight)).toBe(true);
+
+      // Sun 08:00 EST — closed.
+      vi.setSystemTime(new Date("2026-11-01T13:00:00Z"));
+      expect(isScheduleActiveNow(saturdayNight)).toBe(false);
+    });
+  });
+
+  it("falls back to the default zone instead of throwing on an unusable one", () => {
+    // Rows predating timezone validation may hold a zone Intl rejects. That
+    // must not take the one-minute runner's whole sweep down with a RangeError.
+    const broken = {
+      mode: "custom",
+      timezone: "Mars/Olympus",
+      days: { wednesday: [{ start: "22:00", end: "08:00" }] },
+    };
+
+    atKolkata("23:00"); // 23:00 in the Asia/Kolkata fallback
+    expect(() => isScheduleActiveNow(broken)).not.toThrow();
+    expect(isScheduleActiveNow(broken)).toBe(true);
+  });
+});
+
 describe("resolveEffectiveSchedule — the priority rule", () => {
   it("prefers the global schedule when one applies", () => {
     const result = resolveEffectiveSchedule({

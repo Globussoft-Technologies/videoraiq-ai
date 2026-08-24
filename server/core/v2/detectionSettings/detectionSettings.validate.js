@@ -1,57 +1,52 @@
 import Joi from "joi";
+import {
+  WEEKDAYS as weekdays,
+  findScheduleConflict,
+  hasAnyWindow,
+  isValidTimezone,
+} from "../../../utils/scheduleWindows.js";
 
-const weekdays = [
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-  "sunday",
-];
-
-const timeToMinutes = (time) => {
-  const [hours, minutes] = time.split(":").map(Number);
-  return hours * 60 + minutes;
-};
-
+/**
+ * Window rules now live in utils/scheduleWindows.js, shared with the runtime
+ * evaluator (services/detectionSchedule.resolver.js) and re-exported to the
+ * NVR-level global schedule. Keeping one implementation is what guarantees a
+ * schedule cannot pass validation under one set of rules and then be evaluated
+ * under another - the exact way an overnight range used to be accepted by the
+ * UI and silently ignored by the scheduler.
+ *
+ * What changed for callers: a window whose end is before its start is no longer
+ * an error, it is an overnight range (22:00 -> 08:00 = "until 08:00 tomorrow").
+ * start === end stays rejected, so nobody gets a 24-hour window by accident.
+ * Overlap detection now accounts for the minutes an overnight range occupies on
+ * the following day. Normal same-day windows validate exactly as before,
+ * touching boundaries included.
+ */
 const validateScheduleWindows = (value, helpers) => {
   if (value.mode !== "custom") return value;
 
   const days = value.days || {};
-  let hasWindow = false;
 
-  for (const day of weekdays) {
-    const windows = days[day] || [];
-    const sorted = windows
-      .map((window) => ({
-        ...window,
-        startMinutes: timeToMinutes(window.start),
-        endMinutes: timeToMinutes(window.end),
-      }))
-      .sort((a, b) => a.startMinutes - b.startMinutes);
-
-    for (let index = 0; index < sorted.length; index += 1) {
-      const current = sorted[index];
-      hasWindow = true;
-
-      if (current.startMinutes >= current.endMinutes) {
-        return helpers.message(`${day} schedule start must be before end`);
-      }
-
-      const next = sorted[index + 1];
-      if (next && current.endMinutes > next.startMinutes) {
-        return helpers.message(`${day} schedule windows cannot overlap`);
-      }
-    }
-  }
-
-  if (!hasWindow) {
+  if (!hasAnyWindow(days)) {
     return helpers.message("Custom schedule must include at least one time window");
   }
 
+  const conflict = findScheduleConflict(days);
+  if (conflict) return helpers.message(conflict.message);
+
   return value;
 };
+
+/**
+ * A zone the runtime cannot resolve must not reach storage: the one-minute
+ * schedule runner projects every schedule through Intl, which throws a
+ * RangeError on an unknown zone. Probing the runtime (rather than matching a
+ * hardcoded list) accepts the same aliases admin.service.js updateTimezone
+ * does, so "Asia/Calcutta" keeps working wherever the ICU build knows it.
+ */
+const ianaTimezone = (value, helpers) =>
+  isValidTimezone(value)
+    ? value
+    : helpers.message(`${value} is not a valid IANA timezone`);
 
 const timeWindowSchema = Joi.object({
   start: Joi.string()
@@ -76,8 +71,10 @@ export const scheduleSchema = Joi.object({
   mode: Joi.string().valid("always", "custom").required(),
   timezone: Joi.when("mode", {
     is: "custom",
-    then: Joi.string().trim().required(),
-    otherwise: Joi.string().trim().allow(null, "").optional(),
+    // .allow(null, "") short-circuits Joi's rule chain, so in "always" mode an
+    // absent zone still skips the probe below - only a real string is checked.
+    then: Joi.string().trim().required().custom(ianaTimezone),
+    otherwise: Joi.string().trim().allow(null, "").optional().custom(ianaTimezone),
   }),
   days: Joi.when("mode", {
     is: "custom",

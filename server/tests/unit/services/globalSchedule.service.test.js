@@ -403,13 +403,77 @@ describe("createGlobalSchedule", () => {
         },
       ],
       [
-        "end before start",
+        // end < start is now an overnight range, not an error. What is still
+        // rejected is a zero-length window - the case that would otherwise be
+        // silently reinterpreted as "all day".
+        "zero-length window",
         {
           nvrId: NVR_ID,
           schedule: {
             mode: "custom",
             timezone: "Asia/Kolkata",
-            days: { monday: [{ start: "18:00", end: "09:00" }] },
+            days: { monday: [{ start: "09:00", end: "09:00" }] },
+          },
+        },
+      ],
+      [
+        // The overnight range's Monday half (22:00-24:00) collides with an
+        // existing Monday window.
+        "overnight window overlapping the same day",
+        {
+          nvrId: NVR_ID,
+          schedule: {
+            mode: "custom",
+            timezone: "Asia/Kolkata",
+            days: {
+              monday: [
+                { start: "18:00", end: "23:00" },
+                { start: "22:00", end: "08:00" },
+              ],
+            },
+          },
+        },
+      ],
+      [
+        // ...and its Tuesday half (00:00-08:00) collides with Tuesday's own
+        // window. Catching this is the whole point of expanding segments
+        // across the day boundary.
+        "overnight window overlapping the next day",
+        {
+          nvrId: NVR_ID,
+          schedule: {
+            mode: "custom",
+            timezone: "Asia/Kolkata",
+            days: {
+              monday: [{ start: "22:00", end: "08:00" }],
+              tuesday: [{ start: "06:00", end: "10:00" }],
+            },
+          },
+        },
+      ],
+      [
+        // Sunday's spill lands on Monday - the week wraps.
+        "overnight window wrapping Sunday into Monday",
+        {
+          nvrId: NVR_ID,
+          schedule: {
+            mode: "custom",
+            timezone: "Asia/Kolkata",
+            days: {
+              sunday: [{ start: "22:00", end: "08:00" }],
+              monday: [{ start: "07:00", end: "09:00" }],
+            },
+          },
+        },
+      ],
+      [
+        "timezone the runtime cannot resolve",
+        {
+          nvrId: NVR_ID,
+          schedule: {
+            mode: "custom",
+            timezone: "Mars/Olympus",
+            days: { monday: [{ start: "09:00", end: "18:00" }] },
           },
         },
       ],
@@ -463,6 +527,56 @@ describe("createGlobalSchedule", () => {
 
       expect(res.statusCode).toBe(201);
     });
+
+    const acceptCases = [
+      [
+        "a plain overnight range",
+        { monday: [{ start: "22:00", end: "08:00" }] },
+      ],
+      [
+        "a normal and an overnight range on the same day",
+        {
+          monday: [
+            { start: "09:00", end: "12:00" },
+            { start: "22:00", end: "08:00" },
+          ],
+        },
+      ],
+      [
+        // The overnight half ends exactly where Tuesday's window starts.
+        // Windows are half-open, so touching is not overlapping - the same
+        // boundary rule normal windows have always used.
+        "an overnight range touching the next day's window",
+        {
+          monday: [{ start: "22:00", end: "08:00" }],
+          tuesday: [{ start: "08:00", end: "17:00" }],
+        },
+      ],
+      [
+        "consecutive overnight ranges on consecutive days",
+        {
+          monday: [{ start: "22:00", end: "06:00" }],
+          tuesday: [{ start: "22:00", end: "06:00" }],
+        },
+      ],
+    ];
+
+    for (const [name, days] of acceptCases) {
+      it(`accepts: ${name}`, async () => {
+        const res = makeRes();
+        await service.createGlobalSchedule(
+          makeReq({
+            body: {
+              ...validBody,
+              schedule: { mode: "custom", timezone: "Asia/Kolkata", days },
+            },
+          }),
+          res,
+        );
+
+        expect(res.statusCode).toBe(201);
+      });
+    }
 
     it("accepts mode 'always' without days", async () => {
       const res = makeRes();

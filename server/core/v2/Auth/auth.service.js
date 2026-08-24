@@ -760,6 +760,48 @@ return bypassUsers.find(
          );
       }
 
+      // ✅ Backfill the autoEmailReports module for permission configs seeded
+      // before that module existed. Defaults follow the same shape as the role
+      // presets below: admin gets everything, write everything but delete, read
+      // view-only, and any custom role starts all-false. Only fills when the key
+      // is absent, so an admin's own later change to it is never overwritten.
+      // Guarded so it can never block login.
+      try {
+        if (adminData?._id) {
+          const autoEmailReportDefaults = {
+            adminPermission: adminConfig.autoEmailReports,
+            writePermission: writeConfig.autoEmailReports,
+            readPermission: readConfig.autoEmailReports,
+          };
+
+          const stalePermissions = await permissionModel.find({
+            adminId: adminData._id,
+            "permissionConfig.autoEmailReports": { $exists: false },
+          });
+
+          for (const perm of stalePermissions) {
+            if (!perm.permissionConfig) continue;
+            perm.permissionConfig.autoEmailReports = {
+              ...(autoEmailReportDefaults[perm.permissionName] ||
+                completeConfig.autoEmailReports),
+            };
+            perm.markModified("permissionConfig");
+            await perm.save();
+          }
+
+          if (stalePermissions.length) {
+            logger.info(
+              `Backfilled autoEmailReports permissions for ${stalePermissions.length} config(s) of admin ${adminData._id}`,
+            );
+          }
+        }
+      } catch (err) {
+        logger.error(
+          "Error backfilling autoEmailReports permissions:",
+          err?.message,
+        );
+      }
+
       // Plan is active here. If this admin's streams were previously stopped due
       // to expiry, resume them (fire-and-forget) and clear the flag. Only fires on
       // the expired -> active transition, not on every active login. Guarded so it
