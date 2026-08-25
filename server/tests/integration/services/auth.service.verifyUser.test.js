@@ -53,7 +53,10 @@ beforeEach(async () => {
 });
 
 /** Build the standard set of (URL, response) handlers verifyUser drives. */
-function wireFetchHappy({ subscriptions = { plan_main: "2099-12-31" } } = {}) {
+function wireFetchHappy({
+  subscriptions = { plan_main: "2099-12-31" },
+  user = {},
+} = {}) {
   fetchMock.mockImplementation(async (url) => {
     if (url.includes("/check-access/by-login-pass")) {
       return {
@@ -66,6 +69,7 @@ function wireFetchHappy({ subscriptions = { plan_main: "2099-12-31" } } = {}) {
           name_f: "Alice",
           name_l: "A",
           subscriptions,
+          ...user,
         }),
       };
     }
@@ -126,6 +130,46 @@ describe("AUTHService.verifyUser — happy path", () => {
     const config = await dashboardSidebarModel.findOne({ adminId: admin._id });
     expect(config).not.toBeNull();
     expect(Array.isArray(config.detectionConfigs)).toBe(true);
+  });
+
+  it("synchronizes mutable aMember profile fields by stable user_id", async () => {
+    wireFetchHappy();
+    let ctx = authCtx();
+    await AUTHService.verifyUser(ctx.req, ctx.res);
+    expect(ctx.res.statusCode).toBe(200);
+
+    const original = await Admin.findOne({ user_id: "42" });
+    const originalId = original._id.toString();
+
+    wireFetchHappy({
+      user: {
+        login: "alice-renamed",
+        email: "alice.new@test.com",
+        name_f: "Alicia",
+        name_l: "Updated",
+      },
+    });
+    ctx = authCtx();
+    ctx.req.body.login = "alice-renamed";
+    await AUTHService.verifyUser(ctx.req, ctx.res);
+
+    expect(ctx.res.statusCode).toBe(200);
+    expect(ctx.res._body.user).toMatchObject({
+      login: "alice-renamed",
+      user_email: "alice.new@test.com",
+      name_f: "Alicia",
+      name_l: "Updated",
+    });
+
+    const synchronized = await Admin.findOne({ user_id: "42" });
+    expect(synchronized._id.toString()).toBe(originalId);
+    expect(synchronized).toMatchObject({
+      login: "alice-renamed",
+      email: "alice.new@test.com",
+      name_f: "Alicia",
+      name_l: "Updated",
+    });
+    expect(await Admin.countDocuments({ user_id: "42" })).toBe(1);
   });
 
   // NOTE: #106 — axios import was added; now testing the plan-expired

@@ -579,11 +579,10 @@ return bypassUsers.find(
           // Register admin license for bypass users only (non-blocking)
           if (bypassUser) {
             let adminData = await adminModel.findOne({
-              email: userData?.email,
               user_id: userData?.user_id,
             });
             if (!adminData) {
-              adminData = await this.registerAdminIfNotExists(userData);
+              adminData = (await this.registerAdminIfNotExists(userData))?.admin;
             }
             if (adminData?._id) {
               this.registerAdminLicense(adminData, userData).catch((err) => {
@@ -610,14 +609,16 @@ return bypassUsers.find(
           msg: "Your Plan expired",
         });
       }
-      // Fetch or create adminData (for non-bypass users or if not already created)
-      let adminData = await adminModel.findOne({
-        email: userData?.email,
-        user_id: userData?.user_id,
-      });
-      if (!adminData) {
-        adminData = await this.registerAdminIfNotExists(userData);
+      // aMember's user_id is the stable identity. Email, login and names are
+      // mutable profile fields, so resolve by user_id and refresh those fields
+      // on every successful login.
+      const adminRegistration = await this.registerAdminIfNotExists(userData);
+      if (!adminRegistration?.ok || !adminRegistration?.admin) {
+        throw new Error(
+          adminRegistration?.error || "Failed to synchronize aMember profile"
+        );
       }
+      const adminData = adminRegistration.admin;
 
       // ✅ Backfill newly added logsSound field for old users
       if (adminData?._id) {
@@ -769,7 +770,6 @@ return bypassUsers.find(
       let firstIncidentCreatedDate = [];
       const existingUser = await Admin.findOne({
         user_id: userData?.user_id,
-        email: userData?.email,
       });
 
       if (existingUser) {
@@ -1036,6 +1036,16 @@ return bypassUsers.find(
           admin: newAdmin,
         };
       }
+
+      // aMember owns these profile fields. Keep the local record synchronized
+      // while preserving its _id, orgId and all application-specific settings.
+      existingUser.set({
+        login: userData?.login,
+        name_f: userData?.name_f ?? "",
+        name_l: userData?.name_l ?? "",
+        email: userData?.email,
+      });
+      await existingUser.save();
 
       // If admin exists → ensure dashboard config exists
       let isDashboardConfigAvailable = await dashboardSidebarModel.findOne({
