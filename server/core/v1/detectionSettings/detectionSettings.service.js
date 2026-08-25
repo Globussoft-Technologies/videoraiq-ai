@@ -1,5 +1,6 @@
 import Admin from "../admin/admin.model.js";
 import {
+  dsLogicNamesFor,
   DETECTION_TYPES,
   countPersonsSettings,
   genericObjectDetectionSettings,
@@ -1119,13 +1120,53 @@ class DetectionSettingService {
         shouldEnable && scheduleSource !== "explicit" && isScheduleOpeningTick(governingSchedule);
 
       if (currentStatus === shouldEnable && !openingTick) {
-        if (stateChangeSource === "schedule-runner") {
-          logger.info(
-            `[DETECTION_SCHEDULE] No-op — channel=${channel._id} detector=${settingType} ` +
-              `currentStatus=${currentStatus} shouldEnable=${shouldEnable} scheduleSource=${scheduleSource}`,
+        // Our stored flag is only the last state we BELIEVE we set. When a start
+        // silently failed, it says running while DS has no such pipeline — and
+        // because this check is idempotent against that same flag, the detector
+        // is never retried. On a two-detection camera that is exactly how one
+        // detector comes up and the other never does.
+        //
+        // So before skipping a detector that is SUPPOSED to be running, ask DS
+        // what it is actually running. One read, and only in the case we would
+        // otherwise have skipped.
+        if (shouldEnable && scheduleSource !== "explicit") {
+          const activeLogics = await pythonService.getCameraActiveLogics(
+            String(channel._id),
+            adminId,
           );
+          const expected = dsLogicNamesFor(settingType);
+          // null means DS did not answer — trust the stored flag rather than
+          // restarting everything on a failed probe.
+          const runningInDs =
+            activeLogics === null ||
+            expected.length === 0 ||
+            expected.some((name) => activeLogics.includes(name));
+
+          if (!runningInDs) {
+            logger.error(
+              `[DETECTION_SCHEDULE] Drift — channel=${channel._id} detector=${settingType} ` +
+                `stored as running but DS active_logics=[${activeLogics.join(", ")}] ` +
+                `does not include [${expected.join(", ")}]; restarting it`,
+            );
+            // Fall through and issue the start.
+          } else {
+            if (stateChangeSource === "schedule-runner") {
+              logger.info(
+                `[DETECTION_SCHEDULE] No-op — channel=${channel._id} detector=${settingType} ` +
+                  `currentStatus=${currentStatus} shouldEnable=${shouldEnable} scheduleSource=${scheduleSource}`,
+              );
+            }
+            return;
+          }
+        } else {
+          if (stateChangeSource === "schedule-runner") {
+            logger.info(
+              `[DETECTION_SCHEDULE] No-op — channel=${channel._id} detector=${settingType} ` +
+                `currentStatus=${currentStatus} shouldEnable=${shouldEnable} scheduleSource=${scheduleSource}`,
+            );
+          }
+          return;
         }
-        return;
       }
 
       const cameraId = channel._id.toString();

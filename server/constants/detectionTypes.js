@@ -117,6 +117,47 @@ export const DETECTION_OBJECTS_TYPES_MAP = {
   guardAbsence: "Guard Absence Detection",
 };
 
+/**
+ * Our detection-mode strings mapped to the detector names the detection
+ * service actually uses (its DetectionLogic enum).
+ *
+ * Several differ from our own setting keys — "intrusion" is
+ * zoneIntrusionSettings there, desk absence and table occupancy have their
+ * "Detection" in the opposite place. Sending the wrong name fails DS request
+ * validation outright, so this table is the single place that translation
+ * lives.
+ */
+export const DS_LOGIC_BY_MODE = {
+  helmet: "personalProtectiveEquipmentSettings",
+  vest: "personalProtectiveEquipmentSettings",
+  crowd: "crowdDetectionSettings",
+  line_crossing: "lineCrossingSettings",
+  vehicles: "countVehiclesSettings",
+  countPersons: "countPersonsSettings",
+  vehicleObstruction: "vehicleObstructionSettings",
+  intrusion: "zoneIntrusionSettings",
+  conveyor: "conveyorDetectionSettings",
+  crusher: "crusherDetectionSettings",
+  water_spillage: "waterSpillageDetectionSettings",
+  ANPR: "numberPlateDetectionSettings",
+  loitering: "loiteringDetectionSettings",
+  vehicleType: "vehicleTypeDetectionSettings",
+  tableOccupancySettings: "tableOccupancySettings",
+  desk_absence: "deskAbsenceDetectionSettings",
+  mobilePhoneDetection: "mobilePhoneDetectionSettings",
+  foodServicePPEDetection: "foodServicePPEDetection",
+  carModelDetection: "carModelDetectionSettings",
+};
+
+/** DS logic names for one of our setting types. */
+export const dsLogicNamesFor = (settingType) => {
+  const modes = DETECTION_MODES_MAP[settingType] || [];
+  const names = (Array.isArray(modes) ? modes : [modes])
+    .map((mode) => DS_LOGIC_BY_MODE[mode])
+    .filter(Boolean);
+  return [...new Set(names)];
+};
+
 export const toPopulateDetections = [
   { path: "detections.countPersonsSettings.id" },
   { path: "detections.motionDetectionSettings.id" },

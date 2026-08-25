@@ -1,5 +1,6 @@
 import Admin from "../admin/admin.model.js";
 import {
+  dsLogicNamesFor,
   DETECTION_TYPES,
   countPersonsSettings,
   genericObjectDetectionSettings,
@@ -1167,7 +1168,34 @@ class DetectionSettingService {
       const openingTick =
         shouldEnable && scheduleSource !== "explicit" && isScheduleOpeningTick(governingSchedule);
 
-      if (currentStatus === shouldEnable && !openingTick) return;
+      if (currentStatus === shouldEnable && !openingTick) {
+        // Before skipping a detector that is SUPPOSED to be running, confirm DS
+        // really has it. Our stored flag is only the last state we believe we
+        // set; a silently failed start leaves it saying "running" forever, and
+        // this idempotency check then never retries. One read, only in the case
+        // we would otherwise have skipped.
+        let runningInDs = true;
+        if (shouldEnable && scheduleSource !== "explicit") {
+          const activeLogics = await pythonService.getCameraActiveLogics(
+            String(channel._id),
+            adminId,
+          );
+          const expected = dsLogicNamesFor(settingType);
+          runningInDs =
+            activeLogics === null ||
+            expected.length === 0 ||
+            expected.some((name) => activeLogics.includes(name));
+
+          if (!runningInDs) {
+            logger.error(
+              `[DETECTION_SCHEDULE] Drift — channel=${channel._id} detector=${settingType} ` +
+                `stored as running but DS active_logics=[${activeLogics.join(", ")}] ` +
+                `does not include [${expected.join(", ")}]; restarting it`,
+            );
+          }
+        }
+        if (runningInDs) return;
+      }
 
       const cameraId = channel._id.toString();
       const zones = detectionSetting?.settings?.referencePoints?.[cameraId] || [];

@@ -819,6 +819,38 @@ class PythonService {
     return await this.updateNewDetection(payload);
   }
 
+  /**
+   * Which detectors DS is ACTUALLY running on a camera right now.
+   *
+   * Read-only. Our stored `enabled` flag is only the last state we believe we
+   * set; when a start silently failed, that flag says running while DS has
+   * nothing — and because the runner is idempotent against its own flag, it
+   * never retries. Asking DS is the only way out of that.
+   *
+   * Returns null (not an empty list) when the state cannot be determined, so
+   * callers can tell "DS says nothing is running" from "DS did not answer"
+   * and avoid acting on a failed probe.
+   */
+  async getCameraActiveLogics(camera_id, admin_id) {
+    try {
+      const { detectionUrl } = await resolveAdminEndpoints(admin_id);
+      const response = await axios.get(
+        `${detectionUrl}/stream/${camera_id}/status`,
+        { timeout: 8000 },
+      );
+      const logics = response?.data?.active_logics;
+      return Array.isArray(logics) ? logics : [];
+    } catch (error) {
+      // 404 is a definite answer: DS has no pipeline for this camera at all.
+      if (error?.response?.status === 404) return [];
+      logger.error(
+        `Could not read DS status for camera ${camera_id}: ` +
+          `${error?.response?.data ? JSON.stringify(error.response.data) : error?.message}`,
+      );
+      return null;
+    }
+  }
+
   async stopNewDetection(camera_id, nvr_id, detectionModes = [], admin_id) {
     try {
       // 🔹 Convert detectionModes → detectors (names expected by API)
