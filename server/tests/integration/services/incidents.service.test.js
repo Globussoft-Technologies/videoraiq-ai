@@ -31,6 +31,9 @@ vi.mock("../../../core/v1/alerts/alert.events.js", () => ({
 vi.mock("../../../core/v1/jobs/jobs.service.js", () => ({
   default: { handleProfileNotification: vi.fn().mockResolvedValue(false) },
 }));
+vi.mock("../../../utils/mediaStorage.js", () => ({
+  deleteMedia: vi.fn().mockResolvedValue(undefined),
+}));
 
 const incidents = await import(
   "../../../core/v1/incidents/incidents.model.js"

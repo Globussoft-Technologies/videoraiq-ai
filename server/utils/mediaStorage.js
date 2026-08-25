@@ -282,7 +282,10 @@ export async function mediaExists(mediaPath) {
 
 /** Delete a stored media file from its backend (routed by the stored path). */
 export async function deleteMedia(mediaPath) {
-  if (isOraclePath(mediaPath)) {
+  // New Oracle uploads and migrated NAS objects both use uploads/... keys.
+  // The explicit oracle/ marker still takes precedence for older records;
+  // otherwise route the legacy, non-prefixed path via the active provider.
+  if (isOraclePath(mediaPath) || getActiveProvider() === "oracle") {
     const { client, bucket } = getOracle();
     await client.send(
       new DeleteObjectCommand({ Bucket: bucket, Key: oracleKeyFor(mediaPath) })

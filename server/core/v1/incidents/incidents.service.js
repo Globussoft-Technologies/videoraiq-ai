@@ -49,6 +49,7 @@ import {
   MobilePhoneDetectionIncident,
   CarModelDetectionIncident
 } from "./incidents.model.js";
+import { deleteMedia } from "../../../utils/mediaStorage.js";
 const modelMap = {
   countPersons: CountPersonIncident,
   countVehicles: CountVehiclesIncident,
@@ -1367,18 +1368,10 @@ class IncidentsService {
           }
 
           try {
-            await withSFTPConnection(async (sftp) => {
-              const exists = await sftp.exists(incident.Image);
-              if (exists) {
-                await sftp.delete(incident.Image);
-                console.log(`Deleted from SFTP: ${incident.Image}`);
-              } else {
-                console.warn(`SFTP file missing: ${incident.Image}`);
-              }
-            });
+            await deleteMedia(incident.Image);
           } catch (err) {
-            console.error("SFTP delete failed:", err.message);
-            next(new AppError("Failed to delete incidents", 500));
+            console.error("Media delete failed:", err.message);
+            return next(new AppError("Failed to delete incidents", 500));
           }
         }
       }

@@ -20,6 +20,7 @@ import {
   NORM_PLATE_FIELD,
 } from "../../../utils/vehicleTagging.js";
 import { ALERT_FEED_EXCLUDED_TYPES } from "../../../constants/detectionTypes.js";
+import { deleteMedia } from "../../../utils/mediaStorage.js";
 
 import {
   Incident,
@@ -1469,18 +1470,10 @@ class IncidentsService {
           }
 
           try {
-            await withSFTPConnection(async (sftp) => {
-              const exists = await sftp.exists(incident.Image);
-              if (exists) {
-                await sftp.delete(incident.Image);
-                console.log(`Deleted from SFTP: ${incident.Image}`);
-              } else {
-                console.warn(`SFTP file missing: ${incident.Image}`);
-              }
-            });
+            await deleteMedia(incident.Image);
           } catch (err) {
-            console.error("SFTP delete failed:", err.message);
-            next(new AppError("Failed to delete incidents", 500));
+            console.error("Media delete failed:", err.message);
+            return next(new AppError("Failed to delete incidents", 500));
           }
         }
       }

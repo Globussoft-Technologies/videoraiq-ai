@@ -6,7 +6,7 @@
  *   - deleteIncident         (no-Image branch — keeps SFTP off the hot path)
  *   - deleteIncidentsByIds   (validation, 404, no-Image happy path)
  *
- * Mocks: 4 (alerts, socket, SFTP connection check, jobs service) — the same
+ * Mocks: 5 (alerts, socket, SFTP, media storage, jobs service) — the same
  * stable shape every other incidents test uses.
  */
 import {
@@ -35,6 +35,9 @@ vi.mock("../../../utils/newSFTPConnectionCheck.js", () => ({
     end: vi.fn().mockResolvedValue(undefined),
   }),
 }));
+vi.mock("../../../utils/mediaStorage.js", () => ({
+  deleteMedia: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("../../../core/v1/jobs/jobs.service.js", () => ({
   default: { handleProfileNotification: vi.fn().mockResolvedValue(false) },
 }));
@@ -42,6 +45,7 @@ vi.mock("../../../core/v1/jobs/jobs.service.js", () => ({
 const { default: IncidentsService } = await import(
   "../../../core/v1/incidents/incidents.service.js"
 );
+const { deleteMedia } = await import("../../../utils/mediaStorage.js");
 const incidentsModel = await import(
   "../../../core/v1/incidents/incidents.model.js"
 );
@@ -62,6 +66,8 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   await clearCollections();
+  deleteMedia.mockClear();
+  deleteMedia.mockResolvedValue(undefined);
   admin = await Admin.create({
     user_id: "9001",
     login: "incid-crud",
@@ -363,6 +369,23 @@ describe("IncidentsService.deleteIncidentsByIds", () => {
     expect(res.statusCode).toBe(200);
     expect(res._body.status).toBe("success");
     expect(await Incident.countDocuments()).toBe(0);
+  });
+
+  it("deletes incident media through the configured storage backend", async () => {
+    const inc = await seedMotion({
+      Image: "/uploads/images/camera-1/image.jpg",
+    });
+    const { req, res, next } = serviceCtx({
+      body: { incidentIds: [inc._id.toString()] },
+    });
+
+    await IncidentsService.deleteIncidentsByIds(req, res, next);
+
+    expect(deleteMedia).toHaveBeenCalledWith(
+      "/uploads/images/camera-1/image.jpg"
+    );
+    expect(res.statusCode).toBe(200);
+    expect(await Incident.findById(inc._id)).toBeNull();
   });
 
   it("rejects a batch where any incident has a '..' image path", async () => {
