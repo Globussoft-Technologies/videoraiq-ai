@@ -92,7 +92,12 @@ class PythonService {
         ? `${attendanceUrl}/api/v1/cameras/resume-all`
         : `${attendanceUrl}/api/v1/cameras/stop-all`;
 
-      const [detectionResponse, attendanceResponse] = await Promise.all([
+      // allSettled, not all: these are two independent services, and with
+      // Promise.all a single unreachable one rejected the whole call. The
+      // schedule runner treats that as a total failure and leaves every
+      // camera in the batch at its old state — so one sick attendance host
+      // silently kept detection pipelines running past their stop time.
+      const [detectionResult, attendanceResult] = await Promise.allSettled([
         axios.post(detectionEndpoint, payload, {
           headers: {
             "Content-Type": "application/json",
@@ -105,10 +110,43 @@ class PythonService {
         }),
       ]);
 
-      return {
-        detection: detectionResponse?.data ?? null,
-        attendance: attendanceResponse?.data ?? null,
+      const failureDetail = (result) =>
+        result?.reason?.response?.data || result?.reason?.message || "unknown error";
+
+      if (detectionResult.status === "rejected") {
+        logger.error(
+          `Bulk ${enable ? "resume" : "stop"} failed on detection ` +
+            `(${detectionEndpoint}): ${JSON.stringify(failureDetail(detectionResult))}`,
+        );
+      }
+      if (attendanceResult.status === "rejected") {
+        logger.error(
+          `Bulk ${enable ? "resume" : "stop"} failed on attendance ` +
+            `(${attendanceEndpoint}): ${JSON.stringify(failureDetail(attendanceResult))}`,
+        );
+      }
+
+      // Both down means nothing changed, so surface it and let the caller
+      // leave the stored state alone — the next tick retries.
+      if (detectionResult.status === "rejected" && attendanceResult.status === "rejected") {
+        throw detectionResult.reason;
+      }
+
+      const result = {
+        detection: detectionResult.value?.data ?? null,
+        attendance: attendanceResult.value?.data ?? null,
       };
+
+      // Added ONLY on a partial failure, so the success shape is byte-identical
+      // to before — callers that deep-equal or serialise this response keep
+      // working, and the field's presence itself means something went wrong.
+      if (detectionResult.status === "rejected") {
+        result.partialFailure = "attendance-only";
+      } else if (attendanceResult.status === "rejected") {
+        result.partialFailure = "detection-only";
+      }
+
+      return result;
     } catch (error) {
       logger.error(
         `Error toggling cameras in bulk:`,

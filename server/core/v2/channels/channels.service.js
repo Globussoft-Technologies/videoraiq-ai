@@ -28,6 +28,7 @@ import pythonService from "../../../services/python.service.js";
 import {
   manualOverrideFor,
   resolveDesiredDetectionState,
+  buildGlobalScheduleIndex,
 } from "../../../services/detectionSchedule.resolver.js";
 import DetectionSettingService from "../detectionSettings/detectionSettings.service.js";
 import DetectionSettingsValidation from "../detectionSettings/detectionSettings.validate.js";
@@ -500,9 +501,25 @@ class ChannelService {
 
       const total = await Channel.countDocuments(filter);
 
+      // Zone status for the camera list's Engines chips: does a schedule (this
+      // camera's own, or a matching NVR-level global one) govern each detector
+      // that has been set up? Same "has a schedule at all" test the one-minute
+      // runner uses in applyAllDetectionSchedules, so a chip's colour can never
+      // disagree with what actually governs the detector.
+      const globalScheduleIndex = await buildGlobalScheduleIndex({ userId: user_id });
+
       // Append streamingUrl
       const enrichedChannels = await Promise.all(
         channels.map(async (channel) => {
+          const detections = channel.detections || {};
+          for (const settingType of Object.keys(DETECTION_TYPES)) {
+            const entry = detections[settingType];
+            if (!entry?.id) continue; // no zone configured -> nothing to flag
+            const hasCameraSchedule = Boolean(entry?.schedule);
+            const hasGlobalSchedule = Boolean(globalScheduleIndex.find(channel, settingType));
+            entry.isScheduled = hasCameraSchedule || hasGlobalSchedule;
+          }
+
           const streamingUrl = await buildStreamingUrl(channel.nvrId, channel);
           // const nvr = channel.nvrId;
 
