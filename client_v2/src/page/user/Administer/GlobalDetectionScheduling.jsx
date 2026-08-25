@@ -964,10 +964,28 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
       ]);
 
       setNvrData(cameras);
-      if (silent) return;
+
+      // A silent refresh deliberately leaves the form alone, but it must still
+      // track WHICH schedule is being edited. Skipping this entirely meant a
+      // schedule deleted or replaced elsewhere left a dead _id behind, and the
+      // next save PUT it and got "Global schedule not found" — intermittently,
+      // depending on whether a silent refresh had run in between.
+      const latest = schedules?.[0] || null;
+      if (silent) {
+        setExistingSchedule((current) => {
+          const currentId = current?._id ? String(current._id) : null;
+          const latestId = latest?._id ? String(latest._id) : null;
+          // Same schedule (or still none): keep the object we have so the
+          // in-progress edit is untouched.
+          if (currentId === latestId) return current;
+          // It vanished or was replaced — adopt what the server actually has.
+          return latest;
+        });
+        return;
+      }
 
       // The list comes back newest-first; this panel edits the most recent.
-      const schedule = schedules?.[0] || null;
+      const schedule = latest;
       setExistingSchedule(schedule);
       const others = (schedules || []).slice(1);
       setOtherScheduleCount(others.length);
@@ -1188,14 +1206,24 @@ export default function GlobalDetectionScheduling({ canEdit = true }) {
 
     setSaving(true);
     try {
+      const createPayload = {
+        ...payload,
+        nvrId: selectedNvrId,
+        name: `${selectedNvrLabel} global schedule`,
+      };
+
       if (existingSchedule?._id) {
-        await updateGlobalSchedule(existingSchedule._id, payload);
+        try {
+          await updateGlobalSchedule(existingSchedule._id, payload);
+        } catch (error) {
+          // 404 means the schedule we thought we were editing is gone — deleted
+          // from another tab or by another admin. Losing the edit and showing
+          // "Global schedule not found" helps nobody; save it as a new one.
+          if (error?.response?.status !== 404) throw error;
+          await createGlobalSchedule(createPayload);
+        }
       } else {
-        await createGlobalSchedule({
-          ...payload,
-          nvrId: selectedNvrId,
-          name: `${selectedNvrLabel} global schedule`,
-        });
+        await createGlobalSchedule(createPayload);
       }
       toast.success(`Global schedule saved. ${SCHEDULER_LAG_NOTE}`);
       await loadNvr(selectedNvrId, { search: debouncedCameraSearch });

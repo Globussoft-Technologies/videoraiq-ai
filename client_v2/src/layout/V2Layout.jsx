@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import useDetectionScheduleEvents from '../hooks/useDetectionScheduleEvents';
 import { V2ThemeProvider, useTheme } from '../theme/ThemeContext';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -77,6 +78,14 @@ function currentViewKey(pathname) {
 }
 
 function Shell() {
+  // Mounted on the shell rather than only on the scheduling page, so a DS
+  // start/stop that fails is visible wherever the user happens to be. The
+  // hook toasts each transition as it arrives over the socket, including the
+  // reason DS gave when a call did not take effect — without this, a camera
+  // that silently refused to stop looked like a scheduling bug rather than a
+  // detection-service one.
+  useDetectionScheduleEvents();
+
   const { theme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
