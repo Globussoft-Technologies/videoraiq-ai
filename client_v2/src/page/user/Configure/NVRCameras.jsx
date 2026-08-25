@@ -1644,8 +1644,8 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
             </button>
           )}
           <button onClick={onClose} style={{
-            fontSize: 12.5, fontWeight: 600, color: 'var(--tx3)',
-            cursor: 'pointer', padding: '9px 6px', background: 'none', border: 'none',
+            fontSize: 12.5, fontWeight: 600, color: 'var(--tx2)',
+            border: '1px solid var(--bd)', borderRadius: 9, padding: '7px 16px', cursor: 'pointer', background: 'var(--bg2)',
           }}>
             Cancel
           </button>
@@ -1663,7 +1663,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                 }}
               >
                 {connecting && <Loader2 size={13} className="animate-spin" />}
-                {connecting ? 'Saving...' : isLocalEdit ? 'Save Changes' : 'Discover Cameras ?'}
+                {connecting ? 'Saving...' : isLocalEdit ? 'Save Changes' : 'Discover Cameras'}
               </button>
             ) : (
               <button

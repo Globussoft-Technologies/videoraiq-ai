@@ -435,18 +435,22 @@ export default function LiveWallGrid() {
     }
   }
 
-  /* "Open full view" from Command Center is a plain redirect to the wall —
-     it must land on the full, unfiltered grid, not force fullscreen and not
-     leave a Camera filter applied. The `?cam=` param only exists to carry
-     the id across navigation; strip it without acting on it. */
+  /* Deep link from elsewhere (e.g. the "View" action in Cameras & NVRs) —
+     ?cam=<id> opens straight into that camera's fullscreen view once its
+     channel is loaded, then the param is stripped so it doesn't re-open on
+     refresh/back-navigation. (Command Center's "Open full view" no longer
+     sends this param — it just navigates to the plain, unfiltered wall.) */
   useEffect(() => {
-    if (!deepLinkCamId) return;
+    if (!deepLinkCamId || channels.loading) return;
+    const match = (Array.isArray(channels.data) ? channels.data : [])
+      .find((c) => (c._id || c.channelId) === deepLinkCamId);
+    if (match) setFullscreen(match);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete('cam');
       return next;
     }, { replace: true });
-  }, [deepLinkCamId, setSearchParams]);
+  }, [deepLinkCamId, channels.data, channels.loading, setSearchParams]);
   useEffect(() => {
     const h = () => {
       const isFs = !!document.fullscreenElement;
