@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Video, Pencil, Maximize2, Minimize2, X, Minus, Plus, CheckCircle2, ChevronDown, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Video, Pencil, Maximize2, Minimize2, X, Minus, Plus, CheckCircle2, ChevronDown, RotateCcw, MoreVertical, Trash2, Undo2 } from 'lucide-react';
 import BufferingIndicator from '../../../components/BufferingIndicator';
 import { toast } from 'sonner';
 import useHlsPlayer from '../../../hooks/useHlsPlayer';
@@ -50,6 +50,7 @@ export default function DetectionZoneMarking({
   const [videoState, setVideoState] = useState('loading'); // loading | ready | error
   const [videoSize, setVideoSize] = useState({ w: 0, h: 0 });
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenActionsOpen, setFullscreenActionsOpen] = useState(false);
 
   const typesApi = useApi(() => fetchDetectionTypes(), []);
   const typeLabels = typesApi.data || {};
@@ -97,6 +98,8 @@ export default function DetectionZoneMarking({
   const [maxPoints, setMaxPoints] = useState(DEFAULT_MAX_POINTS);
   // Line Crossing is always exactly 2 points â€” not adjustable via the +/- stepper.
   const effectiveMaxPoints = isLineCrossing ? 3 : maxPoints;
+  const decreaseMaxPoints = () => setMaxPoints(p => Math.max(MIN_POINTS_TO_CLOSE, p - 1));
+  const increaseMaxPoints = () => setMaxPoints(p => p + 1);
   const [activeZoneIndex, setActiveZoneIndex] = useState(null); // which saved zone is highlighted/being renamed
 
   // Load this type's saved zones whenever the selected detection type changes.
@@ -145,6 +148,60 @@ export default function DetectionZoneMarking({
     document.addEventListener('fullscreenchange', syncFullscreen);
     return () => document.removeEventListener('fullscreenchange', syncFullscreen);
   }, []);
+
+  useEffect(() => {
+    if (!isFullscreen) setFullscreenActionsOpen(false);
+  }, [isFullscreen]);
+
+  useEffect(() => {
+    const handleFullscreenShortcut = async (event) => {
+      const target = event.target;
+      const isTyping =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.tagName === 'SELECT' ||
+        target?.isContentEditable;
+
+      if (isTyping || event.key?.toLowerCase() !== 'f' || document.fullscreenElement) return;
+
+      event.preventDefault();
+      try {
+        await stageRef.current?.requestFullscreen?.();
+      } catch {
+        toast.error('Fullscreen is not available for this browser.');
+      }
+    };
+
+    window.addEventListener('keydown', handleFullscreenShortcut);
+    return () => window.removeEventListener('keydown', handleFullscreenShortcut);
+  }, []);
+
+  useEffect(() => {
+    const handleMaxPointsShortcut = (event) => {
+      const target = event.target;
+      const isTyping =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.tagName === 'SELECT' ||
+        target?.isContentEditable;
+
+      if (isTyping || isLineCrossing || event.ctrlKey || event.metaKey || event.altKey) return;
+
+      const isIncrease = event.key === '+' || event.code === 'NumpadAdd';
+      const isDecrease = event.key === '-' || event.code === 'NumpadSubtract';
+      if (!isIncrease && !isDecrease) return;
+
+      event.preventDefault();
+      if (isIncrease) {
+        increaseMaxPoints();
+      } else {
+        decreaseMaxPoints();
+      }
+    };
+
+    window.addEventListener('keydown', handleMaxPointsShortcut);
+    return () => window.removeEventListener('keydown', handleMaxPointsShortcut);
+  }, [isLineCrossing]);
 
   const handleToggleFullscreen = async (e) => {
     e.stopPropagation();
@@ -299,6 +356,17 @@ export default function DetectionZoneMarking({
     presetAreaRef.current = true;
     setPoints([{ x: 100, y: 100 }, { x: 300, y: 100 }, { x: 300, y: 300 }, { x: 100, y: 300 }]);
     setDrawing(false);
+  };
+
+  const hasDrawableContent = points.length > 0 || draftZones.length > 0 || zones.length > 0;
+  const canUseAreaPreset = !!activeType && !!videoSize.w && !isLineCrossing;
+  const canUseDrawing = !!activeType;
+  const canUseUndo = drawing && (points.length > 0 || draftZones.length > 0);
+  const canUseClearAll = hasDrawableContent;
+
+  const runFullscreenAction = (event, action) => {
+    event.stopPropagation();
+    action();
   };
 
   const handleUpdateZoneField = (index, field, value) => {
@@ -746,8 +814,8 @@ export default function DetectionZoneMarking({
               {!isLineCrossing && (
                 <>
                   <button
-                    onClick={(e) => { e.stopPropagation(); setMaxPoints(p => Math.max(MIN_POINTS_TO_CLOSE, p - 1)); }}
-                    title="Decrease max points"
+                    onClick={(e) => { e.stopPropagation(); decreaseMaxPoints(); }}
+                    title="Decrease max points (-)"
                     style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,.6)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                   >
                     <Minus size={13} />
@@ -756,8 +824,8 @@ export default function DetectionZoneMarking({
                     {maxPoints}
                   </span>
                   <button
-                    onClick={(e) => { e.stopPropagation(); setMaxPoints(p => p + 1); }}
-                    title="Increase max points"
+                    onClick={(e) => { e.stopPropagation(); increaseMaxPoints(); }}
+                    title="Increase max points (+)"
                     style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,.6)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                   >
                     <Plus size={13} />
@@ -766,7 +834,7 @@ export default function DetectionZoneMarking({
               )}
               <button
                 onClick={handleToggleFullscreen}
-                title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen (F)'}
                 style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(0,0,0,.6)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
                 {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
@@ -778,6 +846,102 @@ export default function DetectionZoneMarking({
                 shape renders in blue so it's visually distinct while drawing. Line Crossing draws
                 an open line (polyline, no fill) instead of a closed filled polygon â€” it's a
                 crossing line, not an area. */}
+            {isFullscreen && (
+              <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', right: 16, bottom: 16, zIndex: 8 }}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFullscreenActionsOpen(open => !open);
+                  }}
+                  title="Drawing actions"
+                  aria-label="Drawing actions"
+                  aria-expanded={fullscreenActionsOpen}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 8,
+                    border: '1px solid rgba(255,255,255,.18)',
+                    background: 'rgba(5,8,13,.72)',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 12px 34px rgba(0,0,0,.35)',
+                    backdropFilter: 'blur(8px)',
+                  }}
+                >
+                  <MoreVertical size={18} />
+                </button>
+
+                {fullscreenActionsOpen && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      right: 0,
+                      bottom: 44,
+                      width: 178,
+                      padding: 6,
+                      borderRadius: 10,
+                      border: '1px solid rgba(255,255,255,.16)',
+                      background: 'rgba(5,8,13,.9)',
+                      boxShadow: '0 18px 48px rgba(0,0,0,.45)',
+                      backdropFilter: 'blur(10px)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
+                    }}
+                  >
+                    {[
+                      { label: 'Max Area', icon: Maximize2, disabled: !canUseAreaPreset, onClick: handleMaxArea },
+                      { label: 'Min Area', icon: Minimize2, disabled: !canUseAreaPreset, onClick: handleMinArea },
+                      {
+                        label: drawing ? 'Stop Drawing' : 'Start Drawing',
+                        icon: Pencil,
+                        disabled: !canUseDrawing,
+                        onClick: () => setDrawing(d => !d),
+                      },
+                      { label: 'Undo', icon: Undo2, disabled: !canUseUndo, onClick: handleUndo },
+                      { label: 'Clear All', icon: Trash2, disabled: !canUseClearAll, onClick: handleConfirmClearAll },
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.label}
+                          type="button"
+                          disabled={item.disabled}
+                          onClick={(event) => {
+                            if (item.disabled) return;
+                            runFullscreenAction(event, item.onClick);
+                          }}
+                          style={{
+                            height: 34,
+                            width: '100%',
+                            border: 0,
+                            borderRadius: 7,
+                            padding: '0 9px',
+                            background: item.disabled ? 'transparent' : 'rgba(255,255,255,.06)',
+                            color: item.disabled ? 'rgba(255,255,255,.34)' : '#fff',
+                            cursor: item.disabled ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            textAlign: 'left',
+                          }}
+                        >
+                          <Icon size={14} />
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             <svg
               viewBox="0 0 1000 1000"
               preserveAspectRatio="none"
