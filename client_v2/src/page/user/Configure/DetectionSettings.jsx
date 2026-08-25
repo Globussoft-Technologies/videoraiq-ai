@@ -90,6 +90,10 @@ function appliedTypesFor(camera, typeLabels) {
     key,
     label: detectionTypeLabel(value, key),
     enabled: isTypeEnabled(camera, key),
+    // Set server-side (channels.service.js getAllChannels) alongside `enabled`:
+    // true when a camera-specific or NVR-level global schedule governs this
+    // detector, regardless of whether it happens to be active right now.
+    isScheduled: !!camera?.detections?.[key]?.isScheduled,
     settingId: detectionSettingIdFromEntry(camera?.detections?.[key]),
     order,
   }))
@@ -103,6 +107,27 @@ function appliedTypesFor(camera, typeLabels) {
 
 function enabledTypesFor(camera, typeLabels) {
   return appliedTypesFor(camera, typeLabels).filter(type => type.enabled);
+}
+
+// Every type with a zone (a saved DetectionSetting) configured, whether or not
+// it's currently enabled — the Engines column shows one chip per zone that
+// exists, colour-coded by zoneStatusOf, instead of only the running ones.
+// Named distinctly from DetectionZoneMarking/utils.js's zonesFor(), which
+// returns a setting's drawn polygon areas — a different "zone".
+function configuredZoneTypesFor(camera, typeLabels) {
+  return appliedTypesFor(camera, typeLabels).filter(type => !!type.settingId);
+}
+
+/**
+ * running   — the detector is on right now.
+ * scheduled — a zone exists and a schedule governs it, but it isn't running
+ *             at this instant (outside its window, or an override paused it).
+ * idle      — a zone exists but nothing is running or scheduled for it.
+ */
+function zoneStatusOf(type) {
+  if (type.enabled) return 'running';
+  if (type.isScheduled) return 'scheduled';
+  return 'idle';
 }
 
 function resettableTypesFor(camera, typeLabels) {
@@ -189,8 +214,37 @@ function detectionInitials(label) {
     .join('');
 }
 
-function EngineChip({ label }) {
+// Background/border are fixed rgba tints (not theme-scoped) matching every
+// other tinted badge in this file (e.g. the Applied Types trigger below);
+// the text/icon colour is the theme-aware "-ink" token so each stays legible
+// on both a near-white and a near-black row.
+const ZONE_STATUS_STYLE = {
+  running: {
+    border: '1px solid rgba(34,197,94,.32)',
+    background: 'rgba(34,197,94,.1)',
+    color: 'var(--ok-ink)',
+  },
+  scheduled: {
+    border: '1px solid rgba(245,166,35,.34)',
+    background: 'rgba(245,166,35,.12)',
+    color: 'var(--warn-ink)',
+  },
+  idle: {
+    border: '1px solid rgba(148,163,184,.3)',
+    background: 'rgba(148,163,184,.12)',
+    color: 'var(--tx3)',
+  },
+};
+
+const ZONE_STATUS_TOOLTIP = {
+  running: 'Running now',
+  scheduled: 'Scheduled — not running right now',
+  idle: 'Zone created — not running or scheduled',
+};
+
+function EngineChip({ label, status = 'idle' }) {
   const [hovered, setHovered] = useState(false);
+  const palette = ZONE_STATUS_STYLE[status] || ZONE_STATUS_STYLE.idle;
 
   return (
     <span
@@ -206,9 +260,9 @@ function EngineChip({ label }) {
           minWidth: 38,
           padding: '0 9px',
           borderRadius: 999,
-          border: '1px solid rgba(59,130,246,.2)',
-          background: 'rgba(59,130,246,.08)',
-          color: 'var(--tx2)',
+          border: palette.border,
+          background: palette.background,
+          color: palette.color,
           fontSize: 11.5,
           fontWeight: 600,
           whiteSpace: 'nowrap',
@@ -242,6 +296,9 @@ function EngineChip({ label }) {
           }}
         >
           {label}
+          <span style={{ display: 'block', marginTop: 3, fontSize: 10, fontWeight: 500, color: 'var(--tx3)' }}>
+            {ZONE_STATUS_TOOLTIP[status]}
+          </span>
           <span
             style={{
               position: 'absolute',
@@ -536,7 +593,7 @@ function CameraPreviewModal({ camera, onClose }) {
 }
 
 function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionRequest, onResetThresholdsRequest, onCheckTypeChange, checkTypeSaving, resetLoading = false, canEdit = false }) {
-  const enabledTypes = enabledTypesFor(camera, typeLabels);
+  const zoneTypes = configuredZoneTypesFor(camera, typeLabels);
   const resettableTypes = resettableTypesFor(camera, typeLabels);
 
   return (
@@ -596,14 +653,14 @@ function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionReq
       </span>
 
       <span style={{ minWidth: 0 }}>
-        {enabledTypes.length ? (
+        {zoneTypes.length ? (
           <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {enabledTypes.map(type => (
-              <EngineChip key={type.key} label={type.label} />
+            {zoneTypes.map(type => (
+              <EngineChip key={type.key} label={type.label} status={zoneStatusOf(type)} />
             ))}
           </span>
         ) : (
-          <span style={{ fontSize: 12, color: 'var(--tx3)' }}>No detections enabled</span>
+          <span style={{ fontSize: 12, color: 'var(--tx3)' }}>No zones configured</span>
         )}
       </span>
 

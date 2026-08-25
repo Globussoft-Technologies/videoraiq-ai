@@ -50,6 +50,7 @@
      light mode. Both clear 4.5:1 against their own theme's surface. */
   --ok-ink: #4ade80;
   --crit-ink: #ff6b6b;
+  --warn-ink: #fbbf24;
 }
 
 [data-vq-theme='light'] {
@@ -81,6 +82,7 @@
      a white row. */
   --ok-ink: #15803d;
   --crit-ink: #c81e1e;
+  --warn-ink: #b45309;
 }
 
 /* ---- Base element styling scoped to the V2 root ---- */

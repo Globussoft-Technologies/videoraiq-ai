@@ -30,7 +30,7 @@ const severityBg = (severity) => {
 };
 
 const formatTime = (t) =>
-  t ? moment.utc(t).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A') : '--';
+  t && t !== '--' ? moment.utc(t).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A') : '--';
 
 // Formats a raw plate value into the standard "SS DD LL NNNN" display style
 // (e.g. "ka02mp9657" -> "KA02 MP9657"). Falls back to a plain uppercase of
@@ -295,7 +295,7 @@ export const buildColumns = ({
         Time of Incident
       </button>
     ),
-    cell: ({ row }) => <span className={styles.text}>{formatTime(row.original.createdAt)}</span>,
+    cell: ({ row }) => <span className={styles.text}>{formatTime(row.original.timeOfIncident)}</span>,
   },
   ...(typeof onEdit === 'function' ||
   typeof onTagUser === 'function' ||
@@ -404,7 +404,7 @@ export const renderANPRCard = (row, { onPreview, onEdit, onTagUser, onUntagUser,
           className="text-[11px] text-[var(--tx3)] whitespace-nowrap shrink-0"
           style={{ fontFamily: 'var(--mono)' }}
         >
-          {formatTime(row.createdAt)}
+          {formatTime(row.timeOfIncident)}
         </span>
       </div>
       <div className="flex items-center justify-between gap-2 mt-[5px]">
