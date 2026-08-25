@@ -5,7 +5,7 @@ import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { timeAgo, detectionLabel } from '../lib/format';
 import { ENGINE_PALETTE } from '../lib/engineMeta';
-import { getEnabledEngines } from './CameraGrid';
+import { getEnabledEngines, ENGINE_LABEL_MAP } from './CameraGrid';
 
 const SEV_COLOR = {
   high: 'var(--crit)', critical: 'var(--crit)',
@@ -65,6 +65,65 @@ function useLiveDetections(channel, enabled = true) {
   }, [enabled, socket, user?.adminId, channel?._id, channel?.channelId]);
 
   return detections;
+}
+
+function engineLabel(settingType) {
+  return ENGINE_LABEL_MAP[settingType] || settingType.replace('Settings', '').replace(/([A-Z])/g, ' $1').trim();
+}
+
+/**
+ * Engine chips for one camera, kept live without a page refresh.
+ *
+ * `getEnabledEngines(channel)` is the baseline (from the last time `channel`
+ * was fetched). The detection scheduler — global or per-camera, and whichever
+ * schedule wins when several overlap on the same camera — starts/stops
+ * engines on its own clock and broadcasts each transition on
+ * `detectionSchedule_${adminId}` with `{ channelId, settingType, enabled }`
+ * (same event GlobalDetectionScheduling.jsx uses to keep its running/stopped
+ * badges live). Applying matching events as overrides on top of the baseline
+ * means this list flips the instant a schedule boundary fires, exactly like
+ * that screen, instead of only updating on the next manual reload of this
+ * camera's data.
+ */
+function useLiveEnabledEngines(channel) {
+  const { socket } = useSocket() || {};
+  const { user } = useAuth();
+  const ids = channelIdsOf(channel);
+  const baseline = getEnabledEngines(channel);
+  const [overrides, setOverrides] = useState({});
+
+  // A different camera, or the channel's own detections changing shape from
+  // a real refetch, invalidates any override collected for the old state.
+  useEffect(() => {
+    setOverrides({});
+  }, [ids.join(','), channel?.detections]);
+
+  useEffect(() => {
+    if (!socket || !user?.adminId || !ids.length) return undefined;
+
+    const handleScheduleEvent = (payload) => {
+      if (!payload?.settingType) return;
+      const eventChannelId = payload.channelId?._id || payload.channelId;
+      if (!eventChannelId || !ids.includes(String(eventChannelId))) return;
+      setOverrides((prev) => ({ ...prev, [payload.settingType]: payload.enabled === true }));
+    };
+
+    const eventName = `detectionSchedule_${user.adminId}`;
+    socket.on(eventName, handleScheduleEvent);
+    return () => socket.off(eventName, handleScheduleEvent);
+  }, [socket, user?.adminId, ids.join(',')]);
+
+  if (!Object.keys(overrides).length) return baseline;
+
+  // Rebuild from the channel's own settingType keys (not just the baseline
+  // labels) so a schedule turning on an engine that was previously disabled
+  // — and therefore absent from `baseline` — can still appear live.
+  const detections = channel?.detections && typeof channel.detections === 'object' ? channel.detections : {};
+  const settingTypes = new Set([...Object.keys(detections), ...Object.keys(overrides)]);
+  const enabledTypes = [...settingTypes].filter((settingType) => (
+    settingType in overrides ? overrides[settingType] : detections[settingType]?.enabled === true
+  ));
+  return enabledTypes.map(engineLabel);
 }
 
 function DetectionRow({ detection }) {
@@ -146,7 +205,7 @@ const cardClassFlush = 'rounded-[14px] border border-[var(--bd)] bg-[var(--bg1)]
 export default function ActiveDetectionsPanel({ channel, showActiveDetections = true }) {
   const navigate = useNavigate();
   const liveDetections = useLiveDetections(channel, showActiveDetections);
-  const engines = getEnabledEngines(channel);
+  const engines = useLiveEnabledEngines(channel);
   const nvr = channel?.nvrId;
   const site = nvr?.location || channel?.location || channel?.locationName || '—';
   const nvrName = nvr?.nvrName || channel?.nvrName || '—';

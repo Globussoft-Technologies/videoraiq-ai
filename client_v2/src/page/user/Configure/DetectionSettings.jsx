@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, Video, ChevronRight, ChevronDown, Play, X, Loader2, ListRestart } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
@@ -242,15 +243,68 @@ const ZONE_STATUS_TOOLTIP = {
   idle: 'Zone created — not running or scheduled',
 };
 
+// Tooltip geometry. TIP_MAX_W matches the bubble's maxWidth so the clamp below
+// can keep it inside the viewport; TIP_MIN_ROOM is roughly the tallest the
+// bubble gets (label + status line), used to decide whether it fits above.
+const TIP_MAX_W = 220;
+const TIP_GAP = 10;
+const TIP_EDGE = 8;
+const TIP_MIN_ROOM = 76;
+
+/** Engine initials chip with a hover tooltip naming the detection and its state.
+ *
+ * The bubble is rendered into a body portal rather than absolutely inside the
+ * chip: the table card is overflow:hidden, which clipped the tooltip on the top
+ * row (it could only grow upward into the header). Same reason the popovers on
+ * this page portal — see AppliedTypesPopover below. */
 function EngineChip({ label, status = 'idle' }) {
-  const [hovered, setHovered] = useState(false);
+  const [tip, setTip] = useState(null);
+  const chipRef = useRef(null);
   const palette = ZONE_STATUS_STYLE[status] || ZONE_STATUS_STYLE.idle;
+
+  const showTip = () => {
+    const rect = chipRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const centre = rect.left + rect.width / 2;
+    const half = TIP_MAX_W / 2;
+    // Keep the bubble inside the viewport even for chips near either edge.
+    const left = Math.min(
+      Math.max(centre, half + TIP_EDGE),
+      window.innerWidth - half - TIP_EDGE
+    );
+    // Not enough room above (top row, or a scrolled-up page) — flip below.
+    const flip = rect.top < TIP_MIN_ROOM + TIP_GAP;
+
+    setTip({
+      left,
+      top: flip ? rect.bottom + TIP_GAP : rect.top - TIP_GAP,
+      flip,
+      // Clamping moves the bubble but not the chip, so offset the arrow to keep
+      // it pointing at what it describes.
+      arrow: centre - left,
+    });
+  };
+
+  // Fixed coordinates go stale the moment the page moves, and a bubble with
+  // pointerEvents:none never gets the mouseleave that would normally close it.
+  useEffect(() => {
+    if (!tip) return undefined;
+    const hide = () => setTip(null);
+    window.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
+    return () => {
+      window.removeEventListener('scroll', hide, true);
+      window.removeEventListener('resize', hide);
+    };
+  }, [tip]);
 
   return (
     <span
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{ position: 'relative', display: 'inline-flex' }}
+      ref={chipRef}
+      onMouseEnter={showTip}
+      onMouseLeave={() => setTip(null)}
+      style={{ display: 'inline-flex' }}
     >
       <span
         style={{
@@ -271,51 +325,53 @@ function EngineChip({ label, status = 'idle' }) {
       >
         {detectionInitials(label)}
       </span>
-      {hovered && (
-        <span
-          style={{
-            position: 'absolute',
-            left: '50%',
-            bottom: 'calc(100% + 10px)',
-            transform: 'translateX(-50%)',
-            zIndex: 20,
-            maxWidth: 220,
-            padding: '7px 10px',
-            borderRadius: 10,
-            background: 'var(--tooltip)',
-            color: 'var(--tx)',
-            border: '1px solid var(--bd2)',
-            fontSize: 11.5,
-            fontWeight: 600,
-            lineHeight: 1.35,
-            textAlign: 'center',
-            boxShadow: '0 12px 28px rgba(15,23,42,.24)',
-            pointerEvents: 'none',
-            whiteSpace: 'normal',
-            backdropFilter: 'blur(8px)',
-          }}
-        >
-          {label}
-          <span style={{ display: 'block', marginTop: 3, fontSize: 10, fontWeight: 500, color: 'var(--tx3)' }}>
-            {ZONE_STATUS_TOOLTIP[status]}
-          </span>
+      {tip &&
+        createPortal(
           <span
             style={{
-              position: 'absolute',
-              left: '50%',
-              top: '100%',
-              width: 10,
-              height: 10,
+              position: 'fixed',
+              left: tip.left,
+              top: tip.top,
+              transform: `translate(-50%, ${tip.flip ? '0' : '-100%'})`,
+              zIndex: 9999,
+              width: 'max-content',
+              maxWidth: TIP_MAX_W,
+              padding: '7px 10px',
+              borderRadius: 10,
               background: 'var(--tooltip)',
-              borderRight: '1px solid var(--bd2)',
-              borderBottom: '1px solid var(--bd2)',
-              transform: 'translateX(-50%) rotate(45deg)',
-              marginTop: -5,
+              color: 'var(--tx)',
+              border: '1px solid var(--bd2)',
+              fontSize: 11.5,
+              fontWeight: 600,
+              lineHeight: 1.35,
+              textAlign: 'center',
+              boxShadow: '0 12px 28px rgba(15,23,42,.24)',
+              pointerEvents: 'none',
+              whiteSpace: 'normal',
               backdropFilter: 'blur(8px)',
             }}
-          />
-        </span>
-      )}
+          >
+            {label}
+            <span style={{ display: 'block', marginTop: 3, fontSize: 10, fontWeight: 500, color: 'var(--tx3)' }}>
+              {ZONE_STATUS_TOOLTIP[status]}
+            </span>
+            <span
+              style={{
+                position: 'absolute',
+                left: `calc(50% + ${tip.arrow}px)`,
+                ...(tip.flip
+                  ? { bottom: '100%', marginBottom: -5, borderLeft: '1px solid var(--bd2)', borderTop: '1px solid var(--bd2)' }
+                  : { top: '100%', marginTop: -5, borderRight: '1px solid var(--bd2)', borderBottom: '1px solid var(--bd2)' }),
+                width: 10,
+                height: 10,
+                background: 'var(--tooltip)',
+                transform: 'translateX(-50%) rotate(45deg)',
+                backdropFilter: 'blur(8px)',
+              }}
+            />
+          </span>,
+          document.body
+        )}
     </span>
   );
 }

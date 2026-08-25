@@ -7,6 +7,8 @@ import PlaybackTimeline from './PlaybackTimeline';
 import ActiveDetectionsPanel from './ActiveDetectionsPanel';
 import { useApi } from '../hooks/useApi';
 import { getChannels, getLocations, getNVRs, getDepartments } from '../helpers/monitoring';
+import { useSocket } from '../context/SocketContext';
+import { useAuth } from '../context/AuthContext';
 
 /* Camera-type maps to the channel `checkType` field on the backend. */
 const CAM_TYPE_OPTIONS = [
@@ -142,6 +144,35 @@ export default function CameraGrid() {
     () => getChannels({ location: effLoc, nvrId: selNvr, department: selDept, camType: selType, limit: 200 }),
     [ctxLoc, selLoc.join(','), selNvr.join(','), selDept.join(','), selType.join(',')]
   );
+
+  /*
+   * A camera's enabled/disabled engines can flip on their own, driven by the
+   * detection scheduler (global or per-camera, whichever wins when several
+   * overlap on one camera) — not just by an explicit user edit here. Without
+   * this, ActiveDetectionsPanel's "Engines on this Camera" chips would only
+   * reflect a schedule boundary after the next manual reload of this page.
+   * Same live-update mechanism GlobalDetectionScheduling.jsx uses for its
+   * running/stopped badges: treat each `detectionSchedule_${adminId}` event
+   * as a "something changed, refetch" signal (debounced, since one boundary
+   * can flip several cameras/engines at once) rather than trying to patch
+   * partial state from the payload here.
+   */
+  const { socket } = useSocket() || {};
+  const { user } = useAuth();
+  useEffect(() => {
+    if (!socket || !user?.adminId) return undefined;
+    let timer = null;
+    const handleScheduleEvent = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => channels.refetch({ silent: true }), 600);
+    };
+    const eventName = `detectionSchedule_${user.adminId}`;
+    socket.on(eventName, handleScheduleEvent);
+    return () => {
+      clearTimeout(timer);
+      socket.off(eventName, handleScheduleEvent);
+    };
+  }, [socket, user?.adminId, channels.refetch]);
 
   const locsApi  = useApi(() => getLocations(0, 100), []);
   const nvrsApi  = useApi(() => getNVRs(), []);

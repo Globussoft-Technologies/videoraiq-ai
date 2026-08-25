@@ -972,6 +972,11 @@ export default function DetectionDetailPanel({
       ? 'You only have view access for detections'
       : 'Create detection setting first to edit schedule';
 
+  // Detection-service success/failure toasts for schedule changes on this
+  // camera are owned by the parent Detections.jsx (it listens on
+  // `detectionSchedule_${adminId}` and refetches the camera on every event) —
+  // kept in one place so a save doesn't toast twice.
+
   useEffect(() => {
     let alive = true;
     if (!settingId || !channelId) {
@@ -1083,8 +1088,7 @@ export default function DetectionDetailPanel({
     const base = { monday: [], tuesday: [], wednesday: [], thursday: [], friday: [], saturday: [], sunday: [] };
     const formatted = {};
     for (const day of Object.keys(base)) {
-      const list = d?.[day] || [];
-      formatted[day] = list.slice(0, 1);
+        formatted[day] = d?.[day] || [];
     }
     return formatted;
   }
@@ -1092,14 +1096,14 @@ export default function DetectionDetailPanel({
   function addInterval(day) {
     setScheduleForm((s) => {
       const days = ensureDays(s.days);
-      return { ...s, days: { ...days, [day]: [{ start: '09:00', end: '18:00' }] } };
+      return { ...s, days: { ...days, [day]: [...(days[day] || []), { start: '09:00', end: '18:00' }] } };
     });
   }
 
   function removeInterval(day, idx) {
     setScheduleForm((s) => {
       const days = ensureDays(s.days);
-      return { ...s, days: { ...days, [day]: [] } };
+      return { ...s, days: { ...days, [day]: (days[day] || []).filter((_, i) => i !== idx) } };
     });
   }
 
@@ -1121,7 +1125,7 @@ export default function DetectionDetailPanel({
         ...s,
         days: {
           ...days,
-          [targetDay]: sourceRanges.slice(0, 1).map((range) => ({ ...range })),
+          [targetDay]: sourceRanges.map((range) => ({ ...range })),
         },
       };
     });
@@ -1136,7 +1140,7 @@ export default function DetectionDetailPanel({
       if (!sourceRanges.length) return s;
       const nextDays = {};
       SCHEDULE_DAYS.forEach((day) => {
-        nextDays[day] = sourceRanges.slice(0, 1).map((range) => ({ ...range }));
+        nextDays[day] = sourceRanges.map((range) => ({ ...range }));
       });
       return { ...s, days: nextDays };
     });
@@ -1492,7 +1496,7 @@ export default function DetectionDetailPanel({
             <div
               onClick={(e) => e.stopPropagation()}
               style={{
-                width: 'min(640px, 94vw)',
+                width: 'min(720px, 94vw)',
                 maxHeight: '90vh',
                 display: 'flex',
                 flexDirection: 'column',
@@ -1646,16 +1650,16 @@ export default function DetectionDetailPanel({
                           key={day}
                           style={{
                             display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 16,
+                            alignItems: 'flex-start',
+                            flexWrap: 'wrap',
+                            gap: 12,
                             padding: '12px 16px',
                             background: 'var(--bg1solid)',
                             border: '1px solid var(--bd)',
                             borderRadius: '12px',
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 9, width: 100, flexShrink: 0, paddingTop: 3 }}>
                             <div
                               style={{
                                 width: 32,
@@ -1670,39 +1674,41 @@ export default function DetectionDetailPanel({
                             >
                               <Calendar size={16} />
                             </div>
-                            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--tx)', width: 90, flexShrink: 0 }}>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--tx)' }}>
                               {titleCase(day)}
                             </span>
-                            <div style={{ marginRight: 4 }}>
-                              <CopyFromButton
-                                options={copyOptions}
-                                disabled={scheduleLoading || copyOptions.length === 0}
-                                onPick={(sourceDay) => copyIntervalFromDay(sourceDay, day)}
-                                title={copyOptions.length ? `Copy another day's schedule to ${titleCase(day)}` : 'No other day has a time range to copy'}
-                              />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
-                              {!hasRange ? (
-                                <span style={{ fontSize: 13, color: 'var(--tx3)' }}>No ranges</span>
-                              ) : (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          </div>
+                          <div style={{ paddingTop: 1, flexShrink: 0 }}>
+                            <CopyFromButton
+                              options={copyOptions}
+                              disabled={scheduleLoading || copyOptions.length === 0}
+                              onPick={(sourceDay) => copyIntervalFromDay(sourceDay, day)}
+                              title={copyOptions.length ? `Copy another day's schedule to ${titleCase(day)}` : 'No other day has a time range to copy'}
+                            />
+                          </div>
+                          <div style={{ flex: '1 1 260px', minWidth: 260, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {!hasRange ? (
+                              <span style={{ fontSize: 13, color: 'var(--tx3)', paddingTop: 4 }}>No ranges</span>
+                            ) : (
+                              ranges.map((range, index) => (
+                                <div key={index} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                                   <TimeInput12
-                                    value={ranges[0].start || '09:00'}
+                                    value={range.start || '09:00'}
                                     disabled={scheduleLoading}
-                                    onChange={(value) => updateInterval(day, 0, 'start', value)}
+                                    onChange={(value) => updateInterval(day, index, 'start', value)}
                                   />
                                   <span style={{ fontSize: 13, color: 'var(--tx2)', fontWeight: 500 }}>to</span>
                                   <TimeInput12
-                                    value={ranges[0].end || '18:00'}
+                                    value={range.end || '18:00'}
                                     disabled={scheduleLoading}
-                                    onChange={(value) => updateInterval(day, 0, 'end', value)}
+                                    onChange={(value) => updateInterval(day, index, 'end', value)}
                                   />
                                   {/* An end before the start is a valid overnight range, not a
                                       typo. The stored value stays the one {start, end} the user
                                       typed — this only names what it means. */}
-                                  {isOvernightRange(ranges[0]) && (
+                                  {isOvernightRange(range) && (
                                     <span
-                                      title={`Detection runs from ${ranges[0].start} to ${ranges[0].end} the following day`}
+                                      title={`Detection runs from ${range.start} to ${range.end} the following day`}
                                       style={{
                                         flexShrink: 0,
                                         fontSize: 10,
@@ -1719,56 +1725,56 @@ export default function DetectionDetailPanel({
                                       next day
                                     </span>
                                   )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          {hasRange ? (
-                            <button
-                              onClick={() => removeInterval(day, 0)}
-                              type="button"
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                width: 32,
-                                height: 32,
-                                borderRadius: '8px',
-                                border: 'none',
+                                  <button
+                                    onClick={() => removeInterval(day, index)}
+                                    type="button"
+                                    disabled={scheduleLoading}
+                                    style={{
+                                      display: 'grid',
+                                      placeItems: 'center',
+                                      width: 28,
+                                      height: 28,
+                                      borderRadius: '8px',
+                                      border: '1px solid var(--bd)',
+                                      background: 'transparent',
                                       color: '#ef4444',
-                                cursor: 'pointer',
+                                      cursor: scheduleLoading ? 'not-allowed' : 'pointer',
                                       flexShrink: 0,
-                              }}
-                              title="Remove time range"
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => addInterval(day)}
-                              type="button"
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 4,
-                                height: 32,
-                                padding: '0 12px',
-                                borderRadius: '8px',
-                                border: 'none',
-                                background: 'color-mix(in srgb, var(--violet) 12%, var(--bg2))',
-                                color: '#7c3aed',
-                                cursor: 'pointer',
-                                fontWeight: 600,
-                                fontSize: '13px',
-                                      flexShrink: 0,
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = 'color-mix(in srgb, var(--violet) 20%, var(--bg2))'}
-                              onMouseLeave={(e) => e.currentTarget.style.background = 'color-mix(in srgb, var(--violet) 12%, var(--bg2))'}
-                            >
-                              <Plus size={14} strokeWidth={2.5} />
-                              Add
-                            </button>
-                          )}
+                                    }}
+                                    title="Remove time range"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                          <button
+                            onClick={() => addInterval(day)}
+                            type="button"
+                            disabled={scheduleLoading}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              height: 32,
+                              padding: '0 12px',
+                              borderRadius: '8px',
+                              border: 'none',
+                              background: 'color-mix(in srgb, var(--violet) 12%, var(--bg2))',
+                              color: '#7c3aed',
+                              cursor: scheduleLoading ? 'not-allowed' : 'pointer',
+                              fontWeight: 600,
+                              fontSize: '13px',
+                              flexShrink: 0,
+                              marginLeft: 'auto',
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'color-mix(in srgb, var(--violet) 20%, var(--bg2))'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'color-mix(in srgb, var(--violet) 12%, var(--bg2))'}
+                          >
+                            <Plus size={14} strokeWidth={2.5} />
+                            Add
+                          </button>
                         </div>
                         );
                       })}

@@ -8,6 +8,8 @@ import { useApi } from '../../../../hooks/useApi';
 import { usePermissions } from '@/context/PermissionContext';
 import MultiSelect from '../../../../components/MultiSelect';
 import { deleteDetectionSetting, getCamerasByNvr, getChannels, getDetectionSettings, getDetectionTypes, getNvrs, resetDetectionThresholds, toggleChannelDetection, updateChannel, updateDetectionSetting } from '../../../../helpers/configure';
+import { useSocket } from '../../../../context/SocketContext';
+import { useAuth } from '../../../../context/AuthContext';
 import { fetchDetectionTypes as fetchIncidentFilterTypes, fetchIncidents, fetchIncidentStats } from '../../../../helpers/incidents';
 import { timeOfDay } from '../../../../lib/format';
 import DetectionZoneMarking from '../DetectionZoneMarking';
@@ -1229,6 +1231,52 @@ export default function Detections() {
       // The editor already applied the successful local update; skip noisy background refresh errors.
     }
   };
+
+  /**
+   * Saving a per-camera schedule only confirms the schedule DOCUMENT was
+   * written; actually starting/stopping the detector is a separate,
+   * asynchronous call to the detection service (DS) made server-side right
+   * after. That call can resolve (or fail) after the one refreshZoneCamera()
+   * call submitSchedule() already does on save, so the "Status: Paused/
+   * Active" shown here can go stale the moment DS is slow.
+   *
+   * Same fix GlobalDetectionScheduling.jsx already relies on for its running/
+   * stopped badges: treat every `detectionSchedule_${adminId}` event for the
+   * open camera as a "something changed, refetch" signal (debounced, since a
+   * save can emit more than one event) instead of trusting a single
+   * immediately-after-save snapshot.
+   */
+  const { socket } = useSocket() || {};
+  const { user } = useAuth();
+  useEffect(() => {
+    if (!socket || !user?.adminId || !zoneCamera?._id) return undefined;
+    let timer = null;
+    const handleScheduleEvent = (payload) => {
+      const eventChannelId = payload?.channelId?._id || payload?.channelId;
+      if (String(eventChannelId) !== String(zoneCamera._id)) return;
+
+      const detectionName = payload?.detectionName || payload?.settingType || 'Detection';
+      if (payload?.status === 'failed') {
+        const reason = payload?.dsResponse?.detail || payload?.dsResponse?.message || payload?.dsError || 'no response from the detection service';
+        toast.error(`Could not ${payload?.operation || 'apply the schedule for'} ${detectionName} — ${reason}`);
+      } else {
+        const enabled = payload?.enabled === true;
+        toast.success(`${enabled ? 'Enabled' : 'Disabled'} — ${detectionName}`);
+      }
+
+      clearTimeout(timer);
+      timer = setTimeout(refreshZoneCamera, 600);
+    };
+    const eventName = `detectionSchedule_${user.adminId}`;
+    socket.on(eventName, handleScheduleEvent);
+    return () => {
+      clearTimeout(timer);
+      socket.off(eventName, handleScheduleEvent);
+    };
+    // refreshZoneCamera intentionally stays inline with the latest zoneCamera/
+    // selectedSettingType for this render, same as handleCameraFilterChange above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, user?.adminId, zoneCamera?._id]);
 
   const handleZoneCameraTypeChange = async (checkType) => {
     if (!canEditDetections) return;
