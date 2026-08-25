@@ -220,8 +220,18 @@ class PythonService {
       // const rtspUrl = buildRTSPUrl(nvr, channel, "main");
       // const streamingPath = await getStreamingUrl(uid, rtspUrl);
       const streamingPath = await buildStreamingUrl(nvr, channel);
-      const streamingUrl =
-        APP_ENV === "cloud" ? `${await resolveHost(nvr?.userId)}/${streamingPath}` : streamingPath;
+
+      // stream_url MUST be absolute: DS fetches it directly, and a bare
+      // "stream/<nvr>-<cam>/playlist.m3u8" is not fetchable from there. The old
+      // check only prefixed the host when APP_ENV was "cloud", but every config
+      // ships APP_ENV "local", so DS was handed a relative path on every start -
+      // the pipeline came up, found nothing to read, and produced no detections.
+      // Prefix whenever the path is not already absolute, whatever the env.
+      const isAbsolute = /^https?:\/\//i.test(String(streamingPath || ""));
+      const streamHost = String((await resolveHost(nvr?.userId)) || "").replace(/\/+$/, "");
+      const streamingUrl = isAbsolute
+        ? String(streamingPath)
+        : `${streamHost}/${String(streamingPath || "").replace(/^\/+/, "")}`;
 
       // ! new
       // const streamingUrl = `${nvr?.domain}${channel?.streamingPath}`;
@@ -259,9 +269,16 @@ class PythonService {
       return await this.startNewDetection(payload);
     } else {
       // return await this.stopDetection(channel?._id?.toString());
+      // Pass the detector modes and the admin. Without the modes the payload
+      // carries no `detectors` list and DS stops the WHOLE camera, killing
+      // every other detection on it. Without the admin the request goes to
+      // the global default host even when this admin has its own, so the
+      // stop lands on a server that is not running the pipeline.
       return await this.stopNewDetection(
         channel?._id?.toString(),
         channel?.nvrId?._id?.toString(),
+        DETECTION_MODES_MAP[type] || [],
+        admin_id,
       );
     }
   }
@@ -802,7 +819,7 @@ class PythonService {
     return await this.updateNewDetection(payload);
   }
 
-  async stopNewDetection(camera_id, nvr_id, detectionModes = []) {
+  async stopNewDetection(camera_id, nvr_id, detectionModes = [], admin_id) {
     try {
       // 🔹 Convert detectionModes → detectors (names expected by API)
       const detectors = [];
@@ -859,12 +876,24 @@ class PythonService {
         detectors.push("vehicleTypeDetectionSettings");
       }
       if (detectionModes?.includes("tableOccupancySettings")) {
-        detectors.push("tableOccupancyDetectionSettings");
+        // DS enum is tableOccupancySettings, not ...DetectionSettings. The wrong
+        // name fails the whole request validation, so the stop never happened.
+        detectors.push("tableOccupancySettings");
       }
 
       if (detectionModes?.includes("desk_absence")) {
-        detectors.push("deskAbsenceSettings");
+        // DS enum is deskAbsenceDetectionSettings - the mirror image of the
+        // internal setting key. Same failure mode as table occupancy above.
+        detectors.push("deskAbsenceDetectionSettings");
       }
+      if (detectionModes?.includes("foodServicePPEDetection")) {
+        detectors.push("foodServicePPEDetection");
+      }
+
+      if (detectionModes?.includes("carModelDetection")) {
+        detectors.push("carModelDetectionSettings");
+      }
+
       if (detectionModes?.includes("mobilePhoneDetection")) {
         detectors.push("mobilePhoneDetectionSettings");
       }
@@ -879,8 +908,14 @@ class PythonService {
         payload.detectors = detectors;
       }
 
+      // Per-admin endpoint, matching startNewDetection. Using the global
+      // config default here meant an admin with a custom detectionUrl had its
+      // detections started on one host and stopped on another — so they never
+      // actually stopped.
+      const { detectionUrl } = await resolveAdminEndpoints(admin_id);
+
       const response = await axios.post(
-        `${detectionHost}/stream/stop`,
+        `${detectionUrl}/stream/stop`,
         payload,
         {
           headers: {

@@ -61,8 +61,14 @@ describe("cameraCanBulkToggle", () => {
     expect(cameraCanBulkToggle([false, false, false], "stop")).toBe(true);
   });
 
-  it("allows a resume batch when every detector should end up running", () => {
-    expect(cameraCanBulkToggle([true, true], "resume")).toBe(true);
+  it("NEVER batches a resume, even when every detector should end up running", () => {
+    // /stream/resume-all carries no stream url, detectors, zones or
+    // thresholds, so it can only un-pause a pipeline DS already holds.
+    // Starting always goes through the per-detector POST /stream instead,
+    // which sends the full configuration — otherwise a camera reports
+    // enabled while no detections actually fire.
+    expect(cameraCanBulkToggle([true, true], "resume")).toBe(false);
+    expect(cameraCanBulkToggle([true], "resume")).toBe(false);
   });
 
   it("refuses a stop batch when any detector should stay running", () => {
@@ -74,14 +80,17 @@ describe("cameraCanBulkToggle", () => {
     expect(cameraCanBulkToggle([true, false], "resume")).toBe(false);
   });
 
-  it("refuses a batch whose direction is the opposite of every target", () => {
+  it("refuses a stop batch whose direction is the opposite of every target", () => {
     expect(cameraCanBulkToggle([true, true], "stop")).toBe(false);
-    expect(cameraCanBulkToggle([false, false], "resume")).toBe(false);
+  });
+
+  it("refuses an unrecognised operation", () => {
+    expect(cameraCanBulkToggle([false, false], "pause")).toBe(false);
+    expect(cameraCanBulkToggle([false, false], undefined)).toBe(false);
   });
 
   it("handles a single-detector camera, the common case", () => {
     expect(cameraCanBulkToggle([false], "stop")).toBe(true);
-    expect(cameraCanBulkToggle([true], "resume")).toBe(true);
     expect(cameraCanBulkToggle([true], "stop")).toBe(false);
   });
 
@@ -188,7 +197,7 @@ describe("routing a real multi-detection camera", () => {
     expect((await routeFor(channel, index, "stop")).bulk).toBe(true);
   });
 
-  it("does NOT batch a resume when a sibling should stay stopped", async () => {
+  it("does NOT batch a resume at all — starts go through POST /stream", async () => {
     // deskAbsence opens at 09:00; lineCrossing is ungoverned and switched off,
     // so a resume-all would wrongly start it.
     const index = createGlobalScheduleIndex([globalCovering([DESK])]);

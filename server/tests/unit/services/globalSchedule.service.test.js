@@ -25,11 +25,15 @@ const h = vi.hoisted(() => ({
 }));
 
 /** Mongoose-ish chain: .populate().sort().lean() all resolve to `value`. */
+// Mongoose Query is thenable, so `await Model.find(...)` resolves to the docs
+// without calling .lean(). Modelling only populate/sort/lean made an awaited
+// find() resolve to the chain object itself.
 const chain = (value) => {
   const self = {
     populate: () => self,
     sort: () => self,
     lean: async () => value,
+    then: (onFulfilled, onRejected) => Promise.resolve(value).then(onFulfilled, onRejected),
   };
   return self;
 };

@@ -1215,7 +1215,10 @@ class DetectionSettingService {
 
       await emitDetectionScheduleState(req, channel, detectionSetting, "apply", {
         operation,
-        status: "success",
+        // allSettled lets one service fail while the other succeeds. Calling
+        // that a clean success hides exactly the case we need to see.
+        status: backendResponse?.partialFailure ? "failed" : "success",
+        dsPartialFailure: backendResponse?.partialFailure || undefined,
         scheduleSource,
         endpoint: dsEndpoint,
         response: backendResponse ?? null,

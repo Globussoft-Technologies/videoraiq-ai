@@ -204,8 +204,21 @@ export const cameraDetectorTargetStates = async (channel, { index } = {}) => {
 
 export const cameraCanBulkToggle = (targetStates = [], operation) => {
   if (!Array.isArray(targetStates) || targetStates.length === 0) return false;
-  const wanted = operation === "resume";
-  return targetStates.every((state) => state === wanted);
+
+  // RESUME IS NEVER BATCHED.
+  //
+  // /stream/resume-all carries only { admin_id, camera_id } — no stream url,
+  // no detectors, no zones or thresholds. It can only un-pause a pipeline DS
+  // already holds, so a detector DS has never been told about (first start
+  // after configuration, or after a DS restart) comes back "resumed" while
+  // nothing actually runs: enabled=true in our DB, no detections firing.
+  //
+  // Starting therefore always goes through the per-detector POST /stream,
+  // which sends the full configuration and is idempotent. Stopping needs no
+  // configuration, so it still batches.
+  if (operation !== "stop") return false;
+
+  return targetStates.every((state) => state === false);
 };
 
 /** nvrId may arrive populated (a document) or raw (an ObjectId). */

@@ -1183,7 +1183,10 @@ class DetectionSettingService {
         stateChangeSource || "apply",
         {
           operation,
-          status: "success",
+          // allSettled lets one service fail while the other succeeds. Calling
+          // that a clean success hides exactly the case we need to see.
+          status: backendResponse?.partialFailure ? "failed" : "success",
+          dsPartialFailure: backendResponse?.partialFailure || undefined,
           scheduleSource,
           endpoint: dsEndpoint,
           response: backendResponse ?? null,
@@ -1410,7 +1413,8 @@ class DetectionSettingService {
               "schedule-runner",
               {
                 operation: group.operation,
-                status: "success",
+                status: backendResponse?.partialFailure ? "failed" : "success",
+                dsPartialFailure: backendResponse?.partialFailure || undefined,
                 scheduleSource: item.scheduleSource,
                 endpoint,
                 response: backendResponse ?? null,
