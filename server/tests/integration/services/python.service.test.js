@@ -26,6 +26,9 @@ vi.mock("../../../utils/rtspStream.js", () => ({
   default: vi.fn(),
   buildRTSPUrl: vi.fn(() => "rtsp://fake.test/main"),
   buildStreamingUrl: vi.fn().mockResolvedValue("stream.m3u8"),
+  // stream_url is now made absolute on every start, not only when APP_ENV is
+  // "cloud", so resolveHost is always consulted and has to be mocked.
+  resolveHost: vi.fn().mockResolvedValue("http://stream.test"),
 }));
 
 vi.mock("../../../utils/adminEndpoints.js", () => ({
@@ -416,7 +419,11 @@ describe("PythonService.handleDetectionStartStop", () => {
     expect(body.nvr_id).toBe("nvr-9");
     expect(body.admin_id).toBe("admin-9");
     expect(body.detectors.find((d) => d.name === "crowdDetectionSettings")).toBeDefined();
-    expect(body.stream_url).toBe("stream.m3u8");
+    // Absolute, not the bare path buildStreamingUrl returned. DS fetches this
+    // URL directly, so a relative "stream/<nvr>-<cam>/playlist.m3u8" produced a
+    // pipeline that started and then had nothing to read - the camera showed as
+    // running while no detections ever fired.
+    expect(body.stream_url).toBe("http://stream.test/stream.m3u8");
   });
 
   it("enable=true with an unknown detection type yields empty modes and rejects", async () => {

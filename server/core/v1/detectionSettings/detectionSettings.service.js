@@ -71,6 +71,7 @@ import {
   SCHEDULE_SOURCE,
   cameraCanBulkToggle,
   cameraDetectorTargetStates,
+  isScheduleOpeningTick,
   resolveDesiredDetectionState,
 } from "../../../services/detectionSchedule.resolver.js";
 import mongoose, { Types } from "mongoose";
@@ -1054,26 +1055,70 @@ class DetectionSettingService {
         userId: req?.verified?.userData?.user_id,
         channelUserId: channel?.userId,
       });
-      const settingType = detectionSetting.settingType;
-      const link = channel?.detections?.[settingType];
-      if (!link?.id) return;
+      // A DetectionSetting document's settingType is not always the key the
+      // channel stores it under: several detectors carry a DS-side alias
+      // ("zoneIntrusionSettings" for unauthorizedAccessSettings, and the same
+      // for desk absence / table occupancy / number plate). Looking the alias up
+      // directly found nothing and returned in silence, so that detector was
+      // simply never started or stopped — on a two-detection camera only one
+      // ever moved. Fall back to matching the setting document itself, which
+      // does not depend on names lining up at all.
+      let settingType = detectionSetting.settingType;
+      let link = channel?.detections?.[settingType];
+
+      if (!link?.id) {
+        const settingId = String(detectionSetting._id || detectionSetting.id || "");
+        const matchedKey = Object.keys(DETECTION_TYPES).find((key) => {
+          const candidate = channel?.detections?.[key]?.id;
+          const candidateId = String(candidate?._id || candidate || "");
+          return settingId && candidateId && candidateId === settingId;
+        });
+
+        if (matchedKey) {
+          logger.info(
+            `[DETECTION_SCHEDULE] settingType "${settingType}" is not a channel key; ` +
+              `matched setting ${settingId} to detector "${matchedKey}" on channel ${channel?._id}`,
+          );
+          settingType = matchedKey;
+          link = channel?.detections?.[matchedKey];
+        }
+      }
+
+      if (!link?.id) {
+        // Loud, not silent: this used to drop a detector with no trace at all.
+        logger.error(
+          `[DETECTION_SCHEDULE] No detector on channel ${channel?._id} matches setting ` +
+            `${detectionSetting?._id} (settingType="${detectionSetting?.settingType}") — skipped`,
+        );
+        return;
+      }
 
       // Global (NVR-level) schedule takes priority; with none applicable this
       // resolves to the camera's own schedule, i.e. the previous behaviour.
       let shouldEnable = targetState;
       let scheduleSource = "explicit";
+      let governingSchedule;
       if (typeof shouldEnable !== "boolean") {
         const desired = await resolveDesiredDetectionState(channel, settingType, {
           index: globalScheduleIndex,
         });
         shouldEnable = desired.active;
         scheduleSource = desired.source;
+        governingSchedule = desired.schedule;
       }
 
       // Idempotency: `enabled` is the last-known DS state, so a camera already
       // in the desired state costs nothing and issues no DS call this tick.
       const currentStatus = link.enabled === true;
-      if (currentStatus === shouldEnable) {
+
+      // On the tick a window opens, re-assert even when the stored flag already
+      // agrees. That flag is only our last-known DS state, and a detector marked
+      // running that DS never actually started would otherwise never be retried.
+      // Without this the runner's own opening-tick check was defeated here.
+      const openingTick =
+        shouldEnable && scheduleSource !== "explicit" && isScheduleOpeningTick(governingSchedule);
+
+      if (currentStatus === shouldEnable && !openingTick) {
         if (stateChangeSource === "schedule-runner") {
           logger.info(
             `[DETECTION_SCHEDULE] No-op — channel=${channel._id} detector=${settingType} ` +
@@ -1320,7 +1365,16 @@ class DetectionSettingService {
           const shouldEnable = desired.active;
           const scheduleSource = desired.source;
 
-          if (currentStatus === shouldEnable) continue;
+          // On the tick a window opens, start every detector it covers even if
+          // our stored flag already claims it is running. That flag can be
+          // stale — a detector marked enabled that DS never actually started
+          // would otherwise never be retried, because stored and desired
+          // already agree. POST /stream is documented as additive ("if camera
+          // already running: enable new detectors"), so re-asserting is safe,
+          // and it happens once per window rather than every minute.
+          const openingTick = shouldEnable && isScheduleOpeningTick(desired.schedule);
+
+          if (currentStatus === shouldEnable && !openingTick) continue;
 
           const req = buildScheduleRunnerReq(channel, adminId);
 

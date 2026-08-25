@@ -68,6 +68,7 @@ import Channel from "../channels/channels.model.js";
 import {
   cameraCanBulkToggle,
   cameraDetectorTargetStates,
+  isScheduleOpeningTick,
   resolveDesiredDetectionState, manualOverrideFor,
 } from "../../../services/detectionSchedule.resolver.js";
 import { sendPayloadToUser } from "../../../socket.js";
@@ -1107,23 +1108,66 @@ class DetectionSettingService {
         userId: req?.verified?.userData?.user_id,
         channelUserId: channel?.userId,
       });
-      const settingType = detectionSetting.settingType;
-      const link = channel?.detections?.[settingType];
-      if (!link?.id) return;
+      // A DetectionSetting document's settingType is not always the key the
+      // channel stores it under: several detectors carry a DS-side alias
+      // ("zoneIntrusionSettings" for unauthorizedAccessSettings, and the same
+      // for desk absence / table occupancy / number plate). Looking the alias up
+      // directly found nothing and returned in silence, so that detector was
+      // simply never started or stopped — on a two-detection camera only one
+      // ever moved. Fall back to matching the setting document itself, which
+      // does not depend on names lining up at all.
+      let settingType = detectionSetting.settingType;
+      let link = channel?.detections?.[settingType];
+
+      if (!link?.id) {
+        const settingId = String(detectionSetting._id || detectionSetting.id || "");
+        const matchedKey = Object.keys(DETECTION_TYPES).find((key) => {
+          const candidate = channel?.detections?.[key]?.id;
+          const candidateId = String(candidate?._id || candidate || "");
+          return settingId && candidateId && candidateId === settingId;
+        });
+
+        if (matchedKey) {
+          logger.info(
+            `[DETECTION_SCHEDULE] settingType "${settingType}" is not a channel key; ` +
+              `matched setting ${settingId} to detector "${matchedKey}" on channel ${channel?._id}`,
+          );
+          settingType = matchedKey;
+          link = channel?.detections?.[matchedKey];
+        }
+      }
+
+      if (!link?.id) {
+        // Loud, not silent: this used to drop a detector with no trace at all.
+        logger.error(
+          `[DETECTION_SCHEDULE] No detector on channel ${channel?._id} matches setting ` +
+            `${detectionSetting?._id} (settingType="${detectionSetting?.settingType}") — skipped`,
+        );
+        return;
+      }
 
       // Same resolver the v1 one-minute runner uses, so an immediate save and
       // the next tick always agree: global (NVR-level) schedule takes priority,
       // falling back to this camera's own schedule.
       let shouldEnable = targetState;
       let scheduleSource = "explicit";
+      let governingSchedule;
       if (typeof shouldEnable !== "boolean") {
         const desired = await resolveDesiredDetectionState(channel, settingType);
         shouldEnable = desired.active;
         scheduleSource = desired.source;
+        governingSchedule = desired.schedule;
       }
 
       const currentStatus = link.enabled === true;
-      if (currentStatus === shouldEnable) return;
+
+      // On the tick a window opens, re-assert even when the stored flag already
+      // agrees. That flag is only our last-known DS state, and a detector marked
+      // running that DS never actually started would otherwise never be retried.
+      const openingTick =
+        shouldEnable && scheduleSource !== "explicit" && isScheduleOpeningTick(governingSchedule);
+
+      if (currentStatus === shouldEnable && !openingTick) return;
 
       const cameraId = channel._id.toString();
       const zones = detectionSetting?.settings?.referencePoints?.[cameraId] || [];

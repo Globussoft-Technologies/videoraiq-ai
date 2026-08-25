@@ -2,6 +2,7 @@ import GlobalSchedule from "../core/v1/globalSchedule/globalSchedule.model.js";
 import { DETECTION_TYPES } from "../constants/detectionTypes.js";
 import logger from "../utils/logger.js";
 import {
+  isScheduleOpeningNow,
   isValidTimezone,
   isWithinScheduleDays,
   nextScheduleBoundary,
@@ -219,6 +220,19 @@ export const cameraCanBulkToggle = (targetStates = [], operation) => {
   if (operation !== "stop") return false;
 
   return targetStates.every((state) => state === false);
+};
+
+/**
+ * Is this schedule opening right now, in its own timezone?
+ *
+ * Only meaningful for custom schedules — "always" never opens, it simply is.
+ */
+export const isScheduleOpeningTick = (schedule) => {
+  if (!schedule || schedule.mode !== "custom") return false;
+  const { day, minutes } = getNowInScheduleTimezone(
+    schedule.timezone || DEFAULT_SCHEDULE_TIMEZONE,
+  );
+  return isScheduleOpeningNow(schedule.days, day, minutes);
 };
 
 /** nvrId may arrive populated (a document) or raw (an ObjectId). */

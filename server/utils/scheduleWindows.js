@@ -230,6 +230,32 @@ export const isWithinScheduleDays = (days = {}, day, minutes) => {
  * admin.service.js updateTimezone, so aliases the ICU build understands
  * ("Asia/Calcutta") pass here exactly as they do there.
  */
+/**
+ * Did this schedule OPEN within the last minute?
+ *
+ * True only on the tick that crosses a start boundary: covered now, not
+ * covered a minute ago. Handles the midnight rollover, so an overnight
+ * window opening at 00:00 is caught too.
+ *
+ * Used to re-assert every covered detector exactly once per window. The
+ * runner is otherwise idempotent against our own stored `enabled` flag, so a
+ * detector marked running that DS never actually started stays invisible to
+ * it forever. Re-asserting at the open is what heals that drift without
+ * hammering DS every minute.
+ */
+export const isScheduleOpeningNow = (days = {}, day, minutes) => {
+  if (!WEEKDAYS.includes(day) || !Number.isFinite(minutes)) return false;
+  if (!isWithinScheduleDays(days, day, minutes)) return false;
+
+  const previousMinute = minutes - 1;
+  if (previousMinute >= 0) {
+    return !isWithinScheduleDays(days, day, previousMinute);
+  }
+  // Just after local midnight: the minute before belongs to yesterday.
+  const yesterday = previousWeekday(day);
+  return !isWithinScheduleDays(days, yesterday, MINUTES_IN_DAY - 1);
+};
+
 export const isValidTimezone = (timezone) => {
   if (typeof timezone !== "string" || !timezone.trim()) return false;
   try {
