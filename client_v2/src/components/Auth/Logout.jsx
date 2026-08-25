@@ -10,6 +10,11 @@ const logoutRedirectUrl = () => {
   const loginUrl = envValue('VITE_AMEMBER_LOGIN_URL');
   const memberUrl = envValue('VITE_AMEMBER_MEMBER_URL');
   const amemberUrl = memberUrl || loginUrl;
+  const frontendUrl = envValue('VITE_FRONTEND').replace(/\/+$/, '');
+
+  if (frontendUrl === 'https://pridehonda.videoraiq.com') {
+    return `${frontendUrl}/admin-login`;
+  }
 
   if (amemberUrl) {
     const logoutUrl = new URL(
@@ -21,8 +26,7 @@ const logoutRedirectUrl = () => {
     return logoutUrl.toString();
   }
 
-  const frontendUrl = envValue('VITE_FRONTEND');
-  return frontendUrl ? `${frontendUrl.replace(/\/$/, '')}/logout` : '/admin-login';
+  return frontendUrl ? `${frontendUrl}/logout` : '/admin-login';
 };
 
 /**
