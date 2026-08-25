@@ -16,6 +16,22 @@ const url = import.meta.env.VITE_ENV;
 const accessCookieName = () =>
   url === "dev" ? "dev-access-token" : url === "prod" ? "prod-access-token" : "access-token";
 
+/* Same local-setup convention as IsAuth.jsx / Logout.jsx: a local deployment
+   has no separate hosted login, so "admin login" is just the in-app
+   /admin-login route. A hosted (non-local) deployment sends the user to the
+   aMember admin login instead — same env resolution as IsAuth.jsx's
+   loginRedirectUrl(), so both stay in sync if the aMember URLs change. */
+const envValue = (key) => String(import.meta.env[key] || "").trim();
+const isLocalSetup = () => envValue("VITE_LOCAL_SETUP").toLowerCase() === "true";
+const adminLoginUrl = () => {
+  if (isLocalSetup()) return "/admin-login";
+
+  const loginUrl = envValue("VITE_AMEMBER_LOGIN_URL");
+  if (loginUrl) return loginUrl;
+
+  return "/admin-login";
+};
+
 const REMEMBER_COOKIE = "user_remember_me";
 
 const FEATURES = [
@@ -34,7 +50,8 @@ const STATS = [
 /**
  * Employee / user portal login (route: /employee-login). A light-themed page,
  * deliberately separate from the dark admin login at /admin-login. The
- * "Login as admin" action bounces to that admin login.
+ * "Login as admin" action bounces to that admin login — in-app when
+ * VITE_LOCAL_SETUP is true, otherwise the hosted aMember admin login.
  */
 export default function EmployeeLogin() {
   const navigate = useNavigate();
@@ -384,7 +401,10 @@ export default function EmployeeLogin() {
               <button
                 type="button"
                 className="vqp-ghost w-full h-11 mt-[14px] rounded-[12px] cursor-pointer font-['Space_Grotesk',sans-serif] font-semibold text-[13.5px] text-[#2a6fdb] bg-[#eaf1fd] border-[1.5px] border-solid border-[#cfe0fb] flex items-center justify-center gap-2 transition-[background,border-color] duration-150"
-                onClick={() => navigate("/admin-login")}
+                onClick={() => {
+                  if (isLocalSetup()) navigate(adminLoginUrl());
+                  else window.location.href = adminLoginUrl();
+                }}
               >
                 <ShieldCheck size={16} />
                 Login as admin
