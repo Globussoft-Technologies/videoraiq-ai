@@ -1,4 +1,5 @@
 import GlobalSchedule from "../core/v1/globalSchedule/globalSchedule.model.js";
+import { DETECTION_TYPES } from "../constants/detectionTypes.js";
 import logger from "../utils/logger.js";
 import {
   isValidTimezone,
@@ -137,6 +138,74 @@ export const manualOverrideFor = (schedule, enable, now = new Date()) => {
   if (!until) return none;
 
   return { overrideState: enable, overrideUntil: until };
+};
+
+/**
+ * Is it safe to move this whole camera with one bulk DS call?
+ *
+ * The bulk endpoints (/stream/stop-all, /stream/resume-all) take camera ids
+ * and act on EVERY detector on the camera — the payload carries no detector
+ * scope at all. So batching a camera is only correct when every detector
+ * configured on it is meant to end up in the state the batch is moving to.
+ *
+ * Otherwise stopping one detector at its schedule close would also stop the
+ * others, minutes or hours before their own close times, and only the
+ * detector that triggered the batch would have its stored `enabled` updated
+ * — leaving the rest marked running while their pipelines are dead, which
+ * the runner then never corrects because stored and desired already agree.
+ *
+ * `targetStates` is the state each configured detector should be in after
+ * this tick: its resolved schedule verdict when something governs it, or
+ * its current state when nothing does (an ungoverned detector must be left
+ * exactly as it is).
+ */
+/**
+ * Where every configured detector on this camera should end up right now.
+ *
+ * Feeds cameraCanBulkToggle. A detector nothing schedules contributes its
+ * CURRENT state, because nothing is entitled to move it — that is what stops
+ * a bulk call sweeping an untouched detector along with the one whose window
+ * just closed.
+ *
+ * Builds the global index once and reuses it across detectors, so this costs
+ * one query rather than one per detector. Pass `index` when the caller
+ * already has one (the schedule runner does).
+ */
+export const cameraDetectorTargetStates = async (channel, { index } = {}) => {
+  const detections = channel?.detections || {};
+
+  const globalIndex =
+    index ||
+    (await buildGlobalScheduleIndex({
+      userId: channel?.userId,
+      nvrId: channelNvrId(channel),
+    }));
+
+  const states = [];
+  for (const settingType of Object.keys(DETECTION_TYPES)) {
+    const entry = detections[settingType];
+    if (!entry?.id) continue; // not configured on this camera
+
+    const governed =
+      Boolean(entry?.schedule) || Boolean(globalIndex.find(channel, settingType));
+    if (!governed) {
+      states.push(entry?.enabled === true);
+      continue;
+    }
+
+    const desired = await resolveDesiredDetectionState(channel, settingType, {
+      index: globalIndex,
+    });
+    states.push(desired.active);
+  }
+
+  return states;
+};
+
+export const cameraCanBulkToggle = (targetStates = [], operation) => {
+  if (!Array.isArray(targetStates) || targetStates.length === 0) return false;
+  const wanted = operation === "resume";
+  return targetStates.every((state) => state === wanted);
 };
 
 /** nvrId may arrive populated (a document) or raw (an ObjectId). */

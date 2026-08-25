@@ -69,6 +69,8 @@ import Channel from "../channels/channels.model.js";
 import {
   buildGlobalScheduleIndex,
   SCHEDULE_SOURCE,
+  cameraCanBulkToggle,
+  cameraDetectorTargetStates,
   resolveDesiredDetectionState,
 } from "../../../services/detectionSchedule.resolver.js";
 import mongoose, { Types } from "mongoose";
@@ -1100,15 +1102,29 @@ class DetectionSettingService {
 
       logger.info(`[DETECTION_SCHEDULE] DS request — ${logContext}`);
 
+
+      // The bulk endpoints act on the WHOLE camera, so they are only safe when
+      // every detector configured on it is meant to end up in this operation's
+      // state. On a camera whose detectors run to different schedules, batching
+      // would stop the siblings at this detector's close time — and only this
+      // detector's stored `enabled` would be written back, leaving the rest
+      // marked running with dead pipelines. Fall back to the per-detector call.
+      const canBulk =
+        scheduleSource === SCHEDULE_SOURCE.GLOBAL
+          ? cameraCanBulkToggle(
+              await cameraDetectorTargetStates(channel, { index: globalScheduleIndex }),
+              operation,
+            )
+          : false;
       let backendResponse;
       const dsEndpoint =
-        scheduleSource === SCHEDULE_SOURCE.GLOBAL
+        scheduleSource === SCHEDULE_SOURCE.GLOBAL && canBulk
           ? GLOBAL_SCHEDULE_BULK_ENDPOINTS[operation]
           : shouldEnable
             ? "POST /stream (start)"
             : "POST /stream/stop";
       try {
-        if (scheduleSource === SCHEDULE_SOURCE.GLOBAL) {
+        if (scheduleSource === SCHEDULE_SOURCE.GLOBAL && canBulk) {
           backendResponse = await pythonService.toggleCamerasBulk(
             adminId,
             cameraId,
@@ -1245,12 +1261,17 @@ class DetectionSettingService {
       const workByChannel = new Map();
       const globalBulkOps = new Map();
       for (const channel of channels) {
+        // Pass 1 — resolve EVERY configured detector on this camera, including
+        // ones nothing schedules. The bulk DS endpoints move a whole camera at
+        // once, so deciding whether a batch is safe needs the full picture,
+        // not just the detector whose window happened to close.
+        const evaluated = [];
         for (const settingType of Object.keys(DETECTION_TYPES)) {
           const detectionSetting = channel?.detections?.[settingType]?.id;
           if (!detectionSetting) continue;
 
-          // Evaluate a detector only if some schedule governs it — its own, or
-          // a global one. Detectors with neither stay untouched, as before.
+          // A detector is governed by its own schedule or a global one.
+          // Detectors with neither stay untouched, as before.
           const hasCameraSchedule = Boolean(
             channel?.detections?.[settingType]?.schedule,
           );
@@ -1265,21 +1286,48 @@ class DetectionSettingService {
             );
           }
 
-          if (!hasCameraSchedule && !hasGlobalSchedule) continue;
+          const governed = hasCameraSchedule || hasGlobalSchedule;
+          const currentStatus = channel?.detections?.[settingType]?.enabled === true;
+          const desired = governed
+            ? await resolveDesiredDetectionState(channel, settingType, {
+                index: globalScheduleIndex,
+              })
+            : null;
+
+          evaluated.push({
+            settingType,
+            detectionSetting,
+            governed,
+            currentStatus,
+            desired,
+            // Where this detector should end up after this tick. An ungoverned
+            // one keeps what it has — nothing is entitled to move it.
+            targetState: governed ? desired.active : currentStatus,
+          });
+        }
+
+        const targetStates = evaluated.map((item) => item.targetState);
+
+        // Pass 2 — act.
+        for (const item of evaluated) {
+          const { settingType, detectionSetting, governed, currentStatus, desired } = item;
+          if (!governed) continue;
 
           const adminId = adminIdByUserId.get(String(channel?.userId || ""));
-          const desired = await resolveDesiredDetectionState(channel, settingType, {
-            index: globalScheduleIndex,
-          });
           const shouldEnable = desired.active;
           const scheduleSource = desired.source;
-          const currentStatus = channel?.detections?.[settingType]?.enabled === true;
 
           if (currentStatus === shouldEnable) continue;
 
           const req = buildScheduleRunnerReq(channel, adminId);
 
-          if (scheduleSource === SCHEDULE_SOURCE.GLOBAL) {
+          const operation = shouldEnable ? "resume" : "stop";
+          // Batch only when the whole camera is moving that way. A camera with
+          // detectors on different schedules falls back to the per-detector
+          // path, which targets one detector instead of all of them.
+          const bulkSafe = cameraCanBulkToggle(targetStates, operation);
+
+          if (scheduleSource === SCHEDULE_SOURCE.GLOBAL && bulkSafe) {
             if (!adminId) {
               logger.error(
                 `[DETECTION_SCHEDULE] Missing adminId for global bulk action ` +
@@ -1288,7 +1336,6 @@ class DetectionSettingService {
               continue;
             }
 
-            const operation = shouldEnable ? "resume" : "stop";
             const bulkKey = `${adminId}:${operation}`;
             if (!globalBulkOps.has(bulkKey)) {
               globalBulkOps.set(bulkKey, {

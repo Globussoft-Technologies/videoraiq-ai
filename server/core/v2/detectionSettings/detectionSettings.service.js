@@ -65,7 +65,11 @@ import {
   carModelDetectionSchemaSetting
 } from "./detectionSettings.model.js";
 import Channel from "../channels/channels.model.js";
-import { resolveDesiredDetectionState, manualOverrideFor } from "../../../services/detectionSchedule.resolver.js";
+import {
+  cameraCanBulkToggle,
+  cameraDetectorTargetStates,
+  resolveDesiredDetectionState, manualOverrideFor,
+} from "../../../services/detectionSchedule.resolver.js";
 import { sendPayloadToUser } from "../../../socket.js";
 import mongoose, { Types } from "mongoose";
 
@@ -233,17 +237,17 @@ const normalizeTelegramSettings = (settings = {}) => {
 
   const zoneConfigs = Array.isArray(settings.zone_configs)
     ? settings.zone_configs.map((zoneConfig) => {
-        const zoneTelegramChatIds = normalizeTelegramChatIds(
-          zoneConfig?.telegramChatIds,
-          zoneConfig?.telegramChatId,
-        );
+      const zoneTelegramChatIds = normalizeTelegramChatIds(
+        zoneConfig?.telegramChatIds,
+        zoneConfig?.telegramChatId,
+      );
 
-        return {
-          ...zoneConfig,
-          telegramChatIds: zoneTelegramChatIds,
-          telegramChatId: zoneTelegramChatIds[0] || null,
-        };
-      })
+      return {
+        ...zoneConfig,
+        telegramChatIds: zoneTelegramChatIds,
+        telegramChatId: zoneTelegramChatIds[0] || null,
+      };
+    })
     : settings.zone_configs;
 
   return {
@@ -511,8 +515,7 @@ class DetectionSettingService {
     for (const channel of existingChannels) {
       if (channel.detections?.[settingType]?.enabled) {
         throw new Error(
-          `Channel '${channel.name}' already has ${
-            DETECTION_TYPES[settingType] || settingType
+          `Channel '${channel.name}' already has ${DETECTION_TYPES[settingType] || settingType
           } enabled.`,
         );
       }
@@ -1141,15 +1144,27 @@ class DetectionSettingService {
 
       logger.info(`[DETECTION_SCHEDULE] DS request — ${logContext}`);
 
+
+      // The bulk endpoints act on the WHOLE camera, so they are only safe when
+      // every detector configured on it is meant to end up in this operation's
+      // state. On a camera whose detectors run to different schedules, batching
+      // would stop the siblings at this detector's close time — and only this
+      // detector's stored `enabled` would be written back, leaving the rest
+      // marked running with dead pipelines. Fall back to the per-detector call.
+      const canBulk =
+        scheduleSource === SCHEDULE_SOURCE.GLOBAL
+          ? cameraCanBulkToggle(await cameraDetectorTargetStates(channel), operation)
+          : false;
+
       let backendResponse;
       const dsEndpoint =
-        scheduleSource === SCHEDULE_SOURCE.GLOBAL
+        scheduleSource === SCHEDULE_SOURCE.GLOBAL && canBulk
           ? GLOBAL_SCHEDULE_BULK_ENDPOINTS[operation]
           : shouldEnable
             ? "POST /stream (start)"
             : "POST /stream/stop";
       try {
-        if (scheduleSource === SCHEDULE_SOURCE.GLOBAL) {
+        if (scheduleSource === SCHEDULE_SOURCE.GLOBAL && canBulk) {
           backendResponse = await pythonService.toggleCamerasBulk(
             adminId,
             cameraId,
@@ -1174,7 +1189,7 @@ class DetectionSettingService {
         // The DS response decides success, not the fact that we sent a request.
         logger.error(
           `[DETECTION_SCHEDULE] DS request FAILED — ${logContext} ` +
-            `error=${error?.message} response=${JSON.stringify(error?.response?.data ?? null)}`,
+          `error=${error?.message} response=${JSON.stringify(error?.response?.data ?? null)}`,
         );
         await emitDetectionScheduleState(req, channel, detectionSetting, "apply", {
           operation,
@@ -1189,7 +1204,7 @@ class DetectionSettingService {
 
       logger.info(
         `[DETECTION_SCHEDULE] DS response OK — ${logContext} ` +
-          `response=${JSON.stringify(backendResponse ?? null)}`,
+        `response=${JSON.stringify(backendResponse ?? null)}`,
       );
 
       await updateModelThresholds(detectionSetting, backendResponse);
@@ -1618,7 +1633,7 @@ class DetectionSettingService {
             "Failed to detach detection setting",
             error.message,
           ),
-      );
+        );
     }
   }
 
@@ -1710,7 +1725,7 @@ class DetectionSettingService {
             "Failed to reset detection thresholds",
             error.message,
           ),
-      );
+        );
     }
   }
 
