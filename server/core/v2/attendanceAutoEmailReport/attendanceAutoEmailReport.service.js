@@ -112,6 +112,18 @@ function statusForRow(row, rules) {
   return "Absent";
 }
 
+// Employee records can carry junk instead of a real value — the literal
+// string "null" (from a bad import/migration) or a bare country code with no
+// actual subscriber number (e.g. "91"). Both are truthy so `value || "-"`
+// lets them through; treat them as missing too.
+function cleanField(value, { minDigits = 0 } = {}) {
+  if (value === null || value === undefined) return "-";
+  const text = String(value).trim();
+  if (!text || text.toLowerCase() === "null" || text.toLowerCase() === "undefined") return "-";
+  if (minDigits && /^\d+$/.test(text) && text.length < minDigits) return "-";
+  return text;
+}
+
 function csvCell(value) {
   const string = String(value ?? "");
   return /[",\r\n]/.test(string) ? `"${string.replaceAll('"', '""')}"` : string;
@@ -172,14 +184,16 @@ async function reportRows(report, reference) {
     const employee = item.employee || {};
     const row = {
       date: moment(item.createdAt).tz(timezone).format("DD MMM YYYY"),
-      employeeId: employee.emp_id || "-",
+      employeeId: cleanField(employee.emp_id),
       employee: `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || "Unknown employee",
-      email: employee.email || "-",
-      phone: employee.phoneNumber || "-",
-      designation: employee.designation || "-",
-      branch: employee.branch || "-",
-      department: employee.departmentId?.departmentName || "-",
-      location: employee.location || "-",
+      email: cleanField(employee.email),
+      // A phone number under 8 digits is just a stray country code (e.g.
+      // "91") left over with no actual subscriber number attached.
+      phone: cleanField(employee.phoneNumber, { minDigits: 8 }),
+      designation: cleanField(employee.designation),
+      branch: cleanField(employee.branch),
+      department: cleanField(employee.departmentId?.departmentName),
+      location: cleanField(employee.location),
       checkIn: formatTime(firstCheckIn?.timestamp, timezone),
       checkOut: formatTime(lastCheckOut?.timestamp, timezone),
       duration: formatDuration(firstCheckIn?.timestamp, lastCheckOut?.timestamp),
@@ -252,7 +266,7 @@ async function buildPdf({ report, rows, label, timezone }) {
     const withSub = (main, sub) => (sub ? `${main}\n${sub}` : main);
     const rowValues = (row) => [
       row.date,
-      withSub(row.employee, joinSub(row.employeeId !== "-" ? `#${row.employeeId}` : "", row.designation)),
+      withSub(row.employee, joinSub(row.employeeId, row.designation)),
       row.department,
       withSub(row.email, row.phone !== "-" ? row.phone : ""),
       row.location,

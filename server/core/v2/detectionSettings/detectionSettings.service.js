@@ -65,7 +65,7 @@ import {
   carModelDetectionSchemaSetting
 } from "./detectionSettings.model.js";
 import Channel from "../channels/channels.model.js";
-import { resolveDesiredDetectionState } from "../../../services/detectionSchedule.resolver.js";
+import { resolveDesiredDetectionState, manualOverrideFor } from "../../../services/detectionSchedule.resolver.js";
 import { sendPayloadToUser } from "../../../socket.js";
 import mongoose, { Types } from "mongoose";
 
@@ -976,9 +976,23 @@ class DetectionSettingService {
           );
       }
 
+      // Preserve whatever the admin last deliberately set (on or off) against
+      // the schedule they just saved — the same override the manual toggle
+      // endpoint (channels.service.js toggleDetection) computes for itself.
+      // Without this, applyDetectionScheduleState below force-syncs `enabled`
+      // to the new schedule's current verdict unconditionally: a detector the
+      // admin turned on (or off) outside of any window it was governed by
+      // before would otherwise flip the instant a schedule is attached to it,
+      // even though nothing about their intent changed.
+      const currentlyEnabled = channel.detections[settingType].enabled === true;
+      const override = manualOverrideFor(value, currentlyEnabled);
       channel.detections[settingType].schedule = value;
+      channel.detections[settingType].overrideState = override.overrideState;
+      channel.detections[settingType].overrideUntil = override.overrideUntil;
       channel.control = 1;
       channel.markModified(`detections.${settingType}.schedule`);
+      channel.markModified(`detections.${settingType}.overrideState`);
+      channel.markModified(`detections.${settingType}.overrideUntil`);
       await channel.save();
 
       const populatedChannel = await Channel.findById(channel._id)
