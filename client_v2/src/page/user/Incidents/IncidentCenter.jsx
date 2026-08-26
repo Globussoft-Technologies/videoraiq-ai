@@ -1,10 +1,19 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, useOutletContext } from 'react-router-dom';
-import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2, Car, Building2, CalendarClock, Hash, Server, Video, Minus, Plus, RotateCcw } from 'lucide-react';
+import moment from 'moment-timezone';
+import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2, Clock, Car, Building2, CalendarClock, Hash, Server, Video, Minus, Plus, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import SharedMultiSelect from '../../../components/MultiSelect';
 import DateRangePicker, { fmt } from '../../../components/DateRangePicker';
+import {
+  generateHourOptions,
+  generateMinuteOptions,
+  generatePeriodOptions,
+  parseTime,
+  formatTime,
+} from '../../../pages/AttendanceLogs/components/timeUtils';
 import IncidentCard, { apiMarkResolved, ReportModal, VehicleTagStrip } from './IncidentCard';
 import TagUserModal, { UntagUserModal } from '../../../components/TagUserModal';
 import TagStatusFilter from '../../../components/TagStatusFilter';
@@ -179,18 +188,132 @@ function MultiSelect({ options, selected, onChange, placeholder = 'Select' }) {
   );
 }
 
-/* ── Simple single select with chevron ────────────────────────────────────── */
-function FilterSelect({ value, onChange, children, style = {} }) {
+/* ── Compact single-value dropdown ─────────────────────────────────────────
+   A native <select> can't be restyled cross-browser — its open listbox
+   renders every option at full native size (e.g. all 60 minutes), which is
+   what made the time picker's dropdowns huge and unscrollable-looking. This
+   portals a small, height-capped, scrollable panel instead, positioned off
+   the trigger the same way MultiSelect.jsx does (fixed coords from
+   getBoundingClientRect, flips upward if it won't fit below). */
+function CompactSelect({ value, options, placeholder, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const triggerRef = useRef(null);
+  const panelRef = useRef(null);
+
+  useEffect(() => {
+    const onClick = (e) => {
+      if (
+        triggerRef.current && !triggerRef.current.contains(e.target) &&
+        panelRef.current && !panelRef.current.contains(e.target)
+      ) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const panelHeight = panelRef.current?.offsetHeight || 220;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const openUpward = spaceBelow < panelHeight && spaceAbove > spaceBelow;
+      setPos(openUpward
+        ? { position: 'fixed', bottom: Math.max(8, window.innerHeight - rect.top + 4), left: rect.left, width: Math.max(rect.width, 64) }
+        : { position: 'fixed', top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 64) });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [open]);
+
   return (
-    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-      <select
-        value={value}
-        onChange={onChange}
-        style={{ ...filterInput, paddingRight: 30, appearance: 'none', minWidth: 150, ...style }}
+    <div style={{ position: 'relative' }}>
+      <button
+        type="button"
+        ref={triggerRef}
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          ...filterInput, width: '100%', minWidth: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
+          padding: '0 8px',
+        }}
       >
-        {children}
-      </select>
-      <ChevronDown size={14} style={{ position: 'absolute', right: 10, pointerEvents: 'none', color: 'var(--tx3)' }} />
+        <span style={{ color: value ? 'var(--tx)' : 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {value || placeholder}
+        </span>
+        <ChevronDown size={13} style={{ color: 'var(--tx3)', flexShrink: 0 }} />
+      </button>
+
+      {open && pos && createPortal(
+        <div
+          ref={panelRef}
+          data-vq-portal-panel
+          style={{ ...pos, zIndex: 10030, maxHeight: 220, overflowY: 'auto' }}
+          className="rounded-[10px] border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg"
+        >
+          {options.map((opt) => (
+            <div
+              key={opt}
+              onClick={() => { onChange(opt); setOpen(false); }}
+              style={{
+                padding: '7px 12px', fontSize: 12.5, cursor: 'pointer',
+                color: opt === value ? '#fff' : 'var(--tx2)',
+                background: opt === value ? 'var(--blue)' : 'transparent',
+              }}
+              onMouseEnter={(e) => { if (opt !== value) e.currentTarget.style.background = 'var(--bg2)'; }}
+              onMouseLeave={(e) => { if (opt !== value) e.currentTarget.style.background = 'transparent'; }}
+            >
+              {opt}
+            </div>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+/* ── 12-hour time-of-day picker (hour/minute/AM-PM), same value shape as
+   Attendance Logs' fromTime/toTime ("HH:MM AM/PM", or '' when unset) ────── */
+const timeHourOptions = generateHourOptions();
+const timeMinuteOptions = generateMinuteOptions();
+const timePeriodOptions = generatePeriodOptions();
+
+function TimeField({ label, value, onChange }) {
+  // formatTime only returns a non-empty string once hour, minute AND period
+  // are all set — picking just the hour would otherwise round-trip through
+  // onChange('') immediately, resetting every select back to blank before the
+  // other two could ever be picked. Track the three parts locally (as
+  // Attendance Logs' LogsFilterPopover does with fromTimeParts/toTimeParts)
+  // and only call onChange once the combination is complete.
+  const [parts, setParts] = useState(() => parseTime(value));
+  useEffect(() => setParts(parseTime(value)), [value]);
+
+  const update = (part, next) => {
+    const merged = { ...parts, [part]: next };
+    setParts(merged);
+    onChange(formatTime(merged.hour, merged.minute, merged.period));
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--tx3)' }}>{label}</span>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 74px', gap: 6 }}>
+        <CompactSelect value={parts.hour} placeholder="HH" options={timeHourOptions} onChange={(v) => update('hour', v)} />
+        <CompactSelect value={parts.minute} placeholder="MM" options={timeMinuteOptions} onChange={(v) => update('minute', v)} />
+        <CompactSelect value={parts.period} placeholder="--" options={timePeriodOptions} onChange={(v) => update('period', v)} />
+      </div>
     </div>
   );
 }
@@ -207,9 +330,14 @@ async function fetchDepartments() {
   return Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
 }
 
-function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds, setDeptIds, locIds, setLocIds }) {
+function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds, setDeptIds, locIds, setLocIds, fromTime, setFromTime, toTime, setToTime }) {
   const [open, setOpen] = useState(false);
   const ref             = useRef(null);
+  // Collapsed by default so the popover isn't dominated by an empty time
+  // picker — auto-expands once (and stays expanded) as soon as either time is
+  // set, so an active filter is never hidden behind a collapsed section.
+  const [timeExpanded, setTimeExpanded] = useState(false);
+  useEffect(() => { if (fromTime || toTime) setTimeExpanded(true); }, [fromTime, toTime]);
 
   const nvrsApi  = useApi(() => getNvrs(0, 100), []);
   const deptsApi = useApi(() => fetchDepartments(), []);
@@ -242,8 +370,8 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
   const depts = deptsApi.data ?? [];
   const locs  = locsApi.data  ?? [];
 
-  const activeCount = [nvrIds, channelIds, deptIds, locIds].filter(a => a.length > 0).length;
-  const resetAll    = () => { setNvrIds([]); setChannelIds([]); setDeptIds([]); setLocIds([]); };
+  const activeCount = [nvrIds, channelIds, deptIds, locIds].filter(a => a.length > 0).length + (fromTime ? 1 : 0) + (toTime ? 1 : 0);
+  const resetAll    = () => { setNvrIds([]); setChannelIds([]); setDeptIds([]); setLocIds([]); setFromTime(''); setToTime(''); };
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
@@ -287,6 +415,47 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
               >
                 Reset all
               </button>
+            )}
+          </div>
+
+          {/* Time-of-day window (12-hour) — applies independently to every day
+              in the selected date range, same semantics as Attendance Logs'
+              fromTime/toTime. Converted to UTC before it reaches the API.
+              Collapsed by default (like the other sections' pickers, which
+              only take space once opened); From/To stack full-width when
+              expanded so each row's three HH/MM/AM-PM selects have room to
+              breathe in this 280px popover. */}
+          <div style={{
+            borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--bd)',
+            overflow: 'hidden',
+          }}>
+            <button
+              type="button"
+              onClick={() => setTimeExpanded((v) => !v)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                width: '100%', padding: '10px 12px', background: 'none', border: 'none',
+                cursor: 'pointer', textAlign: 'left',
+              }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Clock size={13} style={{ color: 'var(--tx3)' }} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx2)' }}>Time Range</span>
+                {(fromTime || toTime) && (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--blue)', background: 'rgba(59,130,246,.12)', borderRadius: 999, padding: '1px 7px' }}>
+                    {[fromTime, toTime].filter(Boolean).length}
+                  </span>
+                )}
+              </span>
+              {timeExpanded
+                ? <ChevronUp size={14} style={{ color: 'var(--tx3)' }} />
+                : <ChevronDown size={14} style={{ color: 'var(--tx3)' }} />}
+            </button>
+            {timeExpanded && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 12px 12px' }}>
+                <TimeField label="From" value={fromTime} onChange={setFromTime} />
+                <TimeField label="To" value={toTime} onChange={setToTime} />
+              </div>
             )}
           </div>
 
@@ -1032,6 +1201,11 @@ export default function IncidentCenter() {
   const [channelIds, setChannelIds] = useState([]);
   const [deptIds,    setDeptIds]    = useState([]);
   const [locIds,     setLocIds]     = useState([]);
+  // Time-of-day window, 12-hour display value ("09:00 AM" or '' when unset) —
+  // same shape Attendance Logs' fromTime/toTime use. Converted to UTC "HH:mm"
+  // only when building serverFilter, right before the request.
+  const [timeFrom,   setTimeFrom]   = useState('');
+  const [timeTo,     setTimeTo]     = useState('');
 
   const [selectedForDelete, setSelectedForDelete] = useState([]);
   const [deleting, setDeleting] = useState(false);
@@ -1081,8 +1255,20 @@ export default function IncidentCenter() {
       if (debouncedVehicleSearch.trim()) f.search = debouncedVehicleSearch.trim();
       if (tagStatus) f.tagStatus = tagStatus;
     }
+    // Time-of-day window: convert the browser-local 12-hour picks to UTC
+    // "HH:mm" here, right before the request — the backend only ever sees
+    // UTC and applies the window to every day in the range independently.
+    const toUtcHHmm = (localTime) => {
+      if (!localTime) return null;
+      const parsed = moment(localTime, ['hh:mm A', 'h:mm A'], true);
+      return parsed.isValid() ? parsed.utc().format('HH:mm') : null;
+    };
+    const utcFrom = toUtcHHmm(timeFrom);
+    const utcTo = toUtcHHmm(timeTo);
+    if (utcFrom) f.fromTime = utcFrom;
+    if (utcTo) f.toTime = utcTo;
     return f;
-  }, [ctxLoc, detTypes, dateFrom, dateTo, nvrIds, channelIds, deptIds, locIds, sevSet, statusSet, showsVehicleControls, debouncedVehicleSearch, tagStatus]);
+  }, [ctxLoc, detTypes, dateFrom, dateTo, nvrIds, channelIds, deptIds, locIds, sevSet, statusSet, showsVehicleControls, debouncedVehicleSearch, tagStatus, timeFrom, timeTo]);
 
   const stats = useApi(() => fetchIncidentStats(serverFilter), [JSON.stringify(serverFilter)], { pollMs: 60000 });
   const types = useApi(() => fetchDetectionTypes(), []);
@@ -1228,7 +1414,7 @@ export default function IncidentCenter() {
   const toggleSet = (setter) => (key) =>
     setter((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
-  const hasFilters = !!(detTypes.size || sevSet.size || statusSet.size || dateFrom || dateTo || nvrIds.length || channelIds.length || deptIds.length || locIds.length || vehicleSearch || tagStatus);
+  const hasFilters = !!(detTypes.size || sevSet.size || statusSet.size || dateFrom || dateTo || nvrIds.length || channelIds.length || deptIds.length || locIds.length || vehicleSearch || tagStatus || timeFrom || timeTo);
 
   const clearAll = useCallback(() => {
     setDetTypes(new Set());
@@ -1236,6 +1422,7 @@ export default function IncidentCenter() {
     setDateFrom(''); setDateTo('');
     setNvrIds([]); setChannelIds([]); setDeptIds([]); setLocIds([]);
     setVehicleSearch(''); setDebouncedVehicleSearch(''); setTagStatus('');
+    setTimeFrom(''); setTimeTo('');
     setPage(0);
   }, []);
 
@@ -1335,6 +1522,8 @@ export default function IncidentCenter() {
           channelIds={channelIds} setChannelIds={v => { setChannelIds(v); setPage(0); }}
           deptIds={deptIds}       setDeptIds={v => { setDeptIds(v); setPage(0); }}
           locIds={locIds}         setLocIds={v => { setLocIds(v); setPage(0); }}
+          fromTime={timeFrom}     setFromTime={v => { setTimeFrom(v); setPage(0); }}
+          toTime={timeTo}         setToTime={v => { setTimeTo(v); setPage(0); }}
         />
 
         {/* Vehicle Detection only: search by plate or tagged user name, plus
