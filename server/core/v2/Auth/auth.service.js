@@ -784,11 +784,42 @@ return bypassUsers.find(
           logger.error("[PLAN_EXPIRED] stop-all admin lookup failed:", e?.message);
         }
 
+        // Authentication succeeded, but aMember returned no active access.
+        // Load access history once so the client can show the latest expiry
+        // instead of repeatedly redirecting between aMember and the SPA.
+        let knownSubscriptions = userData?.subscriptions || {};
+        if (
+          Object.keys(knownSubscriptions).length === 0 &&
+          userData?.user_id
+        ) {
+          try {
+            const access = await this.getAmemberAccessByUserId(
+              parseInt(userData.user_id, 10)
+            );
+            knownSubscriptions = this.extractSubscriptions(access) || {};
+          } catch (error) {
+            logger.warn(
+              `[AUTH_INACTIVE_PLAN] Could not load access history for ${userData.user_id}: ${error.message}`
+            );
+          }
+        }
+
+        const latest = this._resolveLatestSubscription(knownSubscriptions);
+        const isExpired = Boolean(
+          latest?.expiry && new Date(latest.expiry).getTime() < Date.now()
+        );
+
         return res.status(403).json({
-          ok: true,
+          ok: false,
+          authenticated: true,
+          access: false,
           code: -6,
-          expired: true,
-          msg: "Your Plan expired",
+          reason: isExpired ? "subscription_expired" : "subscription_inactive",
+          expired: isExpired,
+          latestExpiry: latest?.expiry || null,
+          msg: isExpired
+            ? "Your subscription has expired"
+            : "Your account does not have an active subscription",
         });
       }
       // aMember's user_id is the stable identity. Email, login and names are
