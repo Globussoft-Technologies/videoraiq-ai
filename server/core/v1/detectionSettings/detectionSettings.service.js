@@ -1397,6 +1397,53 @@ class DetectionSettingService {
 
         const targetStates = evaluated.map((item) => item.targetState);
 
+        // Our stored `enabled` flag is only the last state we BELIEVE we set.
+        // A start that silently failed leaves it saying "running" while DS has
+        // no such pipeline, and because the skip below is idempotent against
+        // that same flag, the detector is never retried — on a camera with two
+        // detections that is exactly how one comes up and the other never does.
+        //
+        // So whenever we are about to skip a detector that is SUPPOSED to be
+        // running, ask DS what it actually has. One read per camera per tick,
+        // and only in that case. This has to happen HERE rather than inside
+        // applyDetectionScheduleState, because the skip below returns before
+        // apply is ever reached.
+        let dsActiveLogics;
+        const aboutToSkipAStart = evaluated.some(
+          (item) =>
+            item.governed && item.desired?.active === true && item.currentStatus === true,
+        );
+        if (aboutToSkipAStart) {
+          dsActiveLogics = await pythonService.getCameraActiveLogics(
+            String(channel._id),
+            adminIdByUserId.get(String(channel?.userId || "")),
+          );
+        }
+
+        // One line per camera saying what was seen and why. Without it, a
+        // detector that never reaches a DS call is invisible: there is nothing
+        // in the log to distinguish "not configured", "not governed by this
+        // schedule" and "skipped because we thought it was already running".
+        if (evaluated.length && globalScheduleIndex.channelIds.includes(String(channel._id))) {
+          const summary = evaluated
+            .map(
+              (item) =>
+                `${item.settingType}{governed=${item.governed},stored=${item.currentStatus},` +
+                  `want=${item.desired ? item.desired.active : "-"}}`,
+            )
+            .join(" ");
+          const dsSummary = Array.isArray(dsActiveLogics)
+            ? dsActiveLogics.join(",") || "none"
+            : dsActiveLogics === null
+              ? "probe-failed"
+              : "not-probed";
+          logger.info(
+            `[DETECTION_SCHEDULE] Camera ${channel._id} ` +
+              `"${channel.customName || channel.name}" detectors: ${summary} ` +
+              `dsActive=[${dsSummary}]`,
+          );
+        }
+
         // Pass 2 — act.
         for (const item of evaluated) {
           const { settingType, detectionSetting, governed, currentStatus, desired } = item;
@@ -1415,7 +1462,25 @@ class DetectionSettingService {
           // and it happens once per window rather than every minute.
           const openingTick = shouldEnable && isScheduleOpeningTick(desired.schedule);
 
-          if (currentStatus === shouldEnable && !openingTick) continue;
+          // DS says this detector is not running even though we think it is.
+          // A null probe (DS unreachable) is not evidence, so it is ignored.
+          const expectedLogics = dsLogicNamesFor(settingType);
+          const missingInDs =
+            shouldEnable &&
+            currentStatus === true &&
+            Array.isArray(dsActiveLogics) &&
+            expectedLogics.length > 0 &&
+            !expectedLogics.some((name) => dsActiveLogics.includes(name));
+
+          if (missingInDs) {
+            logger.error(
+              `[DETECTION_SCHEDULE] Drift — channel=${channel._id} detector=${settingType} ` +
+                `stored as running but DS active_logics=[${dsActiveLogics.join(", ")}] ` +
+                `does not include [${expectedLogics.join(", ")}]; starting it`,
+            );
+          }
+
+          if (currentStatus === shouldEnable && !openingTick && !missingInDs) continue;
 
           const req = buildScheduleRunnerReq(channel, adminId);
 
