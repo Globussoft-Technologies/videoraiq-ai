@@ -82,8 +82,10 @@ function sanitizeSegment(seg) {
 
 // Canonical shape produced by putMedia — used to constrain reads/deletes so a
 // caller can't address arbitrary keys in the bucket via the mediaPath param.
-// Matches both oracle/ prefixed and non-prefixed paths for backward compatibility
-const ORACLE_KEY_RE = /^(?:oracle\/)?uploads\/(?:image|video)s\/[^/]+\/[^/]+$/;
+// Matches both oracle/ prefixed and non-prefixed paths for backward compatibility.
+// "reports" covers generated files (e.g. attendance auto-email PDFs/CSVs)
+// stored via putMedia({ mediaType: "report", ... }) alongside images/videos.
+const ORACLE_KEY_RE = /^(?:oracle\/)?uploads\/(?:image|video|report)s\/[^/]+\/[^/]+$/;
 
 /** Validate + normalize an Oracle object key, rejecting out-of-namespace keys. */
 function oracleKeyFor(mediaPath) {

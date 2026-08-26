@@ -1,5 +1,4 @@
 import axios from "axios";
-import { ZipArchive } from "archiver";
 import PDFDocument from "pdfkit";
 import moment from "moment-timezone";
 import mongoose from "mongoose";
@@ -8,6 +7,7 @@ import config from "config";
 import Joi from "joi";
 import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
+import { putMedia } from "../../../utils/mediaStorage.js";
 import Attendance from "../attendance/attendance.model.js";
 import AttendanceSettings from "../attendance/attendanceSettings.model.js";
 import AuthorizedUsers from "../authorizedUsers/authorizedUsers.model.js";
@@ -266,6 +266,17 @@ async function buildPdf({ report, rows, label, timezone }) {
     document.on("error", reject);
     document.on("end", () => resolve(Buffer.concat(chunks)));
 
+    // document.image() only dedupes by its internal registry when given a
+    // string path — a raw Buffer is re-decoded and re-embedded as a brand new
+    // XObject on every call (PDFKit's images mixin only populates
+    // _imageRegistry for string sources). drawHeader() below runs once per
+    // page, so passing the raw `logo` buffer there embedded this ~230KB PNG
+    // separately on every page — a 1716-row/86-page report reached ~19.7MB
+    // from the logo alone. Opening it once via openImage() and reusing that
+    // PDFImage object (which document.image() accepts as an already-embedded
+    // image, skipping openImage entirely) embeds the logo exactly once.
+    const logoImage = logo ? document.openImage(logo) : null;
+
     const pageWidth = document.page.width - 64;
     const columns = [
       ["Date", 82], ["Employee", 144], ["Department", 104], ["Email", 170], ["Location", 80],
@@ -276,7 +287,7 @@ async function buildPdf({ report, rows, label, timezone }) {
       const purpleX = document.page.width - titleBlockWidth;
       document.rect(0, 0, document.page.width, 102).fill(V2_BLUE);
       document.rect(purpleX, 0, titleBlockWidth, 102).fill(V2_PURPLE);
-      if (logo) document.image(logo, 36, 25, { fit: [145, 48] });
+      if (logoImage) document.image(logoImage, 36, 25, { fit: [145, 48] });
       document.fillColor("#ffffff").font("Helvetica-Bold").fontSize(20).text("Attendance Report", purpleX, 29, { width: titleBlockWidth - 32, align: "right" });
       document.font("Helvetica").fontSize(9).text(report.title, purpleX, 57, { width: titleBlockWidth - 32, align: "right" });
       document.fillColor("#273657").font("Helvetica-Bold").fontSize(13).text(label, 32, 122);
@@ -336,88 +347,69 @@ async function buildPdf({ report, rows, label, timezone }) {
 }
 
 function emailHtml(report, details) {
-  const zippedNote = details.zipped
-    ? `<div style="margin-top:10px;padding:12px;border-radius:8px;background:#eef5ff;color:#173b83;font-size:12.5px">The report was large, so PDF and CSV are bundled into the attached .zip to fit email size limits.</div>`
-    : "";
+  const links = details.files
+    .map((file) => `<a href="${file.url}" style="color:#173b83;font-weight:600" target="_blank" rel="noopener">Download ${file.format.toUpperCase()}</a>`)
+    .join(" &nbsp;•&nbsp; ");
   return `<div style="font-family:Arial,sans-serif;background:#f5f8ff;padding:28px;color:#273657">
     <div style="max-width:700px;margin:auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e3eafb">
       <div style="padding:22px 28px;background:linear-gradient(110deg,${V2_BLUE},${V2_PURPLE});color:#fff"><img src="${LOGO_URL}" alt="VideoraIQ" style="max-height:34px;max-width:140px;vertical-align:middle"><span style="float:right;font-size:18px;font-weight:700;margin-top:7px">Attendance Report</span></div>
       <div style="padding:28px"><h2 style="margin:0 0 10px;color:#173b83">${report.title}</h2><p style="margin:0 0 18px;color:#61708f">${details.label} · ${details.timezone}</p>
-      <div style="padding:16px;border-radius:8px;background:#eef5ff;color:#173b83"><strong>${details.rowCount}</strong> employee attendance record${details.rowCount === 1 ? "" : "s"} included. The requested report${details.attachmentCount === 1 ? " is" : "s are"} attached.</div>
-      ${zippedNote}
+      <div style="padding:16px;border-radius:8px;background:#eef5ff;color:#173b83"><strong>${details.rowCount}</strong> employee attendance record${details.rowCount === 1 ? "" : "s"} included.</div>
+      <div style="margin-top:18px;padding:16px;border-radius:8px;border:1px solid #e3eafb;text-align:center">${links}</div>
       <p style="margin:22px 0 0;color:#61708f;font-size:13px">Generated automatically by VideoraIQ.</p></div></div></div>`;
 }
-
-// SendGrid rejects any message whose total size (headers + body + attachments,
-// all base64) exceeds 30MB. Base64 inflates raw bytes by ~4/3, so we compare
-// against the encoded attachment size and leave headroom for the HTML body.
-const SENDGRID_MAX_MESSAGE_BYTES = 30 * 1024 * 1024;
-const SENDGRID_ATTACHMENT_BUDGET_BYTES = SENDGRID_MAX_MESSAGE_BYTES - 512 * 1024;
 
 function safeReportName(report) {
   return report.title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "attendance-report";
 }
 
-function rawAttachments(report, csvBuffer, pdfBuffer) {
-  const safeName = safeReportName(report);
-  const attachments = [];
-  if (pdfBuffer) attachments.push({ buffer: pdfBuffer, filename: `${safeName}.pdf`, type: "application/pdf" });
-  if (csvBuffer) attachments.push({ buffer: csvBuffer, filename: `${safeName}.csv`, type: "text/csv" });
-  return attachments;
-}
-
-function toSendGridAttachments(attachments) {
-  return attachments.map(({ buffer, filename, type }) => ({
-    content: buffer.toString("base64"),
-    filename,
-    type,
-    disposition: "attachment",
-  }));
-}
-
-/** Zips file buffers into one archive buffer (CSV/text compresses very well; PDF less so, but still helps). */
-async function zipAttachments(attachments) {
-  const archive = new ZipArchive({ zlib: { level: 9 } });
-  const chunks = [];
-  archive.on("data", (chunk) => chunks.push(chunk));
-  const done = new Promise((resolve, reject) => {
-    archive.on("end", resolve);
-    archive.on("error", reject);
-  });
-  for (const { buffer, filename } of attachments) archive.append(buffer, { name: filename });
-  await archive.finalize();
-  await done;
-  return Buffer.concat(chunks);
+// Stored media paths are relative (see toRelativeMediaPath in mediaStorage.js)
+// — every other stored file in this codebase is resolved to a full URL by
+// prepending this same config key at link/display time, never baked in.
+export function publicUrlFor(mediaPath) {
+  return `${config.get("ImageView")}${mediaPath.startsWith("/") ? "" : "/"}${mediaPath}`;
 }
 
 /**
- * Builds the SendGrid attachment list for a report, always including every
- * requested format (PDF and CSV together, never one dropped for the other).
- * When the plain attachments would exceed SendGrid's size budget, they are
- * bundled into a single .zip instead — CSV in particular compresses by 90%+,
- * so this keeps very large (e.g. full-year, large-org) reports deliverable
- * without silently omitting a format. Only if even the zip doesn't fit does
- * this give up, which in practice should not happen for text/table reports.
+ * Uploads the report's generated files (PDF/CSV buffers) to whichever media
+ * backend this deployment runs (NAS over SFTP, or Oracle Object Storage —
+ * see mediaStorage.js; switched by a single config flag, transparent here),
+ * and returns each file's relative storage path plus a public download URL.
+ * One file per format, no size limit to juggle: the email links to the file
+ * instead of attaching it, so SendGrid's ~30MB message cap never applies.
  */
-async function makeAttachments(report, rowCount, csvBuffer, pdfBuffer) {
-  const plain = rawAttachments(report, csvBuffer, pdfBuffer);
-  const plainAttachments = toSendGridAttachments(plain);
-  const plainBytes = plainAttachments.reduce((sum, attachment) => sum + attachment.content.length, 0);
-  if (plainBytes <= SENDGRID_ATTACHMENT_BUDGET_BYTES) {
-    return { attachments: plainAttachments, zipped: false };
+export async function uploadReportFiles(report, csvBuffer, pdfBuffer) {
+  const safeName = safeReportName(report);
+  const files = [];
+  if (pdfBuffer) {
+    const path = await putMedia({ buffer: pdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.pdf` });
+    files.push({ format: "pdf", path, url: publicUrlFor(path) });
   }
+  if (csvBuffer) {
+    const path = await putMedia({ buffer: csvBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.csv` });
+    files.push({ format: "csv", path, url: publicUrlFor(path) });
+  }
+  return files;
+}
 
-  const zipBuffer = await zipAttachments(plain);
-  const zipAttachment = toSendGridAttachments([{ buffer: zipBuffer, filename: `${safeReportName(report)}.zip`, type: "application/zip" }]);
-  const zipBytes = zipAttachment[0].content.length;
-  if (zipBytes > SENDGRID_ATTACHMENT_BUDGET_BYTES) {
-    const error = new Error(
-      `The generated report (${rowCount} records) is too large to email even when compressed (${(zipBytes / (1024 * 1024)).toFixed(1)}MB). Narrow the date range or filter to fewer employees/departments.`
-    );
-    error.code = "REPORT_TOO_LARGE";
-    throw error;
-  }
-  return { attachments: zipAttachment, zipped: true };
+// Delivery history is capped per report so the document doesn't grow
+// unbounded across years of scheduled sends — recent history is what's
+// actually useful; older entries are dropped oldest-first.
+const HISTORY_LIMIT = 50;
+
+async function recordDelivery(report, { period, rowCount, recipients, files }) {
+  await Report.updateOne(
+    { _id: report._id },
+    {
+      $push: {
+        history: {
+          $each: [{ sentAt: new Date(), period, rowCount, recipients, files: files.map(({ format, path }) => ({ format, path })) }],
+          $position: 0,
+          $slice: HISTORY_LIMIT,
+        },
+      },
+    }
+  );
 }
 
 async function deliver(report, options = {}) {
@@ -429,30 +421,54 @@ async function deliver(report, options = {}) {
   const wantsPdf = report.formats.includes("pdf");
   const wantsCsv = report.formats.includes("csv");
 
+  const csvT0 = Date.now();
   const csvBuffer = wantsCsv ? buildCsv({ report, rows, label: summary.label, timezone: summary.timezone }) : null;
+  const csvMs = Date.now() - csvT0;
+  const pdfT0 = Date.now();
   const pdfBuffer = wantsPdf ? await buildPdf({ report, rows, label: summary.label, timezone: summary.timezone }) : null;
-  const { attachments, zipped } = await makeAttachments(report, summary.rowCount, csvBuffer, pdfBuffer);
+  const pdfMs = Date.now() - pdfT0;
 
-  const details = { ...summary, attachmentCount: attachments.length, zipped };
+  const uploadT0 = Date.now();
+  const files = await uploadReportFiles(report, csvBuffer, pdfBuffer);
+  const uploadMs = Date.now() - uploadT0;
+
+  // Diagnostics: pins down exactly what a run looked like (row count,
+  // per-format build time, upload time) instead of guessing from a generic
+  // failure message if delivery ever fails downstream.
+  logger.info(
+    `[ATTENDANCE_AUTO_EMAIL_REPORT] deliver diagnostics: report=${report._id} rows=${summary.rowCount} ` +
+    `csvRawKB=${csvBuffer ? (csvBuffer.length / 1024).toFixed(1) : "n/a"} csvBuildMs=${csvMs} ` +
+    `pdfRawKB=${pdfBuffer ? (pdfBuffer.length / 1024).toFixed(1) : "n/a"} pdfBuildMs=${pdfMs} ` +
+    `uploadMs=${uploadMs} files=${files.length}`
+  );
+
+  const details = { ...summary, files };
   const recipients = options.recipients?.length ? options.recipients : report.recipients;
   const email = {
     from: { name: config.get("sendgrid.name"), email: config.get("sendgrid.email") },
     to: recipients,
     subject: `[Attendance Report] ${report.title} | ${details.label}`,
     html: emailHtml(report, details),
-    attachments,
   };
   sendGridMail.setApiKey(config.get("sendgrid.key"));
   try {
+    const sendT0 = Date.now();
     const sendStatus = await sendGridMail.send(email);
+    logger.info(`[ATTENDANCE_AUTO_EMAIL_REPORT] SendGrid accepted the send in ${Date.now() - sendT0}ms (report=${report._id})`);
     await trackOutboundEmail(email, sendStatus, { adminId: report.adminId, category: "Attendance report" });
+    await recordDelivery(report, { period: details.label, rowCount: details.rowCount, recipients, files });
     return details;
   } catch (error) {
-    // SendGrid's SDK error carries the actual reason (e.g. "Attachment size
-    // exceeds maximum") in response.body.errors, not in error.message — surface
-    // it so failures aren't reported to admins as a generic, unactionable error.
+    // SendGrid's SDK error carries the actual reason (e.g. bad from-address,
+    // unverified sender) in response.body.errors, not in error.message —
+    // surface it so failures aren't reported to admins as a generic,
+    // unactionable error.
     const sendGridDetail = error?.response?.body?.errors?.map((item) => item.message).filter(Boolean).join("; ");
     if (sendGridDetail) error.message = `${error.message}: ${sendGridDetail}`;
+    logger.error(
+      `[ATTENDANCE_AUTO_EMAIL_REPORT] SendGrid rejected the send (report=${report._id}): ` +
+      `status=${error?.code || error?.response?.statusCode || "n/a"} body=${JSON.stringify(error?.response?.body || {})}`
+    );
     await trackFailedEmail(email, error, { adminId: report.adminId, category: "Attendance report" });
     throw error;
   }
@@ -620,7 +636,7 @@ class AttendanceAutoEmailReportService {
         if (error) return res.status(400).json(Response.validationFailResp("Validation failed", error.message));
       }
       const details = await deliver(report, { recipients });
-      return res.json(Response.userSuccessResp("Attendance report sent", { recipients: recipients?.length ? recipients : report.recipients, recordCount: details.rowCount, period: details.label, zipped: details.zipped }));
+      return res.json(Response.userSuccessResp("Attendance report sent", { recipients: recipients?.length ? recipients : report.recipients, recordCount: details.rowCount, period: details.label, files: details.files?.map((file) => ({ format: file.format, url: file.url })) }));
     } catch (error) {
       logger.error(`[ATTENDANCE_AUTO_EMAIL_REPORT] Send failed: ${error.message}`);
       return res.status(500).json(Response.errorResp("Failed to send attendance report", error.message));

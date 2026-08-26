@@ -29,6 +29,27 @@ const targetSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// One past delivery — kept so admins can see what was sent, when, to whom,
+// and revisit the files later without waiting for another scheduled run.
+const deliveryHistorySchema = new mongoose.Schema(
+  {
+    sentAt: { type: Date, default: Date.now },
+    period: { type: String, default: "" },
+    rowCount: { type: Number, default: 0 },
+    recipients: [{ type: String }],
+    files: [
+      {
+        format: { type: String, enum: ["pdf", "csv"] },
+        // Relative storage path (as returned by putMedia) — resolved to a
+        // full public URL with config.ImageView at read/link-build time, same
+        // as every other stored media path in this codebase.
+        path: { type: String },
+      },
+    ],
+  },
+  { _id: false },
+);
+
 const attendanceAutoEmailReportSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
@@ -45,6 +66,9 @@ const attendanceAutoEmailReportSchema = new mongoose.Schema(
     lastRunKey: { type: String, default: null },
     lastSentAt: { type: Date, default: null },
     lastError: { type: String, default: null },
+    // Most-recent-first; capped in the service layer rather than here so the
+    // cap can change without a migration.
+    history: { type: [deliveryHistorySchema], default: [] },
   },
   { timestamps: true },
 );
