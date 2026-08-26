@@ -43,24 +43,56 @@ function escapeRegex(value = "") {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/** Flatten an axios error down to the parts that actually explain a failure. */
+function describeAxiosError(err) {
+  if (err?.response) {
+    // EmpMonitor answered, just not with 2xx — the response body usually says why.
+    const body = typeof err.response.data === "string"
+      ? err.response.data.slice(0, 500)
+      : JSON.stringify(err.response.data)?.slice(0, 500);
+    return `HTTP ${err.response.status} ${err.response.statusText || ""} — ${body}`;
+  }
+  if (err?.request) {
+    // Request went out, no response came back — DNS, timeout, wrong domain, network egress, etc.
+    return `no response received (${err.code || err.message})`;
+  }
+  return err?.message || String(err);
+}
+
 /** One page of an admin's EmpMonitor roster. */
 async function fetchEmployeePage(organization_ids, skip, limit) {
-  const response = await axios.post(
-    config.get("empDomain") + "user/fieldAllEmployeeListMultiOrg",
-    { secretKey: config.get("emp_secret_key"), organization_ids, skip, limit },
+  const url = config.get("empDomain") + "user/fieldAllEmployeeListMultiOrg";
+  logger.info(
+    `[EMP-EXIT-SYNC] POST ${url} organization_ids=[${organization_ids.join(",")}] skip=${skip} limit=${limit}`,
   );
+  const response = await axios.post(url, {
+    secretKey: config.get("emp_secret_key"),
+    organization_ids,
+    skip,
+    limit,
+  });
   const data = response?.data?.data;
-  return {
-    users: Array.isArray(data?.users) ? data.users : [],
-    count: Number(data?.count) || 0,
-  };
+  const users = Array.isArray(data?.users) ? data.users : [];
+  const count = Number(data?.count) || 0;
+  logger.info(
+    `[EMP-EXIT-SYNC] EmpMonitor responded: ${users.length} users on this page, reported count=${count}` +
+      (users.length === 0 ? ` (raw response: ${JSON.stringify(response?.data)?.slice(0, 300)})` : ""),
+  );
+  return { users, count };
 }
 
 /** Suspend one exited employee's VideoRDB account, if still active. Never throws. */
 async function suspendIfActive(adminId, employee, summary) {
   const email = employee?.email;
-  if (!email || !employee?.date_of_exit) return; // no exit date -> nothing to do
+  if (!email) {
+    logger.warn(`[EMP-EXIT-SYNC] admin ${adminId}: EmpMonitor employee has no email — skipping (id=${employee?.id})`);
+    return;
+  }
+  if (!employee?.date_of_exit) return; // no exit date -> nothing to do
 
+  logger.info(
+    `[EMP-EXIT-SYNC] admin ${adminId}: ${email} has date_of_exit=${employee.date_of_exit} — checking VideoRDB`,
+  );
   try {
     const result = await authorizedUsersModel.updateOne(
       {
@@ -72,7 +104,16 @@ async function suspendIfActive(adminId, employee, summary) {
     );
     if (result.matchedCount) {
       summary.matched += 1;
-      if (result.modifiedCount) summary.suspended += 1;
+      if (result.modifiedCount) {
+        summary.suspended += 1;
+        logger.info(`[EMP-EXIT-SYNC] admin ${adminId}: suspended ${email}`);
+      }
+    } else {
+      // Either no VideoRDB account for this email, or it's already suspended —
+      // both are expected no-ops, but worth seeing while chasing "nothing happened".
+      logger.info(
+        `[EMP-EXIT-SYNC] admin ${adminId}: no active VideoRDB user matched ${email} (already suspended, or never imported)`,
+      );
     }
   } catch (err) {
     logger.error(
@@ -92,7 +133,15 @@ async function syncAdmin(admin) {
         .map((entry) => Number(entry.orgId)),
     ),
   ];
-  if (!organization_ids.length) return summary;
+  if (!organization_ids.length) {
+    logger.warn(
+      `[EMP-EXIT-SYNC] admin ${admin._id}: has empData but no usable orgId — skipping ` +
+        `(empData=${JSON.stringify(admin.empData)?.slice(0, 300)})`,
+    );
+    return summary;
+  }
+
+  logger.info(`[EMP-EXIT-SYNC] admin ${admin._id}: syncing orgIds=[${organization_ids.join(",")}]`);
 
   let skip = 0;
   for (let page = 0; page < MAX_PAGES_PER_ADMIN; page += 1) {
@@ -101,7 +150,7 @@ async function syncAdmin(admin) {
       batch = await fetchEmployeePage(organization_ids, skip, PAGE_LIMIT);
     } catch (err) {
       logger.error(
-        `[EMP-EXIT-SYNC] admin ${admin._id}: EmpMonitor fetch failed at skip=${skip}: ${err?.message}`,
+        `[EMP-EXIT-SYNC] admin ${admin._id}: EmpMonitor fetch failed at skip=${skip}: ${describeAxiosError(err)}`,
       );
       break; // rest of this admin's pages are retried on the next hourly tick
     }
@@ -118,6 +167,10 @@ async function syncAdmin(admin) {
     if (batch.users.length < PAGE_LIMIT) break;
   }
 
+  logger.info(
+    `[EMP-EXIT-SYNC] admin ${admin._id}: done — ${summary.processed} processed, ` +
+      `${summary.matched} matched, ${summary.suspended} suspended`,
+  );
   return summary;
 }
 
@@ -130,12 +183,20 @@ export async function runEmpExitSync() {
     return null;
   }
   running = true;
+  logger.info("[EMP-EXIT-SYNC] sync starting");
   const totals = { admins: 0, processed: 0, matched: 0, suspended: 0 };
   try {
     const admins = await adminModel
       .find({ "empData.0": { $exists: true } })
       .select("_id empData")
       .lean();
+
+    if (admins.length === 0) {
+      logger.warn(
+        "[EMP-EXIT-SYNC] no admins have empData configured — nothing to sync " +
+          "(this is expected only if no admin has linked an EmpMonitor org yet)",
+      );
+    }
 
     for (const admin of admins) {
       totals.admins += 1;
