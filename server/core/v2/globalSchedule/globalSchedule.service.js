@@ -5,6 +5,7 @@ import { DETECTION_TYPES, toPopulateDetections } from "../../../constants/detect
 import GlobalScheduleValidation from "./globalSchedule.validation.js";
 import logger from "../../../utils/logger.js";
 import Response from "../../../utils/response.js";
+import Admin from "../admin/admin.model.js";
 
 /**
  * NVR-level global detection scheduling — CRUD only.
@@ -83,6 +84,31 @@ const toCameraSummary = (channel) => ({
  */
 const findOwnedNvr = async (nvrId, userId) =>
   NVR.findOne({ _id: nvrId, userId }).lean();
+
+const isMongoObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").trim());
+
+/**
+ * The Admin _id this schedule should act as.
+ *
+ * Prefers the adminId already on the request, then an Admin whose user_id is
+ * the caller's. Returns null when neither resolves, which is recorded as-is
+ * rather than guessed at.
+ */
+const resolveScheduleAdminId = async (req, userId) => {
+  const fromToken = req?.verified?.userData?.adminId;
+  if (isMongoObjectId(fromToken)) return String(fromToken);
+
+  const candidate = String(userId || "").trim();
+  if (!candidate) return null;
+
+  try {
+    const admin = await Admin.findOne({ user_id: candidate }).select("_id").lean();
+    return admin?._id ? String(admin._id) : null;
+  } catch (error) {
+    logger.error(`[GLOBAL_SCHEDULE] Could not resolve adminId for ${candidate}: ${error?.message}`);
+    return null;
+  }
+};
 
 const findOwnedSchedule = async (id, userId) =>
   GlobalSchedule.findOne({ _id: id, userId });
@@ -232,7 +258,15 @@ class GlobalScheduleService {
         return res.status(400).json(Response.userFailResp("Validation Failed", cameraError));
       }
 
-      const created = await GlobalSchedule.create({ ...value, userId: user_id });
+      const adminId = await resolveScheduleAdminId(req, user_id);
+      if (!adminId) {
+        logger.error(
+          `[GLOBAL_SCHEDULE] No adminId resolved for userId=${user_id} — the runner ` +
+            "will not be able to call DS for this schedule",
+        );
+      }
+
+      const created = await GlobalSchedule.create({ ...value, userId: user_id, adminId });
 
       logger.info(
         `[GLOBAL_SCHEDULE] Created ${created._id} userId=${user_id} nvrId=${value.nvrId} ` +
@@ -337,6 +371,12 @@ class GlobalScheduleService {
       for (const field of ["name", "enabled", "schedule", "cameras", "detectors"]) {
         if (value[field] !== undefined) globalSchedule[field] = value[field];
       }
+      // Backfill for schedules saved before adminId existed, so an existing
+      // schedule starts working again the first time it is edited.
+      if (!globalSchedule.adminId) {
+        globalSchedule.adminId = await resolveScheduleAdminId(req, user_id);
+      }
+
       globalSchedule.markModified("schedule");
       await globalSchedule.save();
 

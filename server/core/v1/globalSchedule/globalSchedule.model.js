@@ -62,6 +62,23 @@ const GlobalScheduleSchema = new mongoose.Schema(
       ref: "NVR",
       required: true,
     },
+    /**
+     * The Admin _id (24-hex) to call the detection service as.
+     *
+     * userId above is the account's numeric user_id, and not every account
+     * that owns cameras has an Admin document of its own — a member-owned
+     * camera resolved to no admin at all, and DS rejects a start with no
+     * admin_id ("body.admin_id: Field required"), so those cameras never ran.
+     *
+     * Captured at save time, when the request still carries a real adminId.
+     * The one-minute runner has no token to derive it from, so recording it
+     * here is what makes the schedule actionable later. Null on documents
+     * written before this field existed; callers fall back as they did.
+     */
+    adminId: {
+      type: String,
+      default: null,
+    },
     name: {
       type: String,
       default: null,

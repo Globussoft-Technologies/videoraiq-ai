@@ -1467,7 +1467,14 @@ class DetectionSettingService {
 
           // The camera's own userId first; failing that, the owner of the
           // schedule governing it.
+          // The schedule's own adminId first: it was captured from a real
+          // request and is the only source that works when the camera's owner
+          // has no Admin document of its own. Then the camera's userId, then
+          // the schedule owner's.
           const adminId =
+            (isMongoObjectId(item.matchedGlobalSchedule?.adminId)
+              ? String(item.matchedGlobalSchedule.adminId)
+              : null) ||
             adminIdByUserId.get(String(channel?.userId || "")) ||
             adminIdByUserId.get(String(item.matchedGlobalSchedule?.userId || ""));
 
