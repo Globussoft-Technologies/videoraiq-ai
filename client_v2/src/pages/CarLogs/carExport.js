@@ -45,6 +45,7 @@ const fetchAllForExport = async ({
   sortOrder,
   nvrIds,
   channelIds,
+  vehicleNumber,
   searchInput,
 }) => {
   const res = await axios.post(
@@ -60,6 +61,7 @@ const fetchAllForExport = async ({
         ...(sortOrder && { sortOrder }),
         ...(nvrIds?.length && { nvrIds: nvrIds.join(',') }),
         ...(channelIds?.length && { channelIds: channelIds.join(',') }),
+        ...(vehicleNumber && { vehicleNumber }),
         ...(searchInput && { search: searchInput }),
       },
       headers: getHeaders(),

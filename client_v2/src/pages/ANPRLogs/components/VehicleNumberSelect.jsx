@@ -65,7 +65,12 @@ const VehicleNumberSelect = ({
 const VehicleOption = ({ active, label, onClick }) => (
   <button
     type="button"
-    onClick={onClick}
+    onMouseDown={(e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onClick();
+    }}
+    onClick={(e) => e.stopPropagation()}
     className={`w-full text-left px-3 py-1.5 text-xs cursor-pointer hover:bg-[var(--bg2)] ${
       active ? 'bg-[var(--bg2)] font-medium text-[var(--brand)]' : 'text-[var(--tx)]'
     }`}

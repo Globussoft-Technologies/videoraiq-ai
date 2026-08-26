@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/pages/AttendanceLogs/
 import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
 import ExportButton from '@/pages/AttendanceLogs/components/ExportButton';
+import VehicleNumberSelect from '@/pages/ANPRLogs/components/VehicleNumberSelect';
 import { handleCarExport } from './carExport';
 
 const HOST = import.meta.env.VITE_BACKEND;
@@ -64,6 +65,7 @@ const fetchCarLogs = ({
   sortOrder,
   nvrIds,
   channelIds,
+  vehicleNumber,
   search,
 }) =>
   axios.post(
@@ -79,6 +81,7 @@ const fetchCarLogs = ({
         ...(sortOrder && { sortOrder }),
         ...(nvrIds?.length && { nvrIds: nvrIds.join(',') }),
         ...(channelIds?.length && { channelIds: channelIds.join(',') }),
+        ...(vehicleNumber && { vehicleNumber }),
         ...(search && { search }),
       },
       headers: getHeaders(),
@@ -88,6 +91,13 @@ const fetchCarLogs = ({
 const getNVRs = () => axios.post(`${HOST}/authorizedChannels/getNVRS`, {}, { headers: jsonHeaders() });
 const getchannels = (data) =>
   axios.post(`${HOST}/authorizedChannels/getChannels`, data, { headers: jsonHeaders() });
+const getVehicleNumbers = (search) =>
+  axios.get(`${HOST}/incidents/logs/car-model-detection/numbers`, {
+    params: {
+      ...(search && { search }),
+    },
+    headers: getHeaders(),
+  });
 
 const CarLogs = () => {
   const todayISO = moment().format('YYYY-MM-DD');
@@ -108,6 +118,9 @@ const CarLogs = () => {
   const [cameraList, setCameraList] = useState([]);
   const [nvrIds, setNvrIds] = useState([]);
   const [channelIds, setChannelIds] = useState([]);
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [vehicleNumberList, setVehicleNumberList] = useState([]);
+  const [vehicleNumberSearch, setVehicleNumberSearch] = useState('');
   const [previewImage, setPreviewImage] = useState(null);
   const [viewMode, setViewMode] = useState(() => {
     const saved = localStorage.getItem('v2_car_logs_view_mode');
@@ -138,6 +151,7 @@ const CarLogs = () => {
         sortOrder,
         nvrIds,
         channelIds,
+        vehicleNumber,
         search: searchInput,
       });
       const data = res?.data?.body?.data;
@@ -164,7 +178,7 @@ const CarLogs = () => {
     } finally {
       setLoading(false);
     }
-  }, [skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, searchInput]);
+  }, [skip, limit, startDate, endDate, sortField, sortOrder, nvrIds, channelIds, vehicleNumber, searchInput]);
 
   useEffect(() => {
     fetchLogs();
@@ -213,8 +227,20 @@ const CarLogs = () => {
   }, [nvrIds]);
 
   useEffect(() => {
+    const handle = setTimeout(async () => {
+      try {
+        const res = await getVehicleNumbers(vehicleNumberSearch);
+        setVehicleNumberList(res?.data?.body?.data?.vehicleNumbers || []);
+      } catch (err) {
+        console.log('Error fetching vehicle numbers:', err);
+      }
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [vehicleNumberSearch]);
+
+  useEffect(() => {
     setCurrentPage(1);
-  }, [nvrIds, channelIds]);
+  }, [nvrIds, channelIds, vehicleNumber]);
 
   useEffect(() => {
     localStorage.setItem('v2_car_logs_view_mode', viewMode);
@@ -373,11 +399,13 @@ const CarLogs = () => {
     [cameraList]
   );
 
-  const activeFiltersCount = [nvrIds.length > 0, channelIds.length > 0].filter(Boolean).length;
+  const activeFiltersCount = [nvrIds.length > 0, channelIds.length > 0, !!vehicleNumber].filter(Boolean).length;
 
   const resetFilters = () => {
     setNvrIds([]);
     setChannelIds([]);
+    setVehicleNumber('');
+    setVehicleNumberSearch('');
   };
 
   const handleExport = (format) =>
@@ -388,6 +416,7 @@ const CarLogs = () => {
       sortOrder,
       nvrIds,
       channelIds,
+      vehicleNumber,
       searchInput,
     });
 
@@ -581,6 +610,13 @@ const CarLogs = () => {
                   className="w-full"
                   maxHeight="max-h-40"
                   msg="No Camera Found"
+                />
+                <VehicleNumberSelect
+                  vehicleNumber={vehicleNumber}
+                  setVehicleNumber={setVehicleNumber}
+                  vehicleNumberList={vehicleNumberList}
+                  vehicleNumberSearch={vehicleNumberSearch}
+                  setVehicleNumberSearch={setVehicleNumberSearch}
                 />
               </div>
             </div>

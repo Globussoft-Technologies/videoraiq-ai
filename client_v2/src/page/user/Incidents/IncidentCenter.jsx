@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useOutletContext } from 'react-router-dom';
-import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2 } from 'lucide-react';
+import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2, Car, Building2, CalendarClock, Hash, Server, Video, Minus, Plus, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import SharedMultiSelect from '../../../components/MultiSelect';
@@ -9,7 +9,7 @@ import IncidentCard, { apiMarkResolved, ReportModal, VehicleTagStrip } from './I
 import TagUserModal, { UntagUserModal } from '../../../components/TagUserModal';
 import TagStatusFilter from '../../../components/TagStatusFilter';
 import TaggedUserDetailsModal from '../../../components/TaggedUserDetailsModal';
-import { PLATE_BEARING_TYPES } from '../../../helpers/vehicleTagging';
+import { formatPlate, PLATE_BEARING_TYPES } from '../../../helpers/vehicleTagging';
 import RefreshControl from '../../../components/RefreshControl';
 import DeleteConfirmation from '../../../components/DeleteConfirmation';
 import { useApi } from '../../../hooks/useApi';
@@ -370,6 +370,98 @@ function navBtnStyle(side) {
   };
 }
 
+const displayValue = (value) => {
+  if (value == null) return '--';
+  const text = String(value).trim();
+  return text ? text : '--';
+};
+
+const isCarModelDetection = (item) =>
+  item?.incidentType === 'carModelDetection' ||
+  /car\s*model/i.test(item?.incidentName || item?.displayName || '');
+
+function CarModelDetails({ item }) {
+  if (!isCarModelDetection(item)) return null;
+
+  const details = [
+    { label: 'Model Name', value: displayValue(item.model_name || item.modelName || item.carModelName || item.carModel), icon: Car, accent: '#38bdf8' },
+    { label: 'Vehicle No', value: formatPlate(item.vehicleNumber) || '--', icon: Hash, accent: '#facc15', mono: true },
+    { label: 'Company', value: displayValue(item.company || item.make || item.carCompany), icon: Building2, accent: '#a78bfa' },
+    { label: 'Year', value: displayValue(item.year), icon: CalendarClock, accent: '#34d399' },
+    { label: 'NVR Name', value: displayValue(item.nvrData?.nvrName), icon: Server, accent: '#60a5fa' },
+    { label: 'Camera Name', value: displayValue(item.channelData?.name || item.channelName), icon: Video, accent: '#fb7185' },
+    { label: 'Time', value: shortDateTime(item.timeOfIncident || item.createdAt) || '--', icon: CalendarClock, accent: '#f97316', mono: true },
+  ];
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        marginTop: 10,
+        display: 'flex',
+        alignItems: 'stretch',
+        gap: 0,
+        maxWidth: 'min(100%, 1100px)',
+        overflowX: 'auto',
+        overflowY: 'hidden',
+        paddingBottom: 2,
+      }}
+    >
+      {details.map(({ label, value, icon: Icon, accent, mono }, idx) => (
+        <Fragment key={label}>
+          <div
+            style={{
+              position: 'relative',
+              zIndex: 1,
+            flex: '1 0 124px',
+              minWidth: 0,
+            padding: '6px 9px',
+              borderRadius: 8,
+              background: 'rgba(15,23,42,.78)',
+              border: '1px solid rgba(255,255,255,.16)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+              <Icon size={12} color={accent} style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '.12em', color: 'rgba(255,255,255,.48)', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {label}
+              </span>
+            </div>
+            <div
+              title={value}
+              style={{
+                color: '#fff',
+                fontSize: mono ? 11 : 10.5,
+                fontWeight: 750,
+                fontFamily: mono ? 'monospace' : 'inherit',
+                overflow: 'visible',
+                overflowWrap: 'anywhere',
+                whiteSpace: 'normal',
+                lineHeight: 1.25,
+              }}
+            >
+              {value}
+            </div>
+          </div>
+          {idx < details.length - 1 && (
+            <div
+              aria-hidden="true"
+              style={{
+                alignSelf: 'center',
+                flex: '0 0 10px',
+                height: 1,
+                background: `linear-gradient(90deg, ${accent}, ${details[idx + 1].accent})`,
+                opacity: .72,
+              }}
+            />
+          )}
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
 function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onResolvedChange, onTagUser, onUntagUser, onViewUser, tagOpen = false, pageOffset = 0, totalCount = 0, onNavigateGlobal, navLoading = false, navFailedAt = 0 }) {
   const item = items[index];
   // Navigation spans the whole filtered result set, not just the loaded page:
@@ -379,7 +471,6 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
   const total       = totalCount || items.length;
   const hasPrev = globalIndex > 0;
   const hasNext = globalIndex < total - 1;
-  const wheelLockRef = useRef(false);
 
   // Overlay panel state (ported from client's VideoModal): the panel collapses
   // behind the blue tab, and resolve/report act on the currently-shown incident.
@@ -387,6 +478,7 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
   const [reportOpen, setReportOpen]   = useState(false);
   const [resolved, setResolved]       = useState(false);
   const [resolving, setResolving]     = useState(false);
+  const [zoom, setZoom]               = useState(1);
   // Transient confirmation shown for a couple of seconds after the request
   // settles — { text, ok }. Without it the only feedback was the checkbox
   // quietly filling in, which is easy to miss on a busy frame.
@@ -415,6 +507,7 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
   useEffect(() => {
     clearTimeout(flashTimerRef.current);
     setSaveFlash(null);
+    setZoom(1);
   }, [item?._id, item?.id]);
 
   // A new incident means a new <img> (keyed by id) that has to load — show the
@@ -502,13 +595,18 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [goPrev, goNext, onClose, reportOpen, tagOpen]);
 
+  const updateZoom = (next) => {
+    setZoom((current) => {
+      const value = typeof next === 'function' ? next(current) : next;
+      return Math.min(4, Math.max(1, Number(value.toFixed(2))));
+    });
+  };
+
   function onWheel(e) {
     if (reportOpen || tagOpen) return;
-    if (wheelLockRef.current) return;
-    if (Math.abs(e.deltaY) < 10) return;
-    wheelLockRef.current = true;
-    if (e.deltaY > 0) goNext(); else goPrev();
-    setTimeout(() => { wheelLockRef.current = false; }, 250);
+    e.preventDefault();
+    if (Math.abs(e.deltaY) < 3) return;
+    updateZoom((current) => current + (e.deltaY < 0 ? 0.12 : -0.12));
   }
 
   if (!item) return null;
@@ -518,6 +616,7 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
   const det    = detectionLabel(item.incidentType || item.displayName);
   const cam    = item.channelData?.name || '';
   const site   = item.nvrData?.nvrName  || item.location  || '';
+  const carModel = isCarModelDetection(item);
 
   return (
     <div
@@ -554,8 +653,69 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
             alt={det}
             onLoad={() => setImgLoading(false)}
             onError={() => setImgLoading(false)}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              display: 'block',
+              transform: `scale(${zoom})`,
+              transformOrigin: 'center center',
+              transition: 'transform 120ms ease-out',
+              cursor: zoom > 1 ? 'zoom-out' : 'zoom-in',
+            }}
           />
+        )}
+
+        {imgSrc && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            onWheel={(e) => e.stopPropagation()}
+            style={{
+              position: 'absolute',
+              top: 16,
+              left: 16,
+              zIndex: 35,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: 4,
+              borderRadius: 10,
+              border: '1px solid rgba(255,255,255,.22)',
+              background: 'rgba(255,255,255,.94)',
+              boxShadow: '0 10px 30px rgba(0,0,0,.28)',
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => updateZoom((current) => current - 0.2)}
+              title="Zoom out"
+              style={{ width: 30, height: 30, border: 'none', borderRadius: 7, background: 'transparent', color: '#1f2a44', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Minus size={15} />
+            </button>
+            <span style={{ minWidth: 50, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#33415f' }}>
+              {Math.round(zoom * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={() => updateZoom((current) => current + 0.2)}
+              title="Zoom in"
+              style={{ width: 30, height: 30, border: 'none', borderRadius: 7, background: 'transparent', color: '#1f2a44', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Plus size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoom(1)}
+              title="Reset zoom"
+              style={{ width: 30, height: 30, border: 'none', borderRadius: 7, background: 'transparent', color: '#1f2a44', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <RotateCcw size={15} />
+            </button>
+          </div>
         )}
 
         {/* Exactly one spinner is visible at a time. While a page fetch is in
@@ -589,7 +749,7 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
             // expand keeps working while a fetch is in flight — the panel is
             // independent of navigation state.
             position: 'absolute', bottom: 32, left: 32, zIndex: 30,
-            display: 'flex', alignItems: 'stretch', maxWidth: 'calc(100% - 64px)',
+            display: 'flex', alignItems: 'stretch', maxWidth: carModel ? 'min(calc(100% - 64px), 1220px)' : 'calc(100% - 64px)',
           }}
         >
           {/* Blue collapse tab — own stacking context above the panel body so a
@@ -628,32 +788,36 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
               boxShadow: '0 25px 50px -12px rgba(0,0,0,.6)',
               backdropFilter: 'blur(6px)',
               clipPath: 'polygon(0 0, 95% 0, 100% 20%, 100% 100%, 5% 100%, 0 80%)',
+              width: carModel ? 'fit-content' : undefined,
+              maxWidth: carModel ? '100%' : undefined,
             }}
           >
-            <div className="vq-inc-panel-inner" style={{ display: 'flex', alignItems: 'flex-start', gap: 40, padding: '28px 40px', flexWrap: 'wrap', width: 'max-content', maxWidth: '100%' }}>
+            <div className="vq-inc-panel-inner" style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: carModel ? 20 : 40, padding: carModel ? '18px 30px 20px' : '28px 40px', flexWrap: 'wrap', width: carModel ? 'auto' : 'max-content', maxWidth: '100%' }}>
               {/* Title block */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, width: carModel ? '100%' : undefined }}>
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.3em', color: '#38bdf8', textTransform: 'uppercase' }}>
                   Security Feed
                 </span>
-                <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: '#fff', letterSpacing: '-.02em', textTransform: 'uppercase', lineHeight: 1.15, wordBreak: 'break-word' }}>
+                <h1 style={{ margin: 0, fontSize: carModel ? 22 : 24, fontWeight: 900, color: '#fff', letterSpacing: '-.02em', textTransform: 'uppercase', lineHeight: 1.15, wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
                   {item.incidentName || det}
                 </h1>
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,.6)', wordBreak: 'break-word' }}>
+                <p style={{ margin: 0, fontSize: carModel ? 13 : 14, fontWeight: 500, color: 'rgba(255,255,255,.6)', wordBreak: 'break-word', paddingRight: carModel ? 420 : 0 }}>
                   {item.description || [cam, site].filter(Boolean).join(' · ')}
                 </p>
                 <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'rgba(255,255,255,.45)', marginTop: 2 }}>
                   {shortDateTime(item.timeOfIncident)} · {index + 1} / {items.length}
                 </span>
+                <CarModelDetails item={item} />
                 {/* Vehicle Detection: the plate and who it belongs to, with
                     Tag User inline for a plate nobody owns yet. */}
-                <div style={{ marginTop: 8 }}>
+                <div style={{ marginTop: carModel ? 6 : 8 }}>
                   <VehicleTagStrip
                     item={item}
                     onTagUser={onTagUser}
                     onUntagUser={onUntagUser}
                     onViewUser={onViewUser}
                     variant="lightbox"
+                    showPlate={!carModel}
                   />
                 </div>
               </div>
@@ -664,6 +828,9 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
               <div
                 onClick={(e) => { e.stopPropagation(); handleMarkResolved(); }}
                 style={{
+                  position: carModel ? 'absolute' : undefined,
+                  top: carModel ? 26 : undefined,
+                  right: carModel ? 250 : undefined,
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '8px 20px', cursor: resolving ? 'wait' : 'pointer',
                   border: `1px solid ${saveFlash ? (saveFlash.ok ? 'rgba(16,185,129,.8)' : 'rgba(239,68,68,.7)') : 'rgba(255,255,255,.3)'}`,
@@ -697,6 +864,9 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
               <button
                 onClick={(e) => { e.stopPropagation(); setReportOpen(true); }}
                 style={{
+                  position: carModel ? 'absolute' : undefined,
+                  top: carModel ? 26 : undefined,
+                  right: carModel ? 56 : undefined,
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '8px 20px', cursor: 'pointer',
                   border: '1px solid rgba(59,130,246,.5)',

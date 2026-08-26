@@ -29,7 +29,7 @@ const SEV_LABEL = {
  *
  * Exported so the Incident Center lightbox shows exactly the same thing.
  */
-export function VehicleTagStrip({ item, onTagUser, onUntagUser, onViewUser, variant = 'card' }) {
+export function VehicleTagStrip({ item, onTagUser, onUntagUser, onViewUser, variant = 'card', showPlate = true }) {
   if (!hasReadablePlate(item?.vehicleNumber)) return null;
 
   const dark = variant === 'lightbox';
@@ -39,7 +39,7 @@ export function VehicleTagStrip({ item, onTagUser, onUntagUser, onViewUser, vari
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
-      <span style={plateStyle}>{formatPlate(item.vehicleNumber)}</span>
+      {showPlate && <span style={plateStyle}>{formatPlate(item.vehicleNumber)}</span>}
 
       {item.taggedUser ? (
         <span style={{
