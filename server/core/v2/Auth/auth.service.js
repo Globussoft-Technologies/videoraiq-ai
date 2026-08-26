@@ -587,15 +587,57 @@ class AUTHService {
 
   async fetchUserDataByName(loginPass) {
     const url = `${this.baseUrl}/check-access/by-login-pass`;
-    const params = new URLSearchParams({
-      _key: this.apiKey,
-      login: loginPass.login,
-      pass: loginPass.pass,
-    });
-    try {
+
+    const authenticate = async (login) => {
+      const params = new URLSearchParams({
+        _key: this.apiKey,
+        login,
+        pass: loginPass.pass,
+      });
+
       const response = await fetchWithTimeout(`${url}?${params}`);
-      const data = await response.json();
-      return data;
+      return response.json();
+    };
+
+    try {
+      const suppliedLogin = String(loginPass.login).trim();
+      const directResult = await authenticate(suppliedLogin);
+
+      // Some aMember installations are configured to authenticate by email
+      // only. In that mode, resolve an exact username match to its aMember
+      // email and retry through the same password-validation endpoint.
+      if (directResult?.ok || suppliedLogin.includes("@")) {
+        return directResult;
+      }
+
+      try {
+        const userParams = new URLSearchParams({
+          _key: this.apiKey,
+          "_filter[login]": suppliedLogin,
+          _count: "1",
+        });
+        const userResponse = await fetchWithTimeout(
+          `${this.baseUrl}/users?${userParams}`
+        );
+        const users = await userResponse.json();
+        const matchedUser = users?.[0];
+        const matchedEmail = matchedUser?.email?.trim();
+
+        if (
+          matchedUser?.login === suppliedLogin &&
+          matchedEmail &&
+          matchedEmail.toLowerCase() !== suppliedLogin.toLowerCase()
+        ) {
+          return await authenticate(matchedEmail);
+        }
+      } catch (lookupError) {
+        logger.warn(
+          "Unable to resolve aMember username during login fallback:",
+          lookupError
+        );
+      }
+
+      return directResult;
     } catch (error) {
       logger.error("Error fetching user data:", error);
       throw error;
@@ -663,11 +705,6 @@ return bypassUsers.find(
         return res.status(403).json({ message: "login and password required" });
       }
 
-      const allowed = config.get("allowed_users") || [];
-      if (allowed.length > 0 && !allowed.includes(login.login)) {
-        return res.status(403).json({ message: "Invalid credentials" });
-      }
-
       // Bypass aMember for users defined in config bypass_users
       const bypassUser = this._getBypassUser(login.login, login.pass);
       let userData;
@@ -678,7 +715,18 @@ return bypassUsers.find(
       }
       if (!userData?.ok) {
         return res.status(403).json({ ...userData });
-      } else if (!this.isPlanActive(userData)) {
+      }
+
+      const allowed = config.get("allowed_users") || [];
+      const allowedIdentifiers = [login.login, userData.login, userData.email];
+      if (
+        allowed.length > 0 &&
+        !allowedIdentifiers.some((identifier) => allowed.includes(identifier))
+      ) {
+        return res.status(403).json({ message: "Invalid credentials" });
+      }
+
+      if (!this.isPlanActive(userData)) {
         if(APP_ENV === "local") {
           let detectionServiceRevokeSecretKey = config.get(
             "detectionServiceRevokeSecretKey"
@@ -1187,6 +1235,14 @@ return bypassUsers.find(
   }
   async registerAdminIfNotExists(userData) {
     try {
+      const userId = String(userData?.user_id ?? "").trim();
+      const login = String(userData?.login ?? "").trim();
+      const email = String(userData?.email ?? "").trim();
+
+      if (!userId || !login || !email) {
+        throw new Error("aMember user_id, login and email are required");
+      }
+
       let detectionTypes = [
         "countPersons",
         "genericObjectDetection",
@@ -1207,19 +1263,29 @@ return bypassUsers.find(
         allowedDetection: true,
       }));
 
-      // Check if admin already exists
-      let existingUser = await adminModel.findOne({
-        user_id: userData?.user_id,
+      // user_id is the stable identity. The login/email alternatives reconcile
+      // legacy rows that were previously created with a missing or stale
+      // aMember user_id, without replacing their Mongo _id or related data.
+      const matchingUsers = await adminModel.find({
+        $or: [{ user_id: userId }, { login }, { email }],
       });
+
+      if (matchingUsers.length > 1) {
+        throw new Error(
+          "Conflicting admin records match this aMember user_id, login or email"
+        );
+      }
+
+      const existingUser = matchingUsers[0] ?? null;
 
       // If no admin → create new admin
       if (!existingUser) {
         const newAdmin = await adminModel.create({
-          user_id: userData?.user_id,
-          login: userData?.login,
+          user_id: userId,
+          login,
           name_f: userData?.name_f ?? "",
           name_l: userData?.name_l ?? "",
-          email: userData?.email,
+          email,
         });
 
         await dashboardSidebarModel.create({
@@ -1237,10 +1303,11 @@ return bypassUsers.find(
       // aMember owns these profile fields. Keep the local record synchronized
       // while preserving its _id, orgId and all application-specific settings.
       existingUser.set({
-        login: userData?.login,
+        user_id: userId,
+        login,
         name_f: userData?.name_f ?? "",
         name_l: userData?.name_l ?? "",
-        email: userData?.email,
+        email,
       });
       await existingUser.save();
 
