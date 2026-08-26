@@ -461,6 +461,28 @@ class IncidentsController {
     return await incidentsService.getCarModelVehicleNumbers(req, res, next);
   }
 
+  async updateCarModelDetectionDetails(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Sync the reference image to the car model catalog service, then update local car model detection details.'
+    #swagger.parameters['id'] = { in: 'path', type: 'string', required: true }
+    #swagger.parameters['data'] = {
+      in: 'body',
+      required: true,
+      schema: {
+        model_name: 'City',
+        company: 'Honda',
+        year: 2022
+      }
+    }
+    #swagger.responses[200] = { description: 'Car model details updated successfully' }
+    #swagger.responses[400] = { description: 'Validation error' }
+    #swagger.responses[404] = { description: 'Incident not found' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.updateCarModelDetectionDetails(req, res, next);
+  }
+
   async getVehicleNumbers(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get the full distinct list of vehicle numbers captured in vehicleDetection incidents for the authenticated user.'

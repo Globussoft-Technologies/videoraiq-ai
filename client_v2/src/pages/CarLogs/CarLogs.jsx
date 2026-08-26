@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import moment from 'moment-timezone';
-import { Building2, Calendar, Car, CarFront, Clock, Filter, Hash, Image, Palette, RotateCcw, Server, Video } from 'lucide-react';
+import { Building2, Calendar, Car, CarFront, Clock, Filter, Hash, Image, Loader2, Palette, Pencil, RotateCcw, Server, Video } from 'lucide-react';
 import getAccessToken from '@/utils/getAccessToken';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePage';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 import MultiSelect from '@/pages/AttendanceLogs/components/MultiSelect';
@@ -15,6 +17,22 @@ import VehicleNumberSelect from '@/pages/ANPRLogs/components/VehicleNumberSelect
 import { handleCarExport } from './carExport';
 
 const HOST = import.meta.env.VITE_BACKEND;
+const HONDA_MODEL_OPTIONS = [
+  'Amaze',
+  'Amaze 2nd Gen',
+  'City',
+  'City Hybrid',
+  'Elevate',
+  'ZR-V',
+  'Brio',
+  'Jazz',
+  'WR-V',
+  'Mobilio',
+  'BR-V',
+  'Civic',
+  'Accord',
+  'CR-V',
+];
 
 const getHeaders = () => ({
   Accept: 'application/json',
@@ -52,6 +70,120 @@ const getCompany = (item) => item.company || item.make || item.carCompany || '--
 
 const formatIncidentTime = (value) =>
   value ? moment.utc(value).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A') : '--';
+
+const optionKey = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const normalizeHondaModel = (value) =>
+  HONDA_MODEL_OPTIONS.find((model) => optionKey(model) === optionKey(value)) || '';
+
+const updateCarModelDetails = (incidentId, payload) =>
+  axios.patch(`${HOST}/incidents/logs/car-model-detection/${incidentId}`, payload, {
+    headers: jsonHeaders(),
+  });
+
+function EditCarModelModal({ row, saving, onClose, onSave }) {
+  const [model, setModel] = useState(() => normalizeHondaModel(row?.modelName));
+  const [company, setCompany] = useState(() => (row?.company && row.company !== '--' ? row.company : ''));
+  const [year, setYear] = useState(() => (row?.year && row.year !== '--' ? String(row.year) : ''));
+
+  useEffect(() => {
+    setModel(normalizeHondaModel(row?.modelName));
+    setCompany(row?.company && row.company !== '--' ? row.company : '');
+    setYear(row?.year && row.year !== '--' ? String(row.year) : '');
+  }, [row]);
+
+  if (!row) return null;
+
+  const originalModel = normalizeHondaModel(row.modelName);
+  const originalCompany = row.company && row.company !== '--' ? row.company : '';
+  const originalYear = row.year && row.year !== '--' ? String(row.year) : '';
+  const hasChanges =
+    (model && model !== originalModel) ||
+    company.trim() !== originalCompany ||
+    year.trim() !== originalYear;
+
+  const submit = (e) => {
+    e.preventDefault();
+    onSave({
+      model,
+      company: company.trim(),
+      year: year.trim(),
+      originalModel,
+      originalCompany,
+      originalYear,
+    });
+  };
+
+  return (
+    <Dialog open={!!row} onOpenChange={(open) => !open && !saving && onClose()}>
+      <DialogContent className="left-1/2 top-1/2 w-[min(460px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 border border-[var(--bd)] bg-[var(--bg1solid)] p-0 text-[var(--tx)]">
+        <form onSubmit={submit}>
+          <DialogHeader className="border-b border-[var(--bd)] px-5 py-4">
+            <DialogTitle className="text-[18px] text-[var(--tx)]">Edit Car Details</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 px-5 py-5">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--tx3)]">Model Name</span>
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="h-10 w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 text-sm text-[var(--tx)] outline-none focus:border-[var(--brand)]"
+              >
+                <option value="">Select model</option>
+                {HONDA_MODEL_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--tx3)]">Company</span>
+              <Input
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                placeholder="Company"
+                className="h-10 rounded-lg bg-[var(--bg2)]"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--tx3)]">Year</span>
+              <Input
+                type="number"
+                min="1900"
+                max="2100"
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+                placeholder="Year"
+                className="h-10 rounded-lg bg-[var(--bg2)]"
+              />
+            </label>
+          </div>
+
+          <DialogFooter className="border-t border-[var(--bd)] px-5 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={saving}
+              className="border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx)] hover:bg-[var(--bg2)]"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={saving || !hasChanges}
+              className="bg-[var(--brand)] text-white hover:opacity-90"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 const REFRESH_KEY = 'v2_car_logs_auto_refresh_enabled';
 const INTERVAL_KEY = 'v2_car_logs_auto_refresh_interval';
@@ -122,6 +254,8 @@ const CarLogs = () => {
   const [vehicleNumberList, setVehicleNumberList] = useState([]);
   const [vehicleNumberSearch, setVehicleNumberSearch] = useState('');
   const [previewImage, setPreviewImage] = useState(null);
+  const [editRow, setEditRow] = useState(null);
+  const [editSaving, setEditSaving] = useState(false);
   const [viewMode, setViewMode] = useState(() => {
     const saved = localStorage.getItem('v2_car_logs_view_mode');
     return saved === 'grid' || saved === 'table' ? saved : 'table';
@@ -259,6 +393,63 @@ const CarLogs = () => {
 
   const openPreview = (url) => {
     if (url) setPreviewImage(url);
+  };
+
+  const openEdit = (row) => setEditRow(row);
+
+  const handleSaveEdit = async ({ model, company, year, originalModel, originalCompany, originalYear }) => {
+    if (!editRow) return;
+    const payload = {};
+    const updates = {};
+
+    if (model && model !== originalModel) {
+      payload.model_name = model;
+      updates.modelName = model;
+    }
+
+    if (company !== originalCompany) {
+      payload.company = company;
+      updates.company = company || '--';
+    }
+
+    if (year !== originalYear) {
+      const parsedYear = Number(year);
+      if (!Number.isInteger(parsedYear) || parsedYear < 1900 || parsedYear > 2100) {
+        toast.error('Enter a valid year');
+        return;
+      }
+      payload.year = parsedYear;
+      updates.year = parsedYear;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      toast.error('Change at least one value');
+      return;
+    }
+
+    setEditSaving(true);
+    try {
+      const res = await updateCarModelDetails(editRow.id, payload);
+      const catalogSync = res?.data?.body?.data?.catalogSync;
+      setRows((current) =>
+        current.map((row) =>
+          row.id === editRow.id ? { ...row, ...updates } : row
+        )
+      );
+      if (catalogSync?.success === false) {
+        toast.warning('Car details updated, catalog sync failed');
+      } else {
+        toast.success('Car details updated');
+      }
+      setEditRow(null);
+    } catch (err) {
+      console.log('Failed to update car model reference:', err);
+      const errorBody = err?.response?.data?.body;
+      const errorDetail = errorBody?.error?.detail || errorBody?.error?.response?.detail;
+      toast.error(errorDetail?.message || errorBody?.message || err?.response?.data?.message || 'Failed to update car details');
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const columns = useMemo(
@@ -400,6 +591,25 @@ const CarLogs = () => {
         ),
         cell: ({ row }) => <span className="text-[13px] text-[var(--tx)] whitespace-nowrap">{row.original.incidentTime}</span>,
       },
+      {
+        accessorKey: 'actions',
+        header: () => (
+          <span className="uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] [font-family:var(--mono)]">
+            Actions
+          </span>
+        ),
+        cell: ({ row }) => (
+          <button
+            type="button"
+            onClick={() => openEdit(row.original)}
+            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] transition-colors hover:border-[var(--brand)] hover:text-[var(--brand)]"
+            title="Edit car details"
+            aria-label="Edit car details"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+        ),
+      },
     ],
     [sortField]
   );
@@ -447,6 +657,15 @@ const CarLogs = () => {
     (row) => (
       <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[13px] overflow-hidden hover:border-[var(--bd2)] transition-colors h-full w-full min-w-0">
         <div className="relative bg-[#0a0e15] flex items-center justify-center" style={{ aspectRatio: '6 / 3' }}>
+          <button
+            type="button"
+            onClick={() => openEdit(row)}
+            className="absolute right-2 top-2 z-10 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/20 bg-black/55 text-white shadow-sm transition-colors hover:bg-black/75"
+            title="Edit car details"
+            aria-label="Edit car details"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
           {row.imageUrl ? (
             <ImageWithLoader
               src={row.imageUrl}
@@ -551,6 +770,12 @@ const CarLogs = () => {
   return (
     <div className="p-3 sm:p-4 lg:p-[22px] flex flex-col gap-3 sm:gap-[18px] min-h-full">
       <ImagePreviewModal previewImage={previewImage} onClose={() => setPreviewImage(null)} />
+      <EditCarModelModal
+        row={editRow}
+        saving={editSaving}
+        onClose={() => setEditRow(null)}
+        onSave={handleSaveEdit}
+      />
 
       <ReusableTablePage
         loading={loading}

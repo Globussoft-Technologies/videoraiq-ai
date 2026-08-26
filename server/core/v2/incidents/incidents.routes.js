@@ -117,6 +117,11 @@ router.post(
   viewAccessCheck,
   incidentsController.getCarModelDetectionLogs,
 );
+router.patch(
+  "/logs/car-model-detection/:id",
+  editAccessCheck,
+  incidentsController.updateCarModelDetectionDetails,
+);
 router.get(
   "/logs/car-model-detection/numbers",
   viewAccessCheck,

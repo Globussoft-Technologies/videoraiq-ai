@@ -4,6 +4,7 @@ import logger from "../../../utils/logger.js";
 import nvrModel from "../NVR/nvr.model.js";
 import incidentsValidate from "./incidents.validate.js";
 import mongoose from "mongoose";
+import axios from "axios";
 import Response from "../../../utils/response.js";
 import { sendPayloadToUser } from "../../../socket.js";
 import momentTZ from "moment-timezone";
@@ -135,6 +136,56 @@ const toModelYear = (value) => {
   const year = Number.parseInt(String(value).trim(), 10);
   return Number.isFinite(year) ? year : null;
 };
+
+const carModelCatalogBaseUrl = () => {
+  try {
+    if (config.has("CarModelCatalogAPI")) {
+      return String(config.get("CarModelCatalogAPI") || "").replace(/\/+$/, "");
+    }
+  } catch (_) {}
+  return "https://meet-greet-obj-det.videoraiq.com";
+};
+
+const carModelCatalogImageUrl = (pathValue) => {
+  const pathText = String(pathValue || "").trim();
+  if (!pathText) return "";
+  if (/^https?:\/\//i.test(pathText)) return pathText;
+
+  let baseUrl = "";
+  try {
+    if (config.has("backendDomain")) {
+      baseUrl = `${String(config.get("backendDomain") || "").replace(/\/+$/, "")}/api/v2/uploads`;
+    }
+  } catch (_) {}
+  if (!baseUrl) {
+    try {
+      if (config.has("ImageView")) baseUrl = String(config.get("ImageView") || "");
+    } catch (_) {}
+  }
+
+  return `${baseUrl.replace(/\/+$/, "")}/${pathText.replace(/^\/+/, "")}`;
+};
+
+const HONDA_MODEL_OPTIONS = [
+  "Amaze",
+  "Amaze 2nd Gen",
+  "City",
+  "City Hybrid",
+  "Elevate",
+  "ZR-V",
+  "Brio",
+  "Jazz",
+  "WR-V",
+  "Mobilio",
+  "BR-V",
+  "Civic",
+  "Accord",
+  "CR-V",
+];
+
+const modelOptionKey = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const normalizeHondaModel = (value) =>
+  HONDA_MODEL_OPTIONS.find((model) => modelOptionKey(model) === modelOptionKey(value)) || null;
 
 // Attribute values arrive from the DS under several spellings and sometimes
 // as explicit placeholders. Take the first usable one and treat placeholder
@@ -3127,6 +3178,203 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch car model detection logs", 500));
+    }
+  }
+
+  async updateCarModelDetectionDetails(req, res, next) {
+    try {
+      const data = req?.verified?.userData;
+      if (!data?.user_id) {
+        return res
+          .status(401)
+          .json(Response.accessDeniedResp("User authentication failed.", "Unauthorized"));
+      }
+
+      const { id: incidentId } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(incidentId)) {
+        return res
+          .status(400)
+          .json(Response.validationFailResp("Invalid incident id", "Validation failed"));
+      }
+
+      const { model_name, company, year } = req.body || {};
+      const updates = {};
+
+      if (model_name !== undefined) {
+        const normalizedModel = normalizeHondaModel(model_name);
+        if (!normalizedModel) {
+          return res
+            .status(400)
+            .json(Response.validationFailResp("Invalid model name", "Validation failed"));
+        }
+        updates.model_name = normalizedModel;
+      }
+
+      if (company !== undefined) {
+        const normalizedMake = String(company || "").trim();
+        updates.company = normalizedMake || null;
+      }
+
+      if (year !== undefined) {
+        const normalizedYear = toModelYear(year);
+        if (!normalizedYear || normalizedYear < 1900 || normalizedYear > 2100) {
+          return res
+            .status(400)
+            .json(Response.validationFailResp("Invalid year", "Validation failed"));
+        }
+        updates.year = normalizedYear;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return res
+          .status(400)
+          .json(Response.validationFailResp("No editable fields provided", "Validation failed"));
+      }
+
+      let adminId = data.adminId;
+      if (!adminId) {
+        const admin = await adminModel
+          .findOne({ user_id: data.user_id.toString() })
+          .select("_id")
+          .lean();
+        adminId = admin?._id?.toString();
+      }
+
+      if (!adminId) {
+        return res
+          .status(400)
+          .json(Response.validationFailResp("Missing admin id", "Validation failed"));
+      }
+
+      const existingIncident = await CarModelDetectionIncident.findOne(
+        {
+          _id: incidentId,
+          userId: data.user_id.toString(),
+          incidentType: "carModelDetection",
+        },
+      );
+
+      if (!existingIncident) {
+        return res
+          .status(404)
+          .json(Response.notFoundResp("Car model detection incident not found"));
+      }
+
+      const imageUrl = carModelCatalogImageUrl(existingIncident.Image);
+      if (!imageUrl) {
+        return res
+          .status(400)
+          .json(Response.validationFailResp("Missing image url", "Validation failed"));
+      }
+
+      const catalogModelName =
+        updates.model_name ||
+        normalizeHondaModel(existingIncident.model_name) ||
+        String(existingIncident.model_name || "").trim();
+
+      if (!catalogModelName) {
+        return res
+          .status(400)
+          .json(Response.validationFailResp("Missing catalog model name", "Validation failed"));
+      }
+
+      const catalogUrl = `${carModelCatalogBaseUrl()}/car-model-catalog/references`;
+      let catalogSync = { success: true, response: null, error: null };
+      try {
+        const imageResponse = await axios.get(imageUrl, {
+          responseType: "arraybuffer",
+          timeout: 15000,
+        });
+        const contentType = imageResponse.headers?.["content-type"] || "image/jpeg";
+        const imagePath = new URL(imageUrl).pathname;
+        const imageName = path.basename(imagePath) || `${incidentId}.jpg`;
+
+        const catalogFormData = new FormData();
+        catalogFormData.append("admin_id", adminId.toString());
+        catalogFormData.append("catalog_id", "honda_car_models");
+        catalogFormData.append("model_name", catalogModelName);
+        catalogFormData.append(
+          "image",
+          new Blob([Buffer.from(imageResponse.data)], { type: contentType }),
+          imageName,
+        );
+
+        const catalogResponse = await axios.post(
+          catalogUrl,
+          catalogFormData,
+          {
+            headers: { accept: "application/json" },
+            timeout: 15000,
+          },
+        );
+        catalogSync.response = catalogResponse.data;
+      } catch (syncError) {
+        const syncMessage =
+          syncError?.response?.data?.message ||
+          syncError?.response?.data?.detail ||
+          syncError?.message ||
+          "Catalog sync failed";
+        const syncStatus = syncError?.response?.status || null;
+        const syncData = syncError?.response?.data || null;
+        logger.error("[CAR_MODEL_CATALOG_SYNC_ERROR]", {
+          incidentId,
+          catalogUrl,
+          status: syncStatus,
+          payload: {
+            admin_id: adminId.toString(),
+            catalog_id: "honda_car_models",
+            image_url: imageUrl,
+            model_name: catalogModelName,
+          },
+          response: syncData,
+          error: syncMessage,
+        });
+        const responseStatus = syncStatus || 502;
+        return res.status(responseStatus).json({
+          statusCode: responseStatus,
+          body: {
+            status: "failed",
+            message: syncData?.detail?.message || syncData?.message || syncMessage,
+            error: syncData || { detail: syncMessage },
+          },
+        });
+      }
+
+      const updatedIncident = await CarModelDetectionIncident.findOneAndUpdate(
+        {
+          _id: incidentId,
+          userId: data.user_id.toString(),
+          incidentType: "carModelDetection",
+        },
+        { $set: updates },
+        { new: true, runValidators: true },
+      );
+
+      if (!updatedIncident) {
+        return res
+          .status(404)
+          .json(Response.notFoundResp("Car model detection incident not found"));
+      }
+
+      return res.status(200).json(
+        Response.userSuccessResp("Car model details updated successfully", {
+          Incident: updatedIncident,
+          catalogPayload: {
+            admin_id: adminId.toString(),
+            catalog_id: "honda_car_models",
+            image_url: imageUrl,
+            model_name: catalogModelName,
+          },
+          catalogSync,
+        }),
+      );
+    } catch (error) {
+      logger.error("[UPDATE_CAR_MODEL_DETAILS_ERROR]", {
+        incidentId: req.params?.id,
+        errorMessage: error.message,
+        errorStack: error.stack,
+      });
+      next(new AppError("Failed to update car model details", 500));
     }
   }
 
