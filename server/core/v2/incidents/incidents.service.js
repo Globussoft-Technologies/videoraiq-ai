@@ -3003,7 +3003,7 @@ console.log(result,'result');
 
   async getCarModelDetectionLogs(req, res, next) {
     try {
-      const { model_name } = req.query;
+      const { model_name, vehicleNumber } = req.query;
       const extraMatch = {};
       if (model_name) {
         const escaped = model_name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -3011,6 +3011,10 @@ console.log(result,'result');
           { model_name: { $regex: escaped, $options: "i" } },
           { incidentName: { $regex: escaped, $options: "i" } },
         ];
+      }
+      if (vehicleNumber) {
+        const escaped = vehicleNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        extraMatch.vehicleNumber = { $regex: escaped, $options: "i" };
       }
       return await this._fetchIncidentLogs({
         req,
@@ -3033,6 +3037,52 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch car model detection logs", 500));
+    }
+  }
+
+  async getCarModelVehicleNumbers(req, res, next) {
+    try {
+      const data = req?.verified?.userData;
+      if (!data?.user_id) {
+        return res.send(
+          Response.userFailResp("User authentication failed.", "Unauthorized"),
+        );
+      }
+
+      const distinctValues = await CarModelDetectionIncident.distinct(
+        "vehicleNumber",
+        {
+          userId: data.user_id.toString(),
+          incidentType: "carModelDetection",
+          vehicleNumber: { $type: "string", $nin: [""] },
+        },
+      );
+
+      // Treat formatting-only differences as the same vehicle number and
+      // return a deterministic representation regardless of distinct order.
+      const seen = new Set();
+      const vehicleNumbers = distinctValues
+        .map((value) => value.trim().toUpperCase())
+        .filter((value) => {
+          if (!value) return false;
+          if (seen.has(value)) return false;
+          seen.add(value);
+          return true;
+        })
+        .sort((left, right) => left.localeCompare(right));
+
+      return res.status(200).json(
+        Response.userSuccessResp(
+          "Car model vehicle numbers fetched successfully",
+          {
+            totalCount: vehicleNumbers.length,
+            vehicleNumbers,
+          },
+        ),
+      );
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch car model vehicle numbers", 500));
     }
   }
 

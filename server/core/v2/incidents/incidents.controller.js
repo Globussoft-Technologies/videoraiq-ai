@@ -429,7 +429,7 @@ class IncidentsController {
 
   async getCarModelDetectionLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
-    #swagger.description = 'Get Car Model Detection (carModelDetection) logs (tabular). Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, model_name, search. Paginated via skip/limit.'
+    #swagger.description = 'Get Car Model Detection (carModelDetection) logs (tabular). Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, model_name, vehicleNumber, search. Paginated via skip/limit.'
     #swagger.parameters['skip'] = { in: 'query', type: 'integer' }
     #swagger.parameters['limit'] = { in: 'query', type: 'integer' }
     #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
@@ -442,12 +442,23 @@ class IncidentsController {
     #swagger.parameters['resolved'] = { in: 'query', type: 'boolean' }
     #swagger.parameters['reportStatus'] = { in: 'query', type: 'boolean' }
     #swagger.parameters['model_name'] = { in: 'query', type: 'string', description: 'Partial match on detected model name' }
+    #swagger.parameters['vehicleNumber'] = { in: 'query', type: 'string', description: 'Case-insensitive partial match on vehicle number' }
     #swagger.parameters['search'] = { in: 'query', type: 'string' }
     #swagger.responses[200] = { description: 'Car model detection logs fetched successfully' }
     #swagger.responses[500] = { description: 'Internal server error' }
     #swagger.security = [{ "EncryptedAuthToken": [] }]
     */
     return await incidentsService.getCarModelDetectionLogs(req, res, next);
+  }
+
+  async getCarModelVehicleNumbers(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get all distinct, non-empty vehicle numbers from carModelDetection incidents for the authenticated user. No date or channel filters are applied.'
+    #swagger.responses[200] = { description: 'Car model vehicle numbers fetched successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.getCarModelVehicleNumbers(req, res, next);
   }
 
   async getVehicleNumbers(req, res, next) {
