@@ -483,6 +483,51 @@ class AttendanceService {
     }
   }
 
+  /**
+   * The KPI-tile status tally as one $group stage, covering the whole
+   * filtered range (no name search, no pagination) — same shape/values as
+   * getAttendance's countPipeline used to compute in its own separate
+   * aggregate() call. Extracted so it can run as a $facet branch instead.
+   */
+  attendanceStatusCountStage() {
+    const countByStatus = (status) => ({
+      $sum: { $cond: [{ $eq: ["$status", status] }, 1, 0] },
+    });
+
+    return {
+      $group: {
+        _id: null,
+        present: countByStatus(ATTENDANCE_STATUS.PRESENT),
+        halfDay: countByStatus(ATTENDANCE_STATUS.HALF_DAY),
+        earlyLeave: {
+          $sum: {
+            $cond: [
+              {
+                $and: [
+                  { $eq: ["$status", ATTENDANCE_STATUS.ABSENT] },
+                  { $ne: [{ $ifNull: ["$firstCheckIn", null] }, null] },
+                ],
+              },
+              1,
+              0,
+            ],
+          },
+        },
+        checkedIn: countByStatus(ATTENDANCE_STATUS.CHECKED_IN),
+        // Duration-agnostic: "did this employee check in/out at all today",
+        // regardless of what status that graded to. Feeds the Check In /
+        // Checkout tiles and the roster-based Absent count below — same
+        // shape /analytics/attendance-presence already returns.
+        checkinLogs: {
+          $sum: { $cond: [{ $ne: [{ $ifNull: ["$firstCheckIn", null] }, null] }, 1, 0] },
+        },
+        checkoutLogs: {
+          $sum: { $cond: [{ $ne: [{ $ifNull: ["$lastCheckOut", null] }, null] }, 1, 0] },
+        },
+      },
+    };
+  }
+
   async getAttendance(req, res, _next) {
     try {
       if (req?.query?.status === "not_checked_in") {
@@ -491,17 +536,58 @@ class AttendanceService {
 
       const { pipeline, countPipeline } = await this.buildAttendancePipeline(req);
 
-      // strength: 2 → case-insensitive so Name/Location/Department sort
-      // alphabetically instead of MongoDB's default (uppercase before lowercase).
-      const attendances = await Attendance.aggregate(pipeline).collation({
-        locale: "en",
-        strength: 2,
-      });
+      // pipeline and countPipeline share the exact same expensive prefix —
+      // $match, $unwind, four $lookups, $group, then the status/time filters
+      // (countPipeline IS that prefix; pipeline is that prefix + name filter +
+      // sort + skip/limit). Below, running them as three separate
+      // Attendance.aggregate() calls repeated that whole unwind+lookup+group
+      // fan-out three times per request (and the frontend calls this endpoint
+      // twice per filter change — once for the page, once for the KPI tiles
+      // — so six times total), which is what made multi-week/month ranges
+      // slow. $facet runs the shared prefix ONCE and branches into three cheap
+      // tails off the same intermediate result set instead.
+      //
+      // The unauthorized-channel/NVR short-circuit returns a bare
+      // `[{ $match: { _id: null } }]` array rather than
+      // `{ pipeline, countPipeline }` (a pre-existing quirk elsewhere in this
+      // file) — this guard throws in that case exactly as the old
+      // three-aggregate code implicitly did (aggregate(undefined) would throw
+      // there too, caught by the outer try/catch).
+      if (!Array.isArray(pipeline) || !Array.isArray(countPipeline)) {
+        throw new Error("Failed to build attendance pipeline");
+      }
+      const tailStages = pipeline.slice(countPipeline.length);
+      const statusCountStage = this.attendanceStatusCountStage();
 
-      const firstAttendance = await Attendance.findOne()
-        .sort({ createdAt: 1 })
-        .select("createdAt");
+      const summaryBreakdownReq = {
+        ...req,
+        query: {
+          ...(req.query || {}),
+          name: "",
+        },
+      };
 
+      const [[facetResult], firstAttendance, notCheckedInSummary] = await Promise.all([
+        Attendance.aggregate([
+          ...countPipeline,
+          {
+            $facet: {
+              rows: tailStages,
+              rowCount: [
+                ...tailStages.filter((stage) => !("$sort" in stage || "$skip" in stage || "$limit" in stage)),
+                { $count: "total" },
+              ],
+              statusCounts: [statusCountStage],
+            },
+          },
+        ]).collation({ locale: "en", strength: 2 }),
+        Attendance.findOne().sort({ createdAt: 1 }).select("createdAt"),
+        this.buildNotCheckedInDataset(summaryBreakdownReq),
+      ]);
+
+      const attendances = facetResult?.rows || [];
+      const total = facetResult?.rowCount?.[0]?.total || 0;
+      const counts = facetResult?.statusCounts?.[0] || {};
       const attendanceLogsStartDate = firstAttendance?.createdAt || null;
 
       if (!attendances || attendances.length === 0) {
@@ -562,78 +648,11 @@ class AttendanceService {
         };
       });
 
-      // Row count for pagination ("Total logs - N") — same filters as
-      // `pipeline` (including the name search), minus sort/skip/limit. This
-      // one deliberately DOES track the search box, unlike countPipeline
-      // below: the table's page count has to match what's actually listed.
-      const rowCountPipeline = pipeline.filter(
-        (stage) => !("$skip" in stage || "$limit" in stage || "$sort" in stage)
-      );
-      rowCountPipeline.push({ $count: "total" });
-
-      // countPipeline comes from buildAttendancePipeline() already excluding
-      // the name-search match (and never had sort/pagination stages to begin
-      // with) — see the comment there. This is what feeds the KPI tiles
-      // below, so typing in the search box narrows the table but leaves the
-      // tiles reporting the full date-range totals.
-      //
-      // Status totals come from this pass rather than a second query, and
-      // cover the whole filtered (minus name) result set — the KPI tiles used
-      // to be counted on the client from the loaded page only, so a
-      // 150-employee range with 10 rows per page reported totals out of 10.
-      const countByStatus = (status) => ({
-        $sum: { $cond: [{ $eq: ["$status", status] }, 1, 0] },
-      });
-
-      countPipeline.push({
-        $group: {
-          _id: null,
-          present: countByStatus(ATTENDANCE_STATUS.PRESENT),
-          halfDay: countByStatus(ATTENDANCE_STATUS.HALF_DAY),
-          earlyLeave: {
-            $sum: {
-              $cond: [
-                {
-                  $and: [
-                    { $eq: ["$status", ATTENDANCE_STATUS.ABSENT] },
-                    { $ne: [{ $ifNull: ["$firstCheckIn", null] }, null] },
-                  ],
-                },
-                1,
-                0,
-              ],
-            },
-          },
-          checkedIn: countByStatus(ATTENDANCE_STATUS.CHECKED_IN),
-          // Duration-agnostic: "did this employee check in/out at all today",
-          // regardless of what status that graded to. Feeds the Check In /
-          // Checkout tiles and the roster-based Absent count below — same
-          // shape /analytics/attendance-presence already returns.
-          checkinLogs: {
-            $sum: { $cond: [{ $ne: [{ $ifNull: ["$firstCheckIn", null] }, null] }, 1, 0] },
-          },
-          checkoutLogs: {
-            $sum: { $cond: [{ $ne: [{ $ifNull: ["$lastCheckOut", null] }, null] }, 1, 0] },
-          },
-        },
-      });
-
-      const userData = req?.verified?.userData || {};
-      const summaryBreakdownReq = {
-        ...req,
-        query: {
-          ...(req.query || {}),
-          name: "",
-        },
-      };
-      const [rowCountResult, countResult, notCheckedInSummary] =
-        await Promise.all([
-          Attendance.aggregate(rowCountPipeline),
-          Attendance.aggregate(countPipeline),
-          this.buildNotCheckedInDataset(summaryBreakdownReq),
-        ]);
-      const total = rowCountResult[0]?.total || 0;
-      const counts = countResult[0] || {};
+      // total and counts (KPI tile status tally, covering the whole filtered
+      // range regardless of the search box — see the note on countPipeline in
+      // buildAttendancePipeline) both came out of the single $facet call above,
+      // run concurrently with notCheckedInSummary, instead of two further full
+      // re-aggregations over the same range plus a separate sequential await.
       const checkinLogs = counts.checkinLogs || 0;
       const checkoutLogs = counts.checkoutLogs || 0;
       const totalEmployees = notCheckedInSummary.totalEmployees || 0;

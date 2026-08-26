@@ -44,6 +44,7 @@ const attendanceAutoEmailReportSchema = new mongoose.Schema(
     enabled: { type: Boolean, default: true },
     lastRunKey: { type: String, default: null },
     lastSentAt: { type: Date, default: null },
+    lastError: { type: String, default: null },
   },
   { timestamps: true },
 );

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { ZipArchive } from "archiver";
 import PDFDocument from "pdfkit";
 import moment from "moment-timezone";
 import mongoose from "mongoose";
@@ -139,75 +140,107 @@ async function logoBuffer() {
   }
 }
 
-async function reportRows(report, reference) {
-  const { timezone, start, end, label } = rangeForReport(report, reference);
+function rowFromAttendance(item, timezone, rules) {
+  const events = [...(item.events || [])].sort((left, right) => new Date(left.timestamp) - new Date(right.timestamp));
+  const checkins = events.filter((event) => event.cameraType === "checkin");
+  const checkouts = events.filter((event) => event.cameraType === "checkout");
+  const firstCheckIn = checkins[0] || null;
+  const lastCheckOut = checkouts.at(-1) || null;
+  const employee = item.employee || {};
+  const row = {
+    date: moment(item.createdAt).tz(timezone).format("DD MMM YYYY"),
+    employeeId: cleanField(employee.emp_id),
+    employee: `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || "Unknown employee",
+    email: cleanField(employee.email),
+    // A phone number under 8 digits is just a stray country code (e.g.
+    // "91") left over with no actual subscriber number attached.
+    phone: cleanField(employee.phoneNumber, { minDigits: 8 }),
+    designation: cleanField(employee.designation),
+    branch: cleanField(employee.branch),
+    department: cleanField(employee.departmentId?.departmentName),
+    location: cleanField(employee.location),
+    checkIn: formatTime(firstCheckIn?.timestamp, timezone),
+    checkOut: formatTime(lastCheckOut?.timestamp, timezone),
+    duration: formatDuration(firstCheckIn?.timestamp, lastCheckOut?.timestamp),
+    checkInCount: checkins.length,
+    checkOutCount: checkouts.length,
+    checkInCamera: firstCheckIn?.channel?.customName || firstCheckIn?.channel?.name || "-",
+    checkOutCamera: lastCheckOut?.channel?.customName || lastCheckOut?.channel?.name || "-",
+    status: "",
+  };
+  row.status = statusForRow({ firstCheckIn: firstCheckIn?.timestamp, lastCheckOut: lastCheckOut?.timestamp }, rules);
+  return row;
+}
+
+function attendanceQuery(report, start, end) {
   const query = {
     user: asObjectId(report.adminId),
     createdAt: { $gte: start.toDate(), $lte: end.toDate() },
   };
-  const target = report.target || {};
+  return query;
+}
 
+async function applyTargetScope(query, target) {
   if (target.scope === "employees") {
     query.employee = { $in: target.employeeIds.map(asObjectId) };
   } else if (target.scope === "departments") {
     const employees = await AuthorizedUsers.find({
-      adminId: asObjectId(report.adminId),
+      adminId: query.user,
       departmentId: { $in: target.departmentIds.map(asObjectId) },
     }).distinct("_id");
     query.employee = { $in: employees };
   }
+  return query;
+}
 
-  const [attendanceRaw, settings] = await Promise.all([
-    Attendance.find(query)
-      .populate({ path: "employee", populate: { path: "departmentId", select: "departmentName" } })
-      .populate({ path: "events.channel", select: "name customName" })
-      .sort({ createdAt: 1 })
-      .lean(),
-    AttendanceSettings.findOne({ adminId: report.adminId }).lean(),
-  ]);
+// A year of attendance for a large org can be hundreds of thousands of
+// documents. Loading them into one array with .find().lean() holds every
+// document (plus its populated employee/channel subdocs) in memory at once,
+// which is what made large custom-range reports slow/OOM-prone. A cursor
+// processes one document at a time — memory stays flat regardless of range.
+const CURSOR_BATCH_SIZE = 500;
 
-  // The Attendance Logs UI joins employee via an aggregation $lookup +
-  // $unwind (no preserveNullAndEmptyArrays), which drops any record whose
-  // employee reference doesn't resolve — e.g. a deleted employee, or an
-  // unauthorized/unrecognised detection with no linked employee. .populate()
-  // instead leaves `employee` null for those, so without this filter the
-  // exported report includes "Unknown employee" rows the UI never shows.
-  const attendance = attendanceRaw.filter((item) => item.employee);
+/**
+ * Streams attendance rows for a report, converting each raw document to a
+ * report row via `onRow` as it's read rather than materializing the whole
+ * result set. Returns summary info ({ timezone, start, end, label, rowCount }).
+ */
+async function streamReportRows(report, reference, onRow) {
+  const { timezone, start, end, label } = rangeForReport(report, reference);
+  const target = report.target || {};
+  const query = await applyTargetScope(attendanceQuery(report, start, end), target);
 
+  const settings = await AttendanceSettings.findOne({ adminId: report.adminId }).lean();
   const rules = { fullDayHours: settings?.fullDayHours || 8, halfDayHours: settings?.halfDayHours || 4 };
-  const rows = attendance.map((item) => {
-    const events = [...(item.events || [])].sort((left, right) => new Date(left.timestamp) - new Date(right.timestamp));
-    const checkins = events.filter((event) => event.cameraType === "checkin");
-    const checkouts = events.filter((event) => event.cameraType === "checkout");
-    const firstCheckIn = checkins[0] || null;
-    const lastCheckOut = checkouts.at(-1) || null;
-    const employee = item.employee || {};
-    const row = {
-      date: moment(item.createdAt).tz(timezone).format("DD MMM YYYY"),
-      employeeId: cleanField(employee.emp_id),
-      employee: `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || "Unknown employee",
-      email: cleanField(employee.email),
-      // A phone number under 8 digits is just a stray country code (e.g.
-      // "91") left over with no actual subscriber number attached.
-      phone: cleanField(employee.phoneNumber, { minDigits: 8 }),
-      designation: cleanField(employee.designation),
-      branch: cleanField(employee.branch),
-      department: cleanField(employee.departmentId?.departmentName),
-      location: cleanField(employee.location),
-      checkIn: formatTime(firstCheckIn?.timestamp, timezone),
-      checkOut: formatTime(lastCheckOut?.timestamp, timezone),
-      duration: formatDuration(firstCheckIn?.timestamp, lastCheckOut?.timestamp),
-      checkInCount: checkins.length,
-      checkOutCount: checkouts.length,
-      checkInCamera: firstCheckIn?.channel?.customName || firstCheckIn?.channel?.name || "-",
-      checkOutCamera: lastCheckOut?.channel?.customName || lastCheckOut?.channel?.name || "-",
-      status: "",
-    };
-    row.status = statusForRow({ firstCheckIn: firstCheckIn?.timestamp, lastCheckOut: lastCheckOut?.timestamp }, rules);
-    return row;
-  });
 
-  return { rows, timezone, label, rules };
+  const cursor = Attendance.find(query)
+    .populate({ path: "employee", populate: { path: "departmentId", select: "departmentName" } })
+    .populate({ path: "events.channel", select: "name customName" })
+    .sort({ createdAt: 1 })
+    .batchSize(CURSOR_BATCH_SIZE)
+    .lean()
+    .cursor();
+
+  let rowCount = 0;
+  for await (const item of cursor) {
+    // The Attendance Logs UI joins employee via an aggregation $lookup +
+    // $unwind (no preserveNullAndEmptyArrays), which drops any record whose
+    // employee reference doesn't resolve — e.g. a deleted employee, or an
+    // unauthorized/unrecognised detection with no linked employee. .populate()
+    // instead leaves `employee` null for those, so without this filter the
+    // exported report includes "Unknown employee" rows the UI never shows.
+    if (!item.employee) continue;
+    onRow(rowFromAttendance(item, timezone, rules));
+    rowCount += 1;
+  }
+
+  return { timezone, start, end, label, rowCount, rules };
+}
+
+async function reportRows(report, reference) {
+  const rows = [];
+  const { timezone, label } = await streamReportRows(report, reference, (row) => rows.push(row));
+  return { rows, timezone, label };
 }
 
 function buildCsv({ report, rows, label, timezone }) {
@@ -303,35 +336,111 @@ async function buildPdf({ report, rows, label, timezone }) {
 }
 
 function emailHtml(report, details) {
+  const zippedNote = details.zipped
+    ? `<div style="margin-top:10px;padding:12px;border-radius:8px;background:#eef5ff;color:#173b83;font-size:12.5px">The report was large, so PDF and CSV are bundled into the attached .zip to fit email size limits.</div>`
+    : "";
   return `<div style="font-family:Arial,sans-serif;background:#f5f8ff;padding:28px;color:#273657">
     <div style="max-width:700px;margin:auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e3eafb">
       <div style="padding:22px 28px;background:linear-gradient(110deg,${V2_BLUE},${V2_PURPLE});color:#fff"><img src="${LOGO_URL}" alt="VideoraIQ" style="max-height:34px;max-width:140px;vertical-align:middle"><span style="float:right;font-size:18px;font-weight:700;margin-top:7px">Attendance Report</span></div>
       <div style="padding:28px"><h2 style="margin:0 0 10px;color:#173b83">${report.title}</h2><p style="margin:0 0 18px;color:#61708f">${details.label} · ${details.timezone}</p>
-      <div style="padding:16px;border-radius:8px;background:#eef5ff;color:#173b83"><strong>${details.rows.length}</strong> employee attendance record${details.rows.length === 1 ? "" : "s"} included. The requested PDF/CSV report is attached.</div>
+      <div style="padding:16px;border-radius:8px;background:#eef5ff;color:#173b83"><strong>${details.rowCount}</strong> employee attendance record${details.rowCount === 1 ? "" : "s"} included. The requested report${details.attachmentCount === 1 ? " is" : "s are"} attached.</div>
+      ${zippedNote}
       <p style="margin:22px 0 0;color:#61708f;font-size:13px">Generated automatically by VideoraIQ.</p></div></div></div>`;
 }
 
-async function makeAttachments(report, details) {
+// SendGrid rejects any message whose total size (headers + body + attachments,
+// all base64) exceeds 30MB. Base64 inflates raw bytes by ~4/3, so we compare
+// against the encoded attachment size and leave headroom for the HTML body.
+const SENDGRID_MAX_MESSAGE_BYTES = 30 * 1024 * 1024;
+const SENDGRID_ATTACHMENT_BUDGET_BYTES = SENDGRID_MAX_MESSAGE_BYTES - 512 * 1024;
+
+function safeReportName(report) {
+  return report.title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "attendance-report";
+}
+
+function rawAttachments(report, csvBuffer, pdfBuffer) {
+  const safeName = safeReportName(report);
   const attachments = [];
-  const safeName = report.title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "attendance-report";
-  if (report.formats.includes("pdf")) {
-    attachments.push({ content: (await buildPdf({ report, ...details })).toString("base64"), filename: `${safeName}.pdf`, type: "application/pdf", disposition: "attachment" });
-  }
-  if (report.formats.includes("csv")) {
-    attachments.push({ content: buildCsv({ report, ...details }).toString("base64"), filename: `${safeName}.csv`, type: "text/csv", disposition: "attachment" });
-  }
+  if (pdfBuffer) attachments.push({ buffer: pdfBuffer, filename: `${safeName}.pdf`, type: "application/pdf" });
+  if (csvBuffer) attachments.push({ buffer: csvBuffer, filename: `${safeName}.csv`, type: "text/csv" });
   return attachments;
 }
 
+function toSendGridAttachments(attachments) {
+  return attachments.map(({ buffer, filename, type }) => ({
+    content: buffer.toString("base64"),
+    filename,
+    type,
+    disposition: "attachment",
+  }));
+}
+
+/** Zips file buffers into one archive buffer (CSV/text compresses very well; PDF less so, but still helps). */
+async function zipAttachments(attachments) {
+  const archive = new ZipArchive({ zlib: { level: 9 } });
+  const chunks = [];
+  archive.on("data", (chunk) => chunks.push(chunk));
+  const done = new Promise((resolve, reject) => {
+    archive.on("end", resolve);
+    archive.on("error", reject);
+  });
+  for (const { buffer, filename } of attachments) archive.append(buffer, { name: filename });
+  await archive.finalize();
+  await done;
+  return Buffer.concat(chunks);
+}
+
+/**
+ * Builds the SendGrid attachment list for a report, always including every
+ * requested format (PDF and CSV together, never one dropped for the other).
+ * When the plain attachments would exceed SendGrid's size budget, they are
+ * bundled into a single .zip instead — CSV in particular compresses by 90%+,
+ * so this keeps very large (e.g. full-year, large-org) reports deliverable
+ * without silently omitting a format. Only if even the zip doesn't fit does
+ * this give up, which in practice should not happen for text/table reports.
+ */
+async function makeAttachments(report, rowCount, csvBuffer, pdfBuffer) {
+  const plain = rawAttachments(report, csvBuffer, pdfBuffer);
+  const plainAttachments = toSendGridAttachments(plain);
+  const plainBytes = plainAttachments.reduce((sum, attachment) => sum + attachment.content.length, 0);
+  if (plainBytes <= SENDGRID_ATTACHMENT_BUDGET_BYTES) {
+    return { attachments: plainAttachments, zipped: false };
+  }
+
+  const zipBuffer = await zipAttachments(plain);
+  const zipAttachment = toSendGridAttachments([{ buffer: zipBuffer, filename: `${safeReportName(report)}.zip`, type: "application/zip" }]);
+  const zipBytes = zipAttachment[0].content.length;
+  if (zipBytes > SENDGRID_ATTACHMENT_BUDGET_BYTES) {
+    const error = new Error(
+      `The generated report (${rowCount} records) is too large to email even when compressed (${(zipBytes / (1024 * 1024)).toFixed(1)}MB). Narrow the date range or filter to fewer employees/departments.`
+    );
+    error.code = "REPORT_TOO_LARGE";
+    throw error;
+  }
+  return { attachments: zipAttachment, zipped: true };
+}
+
 async function deliver(report, options = {}) {
-  const details = await reportRows(report, options.reference);
+  // Rows are streamed straight into the CSV writer as they're read from the
+  // cursor — the full result set is never held as one array in memory, so a
+  // year of records for a large org stays flat instead of scaling with rows.
+  const rows = [];
+  const summary = await streamReportRows(report, options.reference, (row) => rows.push(row));
+  const wantsPdf = report.formats.includes("pdf");
+  const wantsCsv = report.formats.includes("csv");
+
+  const csvBuffer = wantsCsv ? buildCsv({ report, rows, label: summary.label, timezone: summary.timezone }) : null;
+  const pdfBuffer = wantsPdf ? await buildPdf({ report, rows, label: summary.label, timezone: summary.timezone }) : null;
+  const { attachments, zipped } = await makeAttachments(report, summary.rowCount, csvBuffer, pdfBuffer);
+
+  const details = { ...summary, attachmentCount: attachments.length, zipped };
   const recipients = options.recipients?.length ? options.recipients : report.recipients;
   const email = {
     from: { name: config.get("sendgrid.name"), email: config.get("sendgrid.email") },
     to: recipients,
     subject: `[Attendance Report] ${report.title} | ${details.label}`,
     html: emailHtml(report, details),
-    attachments: await makeAttachments(report, details),
+    attachments,
   };
   sendGridMail.setApiKey(config.get("sendgrid.key"));
   try {
@@ -339,6 +448,11 @@ async function deliver(report, options = {}) {
     await trackOutboundEmail(email, sendStatus, { adminId: report.adminId, category: "Attendance report" });
     return details;
   } catch (error) {
+    // SendGrid's SDK error carries the actual reason (e.g. "Attachment size
+    // exceeds maximum") in response.body.errors, not in error.message — surface
+    // it so failures aren't reported to admins as a generic, unactionable error.
+    const sendGridDetail = error?.response?.body?.errors?.map((item) => item.message).filter(Boolean).join("; ");
+    if (sendGridDetail) error.message = `${error.message}: ${sendGridDetail}`;
     await trackFailedEmail(email, error, { adminId: report.adminId, category: "Attendance report" });
     throw error;
   }
@@ -506,7 +620,7 @@ class AttendanceAutoEmailReportService {
         if (error) return res.status(400).json(Response.validationFailResp("Validation failed", error.message));
       }
       const details = await deliver(report, { recipients });
-      return res.json(Response.userSuccessResp("Attendance report sent", { recipients: recipients?.length ? recipients : report.recipients, recordCount: details.rows.length, period: details.label }));
+      return res.json(Response.userSuccessResp("Attendance report sent", { recipients: recipients?.length ? recipients : report.recipients, recordCount: details.rowCount, period: details.label, zipped: details.zipped }));
     } catch (error) {
       logger.error(`[ATTENDANCE_AUTO_EMAIL_REPORT] Send failed: ${error.message}`);
       return res.status(500).json(Response.errorResp("Failed to send attendance report", error.message));
@@ -525,11 +639,11 @@ class AttendanceAutoEmailReportService {
         if (!report) continue;
         try {
           await deliver(report);
-          const update = { lastSentAt: new Date() };
+          const update = { lastSentAt: new Date(), lastError: null };
           if (report.schedule.frequency === "custom") update.enabled = false;
           await Report.updateOne({ _id: report._id }, { $set: update });
         } catch (error) {
-          await Report.updateOne({ _id: report._id }, { $set: { lastRunKey: null } });
+          await Report.updateOne({ _id: report._id }, { $set: { lastRunKey: null, lastError: error.message } });
           logger.error(`[ATTENDANCE_AUTO_EMAIL_REPORT] Scheduled send failed for ${report._id}: ${error.message}`);
         }
       }
