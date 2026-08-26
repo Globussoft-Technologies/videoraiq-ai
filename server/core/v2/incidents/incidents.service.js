@@ -747,6 +747,12 @@ class IncidentsService {
       let {
         startDate,
         endDate,
+        // Time-of-day window, "HH:mm" in UTC (24-hour) — the frontend
+        // converts whatever the admin picked in the org's local 12-hour time
+        // to UTC before sending, so this endpoint only ever compares UTC
+        // strings and never needs to know the org's timezone.
+        fromTime,
+        toTime,
         nvrId,
         channelId,
         location,
@@ -876,6 +882,38 @@ class IncidentsService {
           $gte: momentTZ.tz(startDate, timezone).startOf("day").toDate(),
           $lte: momentTZ.tz(endDate, timezone).endOf("day").toDate(),
         };
+      }
+
+      // Time-of-day filter: "on every day in the selected range, only
+      // incidents whose time falls between fromTime and toTime" — not one
+      // continuous window spanning the whole range. $dateToString with no
+      // timezone option formats in UTC, matching fromTime/toTime (already
+      // UTC "HH:mm" strings from the frontend), so this is a plain string
+      // comparison with no per-org timezone lookup needed here.
+      //
+      // The frontend converts a LOCAL 12-hour pick to UTC before sending, and
+      // that conversion can flip which of fromTime/toTime is numerically
+      // larger even though the local window didn't wrap — e.g. 2:00 AM IST
+      // -> 20:30 UTC (previous day) and 7:01 PM IST -> 13:31 UTC, so
+      // fromTime (20:30) > toTime (13:31) despite "2 AM to 7 PM" being a
+      // perfectly normal same-day local window. Once in UTC terms this IS a
+      // window that wraps midnight, so it has to be matched with OR
+      // ("time >= fromTime OR time <= toTime"), not AND — AND would require a
+      // time simultaneously >= 20:30 and <= 13:31, which no timestamp
+      // satisfies, silently returning zero rows for any local window that
+      // happens to straddle the UTC/IST day boundary after conversion.
+      const validHHmm = (value) => typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+      if (validHHmm(fromTime) || validHHmm(toTime)) {
+        const timeOfDay = { $dateToString: { format: "%H:%M", date: "$timeOfIncident" } };
+        if (validHHmm(fromTime) && validHHmm(toTime)) {
+          matchStage.$expr = fromTime <= toTime
+            ? { $and: [{ $gte: [timeOfDay, fromTime] }, { $lte: [timeOfDay, toTime] }] }
+            : { $or: [{ $gte: [timeOfDay, fromTime] }, { $lte: [timeOfDay, toTime] }] };
+        } else if (validHHmm(fromTime)) {
+          matchStage.$expr = { $gte: [timeOfDay, fromTime] };
+        } else {
+          matchStage.$expr = { $lte: [timeOfDay, toTime] };
+        }
       }
 
       // Reported incidents are an active bucket; resolved reports should not leak back into it.
