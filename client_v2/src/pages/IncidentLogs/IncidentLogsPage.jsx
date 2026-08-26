@@ -15,6 +15,8 @@ import { handleIncidentExport } from './incidentExport';
 import IncidentFilterPopover from './components/IncidentFilterPopover';
 import { getNVRs, getchannels, fetchIncidentLogs } from './Api';
 
+const SEVERITY_LEVELS = ['high', 'moderate', 'low'];
+
 /**
  * Shared page for the six stevinrock incident-table logs (conveyor, crusher,
  * vehicle-obstruction, line-crossing, water-spill, unauthorized-access).
@@ -60,6 +62,7 @@ const IncidentLogsPage = ({ config }) => {
   const [viewMode, setViewMode] = useState('grid'); // 'table' | 'grid'
   const [previewImage, setPreviewImage] = useState(null);
   const [previewImageLoading, setPreviewImageLoading] = useState(false);
+  const [severityTotals, setSeverityTotals] = useState({ high: 0, moderate: 0, low: 0 });
 
   const { permissions, loading: permissionsLoading } = usePermissions();
   const navigate = useNavigate();
@@ -153,6 +156,30 @@ const IncidentLogsPage = ({ config }) => {
 
       dispatch({ type: 'SET_ROWS', value: mapped });
       dispatch({ type: 'SET_TOTAL_COUNT', value: total });
+
+      try {
+        const totals = await Promise.all(
+          SEVERITY_LEVELS.map(async (level) => {
+            if (severity && severity !== level) return [level, 0];
+            const countRes = await fetchIncidentLogs({
+              endpoint: config.endpoint,
+              skip: 0,
+              limit: 1,
+              startDate,
+              endDate,
+              nvrIds,
+              channelIds,
+              severity: level,
+              status: config.showStatus ? status : undefined,
+              search: searchInput,
+            });
+            return [level, countRes?.data?.body?.data?.totalCount || 0];
+          })
+        );
+        setSeverityTotals(Object.fromEntries(totals));
+      } catch (statsErr) {
+        console.log(`Error fetching ${config.title} severity totals:`, statsErr);
+      }
     } catch (err) {
       console.log(`Error fetching ${config.title}:`, err);
       dispatch({ type: 'SET_ERROR', value: err });
@@ -215,16 +242,13 @@ const IncidentLogsPage = ({ config }) => {
 
   // KPI tiles — derived from the loaded page + server total (no placeholder data).
   const stats = useMemo(() => {
-    const list = rows || [];
-    const bySeverity = (name) =>
-      list.filter((r) => (r.severity || '').toLowerCase() === name).length;
     return [
       { label: 'Incidents', value: totalCount ?? 0, color: 'var(--blue)' },
-      { label: 'High (page)', value: bySeverity('high'), color: 'var(--crit)' },
-      { label: 'Moderate (page)', value: bySeverity('moderate'), color: 'var(--warn)' },
-      { label: 'Low (page)', value: bySeverity('low'), color: 'var(--ok)' },
+      { label: 'High', value: severityTotals.high || 0, color: 'var(--crit)' },
+      { label: 'Moderate', value: severityTotals.moderate || 0, color: 'var(--warn)' },
+      { label: 'Low', value: severityTotals.low || 0, color: 'var(--ok)' },
     ];
-  }, [rows, totalCount]);
+  }, [severityTotals, totalCount]);
 
   const handleExport = (format) =>
     handleIncidentExport(format, config, {

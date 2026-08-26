@@ -34,7 +34,7 @@ export const initialState = {
   status: '', // ON / OFF (conveyor only)
 
   // pagination
-  limit: 10,
+  limit: 12,
 };
 
 export function reducer(state, action) {

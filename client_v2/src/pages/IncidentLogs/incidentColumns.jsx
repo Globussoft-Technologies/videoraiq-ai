@@ -1,6 +1,6 @@
 import React from 'react';
 import moment from 'moment-timezone';
-import { Image } from 'lucide-react';
+import { AlertTriangle, Clock, Image, Server, ShieldAlert, Video } from 'lucide-react';
 import { styles } from './incidentState';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 
@@ -15,7 +15,6 @@ const severityClass = (severity) => {
         : 'text-[var(--tx3)] bg-[var(--bg2)]';
 };
 
-// Solid overlay colour for the on-image severity chip.
 const severityBg = (severity) => {
   const s = (severity || '--').toLowerCase();
   return s === 'low'
@@ -30,7 +29,21 @@ const severityBg = (severity) => {
 const formatTime = (t) =>
   t ? moment.utc(t).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A') : '--';
 
-// Conveyor maps raw ON/OFF to human labels; crusher shows the raw status.
+const IncidentCardRow = ({ icon: Icon, label, value, valueClassName = '', valueStyle }) => (
+  <div className="flex items-center gap-2 text-xs min-w-0">
+    <Icon className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+    <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
+      {label}
+    </span>
+    <span
+      className={`text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0 ${valueClassName}`}
+      style={valueStyle}
+    >
+      {value}
+    </span>
+  </div>
+);
+
 export const formatStatus = (value, config) => {
   if (!value || value === '--') return '--';
   if (config?.formatStatus) {
@@ -61,14 +74,6 @@ const sortableHeader = (label, field, onSort, sortable) =>
       )
     : label;
 
-/**
- * Build the incident-log table columns from a page `config`.
- *  - config.showStatus  → render a "Current Status" column
- *  - config.formatStatus → map ON/OFF to Loaded/Not-Loaded
- *  - config.sortable     → enable header sorting (line-crossing disables it)
- * `onSort(field)` toggles sort; `onPreview(url)` opens the image modal.
- * These logs are read-only — editing lives on the ANPR page only.
- */
 export const buildColumns = (config, { onSort, onPreview }) => {
   const sortable = config.sortable !== false;
   const cols = [
@@ -156,15 +161,11 @@ export const buildColumns = (config, { onSort, onPreview }) => {
   return cols;
 };
 
-/**
- * Grid-view card for a single incident row — image-forward layout consistent
- * with the ANPR grid cards. Clicking the snapshot opens the preview modal.
- */
 export const renderIncidentCard = (row, config, { onPreview }) => (
   <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[13px] overflow-hidden hover:border-[var(--bd2)] transition-colors h-full w-full min-w-0">
     <div
       className="relative bg-[#0a0e15] flex items-center justify-center"
-      style={{ aspectRatio: '4 / 3' }}
+      style={{ aspectRatio: config.gridVariant === 'details' ? '6 / 3' : '4 / 3' }}
     >
       {row.incidentImageUrl ? (
         <ImageWithLoader
@@ -179,7 +180,6 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
         <Image className="w-10 h-10 text-[var(--tx3)]" />
       )}
 
-      {/* Severity badge top-right */}
       <div
         className="absolute top-2 right-2 z-20 text-[9px] font-semibold px-[7px] py-[3px] rounded-[5px] capitalize text-white shadow-sm"
         style={{ background: severityBg(row.severity) }}
@@ -187,7 +187,6 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
         {row.severity || '--'}
       </div>
 
-      {/* Status badge top-left (when the log type has one) */}
       {config.showStatus && (
         <div className="absolute top-2 left-2 z-20 text-[9px] font-semibold px-[7px] py-[3px] rounded-[5px] text-white shadow-sm bg-[rgba(6,8,13,.82)]">
           {formatStatus(row.currentStatus, config)}
@@ -195,27 +194,43 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
       )}
     </div>
 
-    <div className="p-[11px]">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[12.5px] font-semibold text-[var(--tx)] truncate">
-          {row.incidentName}
-        </span>
-        <span
-          className="text-[11px] text-[var(--tx3)] whitespace-nowrap"
-          style={{ fontFamily: 'var(--mono)' }}
+    {config.gridVariant === 'details' ? (
+      <div className="p-[11px] space-y-[9px]">
+        <IncidentCardRow icon={ShieldAlert} label="Incident" value={row.incidentName} />
+        <IncidentCardRow
+          icon={AlertTriangle}
+          label="Severity"
+          value={row.severity || '--'}
+          valueClassName="capitalize"
+          valueStyle={{ color: severityBg(row.severity) }}
+        />
+        <IncidentCardRow icon={Server} label="NVR" value={row.nvrName} />
+        <IncidentCardRow icon={Video} label="Camera" value={row.channelName} />
+        <IncidentCardRow icon={Clock} label="Time" value={formatTime(row.createdAt)} />
+      </div>
+    ) : (
+      <div className="p-[11px]">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[12.5px] font-semibold text-[var(--tx)] truncate">
+            {row.incidentName}
+          </span>
+          <span
+            className="text-[11px] text-[var(--tx3)] whitespace-nowrap"
+            style={{ fontFamily: 'var(--mono)' }}
+          >
+            {formatTime(row.createdAt)}
+          </span>
+        </div>
+        <div
+          className="text-[12px] font-semibold mt-[5px] capitalize truncate"
+          style={{ color: severityBg(row.severity) }}
         >
-          {formatTime(row.createdAt)}
-        </span>
+          {row.severity || '--'}
+        </div>
+        <div className="text-[10px] text-[var(--tx3)] mt-[2px] truncate">
+          {row.nvrName} - {row.channelName}
+        </div>
       </div>
-      <div
-        className="text-[12px] font-semibold mt-[5px] capitalize truncate"
-        style={{ color: severityBg(row.severity) }}
-      >
-        {row.severity || '--'}
-      </div>
-      <div className="text-[10px] text-[var(--tx3)] mt-[2px] truncate">
-        {row.nvrName} · {row.channelName}
-      </div>
-    </div>
+    )}
   </div>
 );
