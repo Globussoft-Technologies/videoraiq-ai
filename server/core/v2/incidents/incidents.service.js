@@ -1,4 +1,4 @@
-﻿import Channel from "./../channels/channels.model.js";
+import Channel from "./../channels/channels.model.js";
 import AppError from "../../../utils/appError.js";
 import logger from "../../../utils/logger.js";
 import nvrModel from "../NVR/nvr.model.js";
@@ -2707,6 +2707,56 @@ console.log(result,'result');
     }
   }
 
+  async _attachVehicleLogCounts(logs, userId, incidentType) {
+    if (!Array.isArray(logs) || logs.length === 0) return;
+    const distinctPlates = [
+      ...new Set(
+        logs
+          .map((l) => l.vehicleNumber)
+          .filter((v) => typeof v === "string" && v.trim()),
+      ),
+    ];
+    if (distinctPlates.length === 0) return;
+
+    try {
+      const counts = await Incident.aggregate([
+        {
+          $match: {
+            userId: userId.toString(),
+            incidentType: incidentType,
+            vehicleNumber: { $in: distinctPlates },
+          },
+        },
+        {
+          $group: {
+            _id: "$vehicleNumber",
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+
+      const countMap = {};
+      counts.forEach((c) => {
+        if (c._id) countMap[c._id] = c.count;
+      });
+
+      logs.forEach((log) => {
+        if (log.vehicleNumber) {
+          const cnt = countMap[log.vehicleNumber] || 1;
+          log.vehicleLogCount = cnt;
+          log.sameVehicleLogCount = cnt;
+          log.sameVehicleCount = cnt;
+        } else {
+          log.vehicleLogCount = 0;
+          log.sameVehicleLogCount = 0;
+          log.sameVehicleCount = 0;
+        }
+      });
+    } catch (err) {
+      logger.error("Failed to attach vehicle log counts", err);
+    }
+  }
+
   async _fetchIncidentLogs({
     req,
     res,
@@ -2966,6 +3016,8 @@ console.log(result,'result');
       await attachTaggedUsers(logs, data?.adminId);
     }
 
+    await this._attachVehicleLogCounts(logs, data?.user_id, incidentType);
+
     return res.status(200).json(
       Response.userSuccessResp(`${incidentType} logs fetched successfully`, {
         totalCount: countResult[0]?.totalCount || 0,
@@ -2980,7 +3032,7 @@ console.log(result,'result');
       const extraMatch = {};
       if (vehicleNumber) {
         const escaped = vehicleNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        extraMatch.vehicleNumber = { $regex: escaped, $options: "i" };
+        extraMatch.vehicleNumber = { $regex: `^${escaped}$`, $options: "i" };
       }
       return await this._fetchIncidentLogs({
         req,
@@ -3014,7 +3066,7 @@ console.log(result,'result');
       }
       if (vehicleNumber) {
         const escaped = vehicleNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        extraMatch.vehicleNumber = { $regex: escaped, $options: "i" };
+        extraMatch.vehicleNumber = { $regex: `^${escaped}$`, $options: "i" };
       }
       return await this._fetchIncidentLogs({
         req,
@@ -3071,12 +3123,40 @@ console.log(result,'result');
         })
         .sort((left, right) => left.localeCompare(right));
 
+      const countAgg = await CarModelDetectionIncident.aggregate([
+        {
+          $match: {
+            userId: data.user_id.toString(),
+            incidentType: "carModelDetection",
+            vehicleNumber: { $type: "string", $nin: [""] },
+          },
+        },
+        {
+          $group: {
+            _id: "$vehicleNumber",
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+      const vehicleNumberCounts = {};
+      countAgg.forEach((item) => {
+        if (item._id) {
+          const key = item._id.trim().toUpperCase();
+          vehicleNumberCounts[key] = (vehicleNumberCounts[key] || 0) + item.count;
+        }
+      });
+
       return res.status(200).json(
         Response.userSuccessResp(
           "Car model vehicle numbers fetched successfully",
           {
             totalCount: vehicleNumbers.length,
             vehicleNumbers,
+            vehicleNumberCounts,
+            vehicleNumbersWithCounts: vehicleNumbers.map((vn) => ({
+              vehicleNumber: vn,
+              count: vehicleNumberCounts[vn] || 0,
+            })),
           },
         ),
       );
@@ -3104,10 +3184,38 @@ console.log(result,'result');
         },
       );
 
+      const countAgg = await CarModelDetectionIncident.aggregate([
+        {
+          $match: {
+            userId: data.user_id.toString(),
+            incidentType: "carModelDetection",
+            vehicleNumber: { $nin: [null, ""] },
+          },
+        },
+        {
+          $group: {
+            _id: "$vehicleNumber",
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+      const vehicleNumberCounts = {};
+      countAgg.forEach((item) => {
+        if (item._id) {
+          const key = item._id.trim().toUpperCase();
+          vehicleNumberCounts[key] = (vehicleNumberCounts[key] || 0) + item.count;
+        }
+      });
+
       return res.status(200).json(
         Response.userSuccessResp("Vehicle numbers fetched successfully", {
           totalCount: vehicleNumbers.length,
           vehicleNumbers,
+          vehicleNumberCounts,
+          vehicleNumbersWithCounts: vehicleNumbers.map((vn) => ({
+            vehicleNumber: String(vn).trim().toUpperCase(),
+            count: vehicleNumberCounts[String(vn).trim().toUpperCase()] || 0,
+          })),
         }),
       );
     } catch (error) {

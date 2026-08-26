@@ -2599,6 +2599,56 @@ console.log(result,'result');
     }
   }
 
+  async _attachVehicleLogCounts(logs, userId, incidentType) {
+    if (!Array.isArray(logs) || logs.length === 0) return;
+    const distinctPlates = [
+      ...new Set(
+        logs
+          .map((l) => l.vehicleNumber)
+          .filter((v) => typeof v === "string" && v.trim()),
+      ),
+    ];
+    if (distinctPlates.length === 0) return;
+
+    try {
+      const counts = await Incident.aggregate([
+        {
+          $match: {
+            userId: userId.toString(),
+            incidentType: incidentType,
+            vehicleNumber: { $in: distinctPlates },
+          },
+        },
+        {
+          $group: {
+            _id: "$vehicleNumber",
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+
+      const countMap = {};
+      counts.forEach((c) => {
+        if (c._id) countMap[c._id] = c.count;
+      });
+
+      logs.forEach((log) => {
+        if (log.vehicleNumber) {
+          const cnt = countMap[log.vehicleNumber] || 1;
+          log.vehicleLogCount = cnt;
+          log.sameVehicleLogCount = cnt;
+          log.sameVehicleCount = cnt;
+        } else {
+          log.vehicleLogCount = 0;
+          log.sameVehicleLogCount = 0;
+          log.sameVehicleCount = 0;
+        }
+      });
+    } catch (err) {
+      logger.error("Failed to attach vehicle log counts", err);
+    }
+  }
+
   async _fetchIncidentLogs({
     req,
     res,
@@ -2855,6 +2905,8 @@ console.log(result,'result');
       await attachTaggedUsers(logs, data?.adminId);
     }
 
+    await this._attachVehicleLogCounts(logs, data?.user_id, incidentType);
+
     return res.status(200).json(
       Response.userSuccessResp(`${incidentType} logs fetched successfully`, {
         totalCount: countResult[0]?.totalCount || 0,
@@ -2869,7 +2921,7 @@ console.log(result,'result');
       const extraMatch = {};
       if (vehicleNumber) {
         const escaped = vehicleNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        extraMatch.vehicleNumber = { $regex: escaped, $options: "i" };
+        extraMatch.vehicleNumber = { $regex: `^${escaped}$`, $options: "i" };
       }
       return await this._fetchIncidentLogs({
         req,
