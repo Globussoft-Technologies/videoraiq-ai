@@ -87,4 +87,6 @@ export const UNAUTHORIZED_ACCESS_CONFIG = {
   accessDenied: "You don't have permission to view Unauthorized Access Logs.",
   showStatus: false,
   sortable: true,
+  gridVariant: 'details',
+  
 };
