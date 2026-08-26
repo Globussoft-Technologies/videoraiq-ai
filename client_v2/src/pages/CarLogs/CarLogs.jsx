@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import moment from 'moment-timezone';
-import { Building2, Calendar, Car, CarFront, Clock, Filter, Image, Palette, RotateCcw, Server, Video } from 'lucide-react';
+import { Building2, Calendar, Car, CarFront, Clock, Filter, Hash, Image, Palette, RotateCcw, Server, Video } from 'lucide-react';
 import getAccessToken from '@/utils/getAccessToken';
 import { Button } from '@/components/ui/button';
 import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePage';
@@ -163,6 +163,7 @@ const CarLogs = () => {
           imageUrl: getCarImageUrl(item),
           modelName: getModelName(item),
           vehicleNumber: item.vehicleNumber || '--',
+          vehicleVisitCount: Number(item.vehicleLogCount || 0),
           color: getColor(item),
           company: getCompany(item),
           year: getYear(item),
@@ -315,6 +316,20 @@ const CarLogs = () => {
         ),
       },
       {
+        accessorKey: 'vehicleVisitCount',
+        header: () => (
+          <button
+            onClick={() => toggleSort('vehicleLogCount')}
+            className="cursor-pointer uppercase tracking-[0.06em] text-[10px] text-[var(--tx3)] hover:text-[var(--tx2)] [font-family:var(--mono)]"
+          >
+            Vehicle Visit Count
+          </button>
+        ),
+        cell: ({ row }) => (
+          <span className="text-[13px] text-[var(--tx)] whitespace-nowrap">{row.original.vehicleVisitCount}</span>
+        ),
+      },
+      {
         accessorKey: 'company',
         header: () => (
           <button
@@ -399,6 +414,14 @@ const CarLogs = () => {
     [cameraList]
   );
 
+  const filteredVehicleNumberList = useMemo(() => {
+    const query = vehicleNumberSearch.trim().toLowerCase();
+    if (!query) return vehicleNumberList;
+    return vehicleNumberList.filter((number) =>
+      String(number).toLowerCase().includes(query)
+    );
+  }, [vehicleNumberList, vehicleNumberSearch]);
+
   const activeFiltersCount = [nvrIds.length > 0, channelIds.length > 0, !!vehicleNumber].filter(Boolean).length;
 
   const resetFilters = () => {
@@ -454,6 +477,15 @@ const CarLogs = () => {
             </span>
             <span className="text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0">
               {row.vehicleNumber}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs min-w-0">
+            <Hash className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+            <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
+              Visit Count
+            </span>
+            <span className="text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0">
+              {row.vehicleVisitCount}
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs min-w-0">
@@ -614,7 +646,7 @@ const CarLogs = () => {
                 <VehicleNumberSelect
                   vehicleNumber={vehicleNumber}
                   setVehicleNumber={setVehicleNumber}
-                  vehicleNumberList={vehicleNumberList}
+                  vehicleNumberList={filteredVehicleNumberList}
                   vehicleNumberSearch={vehicleNumberSearch}
                   setVehicleNumberSearch={setVehicleNumberSearch}
                 />

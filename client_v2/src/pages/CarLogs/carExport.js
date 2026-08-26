@@ -72,6 +72,7 @@ const fetchAllForExport = async ({
   return list.map((item) => ({
     modelName: getModelName(item),
     vehicleNumber: item.vehicleNumber || '--',
+    vehicleVisitCount: Number(item.vehicleLogCount || 0),
     company: getCompany(item),
     color: getColor(item),
     year: getYear(item),
@@ -138,6 +139,7 @@ const exportToPDF = async (params) => {
       '#',
       'Model Name',
       'Vehicle Number',
+      'Vehicle Visit Count',
       'Company',
       'Colour',
       'Year',
@@ -150,6 +152,7 @@ const exportToPDF = async (params) => {
       i + 1,
       row.modelName,
       row.vehicleNumber,
+      row.vehicleVisitCount,
       row.company,
       row.color,
       row.year,
@@ -178,10 +181,10 @@ const exportToPDF = async (params) => {
       alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: {
         0: { cellWidth: 9 },
-        9: { cellWidth: 25 },
+        10: { cellWidth: 25 },
       },
       didDrawCell: (data) => {
-        if (data.column.index === 9 && data.section === 'body') {
+        if (data.column.index === 10 && data.section === 'body') {
           const url = allLogs[data.row.index]?.imageUrl;
           if (url) {
             doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url });
@@ -214,9 +217,9 @@ const exportToExcel = async (params) => {
     }
 
     const headerRows = [
-      ['VIDEORAIQ', '', '', '', '', '', '', '', '', ''],
-      ['Car Detection Logs', '', '', '', '', '', '', '', '', ''],
-      [`Generated on ${moment().format('DD/MM/YYYY HH:mm')}`, '', '', '', `Total records: ${allLogs.length}`, '', '', '', '', ''],
+      ['VIDEORAIQ', '', '', '', '', '', '', '', '', '', ''],
+      ['Car Detection Logs', '', '', '', '', '', '', '', '', '', ''],
+      [`Generated on ${moment().format('DD/MM/YYYY HH:mm')}`, '', '', '', `Total records: ${allLogs.length}`, '', '', '', '', '', ''],
       [],
     ];
 
@@ -224,6 +227,7 @@ const exportToExcel = async (params) => {
       i + 1,
       row.modelName,
       row.vehicleNumber,
+      row.vehicleVisitCount,
       row.company,
       row.color,
       row.year,
@@ -235,20 +239,21 @@ const exportToExcel = async (params) => {
 
     const worksheet = XLSX.utils.aoa_to_sheet([
       ...headerRows,
-      ['#', 'Model Name', 'Vehicle Number', 'Company', 'Colour', 'Year', 'NVR Name', 'Camera Name', 'Time', 'Image'],
+      ['#', 'Model Name', 'Vehicle Number', 'Vehicle Visit Count', 'Company', 'Colour', 'Year', 'NVR Name', 'Camera Name', 'Time', 'Image'],
       ...tableRows,
     ]);
 
     worksheet['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 9 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: 9 } },
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 10 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 10 } },
       { s: { r: 2, c: 0 }, e: { r: 2, c: 3 } },
-      { s: { r: 2, c: 4 }, e: { r: 2, c: 9 } },
+      { s: { r: 2, c: 4 }, e: { r: 2, c: 10 } },
     ];
     worksheet['!cols'] = [
       { wch: 8 },
       { wch: 22 },
       { wch: 18 },
+      { wch: 20 },
       { wch: 18 },
       { wch: 14 },
       { wch: 10 },
@@ -260,7 +265,7 @@ const exportToExcel = async (params) => {
 
     allLogs.forEach((row, i) => {
       if (row.imageUrl) {
-        const cellRef = XLSX.utils.encode_cell({ r: i + 5, c: 9 });
+        const cellRef = XLSX.utils.encode_cell({ r: i + 5, c: 10 });
         worksheet[cellRef] = {
           t: 's',
           v: 'View Image',

@@ -659,6 +659,9 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
   const [resolved, setResolved]       = useState(false);
   const [resolving, setResolving]     = useState(false);
   const [zoom, setZoom]               = useState(1);
+  const [pan, setPan]                 = useState({ x: 0, y: 0 });
+  const [dragging, setDragging]       = useState(false);
+  const dragRef = useRef(null);
   // Transient confirmation shown for a couple of seconds after the request
   // settles — { text, ok }. Without it the only feedback was the checkbox
   // quietly filling in, which is easy to miss on a busy frame.
@@ -688,6 +691,7 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
     clearTimeout(flashTimerRef.current);
     setSaveFlash(null);
     setZoom(1);
+    setPan({ x: 0, y: 0 });
   }, [item?._id, item?.id]);
 
   // A new incident means a new <img> (keyed by id) that has to load — show the
@@ -778,9 +782,48 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
   const updateZoom = (next) => {
     setZoom((current) => {
       const value = typeof next === 'function' ? next(current) : next;
-      return Math.min(4, Math.max(1, Number(value.toFixed(2))));
+      const clamped = Math.min(4, Math.max(1, Number(value.toFixed(2))));
+      if (clamped <= 1) setPan({ x: 0, y: 0 });
+      return clamped;
     });
   };
+
+  useEffect(() => {
+    const onMouseMove = (e) => {
+      if (!dragRef.current) return;
+      e.preventDefault();
+      const { startX, startY, initialX, initialY } = dragRef.current;
+      setPan({
+        x: initialX + e.clientX - startX,
+        y: initialY + e.clientY - startY,
+      });
+    };
+    const stopDragging = () => {
+      if (!dragRef.current) return;
+      dragRef.current = null;
+      setDragging(false);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', stopDragging);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', stopDragging);
+    };
+  }, []);
+
+  function onImageMouseDown(e) {
+    if (zoom <= 1 || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialX: pan.x,
+      initialY: pan.y,
+    };
+    setDragging(true);
+  }
 
   function onWheel(e) {
     if (reportOpen || tagOpen) return;
@@ -831,6 +874,8 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
             ref={imgRef}
             src={imgSrc}
             alt={det}
+            draggable={false}
+            onMouseDown={onImageMouseDown}
             onLoad={() => setImgLoading(false)}
             onError={() => setImgLoading(false)}
             style={{
@@ -840,10 +885,11 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
               height: '100%',
               objectFit: 'contain',
               display: 'block',
-              transform: `scale(${zoom})`,
+              transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
               transformOrigin: 'center center',
-              transition: 'transform 120ms ease-out',
-              cursor: zoom > 1 ? 'zoom-out' : 'zoom-in',
+              transition: dragging ? 'none' : 'transform 120ms ease-out',
+              cursor: zoom > 1 ? (dragging ? 'grabbing' : 'grab') : 'zoom-in',
+              userSelect: 'none',
             }}
           />
         )}
@@ -889,7 +935,10 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
             </button>
             <button
               type="button"
-              onClick={() => setZoom(1)}
+              onClick={() => {
+                setZoom(1);
+                setPan({ x: 0, y: 0 });
+              }}
               title="Reset zoom"
               style={{ width: 30, height: 30, border: 'none', borderRadius: 7, background: 'transparent', color: '#1f2a44', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
