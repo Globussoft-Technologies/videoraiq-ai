@@ -198,6 +198,7 @@ function MultiSelect({ options, selected, onChange, placeholder = 'Select' }) {
 function CompactSelect({ value, options, placeholder, onChange }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
+  const [hover, setHover] = useState(false);
   const triggerRef = useRef(null);
   const panelRef = useRef(null);
 
@@ -243,10 +244,13 @@ function CompactSelect({ value, options, placeholder, onChange }) {
         type="button"
         ref={triggerRef}
         onClick={() => setOpen((o) => !o)}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
         style={{
           ...filterInput, width: '100%', minWidth: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
           padding: '0 8px',
+          border: `1px solid ${hover || open ? 'var(--brand)' : 'var(--bd2)'}`,
         }}
       >
         <span style={{ color: value ? 'var(--tx)' : 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -338,6 +342,10 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
   // set, so an active filter is never hidden behind a collapsed section.
   const [timeExpanded, setTimeExpanded] = useState(false);
   useEffect(() => { if (fromTime || toTime) setTimeExpanded(true); }, [fromTime, toTime]);
+  // Inline styles can't express :hover, so the Time Range card's border
+  // highlight (matching the hover feedback every other control in this
+  // popover already gives) is driven from state via onMouseEnter/Leave.
+  const [timeHeaderHover, setTimeHeaderHover] = useState(false);
 
   const nvrsApi  = useApi(() => getNvrs(0, 100), []);
   const deptsApi = useApi(() => fetchDepartments(), []);
@@ -426,12 +434,15 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
               expanded so each row's three HH/MM/AM-PM selects have room to
               breathe in this 280px popover. */}
           <div style={{
-            borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--bd)',
-            overflow: 'hidden',
+            borderRadius: 10, background: 'var(--bg2)',
+            border: `1px solid ${timeHeaderHover ? 'var(--brand)' : 'var(--bd)'}`,
+            overflow: 'hidden', transition: 'border-color .15s',
           }}>
             <button
               type="button"
               onClick={() => setTimeExpanded((v) => !v)}
+              onMouseEnter={() => setTimeHeaderHover(true)}
+              onMouseLeave={() => setTimeHeaderHover(false)}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 width: '100%', padding: '10px 12px', background: 'none', border: 'none',
