@@ -3095,11 +3095,11 @@ console.log(result,'result');
         );
       }
 
-      const vehicleNumbers = await VehicleDetectionIncident.distinct(
+      const vehicleNumbers = await CarModelDetectionIncident.distinct(
         "vehicleNumber",
         {
           userId: data.user_id.toString(),
-          incidentType: "vehicleDetection",
+          incidentType: "carModelDetection",
           vehicleNumber: { $nin: [null, ""] },
         },
       );
