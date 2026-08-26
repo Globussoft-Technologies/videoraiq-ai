@@ -1109,6 +1109,17 @@ class DetectionSettingService {
         userId: req?.verified?.userData?.user_id,
         channelUserId: channel?.userId,
       });
+
+      // DS requires admin_id and rejects the whole request without it, so an
+      // unresolvable admin is a skip with a clear reason rather than a 422.
+      if (!adminId) {
+        logger.error(
+          `[DETECTION_SCHEDULE] No admin resolved for channel=${channel?._id} ` +
+            `userId=${channel?.userId} — skipping, DS would reject this without admin_id`,
+        );
+        return;
+      }
+
       // A DetectionSetting document's settingType is not always the key the
       // channel stores it under: several detectors carry a DS-side alias
       // ("zoneIntrusionSettings" for unauthorizedAccessSettings, and the same

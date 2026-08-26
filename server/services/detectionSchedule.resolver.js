@@ -300,8 +300,18 @@ export const createGlobalScheduleIndex = (documents = []) => {
     }
   }
 
+  // The admin who owns each schedule. A camera whose own userId is not an
+  // Admin user_id still has to reach SOME admin's DS endpoints, and the
+  // schedule's owner is the right one — it is the account that scheduled it.
+  const ownerUserIds = [
+    ...new Set(
+      schedules.map((schedule) => String(schedule?.userId || "").trim()).filter(Boolean),
+    ),
+  ];
+
   return {
     size: schedules.length,
+    ownerUserIds,
     // Every channel covered by some enabled schedule. The runner uses this to
     // widen its candidate query beyond cameras with their own custom schedule.
     channelIds: [...channelIds],

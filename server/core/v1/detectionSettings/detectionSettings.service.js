@@ -1056,6 +1056,17 @@ class DetectionSettingService {
         userId: req?.verified?.userData?.user_id,
         channelUserId: channel?.userId,
       });
+
+      // DS requires admin_id and rejects the whole request without it, so an
+      // unresolvable admin is a skip with a clear reason rather than a 422.
+      if (!adminId) {
+        logger.error(
+          `[DETECTION_SCHEDULE] No admin resolved for channel=${channel?._id} ` +
+            `userId=${channel?.userId} — skipping, DS would reject this without admin_id`,
+        );
+        return;
+      }
+
       // A DetectionSetting document's settingType is not always the key the
       // channel stores it under: several detectors carry a DS-side alias
       // ("zoneIntrusionSettings" for unauthorizedAccessSettings, and the same
@@ -1312,11 +1323,15 @@ class DetectionSettingService {
       const channels = await Channel.find({ $or: scheduleFilters })
         .populate("nvrId")
         .populate(toPopulateDetections);
-      const adminUserIds = [...new Set(
-        channels
-          .map((channel) => String(channel?.userId || "").trim())
-          .filter(Boolean),
-      )];
+      // Include the schedule owners, not just the cameras' own userId. A
+      // channel whose userId is not an Admin user_id resolved to adminId
+      // undefined, and DS rejects the start outright ("body.admin_id: Field
+      // required") — the camera then never came up, with only a 422 to show
+      // for it.
+      const adminUserIds = [...new Set([
+        ...channels.map((channel) => String(channel?.userId || "").trim()),
+        ...(globalScheduleIndex.ownerUserIds || []),
+      ].filter(Boolean))];
       const adminRecords = adminUserIds.length
         ? await Admin.find({ user_id: { $in: adminUserIds } })
           .select("_id user_id")
@@ -1389,6 +1404,7 @@ class DetectionSettingService {
             governed,
             currentStatus,
             desired,
+            matchedGlobalSchedule,
             // Where this detector should end up after this tick. An ungoverned
             // one keeps what it has — nothing is entitled to move it.
             targetState: governed ? desired.active : currentStatus,
@@ -1449,7 +1465,22 @@ class DetectionSettingService {
           const { settingType, detectionSetting, governed, currentStatus, desired } = item;
           if (!governed) continue;
 
-          const adminId = adminIdByUserId.get(String(channel?.userId || ""));
+          // The camera's own userId first; failing that, the owner of the
+          // schedule governing it.
+          const adminId =
+            adminIdByUserId.get(String(channel?.userId || "")) ||
+            adminIdByUserId.get(String(item.matchedGlobalSchedule?.userId || ""));
+
+          if (!adminId) {
+            // Sending the request anyway just earns a 422 from DS with nothing
+            // to act on, so say plainly which camera cannot be resolved.
+            logger.error(
+              `[DETECTION_SCHEDULE] No admin resolved for channel=${channel._id} ` +
+                `userId=${channel?.userId} scheduleOwner=${item.matchedGlobalSchedule?.userId} ` +
+                `detector=${settingType} — skipping, DS would reject this without admin_id`,
+            );
+            continue;
+          }
           const shouldEnable = desired.active;
           const scheduleSource = desired.source;
 
