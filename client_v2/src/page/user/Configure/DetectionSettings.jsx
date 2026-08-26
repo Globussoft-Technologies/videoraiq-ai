@@ -243,6 +243,51 @@ const ZONE_STATUS_TOOLTIP = {
   idle: 'Zone created — not running or scheduled',
 };
 
+/**
+ * Key for the Engines column's colour coding, so the chips don't rely on a
+ * hover to be readable. Swatch colours and hover text are read from
+ * ZONE_STATUS_STYLE / ZONE_STATUS_TOOLTIP rather than restated, so the legend
+ * can never drift from the chips it explains — add a status there and it only
+ * needs a label here.
+ */
+const ZONE_STATUS_LEGEND = [
+  { status: 'running', label: 'Running' },
+  { status: 'scheduled', label: 'Scheduled' },
+  { status: 'idle', label: 'Zone only' },
+];
+
+function ZoneStatusLegend() {
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'center', gap: 13, marginLeft: 'auto', flexWrap: 'wrap',
+      }}
+    >
+      <span style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>
+        ENGINES
+      </span>
+      {ZONE_STATUS_LEGEND.map(({ status, label }) => (
+        <span
+          key={status}
+          title={ZONE_STATUS_TOOLTIP[status]}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            fontSize: 11.5, color: 'var(--tx2)', whiteSpace: 'nowrap',
+          }}
+        >
+          <span
+            style={{
+              width: 9, height: 9, borderRadius: 999, flexShrink: 0,
+              background: ZONE_STATUS_STYLE[status].color,
+            }}
+          />
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // Tooltip geometry. TIP_MAX_W matches the bubble's maxWidth so the clamp below
 // can keep it inside the viewport; TIP_MIN_ROOM is roughly the tallest the
 // bubble gets (label + status line), used to decide whether it fits above.
@@ -1030,9 +1075,10 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
             }}
           />
         </div>
-        <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>
+        <ZoneStatusLegend />
+        {/* <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>
           {total} total
-        </span>
+        </span> */}
       </div>
 
       <div style={{ position: 'relative', background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, overflow: 'hidden' }}>
