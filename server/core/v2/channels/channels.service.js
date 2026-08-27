@@ -1,6 +1,7 @@
 import Channel from "./channels.model.js";
 import logger from "../../../utils/logger.js";
 import Response from "../../../utils/response.js";
+import { refreshLogsConfiguration } from "../logsConfiguration/logsConfiguration.service.js";
 import NVR from "../NVR/nvr.model.js";
 import channelsValidate from "./channels.validate.js";
 import mongoose from "mongoose";
@@ -246,6 +247,14 @@ class ChannelService {
       
       
       const updatedCamera = await existingChannel.save();
+
+      // Refresh logs configuration and broadcast to frontend if detections/checkType changed
+      const adminId = req?.verified?.userData?.adminId || existingChannel?.userId;
+      if (adminId) {
+        refreshLogsConfiguration(adminId).catch((err) =>
+          logger.error("Error refreshing logs configuration:", err)
+        );
+      }
 
       return res.status(200).json(
         Response.userSuccessResp("Channel updated successfully", {
@@ -857,13 +866,21 @@ class ChannelService {
         { $set: updateFields },
         {
           new: true,
-          projection: { [`detections.${detectionKey}`]: 1, _id: 0 },
+          projection: { [`detections.${detectionKey}`]: 1, userId: 1, _id: 0 },
         }
       );
 
       if (!updatedChannel) {
         return res.send(
           Response.userFailResp("Validation Failed", "Channel not found")
+        );
+      }
+
+      // Refresh logs configuration and broadcast to frontend
+      const adminId = req?.verified?.userData?.adminId || updatedChannel?.userId;
+      if (adminId) {
+        refreshLogsConfiguration(adminId).catch((err) =>
+          logger.error("Error refreshing logs configuration:", err)
         );
       }
 

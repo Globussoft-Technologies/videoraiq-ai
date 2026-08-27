@@ -41,6 +41,7 @@ import locationRoutes from "../../core/v2/locations/location.routes.js";
 import faceImagesRoutes from "../../core/v2/faceImages/faceImages.routes.js";
 import telegramRoutes from "../../core/v2/telegram/telegram.routes.js";
 import clientConfigRoutes from "../../core/v2/clientConfig/clientConfig.routes.js";
+import logsConfigurationRoutes from "../../core/v2/logsConfiguration/logsConfiguration.routes.js";
 
 const router = express.Router();
 
@@ -101,6 +102,7 @@ router.use("/client-config", clientConfigRoutes);
 // Email Monitoring dashboard has its own config-credential login and its own
 // secret — mount WITHOUT verifyToken, the router guards itself.
 router.use("/email-monitoring", emailMonitoringRoutes);
+router.use("/logs-configuration", verifyToken, logsConfigurationRoutes);
 
 export default router;
 
