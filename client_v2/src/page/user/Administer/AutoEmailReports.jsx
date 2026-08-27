@@ -402,66 +402,35 @@ function ReportFormModal({
   );
 }
 
-const PREVIEW_HEADERS = [
-  'ID', 'Name', 'Department', 'Date', 'Location', 'Check in', 'Check out', 'Duration',
-  'Total Working Hours for the Day', 'Total Break Hours for the Day',
-  'Total Working Hours for the period selected', 'Checkin Camera', 'Checkout Camera', 'View Image',
+const PREVIEW_COLUMNS = [
+  { key: 'index', label: 'ID' },
+  { key: 'employee', label: 'Name' },
+  { key: 'department', label: 'Department' },
+  { key: 'date', label: 'Date' },
+  { key: 'location', label: 'Location' },
+  { key: 'checkIn', label: 'Check in' },
+  { key: 'checkOut', label: 'Check out' },
+  { key: 'duration', label: 'Duration' },
+  { key: 'workingHoursDay', label: 'Total Working Hours for the Day' },
+  { key: 'breakHoursDay', label: 'Total Break Hours for the Day' },
+  { key: 'workingHoursPeriod', label: 'Total Working Hours for the period selected' },
+  { key: 'checkInCamera', label: 'Checkin Camera' },
+  { key: 'checkOutCamera', label: 'Checkout Camera' },
+  { key: 'viewImage', label: 'View Image' },
 ];
-const PREVIEW_COL = {
-  id: 0, name: 1, department: 2, date: 3, location: 4, checkIn: 5, checkOut: 6, duration: 7,
-  workingDay: 8, breakDay: 9, workingPeriod: 10, checkInCamera: 11, checkOutCamera: 12, viewImage: 13,
-};
 
-// Mirrors gridRowsForReportRow on the server: summary line + one line per
-// session + a day-totals line + a blank separator, per employee-day row.
-function previewGridRows(rows) {
-  const grid = [];
-  rows.forEach((row, index) => {
-    const summary = new Array(PREVIEW_HEADERS.length).fill('');
-    summary[PREVIEW_COL.id] = String(index + 1);
-    summary[PREVIEW_COL.name] = row.employee ?? '';
-    summary[PREVIEW_COL.department] = row.department ?? '';
-    summary[PREVIEW_COL.date] = row.date ?? '';
-    summary[PREVIEW_COL.location] = row.location ?? '';
-    summary[PREVIEW_COL.checkIn] = row.checkIn ?? '';
-    summary[PREVIEW_COL.checkOut] = row.checkOut ?? '';
-    summary[PREVIEW_COL.duration] = row.duration ?? '';
-    summary[PREVIEW_COL.workingPeriod] = row.workingHoursPeriod ?? '';
-    summary[PREVIEW_COL.checkInCamera] = row.checkInCamera ?? '';
-    summary[PREVIEW_COL.checkOutCamera] = row.checkOutCamera ?? '';
-    summary[PREVIEW_COL.viewImage] = row.viewImage && row.viewImage !== '-'
-      ? { text: 'View Image', link: row.viewImage }
-      : '-';
-    grid.push({ kind: 'summary', cells: summary });
-
-    (row.sessions || []).forEach((session) => {
-      const line = new Array(PREVIEW_HEADERS.length).fill('');
-      line[PREVIEW_COL.checkIn] = session.checkIn ?? '';
-      line[PREVIEW_COL.checkOut] = session.checkOut ?? '';
-      line[PREVIEW_COL.duration] = session.duration ?? '';
-      grid.push({ kind: 'session', cells: line });
-    });
-
-    const totals = new Array(PREVIEW_HEADERS.length).fill('');
-    totals[PREVIEW_COL.workingDay] = row.workingHoursDay ?? '';
-    totals[PREVIEW_COL.breakDay] = row.breakHoursDay ?? '';
-    grid.push({ kind: 'totals', cells: totals });
-
-    grid.push({ kind: 'separator', cells: new Array(PREVIEW_HEADERS.length).fill('') });
-  });
-  return grid;
-}
-
-function renderPreviewCell(value) {
-  if (value && typeof value === 'object') {
-    return <a href={value.link} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)', fontWeight: 600 }}>{value.text}</a>;
+function previewCell(row, key, index) {
+  if (key === 'index') return index + 1;
+  const value = row?.[key];
+  if (value === null || value === undefined || value === '' || value === '-') return '-';
+  if (key === 'viewImage') {
+    return <a href={String(value)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)', fontWeight: 600 }}>View Image</a>;
   }
-  return value === '' ? '' : String(value);
+  return String(value);
 }
 
 function PreviewModal({ preview, onClose }) {
   const rows = Array.isArray(preview?.rows) ? preview.rows : [];
-  const grid = previewGridRows(rows);
   return (
     <div role="dialog" aria-modal="true" style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(2,6,23,.68)' }}>
       <div style={{ width: 'min(100%, 780px)', maxHeight: 'min(820px, calc(100vh - 32px))', display: 'flex', flexDirection: 'column', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, overflow: 'hidden' }}>
@@ -478,19 +447,11 @@ function PreviewModal({ preview, onClose }) {
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', color: 'var(--tx)', fontSize: 12 }}>
               <thead>
-                <tr>{PREVIEW_HEADERS.map((header) => <th key={header} style={tableHeadStyle}>{header}</th>)}</tr>
+                <tr>{PREVIEW_COLUMNS.map((column) => <th key={column.key} style={tableHeadStyle}>{column.label}</th>)}</tr>
               </thead>
               <tbody>
-                {grid.map((line, index) => (
-                  line.kind === 'separator' ? (
-                    <tr key={index}><td colSpan={PREVIEW_HEADERS.length} style={{ ...tableCellStyle, padding: 0, height: 6, background: 'var(--bg2)' }} /></tr>
-                  ) : (
-                    <tr key={index}>
-                      {line.cells.map((cell, cellIndex) => (
-                        <td key={cellIndex} style={{ ...tableCellStyle, fontWeight: line.kind === 'summary' ? 700 : 400 }}>{renderPreviewCell(cell)}</td>
-                      ))}
-                    </tr>
-                  )
+                {rows.map((row, index) => (
+                  <tr key={row?._id || index}>{PREVIEW_COLUMNS.map((column) => <td key={column.key} style={tableCellStyle}>{previewCell(row, column.key, index)}</td>)}</tr>
                 ))}
               </tbody>
             </table>
