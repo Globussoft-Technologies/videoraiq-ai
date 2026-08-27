@@ -961,6 +961,8 @@ export default function DetectionDetailPanel({
   const [scheduleError, setScheduleError] = useState('');
   const [scheduleForm, setScheduleForm] = useState(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  // The schedule as last loaded from the API, not the in-progress form.
+  const loadedScheduleRef = useRef(null);
   const [actualScheduleMode, setActualScheduleMode] = useState('Loading...');
 
   const channelId = channel?._id || channel?.channelId || channel?.id;
@@ -1006,6 +1008,10 @@ export default function DetectionDetailPanel({
     setScheduleError('');
     try {
       const res = await getDetectionSchedule(settingId, channelId);
+      // Keep the schedule exactly as it was stored. Switching to Always has to
+      // know whether custom ranges were previously SAVED, which the form state
+      // cannot answer once the user has started editing it.
+      loadedScheduleRef.current = res?.schedule || null;
       const defaultPayload = res?.schedule
         ? { mode: res.schedule.mode, timezone: res.schedule.timezone || 'Asia/Kolkata', days: res.schedule.days || {} }
         : { mode: 'always', timezone: 'Asia/Kolkata', days: { monday: [], tuesday: [], wednesday: [], thursday: [], friday: [], saturday: [], sunday: [] } };
@@ -1160,7 +1166,21 @@ export default function DetectionDetailPanel({
     setScheduleError('');
     try {
       const payload = { mode: scheduleForm.mode, timezone: scheduleForm.timezone || 'Asia/Kolkata', days: ensureDays(scheduleForm.days) };
-      const response = await updateDetectionSchedule(settingId, channelId, payload);
+
+      // Switching an existing Custom schedule to Always: the saved ranges have
+      // to go, not just be ignored. Sending them back under mode 'always' left
+      // them in the database, so they reappeared the moment anyone switched
+      // back to Custom. Delete is what the app already uses to mean Always —
+      // its own handler sets the mode to Always afterwards.
+      const savedDays = loadedScheduleRef.current?.days || {};
+      const hadSavedRanges = Object.values(savedDays).some(
+        (ranges) => Array.isArray(ranges) && ranges.length > 0,
+      );
+      const clearingCustomRanges = (scheduleForm.mode || 'always') === 'always' && hadSavedRanges;
+
+      const response = clearingCustomRanges
+        ? await deleteDetectionSchedule(settingId, channelId)
+        : await updateDetectionSchedule(settingId, channelId, payload);
       const message = response?.message || 'Schedule saved successfully';
       toast.success(message);
       const newMode = scheduleForm.mode || 'always';
