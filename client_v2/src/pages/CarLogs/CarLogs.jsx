@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import moment from 'moment-timezone';
-import { Building2, Calendar, Car, CarFront, Clock, Filter, Hash, Image, Loader2, Palette, Pencil, RotateCcw, Server, Video } from 'lucide-react';
+import { Building2, Calendar, Car, CarFront, Check, ChevronDown, Clock, Filter, Hash, Image, Loader2, Palette, Pencil, RotateCcw, Server, Video } from 'lucide-react';
+import { toast } from 'sonner';
 import getAccessToken from '@/utils/getAccessToken';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,8 +73,35 @@ const formatIncidentTime = (value) =>
   value ? moment.utc(value).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A') : '--';
 
 const optionKey = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-const normalizeHondaModel = (value) =>
-  HONDA_MODEL_OPTIONS.find((model) => optionKey(model) === optionKey(value)) || '';
+
+// Resolve the stored model to a value the dropdown can preselect. Prefer the
+// canonical Honda option (so casing/spacing differences still match), but fall
+// back to the raw stored value when it isn't one of the known options -- the
+// detection model can emit names outside HONDA_MODEL_OPTIONS, and dropping them
+// left the field looking empty on edit.
+const normalizeHondaModel = (value) => {
+  if (!value || value === '--') return '';
+  return HONDA_MODEL_OPTIONS.find((model) => optionKey(model) === optionKey(value)) || String(value);
+};
+
+// Pull the most specific human-readable message the API returned, falling back
+// to a generic label. The car-model endpoints nest errors a few ways:
+//   body.error.detail.message  (catalog sync failures)
+//   body.error.response.detail.message
+//   body.message               (validation errors)
+//   data.message               (gateway-level errors)
+const getApiMessage = (err, fallback) => {
+  const body = err?.response?.data?.body;
+  const detail = body?.error?.detail || body?.error?.response?.detail;
+  return (
+    detail?.message ||
+    body?.error?.message ||
+    body?.message ||
+    err?.response?.data?.message ||
+    err?.message ||
+    fallback
+  );
+};
 
 const updateCarModelDetails = (incidentId, payload) =>
   axios.patch(`${HOST}/incidents/logs/car-model-detection/${incidentId}`, payload, {
@@ -84,11 +112,13 @@ function EditCarModelModal({ row, saving, onClose, onSave }) {
   const [model, setModel] = useState(() => normalizeHondaModel(row?.modelName));
   const [company, setCompany] = useState(() => (row?.company && row.company !== '--' ? row.company : ''));
   const [year, setYear] = useState(() => (row?.year && row.year !== '--' ? String(row.year) : ''));
+  const [modelOpen, setModelOpen] = useState(false);
 
   useEffect(() => {
     setModel(normalizeHondaModel(row?.modelName));
     setCompany(row?.company && row.company !== '--' ? row.company : '');
     setYear(row?.year && row.year !== '--' ? String(row.year) : '');
+    setModelOpen(false);
   }, [row]);
 
   if (!row) return null;
@@ -122,19 +152,51 @@ function EditCarModelModal({ row, saving, onClose, onSave }) {
           </DialogHeader>
 
           <div className="space-y-4 px-5 py-5">
-            <label className="block">
+            <div className="relative block">
               <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--tx3)]">Model Name</span>
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className="h-10 w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 text-sm text-[var(--tx)] outline-none focus:border-[var(--brand)]"
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setModelOpen((open) => !open)}
+                aria-haspopup="listbox"
+                aria-expanded={modelOpen}
+                className="flex h-10 w-full cursor-pointer items-center justify-between rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 text-left text-sm text-[var(--tx)] outline-none transition-colors hover:border-[var(--bd2)] focus:border-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                <option value="">Select model</option>
-                {HONDA_MODEL_OPTIONS.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-            </label>
+                <span className={model ? '' : 'text-[var(--tx3)]'}>{model || 'Select model'}</span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-[var(--tx3)] transition-transform ${modelOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {modelOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setModelOpen(false)} />
+                  <div
+                    role="listbox"
+                    className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-y-auto rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] p-1 shadow-xl"
+                  >
+                    {['', ...(model && !HONDA_MODEL_OPTIONS.includes(model) ? [model] : []), ...HONDA_MODEL_OPTIONS].map((option) => {
+                      const selected = option === model;
+                      return (
+                        <button
+                          key={option || 'select-model'}
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          onClick={() => {
+                            setModel(option);
+                            setModelOpen(false);
+                          }}
+                          className={`flex min-h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
+                            selected ? 'bg-[var(--brand)] text-white' : 'text-[var(--tx)] hover:bg-[var(--bg2)]'
+                          }`}
+                        >
+                          <span className={option ? '' : 'text-[var(--tx3)]'}>{option || 'Select model'}</span>
+                          {selected && <Check className="h-4 w-4 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
 
             <label className="block">
               <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--tx3)]">Company</span>
@@ -166,14 +228,14 @@ function EditCarModelModal({ row, saving, onClose, onSave }) {
               variant="outline"
               onClick={onClose}
               disabled={saving}
-              className="border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx)] hover:bg-[var(--bg2)]"
+              className="cursor-pointer border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx)] hover:bg-[var(--bg2)] disabled:cursor-not-allowed"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={saving || !hasChanges}
-              className="bg-[var(--brand)] text-white hover:opacity-90"
+              className="cursor-pointer bg-[var(--brand)] text-white hover:opacity-90 disabled:cursor-not-allowed"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
               Save
@@ -310,6 +372,7 @@ const CarLogs = () => {
     } catch (err) {
       console.log('Error fetching car logs:', err);
       setError(err);
+      toast.error(getApiMessage(err, 'Failed to load car logs'));
     } finally {
       setLoading(false);
     }
@@ -430,23 +493,22 @@ const CarLogs = () => {
     setEditSaving(true);
     try {
       const res = await updateCarModelDetails(editRow.id, payload);
-      const catalogSync = res?.data?.body?.data?.catalogSync;
+      const resBody = res?.data?.body;
+      const catalogSync = resBody?.data?.catalogSync;
       setRows((current) =>
         current.map((row) =>
           row.id === editRow.id ? { ...row, ...updates } : row
         )
       );
       if (catalogSync?.success === false) {
-        toast.warning('Car details updated, catalog sync failed');
+        toast.warning(catalogSync?.message || 'Car details updated, but catalog sync failed');
       } else {
-        toast.success('Car details updated');
+        toast.success(resBody?.message || 'Car details updated');
       }
       setEditRow(null);
     } catch (err) {
       console.log('Failed to update car model reference:', err);
-      const errorBody = err?.response?.data?.body;
-      const errorDetail = errorBody?.error?.detail || errorBody?.error?.response?.detail;
-      toast.error(errorDetail?.message || errorBody?.message || err?.response?.data?.message || 'Failed to update car details');
+      toast.error(getApiMessage(err, 'Failed to update car details'));
     } finally {
       setEditSaving(false);
     }

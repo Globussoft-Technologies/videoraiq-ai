@@ -195,7 +195,7 @@ function MultiSelect({ options, selected, onChange, placeholder = 'Select' }) {
    portals a small, height-capped, scrollable panel instead, positioned off
    the trigger the same way MultiSelect.jsx does (fixed coords from
    getBoundingClientRect, flips upward if it won't fit below). */
-function CompactSelect({ value, options, placeholder, onChange }) {
+function CompactSelect({ value, options, placeholder, onChange, isDisabled }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const [hover, setHover] = useState(false);
@@ -266,21 +266,26 @@ function CompactSelect({ value, options, placeholder, onChange }) {
           style={{ ...pos, zIndex: 10030, maxHeight: 220, overflowY: 'auto' }}
           className="rounded-[10px] border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg"
         >
-          {options.map((opt) => (
-            <div
-              key={opt}
-              onClick={() => { onChange(opt); setOpen(false); }}
-              style={{
-                padding: '7px 12px', fontSize: 12.5, cursor: 'pointer',
-                color: opt === value ? '#fff' : 'var(--tx2)',
-                background: opt === value ? 'var(--blue)' : 'transparent',
-              }}
-              onMouseEnter={(e) => { if (opt !== value) e.currentTarget.style.background = 'var(--bg2)'; }}
-              onMouseLeave={(e) => { if (opt !== value) e.currentTarget.style.background = 'transparent'; }}
-            >
-              {opt}
-            </div>
-          ))}
+          {options.map((opt) => {
+            const disabled = isDisabled?.(opt);
+            return (
+              <div
+                key={opt}
+                onClick={() => { if (disabled) return; onChange(opt); setOpen(false); }}
+                style={{
+                  padding: '7px 12px', fontSize: 12.5,
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  color: disabled ? 'var(--tx3)' : opt === value ? '#fff' : 'var(--tx2)',
+                  background: opt === value && !disabled ? 'var(--blue)' : 'transparent',
+                  opacity: disabled ? 0.45 : 1,
+                }}
+                onMouseEnter={(e) => { if (!disabled && opt !== value) e.currentTarget.style.background = 'var(--bg2)'; }}
+                onMouseLeave={(e) => { if (!disabled && opt !== value) e.currentTarget.style.background = 'transparent'; }}
+              >
+                {opt}
+              </div>
+            );
+          })}
         </div>,
         document.body,
       )}
@@ -294,7 +299,15 @@ const timeHourOptions = generateHourOptions();
 const timeMinuteOptions = generateMinuteOptions();
 const timePeriodOptions = generatePeriodOptions();
 
-function TimeField({ label, value, onChange }) {
+/** Minutes-since-midnight for a complete {hour, minute, period} triple, or null if incomplete. */
+function minutesOfDay({ hour, minute, period }) {
+  if (!hour || !minute || !period) return null;
+  let h = parseInt(hour, 10) % 12;
+  if (period === 'PM') h += 12;
+  return h * 60 + parseInt(minute, 10);
+}
+
+function TimeField({ label, value, onChange, bound, boundMode }) {
   // formatTime only returns a non-empty string once hour, minute AND period
   // are all set — picking just the hour would otherwise round-trip through
   // onChange('') immediately, resetting every select back to blank before the
@@ -310,13 +323,28 @@ function TimeField({ label, value, onChange }) {
     onChange(formatTime(merged.hour, merged.minute, merged.period));
   };
 
+  // Same-day window only: rather than let an out-of-order pick land and then
+  // show an error, disable the specific options that would make the
+  // COMPLETE value invalid against the other field — computed by simulating
+  // each candidate with whichever of the other two parts are already picked.
+  // Nothing is disabled until both this field's other parts AND the bound
+  // are set, since a partial value can't yet be judged invalid either way.
+  const boundMinutes = bound ? minutesOfDay(parseTime(bound)) : null;
+  const isDisabledFor = (part) => (optionValue) => {
+    if (boundMinutes == null) return false;
+    const candidate = { ...parts, [part]: optionValue };
+    const candidateMinutes = minutesOfDay(candidate);
+    if (candidateMinutes == null) return false;
+    return boundMode === 'min' ? candidateMinutes < boundMinutes : candidateMinutes > boundMinutes;
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--tx3)' }}>{label}</span>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 74px', gap: 6 }}>
-        <CompactSelect value={parts.hour} placeholder="HH" options={timeHourOptions} onChange={(v) => update('hour', v)} />
-        <CompactSelect value={parts.minute} placeholder="MM" options={timeMinuteOptions} onChange={(v) => update('minute', v)} />
-        <CompactSelect value={parts.period} placeholder="--" options={timePeriodOptions} onChange={(v) => update('period', v)} />
+        <CompactSelect value={parts.hour} placeholder="HH" options={timeHourOptions} onChange={(v) => update('hour', v)} isDisabled={isDisabledFor('hour')} />
+        <CompactSelect value={parts.minute} placeholder="MM" options={timeMinuteOptions} onChange={(v) => update('minute', v)} isDisabled={isDisabledFor('minute')} />
+        <CompactSelect value={parts.period} placeholder="--" options={timePeriodOptions} onChange={(v) => update('period', v)} isDisabled={isDisabledFor('period')} />
       </div>
     </div>
   );
@@ -334,7 +362,7 @@ async function fetchDepartments() {
   return Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
 }
 
-function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds, setDeptIds, locIds, setLocIds, fromTime, setFromTime, toTime, setToTime }) {
+function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds, setDeptIds, locIds, setLocIds, fromTime, setFromTime, toTime, setToTime, timeRangeError }) {
   const [open, setOpen] = useState(false);
   const ref             = useRef(null);
   // Collapsed by default so the popover isn't dominated by an empty time
@@ -435,7 +463,7 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
               breathe in this 280px popover. */}
           <div style={{
             borderRadius: 10, background: 'var(--bg2)',
-            border: `1px solid ${timeHeaderHover ? 'var(--brand)' : 'var(--bd)'}`,
+            border: `1px solid ${timeRangeError ? 'var(--crit)' : timeHeaderHover ? 'var(--brand)' : 'var(--bd)'}`,
             overflow: 'hidden', transition: 'border-color .15s',
           }}>
             <button
@@ -464,8 +492,19 @@ function FiltersPopover({ nvrIds, setNvrIds, channelIds, setChannelIds, deptIds,
             </button>
             {timeExpanded && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 12px 12px' }}>
-                <TimeField label="From" value={fromTime} onChange={setFromTime} />
-                <TimeField label="To" value={toTime} onChange={setToTime} />
+                {/* Same-day window only: "To" earlier than "From" isn't a
+                    valid selection (no overnight/wrap support) — the filter
+                    is withheld from the request until this is fixed. */}
+                <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>
+                  Pick a same-day window (e.g. 9:00 AM to 6:00 PM).
+                </div>
+                <TimeField label="From" value={fromTime} onChange={setFromTime} bound={toTime} boundMode="max" />
+                <TimeField label="To" value={toTime} onChange={setToTime} bound={fromTime} boundMode="min" />
+                {timeRangeError && (
+                  <div style={{ fontSize: 11, color: 'var(--crit)', fontWeight: 600 }}>
+                    {timeRangeError}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1296,6 +1335,30 @@ export default function IncidentCenter() {
     setTagStatus('');
   }, [showsVehicleControls]);
 
+  // Same-day time window only (no overnight/wrap support) — From must be at
+  // or before To in local 12-hour terms. Parsed on today's date purely to
+  // compare minutes-of-day; the actual date is irrelevant and never sent.
+  const timeRangeError = useMemo(() => {
+    // A half-set window (only From or only To) can't be applied — the backend
+    // needs both bounds, and sending one alone silently returned zero results.
+    if (timeFrom && !timeTo) return 'Select a "To" time to apply the time range.';
+    if (!timeFrom && timeTo) return 'Select a "From" time to apply the time range.';
+    if (!timeFrom || !timeTo) return '';
+    const from = moment(timeFrom, ['hh:mm A', 'h:mm A'], true);
+    const to = moment(timeTo, ['hh:mm A', 'h:mm A'], true);
+    if (!from.isValid() || !to.isValid()) return '';
+    return from.isAfter(to) ? '"To" must be the same time as or later than "From".' : '';
+  }, [timeFrom, timeTo]);
+
+  // Nudge the user when only one side of the window is filled — the range
+  // stays inactive until both are picked, so without this the results just
+  // silently don't change.
+  useEffect(() => {
+    if ((timeFrom && !timeTo) || (!timeFrom && timeTo)) {
+      toast.info(`Select ${timeFrom ? 'a "To"' : 'a "From"'} time to apply the time range.`);
+    }
+  }, [timeFrom, timeTo]);
+
   const serverFilter = useMemo(() => {
     const f = {};
     if (ctxLoc)            f.location           = ctxLoc;
@@ -1318,17 +1381,21 @@ export default function IncidentCenter() {
     // Time-of-day window: convert the browser-local 12-hour picks to UTC
     // "HH:mm" here, right before the request — the backend only ever sees
     // UTC and applies the window to every day in the range independently.
-    const toUtcHHmm = (localTime) => {
-      if (!localTime) return null;
-      const parsed = moment(localTime, ['hh:mm A', 'h:mm A'], true);
-      return parsed.isValid() ? parsed.utc().format('HH:mm') : null;
-    };
-    const utcFrom = toUtcHHmm(timeFrom);
-    const utcTo = toUtcHHmm(timeTo);
-    if (utcFrom) f.fromTime = utcFrom;
-    if (utcTo) f.toTime = utcTo;
+    // Withheld entirely while From/To is invalid (To before From) so an
+    // in-progress bad selection never reaches the API silently.
+    if (!timeRangeError) {
+      const toUtcHHmm = (localTime) => {
+        if (!localTime) return null;
+        const parsed = moment(localTime, ['hh:mm A', 'h:mm A'], true);
+        return parsed.isValid() ? parsed.utc().format('HH:mm') : null;
+      };
+      const utcFrom = toUtcHHmm(timeFrom);
+      const utcTo = toUtcHHmm(timeTo);
+      if (utcFrom) f.fromTime = utcFrom;
+      if (utcTo) f.toTime = utcTo;
+    }
     return f;
-  }, [ctxLoc, detTypes, dateFrom, dateTo, nvrIds, channelIds, deptIds, locIds, sevSet, statusSet, showsVehicleControls, debouncedVehicleSearch, tagStatus, timeFrom, timeTo]);
+  }, [ctxLoc, detTypes, dateFrom, dateTo, nvrIds, channelIds, deptIds, locIds, sevSet, statusSet, showsVehicleControls, debouncedVehicleSearch, tagStatus, timeFrom, timeTo, timeRangeError]);
 
   const stats = useApi(() => fetchIncidentStats(serverFilter), [JSON.stringify(serverFilter)], { pollMs: 60000 });
   const types = useApi(() => fetchDetectionTypes(), []);
@@ -1584,6 +1651,7 @@ export default function IncidentCenter() {
           locIds={locIds}         setLocIds={v => { setLocIds(v); setPage(0); }}
           fromTime={timeFrom}     setFromTime={v => { setTimeFrom(v); setPage(0); }}
           toTime={timeTo}         setToTime={v => { setTimeTo(v); setPage(0); }}
+          timeRangeError={timeRangeError}
         />
 
         {/* Vehicle Detection only: search by plate or tagged user name, plus
