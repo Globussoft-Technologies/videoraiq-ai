@@ -30,6 +30,7 @@ const getPresetKey = (start, end) => {
 
 const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeChange }) => {
   const [open, setOpen] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
   const [sel, setSel] = useState({ start: null, end: null });
   const [hovered, setHovered] = useState(null);
   const [viewMonth, setViewMonth] = useState(() => moment(startDate || undefined).startOf('month').subtract(1, 'month'));
@@ -46,6 +47,7 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
     setSel({ start, end });
     setHovered(null);
     setViewMonth((start || moment()).clone().startOf('month').subtract(start && end && start.isSame(end, 'month') ? 1 : 0, 'month'));
+    if (open) setCustomOpen(start && end ? getPresetKey(start, end) === 'custom' : false);
   }, [startDate, endDate, open]);
 
   useEffect(() => {
@@ -62,7 +64,7 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
       document.removeEventListener('mousedown', onClick);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [open]);
+  }, [open, customOpen]);
 
   useLayoutEffect(() => {
     if (!open) return undefined;
@@ -102,7 +104,7 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
       ? `${moment(startDate).format('DD MMMM YYYY')} - ${moment(endDate).format('DD MMMM YYYY')}`
       : 'Select Date';
 
-  const activePreset = getPresetKey(sel.start, sel.end);
+  const activePreset = customOpen ? 'custom' : getPresetKey(sel.start, sel.end);
   const previewing = sel.start && !sel.end && hovered;
   const lo = previewing ? moment.min(sel.start, hovered) : sel.start;
   const hi = previewing ? moment.max(sel.start, hovered) : sel.end;
@@ -114,11 +116,16 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
   const months = useMemo(() => [viewMonth.clone(), viewMonth.clone().add(1, 'month')], [viewMonth]);
 
   const pickPreset = (preset) => {
-    if (!preset.range) return;
+    if (!preset.range) {
+      setCustomOpen(true);
+      setViewMonth((sel.start || moment()).clone().startOf('month').subtract(sel.start && sel.end && sel.start.isSame(sel.end, 'month') ? 1 : 0, 'month'));
+      return;
+    }
     const [start, end] = clampRange(preset.range(), min, max);
     setSel({ start, end });
     setHovered(null);
-    setViewMonth(start.clone().startOf('month'));
+    onRangeChange?.({ start: start.toDate(), end: end.toDate() });
+    setOpen(false);
   };
 
   const pickDay = (day) => {
@@ -190,10 +197,10 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
     <div
       ref={panelRef}
       style={pos || { position: 'fixed', top: -9999, left: -9999 }}
-      className="z-[10030] w-[760px] max-h-[calc(100vh-24px)] overflow-auto rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx)] shadow-2xl"
+      className={`z-[10030] max-h-[calc(100vh-24px)] overflow-auto rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx)] shadow-2xl ${customOpen ? 'w-[760px]' : 'w-[150px]'}`}
     >
-      <div className="grid grid-cols-[134px_minmax(0,1fr)]">
-        <div className="border-r border-[var(--bd)] p-2.5">
+      <div className={customOpen ? 'grid grid-cols-[134px_minmax(0,1fr)]' : ''}>
+        <div className={`${customOpen ? 'border-r border-[var(--bd)]' : ''} p-2.5`}>
           <div className="space-y-1">
             {PRESETS.map((preset) => (
               <button
@@ -212,53 +219,55 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
           </div>
         </div>
 
-        <div>
-          <div className="relative flex gap-6 px-5 py-3" onMouseLeave={() => setHovered(null)}>
-            {months.map((month) => (
-              <React.Fragment key={month.format('YYYY-MM')}>{renderMonth(month)}</React.Fragment>
-            ))}
-            <div className="absolute right-5 top-3 flex gap-3">
-              <button
-                type="button"
-                onClick={() => setViewMonth((month) => month.clone().subtract(1, 'month'))}
-                className="cursor-pointer text-[var(--violet)] hover:opacity-75"
-                aria-label="Previous month"
-              >
-                <ChevronLeft className="h-6 w-6" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMonth((month) => month.clone().add(1, 'month'))}
-                className="cursor-pointer text-[var(--violet)] hover:opacity-75"
-                aria-label="Next month"
-              >
-                <ChevronRight className="h-6 w-6" />
-              </button>
+        {customOpen && (
+          <div>
+            <div className="relative flex gap-6 px-5 py-3" onMouseLeave={() => setHovered(null)}>
+              {months.map((month) => (
+                <React.Fragment key={month.format('YYYY-MM')}>{renderMonth(month)}</React.Fragment>
+              ))}
+              <div className="absolute right-5 top-3 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setViewMonth((month) => month.clone().subtract(1, 'month'))}
+                  className="cursor-pointer text-[var(--violet)] hover:opacity-75"
+                  aria-label="Previous month"
+                >
+                  <ChevronLeft className="h-6 w-6" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMonth((month) => month.clone().add(1, 'month'))}
+                  className="cursor-pointer text-[var(--violet)] hover:opacity-75"
+                  aria-label="Next month"
+                >
+                  <ChevronRight className="h-6 w-6" />
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center justify-between border-t border-[var(--bd)] px-4 py-2">
-            <div className="flex min-w-0 items-center gap-2 text-xs text-[var(--tx2)]">
-              <span className="truncate">
-                {sel.start ? sel.start.format('DD MMMM YYYY') : 'Start date'}
-                {' - '}
-                {(sel.end || sel.start)?.format('DD MMMM YYYY') || 'End date'}
-              </span>
-              <button type="button" onClick={clear} className="inline-flex cursor-pointer items-center gap-1 text-[var(--tx2)] hover:text-[var(--tx)]">
-                <X className="h-3 w-3" />
-                Clear
-              </button>
-            </div>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setOpen(false)} className="h-7 cursor-pointer rounded-md border border-[var(--bd)] px-4 text-xs font-medium text-[var(--tx2)] hover:bg-[var(--bg2)]">
-                Cancel
-              </button>
-              <button type="button" onClick={apply} disabled={!sel.start} className="h-7 cursor-pointer rounded-md bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] px-5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
-                Apply
-              </button>
+            <div className="flex items-center justify-between border-t border-[var(--bd)] px-4 py-2">
+              <div className="flex min-w-0 items-center gap-2 text-xs text-[var(--tx2)]">
+                <span className="truncate">
+                  {sel.start ? sel.start.format('DD MMMM YYYY') : 'Start date'}
+                  {' - '}
+                  {(sel.end || sel.start)?.format('DD MMMM YYYY') || 'End date'}
+                </span>
+                <button type="button" onClick={clear} className="inline-flex cursor-pointer items-center gap-1 text-[var(--tx2)] hover:text-[var(--tx)]">
+                  <X className="h-3 w-3" />
+                  Clear
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setOpen(false)} className="h-7 cursor-pointer rounded-md border border-[var(--bd)] px-4 text-xs font-medium text-[var(--tx2)] hover:bg-[var(--bg2)]">
+                  Cancel
+                </button>
+                <button type="button" onClick={apply} disabled={!sel.start} className="h-7 cursor-pointer rounded-md bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] px-5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                  Apply
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
