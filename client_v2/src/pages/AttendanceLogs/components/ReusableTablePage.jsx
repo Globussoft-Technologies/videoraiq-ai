@@ -12,6 +12,7 @@ import moment from 'moment';
 import { toast } from 'sonner';
 import ProfilesTable from './ProfilesTable';
 import DateRangePicker from './DateRangePicker';
+import PresetDateRangePicker from './PresetDateRangePicker';
 import StatCards from './StatCards';
 
 const PAGE_SIZE_OPTIONS = [12, 20, 60, 100];
@@ -48,6 +49,7 @@ const ReusableTablePage = ({
   onLimitChange,
   stats,
   secondaryToolbar,
+  datePickerVariant,
 }) => {
   const [internalSearchInput, setInternalSearchInput] = useState('');
   const [internalViewMode, setInternalViewMode] = useState('table');
@@ -140,6 +142,7 @@ const ReusableTablePage = ({
   }, [searchInput, startDate, endDate]);
 
   const isEmpty = (paginated || []).length === 0;
+  const DateFilter = datePickerVariant === 'preset' ? PresetDateRangePicker : DateRangePicker;
 
   return (
     <div className="w-full flex flex-1 flex-col">
@@ -163,7 +166,7 @@ const ReusableTablePage = ({
           </div>
 
           {from !== 'visibility' && (
-            <DateRangePicker
+            <DateFilter
               startDate={dateRange.start}
               endDate={dateRange.end}
               minDate={minDate}

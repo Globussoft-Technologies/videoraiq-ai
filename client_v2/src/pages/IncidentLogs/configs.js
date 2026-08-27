@@ -88,5 +88,6 @@ export const UNAUTHORIZED_ACCESS_CONFIG = {
   showStatus: false,
   sortable: true,
   gridVariant: 'details',
+  datePickerVariant: 'preset',
   
 };

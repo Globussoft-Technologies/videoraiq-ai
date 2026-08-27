@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Maximize2, Minus, Plus, RotateCcw, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Maximize2, Minus, Plus, RotateCcw, X } from 'lucide-react';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 
 /**
@@ -7,7 +7,16 @@ import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
  * content area (between the sidebar and below the header), not a tiny thumbnail
  * and not an edge-to-edge takeover. Spinner only shows while genuinely loading.
  */
-const ImagePreviewModal = ({ previewImage, onClose }) => {
+const ImagePreviewModal = ({
+  previewImage,
+  loading = false,
+  setLoading,
+  hasPrevious = false,
+  hasNext = false,
+  onPrevious,
+  onNext,
+  onClose,
+}) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
@@ -17,16 +26,25 @@ const ImagePreviewModal = ({ previewImage, onClose }) => {
   useEffect(() => {
     if (!previewImage) return undefined;
     const onKeyDown = (e) => {
-      if (e.key !== 'Escape') return;
-      if (fullscreen) {
-        setFullscreen(false);
-        return;
+      if (e.key === 'Escape') {
+        if (fullscreen) {
+          setFullscreen(false);
+          return;
+        }
+        onClose?.();
       }
-      onClose?.();
+      if (e.key === 'ArrowLeft' && hasPrevious) {
+        e.preventDefault();
+        onPrevious?.();
+      }
+      if (e.key === 'ArrowRight' && hasNext) {
+        e.preventDefault();
+        onNext?.();
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [previewImage, fullscreen, onClose]);
+  }, [previewImage, fullscreen, hasPrevious, hasNext, onPrevious, onNext, onClose]);
 
   useEffect(() => {
     if (previewImage) {
@@ -101,6 +119,10 @@ const ImagePreviewModal = ({ previewImage, onClose }) => {
 
   if (!previewImage) return null;
 
+  const handleImageSettled = () => {
+    setLoading?.(false);
+  };
+
   const zoomControls = (
     <div
       className={
@@ -162,12 +184,43 @@ const ImagePreviewModal = ({ previewImage, onClose }) => {
         }
         onMouseDown={handleMouseDown}
         onWheel={handleWheel}
+        onLoad={handleImageSettled}
+        onError={handleImageSettled}
         style={{
           transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
           transition: dragging ? 'none' : 'transform 120ms ease-out',
           cursor: zoom > 1 ? (dragging ? 'grabbing' : 'grab') : 'zoom-in',
         }}
       />
+      {loading && (
+        <span className="absolute inset-0 z-20 flex items-center justify-center bg-black/15 backdrop-blur-[1px]">
+          <span className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-black/55 text-white shadow-lg">
+            <Loader2 className="h-5 w-5 animate-spin" />
+          </span>
+        </span>
+      )}
+      {hasPrevious && (
+        <button
+          type="button"
+          onClick={onPrevious}
+          className="absolute left-3 top-1/2 z-30 inline-flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-white/25 bg-black/60 text-white shadow-lg backdrop-blur-sm transition-colors hover:bg-black/80"
+          title="Previous image"
+          aria-label="Previous image"
+        >
+          <ChevronLeft className="h-6 w-6" />
+        </button>
+      )}
+      {hasNext && (
+        <button
+          type="button"
+          onClick={onNext}
+          className="absolute right-3 top-1/2 z-30 inline-flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-white/25 bg-black/60 text-white shadow-lg backdrop-blur-sm transition-colors hover:bg-black/80"
+          title="Next image"
+          aria-label="Next image"
+        >
+          <ChevronRight className="h-6 w-6" />
+        </button>
+      )}
       {!fullscreen && (
         <button
           type="button"

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import moment from 'moment-timezone';
-import { Building2, Calendar, Car, CarFront, Check, ChevronDown, Clock, Filter, Hash, Image, Loader2, Palette, Pencil, RotateCcw, Server, Video } from 'lucide-react';
+import { Building2, Calendar, Car, CarFront, Check, ChevronDown, Clock, Filter, Hash, Image, LayoutGrid, List, Loader2, Palette, Pencil, RotateCcw, Server, Video } from 'lucide-react';
 import { toast } from 'sonner';
 import getAccessToken from '@/utils/getAccessToken';
 import { Button } from '@/components/ui/button';
@@ -247,6 +247,53 @@ function EditCarModelModal({ row, saving, onClose, onSave }) {
   );
 }
 
+function PdfViewPopover({ open, exportingFormat, onOpenChange, onSelect }) {
+  const exporting = !!exportingFormat;
+  return (
+    <Popover open={open} onOpenChange={(nextOpen) => !exporting && onOpenChange(nextOpen)}>
+      <PopoverTrigger asChild>
+        <ExportButton>PDF</ExportButton>
+      </PopoverTrigger>
+      <PopoverContent className="w-[274px] overflow-hidden rounded-xl p-0" align="end">
+        <div className="border-b border-[var(--bd)] px-3.5 py-2.5">
+          <h3 className="text-sm font-bold text-[var(--tx)]">Download PDF</h3>
+        </div>
+        <div className="grid grid-cols-2 gap-2.5 p-3.5">
+          <button
+            type="button"
+            disabled={exporting}
+            onClick={() => onSelect('pdf')}
+            className="flex min-h-[82px] cursor-pointer flex-col items-start justify-between rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-2.5 text-left transition-colors hover:border-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--brand)]/10 text-[var(--brand)]">
+              {exportingFormat === 'pdf' ? <Loader2 className="h-4 w-4 animate-spin" /> : <List className="h-5 w-5" />}
+            </span>
+            <span>
+              <span className="block text-[12.5px] font-semibold text-[var(--tx)]">List View</span>
+              <span className="mt-0.5 block text-[10px] leading-3 text-[var(--tx3)]">Existing table format</span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            disabled={exporting}
+            onClick={() => onSelect('pdf-grid')}
+            className="flex min-h-[82px] cursor-pointer flex-col items-start justify-between rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-2.5 text-left transition-colors hover:border-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--brand)]/10 text-[var(--brand)]">
+              {exportingFormat === 'pdf-grid' ? <Loader2 className="h-4 w-4 animate-spin" /> : <LayoutGrid className="h-5 w-5" />}
+            </span>
+            <span>
+              <span className="block text-[12.5px] font-semibold text-[var(--tx)]">Grid View</span>
+              <span className="mt-0.5 block text-[10px] leading-3 text-[var(--tx3)]">Card format with images</span>
+            </span>
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 const REFRESH_KEY = 'v2_car_logs_auto_refresh_enabled';
 const INTERVAL_KEY = 'v2_car_logs_auto_refresh_interval';
 
@@ -316,8 +363,12 @@ const CarLogs = () => {
   const [vehicleNumberList, setVehicleNumberList] = useState([]);
   const [vehicleNumberSearch, setVehicleNumberSearch] = useState('');
   const [previewImage, setPreviewImage] = useState(null);
+  const [previewIndex, setPreviewIndex] = useState(-1);
+  const [previewImageLoading, setPreviewImageLoading] = useState(false);
   const [editRow, setEditRow] = useState(null);
   const [editSaving, setEditSaving] = useState(false);
+  const [pdfViewOpen, setPdfViewOpen] = useState(false);
+  const [pdfExportingFormat, setPdfExportingFormat] = useState('');
   const [viewMode, setViewMode] = useState(() => {
     const saved = localStorage.getItem('v2_car_logs_view_mode');
     return saved === 'grid' || saved === 'table' ? saved : 'table';
@@ -454,9 +505,45 @@ const CarLogs = () => {
     setSortOrder((prev) => (field === sortField && prev === 'asc' ? 'desc' : 'asc'));
   };
 
-  const openPreview = (url) => {
-    if (url) setPreviewImage(url);
-  };
+  const previewRows = useMemo(() => rows.filter((row) => row.imageUrl), [rows]);
+
+  const showPreviewAt = useCallback(
+    (index) => {
+      const nextRow = previewRows[index];
+      if (!nextRow) return;
+      setPreviewIndex(index);
+      setPreviewImageLoading(true);
+      setPreviewImage(nextRow.imageUrl);
+    },
+    [previewRows]
+  );
+
+  const openPreview = useCallback(
+    (url) => {
+      if (!url) return;
+      const index = previewRows.findIndex((row) => row.imageUrl === url);
+      setPreviewIndex(index);
+      setPreviewImageLoading(true);
+      setPreviewImage(url);
+    },
+    [previewRows]
+  );
+
+  const closePreview = useCallback(() => {
+    setPreviewImage(null);
+    setPreviewIndex(-1);
+    setPreviewImageLoading(false);
+  }, []);
+
+  const showPreviousPreview = useCallback(() => {
+    if (previewIndex > 0) showPreviewAt(previewIndex - 1);
+  }, [previewIndex, showPreviewAt]);
+
+  const showNextPreview = useCallback(() => {
+    if (previewIndex >= 0 && previewIndex < previewRows.length - 1) {
+      showPreviewAt(previewIndex + 1);
+    }
+  }, [previewIndex, previewRows.length, showPreviewAt]);
 
   const openEdit = (row) => setEditRow(row);
 
@@ -673,7 +760,7 @@ const CarLogs = () => {
         ),
       },
     ],
-    [sortField]
+    [sortField, openPreview]
   );
 
   const nvrOptions = useMemo(
@@ -703,8 +790,8 @@ const CarLogs = () => {
     setVehicleNumberSearch('');
   };
 
-  const handleExport = (format) =>
-    handleCarExport(format, {
+  const handleExport = async (format) => {
+    await handleCarExport(format, {
       startDate,
       endDate,
       sortField,
@@ -714,6 +801,17 @@ const CarLogs = () => {
       vehicleNumber,
       searchInput,
     });
+  };
+
+  const handlePdfExport = async (format) => {
+    setPdfExportingFormat(format);
+    try {
+      await handleExport(format);
+      setPdfViewOpen(false);
+    } finally {
+      setPdfExportingFormat('');
+    }
+  };
 
   const gridCard = useCallback(
     (row) => (
@@ -826,19 +924,27 @@ const CarLogs = () => {
         </div>
       </div>
     ),
-    []
+    [openPreview]
   );
 
   return (
     <div className="p-3 sm:p-4 lg:p-[22px] flex flex-col gap-3 sm:gap-[18px] min-h-full">
-      <ImagePreviewModal previewImage={previewImage} onClose={() => setPreviewImage(null)} />
+      <ImagePreviewModal
+        previewImage={previewImage}
+        loading={previewImageLoading}
+        setLoading={setPreviewImageLoading}
+        hasPrevious={previewIndex > 0}
+        hasNext={previewIndex >= 0 && previewIndex < previewRows.length - 1}
+        onPrevious={showPreviousPreview}
+        onNext={showNextPreview}
+        onClose={closePreview}
+      />
       <EditCarModelModal
         row={editRow}
         saving={editSaving}
         onClose={() => setEditRow(null)}
         onSave={handleSaveEdit}
       />
-
       <ReusableTablePage
         loading={loading}
         error={error}
@@ -859,6 +965,7 @@ const CarLogs = () => {
         startDate={startDate}
         endDate={endDate}
         maxDate={maxDateDefault}
+        datePickerVariant="preset"
         onDateRangeChange={({ start, end }) => {
           const toIso = (d) => (d instanceof Date ? moment(d).format('YYYY-MM-DD') : d);
           let s = start ? toIso(start) : null;
@@ -879,7 +986,12 @@ const CarLogs = () => {
         }}
       >
         <ExportButton onClick={() => handleExport('excel')}>Excel</ExportButton>
-        <ExportButton onClick={() => handleExport('pdf')}>PDF</ExportButton>
+        <PdfViewPopover
+          open={pdfViewOpen}
+          exportingFormat={pdfExportingFormat}
+          onOpenChange={setPdfViewOpen}
+          onSelect={handlePdfExport}
+        />
 
         <Popover>
           <PopoverTrigger asChild>

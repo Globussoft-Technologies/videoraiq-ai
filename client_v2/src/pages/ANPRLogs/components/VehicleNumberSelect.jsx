@@ -30,18 +30,18 @@ const VehicleNumberSelect = ({
   };
 
   return (
-    <div className="relative inline-block" ref={ref}>
+    <div className="relative w-full" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="h-9 md:h-10 min-w-[180px] px-3 border border-[var(--bd)] rounded-lg text-sm bg-[var(--bg1solid)] text-[var(--tx2)] cursor-pointer flex items-center justify-between gap-2"
+        className="h-9 md:h-10 w-full px-3 border border-[var(--bd)] rounded-lg text-sm bg-[var(--bg1solid)] text-[var(--tx2)] cursor-pointer flex items-center justify-between gap-2"
       >
         <span className="truncate">{vehicleNumber || 'Vehicle Number'}</span>
         <ChevronDown className={`w-4 h-4 text-[var(--tx3)] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className="absolute left-0 z-[95] mt-1 w-[240px] overflow-hidden rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx)] shadow-lg">
+        <div className="absolute left-0 z-[95] mt-1 w-full min-w-[220px] overflow-hidden rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx)] shadow-lg">
           <div className="p-2 border-b border-[var(--bd)]">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--tx3)]" />

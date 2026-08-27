@@ -15,7 +15,7 @@ import { Loader2, ImageOff } from 'lucide-react';
  * The wrapper `<span>` takes `className` (size/rounding/position); the inner
  * image takes `imgClassName`.
  */
-const ImageWithLoader = ({ src, alt = '', className = '', imgClassName = '', ...rest }) => {
+const ImageWithLoader = ({ src, alt = '', className = '', imgClassName = '', onLoad, onError, ...rest }) => {
   const imgRef = useRef(null);
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
@@ -29,6 +29,7 @@ const ImageWithLoader = ({ src, alt = '', className = '', imgClassName = '', ...
     if (img && img.complete && img.naturalWidth > 0) {
       setLoaded(true);
       setShowSpinner(false);
+      onLoad?.();
       return undefined;
     }
     setLoaded(false);
@@ -60,10 +61,12 @@ const ImageWithLoader = ({ src, alt = '', className = '', imgClassName = '', ...
         onLoad={() => {
           setLoaded(true);
           setShowSpinner(false);
+          onLoad?.();
         }}
         onError={() => {
           setErrored(true);
           setShowSpinner(false);
+          onError?.();
         }}
         className={`${imgClassName} transition-opacity duration-200 ${
           loaded ? 'opacity-100' : 'opacity-0'

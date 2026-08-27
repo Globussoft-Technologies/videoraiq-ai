@@ -61,6 +61,7 @@ const IncidentLogsPage = ({ config }) => {
   const [manualTrigger, setManualTrigger] = useState(0);
   const [viewMode, setViewMode] = useState('grid'); // 'table' | 'grid'
   const [previewImage, setPreviewImage] = useState(null);
+  const [previewIndex, setPreviewIndex] = useState(-1);
   const [previewImageLoading, setPreviewImageLoading] = useState(false);
   const [severityTotals, setSeverityTotals] = useState({ high: 0, moderate: 0, low: 0 });
 
@@ -211,16 +212,48 @@ const IncidentLogsPage = ({ config }) => {
     [cameraList]
   );
 
-  const openPreview = useCallback((url) => {
-    if (!url) return;
-    setPreviewImageLoading(true);
-    setPreviewImage(url);
+  const previewNavigationEnabled = config.storagePrefix === 'unauthorized_access';
+  const previewRows = useMemo(
+    () => (previewNavigationEnabled ? rows.filter((row) => row.incidentImageUrl) : []),
+    [previewNavigationEnabled, rows]
+  );
+
+  const showPreviewAt = useCallback(
+    (index) => {
+      const nextRow = previewRows[index];
+      if (!nextRow) return;
+      setPreviewIndex(index);
+      setPreviewImageLoading(true);
+      setPreviewImage(nextRow.incidentImageUrl);
+    },
+    [previewRows]
+  );
+
+  const openPreview = useCallback(
+    (url) => {
+      if (!url) return;
+      setPreviewIndex(previewNavigationEnabled ? previewRows.findIndex((row) => row.incidentImageUrl === url) : -1);
+      setPreviewImageLoading(true);
+      setPreviewImage(url);
+    },
+    [previewNavigationEnabled, previewRows]
+  );
+
+  const closePreview = useCallback(() => {
+    setPreviewImage(null);
+    setPreviewIndex(-1);
+    setPreviewImageLoading(false);
   }, []);
 
-  const closePreview = () => {
-    setPreviewImage(null);
-    setPreviewImageLoading(false);
-  };
+  const showPreviousPreview = useCallback(() => {
+    if (previewIndex > 0) showPreviewAt(previewIndex - 1);
+  }, [previewIndex, showPreviewAt]);
+
+  const showNextPreview = useCallback(() => {
+    if (previewIndex >= 0 && previewIndex < previewRows.length - 1) {
+      showPreviewAt(previewIndex + 1);
+    }
+  }, [previewIndex, previewRows.length, showPreviewAt]);
 
   const onSort = useCallback(
     (field) => {
@@ -275,6 +308,10 @@ const IncidentLogsPage = ({ config }) => {
         previewImage={previewImage}
         loading={previewImageLoading}
         setLoading={setPreviewImageLoading}
+        hasPrevious={previewNavigationEnabled && previewIndex > 0}
+        hasNext={previewNavigationEnabled && previewIndex >= 0 && previewIndex < previewRows.length - 1}
+        onPrevious={showPreviousPreview}
+        onNext={showNextPreview}
         onClose={closePreview}
       />
 
@@ -299,6 +336,7 @@ const IncidentLogsPage = ({ config }) => {
         startDate={startDate}
         endDate={endDate}
         maxDate={maxDateDefault}
+        datePickerVariant={config.datePickerVariant}
         onDateRangeChange={({ start, end }) => {
           const toIso = (d) => (d instanceof Date ? moment(d).format('YYYY-MM-DD') : d);
           let s = start ? toIso(start) : null;

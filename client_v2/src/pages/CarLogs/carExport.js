@@ -95,6 +95,123 @@ const imageToDataUrl = async (url) => {
   });
 };
 
+const drawReportHeader = async (doc, title, totalRecords) => {
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  doc.setFillColor(245, 248, 255);
+  doc.rect(0, 0, pageWidth, 210, 'F');
+  doc.setFillColor(38, 17, 105);
+  doc.roundedRect(8, 7, pageWidth - 16, 30, 2, 2, 'F');
+  doc.setFillColor(49, 36, 137);
+  doc.roundedRect(8, 7, pageWidth - 16, 30, 2, 2, 'F');
+  doc.setFillColor(27, 18, 92);
+  doc.triangle(8, 7, 92, 7, 8, 37, 'F');
+
+  try {
+    const logoDataUrl = await imageToDataUrl(logoUrl);
+    doc.addImage(logoDataUrl, 'PNG', 17, 17, 50, 11);
+  } catch {
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.text('VideorAIQ', 18, 24);
+  }
+
+  doc.setDrawColor(70, 91, 178);
+  doc.line(74, 14, 74, 31);
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text(title, 82, 20);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(220, 230, 255);
+  doc.text(`Generated on ${moment().format('DD/MM/YYYY hh:mm A')} | Total records: ${totalRecords}`, 82, 27);
+};
+
+const getImageFormat = (dataUrl) => {
+  const match = String(dataUrl || '').match(/^data:image\/([a-zA-Z0-9.+-]+);/);
+  const type = match?.[1]?.toUpperCase();
+  return type === 'JPG' ? 'JPEG' : type || 'JPEG';
+};
+
+const drawLinkedImageFallback = (doc, x, y, width, height, url) => {
+  doc.setFillColor(10, 14, 21);
+  doc.rect(x, y, width, height, 'F');
+  doc.setTextColor(203, 213, 225);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  const text = url ? 'Open Image' : 'No Image';
+  doc.text(text, x + width / 2, y + height / 2 + 2, { align: 'center' });
+  if (url) {
+    const textWidth = doc.getTextWidth(text);
+    doc.line(x + (width - textWidth) / 2, y + height / 2 + 3, x + (width + textWidth) / 2, y + height / 2 + 3);
+  }
+  doc.setTextColor(0, 0, 0);
+};
+
+const drawCardIcon = (doc, type, x, y) => {
+  doc.setDrawColor(71, 85, 117);
+  doc.setLineWidth(0.25);
+
+  if (type === 'hash') {
+    doc.line(x + 1, y, x + 1, y + 4);
+    doc.line(x + 3, y, x + 3, y + 4);
+    doc.line(x, y + 1.4, x + 4, y + 1.4);
+    doc.line(x, y + 2.8, x + 4, y + 2.8);
+    return;
+  }
+
+  if (type === 'clock') {
+    doc.circle(x + 2, y + 2, 2);
+    doc.line(x + 2, y + 2, x + 2, y + 0.8);
+    doc.line(x + 2, y + 2, x + 3.1, y + 2.7);
+    return;
+  }
+
+  if (type === 'calendar') {
+    doc.roundedRect(x, y + 0.3, 4, 3.6, 0.4, 0.4);
+    doc.line(x, y + 1.4, x + 4, y + 1.4);
+    return;
+  }
+
+  if (type === 'server') {
+    doc.roundedRect(x, y + 0.2, 4, 1.5, 0.25, 0.25);
+    doc.roundedRect(x, y + 2.3, 4, 1.5, 0.25, 0.25);
+    return;
+  }
+
+  if (type === 'video') {
+    doc.roundedRect(x, y + 0.8, 3, 2.3, 0.35, 0.35);
+    doc.line(x + 3, y + 1.4, x + 4.2, y + 0.8);
+    doc.line(x + 3, y + 2.6, x + 4.2, y + 3.2);
+    doc.line(x + 4.2, y + 0.8, x + 4.2, y + 3.2);
+    return;
+  }
+
+  if (type === 'palette') {
+    doc.circle(x + 2, y + 2, 2);
+    doc.circle(x + 1.1, y + 1.4, 0.2, 'F');
+    doc.circle(x + 2.1, y + 0.9, 0.2, 'F');
+    doc.circle(x + 3, y + 1.7, 0.2, 'F');
+    return;
+  }
+
+  if (type === 'building') {
+    doc.rect(x + 0.5, y + 0.5, 3, 3.3);
+    doc.line(x + 1.3, y + 1.2, x + 1.3, y + 3.8);
+    doc.line(x + 2.4, y + 1.2, x + 2.4, y + 3.8);
+    doc.line(x, y + 3.8, x + 4, y + 3.8);
+    return;
+  }
+
+  doc.roundedRect(x, y + 1.2, 4, 1.8, 0.45, 0.45);
+  doc.circle(x + 1, y + 3.1, 0.45);
+  doc.circle(x + 3, y + 3.1, 0.45);
+  doc.line(x + 0.8, y + 1.2, x + 1.5, y + 0.4);
+  doc.line(x + 1.5, y + 0.4, x + 2.8, y + 0.4);
+  doc.line(x + 2.8, y + 0.4, x + 3.4, y + 1.2);
+};
+
 const exportToPDF = async (params) => {
   try {
     const allLogs = await fetchAllForExport(params);
@@ -104,36 +221,7 @@ const exportToPDF = async (params) => {
     }
 
     const doc = new jsPDF('landscape');
-    const pageWidth = doc.internal.pageSize.getWidth();
-
-    doc.setFillColor(245, 248, 255);
-    doc.rect(0, 0, pageWidth, 210, 'F');
-    doc.setFillColor(38, 17, 105);
-    doc.roundedRect(8, 7, pageWidth - 16, 30, 2, 2, 'F');
-    doc.setFillColor(49, 36, 137);
-    doc.roundedRect(8, 7, pageWidth - 16, 30, 2, 2, 'F');
-    doc.setFillColor(27, 18, 92);
-    doc.triangle(8, 7, 92, 7, 8, 37, 'F');
-
-    try {
-      const logoDataUrl = await imageToDataUrl(logoUrl);
-      doc.addImage(logoDataUrl, 'PNG', 17, 17, 50, 11);
-    } catch {
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(10);
-      doc.text('VideorAIQ', 18, 24);
-    }
-
-    doc.setDrawColor(70, 91, 178);
-    doc.line(74, 14, 74, 31);
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text('Car Detection Logs', 82, 20);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(220, 230, 255);
-    doc.text(`Generated on ${moment().format('DD/MM/YYYY hh:mm A')} | Total records: ${allLogs.length}`, 82, 27);
+    await drawReportHeader(doc, 'Car Detection Logs', allLogs.length);
 
     const headers = [
       '#',
@@ -205,6 +293,120 @@ const exportToPDF = async (params) => {
   } catch (error) {
     console.log('Failed to export car logs PDF:', error);
     toast.error('Failed to export PDF');
+  }
+};
+
+const exportToGridPDF = async (params) => {
+  try {
+    const allLogs = await fetchAllForExport(params);
+    if (!allLogs.length) {
+      toast.error('No data to export');
+      return;
+    }
+
+    const doc = new jsPDF('landscape');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 5;
+    const gap = 4;
+    const columns = 4;
+    const cardWidth = (pageWidth - margin * 2 - gap * (columns - 1)) / columns;
+    const imageHeight = cardWidth / 2;
+    const rowGap = 4.8;
+    const bodyTopGap = 5.2;
+    const cardHeight = imageHeight + bodyTopGap + rowGap * 9 + 5.5;
+    const firstPageStartY = 42;
+    const nextPageStartY = 12;
+    let x = margin;
+    let y = firstPageStartY;
+    let col = 0;
+    let pageIndex = 0;
+
+    doc.setFillColor(245, 247, 251);
+    doc.rect(0, 0, pageWidth, pageHeight, 'F');
+    await drawReportHeader(doc, 'Car Detection Logs', allLogs.length);
+
+    const addPageIfNeeded = () => {
+      if (y + cardHeight <= pageHeight - 6) return;
+      doc.addPage();
+      pageIndex += 1;
+      doc.setFillColor(245, 247, 251);
+      doc.rect(0, 0, pageWidth, pageHeight, 'F');
+      x = margin;
+      y = pageIndex === 0 ? firstPageStartY : nextPageStartY;
+      col = 0;
+    };
+
+    for (let i = 0; i < allLogs.length; i += 1) {
+      addPageIfNeeded();
+      const row = allLogs[i];
+
+      doc.setDrawColor(224, 228, 236);
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(x, y, cardWidth, cardHeight, 2.5, 2.5, 'FD');
+
+      const imageX = x;
+      const imageY = y;
+      const imageWidth = cardWidth;
+      doc.setFillColor(10, 14, 21);
+      doc.roundedRect(imageX, imageY, imageWidth, imageHeight, 2.5, 2.5, 'F');
+
+      if (row.imageUrl) {
+        try {
+          const imageDataUrl = await imageToDataUrl(row.imageUrl);
+          doc.addImage(imageDataUrl, getImageFormat(imageDataUrl), imageX, imageY, imageWidth, imageHeight);
+        } catch {
+          drawLinkedImageFallback(doc, imageX, imageY, imageWidth, imageHeight, row.imageUrl);
+        }
+        doc.link(imageX, imageY, imageWidth, imageHeight, { url: row.imageUrl });
+      } else {
+        drawLinkedImageFallback(doc, imageX, imageY, imageWidth, imageHeight, '');
+      }
+
+      const labelX = x + 12;
+      const valueX = x + cardWidth - 4;
+      let textY = y + imageHeight + bodyTopGap;
+      const details = [
+        ['car', 'MODEL', row.modelName],
+        ['car', 'VEHICLE NO.', row.vehicleNumber],
+        ['hash', 'VISIT COUNT', row.vehicleVisitCount],
+        ['building', 'COMPANY', row.company],
+        ['palette', 'COLOUR', row.color],
+        ['calendar', 'YEAR', row.year],
+        ['server', 'NVR', row.nvrName],
+        ['video', 'CAMERA', row.channelName],
+        ['clock', 'TIME', row.incidentTime],
+      ];
+
+      details.forEach(([icon, label, value]) => {
+        drawCardIcon(doc, icon, x + 4.2, textY - 2.8);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(5, 24, 55);
+        doc.setFontSize(5.1);
+        doc.text(label, labelX, textY);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(26, 42, 103);
+        doc.setFontSize(6.3);
+        const valueText = doc.splitTextToSize(String(value ?? '--'), cardWidth - 33).slice(0, 1)[0] || '--';
+        doc.text(valueText, valueX, textY, { align: 'right' });
+        textY += rowGap;
+      });
+
+      col += 1;
+      if (col >= columns) {
+        col = 0;
+        x = margin;
+        y += cardHeight + gap;
+      } else {
+        x += cardWidth + gap;
+      }
+    }
+
+    doc.save('car_detection_logs_grid.pdf');
+  } catch (error) {
+    console.log('Failed to export car logs grid PDF:', error);
+    toast.error('Failed to export grid PDF');
   }
 };
 
@@ -286,4 +488,5 @@ const exportToExcel = async (params) => {
 export const handleCarExport = async (format, params) => {
   if (format === 'excel') await exportToExcel(params);
   if (format === 'pdf') await exportToPDF(params);
+  if (format === 'pdf-grid') await exportToGridPDF(params);
 };
