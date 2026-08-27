@@ -25,6 +25,7 @@ import LocationModel from "../locations/location.model.js";
 import OptimizedAccessLogs from "../accesslogs/newAccessLogs.model.js";
 import { normalizePlate, findVehicleOwners, TAGGED_USER_FIELDS } from "../../../utils/vehicleTagging.js";
 import faceImagesModel from "../faceImages/faceImages.model.js";
+import { putMedia, deleteMedia } from "../../../utils/mediaStorage.js";
 
 
 import fs from 'fs';
@@ -481,18 +482,16 @@ class AuthUsersService {
           );
         }
 
-        // Hold a pooled SFTP connection for the upload only. It used to be
-        // acquired at the top of the handler and released in a finally, which
-        // pinned 1 of the 8 pool slots across the Mongo writes and the
-        // unbounded face-service call below — 8 in-flight registrations
-        // exhausted the pool and broke uploads AND downloads process-wide.
-        const uploadedFiles = await withSFTPConnection((sftp) =>
-          uploadFilesToSFTP({
-            files: req.files,
-            mediaType: "image",
-            folderName: `${firstName}${lastName}`,
-            sftp,
-          })
+        // Upload files using the storage abstraction (routes to Oracle or SFTP based on config)
+        const uploadedFiles = await Promise.all(
+          req.files.map((file) =>
+            putMedia({
+              buffer: file.buffer,
+              mediaType: "image",
+              folderName: `${firstName}${lastName}`,
+              originalName: file.originalname,
+            })
+          )
         );
 
 
@@ -592,7 +591,7 @@ class AuthUsersService {
             if (userRegistrByLink) {
               await authorizedUsersModel.findByIdAndDelete(newUser._id);
               // Drop the images too, or every failed retry orphans 3 more.
-              await deleteFileFromStorage(uploadedFiles, cacheDir).catch(() => {});
+              await Promise.all(uploadedFiles.map(f => deleteMedia(f).catch(() => {})));
             } else {
               //Update user as unverified
               await authorizedUsersModel.findByIdAndUpdate(
@@ -790,29 +789,21 @@ async updateAuthUser(req, res, _next) {
 
     // Delete removed files
     if (deletedProfilePics.length > 0) {
-      const deleteResult = await deleteFileFromStorage(
-        deletedProfilePics,
-        cacheDir
-      );
-
-      if (!deleteResult.success) {
-        return res.send(
-          Response.userFailResp(deleteResult.message, "Validation Failed!")
-        );
-      }
+      await Promise.all(deletedProfilePics.map(pic => deleteMedia(pic).catch(() => {})));
     }
 
     // Upload new images
     let uploadedFiles = [];
     if (req.files && req.files.length > 0) {
-      // Pooled connection held for the upload only — see createAuthUser.
-      uploadedFiles = await withSFTPConnection((sftp) =>
-        uploadFilesToSFTP({
-          files: req.files,
-          mediaType: "image",
-          folderName: `${existingUser?.firstName}${existingUser?.lastName}`,
-          sftp,
-        })
+      uploadedFiles = await Promise.all(
+        req.files.map((file) =>
+          putMedia({
+            buffer: file.buffer,
+            mediaType: "image",
+            folderName: `${existingUser?.firstName}${existingUser?.lastName}`,
+            originalName: file.originalname,
+          })
+        )
       );
     }
 
@@ -980,13 +971,10 @@ async updateAuthUser(req, res, _next) {
         
       }
 
-    //Delete uploadedFiles if error.response?.data?.message === "Identity verification failed. Please upload a valid photo" 
+    //Delete uploadedFiles if error.response?.data?.message === "Identity verification failed. Please upload a valid photo"
     //and also find the image that was uploaded and only delete that image's from user collection
       if (err.response?.data?.message === "Identity verification failed. Please upload a valid photo") {
-        await deleteFileFromStorage(
-          uploadedFiles,
-          cacheDir
-        );
+        await Promise.all(uploadedFiles.map(f => deleteMedia(f).catch(() => {})));
         let updateUserData = await authorizedUsersModel.findById(updatedUser._id);
         updateUserData.profilePics = updateUserData?.profilePics?.filter(
           (pic) => !uploadedFiles?.includes(pic)
