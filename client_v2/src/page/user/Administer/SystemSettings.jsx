@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Clapperboard, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -35,6 +35,9 @@ import {
   updateEmailAlertSwitch,
   updateTelegramAlertSwitch,
   updateRetention,
+  updateIncidentPreview,
+  normalizeIncidentPreview,
+  INCIDENT_PREVIEW_MAX_SECONDS,
   updateTimezone,
 } from '../../../helpers/administer';
 import { useAttendanceSocket } from '../../../context/AttendanceSocketContext';
@@ -635,6 +638,8 @@ export default function SystemSettings() {
   const [fullDayHours, setFullDayHours] = useState('');
   const [halfDayHours, setHalfDayHours] = useState('');
   const [retentionSaving, setRetentionSaving] = useState(false);
+  const [previewSaving, setPreviewSaving] = useState(false);
+  const [previewWindow, setPreviewWindow] = useState({ beforeSeconds: 10, afterSeconds: 10 });
   const [retentionEnabled, setRetentionEnabled] = useState(true);
   const [retentionMonths, setRetentionMonths] = useState({
     incidents: RETENTION_DEFAULT_MONTHS,
@@ -662,12 +667,20 @@ export default function SystemSettings() {
 
   const adminUserId = admin.user_id || admin.userId;
   const retention = admin.retention || {};
+  // Falls back to the shared defaults when the admin has never set them, so
+  // the inputs always show the window a preview would actually use.
+  const storedPreview = normalizeIncidentPreview(admin.incidentPreview);
   const storedIncidentRetention = retention.incidents || '';
   const storedAttendanceRetention = retention.attendance || '';
   const storedAccessRetention = retention.accessLogs || '';
   const storedRetentionSpecs = [storedIncidentRetention, storedAttendanceRetention, storedAccessRetention].filter(Boolean);
   const storedRetentionEnabled = retention.enabled !== false
     && !(storedRetentionSpecs.length > 0 && storedRetentionSpecs.every(isNeverRetention));
+
+  useEffect(() => {
+    setPreviewWindow(storedPreview);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storedPreview.beforeSeconds, storedPreview.afterSeconds]);
 
   useEffect(() => {
     setRetentionEnabled(storedRetentionEnabled);
@@ -892,6 +905,42 @@ export default function SystemSettings() {
     setRetentionMonths((current) => ({ ...current, [key]: next }));
     notifyRetentionPendingSave();
   };
+
+  const handlePreviewSave = async () => {
+    if (!adminUserId) {
+      toast.error('Admin user id is not available yet');
+      return;
+    }
+    setPreviewSaving(true);
+    try {
+      await updateIncidentPreview({
+        userId: adminUserId,
+        beforeSeconds: previewWindow.beforeSeconds,
+        afterSeconds: previewWindow.afterSeconds,
+      });
+      await adminApi.refetch({ silent: true });
+      toast.success('Incident preview settings updated');
+    } catch (err) {
+      toast.error(err?.response?.data?.body?.message || 'Failed to update incident preview settings');
+    } finally {
+      setPreviewSaving(false);
+    }
+  };
+
+  const setPreviewSeconds = (key, raw) => {
+    if (raw === '') {
+      setPreviewWindow((current) => ({ ...current, [key]: '' }));
+      return;
+    }
+    const seconds = Number(raw);
+    if (!Number.isFinite(seconds)) return;
+    const clamped = Math.min(Math.max(Math.round(seconds), 0), INCIDENT_PREVIEW_MAX_SECONDS);
+    setPreviewWindow((current) => ({ ...current, [key]: clamped }));
+  };
+
+  const previewTotal = (Number(previewWindow.beforeSeconds) || 0) + (Number(previewWindow.afterSeconds) || 0);
+  const canSavePreview = !previewSaving && previewTotal > 0
+    && previewWindow.beforeSeconds !== '' && previewWindow.afterSeconds !== '';
 
   const handleRetentionSave = async () => {
     if (!canApplyRetention) {
@@ -1182,6 +1231,75 @@ export default function SystemSettings() {
             <Metric label="Incidents" value={retentionSummaryLabel(storedIncidentRetention)} icon={Database} />
             <Metric label="Attendance" value={retentionSummaryLabel(storedAttendanceRetention)} icon={Clock} tone="ok" />
             <Metric label="Access Logs" value={retentionSummaryLabel(storedAccessRetention)} icon={ShieldCheck} tone="warn" />
+          </div>
+        </Panel>
+
+        <Panel>
+          <PanelHeader
+            icon={Clapperboard}
+            title="Incident Preview"
+            sub="How much recorded footage plays either side of an incident"
+            action={
+              <ActionButton onClick={handlePreviewSave} disabled={!canSavePreview} icon={previewSaving ? Loader2 : null} variant="primary">
+                Save
+              </ActionButton>
+            }
+          />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
+            <div style={{ flex: '1 1 180px', minWidth: 0 }}>
+              <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)', marginBottom: 6 }}>
+                Before the incident
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="number"
+                  min={0}
+                  max={INCIDENT_PREVIEW_MAX_SECONDS}
+                  value={previewWindow.beforeSeconds}
+                  onChange={e => setPreviewSeconds('beforeSeconds', e.target.value)}
+                  disabled={previewSaving}
+                  style={{
+                    width: 88, height: 38, padding: '0 10px', borderRadius: 9, boxSizing: 'border-box',
+                    background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13, color: 'var(--tx)', outline: 'none',
+                  }}
+                />
+                <span style={{ fontSize: 12, color: 'var(--tx3)' }}>seconds</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 5 }}>Lead-in, so the cause is visible</div>
+            </div>
+            <div style={{ flex: '1 1 180px', minWidth: 0 }}>
+              <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: 'var(--tx2)', marginBottom: 6 }}>
+                After the incident
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="number"
+                  min={0}
+                  max={INCIDENT_PREVIEW_MAX_SECONDS}
+                  value={previewWindow.afterSeconds}
+                  onChange={e => setPreviewSeconds('afterSeconds', e.target.value)}
+                  disabled={previewSaving}
+                  style={{
+                    width: 88, height: 38, padding: '0 10px', borderRadius: 9, boxSizing: 'border-box',
+                    background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13, color: 'var(--tx)', outline: 'none',
+                  }}
+                />
+                <span style={{ fontSize: 12, color: 'var(--tx3)' }}>seconds</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 5 }}>How long to keep playing</div>
+            </div>
+          </div>
+          <div style={{ marginTop: 14, padding: '10px 12px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
+            <div style={{ fontSize: 12, color: 'var(--tx2)' }}>
+              Each preview plays{' '}
+              <strong style={{ color: 'var(--tx)' }}>{previewTotal}s</strong> of recording.
+            </div>
+            {/* The clip is built on demand from the recorder, so this is a real
+                request against stored footage — not a cached thumbnail. */}
+            <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 3 }}>
+              Loaded when someone opens a preview, not with the incident list.
+              Nothing plays for a moment the recorder has no footage for.
+            </div>
           </div>
         </Panel>
 

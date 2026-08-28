@@ -152,6 +152,69 @@ export const updateAttendanceSettings = async ({ fullDayHours, halfDayHours }) =
   return unwrap(res);
 };
 
+/**
+ * How much footage an incident preview shows either side of the incident.
+ *
+ * Defaults apply when the admin has never set them (both keys null), so a
+ * preview always has a window to ask for.
+ */
+export const INCIDENT_PREVIEW_DEFAULTS = { beforeSeconds: 10, afterSeconds: 10 };
+export const INCIDENT_PREVIEW_MAX_SECONDS = 300;
+
+/** Clamp whatever is stored into something a player can actually use. */
+export const normalizeIncidentPreview = (stored = {}) => {
+  const pick = (value, fallback) => {
+    const seconds = Number(value);
+    if (!Number.isFinite(seconds) || seconds < 0) return fallback;
+    return Math.min(Math.round(seconds), INCIDENT_PREVIEW_MAX_SECONDS);
+  };
+  return {
+    beforeSeconds: pick(stored?.beforeSeconds, INCIDENT_PREVIEW_DEFAULTS.beforeSeconds),
+    afterSeconds: pick(stored?.afterSeconds, INCIDENT_PREVIEW_DEFAULTS.afterSeconds),
+  };
+};
+
+/*
+ * Module-level cache: every incident card needs these numbers, and a grid
+ * shows a dozen at once. One shared fetch rather than one per card — the same
+ * pattern the timezone dropdown uses.
+ */
+let previewCache = null;
+let previewPromise = null;
+
+export const getIncidentPreviewSettings = () => {
+  if (previewCache) return Promise.resolve(previewCache);
+  if (previewPromise) return previewPromise;
+  previewPromise = fetchAdmin()
+    .then((admin) => {
+      previewCache = normalizeIncidentPreview(admin?.incidentPreview);
+      return previewCache;
+    })
+    .catch(() => {
+      previewPromise = null; // let the next mount retry
+      return { ...INCIDENT_PREVIEW_DEFAULTS };
+    });
+  return previewPromise;
+};
+
+/** Called after a save so open cards pick the new window up. */
+export const setIncidentPreviewCache = (settings) => {
+  previewCache = normalizeIncidentPreview(settings);
+  previewPromise = null;
+};
+
+export const updateIncidentPreview = async ({ userId, ...payload }) => {
+  const token = getAccessToken();
+  const res = await axios.put(
+    `${Api_url}/admin/incident-preview`,
+    { userId, ...payload },
+    { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
+  );
+  const data = unwrap(res);
+  setIncidentPreviewCache(data?.incidentPreview || payload);
+  return data;
+};
+
 export const updateRetention = async ({ userId, ...payload }) => {
   const token = getAccessToken();
   const res = await axios.put(

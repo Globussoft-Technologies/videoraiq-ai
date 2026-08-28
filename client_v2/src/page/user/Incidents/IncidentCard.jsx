@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import IncidentPreviewModal from './IncidentPreviewModal';
 import { toast } from 'sonner';
-import { ImageOff, Maximize2, X, Flag, Check, UserPlus, UserCheck, UserMinus } from 'lucide-react';
+import { PlayCircle, ImageOff, Maximize2, X, Flag, Check, UserPlus, UserCheck, UserMinus } from 'lucide-react';
 import { detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
 import { taggedUserName, formatPlate, hasReadablePlate } from '../../../helpers/vehicleTagging';
 import axios from 'axios';
@@ -273,6 +274,7 @@ function Spinner({ size = 14, color = '#fff' }) {
 /* ── Card ─────────────────────────────────────────────────────────────────── */
 export default function IncidentCard({ item, onClick, onRefresh, onResolvedChange, onOpenLightbox, onTagUser, onUntagUser, onViewUser, deleteMode, selectedForDelete, onToggleDelete }) {
   const [reportOpen,   setReportOpen]   = useState(false);
+  const [previewOpen,  setPreviewOpen]  = useState(false);
   const [resolving,    setResolving]    = useState(false);
   const [localResolved, setLocalResolved] = useState(item.resolved || false);
   const [hover,        setHover]        = useState(false);
@@ -288,6 +290,14 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
   const det      = detectionLabel(item.incidentType || item.displayName);
   const st       = statusOf({ ...item, resolved: localResolved });
   const cam      = item.channelData?.name || '';
+
+  // Preview the recorded moment in place. channelData is the whole channel
+  // document (the incidents aggregation $lookup does not project it down), so
+  // the ids the playback API needs are all on it.
+  const previewChannel = item.channelData || null;
+  const previewChannelId = previewChannel?._id || item.channelId || null;
+  const previewAt = item.timeOfIncident || null;
+  const canPreview = Boolean(previewChannelId && previewAt);
   const site     = item.nvrData?.nvrName  || item.location  || '';
   const conf     = item.confidence ?? item.accuracy ?? item.score;
   const imgSrc   = item.Image ? mediaUrl(item.Image) : null;
@@ -329,6 +339,15 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
   return (
     <>
       {reportOpen && <ReportModal item={item} onClose={() => setReportOpen(false)} onSuccess={onRefresh} />}
+      {previewOpen && (
+        <IncidentPreviewModal
+          item={item}
+          channel={previewChannel}
+          channelId={previewChannelId}
+          at={previewAt}
+          onClose={() => setPreviewOpen(false)}
+        />
+      )}
 
       <div
         onClick={handleCardClick}
@@ -497,6 +516,34 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
             <span style={{ fontSize: 11, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: '1 1 auto' }}>
               {cam}
             </span>
+            {/* Opens Playback on this camera at the second the incident was
+                recorded. Hidden rather than disabled when the incident carries
+                no camera or timestamp — a dead control is worse than none. */}
+            {canPreview && (
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); setPreviewOpen(true); }}
+                title={`Play the recorded moment — ${shortDateTime(item.timeOfIncident)}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  flex: '0 0 auto',
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  border: '1px solid var(--bd)',
+                  background: 'transparent',
+                  color: 'var(--blue)',
+                  fontSize: 10.5,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <PlayCircle size={12} />
+                Preview
+              </button>
+            )}
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: '0 0 auto', fontSize: 10.5, color: st.color, fontWeight: 600 }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: st.color }} />
               {st.label}
