@@ -632,18 +632,18 @@ function CarModelDetails({ item }) {
             style={{
               position: 'relative',
               zIndex: 1,
-            flex: '1 0 124px',
+              flex: '1 0 124px',
               minWidth: 0,
-            padding: '6px 9px',
+              padding: '7px 9px 8px',
               borderRadius: 8,
               background: 'rgba(15,23,42,.78)',
               border: '1px solid rgba(255,255,255,.16)',
               boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
               <Icon size={12} color={accent} style={{ flexShrink: 0 }} />
-              <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '.12em', color: 'rgba(255,255,255,.48)', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: '.12em', color: 'rgba(255,255,255,.52)', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {label}
               </span>
             </div>
@@ -651,13 +651,13 @@ function CarModelDetails({ item }) {
               title={value}
               style={{
                 color: '#fff',
-                fontSize: mono ? 11 : 10.5,
+                fontSize: mono ? 12.5 : 12,
                 fontWeight: 750,
                 fontFamily: mono ? 'monospace' : 'inherit',
                 overflow: 'visible',
                 overflowWrap: 'anywhere',
                 whiteSpace: 'normal',
-                lineHeight: 1.25,
+                lineHeight: 1.3,
               }}
             >
               {value}

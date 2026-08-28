@@ -254,39 +254,30 @@ function PdfViewPopover({ open, exportingFormat, onOpenChange, onSelect }) {
       <PopoverTrigger asChild>
         <ExportButton>PDF</ExportButton>
       </PopoverTrigger>
-      <PopoverContent className="w-[274px] overflow-hidden rounded-xl p-0" align="end">
-        <div className="border-b border-[var(--bd)] px-3.5 py-2.5">
-          <h3 className="text-sm font-bold text-[var(--tx)]">Download PDF</h3>
-        </div>
-        <div className="grid grid-cols-2 gap-2.5 p-3.5">
+      <PopoverContent className="w-[190px] overflow-hidden rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] p-1.5 shadow-xl" align="end">
+        <div className="space-y-1">
           <button
             type="button"
             disabled={exporting}
             onClick={() => onSelect('pdf')}
-            className="flex min-h-[82px] cursor-pointer flex-col items-start justify-between rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-2.5 text-left transition-colors hover:border-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-70"
+            className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-sm font-semibold text-[var(--tx)] transition-colors hover:bg-[var(--bg2)] disabled:cursor-not-allowed disabled:opacity-70"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--brand)]/10 text-[var(--brand)]">
-              {exportingFormat === 'pdf' ? <Loader2 className="h-4 w-4 animate-spin" /> : <List className="h-5 w-5" />}
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-red-500/10 text-red-500">
+              {exportingFormat === 'pdf' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <List className="h-3.5 w-3.5" />}
             </span>
-            <span>
-              <span className="block text-[12.5px] font-semibold text-[var(--tx)]">List View</span>
-              <span className="mt-0.5 block text-[10px] leading-3 text-[var(--tx3)]">Existing table format</span>
-            </span>
+            <span className="truncate">Export List View</span>
           </button>
 
           <button
             type="button"
             disabled={exporting}
             onClick={() => onSelect('pdf-grid')}
-            className="flex min-h-[82px] cursor-pointer flex-col items-start justify-between rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-2.5 text-left transition-colors hover:border-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-70"
+            className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-sm font-semibold text-[var(--tx)] transition-colors hover:bg-[var(--bg2)] disabled:cursor-not-allowed disabled:opacity-70"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--brand)]/10 text-[var(--brand)]">
-              {exportingFormat === 'pdf-grid' ? <Loader2 className="h-4 w-4 animate-spin" /> : <LayoutGrid className="h-5 w-5" />}
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[var(--brand)]/10 text-[var(--brand)]">
+              {exportingFormat === 'pdf-grid' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LayoutGrid className="h-3.5 w-3.5" />}
             </span>
-            <span>
-              <span className="block text-[12.5px] font-semibold text-[var(--tx)]">Grid View</span>
-              <span className="mt-0.5 block text-[10px] leading-3 text-[var(--tx3)]">Card format with images</span>
-            </span>
+            <span className="truncate">Export Grid View</span>
           </button>
         </div>
       </PopoverContent>

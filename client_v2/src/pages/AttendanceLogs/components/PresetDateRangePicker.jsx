@@ -23,9 +23,12 @@ const clampRange = ([start, end], min, max) => [
 const sameRange = (range, start, end) =>
   range?.[0]?.isSame(start, 'day') && range?.[1]?.isSame(end, 'day');
 
-const getPresetKey = (start, end) => {
+const getPresetKey = (start, end, min, max) => {
   if (!start || !end) return 'custom';
-  return PRESETS.find((preset) => preset.range && sameRange(preset.range(), start, end))?.key || 'custom';
+  return PRESETS.find((preset) => {
+    if (!preset.range) return false;
+    return sameRange(clampRange(preset.range(), min, max), start, end);
+  })?.key || 'custom';
 };
 
 const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeChange }) => {
@@ -47,8 +50,8 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
     setSel({ start, end });
     setHovered(null);
     setViewMonth((start || moment()).clone().startOf('month').subtract(start && end && start.isSame(end, 'month') ? 1 : 0, 'month'));
-    if (open) setCustomOpen(start && end ? getPresetKey(start, end) === 'custom' : false);
-  }, [startDate, endDate, open]);
+    if (open) setCustomOpen(start && end ? getPresetKey(start, end, min, max) === 'custom' : false);
+  }, [startDate, endDate, open, minDate, maxDate]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -104,7 +107,7 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
       ? `${moment(startDate).format('DD MMMM YYYY')} - ${moment(endDate).format('DD MMMM YYYY')}`
       : 'Select Date';
 
-  const activePreset = customOpen ? 'custom' : getPresetKey(sel.start, sel.end);
+  const activePreset = customOpen ? 'custom' : getPresetKey(sel.start, sel.end, min, max);
   const previewing = sel.start && !sel.end && hovered;
   const lo = previewing ? moment.min(sel.start, hovered) : sel.start;
   const hi = previewing ? moment.max(sel.start, hovered) : sel.end;
@@ -166,8 +169,8 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
           {days.map((day) => {
             const otherMonth = !day.isSame(month, 'month');
             const disabled = isDisabled(day);
-            const endpoint = isEndpoint(day);
-            const between = inRange(day) && !endpoint;
+            const endpoint = !otherMonth && isEndpoint(day);
+            const between = !otherMonth && inRange(day) && !endpoint;
             const classes = endpoint
               ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white rounded-full font-bold'
               : between

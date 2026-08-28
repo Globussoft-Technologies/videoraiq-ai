@@ -1,6 +1,7 @@
 import React, { useEffect, useCallback, useMemo, useReducer, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment-timezone';
+import { LayoutGrid, List, Loader2 } from 'lucide-react';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
 
@@ -8,6 +9,7 @@ import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePa
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
 import ExportButton from '@/pages/AttendanceLogs/components/ExportButton';
 import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
+import { Popover, PopoverContent, PopoverTrigger } from '@/pages/AttendanceLogs/components/Popover';
 
 import { initialState, reducer } from './incidentState';
 import { buildColumns, renderIncidentCard } from './incidentColumns';
@@ -16,6 +18,44 @@ import IncidentFilterPopover from './components/IncidentFilterPopover';
 import { getNVRs, getchannels, fetchIncidentLogs } from './Api';
 
 const SEVERITY_LEVELS = ['high', 'moderate', 'low'];
+
+function PdfViewPopover({ open, exportingFormat, onOpenChange, onSelect }) {
+  const exporting = !!exportingFormat;
+  return (
+    <Popover open={open} onOpenChange={(nextOpen) => !exporting && onOpenChange(nextOpen)}>
+      <PopoverTrigger asChild>
+        <ExportButton>PDF</ExportButton>
+      </PopoverTrigger>
+      <PopoverContent className="w-[190px] overflow-hidden rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] p-1.5 shadow-xl" align="end">
+        <div className="space-y-1">
+          <button
+            type="button"
+            disabled={exporting}
+            onClick={() => onSelect('pdf')}
+            className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-sm font-semibold text-[var(--tx)] transition-colors hover:bg-[var(--bg2)] disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-red-500/10 text-red-500">
+              {exportingFormat === 'pdf' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <List className="h-3.5 w-3.5" />}
+            </span>
+            <span className="truncate">Export List View</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={exporting}
+            onClick={() => onSelect('pdf-grid')}
+            className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-sm font-semibold text-[var(--tx)] transition-colors hover:bg-[var(--bg2)] disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[var(--brand)]/10 text-[var(--brand)]">
+              {exportingFormat === 'pdf-grid' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LayoutGrid className="h-3.5 w-3.5" />}
+            </span>
+            <span className="truncate">Export Grid View</span>
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 /**
  * Shared page for the six stevinrock incident-table logs (conveyor, crusher,
@@ -63,6 +103,8 @@ const IncidentLogsPage = ({ config }) => {
   const [previewImage, setPreviewImage] = useState(null);
   const [previewIndex, setPreviewIndex] = useState(-1);
   const [previewImageLoading, setPreviewImageLoading] = useState(false);
+  const [pdfViewOpen, setPdfViewOpen] = useState(false);
+  const [pdfExportingFormat, setPdfExportingFormat] = useState('');
   const [severityTotals, setSeverityTotals] = useState({ high: 0, moderate: 0, low: 0 });
 
   const { permissions, loading: permissionsLoading } = usePermissions();
@@ -212,7 +254,8 @@ const IncidentLogsPage = ({ config }) => {
     [cameraList]
   );
 
-  const previewNavigationEnabled = config.storagePrefix === 'unauthorized_access';
+  const unauthorizedAccessLogs = config.storagePrefix === 'unauthorized_access';
+  const previewNavigationEnabled = unauthorizedAccessLogs;
   const previewRows = useMemo(
     () => (previewNavigationEnabled ? rows.filter((row) => row.incidentImageUrl) : []),
     [previewNavigationEnabled, rows]
@@ -283,8 +326,8 @@ const IncidentLogsPage = ({ config }) => {
     ];
   }, [severityTotals, totalCount]);
 
-  const handleExport = (format) =>
-    handleIncidentExport(format, config, {
+  const exportParams = useMemo(
+    () => ({
       startDate,
       endDate,
       sortField,
@@ -294,7 +337,27 @@ const IncidentLogsPage = ({ config }) => {
       severity,
       status: config.showStatus ? status : undefined,
       searchInput,
-    });
+    }),
+    [startDate, endDate, sortField, sortOrder, nvrIds, channelIds, severity, config.showStatus, status, searchInput]
+  );
+
+  const handleExport = useCallback(
+    (format) => handleIncidentExport(format, config, exportParams),
+    [config, exportParams]
+  );
+
+  const handlePdfExport = useCallback(
+    async (format) => {
+      setPdfExportingFormat(format);
+      try {
+        await handleExport(format);
+        setPdfViewOpen(false);
+      } finally {
+        setPdfExportingFormat('');
+      }
+    },
+    [handleExport]
+  );
 
   /* ─────────────── Guards ─────────────── */
   if (permissionsLoading) return null;
@@ -360,7 +423,16 @@ const IncidentLogsPage = ({ config }) => {
         }}
       >
         {canEdit && <ExportButton onClick={() => handleExport('excel')}>Excel</ExportButton>}
-        {canEdit && <ExportButton onClick={() => handleExport('pdf')}>PDF</ExportButton>}
+        {canEdit && unauthorizedAccessLogs ? (
+          <PdfViewPopover
+            open={pdfViewOpen}
+            exportingFormat={pdfExportingFormat}
+            onOpenChange={setPdfViewOpen}
+            onSelect={handlePdfExport}
+          />
+        ) : (
+          canEdit && <ExportButton onClick={() => handleExport('pdf')}>PDF</ExportButton>
+        )}
 
         <IncidentFilterPopover
           nvrOptions={nvrOptions}
