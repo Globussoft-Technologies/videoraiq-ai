@@ -83,7 +83,7 @@ const fetchAllForExport = async ({
   }));
 };
 
-const imageToDataUrl = async (url) => {
+const rawImageToDataUrl = async (url) => {
   const response = await fetch(url);
   const blob = await response.blob();
 
@@ -93,6 +93,53 @@ const imageToDataUrl = async (url) => {
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
+};
+
+// Backwards-compatible alias used by the logo + list-view export.
+const imageToDataUrl = rawImageToDataUrl;
+
+// Downscale to a JPEG that is small enough to keep the grid PDF light and fast
+// to serialize. Card images render at ~65mm wide, so 520px is plenty.
+const MAX_IMG_EDGE = 240;
+
+const loadImage = (src) =>
+  new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+
+const fetchDownscaledImage = async (url) => {
+  const dataUrl = await rawImageToDataUrl(url);
+  try {
+    const img = await loadImage(dataUrl);
+    const scale = Math.min(1, MAX_IMG_EDGE / Math.max(img.width, img.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.6);
+  } catch {
+    return dataUrl;
+  }
+};
+
+// Resolve up to `concurrency` image fetches at a time instead of one-by-one,
+// which is what made the grid PDF crawl on large result sets.
+const mapWithConcurrency = async (items, concurrency, worker) => {
+  const results = new Array(items.length);
+  let cursor = 0;
+  const runNext = async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await worker(items[index], index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, runNext));
+  return results;
 };
 
 const drawReportHeader = async (doc, title, totalRecords) => {
@@ -149,67 +196,66 @@ const drawLinkedImageFallback = (doc, x, y, width, height, url) => {
   doc.setTextColor(0, 0, 0);
 };
 
+// Simple 4x4mm line icons. Every branch draws inside the x..x+4 / y..y+4 box so
+// they align with the label baseline, and we restore the shared draw state at
+// the end so later table/border strokes are not left thin and grey.
 const drawCardIcon = (doc, type, x, y) => {
   doc.setDrawColor(71, 85, 117);
-  doc.setLineWidth(0.25);
+  doc.setLineWidth(0.3);
 
-  if (type === 'hash') {
-    doc.line(x + 1, y, x + 1, y + 4);
-    doc.line(x + 3, y, x + 3, y + 4);
-    doc.line(x, y + 1.4, x + 4, y + 1.4);
-    doc.line(x, y + 2.8, x + 4, y + 2.8);
-    return;
+  switch (type) {
+    case 'hash':
+      doc.line(x + 1.3, y + 0.2, x + 0.9, y + 3.8);
+      doc.line(x + 3.1, y + 0.2, x + 2.7, y + 3.8);
+      doc.line(x + 0.2, y + 1.4, x + 3.9, y + 1.4);
+      doc.line(x + 0.1, y + 2.7, x + 3.8, y + 2.7);
+      break;
+    case 'clock':
+      doc.circle(x + 2, y + 2, 1.8);
+      doc.line(x + 2, y + 2, x + 2, y + 0.7);
+      doc.line(x + 2, y + 2, x + 3, y + 2.6);
+      break;
+    case 'calendar':
+      doc.roundedRect(x + 0.2, y + 0.6, 3.6, 3.2, 0.4, 0.4);
+      doc.line(x + 0.2, y + 1.7, x + 3.8, y + 1.7);
+      doc.line(x + 1.3, y + 0.1, x + 1.3, y + 1);
+      doc.line(x + 2.7, y + 0.1, x + 2.7, y + 1);
+      break;
+    case 'server':
+      doc.roundedRect(x + 0.2, y + 0.4, 3.6, 1.4, 0.25, 0.25);
+      doc.roundedRect(x + 0.2, y + 2.3, 3.6, 1.4, 0.25, 0.25);
+      doc.line(x + 1, y + 1.1, x + 1.4, y + 1.1);
+      doc.line(x + 1, y + 3, x + 1.4, y + 3);
+      break;
+    case 'video':
+      doc.roundedRect(x + 0.2, y + 1, 2.8, 2, 0.35, 0.35);
+      doc.line(x + 3, y + 1.5, x + 3.9, y + 1);
+      doc.line(x + 3, y + 2.5, x + 3.9, y + 3);
+      doc.line(x + 3.9, y + 1, x + 3.9, y + 3);
+      break;
+    case 'palette':
+      doc.circle(x + 2, y + 2, 1.8);
+      doc.circle(x + 1.2, y + 1.5, 0.22, 'F');
+      doc.circle(x + 2.1, y + 1, 0.22, 'F');
+      doc.circle(x + 2.9, y + 1.7, 0.22, 'F');
+      break;
+    case 'building':
+      doc.rect(x + 0.6, y + 0.4, 2.8, 3.4);
+      doc.line(x + 1.4, y + 1.1, x + 1.4, y + 3.8);
+      doc.line(x + 2.6, y + 1.1, x + 2.6, y + 3.8);
+      doc.line(x + 0.2, y + 3.8, x + 3.8, y + 3.8);
+      break;
+    default: // 'car'
+      doc.roundedRect(x + 0.1, y + 1.6, 3.8, 1.6, 0.5, 0.5);
+      doc.line(x + 0.9, y + 1.6, x + 1.5, y + 0.6);
+      doc.line(x + 1.5, y + 0.6, x + 2.6, y + 0.6);
+      doc.line(x + 2.6, y + 0.6, x + 3.2, y + 1.6);
+      doc.circle(x + 1.2, y + 3.3, 0.4);
+      doc.circle(x + 2.8, y + 3.3, 0.4);
   }
 
-  if (type === 'clock') {
-    doc.circle(x + 2, y + 2, 2);
-    doc.line(x + 2, y + 2, x + 2, y + 0.8);
-    doc.line(x + 2, y + 2, x + 3.1, y + 2.7);
-    return;
-  }
-
-  if (type === 'calendar') {
-    doc.roundedRect(x, y + 0.3, 4, 3.6, 0.4, 0.4);
-    doc.line(x, y + 1.4, x + 4, y + 1.4);
-    return;
-  }
-
-  if (type === 'server') {
-    doc.roundedRect(x, y + 0.2, 4, 1.5, 0.25, 0.25);
-    doc.roundedRect(x, y + 2.3, 4, 1.5, 0.25, 0.25);
-    return;
-  }
-
-  if (type === 'video') {
-    doc.roundedRect(x, y + 0.8, 3, 2.3, 0.35, 0.35);
-    doc.line(x + 3, y + 1.4, x + 4.2, y + 0.8);
-    doc.line(x + 3, y + 2.6, x + 4.2, y + 3.2);
-    doc.line(x + 4.2, y + 0.8, x + 4.2, y + 3.2);
-    return;
-  }
-
-  if (type === 'palette') {
-    doc.circle(x + 2, y + 2, 2);
-    doc.circle(x + 1.1, y + 1.4, 0.2, 'F');
-    doc.circle(x + 2.1, y + 0.9, 0.2, 'F');
-    doc.circle(x + 3, y + 1.7, 0.2, 'F');
-    return;
-  }
-
-  if (type === 'building') {
-    doc.rect(x + 0.5, y + 0.5, 3, 3.3);
-    doc.line(x + 1.3, y + 1.2, x + 1.3, y + 3.8);
-    doc.line(x + 2.4, y + 1.2, x + 2.4, y + 3.8);
-    doc.line(x, y + 3.8, x + 4, y + 3.8);
-    return;
-  }
-
-  doc.roundedRect(x, y + 1.2, 4, 1.8, 0.45, 0.45);
-  doc.circle(x + 1, y + 3.1, 0.45);
-  doc.circle(x + 3, y + 3.1, 0.45);
-  doc.line(x + 0.8, y + 1.2, x + 1.5, y + 0.4);
-  doc.line(x + 1.5, y + 0.4, x + 2.8, y + 0.4);
-  doc.line(x + 2.8, y + 0.4, x + 3.4, y + 1.2);
+  doc.setLineWidth(0.2);
+  doc.setDrawColor(0, 0, 0);
 };
 
 const exportToPDF = async (params) => {
@@ -297,12 +343,33 @@ const exportToPDF = async (params) => {
 };
 
 const exportToGridPDF = async (params) => {
+  const progressToastId = 'car-grid-pdf-progress';
   try {
     const allLogs = await fetchAllForExport(params);
     if (!allLogs.length) {
       toast.error('No data to export');
       return;
     }
+
+    // Prefetch and downscale every card image up front, many at a time, so the
+    // render loop below never blocks on the network.
+    let done = 0;
+    toast.loading(`Preparing grid PDF... 0/${allLogs.length}`, { id: progressToastId });
+    const imageData = await mapWithConcurrency(allLogs, 20, async (log) => {
+      let result = null;
+      if (log.imageUrl) {
+        try {
+          result = await fetchDownscaledImage(log.imageUrl);
+        } catch {
+          result = null;
+        }
+      }
+      done += 1;
+      if (done % 10 === 0 || done === allLogs.length) {
+        toast.loading(`Preparing grid PDF... ${done}/${allLogs.length}`, { id: progressToastId });
+      }
+      return result;
+    });
 
     const doc = new jsPDF('landscape');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -352,10 +419,14 @@ const exportToGridPDF = async (params) => {
       doc.roundedRect(imageX, imageY, imageWidth, imageHeight, 2.5, 2.5, 'F');
 
       if (row.imageUrl) {
-        try {
-          const imageDataUrl = await imageToDataUrl(row.imageUrl);
-          doc.addImage(imageDataUrl, getImageFormat(imageDataUrl), imageX, imageY, imageWidth, imageHeight);
-        } catch {
+        const imageDataUrl = imageData[i];
+        if (imageDataUrl) {
+          try {
+            doc.addImage(imageDataUrl, getImageFormat(imageDataUrl), imageX, imageY, imageWidth, imageHeight, undefined, 'FAST');
+          } catch {
+            drawLinkedImageFallback(doc, imageX, imageY, imageWidth, imageHeight, row.imageUrl);
+          }
+        } else {
           drawLinkedImageFallback(doc, imageX, imageY, imageWidth, imageHeight, row.imageUrl);
         }
         doc.link(imageX, imageY, imageWidth, imageHeight, { url: row.imageUrl });
@@ -404,8 +475,11 @@ const exportToGridPDF = async (params) => {
     }
 
     doc.save('car_detection_logs_grid.pdf');
+    toast.dismiss(progressToastId);
+    toast.success('Grid PDF downloaded');
   } catch (error) {
     console.log('Failed to export car logs grid PDF:', error);
+    toast.dismiss(progressToastId);
     toast.error('Failed to export grid PDF');
   }
 };
