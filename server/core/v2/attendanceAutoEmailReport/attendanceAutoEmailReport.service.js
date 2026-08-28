@@ -599,17 +599,246 @@ export async function buildPdf({ report, rows, label, timezone }) {
   });
 }
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]
+  ));
+}
+
+// Email palette — deep navy header + clean white card, blue primary / green
+// secondary actions.
+const MAIL = {
+  navy: "#123a8f",       // header + primary button
+  navyDark: "#0f2f73",   // header gradient end / accent bar
+  green: "#1e9e63",      // secondary (CSV) button
+  greenDark: "#17864f",
+  paper: "#eef2f9",      // page ground
+  card: "#ffffff",
+  panel: "#f4f6fb",      // stat card fill
+  rule: "#e4e8f1",
+  tx: "#1f2a44",         // headings
+  tx2: "#5b6784",        // body text
+  tx3: "#8a94ab",        // captions
+};
+
+const SANS = "font-family:'Segoe UI',Roboto,'Helvetica Neue',Helvetica,Arial,sans-serif;";
+
+// Small inline SVG icons as data URIs (CSP-safe, render as <img> in email).
+const ICON = {
+  // white shield, for the header logo lockup
+  shield: (color = "%23ffffff") =>
+    `data:image/svg+xml;utf8,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="${color.replace("%23", "#")}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="11" r="2.6"/></svg>`
+    )}`,
+  calendarWhite: `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`
+  )}`,
+  calendarBlue: `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#123a8f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`
+  )}`,
+  pin: `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#123a8f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>`
+  )}`,
+  users: `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>`
+  )}`,
+  fileWhite: `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>`
+  )}`,
+  shieldBadge: `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#123a8f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>`
+  )}`,
+  // decorative "letter with checkmark" illustration for the header-right
+  envelope: `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="150" height="120" viewBox="0 0 150 120" fill="none">
+      <rect x="30" y="18" width="70" height="52" rx="4" fill="#ffffff" stroke="#c9d6f2" stroke-width="2"/>
+      <circle cx="46" cy="34" r="6" fill="#8fb0ee"/>
+      <rect x="58" y="30" width="34" height="4" rx="2" fill="#cddaf5"/>
+      <rect x="58" y="40" width="28" height="4" rx="2" fill="#dbe4f8"/>
+      <rect x="58" y="50" width="32" height="4" rx="2" fill="#dbe4f8"/>
+      <path d="M18 52h114l-12 46a6 6 0 0 1-5.8 4.4H35.8A6 6 0 0 1 30 98z" fill="#5b8def"/>
+      <path d="M18 52l57 34 57-34" fill="#93b4f4"/>
+      <path d="M18 52l57 34 57-34" stroke="#3f6fd6" stroke-width="2" fill="none"/>
+      <circle cx="120" cy="86" r="15" fill="#1e9e63"/>
+      <path d="M113 86l5 5 9-10" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`
+  )}`,
+};
+
+// A pill download button — solid fill, file glyph, bulletproof for Outlook.
+function downloadButton(file) {
+  const isPdf = String(file.format).toLowerCase() === "pdf";
+  const label = `Download ${file.format.toUpperCase()}`;
+  const url = escapeHtml(file.url);
+  const fill = isPdf ? MAIL.navy : MAIL.green;
+  const stroke = isPdf ? MAIL.navyDark : MAIL.greenDark;
+  return `
+    <td align="center" style="padding:0 8px;">
+      <!--[if mso]>
+      <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${url}" style="height:52px;v-text-anchor:middle;width:230px;" arcsize="14%" strokecolor="${stroke}" fillcolor="${fill}">
+        <w:anchorlock/>
+        <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;">${label}</center>
+      </v:roundrect>
+      <![endif]-->
+      <!--[if !mso]><!-- -->
+      <a href="${url}" target="_blank" rel="noopener"
+         style="display:block;width:230px;padding:15px 0;border-radius:10px;
+                background:${fill};border:1px solid ${stroke};
+                color:#ffffff;${SANS}font-size:15px;font-weight:700;
+                text-decoration:none;text-align:center;">
+        <img src="${ICON.fileWhite}" width="16" height="16" alt="" style="vertical-align:-3px;margin-right:8px;border:0;"> ${label}
+      </a>
+      <!--<![endif]-->
+    </td>`;
+}
+
 function emailHtml(report, details) {
-  const links = details.files
-    .map((file) => `<a href="${file.url}" style="color:#173b83;font-weight:600" target="_blank" rel="noopener">Download ${file.format.toUpperCase()}</a>`)
-    .join(" &nbsp;•&nbsp; ");
-  return `<div style="font-family:Arial,sans-serif;background:#f5f8ff;padding:28px;color:#273657">
-    <div style="max-width:700px;margin:auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e3eafb">
-      <div style="padding:22px 28px;background:linear-gradient(110deg,${V2_BLUE},${V2_PURPLE});color:#fff"><img src="${LOGO_URL}" alt="VideoraIQ" style="max-height:34px;max-width:140px;vertical-align:middle"><span style="float:right;font-size:18px;font-weight:700;margin-top:7px">Attendance Report</span></div>
-      <div style="padding:28px"><h2 style="margin:0 0 10px;color:#173b83">${report.title}</h2><p style="margin:0 0 18px;color:#61708f">${details.label} · ${details.timezone}</p>
-      <div style="padding:16px;border-radius:8px;background:#eef5ff;color:#173b83"><strong>${details.rowCount}</strong> employee attendance record${details.rowCount === 1 ? "" : "s"} included.</div>
-      <div style="margin-top:18px;padding:16px;border-radius:8px;border:1px solid #e3eafb;text-align:center">${links}</div>
-      <p style="margin:22px 0 0;color:#61708f;font-size:13px">Generated automatically by VideoraIQ.</p></div></div></div>`;
+  const count = details.rowCount || 0;
+  const preheader = `${report.title} — ${count} attendance record${count === 1 ? "" : "s"} · ${details.label}`;
+  const buttonRow = details.files.map(downloadButton).join("");
+  const tz = details.timezone || DEFAULT_TIMEZONE;
+  const nowTz = moment().tz(tz);
+  const startStr = details.start ? moment(details.start).tz(tz).format("DD MMM YYYY") : "";
+  const endStr = details.end ? moment(details.end).tz(tz).format("DD MMM YYYY") : "";
+  const rangeLine = startStr && endStr && endStr !== startStr
+    ? `${startStr} – ${endStr}`
+    : (startStr || details.label);
+
+  return `<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>${escapeHtml(report.title)}</title>
+  <!--[if mso]><style>table,td,div,p,a{font-family:Arial,sans-serif !important;}</style><![endif]-->
+</head>
+<body style="margin:0;padding:0;background:${MAIL.paper};">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(preheader)}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${MAIL.paper};">
+    <tr>
+      <td align="center" style="padding:28px 14px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
+               style="width:600px;max-width:100%;background:${MAIL.card};border-radius:16px;overflow:hidden;
+                      border:1px solid ${MAIL.rule};box-shadow:0 10px 30px rgba(18,58,143,.10);">
+
+          <!-- Header -->
+          <tr>
+            <td bgcolor="${MAIL.navy}" style="background:${MAIL.navy};background:linear-gradient(120deg,${MAIL.navy},${MAIL.navyDark});padding:26px 30px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                <td valign="middle">
+                  <img src="${ICON.shield()}" width="24" height="24" alt="" style="vertical-align:-5px;border:0;">
+                  <span style="${SANS}font-size:21px;font-weight:800;color:#ffffff;letter-spacing:.2px;margin-left:8px;">Videora<span style="font-weight:800;">IQ</span></span>
+                </td>
+                <td valign="middle" align="right">
+                  <span style="${SANS}font-size:19px;font-weight:800;color:#ffffff;letter-spacing:.2px;">Attendance Report</span>
+                  &nbsp;&nbsp;
+                  <span style="display:inline-block;width:42px;height:42px;background:rgba(255,255,255,.16);border-radius:11px;vertical-align:middle;text-align:center;line-height:42px;">
+                    <img src="${ICON.calendarWhite}" width="19" height="19" alt="" style="vertical-align:-4px;border:0;">
+                  </span>
+                </td>
+              </tr></table>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:30px 30px 8px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                <td valign="top">
+
+                  <div style="${SANS}font-size:28px;font-weight:800;color:${MAIL.tx};line-height:1.15;">
+                    ${escapeHtml(report.title)}
+                  </div>
+
+                  <!-- meta line -->
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;">
+                    <tr>
+                      <td valign="middle" style="${SANS}font-size:14px;color:${MAIL.tx2};">
+                        <img src="${ICON.calendarBlue}" width="15" height="15" alt="" style="vertical-align:-2px;margin-right:6px;border:0;">${escapeHtml(rangeLine)}
+                      </td>
+                      <td valign="middle" style="padding:0 14px;color:${MAIL.rule};">|</td>
+                      <td valign="middle" style="${SANS}font-size:14px;color:${MAIL.tx2};">
+                        <img src="${ICON.pin}" width="15" height="15" alt="" style="vertical-align:-2px;margin-right:6px;border:0;">${escapeHtml(tz)}
+                      </td>
+                    </tr>
+                  </table>
+
+                  <!-- stat card -->
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${MAIL.panel}"
+                         style="background:${MAIL.panel};border:1px solid ${MAIL.rule};border-radius:14px;margin-top:22px;">
+                    <tr>
+                      <td style="padding:20px 22px;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+                          <td valign="middle" width="52">
+                            <span style="display:inline-block;width:46px;height:46px;background:${MAIL.navy};border-radius:12px;text-align:center;line-height:46px;">
+                              <img src="${ICON.users}" width="22" height="22" alt="" style="vertical-align:-5px;border:0;">
+                            </span>
+                          </td>
+                          <td valign="middle" style="padding-left:16px;">
+                            <span style="${SANS}font-size:24px;font-weight:800;color:${MAIL.navy};">${escapeHtml(String(count))}</span>
+                            <span style="${SANS}font-size:15px;color:${MAIL.tx2};">&nbsp; employee attendance record${count === 1 ? "" : "s"} included.</span>
+                          </td>
+                        </tr></table>
+                      </td>
+                    </tr>
+                  </table>
+
+                </td>
+                <td valign="top" width="150" align="right" style="padding-left:14px;" class="mail-illus">
+                  <img src="${ICON.envelope}" width="150" height="120" alt="" style="border:0;display:block;max-width:150px;">
+                </td>
+              </tr></table>
+
+              <!-- divider -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 20px;">
+                <tr>
+                  <td style="border-top:1px dashed ${MAIL.rule};font-size:0;line-height:0;">&nbsp;</td>
+                  <td width="150" align="center" style="${SANS}font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:${MAIL.tx3};white-space:nowrap;">Download Report</td>
+                  <td style="border-top:1px dashed ${MAIL.rule};font-size:0;line-height:0;">&nbsp;</td>
+                </tr>
+              </table>
+
+              <!-- buttons -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 6px;">
+                <tr>${buttonRow}</tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td bgcolor="${MAIL.panel}" style="background:${MAIL.panel};padding:20px 30px;border-top:1px solid ${MAIL.rule};">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+                <td valign="top" width="46">
+                  <span style="display:inline-block;width:36px;height:36px;background:#ffffff;border:1px solid ${MAIL.rule};border-radius:50%;text-align:center;line-height:36px;">
+                    <img src="${ICON.shieldBadge}" width="18" height="18" alt="" style="vertical-align:-4px;border:0;">
+                  </span>
+                </td>
+                <td valign="middle" style="padding-left:12px;${SANS}font-size:12.5px;line-height:1.6;color:${MAIL.tx3};">
+                  This is an automated email. Please do not reply to this email.<br>
+                  Generated automatically by <span style="color:${MAIL.navy};font-weight:700;">VideoraIQ</span> &#183; ${escapeHtml(nowTz.format("YYYY"))}.
+                </td>
+              </tr></table>
+            </td>
+          </tr>
+
+          <!-- accent bar -->
+          <tr><td style="height:4px;font-size:0;line-height:0;background:${MAIL.navy};background:linear-gradient(90deg,${MAIL.navy},${MAIL.green});">&nbsp;</td></tr>
+
+        </table>
+
+        <div style="${SANS}font-size:11px;color:${MAIL.tx3};margin-top:14px;">
+          VideoraIQ &#183; Smart Surveillance Powered by AI
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 }
 
 function safeReportName(report) {
@@ -808,17 +1037,22 @@ class AttendanceAutoEmailReportService {
       const search = String(req.query.search || "").trim();
       const employeeQuery = { adminId };
       if (search) {
+        const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         employeeQuery.$or = [
-          { firstName: { $regex: search, $options: "i" } },
-          { lastName: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
+          { firstName: { $regex: escaped, $options: "i" } },
+          { lastName: { $regex: escaped, $options: "i" } },
+          { email: { $regex: escaped, $options: "i" } },
+          { emp_id: { $regex: escaped, $options: "i" } },
         ];
       }
       const [employees, departments] = await Promise.all([
+        // Whole roster — the picker loads once and filters client-side, so a
+        // low cap here silently hid most employees on any org over ~100. The
+        // 5000 cap is a sanity ceiling far above any real employee count.
         AuthorizedUsers.find(employeeQuery)
           .select("firstName lastName email emp_id departmentId designation location")
           .sort({ firstName: 1, lastName: 1 })
-          .limit(100)
+          .limit(5000)
           .lean(),
         Department.find({ adminId }).select("departmentName").sort({ departmentName: 1 }).lean(),
       ]);
