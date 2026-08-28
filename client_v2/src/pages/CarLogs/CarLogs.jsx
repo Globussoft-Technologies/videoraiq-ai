@@ -123,23 +123,12 @@ function EditCarModelModal({ row, saving, onClose, onSave }) {
 
   if (!row) return null;
 
-  const originalModel = normalizeHondaModel(row.modelName);
-  const originalCompany = row.company && row.company !== '--' ? row.company : '';
-  const originalYear = row.year && row.year !== '--' ? String(row.year) : '';
-  const hasChanges =
-    (model && model !== originalModel) ||
-    company.trim() !== originalCompany ||
-    year.trim() !== originalYear;
-
   const submit = (e) => {
     e.preventDefault();
     onSave({
       model,
       company: company.trim(),
       year: year.trim(),
-      originalModel,
-      originalCompany,
-      originalYear,
     });
   };
 
@@ -234,7 +223,7 @@ function EditCarModelModal({ row, saving, onClose, onSave }) {
             </Button>
             <Button
               type="submit"
-              disabled={saving || !hasChanges}
+              disabled={saving}
               className="cursor-pointer bg-[var(--brand)] text-white hover:opacity-90 disabled:cursor-not-allowed"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
@@ -538,22 +527,20 @@ const CarLogs = () => {
 
   const openEdit = (row) => setEditRow(row);
 
-  const handleSaveEdit = async ({ model, company, year, originalModel, originalCompany, originalYear }) => {
+  const handleSaveEdit = async ({ model, company, year }) => {
     if (!editRow) return;
     const payload = {};
     const updates = {};
 
-    if (model && model !== originalModel) {
+    if (model) {
       payload.model_name = model;
       updates.modelName = model;
     }
 
-    if (company !== originalCompany) {
-      payload.company = company;
-      updates.company = company || '--';
-    }
+    payload.company = company;
+    updates.company = company || '--';
 
-    if (year !== originalYear) {
+    if (year) {
       const parsedYear = Number(year);
       if (!Number.isInteger(parsedYear) || parsedYear < 1900 || parsedYear > 2100) {
         toast.error('Enter a valid year');
@@ -561,11 +548,8 @@ const CarLogs = () => {
       }
       payload.year = parsedYear;
       updates.year = parsedYear;
-    }
-
-    if (Object.keys(updates).length === 0) {
-      toast.error('Change at least one value');
-      return;
+    } else {
+      updates.year = '--';
     }
 
     setEditSaving(true);
