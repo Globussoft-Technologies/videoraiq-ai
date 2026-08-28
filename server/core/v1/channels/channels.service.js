@@ -23,6 +23,8 @@ import {
   resolvePlaybackHost,
 } from "../../../utils/rtspStream.js";
 import adminModel from "../admin/admin.model.js";
+import clientDetectionAllocationModel from "../clientConfig/clientDetectionAllocation.model.js";
+import clientCameraDetectionModel from "../clientConfig/clientCameraDetection.model.js";
 import departmentsModel from "../departments/departments.model.js";
 import pythonService from "../../../services/python.service.js";
 import {
@@ -1400,6 +1402,26 @@ class ChannelService {
           .status(400)
           .json(Response.userFailResp("Missing required parameters"));
       }
+
+      // Enabling a detection on a camera is only allowed if the superadmin has
+      // permitted it for this (admin, camera, detection) in ClientCameraDetection.
+      // Disabling is always allowed. No permission row / enabled:false -> 403.
+      if (enable) {
+        const permitted = await clientCameraDetectionModel
+          .findOne({ adminId, cameraId: channelId, settingType: detectionType, enabled: true })
+          .select("_id")
+          .lean();
+        if (!permitted) {
+          return res
+            .status(403)
+            .json(
+              Response.userFailResp(
+                "This detection is not enabled for this camera by the administrator."
+              )
+            );
+        }
+      }
+
       const channel = await Channel.findById(channelId)
         .populate("nvrId")
         .populate(toPopulateDetections);
@@ -1427,6 +1449,31 @@ class ChannelService {
               }
             )
           );
+        }
+
+        // Per-detection camera allocation limit (set by super-admin). Only
+        // restricts ENABLING; disabling is always allowed. e.g. cameraAllocation
+        // 2 for mobilePhoneDetectionSettings => enabled on at most 2 cameras
+        // across all NVRs. Allocation 0 (or no row) => detection cannot be enabled.
+        if (enable) {
+          const allocation = await clientDetectionAllocationModel
+            .findOne({ adminId, settingType: detectionType })
+            .lean();
+          const cameraAllocation = allocation?.cameraAllocation || 0;
+
+          const alreadyEnabled = await Channel.countDocuments({
+            userId,
+            [`detections.${detectionType}.enabled`]: true,
+          }).setOptions({ includeInactive: true });
+
+          if (alreadyEnabled + 1 > cameraAllocation) {
+            return res.status(403).json(
+              Response.userFailResp(
+                "Camera allocation exceeded",
+                `${DETECTION_TYPES[detectionType] || detectionType} can be enabled on at most ${cameraAllocation} camera(s); ${alreadyEnabled} already in use.`
+              )
+            );
+          }
         }
 
         // Linked: Update enabled status

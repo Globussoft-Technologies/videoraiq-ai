@@ -44,6 +44,10 @@ const adminSchema = new mongoose.Schema({
   streamsStopped: { type: Boolean, default: false },
   // Per-admin IANA timezone (e.g. "Asia/Kolkata"). null = not set.
   timezone: { type: String, default: null },
+  // Camera purchase limit set by the super-admin app. Admins may add at most
+  // this many cameras (channels) across all their NVRs. 0 = no cameras allowed
+  // until the super-admin provisions a limit.
+  purchasedCameras: { type: Number, default: 0 },
   // Optional per-admin service endpoint overrides. null = use the global
   // value from config (default for all admins).
   // - streamHost / streamToken  -> RTSPStream.host / RTSPStream.token

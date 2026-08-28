@@ -6,6 +6,7 @@ import channelModel from "../channels/channels.model.js";
 import NVRModel from "../NVR/nvr.model.js";
 import allocationModel from "./clientDetectionAllocation.model.js";
 import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
+import { redis } from "../../../utils/database.js";
 
 class ClientConfigService {
   // GET /client/config/:adminId
@@ -76,20 +77,36 @@ class ClientConfigService {
         return res.status(404).send(Response.notFoundResp("Client not found"));
       }
 
-      // Can't purchase more than the client's physical cameras across all NVRs.
-      // aggregate() bypasses the NVR find-hook, so no memberId access-control applies.
-      const [agg] = await NVRModel.aggregate([
-        { $match: { userId: admin.user_id } },
-        { $group: { _id: null, cameras: { $sum: "$cameraCount" } } },
-      ]);
-      const availableCameras = agg?.cameras || 0;
+      // Can't purchase more than the client's available cameras — cameras that
+      // belong to an NVR the client STILL has. Channels from deleted NVRs are
+      // not cleaned up (Camera.deleteMany on NVR delete is disabled), so a plain
+      // per-user channel count would include orphans and over-report. Scope the
+      // count to the admin's current NVR ids. includeInactive counts un-added
+      // channels too (they're still available to allot).
+      const nvrs = await NVRModel.find({ userId: admin.user_id }).select("_id").lean();
+      const nvrIds = nvrs.map((n) => n._id);
+      const availableCameras = nvrIds.length
+        ? await channelModel
+            .countDocuments({ userId: admin.user_id, nvrId: { $in: nvrIds } })
+            .setOptions({ includeInactive: true })
+        : 0;
       if (count > availableCameras) {
         return res
           .status(400)
-          .send(Response.userFailResp(`purchasedCameras exceeds available cameras across NVRs (${availableCameras})`));
+          .send(Response.userFailResp(`purchasedCameras exceeds available cameras (${availableCameras})`));
       }
 
       await adminModel.updateOne({ _id: adminId }, { purchasedCameras: count });
+
+      // Notify the client app (separate process) so connected users see the new
+      // limit live. Fire-and-forget over Redis pub/sub — never blocks/fails the
+      // response if Redis is unavailable.
+      redis
+        .publish(
+          "purchasedCameras:update",
+          JSON.stringify({ adminId, userId: admin.user_id, purchasedCameras: count }),
+        )
+        .catch((e) => logger.error(`purchasedCameras publish failed: ${e.message}`));
 
       return res.send(
         Response.SuccessResp("Purchased cameras updated", { purchasedCameras: count, availableCameras })

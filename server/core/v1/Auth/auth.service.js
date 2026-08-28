@@ -802,6 +802,10 @@ return bypassUsers.find(
         userSubscriptionType: userData?.subscriptions,
         created_from: "EMP",
         enablePhoneRecipients: config.get("enablePhoneRecipients"),
+        // Superadmin-set camera limit, so the client has it immediately at login.
+        // The socket sends the full { purchasedCameras, added, remaining } snapshot
+        // on connect and on any change; this is just the initial raw limit.
+        purchasedCameras: adminData?.purchasedCameras ?? 0,
         // Resolved RTSP stream host (per-admin override or global default),
         // normalised to always end with a single trailing slash.
         streamHost: `${(adminData?.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
@@ -1118,6 +1122,9 @@ return bypassUsers.find(
         created_from: "EMP",
         createdAt: isUserExist?.createdAt,
         enablePhoneRecipients: config.get("enablePhoneRecipients"),
+        // Superadmin-set camera limit, so the client has it immediately at login.
+        // The socket keeps { purchasedCameras, added, remaining } live thereafter.
+        purchasedCameras: isUserExist?.purchasedCameras ?? 0,
         // Resolved RTSP stream host (per-admin override or global default),
         // normalised to always end with a single trailing slash.
         streamHost: `${(isUserExist?.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,

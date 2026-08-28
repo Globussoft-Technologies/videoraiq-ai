@@ -10,6 +10,7 @@ import brandHandlers, { updateHandlers } from "./nvr.brands.js";
 import DeleteService from "../../../services/delete.service.js";
 import Channel from "../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
+import { emitCameraLimit } from "../../../socket.js";
 import net from "net";
 import config from "config";
 import { autoSyncLocations } from "../../../utils/helperFunctions.js";
@@ -51,6 +52,21 @@ class NVRService {
     }
   }
   // new
+  // Remaining cameras this user may still allot (isAdded:true), based on the
+  // superadmin-set purchasedCameras limit. Returns Infinity when no positive
+  // limit is set (backward-compatible: existing users are uncapped until a
+  // superadmin assigns a limit). Never negative.
+  async getRemainingCameraLimit(userId) {
+    const admin = await adminModel
+      .findOne({ user_id: userId })
+      .select("purchasedCameras")
+      .lean();
+    const purchased = Number(admin?.purchasedCameras) || 0;
+    if (purchased <= 0) return Infinity; // no limit configured
+    const added = await Channel.countDocuments({ userId, isAdded: true });
+    return Math.max(purchased - added, 0);
+  }
+
   async addNvr(req, res, _next) {
     try {
       const userId = req?.verified?.userData?.user_id;
@@ -104,20 +120,28 @@ class NVRService {
             );
         }
       }
+      // Add cameras only up to the admin's remaining purchased-camera limit;
+      // the rest are stored as isAdded:false (available but not counted).
+      const remaining = await this.getRemainingCameraLimit(userId);
+      let addedSoFar = 0;
 
       // Save NVR metadata
       const savedNvr = await NVR.create({
         userId,
         ...nvr,
-        cameraCount: cameras.length,
+        cameraCount: Math.min(cameras.length, remaining === Infinity ? cameras.length : remaining),
       });
 
-      const cameraDocs = cameras.map((cam) => ({
-        userId,
-        nvrId: savedNvr._id,
-        isAdded: true,
-        ...cam,
-      }));
+      const cameraDocs = cameras.map((cam) => {
+        const isAdded = addedSoFar < remaining;
+        if (isAdded) addedSoFar++;
+        return {
+          userId,
+          nvrId: savedNvr._id,
+          isAdded,
+          ...cam,
+        };
+      });
 
       const savedCameras = await Camera.insertMany(cameraDocs);
 
@@ -128,6 +152,9 @@ class NVRService {
       ).catch((err) => {
         logger.error("Failed to auto-sync locations after NVR addition", err);
       });
+
+      // Cameras were just allotted (isAdded:true) — push the new limit snapshot.
+      emitCameraLimit({ userId, adminId });
 
       return res.status(201).json(
         Response.userSuccessResp("NVR metadata registered successfully", {
@@ -1861,6 +1888,10 @@ class NVRService {
       const addedCount = await Camera.countDocuments({ nvrId, isAdded: true });
       await NVR.findByIdAndUpdate(nvrId, { cameraCount: addedCount });
 
+      // Push the updated camera-limit snapshot to this admin's clients (the
+      // added count changed). Fire-and-forget — never blocks the response.
+      emitCameraLimit({ userId: user_id });
+
       return res.status(200).json(
         Response.userSuccessResp("Cameras selection updated successfully", {
           cameras,
@@ -1978,6 +2009,10 @@ class NVRService {
 
       const totalCameras = await Camera.countDocuments({ nvrId }).setOptions({ includeInactive: true });
       await NVR.findByIdAndUpdate(nvrId, { cameraCount: totalCameras });
+
+      // Push the updated camera-limit snapshot to this admin's clients (a camera
+      // was removed, so the added count dropped). Fire-and-forget.
+      emitCameraLimit({ userId: user_id });
 
       return res.status(200).json(
         Response.userSuccessResp("Camera removed successfully", { cameraId, nvrId, cameraCount: totalCameras }),

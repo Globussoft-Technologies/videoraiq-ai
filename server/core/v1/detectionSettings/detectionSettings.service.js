@@ -75,6 +75,7 @@ import {
   isScheduleOpeningTick,
   resolveDesiredDetectionState,
 } from "../../../services/detectionSchedule.resolver.js";
+import clientDetectionAllocationModel from "../clientConfig/clientDetectionAllocation.model.js";
 import mongoose, { Types } from "mongoose";
 
 const modelMap = {
@@ -317,9 +318,25 @@ const applyResetThresholds = async (detectionSetting, thresholds) => {
 class DetectionSettingService {
   async getDetectionTypes(req, res, _next) {
     try {
+      const adminId = req?.verified?.userData?.adminId;
+
+      // Only the detection types the super-admin enabled for this client.
+      const allocations = await clientDetectionAllocationModel
+        .find({ adminId, enabled: true })
+        .select("settingType")
+        .lean();
+      const enabledTypes = new Set(allocations.map((a) => a.settingType));
+
+      // Keep the same { settingType: name } shape, filtered to enabled types.
+      const detectionTypes = Object.fromEntries(
+        Object.entries(DETECTION_TYPES).filter(([settingType]) =>
+          enabledTypes.has(settingType)
+        )
+      );
+
       return res.status(200).json(
         Response.userSuccessResp("Detection types fetched successfully", {
-          detectionTypes: DETECTION_TYPES,
+          detectionTypes,
         }),
       );
     } catch (error) {
