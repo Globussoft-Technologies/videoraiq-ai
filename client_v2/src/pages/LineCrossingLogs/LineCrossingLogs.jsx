@@ -1130,6 +1130,7 @@ export default function LineCrossingLogs() {
           />
           <div style={{ width: 250, maxWidth: '100%' }}>
             <DateRangePicker
+              maxDate={moment.tz(IST_ZONE).toDate()}
               startDate={dateFilter.startDate ? moment.tz(dateFilter.startDate, IST_ZONE).toDate() : null}
               endDate={dateFilter.endDate ? moment.tz(dateFilter.endDate, IST_ZONE).toDate() : null}
               onRangeChange={({ start, end }) => setDateFilter({
@@ -1769,6 +1770,7 @@ export default function LineCrossingLogs() {
               <div>
                 <div style={{ marginBottom: 6, fontSize: 11, fontWeight: 800, color: 'var(--tx2)' }}>Date range</div>
                 <DateRangePicker
+                  maxDate={moment.tz(IST_ZONE).toDate()}
                   startDate={resetDraft.startDate ? moment.tz(resetDraft.startDate, IST_ZONE).toDate() : null}
                   endDate={resetDraft.endDate ? moment.tz(resetDraft.endDate, IST_ZONE).toDate() : null}
                   onRangeChange={({ start, end }) => setResetDraft((prev) => ({
