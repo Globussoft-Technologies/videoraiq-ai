@@ -374,6 +374,10 @@ class AdminController {
     return await adminService.updateRetention(req, res, next);
   }
 
+  async updateIncidentPreview(req, res, next) {
+    return await adminService.updateIncidentPreview(req, res, next);
+  }
+
 }
 
 export default new AdminController();

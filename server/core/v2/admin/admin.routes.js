@@ -26,5 +26,6 @@ router.get("/timezones",verifyToken,adminController.getTimezones);
 router.get("/timezone",verifyToken,adminController.fetchTimezone);
 router.put("/timezone",verifyToken,adminController.updateTimezone);
 router.put("/retention",verifyToken,adminController.updateRetention);
+router.put("/incident-preview",verifyToken,adminController.updateIncidentPreview);
 
 export default router;

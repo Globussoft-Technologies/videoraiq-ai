@@ -107,6 +107,15 @@ const adminSchema = new mongoose.Schema({
     intervalHours: { type: Number, default: null },
     lastSweepAt: { type: Date, default: null },
   },
+  // How much footage an incident preview shows around the moment it happened.
+  // Both null means "use the defaults" (see INCIDENT_PREVIEW_DEFAULTS), so an
+  // admin who never opens the setting still gets a sensible clip.
+  //   beforeSeconds: seconds of lead-in before timeOfIncident
+  //   afterSeconds:  seconds to keep playing after it
+  incidentPreview: {
+    beforeSeconds: { type: Number, default: null },
+    afterSeconds: { type: Number, default: null },
+  },
   // Per-admin detection config. Key = settingType, value = custom display name.
   // If a key is present, that detection is allowed for this admin.
   // Empty object = all detections allowed with default names.

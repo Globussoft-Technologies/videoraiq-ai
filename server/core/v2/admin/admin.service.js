@@ -1002,6 +1002,72 @@ class AdminService {
 
   // Set or clear a target admin's DataRetention overrides. Only keys present in
   // the body change; pass null (or "") to clear one back to the global default.
+  /**
+   * How many seconds of footage an incident preview shows either side of
+   * the incident. Stored per admin; null on either key means "use the
+   * default", which is what an admin who never touches the setting gets.
+   *
+   * Capped at 300s a side: the preview is served by building a playback
+   * stream for that window, and an unbounded value would ask the recorder
+   * for hours of footage behind a thumbnail.
+   */
+  async updateIncidentPreview(req, res, next) {
+    try {
+      const { userId } = req.body;
+      if (!userId) {
+        return res.send(Response.userFailResp("userId is required.", "Validation Failed!"));
+      }
+
+      const KEYS = ["beforeSeconds", "afterSeconds"];
+      const MIN = 0;
+      const MAX = 300;
+      const update = {};
+
+      for (const key of KEYS) {
+        const value = req.body[key];
+        if (value === undefined) continue;
+        if (value === null || value === "") {
+          update[`incidentPreview.${key}`] = null;
+          continue;
+        }
+        const seconds = Number(value);
+        if (!Number.isInteger(seconds) || seconds < MIN || seconds > MAX) {
+          return res.send(
+            Response.userFailResp(
+              `${key} must be a whole number of seconds between ${MIN} and ${MAX} (or null for the default).`,
+              "Validation Failed!",
+            ),
+          );
+        }
+        update[`incidentPreview.${key}`] = seconds;
+      }
+
+      if (!Object.keys(update).length) {
+        return res.send(
+          Response.userFailResp(`Provide one of: ${KEYS.join(", ")}.`, "Validation Failed!"),
+        );
+      }
+
+      const updatedAdmin = await adminModel.findOneAndUpdate(
+        { user_id: String(userId) },
+        { $set: update },
+        { new: true },
+      );
+      if (!updatedAdmin) {
+        return res.send(Response.userFailResp("Admin not found!", "Validation Failed!"));
+      }
+
+      return res.send(
+        Response.userSuccessResp("Incident preview settings updated successfully.", {
+          user_id: updatedAdmin.user_id,
+          incidentPreview: updatedAdmin.incidentPreview,
+        }),
+      );
+    } catch (error) {
+      next(new AppError(error, 500));
+    }
+  }
+
   async updateRetention(req, res, next) {
     try {
       const { userId } = req.body;
