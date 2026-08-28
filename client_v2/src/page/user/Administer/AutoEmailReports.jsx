@@ -411,26 +411,75 @@ const PREVIEW_COLUMNS = [
   { key: 'checkIn', label: 'Check in' },
   { key: 'checkOut', label: 'Check out' },
   { key: 'duration', label: 'Duration' },
-  { key: 'workingHoursDay', label: 'Total Working Hours for the Day' },
-  { key: 'breakHoursDay', label: 'Total Break Hours for the Day' },
-  { key: 'workingHoursPeriod', label: 'Total Working Hours for the period selected' },
+  { key: 'workingHoursDay', label: 'Total Working Hrs (Day)' },
+  { key: 'breakHoursDay', label: 'Total Break Hrs (Day)' },
+  { key: 'workingHoursPeriod', label: 'Total Working Hrs (Period)' },
   { key: 'checkInCamera', label: 'Checkin Camera' },
   { key: 'checkOutCamera', label: 'Checkout Camera' },
   { key: 'viewImage', label: 'View Image' },
 ];
 
-function previewCell(row, key, index) {
-  if (key === 'index') return index + 1;
-  const value = row?.[key];
-  if (value === null || value === undefined || value === '' || value === '-') return '-';
-  if (key === 'viewImage') {
-    return <a href={String(value)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)', fontWeight: 600 }}>View Image</a>;
-  }
-  return String(value);
+const IMAGE_KEY = 'viewImage';
+
+function imageLink(value) {
+  return value && value !== '-'
+    ? <a href={String(value)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)', fontWeight: 600 }}>View Image</a>
+    : '-';
+}
+
+function cellText(value) {
+  return value === null || value === undefined || value === '' || value === '-' ? '-' : String(value);
+}
+
+/**
+ * Expand one employee-day preview row into the same block the PDF/CSV render:
+ *   - summary row: identity + first check-in / last check-out + period total
+ *   - one row per session: check-in / check-out / duration / cameras / image
+ *   - day-totals row: Total Working Hrs (Day) + Total Break Hrs (Day)
+ * Each returned entry is { cells: {colKey: node}, kind }.
+ */
+function expandPreviewRow(row, displayIndex) {
+  const blank = () => Object.fromEntries(PREVIEW_COLUMNS.map((c) => [c.key, '']));
+
+  const summary = blank();
+  summary.index = displayIndex;
+  summary.employee = cellText(row.employee);
+  summary.department = cellText(row.department);
+  summary.date = cellText(row.date);
+  summary.location = cellText(row.location);
+  summary.checkIn = cellText(row.checkIn);
+  summary.checkOut = cellText(row.checkOut);
+  summary.duration = cellText(row.duration);
+  summary.workingHoursPeriod = cellText(row.workingHoursPeriod);
+  summary.checkInCamera = cellText(row.checkInCamera);
+  summary.checkOutCamera = cellText(row.checkOutCamera);
+  summary[IMAGE_KEY] = imageLink(row.viewImage);
+
+  const sessions = (Array.isArray(row.sessions) ? row.sessions : []).map((session) => {
+    const line = blank();
+    line.checkIn = cellText(session.checkIn);
+    line.checkOut = cellText(session.checkOut);
+    line.duration = cellText(session.duration);
+    line.checkInCamera = cellText(session.checkInCamera);
+    line.checkOutCamera = cellText(session.checkOutCamera);
+    line[IMAGE_KEY] = imageLink(session.viewImage);
+    return { cells: line, kind: 'session' };
+  });
+
+  const dayTotals = blank();
+  dayTotals.workingHoursDay = cellText(row.workingHoursDay);
+  dayTotals.breakHoursDay = cellText(row.breakHoursDay);
+
+  return [
+    { cells: summary, kind: 'summary' },
+    ...sessions,
+    { cells: dayTotals, kind: 'totals' },
+  ];
 }
 
 function PreviewModal({ preview, onClose }) {
   const rows = Array.isArray(preview?.rows) ? preview.rows : [];
+  const gridRows = rows.flatMap((row, index) => expandPreviewRow(row, index + 1));
   return (
     <div role="dialog" aria-modal="true" style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(2,6,23,.68)' }}>
       <div style={{ width: 'min(100%, 780px)', maxHeight: 'min(820px, calc(100vh - 32px))', display: 'flex', flexDirection: 'column', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, overflow: 'hidden' }}>
@@ -450,8 +499,19 @@ function PreviewModal({ preview, onClose }) {
                 <tr>{PREVIEW_COLUMNS.map((column) => <th key={column.key} style={tableHeadStyle}>{column.label}</th>)}</tr>
               </thead>
               <tbody>
-                {rows.map((row, index) => (
-                  <tr key={row?._id || index}>{PREVIEW_COLUMNS.map((column) => <td key={column.key} style={tableCellStyle}>{previewCell(row, column.key, index)}</td>)}</tr>
+                {gridRows.map((line, index) => (
+                  <tr
+                    key={index}
+                    style={line.kind === 'summary'
+                      ? { background: 'var(--bg2)', fontWeight: 600 }
+                      : line.kind === 'totals'
+                        ? { color: 'var(--tx2)', fontStyle: 'italic' }
+                        : undefined}
+                  >
+                    {PREVIEW_COLUMNS.map((column) => (
+                      <td key={column.key} style={tableCellStyle}>{line.cells[column.key] === '' ? '' : line.cells[column.key]}</td>
+                    ))}
+                  </tr>
                 ))}
               </tbody>
             </table>
