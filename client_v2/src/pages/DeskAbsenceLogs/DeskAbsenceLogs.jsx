@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
 import MultiSelect from '@/pages/AttendanceLogs/components/MultiSelect';
-import DateRangePicker from '@/pages/AttendanceLogs/components/DateRangePicker';
+import DateRangePicker from '@/components/PresetDateRangePicker';
 import {
   Popover,
   PopoverTrigger,

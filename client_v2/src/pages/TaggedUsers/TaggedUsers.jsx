@@ -394,6 +394,7 @@ const TaggedUsers = () => {
         startDate={startDate}
         endDate={endDate}
         maxDate={maxDateDefault}
+        datePickerVariant="preset"
         onDateRangeChange={({ start, end }) => {
           const toIso = (d) => (d instanceof Date ? d.toISOString().split('T')[0] : d);
           dispatch({ type: 'SET_START_DATE', value: start ? toIso(start) : '' });

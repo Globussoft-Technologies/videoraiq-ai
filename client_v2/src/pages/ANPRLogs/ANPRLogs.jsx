@@ -421,6 +421,7 @@ const ANPRLogs = () => {
         startDate={startDate}
         endDate={endDate}
         maxDate={maxDateDefault}
+        datePickerVariant="preset"
         onDateRangeChange={({ start, end }) => {
           const toIso = (d) => (d instanceof Date ? moment(d).format('YYYY-MM-DD') : d);
           let s = start ? toIso(start) : null;
@@ -445,6 +446,7 @@ const ANPRLogs = () => {
       >
         <TagStatusFilter
           value={tagStatus}
+          height="h-10"
           onChange={(v) => dispatch({ type: 'SET_TAG_STATUS', value: v })}
         />
 

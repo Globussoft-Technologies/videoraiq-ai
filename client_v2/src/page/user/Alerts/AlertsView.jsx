@@ -4,7 +4,8 @@ import { toast } from 'sonner';
 import { X } from 'lucide-react';
 import { Panel, Badge } from '../../../components/primitives';
 import { AsyncBoundary, Loading } from '../../../components/States';
-import DateRangePicker from '../../../components/DateRangePicker';
+import moment from 'moment';
+import PresetDateRangePicker from '../../../components/PresetDateRangePicker';
 import { severity, detectionLabel, shortDateTime, timeAgo, mediaUrl } from '../../../lib/format';
 import { fetchIncidents, fetchIncidentById, updateReportStatus, updateIncidentResolved } from '../../../helpers/incidents';
 
@@ -373,8 +374,6 @@ export default function AlertsView() {
     return f;
   }, [filter, sev, statusFilter, severityFilterValue]);
 
-  const clearDate = useCallback(() => { setDateFrom(''); setDateTo(''); }, []);
-
   const hasFilters = sev !== 'all' || statusFilter !== 'all' || !!(dateFrom && dateTo);
   const clearAllFilters = useCallback(() => {
     setSev('all');
@@ -642,7 +641,16 @@ export default function AlertsView() {
         <div style={{ width: 1, height: 20, background: 'var(--bd2)' }} />
         {STATUS_TABS.map((t) => <div key={t.key} onClick={() => setStatusFilter(t.key)} style={tab(statusFilter === t.key)}>{t.label} ({statusCounts[t.key]})</div>)}
         <div style={{ width: 1, height: 20, background: 'var(--bd2)' }} />
-        <DateRangePicker from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo} onClear={clearDate} />
+        <PresetDateRangePicker
+          startDate={dateFrom || null}
+          endDate={dateTo || null}
+          maxDate={new Date()}
+          onRangeChange={({ start, end }) => {
+            const toIso = (d) => (d instanceof Date ? moment(d).format('YYYY-MM-DD') : '');
+            setDateFrom(toIso(start));
+            setDateTo(toIso(end));
+          }}
+        />
         {hasFilters && (
           <button onClick={clearAllFilters} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: '#fff', background: 'var(--crit)', border: '1px solid var(--crit)', borderRadius: 7, cursor: 'pointer', padding: '5px 10px' }}>
             <X size={13} /> Clear

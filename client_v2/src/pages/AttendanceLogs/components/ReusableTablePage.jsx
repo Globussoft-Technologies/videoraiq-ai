@@ -12,7 +12,7 @@ import moment from 'moment';
 import { toast } from 'sonner';
 import ProfilesTable from './ProfilesTable';
 import DateRangePicker from './DateRangePicker';
-import PresetDateRangePicker from './PresetDateRangePicker';
+import PresetDateRangePicker from '@/components/PresetDateRangePicker';
 import StatCards from './StatCards';
 
 const PAGE_SIZE_OPTIONS = [12, 20, 60, 100];

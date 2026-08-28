@@ -11,7 +11,7 @@ import { usePermissions } from '@/context/PermissionContext';
 import { useSocket } from '@/context/SocketContext';
 import { getChannels } from '@/helpers/configure';
 import { deleteLineCrossingLogs, fetchIncidentLogs } from '@/pages/IncidentLogs/Api';
-import DateRangePicker from '@/pages/AttendanceLogs/components/DateRangePicker';
+import DateRangePicker from '@/components/PresetDateRangePicker';
 import SystemControls from '@/page/user/CommandCenter/SystemControls';
 import MultiSelect from '@/components/MultiSelect';
 import './lineCrossingLogs.css';

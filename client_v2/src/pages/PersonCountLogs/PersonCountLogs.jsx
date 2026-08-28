@@ -16,7 +16,7 @@ import MultiSelect from '@/components/MultiSelect';
 import { fetchPersonCountLogs } from './Api';
 import { buildChart } from './personCountChart';
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
-import DateRangePicker from '@/pages/AttendanceLogs/components/DateRangePicker';
+import DateRangePicker from '@/components/PresetDateRangePicker';
 import { getNvrs, getCamerasByNvr } from '@/helpers/configure';
 
 const LIMIT = 2;

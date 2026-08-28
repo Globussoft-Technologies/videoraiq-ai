@@ -7,10 +7,10 @@ import { TAG_STATUS_OPTIONS } from '@/helpers/vehicleTagging';
  * Shared by ANPR Logs and the Incident Center's Vehicle Detection view so the
  * two read identically; `value` is the `tagStatus` the API expects ('' = all).
  */
-export default function TagStatusFilter({ value = '', onChange, className = '' }) {
+export default function TagStatusFilter({ value = '', onChange, className = '', height = 'h-9' }) {
   return (
     <div
-      className={`inline-flex items-center rounded-[8px] border border-[var(--bd)] bg-[var(--bg2)] overflow-hidden h-9 ${className}`}
+      className={`inline-flex items-center rounded-[8px] border border-[var(--bd)] bg-[var(--bg2)] overflow-hidden ${height} ${className}`}
       role="group"
       aria-label="Filter by tagged state"
     >

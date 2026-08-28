@@ -31,6 +31,17 @@ const getPresetKey = (start, end, min, max) => {
   })?.key || 'custom';
 };
 
+/**
+ * Shared date-range filter with a preset sidebar (Today / Yesterday / Last 7
+ * Days / Last 30 Days / This Month / Last Month / Custom Range). Theme-aware via
+ * CSS vars, portalled panel. Used by the log table pages through
+ * ReusableTablePage (datePickerVariant="preset") and directly by IncidentCenter.
+ *
+ * Props:
+ *   startDate, endDate  - current range; Date | ISO string | null
+ *   minDate, maxDate    - selectable bounds (optional)
+ *   onRangeChange       - ({ start: Date|null, end: Date|null }) => void
+ */
 const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeChange }) => {
   const [open, setOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
@@ -44,14 +55,33 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
   const min = minDate ? moment(minDate).startOf('day') : null;
   const max = maxDate ? moment(maxDate).endOf('day') : null;
 
+  // Sync the internal selection to the incoming range. Kept separate from the
+  // panel-open logic so a re-render (parent re-render, StrictMode double-invoke)
+  // can't collapse a calendar the user just expanded via "Custom Range".
   useEffect(() => {
     const start = startDate ? moment(startDate).startOf('day') : null;
     const end = endDate ? moment(endDate).startOf('day') : null;
     setSel({ start, end });
     setHovered(null);
     setViewMonth((start || moment()).clone().startOf('month').subtract(start && end && start.isSame(end, 'month') ? 1 : 0, 'month'));
-    if (open) setCustomOpen(start && end ? getPresetKey(start, end, min, max) === 'custom' : false);
-  }, [startDate, endDate, open, minDate, maxDate]);
+  }, [startDate, endDate]);
+
+  // Derive whether the calendar starts expanded, but only on the closed->open
+  // transition. `wasOpen` is a render-phase guard (not an effect) so a parent
+  // re-render while the panel is open can never collapse a calendar the user
+  // just opened via "Custom Range". The calendar starts expanded unless the
+  // current range exactly matches one of the presets -- with no range picked
+  // yet, open straight into the custom two-month calendar.
+  const wasOpen = useRef(false);
+  if (open && !wasOpen.current) {
+    wasOpen.current = true;
+    const s = startDate ? moment(startDate).startOf('day') : null;
+    const e = endDate ? moment(endDate).startOf('day') : null;
+    const nextCustom = s && e ? getPresetKey(s, e, min, max) === 'custom' : true;
+    if (nextCustom !== customOpen) setCustomOpen(nextCustom);
+  } else if (!open && wasOpen.current) {
+    wasOpen.current = false;
+  }
 
   useEffect(() => {
     if (!open) return undefined;
@@ -67,7 +97,7 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
       document.removeEventListener('mousedown', onClick);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [open, customOpen]);
+  }, [open]);
 
   useLayoutEffect(() => {
     if (!open) return undefined;
@@ -100,7 +130,7 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
     };
-  }, [open]);
+  }, [open, customOpen]);
 
   const label =
     startDate && endDate
@@ -172,9 +202,9 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
             const endpoint = !otherMonth && isEndpoint(day);
             const between = !otherMonth && inRange(day) && !endpoint;
             const classes = endpoint
-              ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white rounded-full font-bold'
+              ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white rounded-full font-bold border border-[var(--violet)] shadow-sm ring-2 ring-[var(--violet)]/25'
               : between
-                ? 'bg-gradient-to-br from-[var(--blue)]/10 to-[var(--violet)]/15 text-[var(--tx)]'
+                ? 'bg-[var(--violet)]/15 text-[var(--tx)] border-y border-[var(--violet)]/20'
                 : otherMonth
                   ? 'text-[var(--tx3)]'
                   : 'text-[var(--tx)]';
@@ -255,7 +285,11 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
                   {' - '}
                   {(sel.end || sel.start)?.format('DD MMMM YYYY') || 'End date'}
                 </span>
-                <button type="button" onClick={clear} className="inline-flex cursor-pointer items-center gap-1 text-[var(--tx2)] hover:text-[var(--tx)]">
+                <button
+                  type="button"
+                  onClick={clear}
+                  className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-md border border-[var(--crit)]/35 bg-[var(--crit)]/10 px-2.5 text-[11px] font-semibold text-[var(--crit)] transition-colors hover:bg-[var(--crit)]/15"
+                >
                   <X className="h-3 w-3" />
                   Clear
                 </button>
@@ -276,11 +310,11 @@ const PresetDateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeCh
   );
 
   return (
-    <div className="relative w-full sm:w-auto" ref={ref}>
+    <div className="relative w-full sm:w-[300px] sm:max-w-full" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="h-10 w-full sm:w-[300px] flex items-center justify-between gap-2 px-3 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] text-xs 2xl:text-sm font-medium cursor-pointer hover:border-[var(--violet)] transition-colors"
+        className="h-10 w-full flex items-center justify-between gap-2 px-3 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] text-xs 2xl:text-sm font-medium cursor-pointer hover:border-[var(--violet)] transition-colors"
       >
         <span className="flex items-center gap-2 overflow-hidden">
           <CalendarIcon className="w-4 h-4 shrink-0 text-[var(--tx3)]" />

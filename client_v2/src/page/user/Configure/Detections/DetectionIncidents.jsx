@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
+import moment from 'moment';
 import { SEVERITIES, SEVERITY_BY_KEY, INCIDENT_STATUS } from './detectionsData';
-import DateRangePicker from '../../../../components/DateRangePicker';
+import PresetDateRangePicker from '../../../../components/PresetDateRangePicker';
 
 const FILTERS = [{ key: 'all', label: 'All' }, ...SEVERITIES.map((s) => ({ key: s.key, label: s.label }))];
 
@@ -185,12 +186,19 @@ export default function DetectionIncidents({
         </div>
 
         <div style={{ marginLeft: 'auto', flex: '0 0 auto' }}>
-          <DateRangePicker
-            from={dateFrom}
-            to={dateTo}
-            onFrom={(value) => onDateFromChange?.(value)}
-            onTo={(value) => onDateToChange?.(value)}
-            onClear={() => onDateClear?.()}
+          <PresetDateRangePicker
+            startDate={dateFrom || null}
+            endDate={dateTo || null}
+            maxDate={new Date()}
+            onRangeChange={({ start, end }) => {
+              if (!start) {
+                onDateClear?.();
+                return;
+              }
+              const toIso = (d) => moment(d).format('YYYY-MM-DD');
+              onDateFromChange?.(toIso(start));
+              onDateToChange?.(toIso(end || start));
+            }}
           />
         </div>
       </div>

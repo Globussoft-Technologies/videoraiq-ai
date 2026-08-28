@@ -30,11 +30,11 @@ const VehicleNumberSelect = ({
   };
 
   return (
-    <div className="relative w-full" ref={ref}>
+    <div className="relative w-full md:w-[200px]" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="h-9 md:h-10 w-full px-3 border border-[var(--bd)] rounded-lg text-sm bg-[var(--bg1solid)] text-[var(--tx2)] cursor-pointer flex items-center justify-between gap-2"
+        className="h-10 w-full px-3 border border-[var(--bd)] rounded-lg text-sm bg-[var(--bg2)] text-[var(--tx2)] cursor-pointer flex items-center justify-between gap-2 hover:border-[var(--violet)] transition-colors"
       >
         <span className="truncate">{vehicleNumber || 'Vehicle Number'}</span>
         <ChevronDown className={`w-4 h-4 text-[var(--tx3)] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />

@@ -6,7 +6,8 @@ import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsL
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import SharedMultiSelect from '../../../components/MultiSelect';
-import DateRangePicker, { fmt } from '../../../components/DateRangePicker';
+import { fmt } from '../../../components/DateRangePicker';
+import PresetDateRangePicker from '../../../components/PresetDateRangePicker';
 import {
   generateHourOptions,
   generateMinuteOptions,
@@ -1635,12 +1636,16 @@ export default function IncidentCenter() {
         />
 
         {/* Date range */}
-        <DateRangePicker
-          from={dateFrom}
-          to={dateTo}
-          onFrom={(v) => { setDateFrom(v); setPage(0); }}
-          onTo={(v) => { setDateTo(v); setPage(0); }}
-          onClear={() => { setDateFrom(''); setDateTo(''); setPage(0); }}
+        <PresetDateRangePicker
+          startDate={dateFrom || null}
+          endDate={dateTo || null}
+          maxDate={new Date()}
+          onRangeChange={({ start, end }) => {
+            const toIso = (d) => (d instanceof Date ? moment(d).format('YYYY-MM-DD') : '');
+            setDateFrom(toIso(start));
+            setDateTo(toIso(end));
+            setPage(0);
+          }}
         />
 
         {/* Additional filters popover */}

@@ -26,6 +26,7 @@ export const CONVEYOR_CONFIG = {
   showStatus: true,
   formatStatus: true,
   sortable: true,
+  datePickerVariant: 'preset',
 };
 
 export const CRUSHER_CONFIG = {
@@ -39,6 +40,7 @@ export const CRUSHER_CONFIG = {
   showStatus: true,
   formatStatus: false,
   sortable: true,
+  datePickerVariant: 'preset',
 };
 
 export const VEHICLE_OBSTRUCTION_CONFIG = {
@@ -51,6 +53,7 @@ export const VEHICLE_OBSTRUCTION_CONFIG = {
   accessDenied: "You don't have permission to view Vehicle Obstruction Logs.",
   showStatus: false,
   sortable: true,
+  datePickerVariant: 'preset',
 };
 
 export const LINE_CROSSING_CONFIG = {
@@ -75,6 +78,7 @@ export const WATER_SPILL_CONFIG = {
   accessDenied: "You don't have permission to view Water Spillage Logs.",
   showStatus: false,
   sortable: true,
+  datePickerVariant: 'preset',
 };
 
 export const UNAUTHORIZED_ACCESS_CONFIG = {

@@ -131,7 +131,6 @@ function EditCarModelModal({ row, saving, onClose, onSave }) {
       year: year.trim(),
     });
   };
-
   return (
     <Dialog open={!!row} onOpenChange={(open) => !open && !saving && onClose()}>
       <DialogContent className="left-1/2 top-1/2 w-[min(460px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 border border-[var(--bd)] bg-[var(--bg1solid)] p-0 text-[var(--tx)]">

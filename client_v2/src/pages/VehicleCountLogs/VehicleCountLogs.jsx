@@ -16,7 +16,7 @@ import { fetchVehicleCountLogs } from './Api';
 import { buildChart } from './vehicleCountChart';
 import StatCards from '@/pages/AttendanceLogs/components/StatCards';
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
-import DateRangePicker from '@/pages/AttendanceLogs/components/DateRangePicker';
+import DateRangePicker from '@/components/PresetDateRangePicker';
 
 const LIMIT = 2;
 

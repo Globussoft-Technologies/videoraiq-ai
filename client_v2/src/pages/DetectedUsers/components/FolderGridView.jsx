@@ -1,7 +1,7 @@
 import React from 'react';
 import { Folder, Check, X, Loader2, Trash2, Search, SearchX } from 'lucide-react';
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
-import DateRangePicker from '@/pages/AttendanceLogs/components/DateRangePicker';
+import DateRangePicker from '@/components/PresetDateRangePicker';
 import ConfirmationModal from '@/components/DeleteConfirmation';
 import PaginationBar from './PaginationBar';
 
