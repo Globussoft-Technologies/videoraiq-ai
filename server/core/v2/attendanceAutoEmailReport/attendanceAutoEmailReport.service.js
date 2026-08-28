@@ -69,6 +69,17 @@ function spanMinutes(firstCheckIn, lastCheckOut) {
   return minutes >= 0 ? minutes : null;
 }
 
+// "Total Working Hrs (Day)" as the Attendance Logs table computes it
+// (`minutesSpent` in attendanceStatus.js): last check-out − first check-in,
+// rounded to whole minutes, floored at 0. It is the elapsed span and does NOT
+// subtract breaks — the Break column is shown alongside, not deducted. Missing
+// either end → 0.
+function workingMinutesForDay(firstCheckIn, lastCheckOut) {
+  if (!firstCheckIn || !lastCheckOut) return 0;
+  const minutes = (new Date(lastCheckOut) - new Date(firstCheckIn)) / 60000;
+  return Math.max(0, Math.round(minutes));
+}
+
 // Human-readable duration for the "Total Working Hours for the period selected"
 // column. Under 24h it stays HH:MM:SS (unchanged from before); at or above 24h
 // it breaks into the largest non-zero units — months / days / hours / minutes —
@@ -105,44 +116,24 @@ function formatPeriodDuration(minutes) {
   return parts.slice(0, 3).join(" ") || "00:00:00";
 }
 
-// Pair sequential checkin→checkout events into work sessions for one day's
-// events. Mirrors pairSessions semantics described in TIME_CALCULATIONS.md:
-// a check-in opens (or replaces) the currently-open check-in; the next
-// check-out closes it into one session. A check-out with no open check-in is
-// dropped; a trailing check-in with no check-out produces no session.
-function pairSessions(events) {
-  const sorted = [...(events || [])].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-  const sessions = [];
-  let openCheckin = null;
-  for (const event of sorted) {
-    if (event.cameraType === "checkin") {
-      openCheckin = event;
-    } else if (event.cameraType === "checkout" && openCheckin) {
-      sessions.push({ checkin: openCheckin, checkout: event });
-      openCheckin = null;
-    }
-  }
-  return sessions;
-}
-
 function eventCamera(event) {
   return event?.channel?.customName || event?.channel?.name || "-";
 }
 
 // Pair sequential checkout→checkin events into breaks for one day's events.
-// Mirrors pairBreaks in attendance.service.js so break totals here match the
-// Attendance Logs table: a checkout only opens a break after the first
-// check-in, and the last check-out is a bookend, never a break.
-function breakMinutesFor(events) {
+// Byte-for-byte the same algorithm as pairBreaks in attendance.service.js so
+// the break total here always matches the Attendance Logs table and the Break
+// Logs dialog: a checkout only opens a break after the first check-in
+// (`hasCheckedIn`), and the last check-out is a bookend, never a break.
+function pairBreaks(events) {
   const sorted = [...(events || [])].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const pairs = [];
   let currentCheckout = null;
   let hasCheckedIn = false;
-  let minutes = 0;
   for (const event of sorted) {
     if (event.cameraType === "checkin") {
       if (currentCheckout) {
-        const ms = new Date(event.timestamp) - new Date(currentCheckout.timestamp);
-        if (ms > 0) minutes += ms / 60000;
+        pairs.push({ checkout: currentCheckout, checkin: event });
         currentCheckout = null;
       }
       hasCheckedIn = true;
@@ -150,7 +141,16 @@ function breakMinutesFor(events) {
       currentCheckout = event;
     }
   }
-  return minutes;
+  return pairs;
+}
+
+// Total break minutes — each (checkin − checkout) gap rounded to whole minutes
+// and floored at 0, exactly like breakMinutesFromPairs in attendance.service.js.
+function breakMinutesFromPairs(pairs) {
+  return pairs.reduce((sum, pair) => {
+    const ms = new Date(pair.checkin.timestamp) - new Date(pair.checkout.timestamp);
+    return sum + (ms > 0 ? Math.round(ms / 60000) : 0);
+  }, 0);
 }
 
 function checkInImageUrl(event) {
@@ -253,25 +253,19 @@ export function rowFromAttendance(item, timezone, rules) {
   const lastCheckOut = checkouts.at(-1) || null;
   const employee = item.employee || {};
 
-  // Break minutes use the same checkout→checkin pairing as the Attendance
-  // Logs table (pairBreaks in attendance.service.js), so the two agree.
-  const breakMinutes = breakMinutesFor(events);
+  // Computed exactly as the Attendance Logs table does:
+  //   - Total Working Hrs (Day)  = last check-out − first check-in  (elapsed
+  //     span, whole minutes, floored at 0 — `minutesSpent` in
+  //     attendanceStatus.js). Breaks are NOT subtracted; the Break column is
+  //     shown alongside, not deducted.
+  //   - Total Break Hrs (Day)    = Σ (checkin − checkout) gaps  (pairBreaks +
+  //     breakMinutesFromPairs), per-pair rounding.
+  //   - Duration is the same span to whole-second precision.
+  // Matches how the Attendance Logs card shows one "TIME" figure plus a
+  // separate "BREAK" figure.
+  const breakMinutes = breakMinutesFromPairs(pairBreaks(events));
+  const workingMinutesDay = workingMinutesForDay(firstCheckIn?.timestamp, lastCheckOut?.timestamp);
   const grossMinutes = spanMinutes(firstCheckIn?.timestamp, lastCheckOut?.timestamp);
-  const workingMinutes = grossMinutes === null ? null : Math.max(0, grossMinutes - breakMinutes);
-
-  // Every check-in→check-out pair for the day, as its own printable line.
-  // Summed, the session durations equal Total Working Hours for the Day.
-  const sessions = pairSessions(events).map((session) => {
-    const sessionMinutes = spanMinutes(session.checkin.timestamp, session.checkout.timestamp) || 0;
-    return {
-      checkIn: formatClock(session.checkin.timestamp, timezone),
-      checkOut: formatClock(session.checkout.timestamp, timezone),
-      duration: minutesToHms(sessionMinutes),
-      checkInCamera: eventCamera(session.checkin),
-      checkOutCamera: eventCamera(session.checkout),
-      viewImage: checkInImageUrl(session.checkin),
-    };
-  });
 
   const row = {
     date: moment(item.createdAt).tz(timezone).format("DD MMM YYYY"),
@@ -290,17 +284,18 @@ export function rowFromAttendance(item, timezone, rules) {
     checkIn: firstCheckIn ? formatClock(firstCheckIn.timestamp, timezone) : "-",
     checkOut: lastCheckOut ? formatClock(lastCheckOut.timestamp, timezone) : "-",
     duration: grossMinutes === null ? "-" : minutesToHms(grossMinutes),
-    workingHoursDay: workingMinutes === null ? "00:00:00" : minutesToHms(workingMinutes),
+    workingHoursDay: minutesToHms(workingMinutesDay),
     breakHoursDay: minutesToHms(breakMinutes),
     // Filled in by applyPeriodTotals once every day for this employee has been read.
     workingHoursPeriod: "00:00:00",
-    workingMinutesDay: workingMinutes === null ? 0 : workingMinutes,
+    // Per-employee period total sums this (the elapsed-span working minutes),
+    // matching the Attendance Logs definition.
+    workingMinutesDay: workingMinutesDay,
     checkInCount: checkins.length,
     checkOutCount: checkouts.length,
     checkInCamera: eventCamera(firstCheckIn),
     checkOutCamera: eventCamera(lastCheckOut),
     viewImage: firstCheckIn ? checkInImageUrl(firstCheckIn) : "-",
-    sessions,
     status: "",
   };
   row.status = statusForRow({ firstCheckIn: firstCheckIn?.timestamp, lastCheckOut: lastCheckOut?.timestamp }, rules);
@@ -372,9 +367,10 @@ async function streamReportRows(report, reference, onRow) {
   return { timezone, start, end, label, rowCount, rules };
 }
 
-// "Total Working Hours for the period selected" is a per-employee sum across
-// every day in the report range, so it can only be filled once all rows are
-// collected. Mutates rows in place.
+// "Total Working Hours for the period selected" = per-employee sum of Total
+// Working Hrs (Day) — i.e. of the elapsed check-in→check-out spans, the same
+// figure the Attendance Logs table sums — across every day in the report
+// range. Fillable only once all rows are collected. Mutates rows in place.
 export function applyPeriodTotals(rows) {
   const totals = new Map();
   for (const row of rows) {
@@ -417,72 +413,35 @@ const REPORT_HEADERS = [
   "View Image",
 ];
 
-const EMPTY = "";
-const IMAGE_COLUMN_INDEX = REPORT_HEADERS.length - 1;
-
 function imageCell(url) {
   return url && url !== "-" ? { text: "View Image", link: url } : "-";
 }
 
-// Expand one employee-day into the multi-row block described in
-// TIME_CALCULATIONS.md §6:
-//   1. summary row     — identity + first check-in / last check-out + period total
-//   2. per-session rows — each check-in→check-out pair (times, duration, cameras, image)
-//   3. day-totals row   — Total Working Hrs (Day) + Total Break Hrs (Day)
-//   4. blank separator row
-// Column positions line up with REPORT_HEADERS throughout.
-function gridRowsForReportRow(row, displayIndex) {
-  const blank = REPORT_HEADERS.map(() => EMPTY);
-
-  const summary = [
+// One flat table row per employee-day — first check-in, last check-out, and all
+// the day/period totals on the same line. No per-session sub-rows.
+// Column positions line up with REPORT_HEADERS.
+function cellsForReportRow(row, displayIndex) {
+  return [
     String(displayIndex),
     row.employee,
     row.department,
     row.date,
     row.location,
-    row.checkIn,
-    row.checkOut,
+    row.checkIn,   // first check-in of the day
+    row.checkOut,  // last check-out of the day
     row.duration,
-    EMPTY, // Total Working Hrs (Day) — shown on the day-totals row
-    EMPTY, // Total Break Hrs (Day) — shown on the day-totals row
+    row.workingHoursDay,
+    row.breakHoursDay,
     row.workingHoursPeriod,
     row.checkInCamera,
     row.checkOutCamera,
     imageCell(row.viewImage),
   ];
-
-  const sessions = (row.sessions || []).map((session) => {
-    const line = REPORT_HEADERS.map(() => EMPTY);
-    line[5] = session.checkIn;
-    line[6] = session.checkOut;
-    line[7] = session.duration;
-    line[11] = session.checkInCamera;
-    line[12] = session.checkOutCamera;
-    line[IMAGE_COLUMN_INDEX] = imageCell(session.viewImage);
-    return line;
-  });
-
-  const dayTotals = REPORT_HEADERS.map(() => EMPTY);
-  dayTotals[8] = row.workingHoursDay;
-  dayTotals[9] = row.breakHoursDay;
-
-  return [summary, ...sessions, dayTotals, blank];
 }
 
-// Every employee-day expanded into its summary / session / totals / separator
-// rows, flattened into one grid (values line up with REPORT_HEADERS).
+// One row per employee-day (values line up with REPORT_HEADERS).
 export function reportTableRows(rows) {
-  return rows.flatMap((row, index) => gridRowsForReportRow(row, index + 1));
-}
-
-// Same expansion, kept grouped as one block per employee-day so the PDF
-// renderer can zebra-stripe and page-break by day rather than by raw line.
-export function reportTableBlocks(rows) {
-  return rows.map((row, index) => gridRowsForReportRow(row, index + 1));
-}
-
-function isBlankLine(line) {
-  return line.every((value) => value === EMPTY || value === "" || value == null);
+  return rows.map((row, index) => cellsForReportRow(row, index + 1));
 }
 
 // Renders one CSV field. An image cell arrives as { text, link } and is written
@@ -541,7 +500,7 @@ export async function buildPdf({ report, rows, label, timezone }) {
 
     const pageWidth = document.page.width - 64;
     // Widths sum to ~1096pt, within the A3-landscape usable width (~1127pt).
-    // Headings and order line up with REPORT_HEADERS / gridRowsForReportRow.
+    // Headings and order line up with REPORT_HEADERS / cellsForReportRow.
     // `wrap: true` columns hold free text (name, department, camera, location)
     // and are rendered on multiple lines instead of being truncated — the
     // camera and department columns are given enough width to show the full
@@ -592,9 +551,7 @@ export async function buildPdf({ report, rows, label, timezone }) {
     const LINE_H = 9;
     const V_PAD = 6;
 
-    const BLANK_H = 6;
     const lineHeight = (line) => {
-      if (isBlankLine(line)) return BLANK_H;
       let maxLines = 1;
       line.forEach((value, columnIndex) => {
         const col = columns[columnIndex];
@@ -608,10 +565,6 @@ export async function buildPdf({ report, rows, label, timezone }) {
     const drawLine = (line, shade) => {
       document.font("Helvetica").fontSize(8);
       const height = lineHeight(line);
-      if (isBlankLine(line)) {
-        y += height;
-        return;
-      }
       if (shade) document.fillColor("#eef2fb").rect(32, y, pageWidth, height).fill();
       let x = 32;
       line.forEach((value, columnIndex) => {
@@ -620,7 +573,7 @@ export async function buildPdf({ report, rows, label, timezone }) {
         if (!col.wrap) opts.ellipsis = true;
         if (value && typeof value === "object") {
           document.fillColor(V2_BLUE).text(value.text, x + PAD_X, y + V_PAD, { ...opts, link: value.link, underline: true });
-        } else if (value !== "" && value != null && value !== EMPTY) {
+        } else if (value !== "" && value != null) {
           document.fillColor("#2e3b55").text(String(value), x + PAD_X, y + V_PAD, opts);
         }
         x += col.width;
@@ -631,29 +584,15 @@ export async function buildPdf({ report, rows, label, timezone }) {
 
     drawHeader();
     let y = drawTableHeader(165);
-    // One block = one employee-day (summary + session rows + day-totals +
-    // separator). Zebra-striped and kept together on a page per block.
-    const TABLE_TOP = 199; // drawTableHeader(165) returns 165 + 34
-    reportTableBlocks(rows).forEach((block, blockIndex) => {
-      const blockHeight = block.reduce((sum, line) => sum + lineHeight(line), 0);
+    // One line per employee-day, zebra-striped.
+    reportTableRows(rows).forEach((line, index) => {
       const pageBottom = document.page.height - 40;
-      // Keep an employee-day block together: if it won't fit in what's left of
-      // this page (and we're not already at the top), move it to a fresh page.
-      // A block taller than a whole page just flows.
-      if (y > TABLE_TOP && y + blockHeight > pageBottom && blockHeight <= pageBottom - TABLE_TOP) {
+      if (y + lineHeight(line) > pageBottom) {
         document.addPage({ size: "A3", layout: "landscape", margin: 32 });
         drawHeader();
         y = drawTableHeader(165);
       }
-      const shade = blockIndex % 2 === 0;
-      block.forEach((line) => {
-        if (!isBlankLine(line) && y + lineHeight(line) > pageBottom) {
-          document.addPage({ size: "A3", layout: "landscape", margin: 32 });
-          drawHeader();
-          y = drawTableHeader(165);
-        }
-        drawLine(line, shade);
-      });
+      drawLine(line, index % 2 === 1);
     });
     if (!rows.length) document.font("Helvetica").fontSize(12).fillColor("#61708f").text("No attendance records were found for this period.", 32, y + 24);
     document.end();
