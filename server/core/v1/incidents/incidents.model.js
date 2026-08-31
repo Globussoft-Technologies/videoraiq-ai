@@ -26,6 +26,7 @@ const incidentSchema = new Schema({
   // can read it, without touching 25 discriminators.
   ConfidenceScoreInPercentage:{type:Number,default:null},
   resolved:{type:Boolean,default:false},
+  liveDemoData:{type:Boolean,default:false},
   report:{
     status:{type:Boolean,default:false},
     description:{type:String,default:""},

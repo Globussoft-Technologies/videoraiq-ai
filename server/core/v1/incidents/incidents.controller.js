@@ -46,7 +46,12 @@ class IncidentsController {
                             in: 'query',
                             type:'integer',
                             description:'limit',
-    } 
+    }
+    #swagger.parameters['liveDemoData'] = {
+                            in: 'query',
+                            type:'boolean',
+                            description: 'true -> demo incidents only, false/omitted -> real incidents only (default)',
+    }
     #swagger.responses[200] = {
         description: 'List of channels for given NVR'
     }

@@ -42,6 +42,7 @@ import faceImagesRoutes from "../../core/v2/faceImages/faceImages.routes.js";
 import telegramRoutes from "../../core/v2/telegram/telegram.routes.js";
 import clientConfigRoutes from "../../core/v2/clientConfig/clientConfig.routes.js";
 import logsConfigurationRoutes from "../../core/v2/logsConfiguration/logsConfiguration.routes.js";
+import videoRecordsRoutes from "../../core/v2/videoRecords/videoRecords.routes.js";
 
 const router = express.Router();
 
@@ -103,6 +104,7 @@ router.use("/client-config", clientConfigRoutes);
 // secret — mount WITHOUT verifyToken, the router guards itself.
 router.use("/email-monitoring", emailMonitoringRoutes);
 router.use("/logs-configuration", verifyToken, logsConfigurationRoutes);
+router.use("/video-records", verifyToken, videoRecordsRoutes);
 
 export default router;
 

@@ -166,19 +166,15 @@ class PythonService {
     try {
       const nvr = await NVR.findById(channel?.nvrId);
       if (channel && type && admin_id && nvr) {
-        // Attendance needs its zones: refuse to start without a linked
-        // attendanceSettings detection setting for this camera.
+        // Zones come from the camera's linked attendanceSettings detection
+        // setting when one exists; without one the start proceeds with empty
+        // zones (whole-frame attendance).
         const linkedAttendance = channel?.detections?.attendanceSettings?.id;
         const attendanceSetting = linkedAttendance?.settings
           ? linkedAttendance // already populated
           : linkedAttendance
             ? await DetectionSetting.findById(linkedAttendance)
             : null;
-        if (!attendanceSetting) {
-          throw new Error(
-            "No detection setting found for attendance detection on this camera",
-          );
-        }
 
         const cameraId = channel?._id?.toString();
         const zones =
@@ -1041,6 +1037,28 @@ class PythonService {
     } catch (error) {
       logger.error(
         "Error stopping detection:",
+        error?.response?.data || error.message,
+      );
+      throw error;
+    }
+  }
+
+  // Submit an uploaded demo clip to the video-process service. source_url in
+  // the payload must already be absolute — the service fetches it directly.
+  async processVideoJob(payload) {
+    try {
+      const base = (
+        config.has("PythonService.videoProcessUrl")
+          ? config.get("PythonService.videoProcessUrl")
+          : "https://meet-greet-video-process.videoraiq.com"
+      ).replace(/\/+$/, "");
+      const response = await axios.post(`${base}/video-process/jobs`, payload, {
+        headers: { "Content-Type": "application/json" },
+      });
+      return response.data;
+    } catch (error) {
+      logger.error(
+        "Error submitting video-process job:",
         error?.response?.data || error.message,
       );
       throw error;

@@ -499,6 +499,32 @@ describe("PythonService.handleDetectionUpdate", () => {
   });
 });
 
+describe("PythonService.processVideoJob", () => {
+  it("POSTs the payload to <base>/video-process/jobs and returns data", async () => {
+    axios.post.mockResolvedValueOnce({ data: { job_id: "job-1", status: "queued" } });
+    const payload = {
+      admin_id: "64b7f5b8e45c9a0012ab34cd",
+      video_id: "demo-video-001",
+      source_url: "https://media.test/uploads/videos/demo.mp4",
+      detectors: [{ name: "countPersonsSettings" }],
+    };
+    const out = await PythonService.processVideoJob(payload);
+    expect(out).toEqual({ job_id: "job-1", status: "queued" });
+
+    const [url, body, opts] = axios.post.mock.calls[0];
+    expect(url).toMatch(/\/video-process\/jobs$/);
+    expect(body).toEqual(payload);
+    expect(opts.headers["Content-Type"]).toBe("application/json");
+  });
+
+  it("rethrows on axios failure", async () => {
+    axios.post.mockRejectedValueOnce(new Error("process service down"));
+    await expect(
+      PythonService.processVideoJob({ admin_id: "a", video_id: "v" }),
+    ).rejects.toThrow("process service down");
+  });
+});
+
 describe("PythonService.registerChannel", () => {
   it("returns undefined when admin_id is falsy (early-return branch)", async () => {
     // Even if NVR.findById returns a NVR, the falsy admin_id short-circuits
@@ -580,20 +606,22 @@ describe("PythonService.registerChannel", () => {
     expect(body.detection_modes).toEqual(["face"]);
   });
 
-  it("rejects when no attendanceSettings is linked to the camera", async () => {
+  it("starts with empty zones when no attendanceSettings is linked (optional)", async () => {
     NVR.findById.mockResolvedValueOnce({ _id: "nvr-1", brand: "hikvision" });
-    await expect(
-      PythonService.registerChannel(
-        {
-          _id: { toString: () => "cam-1" },
-          nvrId: { _id: { toString: () => "nvr-1" } },
-          name: "Front Lobby",
-        },
-        "live",
-        "admin-1",
-      ),
-    ).rejects.toThrow("No detection setting found for attendance detection");
-    expect(axios.post).not.toHaveBeenCalled();
+    axios.post.mockResolvedValueOnce({ data: { ok: true } });
+    const out = await PythonService.registerChannel(
+      {
+        _id: { toString: () => "cam-1" },
+        nvrId: { _id: { toString: () => "nvr-1" } },
+        name: "Front Lobby",
+      },
+      "live",
+      "admin-1",
+    );
+    expect(out).toEqual({ ok: true });
+    const [, body] = axios.post.mock.calls[0];
+    expect(body.zones).toEqual([]);
+    expect(body.zone_configs).toEqual([]);
   });
 
   it("rethrows when startDetection fails", async () => {

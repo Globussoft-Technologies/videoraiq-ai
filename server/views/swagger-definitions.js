@@ -142,6 +142,8 @@ export const definitions = {
       zone: "Workstation 4",
       type: "gauge",
       severity: "moderate",
+      // optional, defaults to false — set true for a live-demo test session
+      liveDemoData: false,
     },
     updateIncident: {
       incidentType: "countPersons",
@@ -188,6 +190,8 @@ export const definitions = {
         },
       },
       incidentTypeFilter: ["crowdDetection"],
+      // true -> demo incidents only, false/omitted -> real incidents only (default)
+      liveDemoData: false,
     },
     updateChannelConfig: {
       enabled: false,
@@ -701,6 +705,8 @@ export const definitions = {
       getAccessLogs: false,
       isExport: false,
       tag: null,
+      // true -> demo logs only, false/omitted -> real logs only (default)
+      liveDemoData: false,
       skip: 0,
       limit: 10,
     },
@@ -721,6 +727,8 @@ export const definitions = {
       userId:"68493b15b176a495112b6524",
       startDate:"2025-06-01",
       endDate:"2025-06-30",
+      // true -> demo logs only, false/omitted -> real logs only (default)
+      liveDemoData: false,
     },
     updateLogsSound: {
       logsSound: true,
@@ -870,6 +878,8 @@ export const definitions = {
         frame: "https://example.com/person.jpg",
       },
       confidenceScore: 92.5,
+      // optional, defaults to false — set true for a live-demo test session
+      liveDemoData: false,
     },
     fetchAllDepartments: {
       nvrIds: ["68493b14b176a495112b6522", "68493b15b176a495112b6524"],

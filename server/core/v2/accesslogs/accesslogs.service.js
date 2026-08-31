@@ -173,7 +173,7 @@ class AccessLogsService {
           return res.status(400).json(Response.errorResp("Missing adminId"));
         }
 
-        let { skip = 0, limit = 10, startDate, endDate, searchQuery, departmentIds, channelIds, nvrIds } = req.body;
+        let { skip = 0, limit = 10, startDate, endDate, searchQuery, departmentIds, channelIds, nvrIds, liveDemoData } = req.body;
         skip = Number(skip);
         limit = Number(limit);
 
@@ -197,7 +197,11 @@ class AccessLogsService {
         // --------------------------
         // MATCH FILTER
         // --------------------------
-        let match = { admin: new ObjectId(adminId) };
+        // liveDemoData: true -> demo logs only | false/omitted -> real logs only
+        let match = {
+          admin: new ObjectId(adminId),
+          liveDemoData: liveDemoData ? true : { $ne: true },
+        };
 
         // Date filter
         if (!startDate && !endDate) {
@@ -345,7 +349,7 @@ class AccessLogsService {
     async createAccessLogRecord(req,res,next){
      try {
         let body = req.body;
-        let { userId, personName, date, timestamp, images ,cameraId,nvrId,adminId, confidenceScore = 0} = body;
+        let { userId, personName, date, timestamp, images ,cameraId,nvrId,adminId, confidenceScore = 0, liveDemoData} = body;
         let isAdminExist = await adminModel.findOne({ _id: adminId });
         if(!isAdminExist){
           return res.send(Response.userFailResp("Admin not found","Validation failed!"));
@@ -434,6 +438,7 @@ class AccessLogsService {
               // Reached only inside the isUserExist branch, so userId is a
               // real recognized identity — mark it tagged immediately.
               tag: false,
+              liveDemoData: !!liveDemoData,
               // date: startOfDay,
               sessions: [newSession]
             });
@@ -464,6 +469,7 @@ class AccessLogsService {
               admin: adminId,
               userId: userId || null,
               tag: false,
+              liveDemoData: !!liveDemoData,
               // date: startOfDay,
               sessions: [newSession]
             });
@@ -496,6 +502,7 @@ class AccessLogsService {
           const created = await OptimizedAccessLogs.create({
               admin: adminId,
               userId: userId || null,
+              liveDemoData: !!liveDemoData,
               // date: startOfDay,
               sessions: [newSession]
             });
@@ -619,7 +626,7 @@ async getLogs(req, res, next) {
           return res.status(400).json(Response.errorResp("Missing adminId"));
         }
 
-        let { skip = 0, limit = 10, startDate, endDate, searchQuery, departmentIds, channelIds, nvrIds ,removeUnknown, fromTime, toTime,isExport=false,employeeLocations=[],tag} = req.body;
+        let { skip = 0, limit = 10, startDate, endDate, searchQuery, departmentIds, channelIds, nvrIds ,removeUnknown, fromTime, toTime,isExport=false,employeeLocations=[],tag,liveDemoData} = req.body;
         const shouldRemoveUnknown = ["true", true, 1, "1", "yes"].includes(removeUnknown);
         skip = Number(skip);
         limit = Number(limit);
@@ -750,6 +757,8 @@ async getLogs(req, res, next) {
           {
             $match: {
               admin: new ObjectId(adminId),
+              // liveDemoData: true -> demo logs only | false/omitted -> real logs only
+              liveDemoData: liveDemoData ? true : { $ne: true },
               createdAt: {
                 $gte: !startDate ? moment.tz("Asia/Kolkata").startOf("day").toDate() : moment.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
                 $lte: !endDate ? moment.tz("Asia/Kolkata").endOf("day").toDate() : moment.tz(endDate, "Asia/Kolkata").endOf("day").toDate()
@@ -1051,15 +1060,16 @@ async getLogs(req, res, next) {
 
   async getUserSessionReport(req, res, next) {
   try {
-    const { userId, startDate, endDate } = req.body;
+    const { userId, startDate, endDate, liveDemoData } = req.body;
 
     if (!userId) {
       return res.status(400).json({ message: "userId is required" });
     }
 
-    // Match condition
+    // Match condition. liveDemoData: true -> demo logs only | false/omitted -> real logs only
     let match = {
-      userId: new ObjectId(userId)
+      userId: new ObjectId(userId),
+      liveDemoData: liveDemoData ? true : { $ne: true }
     };
 
     if (startDate && endDate) {

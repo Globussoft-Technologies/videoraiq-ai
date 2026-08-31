@@ -55,6 +55,7 @@ class AccessLogsValidation {
         Joi.array().items(Joi.string())
       ).optional(),
       removeUnknown: Joi.boolean().optional(),
+      liveDemoData: Joi.boolean().optional(),
       images: Joi.object({
         face: nonEmptyString.optional(),
         person: nonEmptyString.optional(),

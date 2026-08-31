@@ -182,9 +182,15 @@ class IncidentsService {
   async createIncidents(req, res, next) {
     try {
       normalizeVehicleObstructionPayload(req.body);
-      const { incidentType, nvrId, channelId, triggerNotification, adminId } =
+      const { incidentType, nvrId, channelId, triggerNotification, adminId, liveDemoData } =
         req.body;
       // const userId = req?.verified?.userData?.user_id;
+
+      if (liveDemoData !== undefined && typeof liveDemoData !== "boolean") {
+        return res.send(
+          Response.validationFailResp("liveDemoData must be a boolean", "Validation Failed!"),
+        );
+      }
 
       const isAdminExist = await adminModel.findById(adminId);
       if (!isAdminExist) {
@@ -633,7 +639,7 @@ class IncidentsService {
 
   async getAllIncidentsById(req, res, next) {
     try {
-      const { channelId, incidentId, skip = 0, limit = 10 } = req.query;
+      const { channelId, incidentId, skip = 0, limit = 10, liveDemoData } = req.query;
       let user_id = req?.verified?.userData?.user_id;
       // Validate presence of at least one
       if (!channelId && !incidentId) {
@@ -645,6 +651,8 @@ class IncidentsService {
       let filter = {
         Image: { $exists: true, $nin: [null, "", undefined, "https://"] },
         userId: user_id.toString(),
+        // liveDemoData: true -> demo incidents only | false/omitted -> real incidents only
+        liveDemoData: liveDemoData ? true : { $ne: true },
       };
 
       // If channelId is provided, validate and check existence
@@ -760,13 +768,16 @@ class IncidentsService {
         // whose incidents carry no vehicleNumber.
         search,
         tagStatus,
+        liveDemoData,
       } = req.body;
 
       const matchStage = {
         Image: { $exists: true, $nin: [null, "", undefined, "https://"] },
         incidentType: { $nin: ["countPersons", "lineCrossing", "countVehicles"] },
         userId: user_id.toString(),
-        incidentName: { $not: /Guard Present/i }
+        incidentName: { $not: /Guard Present/i },
+        // liveDemoData: true -> demo incidents only | false/omitted -> real incidents only
+        liveDemoData: liveDemoData ? true : { $ne: true },
       };
 
       // Filter: status (new / acknowledged / resolved). Defaults to
