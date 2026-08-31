@@ -249,11 +249,14 @@ class VideoRecordsService {
         detectors: names.map((name) => ({ name })),
       };
 
+      // Success response from the service means the job is queued:
+      // { job_id, video_id, status: "queued", accepted_detectors,
+      //   estimated_completion_seconds, estimate_quality, status_path }
       const job = await pythonService.processVideoJob(payload);
 
       return res
         .status(200)
-        .json(Response.userSuccessResp("Video processing job submitted", { job, submitted: payload }));
+        .json(Response.userSuccessResp("Video is processing", { processing: true, ...job }));
     } catch (error) {
       logger.error("Error submitting video for processing:", error);
       return res
