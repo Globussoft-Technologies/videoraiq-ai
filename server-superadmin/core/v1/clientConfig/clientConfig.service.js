@@ -6,6 +6,7 @@ import channelModel from "../channels/channels.model.js";
 import NVRModel from "../NVR/nvr.model.js";
 import allocationModel from "./clientDetectionAllocation.model.js";
 import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
+import { resolveDetectionTypes } from "../detectionCatalog/detectionTypes.resolver.js";
 import { redis } from "../../../utils/database.js";
 
 class ClientConfigService {
@@ -23,24 +24,52 @@ class ClientConfigService {
         return res.status(404).send(Response.notFoundResp("Client not found"));
       }
 
-      const [existing, configuredCount, totalChannels] = await Promise.all([
+      const [existing, configuredCount, totalChannels, liveChannels] = await Promise.all([
         allocationModel.find({ adminId }).lean(),
         // A camera is "configured" once any detection is enabled on it — the
         // channel pre-save sets control=1 in that case.
         channelModel.countDocuments({ userId: admin.user_id, control: 1 }),
         channelModel.countDocuments({ userId: admin.user_id }),
+        // Live per-detection usage, read straight off the client's cameras.
+        // The allocation numbers below are a cap; this is what the client is
+        // actually running against it, so the screen can show "3 of 5 in use"
+        // and warn when an allocation is set below what is already deployed.
+        channelModel.find({ userId: admin.user_id }).select("detections").lean(),
       ]);
 
       const byType = Object.fromEntries(existing.map((a) => [a.settingType, a]));
 
+      // settingType -> number of cameras currently running it.
+      const usageByType = {};
+      let licenseInUse = 0;
+      for (const channel of liveChannels) {
+        let consumes = false;
+        for (const [settingType, detection] of Object.entries(channel.detections || {})) {
+          if (detection?.enabled !== true) continue;
+          consumes = true;
+          usageByType[settingType] = (usageByType[settingType] || 0) + 1;
+        }
+        if (consumes) licenseInUse += 1;
+      }
+
+      // The detection list comes from the shared catalog the client backend
+      // publishes, NOT this service's own DETECTION_TYPES copy — that copy had
+      // drifted and was silently hiding detections (Car Model Detection existed
+      // in the client backend but not here, so it could never be licensed).
+      const catalog = await resolveDetectionTypes();
+
       // One row per known detection type; default 0 / disabled if never saved.
-      const detections = Object.entries(DETECTION_TYPES).map(([settingType, name]) => {
+      const detections = catalog.detections.map(({ settingType, name, dsSupported }) => {
         const a = byType[settingType];
         return {
           settingType,
           name,
           cameraAllocation: a?.cameraAllocation || 0,
           enabled: a?.enabled || false,
+          camerasInUse: usageByType[settingType] || 0,
+          // false = the detection engine does not exist in DS, so licensing it
+          // here would never result in anything running.
+          dsSupported: dsSupported ?? null,
         };
       });
 
@@ -49,6 +78,11 @@ class ClientConfigService {
         configured: configuredCount,
         nonConfigured: Math.max(totalChannels - configuredCount, 0),
         detectionsEnabled: detections.filter((d) => d.enabled).length,
+        // Cameras holding a camera-license slot right now (any detection on).
+        licenseInUse,
+        // true when the client backend has not published its catalog yet, so
+        // the list above came from this service's local fallback.
+        detectionsStale: catalog.stale,
       };
 
       return res.send(
@@ -124,7 +158,12 @@ class ClientConfigService {
       if (!mongoose.isValidObjectId(adminId)) {
         return res.status(400).send(Response.userFailResp("Invalid adminId"));
       }
-      if (!DETECTION_TYPES[settingType]) {
+      // Validate against the shared catalog for the same reason: a detection the
+      // client backend supports must be settable here even if this service's
+      // local constants have not caught up.
+      const catalog = await resolveDetectionTypes();
+      const catalogEntry = catalog.detections.find((d) => d.settingType === settingType);
+      if (!catalogEntry && !DETECTION_TYPES[settingType]) {
         return res.status(400).send(Response.userFailResp(`Unknown detection type: ${settingType}`));
       }
 
@@ -160,10 +199,28 @@ class ClientConfigService {
         { new: true, upsert: true, setDefaultsOnInsert: true }
       ).lean();
 
+      // Notify the client app (separate process) so connected users see the new
+      // allocation live, exactly as purchased-cameras changes already do.
+      // Without this a detection granted or revoked here stays invisible until
+      // the user reloads. Fire-and-forget over Redis pub/sub — never blocks or
+      // fails the response if Redis is unavailable.
+      redis
+        .publish(
+          "detectionAllocation:update",
+          JSON.stringify({
+            adminId,
+            userId: admin.user_id,
+            settingType,
+            cameraAllocation: doc.cameraAllocation,
+            enabled: doc.enabled,
+          }),
+        )
+        .catch((e) => logger.error(`detectionAllocation publish failed: ${e.message}`));
+
       return res.send(
         Response.SuccessResp("Detection allocation updated", {
           settingType,
-          name: DETECTION_TYPES[settingType],
+          name: catalogEntry?.name || DETECTION_TYPES[settingType],
           cameraAllocation: doc.cameraAllocation,
           enabled: doc.enabled,
         })
