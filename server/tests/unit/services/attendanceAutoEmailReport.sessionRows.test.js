@@ -3,8 +3,9 @@
  * check-in / last check-out / gross duration + period total), one "session"
  * line per check-in/check-out pair (each with its own worked duration and
  * snapshot link), then a "total" line (the day's Total Working Hrs + Total
- * Break Hrs). This verifies the expansion, the aggregates and that
- * buildCsv/buildPdf still produce valid output.
+ * Break Hrs + the period total), and finally one report-wide "grand" line.
+ * This verifies the expansion, the aggregates and that buildCsv/buildPdf still
+ * produce valid output.
  */
 import { describe, it, expect, vi } from "vitest";
 
@@ -59,17 +60,20 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
     row.workingHoursDay = "01:45:00";
     row.breakHoursDay = "00:30:00";
     row.workingHoursPeriod = "01:45:00";
+    row.workingMinutesDay = 105;
+    row.breakMinutesDay = 30;
+    row.workingMinutesPeriod = 105;
 
     const out = reportTableRows([row]);
-    expect(out.map((r) => r.kind)).toEqual(["day", "session", "session", "total"]);
+    expect(out.map((r) => r.kind)).toEqual(["day", "session", "session", "total", "grand"]);
 
-    // Day line: id + name + span + period total.
+    // Day line: id + name + span. Period total now lives on the total line.
     const day = out[0].cells;
     expect(day[0]).toBe("1");
     expect(day[1]).toBe("Nagul Lingiri");
     expect(day[5]).toBe(row.checkIn);   // first check-in of the day
     expect(day[6]).toBe(row.checkOut);  // last check-out of the day
-    expect(day[10]).toBe("01:45:00");   // period total
+    expect(day[10]).toBe("");           // period total moved to the total line
     expect(day[8]).toBe("");            // day working total lives on the total line
 
     // Session lines: no identity, own duration.
@@ -77,17 +81,37 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
     expect(out[1].cells[7]).toBe("00:30:00");
     expect(out[2].cells[7]).toBe("01:15:00");
 
-    // Total line: day working + break only.
+    // Total line: day working + break + the period total.
     const total = out[3].cells;
     expect(total[8]).toBe("01:45:00");
     expect(total[9]).toBe("00:30:00");
-    expect(total[10]).toBe("");
+    expect(total[10]).toBe("01:45:00");
+
+    // Grand line: report-wide totals.
+    const grand = out[4].cells;
+    expect(grand[1]).toBe("TOTAL (all employees)");
+    expect(grand[8]).toBe("01:45:00");
+    expect(grand[9]).toBe("00:30:00");
+    expect(grand[10]).toBe("01:45:00");
   });
 
   it("still emits a day + single session + total block when the day has one session", () => {
     const row = rowFromAttendance(attendance([ev("checkin", "09:00"), ev("checkout", "17:00")]), "Asia/Kolkata", rules);
     const out = reportTableRows([row]);
-    expect(out.map((r) => r.kind)).toEqual(["day", "session", "total"]);
+    expect(out.map((r) => r.kind)).toEqual(["day", "session", "total", "grand"]);
+  });
+
+  it("sums each employee's period total once across the grand line", () => {
+    const a1 = rowFromAttendance(attendance([ev("checkin", "09:00"), ev("checkout", "17:00")]), "Asia/Kolkata", rules);
+    const a2 = rowFromAttendance(attendance([ev("checkin", "09:00"), ev("checkout", "13:00")]), "Asia/Kolkata", rules);
+    // Same employee, two days — 8h + 4h worked, one 12h period total.
+    a1.workingMinutesDay = 480; a1.breakMinutesDay = 0; a1.workingMinutesPeriod = 720;
+    a2.workingMinutesDay = 240; a2.breakMinutesDay = 0; a2.workingMinutesPeriod = 720;
+    const out = reportTableRows([a1, a2]);
+    const grand = out.at(-1);
+    expect(grand.kind).toBe("grand");
+    expect(grand.cells[8]).toBe("12:00:00");  // 480 + 240 worked minutes
+    expect(grand.cells[10]).toBe("12:00:00"); // 720 period counted once, not 1440
   });
 
   it("buildCsv emits day + session + total lines with a HYPERLINK image cell", () => {
@@ -98,8 +122,8 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
     );
     const csv = buildCsv({ report: {}, rows: [row], label: "07 Aug 2026", timezone: "Asia/Kolkata" }).toString("utf8");
     const lines = csv.split("\r\n");
-    // 6 meta lines + day + 2 sessions + total
-    expect(lines).toHaveLength(10);
+    // 6 meta lines + day + 2 sessions + total + grand
+    expect(lines).toHaveLength(11);
     expect(csv).toContain("=HYPERLINK(");
   });
 

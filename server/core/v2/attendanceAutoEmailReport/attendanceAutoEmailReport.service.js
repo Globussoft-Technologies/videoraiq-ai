@@ -66,12 +66,6 @@ function minutesToHms(minutes) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-function spanMinutes(firstCheckIn, lastCheckOut) {
-  if (!firstCheckIn || !lastCheckOut) return null;
-  const minutes = (new Date(lastCheckOut) - new Date(firstCheckIn)) / 60000;
-  return minutes >= 0 ? minutes : null;
-}
-
 // "Total Working Hrs (Day)" as the Attendance Logs table computes it
 // (`minutesSpent` in attendanceStatus.js): last check-out − first check-in,
 // rounded to whole minutes, floored at 0. It is the elapsed span and does NOT
@@ -298,11 +292,11 @@ export function rowFromAttendance(item, timezone, rules) {
   // separate "BREAK" figure.
   const breakMinutes = breakMinutesFromPairs(pairBreaks(events));
   const workingMinutesDay = workingMinutesForDay(firstCheckIn?.timestamp, lastCheckOut?.timestamp);
-  const grossMinutes = spanMinutes(firstCheckIn?.timestamp, lastCheckOut?.timestamp);
 
   // Every check-in/check-out pairing for the day, each with its own worked
   // duration and snapshot links — the report expands these into sub-rows.
-  const sessions = pairWorkSessions(events).map((session) => ({
+  const workSessions = pairWorkSessions(events);
+  const sessions = workSessions.map((session) => ({
     checkIn: session.checkin ? formatClock(session.checkin.timestamp, timezone) : "-",
     checkOut: session.checkout ? formatClock(session.checkout.timestamp, timezone) : "-",
     // HH:MM:SS under 24h, else a compact "1d 2h 30m" breakdown.
@@ -312,6 +306,13 @@ export function rowFromAttendance(item, timezone, rules) {
     checkInImage: session.checkin ? checkInImageUrl(session.checkin) : "-",
     checkOutImage: session.checkout ? checkInImageUrl(session.checkout) : "-",
   }));
+
+  // Day-line Duration = Σ of the individual work-session durations (actual time
+  // on the clock), so it always agrees with the sub-session rows beneath it.
+  // This differs from Total Working Hrs (Day), which is the gross first-checkin →
+  // last-checkout span (breaks included).
+  const sessionMinutesTotal = workSessions.reduce((sum, session) => sum + sessionMinutes(session), 0);
+  const grossMinutes = workSessions.length ? sessionMinutesTotal : null;
 
   const row = {
     date: moment(item.createdAt).tz(timezone).format("DD MMM YYYY"),
@@ -339,6 +340,7 @@ export function rowFromAttendance(item, timezone, rules) {
     // Per-employee period total sums this (the elapsed-span working minutes),
     // matching the Attendance Logs definition.
     workingMinutesDay: workingMinutesDay,
+    breakMinutesDay: breakMinutes,
     checkInCount: checkins.length,
     checkOutCount: checkouts.length,
     checkInCamera: eventCamera(firstCheckIn),
@@ -438,9 +440,21 @@ async function reportRows(report, reference) {
   const rows = [];
   const { timezone, label } = await streamReportRows(report, reference, (row) => rows.push(row));
   applyPeriodTotals(rows);
-  // Drop internal accumulation fields before the rows go out over the preview API.
-  const cleanRows = rows.map(({ employeeKey, workingMinutesDay, workingMinutesPeriod, ...rest }) => rest);
-  return { rows: cleanRows, timezone, label };
+  // Drop internal accumulation fields before the rows go out over the preview
+  // API, but keep numeric minute fields the preview needs for a grand-total row
+  // (parsing the "9d 7h 40m" display strings back to minutes would be lossy).
+  const cleanRows = rows.map(({ employeeKey, ...rest }) => rest);
+  const totals = grandTotals(rows);
+  return {
+    rows: cleanRows,
+    timezone,
+    label,
+    totals: {
+      workingHours: formatPeriodDuration(totals.workingMinutes),
+      breakHours: formatPeriodDuration(totals.breakMinutes),
+      workingHoursPeriod: formatPeriodDuration(totals.periodMinutes),
+    },
+  };
 }
 
 function imageCell(url, text = "View Image") {
@@ -459,7 +473,11 @@ function imageCell(url, text = "View Image") {
 // hand-placed "" padding, and adding/reordering a column can't misalign rows.
 const REPORT_COLUMNS = [
   { header: "ID", day: (ctx) => String(ctx.index + 1) },
-  { header: "Name", day: (ctx) => ctx.row.employee },
+  {
+    header: "Name",
+    day: (ctx) => ctx.row.employee,
+    grand: () => "TOTAL (all employees)",
+  },
   { header: "Department", day: (ctx) => ctx.row.department },
   { header: "Date", day: (ctx) => ctx.row.date },
   { header: "Location", day: (ctx) => ctx.row.location },
@@ -478,9 +496,21 @@ const REPORT_COLUMNS = [
     day: (ctx) => ctx.row.duration,
     session: (ctx) => ctx.session.duration,
   },
-  { header: "Total Working Hours for the Day", total: (ctx) => ctx.row.workingHoursDay },
-  { header: "Total Break Hours for the Day", total: (ctx) => ctx.row.breakHoursDay },
-  { header: "Total Working Hours for the period selected", day: (ctx) => ctx.row.workingHoursPeriod },
+  {
+    header: "Total Working Hours for the Day",
+    total: (ctx) => ctx.row.workingHoursDay,
+    grand: (ctx) => formatPeriodDuration(ctx.totals.workingMinutes),
+  },
+  {
+    header: "Total Break Hours for the Day",
+    total: (ctx) => ctx.row.breakHoursDay,
+    grand: (ctx) => formatPeriodDuration(ctx.totals.breakMinutes),
+  },
+  {
+    header: "Total Working Hours for the period selected",
+    total: (ctx) => ctx.row.workingHoursPeriod,
+    grand: (ctx) => formatPeriodDuration(ctx.totals.periodMinutes),
+  },
   {
     header: "Checkin Camera",
     day: (ctx) => ctx.row.checkInCamera,
@@ -526,9 +556,30 @@ function sessionsFor(row) {
   }];
 }
 
+// Report-wide totals for the closing "grand" line:
+//   - workingMinutes / breakMinutes — summed over every employee-day.
+//   - periodMinutes — each employee's period total counted once (it already
+//     spans all their days, so summing it per-row would multiply by day count).
+function grandTotals(rows) {
+  let workingMinutes = 0;
+  let breakMinutes = 0;
+  const periodByEmployee = new Map();
+  for (const row of rows) {
+    workingMinutes += row.workingMinutesDay || 0;
+    breakMinutes += row.breakMinutesDay || 0;
+    if (!periodByEmployee.has(row.employeeKey)) {
+      periodByEmployee.set(row.employeeKey, row.workingMinutesPeriod || 0);
+    }
+  }
+  let periodMinutes = 0;
+  for (const value of periodByEmployee.values()) periodMinutes += value;
+  return { workingMinutes, breakMinutes, periodMinutes };
+}
+
 // Expand every employee-day into: day line, one session line per check-in/
-// check-out pair, day total line. Returns `{ kind, cells }` objects so the
-// PDF/CSV can style each line kind.
+// check-out pair, day total line. Closes with a single report-wide "grand"
+// total line. Returns `{ kind, cells }` objects so the PDF/CSV can style each
+// line kind.
 export function reportTableRows(rows) {
   const out = [];
   rows.forEach((row, index) => {
@@ -536,6 +587,7 @@ export function reportTableRows(rows) {
     for (const session of sessionsFor(row)) out.push(lineFor("session", { row, session }));
     out.push(lineFor("total", { row, index }));
   });
+  if (rows.length) out.push(lineFor("grand", { totals: grandTotals(rows) }));
   return out;
 }
 
@@ -660,10 +712,10 @@ export async function buildPdf({ report, rows, label, timezone }) {
     // Line kinds: "day" (identity + span, shaded, bold identity), "session"
     // (one check-in/out pair, plain), "total" (day working/break totals, shaded).
     const drawLine = (line, kind) => {
-      const emphasise = kind === "day" || kind === "total";
-      document.font(emphasise ? "Helvetica-Bold" : "Helvetica").fontSize(8);
+      const emphasise = kind === "day" || kind === "total" || kind === "grand";
+      document.font(emphasise ? "Helvetica-Bold" : "Helvetica").fontSize(kind === "grand" ? 8.5 : 8);
       const height = lineHeight(line);
-      const rowFill = kind === "day" ? "#eef2fb" : kind === "total" ? "#e6edfa" : null;
+      const rowFill = kind === "day" ? "#eef2fb" : kind === "total" ? "#e6edfa" : kind === "grand" ? "#d7e2f7" : null;
       if (rowFill) document.fillColor(rowFill).rect(32, y, pageWidth, height).fill();
       let x = 32;
       line.forEach((value, columnIndex) => {
@@ -677,9 +729,9 @@ export async function buildPdf({ report, rows, label, timezone }) {
         }
         x += col.width;
       });
-      // A heavier rule under the total line closes each employee-day block.
-      const isTotal = kind === "total";
-      document.strokeColor(isTotal ? "#9db6e8" : "#e6ecf7").lineWidth(isTotal ? 0.8 : 0.4)
+      // A heavier rule under the total / grand line closes each block.
+      const heavyRule = kind === "total" || kind === "grand";
+      document.strokeColor(heavyRule ? "#9db6e8" : "#e6ecf7").lineWidth(heavyRule ? 0.8 : 0.4)
         .moveTo(32, y + height).lineTo(32 + pageWidth, y + height).stroke();
       y += height;
     };
