@@ -444,8 +444,21 @@ function previewCell(row, key, index) {
   return String(value);
 }
 
+const GRAND_TOTAL_BY_KEY = {
+  workingHoursDay: 'workingHours',
+  breakHoursDay: 'breakHours',
+  workingHoursPeriod: 'workingHoursPeriod',
+};
+
+function grandTotalCell(totals, key) {
+  if (key === 'employee') return 'TOTAL (all employees)';
+  const totalKey = GRAND_TOTAL_BY_KEY[key];
+  return totalKey && totals?.[totalKey] ? String(totals[totalKey]) : '';
+}
+
 function PreviewModal({ preview, onClose }) {
   const rows = Array.isArray(preview?.rows) ? preview.rows : [];
+  const totals = preview?.totals;
   return (
     <div role="dialog" aria-modal="true" style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(2,6,23,.68)' }}>
       <div style={{ width: 'min(100%, 780px)', maxHeight: 'min(820px, calc(100vh - 32px))', display: 'flex', flexDirection: 'column', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, overflow: 'hidden' }}>
@@ -472,6 +485,18 @@ function PreviewModal({ preview, onClose }) {
                     ))}
                   </tr>
                 ))}
+                {totals && (
+                  <tr>
+                    {PREVIEW_COLUMNS.map((column) => (
+                      <td
+                        key={column.key}
+                        style={{ ...tableCellStyle, fontWeight: 700, background: 'var(--bg2)', borderTop: '2px solid var(--bd2)' }}
+                      >
+                        {grandTotalCell(totals, column.key) || '-'}
+                      </td>
+                    ))}
+                  </tr>
+                )}
               </tbody>
             </table>
           )}

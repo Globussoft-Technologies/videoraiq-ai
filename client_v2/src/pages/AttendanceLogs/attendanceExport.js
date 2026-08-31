@@ -73,11 +73,14 @@ const workingMinutesForRow = (item) => {
 const breakMinutesForRow = (item) =>
   Number.isFinite(item?.breakMinutes) ? Math.max(0, item.breakMinutes) : 0;
 
-/** Elapsed span (arrival → final departure), whole seconds — the Duration column. */
+/**
+ * Duration column — the same first-check-in → last-check-out span as Total
+ * Working Hrs (Day), to whole minutes, so the two columns always agree. Shown
+ * as HH:MM:SS. A day with no check-out shows "-".
+ */
 const durationHms = (item) => {
   if (!item?.logInTime || !item?.logOutTime || item.logOutTime === '--') return '-';
-  const span = (new Date(item.logOutTime) - new Date(item.logInTime)) / 60000;
-  return span >= 0 ? minutesToHms(span) : '-';
+  return minutesToHms(workingMinutesForRow(item));
 };
 
 /** Stable per-employee key for the period total. */
@@ -204,6 +207,37 @@ const buildExportRows = (allLogs, region) => {
   });
 };
 
+/**
+ * Report-wide totals for the closing grand-total row:
+ *   - working / break minutes summed over every employee-day row
+ *   - period minutes: each employee's period total counted once (it already
+ *     spans all their days).
+ */
+const buildGrandTotals = (allLogs) => {
+  let workingMinutes = 0;
+  let breakMinutes = 0;
+  const periodByEmployee = new Map();
+  allLogs.forEach((item) => {
+    workingMinutes += workingMinutesForRow(item);
+    breakMinutes += breakMinutesForRow(item);
+    const key = employeeKey(item);
+    periodByEmployee.set(
+      key,
+      (periodByEmployee.get(key) || 0) + workingMinutesForRow(item)
+    );
+  });
+  let periodMinutes = 0;
+  periodByEmployee.forEach((value) => {
+    periodMinutes += value;
+  });
+  return {
+    Duration: minutesToHms(workingMinutes),
+    WorkingDay: minutesToHms(workingMinutes),
+    BreakDay: minutesToHms(breakMinutes),
+    WorkingPeriod: formatPeriodDuration(periodMinutes),
+  };
+};
+
 const HEADERS = [
   'ID',
   'Name',
@@ -289,12 +323,25 @@ const exportToPDF = async (params) => {
     '', // View Image — drawn in didDrawCell
   ]);
 
+  const grand = buildGrandTotals(allLogs);
+  const foot = [[
+    '', 'TOTAL (all employees)', '', '', '', '', '',
+    grand.Duration,
+    grand.WorkingDay,
+    grand.BreakDay,
+    grand.WorkingPeriod,
+    '', '', '',
+  ]];
+
   autoTable(doc, {
     head: [HEADERS],
     body,
+    foot,
+    showFoot: 'lastPage',
     startY: 148,
     styles: { fontSize: 7, cellPadding: 3, overflow: 'linebreak', valign: 'middle' },
     headStyles: { fillColor: '#173b83', textColor: '#ffffff', fontStyle: 'bold', fontSize: 7 },
+    footStyles: { fillColor: '#d7e2f7', textColor: '#173b83', fontStyle: 'bold', fontSize: 7 },
     alternateRowStyles: { fillColor: '#eef2fb' },
     columnStyles: {
       0: { cellWidth: 24 },
@@ -367,6 +414,17 @@ const exportToExcel = async (params) => {
       row.CheckoutCamera,
       '', // View Image — replaced with a HYPERLINK formula below
     ]),
+    (() => {
+      const grand = buildGrandTotals(allLogs);
+      return [
+        '', 'TOTAL (all employees)', '', '', '', '', '',
+        grand.Duration,
+        grand.WorkingDay,
+        grand.BreakDay,
+        grand.WorkingPeriod,
+        '', '', '',
+      ];
+    })(),
   ];
 
   const worksheet = XLSX.utils.aoa_to_sheet(aoa);
