@@ -62,6 +62,15 @@ vi.mock("../../../utils/logger.js", () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+// getNvrCameras now hides detectors the client is not licensed for. That path
+// reads the Admin and ClientDetectionAllocation collections, which this
+// pure-unit file deliberately does not stand up — so license every detector
+// here and let detectionLicense.service.test.js cover the filtering itself
+// against real models.
+vi.mock("../../../core/v2/clientConfig/detectionLicense.service.js", () => ({
+  getAllowedDetectionTypes: async () => ({ has: () => true }),
+}));
+
 const { default: service } = await import(
   "../../../core/v2/globalSchedule/globalSchedule.service.js"
 );

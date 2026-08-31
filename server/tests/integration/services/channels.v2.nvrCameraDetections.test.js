@@ -31,6 +31,9 @@ const { default: Admin } = await import(
   "../../../core/v2/admin/admin.model.js"
 );
 const { default: NVR } = await import("../../../core/v2/NVR/nvr.model.js");
+const { default: DetectionAllocation } = await import(
+  "../../../core/v2/clientConfig/clientDetectionAllocation.model.js"
+);
 await import("../../../core/v2/profiles/profiles.model.js");
 await import("../../../core/v2/detectionSettings/detectionSettings.model.js");
 await import("../../../core/v2/authorizedUsers/authorizedUsers.model.js");
@@ -60,6 +63,22 @@ function makeChannel(over = {}) {
   });
 }
 
+/**
+ * License detection types for a client. Detections the superadmin has not
+ * allocated are invisible to the client (detectionLicense.service.js), so any
+ * test expecting a detection to be returned has to grant it first.
+ */
+function licenseDetections(adminId, settingTypes) {
+  return DetectionAllocation.insertMany(
+    settingTypes.map((settingType) => ({
+      adminId,
+      settingType,
+      enabled: true,
+      cameraAllocation: 10,
+    }))
+  );
+}
+
 function makeNvr(over = {}) {
   return NVR.create({
     userId: "1",
@@ -79,6 +98,12 @@ describe("v2 ChannelsService.getNvrCameraDetections", () => {
       login: "a",
       email: "a@test.com",
     });
+    await licenseDetections(admin._id, [
+      "countPersonsSettings",
+      "vehicleDetectionSettings",
+      "crowdDetectionSettings",
+      "lightDetectionSettings",
+    ]);
     const nvr1 = await makeNvr({
       userId: "42",
       nvrName: "NVR-A",
@@ -185,6 +210,10 @@ describe("v2 ChannelsService.getNvrCameraDetections", () => {
       login: "a",
       email: "a@test.com",
     });
+    await licenseDetections(admin._id, [
+      "countVehiclesSettings",
+      "countPersonsSettings",
+    ]);
     const nvr = await makeNvr({
       userId: "55",
       nvrName: "Member NVR",
@@ -236,6 +265,7 @@ describe("v2 ChannelsService.getNvrCameraDetections", () => {
       login: "a",
       email: "a@test.com",
     });
+    await licenseDetections(admin._id, ["countPersonsSettings"]);
     const nvr = await makeNvr({
       userId: "77",
       nvrName: "Filtered NVR",
@@ -285,6 +315,72 @@ describe("v2 ChannelsService.getNvrCameraDetections", () => {
     expect(payload(res).data.nvrs[0].cameras[0].cameraName).toBe(
       "Running Camera"
     );
+  });
+
+  it("omits detections the superadmin has not licensed for this client", async () => {
+    const admin = await Admin.create({
+      user_id: "88",
+      login: "a",
+      email: "a@test.com",
+    });
+    // Only Crowd Detection is licensed; the camera is also running Light
+    // Detection, which must not surface anywhere in the client UI.
+    await licenseDetections(admin._id, ["crowdDetectionSettings"]);
+    const nvr = await makeNvr({
+      userId: "88",
+      nvrName: "Licensed NVR",
+      localNvrId: "licensed-nvr",
+    });
+    await makeChannel({
+      userId: "88",
+      nvrId: nvr._id,
+      name: "Mixed Camera",
+      control: 1,
+      detections: {
+        crowdDetectionSettings: { enabled: true },
+        lightDetectionSettings: { enabled: true },
+      },
+    });
+
+    const { req, res, next } = serviceCtx({
+      params: { adminId: admin._id.toString() },
+    });
+    await ChannelsService.getNvrCameraDetections(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.nvrs[0].cameras[0].detections).toEqual([
+      "Crowd Detection",
+    ]);
+  });
+
+  it("returns no cameras when the client has no licensed detections", async () => {
+    const admin = await Admin.create({
+      user_id: "99",
+      login: "a",
+      email: "a@test.com",
+    });
+    const nvr = await makeNvr({
+      userId: "99",
+      nvrName: "Unlicensed NVR",
+      localNvrId: "unlicensed-nvr",
+    });
+    await makeChannel({
+      userId: "99",
+      nvrId: nvr._id,
+      name: "Orphan Camera",
+      control: 1,
+      detections: {
+        crowdDetectionSettings: { enabled: true },
+      },
+    });
+
+    const { req, res, next } = serviceCtx({
+      params: { adminId: admin._id.toString() },
+    });
+    await ChannelsService.getNvrCameraDetections(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.totalNvrs).toBe(0);
   });
 
   it("returns 400 when adminId is missing", async () => {

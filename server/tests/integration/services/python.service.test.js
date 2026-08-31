@@ -350,8 +350,12 @@ describe("PythonService.stopNewDetection", () => {
 
   it("rethrows axios errors", async () => {
     axios.post.mockRejectedValueOnce(new Error("can't stop"));
+    // Must be a MAPPED mode: an unmapped one is now rejected before the request
+    // is made, so it would no longer exercise axios error propagation.
+    // ("persons" is not mapped — DETECTION_MODES_MAP declares countPersonsSettings
+    // twice and the second, ["countPersons"], wins.)
     await expect(
-      PythonService.stopNewDetection("c3", "n3", ["persons"]),
+      PythonService.stopNewDetection("c3", "n3", ["crowd"]),
     ).rejects.toThrow("can't stop");
   });
 });
@@ -567,3 +571,4 @@ describe("PythonService.deregisterChannel / checkChannelHealth", () => {
     await expect(PythonService.checkChannelHealth({})).resolves.toBeUndefined();
   });
 });
+

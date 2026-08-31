@@ -113,6 +113,10 @@ const DetectionModelMap = {
   guardAbsence: GuardAbsenceDetectionSetting,
 };
 import JobsService from "../jobs/jobs.service.js";
+import {
+  allowedIncidentTypes,
+  getAllowedDetectionTypes,
+} from "../clientConfig/detectionLicense.service.js";
 
 const normalizeVehicleObstructionPayload = (body = {}) => {
   const vehicleNumber = body.vehicleNumber == null ? "" : String(body.vehicleNumber).trim();
@@ -2123,13 +2127,29 @@ class IncidentsService {
           Response.userFailResp("Admin not found.", "Validation failed."),
         );
       }
+      // Detection-visibility restriction. This endpoint drives the incident /
+      // alert type filter, so an unlicensed detection must not be offered as a
+      // filter option even when historical incidents for it still exist.
+      // Incidents are keyed by the SHORT type name, so the licensed setting
+      // types are translated through TYPE_MAP first.
+      const allowedTypes = await getAllowedDetectionTypes({
+        adminId: data.adminId,
+        userId: data.user_id,
+      });
+      const licensedIncidentTypes = [...allowedIncidentTypes(allowedTypes)];
+
+      const typeMatch = {
+        userId: isAdminExist.user_id.toString(),
+        incidentType: {
+          $nin: ["countPersons", "lineCrossing", "countVehicles"],
+          $in: licensedIncidentTypes,
+        },
+      };
+
       //Fetch all unique incident types, incidentName and _id and group by incidentType and add skip and limit
       const pipeline = [
         {
-          $match: {
-            userId: isAdminExist.user_id.toString(),
-            incidentType: { $nin: ["countPersons", "lineCrossing","countVehicles"] },
-          },
+          $match: typeMatch,
         },
         {
           $sort: { timeOfIncident: -1 },
@@ -2154,10 +2174,7 @@ class IncidentsService {
       //Total count of incidents after grouping
       const totalCount = await Incident.aggregate([
         {
-          $match: {
-            userId: isAdminExist.user_id.toString(),
-            incidentType: { $nin: ["countPersons", "lineCrossing","countVehicles"] },
-          },
+          $match: typeMatch,
         },
         {
           $group: {

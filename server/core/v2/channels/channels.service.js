@@ -35,7 +35,27 @@ import DetectionSettingService from "../detectionSettings/detectionSettings.serv
 import DetectionSettingsValidation from "../detectionSettings/detectionSettings.validate.js";
 import Recipient from "../verifyRecipients/recipients.model.js";
 import config from "config"
+import {
+  assertCanEnableDetection,
+  getAllowedDetectionTypes,
+  getLicenseState,
+  stripUnlicensedDetections,
+  stripUnlicensedDetectionsFromList,
+} from "../clientConfig/detectionLicense.service.js";
 const APP_ENV = config.get("APP_ENV");
+
+// Licensing refusal -> HTTP. 403 with the human message the UI shows verbatim,
+// plus the machine-readable code and the cameras currently holding the slot so
+// the client can offer "deselect one and continue" instead of a dead end.
+const licenseDeniedResponse = (res, verdict) =>
+  res.status(403).json(
+    Response.accessDeniedResp(verdict.message, {
+      code: verdict.code,
+      limit: verdict.limit,
+      inUse: verdict.inUse,
+      cameras: verdict.cameras,
+    })
+  );
 
 const isMongoObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").trim());
 
@@ -106,6 +126,21 @@ class ChannelService {
 
       const detectionFields = Object.keys(DETECTION_TYPES);
 
+      // One snapshot for the whole request: every enable below is checked
+      // against the same licensing state, so a single call cannot walk past the
+      // cap by enabling several detections at once. Resolved lazily — most
+      // updateChannel calls only rename a camera or set a department and never
+      // reach an enable, and this costs two queries.
+      let licenseStatePromise;
+      const licenseState = () => {
+        licenseStatePromise ||= getLicenseState({
+          adminId: req?.verified?.userData?.adminId,
+          userId: req?.verified?.userData?.user_id,
+          channelUserId: existingChannel?.userId,
+        });
+        return licenseStatePromise;
+      };
+
       if (updates?.detections) {
         const detectionFields = Object.keys(DETECTION_TYPES);
 
@@ -129,6 +164,16 @@ class ChannelService {
                 );
             }
 
+            // ✅ 1b. Licensing gate — same rules as the toggle endpoint.
+            if (updateValue.enabled === true) {
+              const verdict = await assertCanEnableDetection({
+                channelId: String(existingChannel._id),
+                settingType: field,
+                state: await licenseState(),
+              });
+              if (!verdict.ok) return licenseDeniedResponse(res, verdict);
+            }
+
             // ✅ 2. Update the enabled flag in DetectionSetting
             if (linkedSettingId) {
               existingChannel.detections[field].enabled = updateValue?.enabled;
@@ -147,6 +192,16 @@ class ChannelService {
 
         for (const field of detectionFields) {
           if (existingChannel.detections?.[field]?.id) {
+            // Starting a camera turns every linked detector on at once — each
+            // one still has to fit inside its own allocation.
+            if (newEnabledState) {
+              const verdict = await assertCanEnableDetection({
+                channelId: String(existingChannel._id),
+                settingType: field,
+                state: await licenseState(),
+              });
+              if (!verdict.ok) return licenseDeniedResponse(res, verdict);
+            }
             existingChannel.detections[field].enabled = newEnabledState;
           }
         }
@@ -555,10 +610,18 @@ class ChannelService {
         })
       );
 
+      // Detection-visibility restriction: drop every detection this client is
+      // not licensed for before the camera list leaves the server, so the
+      // engine chips / filters built from camera.detections never surface one.
+      const allowedTypes = await getAllowedDetectionTypes({
+        adminId: req?.verified?.userData?.adminId,
+        userId: user_id,
+      });
+
       return res.status(200).json(
         Response.userSuccessResp("Channels retrieved successfully", {
           total,
-          channels: enrichedChannels,
+          channels: stripUnlicensedDetectionsFromList(enrichedChannels, allowedTypes),
           // nvr: nvrData,
         })
       );
@@ -598,9 +661,14 @@ class ChannelService {
       if (!channel) {
         return res.status(404).json(Response.errorResp("Channel not found"));
       }
+      const allowedTypes = await getAllowedDetectionTypes({
+        adminId,
+        userId: user_id,
+        channelUserId: channel?.userId,
+      });
       return res.status(200).json(
         Response.userSuccessResp("Channel retrieved successfully", {
-          channel,
+          channel: stripUnlicensedDetections(channel, allowedTypes),
         })
       );
     } catch (err) {
@@ -698,6 +766,19 @@ class ChannelService {
         });
       }
 
+      // Only the client UI is restricted. A `system` caller is the CV backend
+      // reading the detectors it must actually run — filtering that would stop
+      // engines that are already enabled, which is a licensing question the
+      // superadmin settles by disabling them, not something a read should do.
+      if (!isSystem) {
+        const allowedTypes = await getAllowedDetectionTypes({
+          adminId: req?.verified?.userData?.adminId,
+          userId: req?.verified?.userData?.user_id,
+          channelUserId: channels[0]?.userId,
+        });
+        modifiedChannels = stripUnlicensedDetectionsFromList(modifiedChannels, allowedTypes);
+      }
+
       const finalPayload = {
         channels: modifiedChannels,
       };
@@ -770,6 +851,18 @@ class ChannelService {
 
       const channels = await Channel.find({ _id: { $in: ids } });
 
+      // Starting cameras in bulk enables every linked detector on each of them.
+      // Check against one snapshot, then account for each camera this request
+      // newly licenses so a single bulk call cannot overshoot the limit.
+      const licenseState =
+        control === 1
+          ? await getLicenseState({
+              adminId: req?.verified?.userData?.adminId,
+              userId: req?.verified?.userData?.user_id,
+              channelUserId: channels[0]?.userId,
+            })
+          : null;
+
       for (const channel of channels) {
         const update = { $set: { ...updateFields } };
 
@@ -780,6 +873,30 @@ class ChannelService {
           for (const key of Object.keys(detections)) {
             const detection = detections[key];
             if (detection?.id) {
+              if (control === 1) {
+                const verdict = await assertCanEnableDetection({
+                  channelId: String(channel._id),
+                  settingType: key,
+                  state: licenseState,
+                });
+                if (!verdict.ok) return licenseDeniedResponse(res, verdict);
+
+                // Reserve the slots this camera is about to take so the next
+                // camera in the loop sees them as spent.
+                const entry = {
+                  cameraId: String(channel._id),
+                  name: channel.customName || channel.name || String(channel._id),
+                };
+                if (!licenseState.licenseCameras.some((c) => c.cameraId === entry.cameraId)) {
+                  licenseState.licenseCameras.push(entry);
+                }
+                const forType = licenseState.byType.get(key) || [];
+                if (!forType.some((c) => c.cameraId === entry.cameraId)) {
+                  forType.push(entry);
+                  licenseState.byType.set(key, forType);
+                }
+              }
+
               updatedDetections[key] = {
                 ...detection,
                 enabled: control === 1,
@@ -837,6 +954,20 @@ class ChannelService {
         return res.send(
           Response.userFailResp("Validation Failed", "Invalid camera ID")
         );
+      }
+
+      // Licensing gate — this endpoint can flip `enabled` alongside the zone /
+      // threshold settings, so it is an enable path like any other.
+      if (updates.enabled === true) {
+        const target = await Channel.findById(cameraId).select("userId").lean();
+        const verdict = await assertCanEnableDetection({
+          adminId: req?.verified?.userData?.adminId,
+          userId: req?.verified?.userData?.user_id,
+          channelUserId: target?.userId,
+          channelId: String(cameraId),
+          settingType: detectionKey,
+        });
+        if (!verdict.ok) return licenseDeniedResponse(res, verdict);
       }
 
       const updatePath = `detections.${detectionKey}`;
@@ -1414,10 +1545,12 @@ class ChannelService {
         .lean();
 
       const groupedByNvr = new Map();
+      const allowedTypes = await getAllowedDetectionTypes({ adminId: requestedAdminId, userId });
 
       for (const channel of channels) {
         const detections = Object.entries(channel?.detections || {})
-          .filter(([, detectionConfig]) => detectionConfig?.enabled === true)
+          .filter(([detectionKey, detectionConfig]) =>
+            detectionConfig?.enabled === true && allowedTypes.has(detectionKey))
           .map(([detectionKey]) => DETECTION_TYPES[detectionKey] || detectionKey);
 
         if (channel?.control !== 1 || detections.length === 0) {
@@ -1478,6 +1611,28 @@ class ChannelService {
       if (!channel) {
         return res.status(404).json(Response.notFoundResp("Channel not found"));
       }
+      // Licensing gate. Only turning a detection ON can consume a slot, so a
+      // disable never reaches this — that is what lets a user free capacity
+      // after being refused. Re-enabling on a camera that already holds the
+      // slot is allowed too; assertCanEnableDetection treats it as no-change.
+      if (enable) {
+        const verdict = await assertCanEnableDetection({
+          adminId,
+          userId,
+          channelUserId: channel?.userId,
+          channelId: String(channel._id),
+          settingType: detectionType,
+        });
+        if (!verdict.ok) {
+          logger.info(
+            `[LICENSE] toggleDetection refused channel=${channelId} ` +
+              `detector=${detectionType} code=${verdict.code} ` +
+              `inUse=${verdict.inUse}/${verdict.limit}`
+          );
+          return licenseDeniedResponse(res, verdict);
+        }
+      }
+
       // Check if detection setting exists and is linked
       const existingLink = channel?.detections?.[detectionType];
       logger.debug(

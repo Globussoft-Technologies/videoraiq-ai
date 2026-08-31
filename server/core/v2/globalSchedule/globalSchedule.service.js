@@ -2,6 +2,7 @@ import GlobalSchedule from "./globalSchedule.model.js";
 import Channel from "../channels/channels.model.js";
 import NVR from "../NVR/nvr.model.js";
 import { DETECTION_TYPES, toPopulateDetections } from "../../../constants/detectionTypes.js";
+import { getAllowedDetectionTypes } from "../clientConfig/detectionLicense.service.js";
 import GlobalScheduleValidation from "./globalSchedule.validation.js";
 import logger from "../../../utils/logger.js";
 import Response from "../../../utils/response.js";
@@ -65,16 +66,22 @@ const isConfiguredForDetection = (channel) =>
 
 const escapeRegex = (value = "") => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const toCameraSummary = (channel) => ({
+// `allowedTypes` is the client's licensed detection set. A detector the
+// superadmin has not licensed must not appear as schedulable here either —
+// otherwise a detection hidden everywhere else reappears in Global Detection
+// Scheduling and could be enrolled.
+const toCameraSummary = (channel, allowedTypes) => ({
   channelId: channel._id,
   name: channel.customName || channel.name,
-  configuredDetectors: appliedDetectors(channel).map((settingType) => ({
-    settingType,
-    detectionName: DETECTION_TYPES[settingType],
-    // Live detection state, shown for context. Distinct from a camera's
-    // enrolment in a global schedule.
-    enabled: channel?.detections?.[settingType]?.enabled === true,
-  })),
+  configuredDetectors: appliedDetectors(channel)
+    .filter((settingType) => !allowedTypes || allowedTypes.has(settingType))
+    .map((settingType) => ({
+      settingType,
+      detectionName: DETECTION_TYPES[settingType],
+      // Live detection state, shown for context. Distinct from a camera's
+      // enrolment in a global schedule.
+      enabled: channel?.detections?.[settingType]?.enabled === true,
+    })),
 });
 
 /**
@@ -192,12 +199,21 @@ class GlobalScheduleService {
         .populate(toPopulateDetections)
         .lean();
 
+      const allowedTypes = await getAllowedDetectionTypes({
+        adminId: req?.verified?.userData?.adminId,
+        userId: user_id,
+      });
+
+      // A camera whose only applied detectors are unlicensed has nothing
+      // schedulable left, so it belongs in nonConfigured — listing it as
+      // configured with an empty detector list would be a dead row.
       const configured = [];
       const nonConfigured = [];
       for (const channel of channels) {
-        (isConfiguredForDetection(channel) ? configured : nonConfigured).push(
-          toCameraSummary(channel),
-        );
+        const summary = toCameraSummary(channel, allowedTypes);
+        const schedulable =
+          isConfiguredForDetection(channel) && summary.configuredDetectors.length > 0;
+        (schedulable ? configured : nonConfigured).push(summary);
       }
 
       // Which of those cameras are already enrolled elsewhere, so the UI can

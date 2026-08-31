@@ -29,6 +29,10 @@ const detectionModels = await import(
   "../../../core/v2/detectionSettings/detectionSettings.model.js"
 );
 const { PersonalProtectiveEquipmentSetting } = detectionModels;
+const { default: Admin } = await import("../../../core/v2/admin/admin.model.js");
+const { default: DetectionAllocation } = await import(
+  "../../../core/v2/clientConfig/clientDetectionAllocation.model.js"
+);
 await import("../../../core/v1/NVR/nvr.model.js").catch(() => {});
 await import("../../../core/v1/verifyRecipients/recipients.model.js").catch(() => {});
 await import("../../../core/v1/authorizedUsers/authorizedUsers.model.js").catch(() => {});
@@ -41,6 +45,21 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   await clearCollections();
+  // getAllDetectionSettings only lists detections the superadmin has licensed
+  // for the client (detection-visibility restriction), so the tenant these
+  // fixtures belong to needs PPE allocated before it shows up at all.
+  const admin = await Admin.create({
+    user_id: "u1",
+    login: "u1",
+    email: "u1@test.com",
+    purchasedCameras: 10,
+  });
+  await DetectionAllocation.create({
+    adminId: admin._id,
+    settingType: "personalProtectiveEquipmentSettings",
+    enabled: true,
+    cameraAllocation: 10,
+  });
 });
 
 function makeChannel(over = {}) {

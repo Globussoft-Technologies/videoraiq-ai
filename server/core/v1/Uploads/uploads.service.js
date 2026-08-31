@@ -98,7 +98,7 @@ class UploadService {
             const contentType = getManualMimeType(fileName);
 
             res.setHeader("Content-Type", contentType);
-            res.setHeader("Content-Disposition", "inline");
+            res.setHeader("Content-Disposition", contentDispositionFor(req.query.download, fileName));
             res.setHeader("Accept-Ranges", "bytes");
             res.setHeader("Access-Control-Allow-Origin", "*");
             res.setHeader("Cross-Origin-Opener-Policy", "*");
@@ -216,10 +216,40 @@ export function getManualMimeType(fileName) {
             return 'image/gif';
         case '.pdf':
             return 'application/pdf';
+        case '.csv':
+            return 'text/csv';
+        case '.xlsx':
+            return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
         default:
             return 'application/octet-stream';
     }
 };
+
+/**
+ * Stored object keys are "<epoch>-<uuid>-<originalName>" (see putMedia), so a
+ * browser saving a linked file names it after that key. Passing ?download=<name>
+ * on the fetch URL names the saved file instead — used by the attendance
+ * auto-email report links, which want attendancereport_<timestamp>.<ext>.
+ * Without the param, media keeps rendering inline exactly as before.
+ */
+export function contentDispositionFor(requested, fallbackName) {
+    if (requested === undefined) return 'inline';
+    const name = safeDownloadName(requested) || safeDownloadName(fallbackName) || 'download';
+    // filename* (RFC 5987) carries any non-ASCII characters; the plain
+    // filename= stays for clients that ignore the extended form.
+    return `attachment; filename="${name}"; filename*=UTF-8''${encodeURIComponent(name)}`;
+}
+
+// The name is caller-supplied, so strip anything that could break out of the
+// header (quotes, CR/LF) or address a different path (separators, leading dots).
+function safeDownloadName(value) {
+    return String(value ?? '')
+        .replace(/[/\\]/g, '_')
+        .replace(/[\r\n";]/g, '')
+        .replace(/^\.+/, '')
+        .trim()
+        .slice(0, 200);
+}
 
 
 export default new UploadService();

@@ -74,6 +74,11 @@ import {
 } from "../../../services/detectionSchedule.resolver.js";
 import { sendPayloadToUser } from "../../../socket.js";
 import mongoose, { Types } from "mongoose";
+import {
+  assertDetectionLicensed,
+  filterDetectionTypes,
+  getAllowedDetectionTypes,
+} from "../clientConfig/detectionLicense.service.js";
 
 const modelMap = {
   countPersonsSettings: CountPersonsDetectionSetting,
@@ -360,9 +365,18 @@ const applyResetThresholds = async (detectionSetting, thresholds) => {
 class DetectionSettingService {
   async getDetectionTypes(req, res, _next) {
     try {
+      // Detection-visibility restriction. This endpoint is what every V2
+      // detection picker, engine filter and card grid is built from, so
+      // narrowing it here hides unlicensed detections across the whole admin UI
+      // instead of each screen having to remember to filter.
+      const allowedTypes = await getAllowedDetectionTypes({
+        adminId: req?.verified?.userData?.adminId,
+        userId: req?.verified?.userData?.user_id,
+      });
+
       return res.status(200).json(
         Response.userSuccessResp("Detection types fetched successfully", {
-          detectionTypes: DETECTION_TYPES,
+          detectionTypes: filterDetectionTypes(allowedTypes),
         }),
       );
     } catch (error) {
@@ -442,13 +456,22 @@ class DetectionSettingService {
         userId: req?.verified?.userData?.user_id,
         channelUserId: targetChannel?.userId,
       });
-      const admin = await Admin.findById(adminId).select("detectionConfig").lean();
-      const config = admin?.detectionConfig;
-      // if (config && Object.keys(config).length > 0 && !(value.settingType in config)) {
-      //   return res
-      //     .status(403)
-      //     .json(Response.userFailResp("You are not authorized to use this detection type"));
-      // }
+      // Detection-visibility restriction. The superadmin decides which
+      // detections exist for a client; creating a setting for one they were
+      // never given is refused here rather than only being hidden in the UI.
+      // (This supersedes the never-enabled Admin.detectionConfig check that
+      // sat here — that map only ever held display-name overrides.)
+      const licensed = await assertDetectionLicensed({
+        adminId,
+        userId: req?.verified?.userData?.user_id,
+        channelUserId: targetChannel?.userId,
+        settingType: value.settingType,
+      });
+      if (!licensed.ok) {
+        return res
+          .status(403)
+          .json(Response.accessDeniedResp(licensed.message, { code: licensed.code }));
+      }
 
       // 3. Save to DB for each channelId
       const data = { ...value, userId: user_id };
@@ -639,6 +662,20 @@ class DetectionSettingService {
       }
 
       const settingType = detectionSetting.settingType;
+
+      // Detection-visibility restriction — a setting whose type has been taken
+      // away from this client is read-only from here on.
+      const licensed = await assertDetectionLicensed({
+        adminId: req?.verified?.userData?.adminId,
+        userId: user_id,
+        channelUserId: detectionSetting?.userId,
+        settingType,
+      });
+      if (!licensed.ok) {
+        return res
+          .status(403)
+          .json(Response.accessDeniedResp(licensed.message, { code: licensed.code }));
+      }
 
       if (value.settings && typeof value.settings === "object") {
         const thresholdValidation =
@@ -1396,10 +1433,21 @@ class DetectionSettingService {
 
       const user_id = req?.verified?.userData?.user_id;
 
+      // Detection-visibility restriction: a setting whose type is not licensed
+      // must not appear in the list either, otherwise a detection hidden from
+      // every picker still shows up in "Saved Configurations".
+      const allowedTypes = await getAllowedDetectionTypes({
+        adminId: req?.verified?.userData?.adminId,
+        userId: user_id,
+      });
+
       const filter = { userId: user_id };
       if (ids) filter._id = { $in: toArray(ids) };
       if (name) filter.name = { $regex: name, $options: "i" };
-      if (settingType) filter.settingType = settingType;
+      filter.settingType =
+        settingType && allowedTypes.has(settingType)
+          ? settingType
+          : { $in: settingType ? [] : [...allowedTypes] };
 
       const total = await DetectionSetting.countDocuments(filter);
 
@@ -1606,6 +1654,22 @@ class DetectionSettingService {
 
       if (!channel) {
         return res.status(404).json(Response.userFailResp("Channel not found"));
+      }
+
+      // Detection-visibility restriction. Attaching links the detection to the
+      // camera with enabled:false, so it spends no camera licence yet — the
+      // camera-count rules are applied when it is switched on, in
+      // channels.service.js toggleDetection.
+      const licensed = await assertDetectionLicensed({
+        adminId: req?.verified?.userData?.adminId,
+        userId: user_id,
+        channelUserId: channel?.userId,
+        settingType,
+      });
+      if (!licensed.ok) {
+        return res
+          .status(403)
+          .json(Response.accessDeniedResp(licensed.message, { code: licensed.code }));
       }
 
       // 3. Check if already attached

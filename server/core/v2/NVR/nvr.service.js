@@ -16,6 +16,20 @@ import { autoSyncLocations } from "../../../utils/helperFunctions.js";
 import { buildRTSPUrl, updateCameraStream, registerCameraStream, buildStreamingUrl } from "../../../utils/rtspStream.js";
 import { parseXml } from "../../../utils/xmlParse.js";
 import mongoose from "mongoose";
+import { emitCameraLimit } from "../../../socket.js";
+import { isLicensingEnforced } from "../clientConfig/detectionLicense.service.js";
+
+/**
+ * A channel's identifier, whichever field this deployment stores it in.
+ *
+ * cloudSchema has `channelId`; localSchema has `localChannelId` and NO
+ * channelId at all, so mongoose silently drops it on write. The NVR device,
+ * meanwhile, always reports `channelId`. Keying on `cam.channelId` alone
+ * therefore matched nothing on-prem: camera selection saved as "no changes
+ * made", the Manage Cameras modal showed every box unchecked, and any count
+ * built from that comparison came out as zero.
+ */
+const channelKey = (cam) => String(cam?.channelId ?? cam?.localChannelId ?? "");
 const APP_ENV = config.get("APP_ENV");
 
 class NVRService {
@@ -51,6 +65,28 @@ class NVRService {
     }
   }
   // new
+  /**
+   * How many more cameras this user may mark isAdded, given the superadmin's
+   * purchasedCameras licence. Never negative.
+   *
+   * Unlike v1's copy, zero purchased means zero remaining rather than
+   * "uncapped". A client on zero cameras is now frozen out of the app entirely
+   * (see socket.js `licensed`), so treating 0 as unlimited here would let them
+   * quietly add cameras they have no licence for.
+   */
+  async getRemainingCameraLimit(userId) {
+    // On-prem there is no licence to spend against — the customer owns the box.
+    if (!isLicensingEnforced()) return Infinity;
+
+    const admin = await adminModel
+      .findOne({ user_id: userId })
+      .select("purchasedCameras")
+      .lean();
+    const purchased = Number(admin?.purchasedCameras) || 0;
+    const added = await Channel.countDocuments({ userId, isAdded: true });
+    return Math.max(purchased - added, 0);
+  }
+
   async addNvr(req, res, _next) {
     try {
       const userId = req?.verified?.userData?.user_id;
@@ -105,21 +141,36 @@ class NVRService {
         }
       }
 
+      // Allot cameras only up to the admin's remaining purchased-camera limit;
+      // the rest are stored as isAdded:false — discovered and available, but not
+      // counted against the licence. Registering a 32-channel NVR on a
+      // 1-camera licence previously added all 32.
+      const remaining = await this.getRemainingCameraLimit(userId);
+      let addedSoFar = 0;
+
       // Save NVR metadata
       const savedNvr = await NVR.create({
         userId,
         ...nvr,
-        cameraCount: cameras.length,
+        // remaining is Infinity on-prem, so Math.min keeps the real count.
+        cameraCount: Math.min(cameras.length, remaining),
       });
 
-      const cameraDocs = cameras.map((cam) => ({
-        userId,
-        nvrId: savedNvr._id,
-        isAdded: true,
-        ...cam,
-      }));
+      const cameraDocs = cameras.map((cam) => {
+        const isAdded = addedSoFar < remaining;
+        if (isAdded) addedSoFar++;
+        return {
+          userId,
+          nvrId: savedNvr._id,
+          isAdded,
+          ...cam,
+        };
+      });
 
       const savedCameras = await Camera.insertMany(cameraDocs);
+
+      // Cameras were just allotted — push the new limit snapshot.
+      emitCameraLimit({ userId, adminId: adminId || isAdminExist._id });
 
       // Trigger location auto-sync in background
       autoSyncLocations(
@@ -597,6 +648,9 @@ class NVRService {
       if (!deletedNVR) {
         return res.status(400).json(Response.userFailResp("NVR not found"));
       }
+
+      // Deleting an NVR takes its cameras with it, so the added count dropped.
+      emitCameraLimit({ userId: req?.verified?.userData?.user_id });
 
       return res
         .status(200)
@@ -1844,10 +1898,74 @@ class NVRService {
 
       // Normalize cameraIds to strings for comparison
       const selectedSet = new Set(cameraList.map(id => String(id)));
+
+      // Licence check — cloud only. On-prem cameras are added and removed freely.
+      // Licence check. This endpoint syncs the whole isAdded set for ONE NVR, so
+      // the question is the tenant-wide total afterwards: cameras added on OTHER
+      // NVRs, plus what is being selected here. Neither v1 nor v2 ever checked
+      // this, which is how a client on a 1-camera licence ended up with two.
+      const admin = await adminModel
+        .findOne({ user_id: user_id })
+        .select("purchasedCameras")
+        .lean();
+      const purchased = Number(admin?.purchasedCameras) || 0;
+      const nvrCameraIds = allCameras.map((cam) => cam._id);
+      const addedElsewhere = await Channel.countDocuments({
+        userId: user_id,
+        isAdded: true,
+        _id: { $nin: nvrCameraIds },
+      });
+      // Only real channels count — '__none__' is the clear-everything sentinel
+      // the UI sends, and matches nothing.
+      const selectingHere = allCameras.filter((cam) =>
+        selectedSet.has(channelKey(cam))
+      ).length;
+      const addedHereNow = allCameras.filter((cam) => cam.isAdded).length;
+      const currentTotal = addedElsewhere + addedHereNow;
+      const wouldBeAdded = addedElsewhere + selectingHere;
+
+      // Refuse only a save that INCREASES the total past the licence. A tenant
+      // already over the limit (the old code allowed it, and a licence can be
+      // lowered at any time) must still be able to save reductions — otherwise
+      // they are stuck: every NVR refuses to save because of cameras on the
+      // others, and there is no order in which to fix it.
+      if (isLicensingEnforced() && wouldBeAdded > purchased && wouldBeAdded > currentTotal) {
+        // Name where the problem actually is. Telling someone to "deselect 32"
+        // in a modal where they selected 1 is not actionable — the excess is on
+        // their other NVRs.
+        let message;
+        if (purchased <= 0) {
+          message =
+            "You do not have any camera license. Please contact support to enable cameras.";
+        } else if (addedElsewhere >= purchased) {
+          message =
+            `Your licence covers ${purchased} camera${purchased === 1 ? "" : "s"}, and ` +
+            `${addedElsewhere} ${addedElsewhere === 1 ? "is" : "are"} already added on your ` +
+            `other NVRs. Remove ${addedElsewhere - purchased + selectingHere} there before ` +
+            `adding here.`;
+        } else {
+          message =
+            `Your licence covers ${purchased} camera${purchased === 1 ? "" : "s"} and ` +
+            `${addedElsewhere} ${addedElsewhere === 1 ? "is" : "are"} added on other NVRs, ` +
+            `so you can select ${purchased - addedElsewhere} here. ` +
+            `Deselect ${selectingHere - (purchased - addedElsewhere)} to continue.`;
+        }
+
+        return res.status(403).json(
+          Response.accessDeniedResp(message, {
+            code: "CAMERA_LICENSE_EXCEEDED",
+            limit: purchased,
+            inUse: wouldBeAdded,
+            addedElsewhere,
+            selectingHere,
+            selectableHere: Math.max(purchased - addedElsewhere, 0),
+          })
+        );
+      }
       const bulkOps = allCameras.map((cam) => ({
         updateOne: {
           filter: { _id: cam._id },
-          update: { $set: { isAdded: selectedSet.has(String(cam.channelId)) } },
+          update: { $set: { isAdded: selectedSet.has(channelKey(cam)) } },
         },
       }));
 
@@ -1860,6 +1978,12 @@ class NVRService {
 
       const addedCount = await Camera.countDocuments({ nvrId, isAdded: true });
       await NVR.findByIdAndUpdate(nvrId, { cameraCount: addedCount });
+
+      // Push the new camera-limit snapshot to this admin's clients — the added
+      // count just changed. Without this the over-limit lock keeps showing the
+      // stale count and never clears, however many cameras are removed.
+      // Fire-and-forget; never blocks the response.
+      emitCameraLimit({ userId: user_id });
 
       return res.status(200).json(
         Response.userSuccessResp("Cameras selection updated successfully", {
@@ -1902,14 +2026,28 @@ class NVRService {
       }
 
       const addedCameras = await Camera.find({ nvrId }).setOptions({ includeInactive: true });
-      const addedMap = new Map(addedCameras.map((c) => [c.channelId, { _id: c._id, isAdded: c.isAdded }]));
-      const dbNameByChannel = new Map(addedCameras.map((c) => [c.channelId, c.name]));
+      const addedMap = new Map(
+        addedCameras.map((c) => [channelKey(c), { _id: c._id, isAdded: c.isAdded }])
+      );
+      const dbNameByChannel = new Map(addedCameras.map((c) => [channelKey(c), c.name]));
 
       // Sync DB name -> NVR's current name when a camera was renamed on the device.
       const renames = camerasData.cameras
-        .filter((cam) => dbNameByChannel.has(cam.channelId) && cam.name && cam.name !== dbNameByChannel.get(cam.channelId))
+        .filter(
+          (cam) =>
+            dbNameByChannel.has(channelKey(cam)) &&
+            cam.name &&
+            cam.name !== dbNameByChannel.get(channelKey(cam))
+        )
         .map((cam) => ({
-          updateOne: { filter: { nvrId, channelId: cam.channelId }, update: { $set: { name: cam.name } } },
+          updateOne: {
+            // Match on whichever key this deployment actually stores.
+            filter: {
+              nvrId,
+              $or: [{ channelId: channelKey(cam) }, { localChannelId: channelKey(cam) }],
+            },
+            update: { $set: { name: cam.name } },
+          },
         }));
       if (renames.length) {
         await Camera.bulkWrite(renames);
@@ -1918,7 +2056,7 @@ class NVRService {
       // Auto-add new cameras found on NVR but not in database. Each one's
       // stream is registered immediately (same as the Add-NVR flow) so it can
       // be previewed right away, regardless of isAdded/selection state.
-      const newCameras = camerasData.cameras.filter((cam) => !addedMap.has(cam.channelId));
+      const newCameras = camerasData.cameras.filter((cam) => !addedMap.has(channelKey(cam)));
       if (newCameras.length > 0) {
         const cameraDocs = newCameras.map((cam) => ({
           userId: user_id,
@@ -1928,7 +2066,7 @@ class NVRService {
         }));
         const insertedCameras = await Camera.insertMany(cameraDocs);
         insertedCameras.forEach((savedCam) => {
-          addedMap.set(savedCam.channelId, { _id: savedCam._id, isAdded: savedCam.isAdded });
+          addedMap.set(channelKey(savedCam), { _id: savedCam._id, isAdded: savedCam.isAdded });
           try {
             const uid = `${nvr._id}-${savedCam._id}`;
             const rtspUrl = buildRTSPUrl(nvr, savedCam, "main");
@@ -1941,8 +2079,8 @@ class NVRService {
 
       const availableCameras = camerasData.cameras.map((cam) => ({
         ...cam,
-        isAdded: addedMap.has(cam.channelId) ? addedMap.get(cam.channelId).isAdded : false,
-        dbId: addedMap.has(cam.channelId) ? addedMap.get(cam.channelId)._id : null,
+        isAdded: addedMap.has(channelKey(cam)) ? addedMap.get(channelKey(cam)).isAdded : false,
+        dbId: addedMap.has(channelKey(cam)) ? addedMap.get(channelKey(cam))._id : null,
       }));
 
       return res.status(200).json(
@@ -1978,6 +2116,9 @@ class NVRService {
 
       const totalCameras = await Camera.countDocuments({ nvrId }).setOptions({ includeInactive: true });
       await NVR.findByIdAndUpdate(nvrId, { cameraCount: totalCameras });
+
+      // A camera was removed, so the added count dropped — push the snapshot.
+      emitCameraLimit({ userId: user_id });
 
       return res.status(200).json(
         Response.userSuccessResp("Camera removed successfully", { cameraId, nvrId, cameraCount: totalCameras }),

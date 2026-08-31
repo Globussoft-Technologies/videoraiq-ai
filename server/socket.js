@@ -6,10 +6,23 @@ import logger from "./utils/logger.js";
 import { checkActivePlanSocket } from "./middlewares/checkActivePlan.js";
 import adminModel from "./core/v1/admin/admin.model.js";
 import Channel from "./core/v1/channels/channels.model.js";
+import {
+  getLicenseState,
+  isLicensingEnforced,
+} from "./core/v2/clientConfig/detectionLicense.service.js";
+import { DETECTION_TYPES } from "./constants/detectionTypes.js";
 
-// Compute an admin's camera-limit snapshot { purchasedCameras, added, remaining }.
+// Compute an admin's camera-limit snapshot
+// { purchasedCameras, added, remaining, licensed }.
 // Accepts adminId and/or userId — resolves the missing one from the admin doc.
-// purchasedCameras <= 0 means "no limit" -> remaining: null (uncapped).
+//
+// `remaining` keeps its original meaning: null when purchasedCameras <= 0, so
+// the existing over-limit maths is untouched.
+//
+// `licensed` is the separate question "has the superadmin licensed this client
+// at all?". A client on zero cameras has bought nothing, so the apps freeze with
+// a contact-support message rather than running unrestricted — the policy lives
+// here so v1 and v2 cannot drift on it.
 const getCameraLimitSnapshot = async ({ adminId, userId }) => {
   const admin = adminId
     ? await adminModel.findById(adminId).select("purchasedCameras user_id").lean()
@@ -24,6 +37,37 @@ const getCameraLimitSnapshot = async ({ adminId, userId }) => {
     purchasedCameras,
     added,
     remaining: purchasedCameras > 0 ? Math.max(purchasedCameras - added, 0) : null,
+    // On-prem there is no licence, so the app must never be frozen: report
+    // licensed regardless of purchasedCameras, which nobody sets there.
+    licensed: !isLicensingEnforced() || purchasedCameras > 0,
+  };
+};
+
+// Build an admin's detection-licence snapshot: which detections they may use,
+// each one's camera allocation, and how many cameras are running it now. Same
+// shape the /client-config/license endpoint returns, so the frontend can treat
+// a pushed update and a fetched one identically.
+const getDetectionLicenseSnapshot = async ({ adminId, userId }) => {
+  const state = await getLicenseState({ adminId, userId });
+  if (!state.resolved) return null;
+  return {
+    adminId: state.adminId,
+    userId: state.userId,
+    purchasedCameras: state.purchasedCameras,
+    camerasInUse: state.licenseCameras.length,
+    remaining: Math.max(state.purchasedCameras - state.licenseCameras.length, 0),
+    allowedDetections: [...state.allocations.keys()],
+    detections: [...state.allocations.entries()].map(([settingType, cameraAllocation]) => {
+      const cameras = state.byType.get(settingType) || [];
+      return {
+        settingType,
+        name: DETECTION_TYPES[settingType] || settingType,
+        cameraAllocation,
+        camerasInUse: cameras.length,
+        remaining: Math.max(cameraAllocation - cameras.length, 0),
+        cameras,
+      };
+    }),
   };
 };
 
@@ -40,6 +84,19 @@ export const emitCameraLimit = async ({ adminId, userId }) => {
     io.emit(`purchasedCameras_${snapshot.adminId}`, snapshot);
   } catch (e) {
     logger.error(`emitCameraLimit failed: ${e?.message || e}`);
+  }
+};
+
+// Push an admin's detection licence to their clients. Call after anything that
+// changes what they may run. Fire-and-forget — never throws to the caller.
+export const emitDetectionLicense = async ({ adminId, userId }) => {
+  try {
+    if (!io || (!adminId && !userId)) return;
+    const snapshot = await getDetectionLicenseSnapshot({ adminId, userId });
+    if (!snapshot?.adminId) return;
+    io.emit(`detectionLicense_${snapshot.adminId}`, snapshot);
+  } catch (e) {
+    logger.error(`emitDetectionLicense failed: ${e?.message || e}`);
   }
 };
 
@@ -80,20 +137,85 @@ export const initSocket = (server) => {
   // other commands.
   try {
     const sub = redis.duplicate();
-    sub.subscribe("purchasedCameras:update", (err) => {
-      if (err) logger.error(`Failed to subscribe purchasedCameras:update: ${err.message}`);
-    });
-    sub.on("message", async (_channel, message) => {
+    sub.subscribe(
+      "purchasedCameras:update",
+      "detectionAllocation:update",
+      "detectionCatalog:sync",
+      (err) => {
+        if (err) logger.error(`Failed to subscribe superadmin channels: ${err.message}`);
+      },
+    );
+    sub.on("message", async (channel, message) => {
       try {
+        // The superadmin pressed Sync detections. Re-publish the catalog from
+        // this backend's constants and re-check it against DS's own detector
+        // list — this backend owns both, so the button has to reach it here
+        // rather than the superadmin re-reading a stale collection.
+        if (channel === "detectionCatalog:sync") {
+          const { syncDetectionCatalog } = await import(
+            "./core/v2/detectionCatalog/detectionCatalog.service.js"
+          );
+          const result = await syncDetectionCatalog();
+          logger.info(
+            `[DETECTION_CATALOG] resync requested by superadmin — ${result.total} types`,
+          );
+          return;
+        }
+
         const { adminId, userId } = JSON.parse(message);
         if (!adminId) return;
-        // Recompute the full snapshot so `remaining` reflects current state, and
-        // emit the SAME shape as the on-connect snapshot (one frontend listener
-        // handles both). Channel keyed by adminId so clients filter to their own.
-        const snapshot = await getCameraLimitSnapshot({ adminId, userId });
-        io.emit(`purchasedCameras_${adminId}`, snapshot);
+
+        if (channel === "purchasedCameras:update") {
+          // Recompute the full snapshot so `remaining` reflects current state, and
+          // emit the SAME shape as the on-connect snapshot (one frontend listener
+          // handles both). Channel keyed by adminId so clients filter to their own.
+          const snapshot = await getCameraLimitSnapshot({ adminId, userId });
+          io.emit(`purchasedCameras_${adminId}`, snapshot);
+          // The camera licence also decides whether the app is usable at all, so
+          // a change here can change which detections are enableable.
+          await emitDetectionLicense({ adminId, userId });
+          return;
+        }
+
+        if (channel === "detectionAllocation:update") {
+          const { settingType, enabled } = JSON.parse(message);
+
+          // A revoke has to actually stop the engine. The allocation alone only
+          // hides the detection from the UI; the CV backend reads channels as a
+          // `system` caller and is deliberately unfiltered, so without this the
+          // detector kept running and producing incidents with no control left
+          // anywhere to switch it off.
+          if (enabled === false && settingType) {
+            const { revokeDetectionEverywhere } = await import(
+              "./core/v2/clientConfig/detectionLicense.service.js"
+            );
+            const admin = userId
+              ? { user_id: userId }
+              : await adminModel.findById(adminId).select("user_id").lean();
+            await revokeDetectionEverywhere({
+              adminId,
+              userId: admin?.user_id || userId,
+              settingType,
+            });
+          }
+
+          // The superadmin granted or revoked a detection. Push the new licence
+          // so open clients update without a reload...
+          await emitDetectionLicense({ adminId, userId });
+          // The revoke above may have freed camera-licence slots, so the camera
+          // snapshot the lock reads has to be refreshed too.
+          await emitCameraLimit({ adminId, userId });
+          // ...and re-broadcast the log configuration, since an unlicensed
+          // detection's log page has to disappear with it. Imported lazily:
+          // logsConfiguration.service imports sendPayloadToUser from this file,
+          // so a static import would be a cycle.
+          const { refreshLogsConfiguration } = await import(
+            "./core/v2/logsConfiguration/logsConfiguration.service.js"
+          );
+          await refreshLogsConfiguration(adminId);
+        }
       } catch (e) {
-        logger.error(`purchasedCameras message handling error: ${e.message}`);
+        logger.error(`superadmin pub/sub handling error (${channel}): ${e.message}`);
       }
     });
   } catch (e) {
@@ -121,6 +243,15 @@ export const initSocket = (server) => {
         socket.emit(`purchasedCameras_${adminId}`, snapshot);
       } catch (e) {
         logger.error(`purchasedCameras connect snapshot failed: ${e.message}`);
+      }
+
+      // Same for the detection licence, so a client that was offline while the
+      // superadmin changed it is correct the moment it reconnects.
+      try {
+        const licence = await getDetectionLicenseSnapshot({ adminId, userId });
+        if (licence) socket.emit(`detectionLicense_${adminId}`, licence);
+      } catch (e) {
+        logger.error(`detectionLicense connect snapshot failed: ${e.message}`);
       }
     }
 

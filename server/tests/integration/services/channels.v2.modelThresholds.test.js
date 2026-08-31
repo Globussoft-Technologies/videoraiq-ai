@@ -36,6 +36,35 @@ const { CountPersonsDetectionSetting } = await import(
 const { default: pythonService } = await import(
   "../../../services/python.service.js"
 );
+const { default: Admin } = await import("../../../core/v2/admin/admin.model.js");
+const { default: DetectionAllocation } = await import(
+  "../../../core/v2/clientConfig/clientDetectionAllocation.model.js"
+);
+
+/**
+ * Enabling a detection now goes through the licensing gate
+ * (core/v2/clientConfig/detectionLicense.service.js): the client needs a camera
+ * licence and an allocation for the detection type, otherwise the toggle is
+ * refused with 403. Give the tenant enough headroom that these tests exercise
+ * the threshold behaviour rather than the limits.
+ */
+async function licensedAdmin(userId, settingTypes) {
+  const admin = await Admin.create({
+    user_id: userId,
+    login: `admin-${userId}`,
+    email: `admin-${userId}@test.com`,
+    purchasedCameras: 10,
+  });
+  await DetectionAllocation.insertMany(
+    settingTypes.map((settingType) => ({
+      adminId: admin._id,
+      settingType,
+      enabled: true,
+      cameraAllocation: 10,
+    }))
+  );
+  return admin;
+}
 
 beforeAll(async () => {
   await connectMongo();
@@ -86,9 +115,10 @@ describe("v2 ChannelsService.toggleDetection model thresholds", () => {
         },
       },
     });
+    const admin = await licensedAdmin("22", ["countPersonsSettings"]);
     const { req, res, next } = serviceCtx({
       user_id: "22",
-      adminId: new mongoose.Types.ObjectId().toString(),
+      adminId: admin._id.toString(),
       body: {
         channelId: channel._id.toString(),
         detectionType: "countPersonsSettings",
@@ -147,9 +177,10 @@ describe("v2 DetectionSettingsService model thresholds", () => {
         },
       },
     });
+    const admin = await licensedAdmin("22", ["countPersonsSettings"]);
     const { req, res, next } = serviceCtx({
       user_id: "22",
-      adminId: new mongoose.Types.ObjectId().toString(),
+      adminId: admin._id.toString(),
       params: { id: setting._id.toString() },
       body: {
         settings: {

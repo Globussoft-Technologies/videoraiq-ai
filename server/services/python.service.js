@@ -7,7 +7,11 @@ import getStreamingUrl, {
 import config from "config";
 import NVR from "../core/v1/NVR/nvr.model.js";
 import axios from "axios";
-import { DETECTION_MODES_MAP } from "../constants/detectionTypes.js";
+import {
+  DETECTION_MODES_MAP,
+  DS_DETECTOR_BY_MODE,
+  dsDetectorsForModes,
+} from "../constants/detectionTypes.js";
 import { resolveAdminEndpoints } from "../utils/adminEndpoints.js";
 const detectionHost = config.get("PythonService.detectionUrl");
 const APP_ENV = config.get("APP_ENV");
@@ -851,84 +855,123 @@ class PythonService {
     }
   }
 
+  /**
+   * Fetch the detector names DS actually accepts.
+   *
+   * DS is a FastAPI app that has never disabled `openapi_url`, so its full
+   * schema — including the `DetectionLogic` enum that every detector name is
+   * validated against — is already served at /openapi.json. That is the
+   * authoritative list, live, with no work required on the DS side.
+   *
+   * A purpose-built catalog endpoint is tried first in case DS ever adds one
+   * (path configurable via `detection.detectorCatalogPath`); OpenAPI is the
+   * fallback that works today. Returns null when neither answers, so callers
+   * can tell "DS said nothing" from "DS returned an empty list".
+   */
+  async fetchDsDetectorNames(admin_id) {
+    const { detectionUrl } = await resolveAdminEndpoints(admin_id);
+
+    const catalogPath = config.has("detection.detectorCatalogPath")
+      ? config.get("detection.detectorCatalogPath")
+      : "/detectors";
+
+    // 1. A dedicated catalog endpoint, if DS ever grows one.
+    try {
+      const { data } = await axios.get(`${detectionUrl}${catalogPath}`, { timeout: 8000 });
+      const list = Array.isArray(data) ? data : data?.detectors;
+      if (Array.isArray(list) && list.length) {
+        return {
+          source: catalogPath,
+          names: list.map((e) => (typeof e === "string" ? e : e?.name)).filter(Boolean),
+        };
+      }
+    } catch {
+      // Expected — DS exposes no such endpoint today.
+    }
+
+    // 2. OpenAPI. The enum lives at components.schemas.DetectionLogic.enum.
+    try {
+      const { data } = await axios.get(`${detectionUrl}/openapi.json`, { timeout: 8000 });
+      const names = data?.components?.schemas?.DetectionLogic?.enum;
+      if (Array.isArray(names) && names.length) {
+        return { source: "/openapi.json", names };
+      }
+      logger.debug("[DS] openapi.json carried no DetectionLogic enum");
+    } catch (error) {
+      logger.debug(
+        `[DS] openapi.json unavailable: ${error?.response?.status || error.message}`,
+      );
+    }
+
+    return null;
+  }
+
+  /**
+   * Reconcile DS_DETECTOR_BY_MODE against what DS accepts, so a name we send
+   * that DS does not know is caught here instead of silently failing request
+   * validation later, and so modes with no DS detector at all are reported.
+   *
+   * Never throws — it runs on boot and from the superadmin's Sync button.
+   */
+  async syncDsDetectorNames(admin_id) {
+    const fetched = await this.fetchDsDetectorNames(admin_id);
+    if (!fetched) {
+      logger.debug("[DS] detector names unavailable — skipping reconciliation");
+      return null;
+    }
+
+    const known = new Set(fetched.names);
+    const ours = new Set(Object.values(DS_DETECTOR_BY_MODE).filter(Boolean));
+
+    const weSendButDsRejects = [...ours].filter((name) => !known.has(name));
+    const dsHasButWeNeverSend = [...known].filter((name) => !ours.has(name));
+    // Modes with no DS name on our side. If DS also offers nothing spare, the
+    // detector genuinely does not exist there — it is not a mapping oversight.
+    const stillUnnamed = Object.entries(DS_DETECTOR_BY_MODE)
+      .filter(([, name]) => !name)
+      .map(([mode]) => mode);
+
+    if (weSendButDsRejects.length) {
+      logger.error(
+        `[DS] names DS does not recognise: ${weSendButDsRejects.join(", ")} — ` +
+          `those calls will fail validation. Fix DS_DETECTOR_BY_MODE.`,
+      );
+    }
+    if (stillUnnamed.length) {
+      logger.warn(
+        `[DS] modes with no detector: ${stillUnnamed.join(", ")}. ` +
+          (dsHasButWeNeverSend.length
+            ? `DS offers unused: ${dsHasButWeNeverSend.join(", ")}.`
+            : `DS offers nothing unused — it does not implement these.`),
+      );
+    }
+    if (!weSendButDsRejects.length && !stillUnnamed.length) {
+      logger.info(`[DS] detector names reconciled via ${fetched.source} — ${ours.size} in sync`);
+    }
+
+    return {
+      source: fetched.source,
+      dsNames: [...known],
+      weSendButDsRejects,
+      dsHasButWeNeverSend,
+      stillUnnamed,
+    };
+  }
+
   async stopNewDetection(camera_id, nvr_id, detectionModes = [], admin_id) {
     try {
-      // 🔹 Convert detectionModes → detectors (names expected by API)
-      const detectors = [];
+      // 🔹 Convert detectionModes → detectors (names expected by DS).
+      // Sourced from DS_DETECTOR_BY_MODE so start and stop cannot drift apart,
+      // and so adopting a name DS adds is a one-line data change.
+      const { detectors, unmapped } = dsDetectorsForModes(detectionModes);
 
-      if (["helmet", "vest"].some((mode) => detectionModes?.includes(mode))) {
-        detectors.push("personalProtectiveEquipmentSettings");
-      }
-
-      if (detectionModes?.includes("crowd")) {
-        detectors.push("crowdDetectionSettings");
-      }
-
-      if (detectionModes?.includes("line_crossing")) {
-        detectors.push("lineCrossingSettings");
+      if (unmapped.length) {
+        logger.warn(
+          `[DS] no detector name for mode(s) [${unmapped.join(", ")}] — ` +
+            `see DS_DETECTOR_BY_MODE`,
+        );
       }
 
-      if (detectionModes?.includes("vehicles")) {
-        detectors.push("countVehiclesSettings");
-      }
-
-      if (detectionModes?.includes("countPersons")) {
-        detectors.push("countPersonsSettings");
-      }
-
-      if (detectionModes?.includes("vehicleObstruction")) {
-        detectors.push("vehicleObstructionSettings");
-      }
-
-      if (detectionModes?.includes("intrusion")) {
-        detectors.push("zoneIntrusionSettings");
-      }
-
-      if (detectionModes?.includes("conveyor")) {
-        detectors.push("conveyorDetectionSettings");
-      }
-
-      if (detectionModes?.includes("crusher")) {
-        detectors.push("crusherDetectionSettings");
-      }
-
-      if (detectionModes?.includes("water_spillage")) {
-        detectors.push("waterSpillageDetectionSettings");
-      }
-
-      if (detectionModes?.includes("ANPR")) {
-        detectors.push("numberPlateDetectionSettings");
-      }
-
-      if (detectionModes?.includes("loitering")) {
-        detectors.push("loiteringDetectionSettings");
-      }
-
-      if (detectionModes?.includes("vehicleType")) {
-        detectors.push("vehicleTypeDetectionSettings");
-      }
-      if (detectionModes?.includes("tableOccupancySettings")) {
-        // DS enum is tableOccupancySettings, not ...DetectionSettings. The wrong
-        // name fails the whole request validation, so the stop never happened.
-        detectors.push("tableOccupancySettings");
-      }
-
-      if (detectionModes?.includes("desk_absence")) {
-        // DS enum is deskAbsenceDetectionSettings - the mirror image of the
-        // internal setting key. Same failure mode as table occupancy above.
-        detectors.push("deskAbsenceDetectionSettings");
-      }
-      if (detectionModes?.includes("foodServicePPEDetection")) {
-        detectors.push("foodServicePPEDetection");
-      }
-
-      if (detectionModes?.includes("carModelDetection")) {
-        detectors.push("carModelDetectionSettings");
-      }
-
-      if (detectionModes?.includes("mobilePhoneDetection")) {
-        detectors.push("mobilePhoneDetectionSettings");
-      }
       // 🔹 Build payload
       const payload = {
         camera_id,
@@ -938,6 +981,23 @@ class PythonService {
       // 👉 Only add detectors if you want partial stop
       if (detectors.length) {
         payload.detectors = detectors;
+      } else if (detectionModes?.length) {
+        // Modes were supplied but none resolved to a DS name, so `detectors` is
+        // empty — and an empty list means "stop the WHOLE camera", killing every
+        // other detection running on it.
+        //
+        // That is a caller asking to stop ONE detector and silently taking the
+        // camera down instead. Fail loudly: not stopping one engine is far less
+        // damaging than stopping five the client is still licensed for, and both
+        // callers (toggleDetection, revokeDetectionEverywhere) record the
+        // failure while still persisting the intended state.
+        //
+        // Fix by filling the name into DS_DETECTOR_BY_MODE once DS supplies it.
+        throw new Error(
+          `No DS detector mapping for detection_modes [${detectionModes.join(", ")}] — ` +
+            `refusing to send a camera-wide stop for camera ${camera_id}. ` +
+            `Add the name to DS_DETECTOR_BY_MODE.`,
+        );
       }
 
       // Per-admin endpoint, matching startNewDetection. Using the global

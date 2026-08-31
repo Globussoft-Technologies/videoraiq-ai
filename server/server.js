@@ -21,6 +21,8 @@ import { connectDB } from "./utils/database.js";
 import logger from "./utils/logger.js";
 import { auth, swaggerAuthLogger } from "./views/swaggerAuth.js";
 import { initSocket } from "./socket.js"; // <-- Socket.io setup
+import { syncDetectionCatalog } from "./core/v2/detectionCatalog/detectionCatalog.service.js";
+import pythonService from "./services/python.service.js";
 import { mustRunInsideContainer } from "./scripts/check.js";
 import { prometheusMiddleware } from "./middlewares/prometheusMiddleware.js";
 import { metricsHandler } from "./utils/prometheus.js";
@@ -124,6 +126,21 @@ app.use(globalErrorHandler);
 const startServer = async () => {
   try {
     await connectDB();
+
+    // Publish this backend's DETECTION_TYPES into the shared catalog collection
+    // so server-superadmin lists exactly what we support instead of its own
+    // hand-maintained copy, which drifts. Boot is when the constants can have
+    // changed. Fire-and-forget — a catalog failure must not stop the server.
+    syncDetectionCatalog().catch((err) =>
+      logger.error(`Detection catalog sync failed: ${err.message}`)
+    );
+
+    // Reconcile the DS detector names we send against what DS accepts, so a
+    // wrong or missing name is reported here rather than silently failing DS
+    // request validation later. No-ops until DS exposes a catalog endpoint.
+    pythonService
+      .syncDsDetectorNames()
+      .catch((err) => logger.error(`DS detector name sync failed: ${err.message}`));
 
     const server = http.createServer(app); // 👈 Create HTTP server
     initSocket(server); // 👈 Initialize Socket.IO with HTTP server

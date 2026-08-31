@@ -126,7 +126,11 @@ if (APP_ENV === "cloud") {
   NVRSchema.methods.getDecryptedPassword = function () {
     return decrypt(this.password);
   };
-} else if (APP_ENV === "local") {
+} else if (APP_ENV === "local" || APP_ENV === "onprem") {
+  // "onprem" is the on-premise deployment (config/onprem.json); "local" is the
+  // older name for the same shape and is still what the test config uses.
+  // Without accepting both, an on-premise install throws here at module load
+  // and the server never starts.
   NVRSchema = localSchema;
 } else {
   throw new Error(`Invalid APP_ENV: ${APP_ENV}`);

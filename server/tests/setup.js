@@ -17,6 +17,10 @@ const TEST_IV = "0".repeat(32);
 const testConfig = {
   port: 5000,
   APP_ENV: "local",
+  // Licensing is mandatory config with no default (see detectionLicense.service).
+  // Tests default to the cloud behaviour, where the rules ARE enforced; the
+  // on-premise suite overrides this to false via its own NODE_CONFIG.
+  LICENSING_ENABLED: true,
 
   // Crypto
   ENCRYPTION_KEY: TEST_ENCRYPTION_KEY,

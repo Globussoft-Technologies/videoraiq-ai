@@ -40,7 +40,7 @@ export const DETECTION_TYPES = {
   tableOccupancyDetectionSettings: "Table Occupancy Detection",
   foodServicePPEDetectionSettings: "Food Service PPE Detection",
   mobilePhoneDetectionSettings: "Mobile Phone Detection",
-  carModelDetectionSettings:"Car Model Detection"
+  carModelDetectionSettings: "Car Model Detection"
 }
 
 /**
@@ -82,7 +82,7 @@ export const TYPE_MAP = {
   tableOccupancyDetectionSettings: "tableOccupancySettings",
   foodServicePPEDetectionSettings: "foodServicePPEDetection",
   mobilePhoneDetectionSettings: "mobilePhoneDetection",
-  carModelDetectionSettings:"carModelDetection"
+  carModelDetectionSettings: "carModelDetection"
 };
 
 export const DETECTION_MODES_MAP = {
@@ -107,7 +107,76 @@ export const DETECTION_MODES_MAP = {
   foodServicePPEDetectionSettings: ["foodServicePPEDetection"],
   countPersonsSettings: ["countPersons"],
   mobilePhoneDetectionSettings: ["mobilePhoneDetection"],
-  carModelDetectionSettings:["carModelDetection"]
+  carModelDetectionSettings: ["carModelDetection"]
+};
+
+/**
+ * detection mode -> the detector name DS expects.
+ *
+ * The single source of truth for DS naming. It is deliberately DATA, not an
+ * if-chain: the names lived in two hand-written chains inside python.service.js
+ * (one for start, one for stop) and drifted — `tableOccupancySettings` and
+ * `deskAbsenceDetectionSettings` both shipped wrong at some point, and a wrong
+ * name fails DS request validation silently, so the call just never takes
+ * effect.
+ *
+ * `null` means "DS has not told us the name yet". That is not the same as
+ * "unsupported": these detections exist and can be configured, we simply cannot
+ * address them individually at DS. stopNewDetection refuses to send a
+ * camera-wide stop for them rather than taking down every other detector on the
+ * camera — see the guard there.
+ *
+ * To adopt a name DS adds: fill it in here. Nothing else needs editing, and
+ * syncDsDetectorNames() will stop reporting it as unmapped.
+ */
+export const DS_DETECTOR_BY_MODE = {
+  helmet: "personalProtectiveEquipmentSettings",
+  vest: "personalProtectiveEquipmentSettings",
+  crowd: "crowdDetectionSettings",
+  line_crossing: "lineCrossingSettings",
+  vehicles: "countVehiclesSettings",
+  countPersons: "countPersonsSettings",
+  intrusion: "zoneIntrusionSettings",
+  conveyor: "conveyorDetectionSettings",
+  crusher: "crusherDetectionSettings",
+  water_spillage: "waterSpillageDetectionSettings",
+  ANPR: "numberPlateDetectionSettings",
+  vehicleType: "vehicleTypeDetectionSettings",
+  loitering: "loiteringDetectionSettings",
+  vehicleObstruction: "vehicleObstructionSettings",
+  // DS enum is tableOccupancySettings, not ...DetectionSettings.
+  tableOccupancySettings: "tableOccupancySettings",
+  // DS enum is deskAbsenceDetectionSettings - the mirror image of the internal key.
+  desk_absence: "deskAbsenceDetectionSettings",
+  foodServicePPEDetection: "foodServicePPEDetection",
+  mobilePhoneDetection: "mobilePhoneDetectionSettings",
+  carModelDetection: "carModelDetectionSettings",
+  door: "doorDetectionSettings",
+  light: "lightDetectionSettings",
+  guard_absence: "guardAbsenceSettings",
+};
+
+/**
+ * Resolve a set of detection modes to DS detector names.
+ *
+ * Returns both halves deliberately: `unmapped` is what lets callers refuse a
+ * request rather than send one that means something else entirely (an empty
+ * detector list on /stream/stop means "stop the whole camera").
+ */
+export const dsDetectorsForModes = (modes = []) => {
+  const detectors = [];
+  const unmapped = [];
+
+  for (const mode of modes || []) {
+    const name = DS_DETECTOR_BY_MODE[mode];
+    if (name) {
+      if (!detectors.includes(name)) detectors.push(name);
+    } else {
+      unmapped.push(mode);
+    }
+  }
+
+  return { detectors, unmapped };
 };
 
 export const DETECTION_OBJECTS_TYPES_MAP = {
@@ -747,9 +816,9 @@ export const deskAbsenceSettings = {
       ],
     },
     zone_configs: [
-          { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
-          { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
-      ],
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
     metricType: "gauge",
   },
 };
