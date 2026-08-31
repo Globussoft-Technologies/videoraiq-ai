@@ -29,12 +29,9 @@ const GenerateRegLinkModal = ({ open, onClose, adminId }) => {
   const [expiresAt, setExpiresAt] = useState('');
   const [copied, setCopied] = useState(false);
 
-  // The portal page lives in this same app, so the current origin is the right
-  // default; the env vars only matter when the portal is hosted separately.
-  const baseUrl =
-    import.meta.env.VITE_EMPLOYEE_PORTAL_URL ||
-    import.meta.env.VITE_FRONTEND ||
-    window.location.origin;
+  // Use VITE_FRONTEND for the registration portal, but map app.videoraiq.com to app-dashboard.videoraiq.com
+  const frontendUrl = import.meta.env.VITE_FRONTEND || window.location.origin;
+  const baseUrl = frontendUrl.replace('app.videoraiq.com', 'app-dashboard.videoraiq.com');
 
   if (!open) return null;
 
