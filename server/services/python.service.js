@@ -12,6 +12,7 @@ import {
   DS_DETECTOR_BY_MODE,
   dsDetectorsForModes,
 } from "../constants/detectionTypes.js";
+import { DetectionSetting } from "../core/v1/detectionSettings/detectionSettings.model.js";
 import { resolveAdminEndpoints } from "../utils/adminEndpoints.js";
 const detectionHost = config.get("PythonService.detectionUrl");
 const APP_ENV = config.get("APP_ENV");
@@ -165,6 +166,25 @@ class PythonService {
     try {
       const nvr = await NVR.findById(channel?.nvrId);
       if (channel && type && admin_id && nvr) {
+        // Attendance needs its zones: refuse to start without a linked
+        // attendanceSettings detection setting for this camera.
+        const linkedAttendance = channel?.detections?.attendanceSettings?.id;
+        const attendanceSetting = linkedAttendance?.settings
+          ? linkedAttendance // already populated
+          : linkedAttendance
+            ? await DetectionSetting.findById(linkedAttendance)
+            : null;
+        if (!attendanceSetting) {
+          throw new Error(
+            "No detection setting found for attendance detection on this camera",
+          );
+        }
+
+        const cameraId = channel?._id?.toString();
+        const zones =
+          attendanceSetting?.settings?.referencePoints?.[cameraId] || [];
+        const zone_configs = attendanceSetting?.settings?.zone_configs || [];
+
         // ! old
         // const uid = `${nvr?._id}-${channel?._id}`;
         // const rtspUrl = buildRTSPUrl(nvr, channel, "main");
@@ -179,11 +199,13 @@ class PythonService {
         // const streamingUrl = `${nvr?.domain}${channel?.streamingPath}`;
 
         const payload = {
-          camera_id: channel?._id?.toString(),
+          camera_id: cameraId,
           nvr_id: channel?.nvrId?._id?.toString(),
           admin_id: admin_id?.toString(),
           stream_url: streamingUrl,
           camera_type: type,
+          zones,
+          zone_configs,
           camera_name: channel?.customName || channel?.name,
           pipeline_mode: "object_detection",
           detection_modes: ["face"],

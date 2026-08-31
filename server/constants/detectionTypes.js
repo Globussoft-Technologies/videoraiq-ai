@@ -7,6 +7,7 @@
 */
 
 export const DETECTION_TYPES = {
+  attendanceSettings:"Attendance Settings",
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
   vehicleDetectionSettings: "ANPR Detection",
   unauthorizedAccessSettings: "Intrusion Detection",
@@ -82,7 +83,8 @@ export const TYPE_MAP = {
   tableOccupancyDetectionSettings: "tableOccupancySettings",
   foodServicePPEDetectionSettings: "foodServicePPEDetection",
   mobilePhoneDetectionSettings: "mobilePhoneDetection",
-  carModelDetectionSettings: "carModelDetection"
+  carModelDetectionSettings: "carModelDetection",
+  attendanceSettings: "attendanceSettings",
 };
 
 export const DETECTION_MODES_MAP = {
@@ -107,7 +109,8 @@ export const DETECTION_MODES_MAP = {
   foodServicePPEDetectionSettings: ["foodServicePPEDetection"],
   countPersonsSettings: ["countPersons"],
   mobilePhoneDetectionSettings: ["mobilePhoneDetection"],
-  carModelDetectionSettings: ["carModelDetection"]
+  carModelDetectionSettings: ["carModelDetection"],
+  attendanceSettings: ["attendanceSettings"]
 };
 
 /**
@@ -154,6 +157,7 @@ export const DS_DETECTOR_BY_MODE = {
   door: "doorDetectionSettings",
   light: "lightDetectionSettings",
   guard_absence: "guardAbsenceSettings",
+  attendanceSettings: "attendanceSettings"
 };
 
 /**
@@ -216,6 +220,7 @@ export const DS_LOGIC_BY_MODE = {
   mobilePhoneDetection: "mobilePhoneDetectionSettings",
   foodServicePPEDetection: "foodServicePPEDetection",
   carModelDetection: "carModelDetectionSettings",
+  attendanceSettings: "attendanceSettings"
 };
 
 /** DS logic names for one of our setting types. */
@@ -255,7 +260,8 @@ export const toPopulateDetections = [
   { path: "detections.tableOccupancyDetectionSettings.id" },
   { path: "detections.foodServicePPEDetectionSettings.id" },
   { path: "detections.mobilePhoneDetectionSettings.id" },
-  { path: "detections.carModelDetectionSettings.id" }
+  { path: "detections.carModelDetectionSettings.id" },
+  { path: "detections.attendanceSettings.id" }
 ];
 
 // sample payloads
@@ -1159,6 +1165,39 @@ export const carModelDetectionSettings = {
   NVRId: "664f895da9d345001ee326a9",
   settingType: "carModelDetectionSettings",
   name: "Vehicle Recognition Zone",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
+    imageRequired: true,
+    videoLinkRequirement: false,
+    videoMinLength: 10,
+    videoMaxLength: 120,
+    videoDuration: 10,
+    levelOfImportance: "high",
+    videoResolution: [1920, 1080],
+    detectionTimeGap: 30,
+    referencePoints: {
+      1: [
+        [100, 100],
+        [200, 100],
+        [200, 200],
+        [100, 200],
+      ],
+    },
+    metricType: "gauge",
+    zone_name: "Cashier Counter",
+  },
+};
+
+export const attendanceSettings = {
+  channelId: ["664f89e8a9d345001ee326b1"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "attendanceSettings",
+  name: "Attendance Settings - Zone A",
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {

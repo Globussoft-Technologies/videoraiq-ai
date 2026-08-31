@@ -525,6 +525,28 @@ describe("PythonService.registerChannel", () => {
     expect(axios.post).not.toHaveBeenCalled();
   });
 
+  // A populated attendanceSettings link (the `id.settings` branch) so the
+  // guard passes without a DetectionSetting.findById DB call.
+  const attendanceLink = (cameraId) => ({
+    attendanceSettings: {
+      id: {
+        settings: {
+          referencePoints: {
+            [cameraId]: [
+              [
+                [100, 100],
+                [600, 100],
+                [600, 500],
+                [100, 500],
+              ],
+            ],
+          },
+          zone_configs: [{ name: "Entrance Zone" }],
+        },
+      },
+    },
+  });
+
   it("calls startDetection with the right payload on the happy path", async () => {
     NVR.findById.mockResolvedValueOnce({ _id: "nvr-1", brand: "hikvision" });
     axios.post.mockResolvedValueOnce({ data: { ok: true } });
@@ -533,6 +555,7 @@ describe("PythonService.registerChannel", () => {
       _id: { toString: () => "cam-1" },
       nvrId: { _id: { toString: () => "nvr-1" } },
       name: "Front Lobby",
+      detections: attendanceLink("cam-1"),
     };
 
     const out = await PythonService.registerChannel(channel, "live", "admin-1");
@@ -544,8 +567,33 @@ describe("PythonService.registerChannel", () => {
     expect(body.camera_id).toBe("cam-1");
     expect(body.admin_id).toBe("admin-1");
     expect(body.camera_type).toBe("live");
+    expect(body.zones).toEqual([
+      [
+        [100, 100],
+        [600, 100],
+        [600, 500],
+        [100, 500],
+      ],
+    ]);
+    expect(body.zone_configs).toEqual([{ name: "Entrance Zone" }]);
     expect(body.camera_name).toBe("Front Lobby");
     expect(body.detection_modes).toEqual(["face"]);
+  });
+
+  it("rejects when no attendanceSettings is linked to the camera", async () => {
+    NVR.findById.mockResolvedValueOnce({ _id: "nvr-1", brand: "hikvision" });
+    await expect(
+      PythonService.registerChannel(
+        {
+          _id: { toString: () => "cam-1" },
+          nvrId: { _id: { toString: () => "nvr-1" } },
+          name: "Front Lobby",
+        },
+        "live",
+        "admin-1",
+      ),
+    ).rejects.toThrow("No detection setting found for attendance detection");
+    expect(axios.post).not.toHaveBeenCalled();
   });
 
   it("rethrows when startDetection fails", async () => {
@@ -553,7 +601,12 @@ describe("PythonService.registerChannel", () => {
     axios.post.mockRejectedValueOnce(new Error("attendance failed"));
     await expect(
       PythonService.registerChannel(
-        { _id: { toString: () => "x" }, nvrId: { _id: { toString: () => "n" } }, name: "x" },
+        {
+          _id: { toString: () => "x" },
+          nvrId: { _id: { toString: () => "n" } },
+          name: "x",
+          detections: attendanceLink("x"),
+        },
         "live",
         "admin",
       ),

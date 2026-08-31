@@ -1111,6 +1111,39 @@ const carModelDetectionSchemaSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: carModelDetectionSchema }),
 );
 
+const attendanceDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
+  imageRequired: {
+    type: Boolean,
+    default: false,
+  },
+  videoLinkRequirement: {
+    type: Boolean,
+    default: false,
+  },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "moderate",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  videoResolution: [Number],
+  referencePoints: Object,
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+  zone_name: { type: String, default: "default" },
+});
+
+const attendanceDetectionSetting = DetectionSetting.discriminator(
+  "attendanceSettings",
+  new mongoose.Schema({ settings: attendanceDetectionSchema }),
+);  
 
 export {
   DetectionSetting,
@@ -1141,5 +1174,6 @@ export {
   TableOccupancyDetectionSetting,
   FoodServicePPEDetectionSetting,
   MobilePhoneDetectionSetting,
-  carModelDetectionSchemaSetting
+  carModelDetectionSchemaSetting,
+  attendanceDetectionSetting,
 };

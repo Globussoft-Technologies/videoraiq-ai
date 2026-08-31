@@ -63,7 +63,8 @@ import {
   TableOccupancyDetectionSetting,
   FoodServicePPEDetectionSetting,
   MobilePhoneDetectionSetting,
-  carModelDetectionSchemaSetting
+  carModelDetectionSchemaSetting,
+  attendanceDetectionSetting
 } from "./detectionSettings.model.js";
 import Channel from "../channels/channels.model.js";
 import {
@@ -109,6 +110,7 @@ const modelMap = {
   mobilePhoneDetectionSettings: MobilePhoneDetectionSetting,
   foodServicePPEDetectionSettings: FoodServicePPEDetectionSetting,
   carModelDetectionSettings: carModelDetectionSchemaSetting,
+  attendanceSettings: attendanceDetectionSetting,
 };
 
 const DEFAULT_DETECTION_SCHEDULE = { mode: "always" };

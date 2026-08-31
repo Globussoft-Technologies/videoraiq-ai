@@ -105,6 +105,7 @@ const detectionFields = {
   vehicleObstructionSettings: detectionSettingSchema,
   mobilePhoneDetectionSettings: detectionSettingSchema,
   carModelDetectionSettings: detectionSettingSchema,
+  attendanceSettings: detectionSettingSchema,
 };
 
 // ! old
