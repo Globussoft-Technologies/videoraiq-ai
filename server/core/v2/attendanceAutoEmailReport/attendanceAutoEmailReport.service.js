@@ -83,12 +83,13 @@ function workingMinutesForDay(firstCheckIn, lastCheckOut) {
   return Math.max(0, Math.round(minutes));
 }
 
-// Human-readable duration for the "Total Working Hours for the period selected"
-// column. Under 24h it stays HH:MM:SS (unchanged from before); at or above 24h
-// it breaks into the largest non-zero units — months / days / hours / minutes —
-// so a period total like 223h reads "9d 7h 40m" instead of "223:51:29".
-// A "month" here is a flat 30 days purely for a compact label; the exact value
-// is always still recoverable from the per-day rows.
+// Human-readable duration used for every duration column in the report
+// (session duration, Total Working / Break Hrs for the day, and the period
+// total). Under 24h it stays HH:MM:SS; at or above 24h it breaks into the
+// largest non-zero units — years / months / days / hours / minutes — so a
+// long span like 223h reads "9d 7h 40m" instead of "223:51:29".
+// A "month" here is a flat 30 days and a "year" 365 days, purely for a compact
+// label; the exact value is always still recoverable from the per-day rows.
 function formatPeriodDuration(minutes) {
   if (!Number.isFinite(minutes) || minutes <= 0) return "00:00:00";
   if (minutes < 24 * 60) return minutesToHms(minutes);
@@ -154,6 +155,35 @@ function breakMinutesFromPairs(pairs) {
     const ms = new Date(pair.checkin.timestamp) - new Date(pair.checkout.timestamp);
     return sum + (ms > 0 ? Math.round(ms / 60000) : 0);
   }, 0);
+}
+
+// Pair each check-in with the next check-out into a "work session". Mirrors
+// pairBreaks' shape but for worked time: a check-in opens a session, the first
+// check-out after it closes it. A trailing check-in with no matching check-out
+// is still returned (checkout: null) so it shows as an open session.
+function pairWorkSessions(events) {
+  const sorted = [...(events || [])].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const sessions = [];
+  let openCheckin = null;
+  for (const event of sorted) {
+    if (event.cameraType === "checkin") {
+      if (!openCheckin) openCheckin = event;
+    } else if (event.cameraType === "checkout" && openCheckin) {
+      sessions.push({ checkin: openCheckin, checkout: event });
+      openCheckin = null;
+    }
+  }
+  if (openCheckin) sessions.push({ checkin: openCheckin, checkout: null });
+  return sessions;
+}
+
+// Worked minutes for one session (checkout − checkin), whole minutes, floored
+// at 0. An open session (no checkout) contributes 0, matching how the day
+// total is derived from first check-in → last check-out only.
+function sessionMinutes(session) {
+  if (!session.checkin || !session.checkout) return 0;
+  const ms = new Date(session.checkout.timestamp) - new Date(session.checkin.timestamp);
+  return ms > 0 ? Math.round(ms / 60000) : 0;
 }
 
 function checkInImageUrl(event) {
@@ -270,6 +300,19 @@ export function rowFromAttendance(item, timezone, rules) {
   const workingMinutesDay = workingMinutesForDay(firstCheckIn?.timestamp, lastCheckOut?.timestamp);
   const grossMinutes = spanMinutes(firstCheckIn?.timestamp, lastCheckOut?.timestamp);
 
+  // Every check-in/check-out pairing for the day, each with its own worked
+  // duration and snapshot links — the report expands these into sub-rows.
+  const sessions = pairWorkSessions(events).map((session) => ({
+    checkIn: session.checkin ? formatClock(session.checkin.timestamp, timezone) : "-",
+    checkOut: session.checkout ? formatClock(session.checkout.timestamp, timezone) : "-",
+    // HH:MM:SS under 24h, else a compact "1d 2h 30m" breakdown.
+    duration: formatPeriodDuration(sessionMinutes(session)),
+    checkInCamera: eventCamera(session.checkin),
+    checkOutCamera: eventCamera(session.checkout),
+    checkInImage: session.checkin ? checkInImageUrl(session.checkin) : "-",
+    checkOutImage: session.checkout ? checkInImageUrl(session.checkout) : "-",
+  }));
+
   const row = {
     date: moment(item.createdAt).tz(timezone).format("DD MMM YYYY"),
     employeeKey: String(employee._id || employee.emp_id || ""),
@@ -286,9 +329,11 @@ export function rowFromAttendance(item, timezone, rules) {
     // First check-in and last check-out for the day (matches the previous export).
     checkIn: firstCheckIn ? formatClock(firstCheckIn.timestamp, timezone) : "-",
     checkOut: lastCheckOut ? formatClock(lastCheckOut.timestamp, timezone) : "-",
-    duration: grossMinutes === null ? "-" : minutesToHms(grossMinutes),
-    workingHoursDay: minutesToHms(workingMinutesDay),
-    breakHoursDay: minutesToHms(breakMinutes),
+    // All day-level durations: HH:MM:SS under 24h, else "9d 7h 40m" style
+    // (formatPeriodDuration), same as the period column.
+    duration: grossMinutes === null ? "-" : formatPeriodDuration(grossMinutes),
+    workingHoursDay: formatPeriodDuration(workingMinutesDay),
+    breakHoursDay: formatPeriodDuration(breakMinutes),
     // Filled in by applyPeriodTotals once every day for this employee has been read.
     workingHoursPeriod: "00:00:00",
     // Per-employee period total sums this (the elapsed-span working minutes),
@@ -299,6 +344,7 @@ export function rowFromAttendance(item, timezone, rules) {
     checkInCamera: eventCamera(firstCheckIn),
     checkOutCamera: eventCamera(lastCheckOut),
     viewImage: firstCheckIn ? checkInImageUrl(firstCheckIn) : "-",
+    sessions,
     status: "",
   };
   row.status = statusForRow({ firstCheckIn: firstCheckIn?.timestamp, lastCheckOut: lastCheckOut?.timestamp }, rules);
@@ -397,54 +443,100 @@ async function reportRows(report, reference) {
   return { rows: cleanRows, timezone, label };
 }
 
-// One flat row per employee-day, in the exact order/labels the admins asked
-// for. The image cell is `{ text, link }` when a snapshot link exists.
-const REPORT_HEADERS = [
-  "ID",
-  "Name",
-  "Department",
-  "Date",
-  "Location",
-  "Check in",
-  "Check out",
-  "Duration",
-  "Total Working Hours for the Day",
-  "Total Break Hours for the Day",
-  "Total Working Hours for the period selected",
-  "Checkin Camera",
-  "Checkout Camera",
-  "View Image",
+function imageCell(url, text = "View Image") {
+  return url && url !== "-" ? { text, link: url } : "-";
+}
+
+// Single source of truth for the report grid. Each column declares its header
+// and a value function per line kind:
+//   day     — one per employee-day: identity + the day's first check-in /
+//             last check-out / gross span + the running period total.
+//   session — one per check-in/check-out pair from the actual event data:
+//             that pair's clock times, its own worked duration, its cameras
+//             and its snapshot link.
+//   total   — one per employee-day: the day's Total Working / Break Hrs.
+// A column with no function for a kind renders blank there automatically — no
+// hand-placed "" padding, and adding/reordering a column can't misalign rows.
+const REPORT_COLUMNS = [
+  { header: "ID", day: (ctx) => String(ctx.index + 1) },
+  { header: "Name", day: (ctx) => ctx.row.employee },
+  { header: "Department", day: (ctx) => ctx.row.department },
+  { header: "Date", day: (ctx) => ctx.row.date },
+  { header: "Location", day: (ctx) => ctx.row.location },
+  {
+    header: "Check in",
+    day: (ctx) => ctx.row.checkIn,
+    session: (ctx) => ctx.session.checkIn,
+  },
+  {
+    header: "Check out",
+    day: (ctx) => ctx.row.checkOut,
+    session: (ctx) => ctx.session.checkOut,
+  },
+  {
+    header: "Duration",
+    day: (ctx) => ctx.row.duration,
+    session: (ctx) => ctx.session.duration,
+  },
+  { header: "Total Working Hours for the Day", total: (ctx) => ctx.row.workingHoursDay },
+  { header: "Total Break Hours for the Day", total: (ctx) => ctx.row.breakHoursDay },
+  { header: "Total Working Hours for the period selected", day: (ctx) => ctx.row.workingHoursPeriod },
+  {
+    header: "Checkin Camera",
+    day: (ctx) => ctx.row.checkInCamera,
+    session: (ctx) => ctx.session.checkInCamera,
+  },
+  {
+    header: "Checkout Camera",
+    day: (ctx) => ctx.row.checkOutCamera,
+    session: (ctx) => ctx.session.checkOutCamera,
+  },
+  {
+    header: "View Image",
+    day: (ctx) => imageCell(ctx.row.viewImage),
+    session: (ctx) => imageCell(ctx.session.checkInImage),
+  },
 ];
 
-function imageCell(url) {
-  return url && url !== "-" ? { text: "View Image", link: url } : "-";
+const REPORT_HEADERS = REPORT_COLUMNS.map((column) => column.header);
+
+// Build one line's cells straight from the column schema for the given kind and
+// context. Columns that don't define the kind produce "".
+function lineFor(kind, ctx) {
+  return {
+    kind,
+    cells: REPORT_COLUMNS.map((column) => {
+      const value = column[kind] ? column[kind](ctx) : "";
+      return value == null ? "" : value;
+    }),
+  };
 }
 
-// One flat table row per employee-day — first check-in, last check-out, and all
-// the day/period totals on the same line. No per-session sub-rows.
-// Column positions line up with REPORT_HEADERS.
-function cellsForReportRow(row, displayIndex) {
-  return [
-    String(displayIndex),
-    row.employee,
-    row.department,
-    row.date,
-    row.location,
-    row.checkIn,   // first check-in of the day
-    row.checkOut,  // last check-out of the day
-    row.duration,
-    row.workingHoursDay,
-    row.breakHoursDay,
-    row.workingHoursPeriod,
-    row.checkInCamera,
-    row.checkOutCamera,
-    imageCell(row.viewImage),
-  ];
+// Sessions come from the paired check-in/check-out events. Fall back to the
+// day's own single span only when a row carries no `sessions` array.
+function sessionsFor(row) {
+  if (row.sessions?.length) return row.sessions;
+  return [{
+    checkIn: row.checkIn,
+    checkOut: row.checkOut,
+    duration: row.duration === "-" ? "00:00:00" : row.duration,
+    checkInCamera: row.checkInCamera,
+    checkOutCamera: row.checkOutCamera,
+    checkInImage: row.viewImage,
+  }];
 }
 
-// One row per employee-day (values line up with REPORT_HEADERS).
+// Expand every employee-day into: day line, one session line per check-in/
+// check-out pair, day total line. Returns `{ kind, cells }` objects so the
+// PDF/CSV can style each line kind.
 export function reportTableRows(rows) {
-  return rows.map((row, index) => cellsForReportRow(row, index + 1));
+  const out = [];
+  rows.forEach((row, index) => {
+    out.push(lineFor("day", { row, index }));
+    for (const session of sessionsFor(row)) out.push(lineFor("session", { row, session }));
+    out.push(lineFor("total", { row, index }));
+  });
+  return out;
 }
 
 // Renders one CSV field. An image cell arrives as { text, link } and is written
@@ -477,7 +569,7 @@ export function buildCsv({ report, rows, label, timezone }) {
     [],
     REPORT_HEADERS,
   ].map((line) => line.map(csvCell).join(","));
-  const body = reportTableRows(rows).map((line) => line.map(csvField).join(","));
+  const body = reportTableRows(rows).map(({ cells }) => cells.map(csvField).join(","));
   return Buffer.from(`\uFEFF${[...meta, ...body].join("\r\n")}`, "utf8");
 }
 
@@ -503,7 +595,7 @@ export async function buildPdf({ report, rows, label, timezone }) {
 
     const pageWidth = document.page.width - 64;
     // Widths sum to ~1096pt, within the A3-landscape usable width (~1127pt).
-    // Headings and order line up with REPORT_HEADERS / cellsForReportRow.
+    // Headings and order line up with REPORT_COLUMNS / reportTableRows.
     // `wrap: true` columns hold free text (name, department, camera, location)
     // and are rendered on multiple lines instead of being truncated — the
     // camera and department columns are given enough width to show the full
@@ -565,10 +657,14 @@ export async function buildPdf({ report, rows, label, timezone }) {
       });
       return Math.ceil(maxLines) * LINE_H + V_PAD * 2;
     };
-    const drawLine = (line, shade) => {
-      document.font("Helvetica").fontSize(8);
+    // Line kinds: "day" (identity + span, shaded, bold identity), "session"
+    // (one check-in/out pair, plain), "total" (day working/break totals, shaded).
+    const drawLine = (line, kind) => {
+      const emphasise = kind === "day" || kind === "total";
+      document.font(emphasise ? "Helvetica-Bold" : "Helvetica").fontSize(8);
       const height = lineHeight(line);
-      if (shade) document.fillColor("#eef2fb").rect(32, y, pageWidth, height).fill();
+      const rowFill = kind === "day" ? "#eef2fb" : kind === "total" ? "#e6edfa" : null;
+      if (rowFill) document.fillColor(rowFill).rect(32, y, pageWidth, height).fill();
       let x = 32;
       line.forEach((value, columnIndex) => {
         const col = columns[columnIndex];
@@ -577,25 +673,27 @@ export async function buildPdf({ report, rows, label, timezone }) {
         if (value && typeof value === "object") {
           document.fillColor(V2_BLUE).text(value.text, x + PAD_X, y + V_PAD, { ...opts, link: value.link, underline: true });
         } else if (value !== "" && value != null) {
-          document.fillColor("#2e3b55").text(String(value), x + PAD_X, y + V_PAD, opts);
+          document.fillColor(emphasise ? "#173b83" : "#2e3b55").text(String(value), x + PAD_X, y + V_PAD, opts);
         }
         x += col.width;
       });
-      document.strokeColor("#e6ecf7").lineWidth(0.4).moveTo(32, y + height).lineTo(32 + pageWidth, y + height).stroke();
+      // A heavier rule under the total line closes each employee-day block.
+      const isTotal = kind === "total";
+      document.strokeColor(isTotal ? "#9db6e8" : "#e6ecf7").lineWidth(isTotal ? 0.8 : 0.4)
+        .moveTo(32, y + height).lineTo(32 + pageWidth, y + height).stroke();
       y += height;
     };
 
     drawHeader();
     let y = drawTableHeader(165);
-    // One line per employee-day, zebra-striped.
-    reportTableRows(rows).forEach((line, index) => {
+    reportTableRows(rows).forEach(({ kind, cells }) => {
       const pageBottom = document.page.height - 40;
-      if (y + lineHeight(line) > pageBottom) {
+      if (y + lineHeight(cells) > pageBottom) {
         document.addPage({ size: "A3", layout: "landscape", margin: 32 });
         drawHeader();
         y = drawTableHeader(165);
       }
-      drawLine(line, index % 2 === 1);
+      drawLine(cells, kind);
     });
     if (!rows.length) document.font("Helvetica").fontSize(12).fillColor("#61708f").text("No attendance records were found for this period.", 32, y + 24);
     document.end();
