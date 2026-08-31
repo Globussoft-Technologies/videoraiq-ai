@@ -392,6 +392,21 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
                   {draggableHere && <GripVertical size={13} style={{ color: 'var(--tx3)', flexShrink: 0, marginRight: -3 }} />}
                   <Icon size={18} strokeWidth={1.7} />
                   {!collapsed && <span style={{ flex: 1 }}>{item.label}</span>}
+                  {!collapsed && item.badge && (
+                    <span
+                      style={{
+                        fontFamily: 'var(--mono)',
+                        fontSize: 9,
+                        fontWeight: 800,
+                        color: '#fff',
+                        background: 'linear-gradient(135deg,var(--blue),var(--violet))',
+                        padding: '2px 6px',
+                        borderRadius: 7,
+                      }}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
                   {badge != null && badge > 0 &&
                     (collapsed ? (
                       <span

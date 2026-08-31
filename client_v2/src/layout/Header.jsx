@@ -313,6 +313,41 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
 
       <div style={{ flex: 1, minWidth: 8 }} />
 
+      {!isNarrow && (
+        <button
+          type="button"
+          onClick={() => navigate('/live-demo')}
+          style={{
+            height: 36,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '0 13px',
+            borderRadius: 9,
+            border: '1px solid rgba(255,255,255,.42)',
+            background: 'linear-gradient(135deg,var(--blue),var(--violet))',
+            color: '#fff',
+            fontSize: 12.5,
+            fontWeight: 700,
+            cursor: 'pointer',
+            flex: '0 0 auto',
+            boxShadow: '0 0 0 1px rgba(255,255,255,.22) inset, 0 0 18px rgba(139,92,246,.58), 0 8px 22px rgba(99,102,241,.28)',
+          }}
+        >
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: 999,
+              background: '#fff',
+              boxShadow: '0 0 10px rgba(255,255,255,.95)',
+              flex: '0 0 auto',
+            }}
+          />
+          Live Demo
+        </button>
+      )}
+
       {/* Server network status — this server's own internet uplink (see
           Sidebar's footer widget, which shows the same reading). Hidden on
           narrower headers, same as the clock/theme controls. */}

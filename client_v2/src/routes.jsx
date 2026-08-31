@@ -44,6 +44,7 @@ import VisibilityLog from './pages/VisibilityLog/VisibilityLog';
 import GuardLog from './pages/GuardLog/GuardLog';
 import EmailMonitoringDashboard from './page/user/EmailMonitoring/EmailMonitoringDashboard';
 import AssistantPage from './page/user/Assistant/AssistantPage';
+import LiveDemo from './pages/LiveDemo/LiveDemo';
 
 const STUBS = [
   ['faces', 'faces', '/logs/tagged-users'],
@@ -63,6 +64,7 @@ export const v2Routes = (
   <Route element={<V2Layout />}>
     <Route index element={<HomeRedirect />} />
     <Route path="dashboard" element={guard('dashboard', undefined, <CommandCenter />)} />
+    <Route path="live-demo" element={<LiveDemo />} />
     <Route path="live" element={guard('LIVE', undefined, <LiveWall />)} />
     <Route path="playback" element={guard('playbacks', undefined, <CameraView />)} />
     <Route path="alerts" element={guard('alerts', undefined, <AlertsView />)} />

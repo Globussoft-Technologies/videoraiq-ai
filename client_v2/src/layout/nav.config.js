@@ -35,6 +35,7 @@ import {
   ScanEye,
   SlidersHorizontal,
   Settings2,
+  CirclePlay,
 } from 'lucide-react';
 
 // The sidebar group whose order the user can customise (Settings ▸ Log Order).
@@ -66,6 +67,12 @@ const stevinrockLogItems = [
 // Center/Analytics). Sidebar.jsx hides (not disables) any item whose module
 // resolves to view:false, matching V1's Header.jsx nav filtering exactly.
 export const NAV_GROUPS = [
+  {
+    label: 'EXPERIENCE',
+    items: [
+      { key: 'live-demo', label: 'Live Demo', path: 'live-demo', icon: CirclePlay, badge: 'NEW' },
+    ],
+  },
   {
     label: 'MONITOR',
     items: [
@@ -139,6 +146,7 @@ export const NAV_GROUPS = [
 export const VIEW_META = {
   overview: { title: 'Command Center', sub: 'Real-time intelligence across all sites' },
   wall: { title: 'Live Video Wall', sub: 'Multi-camera monitoring grid' },
+  'live-demo': { title: 'Live Demo', sub: 'Upload a clip, pick a detection, watch VideoraIQ work' },
   camera: { title: 'Playback', sub: 'Recorded footage · scrub, seek & review events' },
   alerts: { title: 'Alerts & Events', sub: 'Investigate and respond to detections' },
   incidents: { title: 'Incident Center', sub: 'Visual evidence grid across all detections' },
