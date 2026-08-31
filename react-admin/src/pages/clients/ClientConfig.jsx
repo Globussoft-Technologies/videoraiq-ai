@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import {
   ArrowLeft,
+  Check,
+  Loader2,
   RefreshCw,
-  Save,
   Search,
   ShieldCheck,
   ShieldHalf,
@@ -26,6 +27,10 @@ import {
   syncDetectionCatalog,
 } from './apis/put'
 import { getApiMessage, notifyApiError, notifyApiSuccess } from '../../utils/apiError'
+
+// How long edits must settle before an auto-save fires. Long enough that
+// holding a stepper is one request, short enough to feel immediate.
+const AUTOSAVE_DELAY_MS = 700
 
 const getInitials = (name = '') => {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -52,6 +57,13 @@ const ClientConfig = () => {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  // Guards against a second flush starting while one is in flight — the
+  // debounce timer and an in-progress request can otherwise overlap.
+  const savingRef = useRef(false)
+  const savingCamerasRef = useRef(false)
+  // Always holds the newest edits, so an in-flight save can tell whether the
+  // user changed anything while it was running.
+  const latestRef = useRef({ totalCameras: 0, detections: [] })
 
   // Tabs: 'license' (default) | 'cameras'. Cameras load lazily on first open.
   const [tab, setTab] = useState('license')
@@ -187,7 +199,8 @@ const ClientConfig = () => {
   const camerasTabDirty = dirtyCameraToggles.length > 0
 
   const handleSaveCameras = async () => {
-    if (!camerasTabDirty) return
+    if (!camerasTabDirty || savingCamerasRef.current) return
+    savingCamerasRef.current = true
     setSavingCameras(true)
     try {
       // One PATCH per changed toggle (endpoint toggles a single detection/camera).
@@ -206,9 +219,18 @@ const ClientConfig = () => {
     } catch (err) {
       notifyApiError(err, 'Failed to update camera detections')
     } finally {
+      savingCamerasRef.current = false
       setSavingCameras(false)
     }
   }
+
+  // Auto-save the per-camera toggles, same debounce as the licence tab.
+  useEffect(() => {
+    if (!camerasTabDirty) return undefined
+    const timer = setTimeout(() => { handleSaveCameras() }, AUTOSAVE_DELAY_MS)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [camerasTabDirty, cameras])
 
   const setDetection = (settingType, patch) => {
     setSaved(false)
@@ -297,35 +319,86 @@ const ClientConfig = () => {
   const camerasDirty = totalCameras !== baseline.totalCameras
   const isDirty = camerasDirty || dirtyDetections.length > 0
 
-  const handleSave = async () => {
+  // Kept in an effect, not assigned during render (refs must not be written
+  // while rendering). It lands well before any in-flight save reads it.
+  useEffect(() => {
+    latestRef.current = { totalCameras, detections }
+  }, [totalCameras, detections])
+
+  // Persist whatever differs from the baseline. Not bound to a button: it runs
+  // automatically once edits settle (see the debounce below).
+  //
+  // Still diff-and-flush rather than one request per control. A stepper fires on
+  // every click and "Enable all" changes 21 rows at once, so per-control saves
+  // would be a burst of requests racing each other — and the camera licence has
+  // to land BEFORE any allocation that depends on it, since the server rejects
+  // an allocation above the purchased count.
+  const flushChanges = async () => {
+    if (savingRef.current) return
+    if (!camerasDirty && dirtyDetections.length === 0) return
+
+    // What this flush is about to persist. Compared afterwards so a save cannot
+    // clobber an edit made while it was in flight: React gives a NEW array
+    // reference on every change, so an unchanged reference means the user has
+    // not touched anything since.
+    const sentDetections = detections
+    const sentTotalCameras = totalCameras
+
+    savingRef.current = true
     setSaving(true)
-    setSaved(false)
     try {
-      // Keep the last server response so we can surface its own success message.
-      let lastRes
       if (camerasDirty) {
-        lastRes = await updatePurchasedCameras(adminId, totalCameras)
+        await updatePurchasedCameras(adminId, totalCameras)
       }
       // Sequential so a failure points at a specific detection.
       for (const d of dirtyDetections) {
-        lastRes = await updateDetection(adminId, d.settingType, {
+        await updateDetection(adminId, d.settingType, {
           cameraAllocation: Number(d.cameraAllocation) || 0,
           enabled: d.enabled,
         })
       }
-      setSaved(true)
-      // Show the API's own success message (not a hardcoded string).
-      notifyApiSuccess(lastRes, 'Configuration saved')
-      // Re-sync stats + baseline from the server so meters/dirty-state reflect saved values.
+      // Re-sync stats + baseline from the server so the meters, the usage
+      // counts and the dirty state all reflect what was actually stored.
       const fresh = await getClientConfig(adminId)
-      applyData(fresh)
+      if (latestRef.current.detections === sentDetections &&
+          latestRef.current.totalCameras === sentTotalCameras) {
+        applyData(fresh)
+        setSaved(true)
+      } else {
+        // Edited mid-save. Keep those edits on screen — the effect will fire
+        // again and persist them — and take only the server-owned stats.
+        setStats(fresh?.body?.data?.stats ?? fresh?.data?.stats ?? null)
+      }
     } catch (err) {
-      // Show the API message (e.g. "purchasedCameras exceeds available cameras…") in a toast only.
+      // No success toast — auto-save fires constantly and would be noise. A
+      // FAILURE still needs saying, and carries the API's own message (e.g.
+      // "purchasedCameras exceeds available cameras…").
       notifyApiError(err, 'Failed to save configuration')
+      // Re-read so the screen shows what the server actually has, rather than
+      // leaving a rejected edit on screen looking as though it applied.
+      try {
+        applyData(await getClientConfig(adminId))
+      } catch {
+        // Nothing useful to do; the toast above already reported the problem.
+      }
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }
+
+  // Auto-save. Waits for edits to settle so holding "+" on a stepper produces
+  // one save, not one per click, and a bulk action produces one flush for all
+  // the rows it touched.
+  useEffect(() => {
+    if (!isDirty || loading || error) return undefined
+    const timer = setTimeout(() => { flushChanges() }, AUTOSAVE_DELAY_MS)
+    return () => clearTimeout(timer)
+    // flushChanges is intentionally omitted: it is recreated every render, so
+    // depending on it would reset the debounce on each keystroke and never fire.
+    // The values it reads are all listed here instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDirty, totalCameras, detections, loading, error])
 
   return (
     <>
@@ -368,35 +441,38 @@ const ClientConfig = () => {
             )}
           </div>
 
-          {/* License tab: save camera license + detection allocations. */}
+          {/* License tab: changes save themselves; this only reports state, so
+              the admin can tell a stored change from one still in flight. */}
           {tab === 'license' && (
-            <div className="flex items-center gap-3">
-              {saved && !isDirty && (
-                <span className="text-sm font-medium text-green-600 dark:text-green-400">Saved ✓</span>
-              )}
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={!isDirty || saving}
-                className="inline-flex items-center gap-2 rounded-xl bg-linear-to-r from-blue-600 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Save size={16} strokeWidth={2.2} />
-                {saving ? 'Saving…' : 'Save Configuration'}
-              </button>
+            <div className="flex items-center gap-2 text-sm">
+              {saving ? (
+                <>
+                  <Loader2 size={15} strokeWidth={2.2} className="animate-spin text-gray-400" />
+                  <span className="font-medium text-gray-500 dark:text-gray-400">Saving…</span>
+                </>
+              ) : isDirty ? (
+                <span className="font-medium text-gray-400 dark:text-gray-500">Unsaved changes</span>
+              ) : saved ? (
+                <>
+                  <Check size={15} strokeWidth={2.6} className="text-green-600 dark:text-green-400" />
+                  <span className="font-medium text-green-600 dark:text-green-400">All changes saved</span>
+                </>
+              ) : null}
             </div>
           )}
 
-          {/* Cameras tab: save per-camera detection toggles. */}
+          {/* Cameras tab: same — toggles persist themselves. */}
           {tab === 'cameras' && (
-            <button
-              type="button"
-              onClick={handleSaveCameras}
-              disabled={!camerasTabDirty || savingCameras}
-              className="inline-flex items-center gap-2 rounded-xl bg-linear-to-r from-blue-600 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Save size={16} strokeWidth={2.2} />
-              {savingCameras ? 'Saving…' : 'Save Configuration'}
-            </button>
+            <div className="flex items-center gap-2 text-sm">
+              {savingCameras ? (
+                <>
+                  <Loader2 size={15} strokeWidth={2.2} className="animate-spin text-gray-400" />
+                  <span className="font-medium text-gray-500 dark:text-gray-400">Saving…</span>
+                </>
+              ) : camerasTabDirty ? (
+                <span className="font-medium text-gray-400 dark:text-gray-500">Unsaved changes</span>
+              ) : null}
+            </div>
           )}
         </div>
 
