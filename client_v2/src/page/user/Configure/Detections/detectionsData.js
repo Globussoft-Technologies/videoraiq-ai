@@ -91,9 +91,17 @@ const CATEGORY_MATCHERS = [
   ['vehicles', ['vehicle', 'traffic', 'anpr', 'plate', 'car']],
   ['industrial', ['conveyor', 'crusher', 'spillage', 'spill', 'light']],
   ['perimeter', ['intrusion', 'unauthorized', 'access', 'line', 'crossing', 'loiter', 'bag', 'baggage']],
-  ['people', ['person', 'people', 'crowd', 'face']],
+  ['people', ['person', 'people', 'crowd', 'face', 'attendance']],
   ['workplace', ['desk', 'guard', 'table', 'occupancy', 'door', 'phone', 'mobile', 'retail', 'food']],
 ];
+
+function isAttendanceDetection(value) {
+  const normalized = String(value || '')
+    .replace(/settings$/i, '')
+    .replace(/[^a-z0-9]/gi, '')
+    .toLowerCase();
+  return normalized === 'attendancedetection' || normalized === 'attendance';
+}
 
 function detectionEntries(detectionTypes) {
   if (Array.isArray(detectionTypes)) {
@@ -156,7 +164,10 @@ function camelize(key) {
 
 export function buildDetectionModels(detectionTypes) {
   return detectionEntries(detectionTypes).map(([key, value]) => {
-    const label = detectionLabel(value, key);
+    const rawLabel = detectionLabel(value, key);
+    const label = isAttendanceDetection(key) || isAttendanceDetection(rawLabel)
+      ? 'Attendance-detection'
+      : rawLabel;
     const data = value && typeof value === 'object' ? value : {};
     const settings = data.settings || {};
     const minConfidence = numberFrom(

@@ -1,4 +1,9 @@
-import { DETECTION_FIELD_KEYS, ZONE_EXTRA_FIELDS } from './constants';
+import {
+  ATTENDANCE_DETECTION_NAME,
+  DETECTION_FIELD_KEYS,
+  ZONE_EXTRA_FIELDS,
+  isAttendanceDetectionType,
+} from './constants';
 import { scheduleFromConfig } from '../ZoneScheduleFields';
 
 export function extraFieldsFor(settingType) {
@@ -44,8 +49,21 @@ export function zonesFor(setting, cameraId) {
 
 export function allTypesFor(camera, typeLabels) {
   const detections = camera?.detections || {};
-  return DETECTION_FIELD_KEYS
-    .filter(key => typeLabels[key])
+  const apiTypeKeys = Array.isArray(typeLabels)
+    ? typeLabels.map((type, index) => type?.settingType || type?.detectionType || type?.key || type?.id || `type-${index}`)
+    : Object.keys(typeLabels || {});
+  const fieldKeys = [...new Set([...DETECTION_FIELD_KEYS, ...apiTypeKeys].filter(Boolean))];
+  const labelFor = (key) => {
+    if (isAttendanceDetectionType(key)) return ATTENDANCE_DETECTION_NAME;
+    if (Array.isArray(typeLabels)) {
+      const match = typeLabels.find((type) => (type?.settingType || type?.detectionType || type?.key || type?.id) === key);
+      return match?.displayName || match?.label || match?.name || match?.detectionName || key;
+    }
+    return typeLabels?.[key];
+  };
+
+  return fieldKeys
+    .filter(key => labelFor(key))
     .map(key => {
       const entry = detections[key];
       const setting = entry?.id && typeof entry.id === 'object' ? entry.id : null;
@@ -53,7 +71,7 @@ export function allTypesFor(camera, typeLabels) {
       const hasZones = zonesFor(setting, camera?._id).length > 0;
       return {
         settingType: key,
-        label: typeLabels[key],
+        label: labelFor(key),
         configured: !!settingId && hasZones,
         settingId,
         setting,

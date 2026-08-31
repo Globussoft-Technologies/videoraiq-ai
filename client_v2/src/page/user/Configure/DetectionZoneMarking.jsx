@@ -8,7 +8,13 @@ import { streamUrl } from '../../../lib/stream';
 import { useApi } from '../../../hooks/useApi';
 import { emptySchedule, buildScheduleFields, formatTime, scheduleError } from './ZoneScheduleFields';
 import { usePermissions } from '@/context/PermissionContext';
-import { DEFAULT_MAX_POINTS, MIN_POINTS_TO_CLOSE } from './DetectionZoneMarking/constants';
+import {
+  ATTENDANCE_DETECTION_NAME,
+  ATTENDANCE_DETECTION_SETTING_TYPE,
+  DEFAULT_MAX_POINTS,
+  MIN_POINTS_TO_CLOSE,
+  isAttendanceDetectionType,
+} from './DetectionZoneMarking/constants';
 import { allTypesFor, extraFieldsFor, polygonPointsAttr, zonesFor } from './DetectionZoneMarking/utils';
 import DetectionTypeDropdown from './DetectionZoneMarking/components/DetectionTypeDropdown';
 import ZoneToolbar from './DetectionZoneMarking/components/ZoneToolbar';
@@ -77,6 +83,7 @@ export default function DetectionZoneMarking({
   }, [selectedSettingType, camera?._id]);
 
   const activeType = allTypes.find(t => t.settingType === selectedType) || null;
+  const isAttendanceDetection = isAttendanceDetectionType(activeType?.settingType || activeType?.label);
   // Line Crossing draws a single straight line (exactly 2 points), not a
   // closed area â€” V1 gives it its own toolbar/shape entirely (see
   // AreaMarkingControls.jsx's isLineCrossing), unlike every other type here
@@ -433,6 +440,8 @@ export default function DetectionZoneMarking({
       // startTime/endTime added only when fully selected in the schedule picker.
       ...buildScheduleFields(z.schedule),
     }));
+    const savedDetectionName = isAttendanceDetection ? ATTENDANCE_DETECTION_NAME : detectionName;
+    const savedSettingType = isAttendanceDetection ? ATTENDANCE_DETECTION_SETTING_TYPE : activeType.settingType;
     if (activeType.settingId) {
       const setting = activeType.setting;
       const fallbackTelegramChatId =
@@ -451,10 +460,10 @@ export default function DetectionZoneMarking({
         ),
       ];
       await updateZoneDetectionSetting(activeType.settingId, {
-        name: detectionName ?? setting.name,
-        enabled: setting.enabled,
-        settingType: setting.settingType,
+        name: savedDetectionName ?? setting.name,
+        settingType: savedSettingType,
         NVRId: cameraNvrId,
+        enabled: setting.enabled,
         channelId: [camera._id],
         settings: {
           ...setting.settings,
@@ -484,10 +493,10 @@ export default function DetectionZoneMarking({
         ),
       ];
       await createZoneDetectionSetting({
-        name: detectionName,
-        settingType: activeType.settingType,
-        channelId: [camera._id],
+        name: savedDetectionName,
+        settingType: savedSettingType,
         NVRId: cameraNvrId,
+        channelId: [camera._id],
         enabled: true,
         settings: {
           levelOfImportance: priority,
@@ -1276,7 +1285,7 @@ export default function DetectionZoneMarking({
 
       {showSaveModal && activeType && (
         <SaveDetectionAreaModal
-          initialName={activeType.setting?.name || `${activeType.label} for ${camera.customName || camera.name}`}
+          initialName={isAttendanceDetection ? ATTENDANCE_DETECTION_NAME : (activeType.setting?.name || `${activeType.label} for ${camera.customName || camera.name}`)}
           initialPriority={activeType.setting?.settings?.levelOfImportance || 'moderate'}
           zones={pendingZones}
           extraFields={extraFieldsFor(activeType.settingType)}

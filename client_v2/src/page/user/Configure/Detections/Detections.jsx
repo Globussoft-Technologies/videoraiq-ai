@@ -13,6 +13,11 @@ import { useAuth } from '../../../../context/AuthContext';
 import { fetchDetectionTypes as fetchIncidentFilterTypes, fetchIncidents, fetchIncidentStats } from '../../../../helpers/incidents';
 import { timeOfDay } from '../../../../lib/format';
 import DetectionZoneMarking from '../DetectionZoneMarking';
+import {
+  ATTENDANCE_DETECTION_NAME,
+  ATTENDANCE_DETECTION_SETTING_TYPE,
+  isAttendanceDetectionType,
+} from '../DetectionZoneMarking/constants';
 import { DetectionSettingsCameraList } from '../DetectionSettings';
 import {
   DETECTION_CATEGORIES,
@@ -46,6 +51,21 @@ const CAMERA_TYPE_OPTIONS = [
 ];
 
 const INCIDENT_PAGE_SIZE = 12;
+
+function compactSearchText(value) {
+  return String(value || '')
+    .replace(/[^a-z0-9]/gi, '')
+    .toLowerCase();
+}
+
+function apiSettingTypeFor(settingType) {
+  return isAttendanceDetectionType(settingType) ? ATTENDANCE_DETECTION_SETTING_TYPE : settingType;
+}
+
+function isSameSettingType(a, b) {
+  if (isAttendanceDetectionType(a) && isAttendanceDetectionType(b)) return true;
+  return a === b;
+}
 
 function normalizeIncidentKey(value) {
   return String(value || '')
@@ -420,7 +440,7 @@ function findSettingForCamera(settingsResult, settingType, cameraId) {
   const items = Array.isArray(settingsResult?.settings) ? settingsResult.settings : [];
   return items.find((item) => {
     const setting = getDetectionSetting(item);
-    if (!setting || setting.settingType !== settingType) return false;
+    if (!setting || !isSameSettingType(setting.settingType, settingType)) return false;
 
     const linkedCameras = getLinkedCameras(item);
     if (linkedCameras.length === 0) return true;
@@ -613,6 +633,7 @@ export default function Detections() {
     () => buildDetectionModels(typesApi.data).map((m) => {
       const edited = edits[m.id] || {};
       const settingType = m.settingType || m.id;
+      const isAttendanceDetection = isAttendanceDetectionType(settingType || m.name);
       const cameraEntry = zoneCamera?.detections?.[settingType];
       const setting = settingFromEntry(cameraEntry);
       const uiData = setting?.uiData || {};
@@ -623,7 +644,9 @@ export default function Detections() {
       };
       const cameraEnabled = typeof cameraEntry === 'object' ? cameraEntry?.enabled : cameraEntry;
       const settingEnabled = setting?.active ?? setting?.enabled;
-      const cameraScopedActive = zoneCamera?._id
+      const cameraScopedActive = isAttendanceDetection
+        ? true
+        : zoneCamera?._id
         ? (cameraEnabled ?? settingEnabled ?? false)
         : m.active;
       const apiThresholds = thresholdsFromSettings(settingType, m.thresholds, apiSettings);
@@ -805,11 +828,23 @@ export default function Detections() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const compactQ = compactSearchText(q);
     return models.filter((m) => {
       if (category !== 'all' && m.category !== category) return false;
       if (stateTab === 'active' && !m.active) return false;
       if (stateTab === 'paused' && m.active) return false;
-      if (q && !`${m.name} ${m.subtitle}`.toLowerCase().includes(q)) return false;
+      if (q) {
+        const haystack = [
+          m.name,
+          m.subtitle,
+          m.id,
+          m.settingType,
+          m.category,
+          CATEGORY_BY_KEY[m.category]?.label,
+        ].filter(Boolean).join(' ').toLowerCase();
+        const compactHaystack = compactSearchText(haystack);
+        if (!haystack.includes(q) && (!compactQ || !compactHaystack.includes(compactQ))) return false;
+      }
       return true;
     });
   }, [models, search, category, stateTab]);
@@ -963,6 +998,7 @@ export default function Detections() {
   const toggleModel = async (model, forcedEnable) => {
     if (!canEditDetections) return;
     const detectionType = model.settingType || model.id;
+    if (isAttendanceDetectionType(detectionType || model.name)) return;
     if (!zoneCamera?._id || !detectionType) {
       toast.error('Select a camera before changing detection status.');
       return;
@@ -1162,8 +1198,8 @@ export default function Detections() {
     const normalized = cameraWithNvr(camera, nvr);
     if (!normalized || !settingType) return normalized;
 
-    const settingsResult = await getDetectionSettings({
-      settingType,
+  const settingsResult = await getDetectionSettings({
+      settingType: apiSettingTypeFor(settingType),
       nvrIds: nvrIdOf(normalized.nvrId) || nvrIdOf(nvr),
       channelIds: normalized._id,
       limit: 100,
@@ -1718,6 +1754,7 @@ export default function Detections() {
                           onSelect={() => selectDetection(model.id)}
                           onToggle={() => toggleModel(model)}
                           toggleDisabled={!canEditDetections || detectionToggleLoading === (model.settingType || model.id)}
+                          hideToggle={isAttendanceDetectionType(model.settingType || model.id || model.name)}
                         />
                       ))}
                     </div>
@@ -1788,6 +1825,7 @@ export default function Detections() {
                   onRecipientsChange={(alertIds) => { if (canEditDetections) updateSelectedRecipients(alertIds); }}
                   onScheduleSaved={refreshZoneCamera}
                   canEdit={canEditDetections}
+                  hideToggle={isAttendanceDetectionType(selectedSettingType || selected?.name)}
                 />
                 <DetectionIncidents
                   detectionName={selected.name}

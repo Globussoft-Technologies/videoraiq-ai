@@ -6,7 +6,7 @@
  * the model (which drives the detail panel on the right); the toggle is
  * click-isolated so flipping it never changes the selection.
  */
-export default function DetectionCard({ model, color, selected, onSelect, onToggle, toggleDisabled = false }) {
+export default function DetectionCard({ model, color, selected, onSelect, onToggle, toggleDisabled = false, hideToggle = false }) {
   return (
     <div
       className="vq-det-card"
@@ -58,9 +58,11 @@ export default function DetectionCard({ model, color, selected, onSelect, onTogg
         >
           {model.name}
         </span>
-        <span onClick={(e) => e.stopPropagation()} style={{ flex: '0 0 auto' }}>
-          <Toggle on={model.active} onChange={onToggle} disabled={toggleDisabled} />
-        </span>
+        {!hideToggle && (
+          <span onClick={(e) => e.stopPropagation()} style={{ flex: '0 0 auto' }}>
+            <Toggle on={model.active} onChange={onToggle} disabled={toggleDisabled} />
+          </span>
+        )}
       </div>
 
       {/* Sub-type line, flush with the status dot above it. --tx (full

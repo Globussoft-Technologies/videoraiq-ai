@@ -2,7 +2,7 @@ import {
   Activity, AlertCircle, Armchair, Box, Briefcase, Calendar, CalendarCheck,
   Car, CarFront, CircleOff, Clock, Clock3, CopyPlus, DoorOpen, Factory, Flame,
   GitCommitHorizontal, Globe, Hammer, HardHat, Lightbulb, ListRestart, Plus,
-  ScanFace, ScanLine, ShieldAlert, ShieldOff, Smartphone, Table2, Trash2,
+  ScanFace, ScanLine, ShieldAlert, ShieldOff, Smartphone, Table2, Trash2, UserCheck,
   Users, UtensilsCrossed, Waves, X, ChevronDown,
 } from 'lucide-react';
 import { Toggle } from '../../../../components/primitives';
@@ -15,6 +15,7 @@ import { useTimezones } from '../ZoneScheduleFields';
 import { thresholdLabel } from './detectionsData';
 import { fetchAlertRecipients, updateDetectionAlerts } from '../DetectionZoneMarking/api/detectionZoneApi';
 import { isOvernightRange, validateScheduleDays } from '../../../../lib/detectionSchedule';
+import { isAttendanceDetectionType } from '../DetectionZoneMarking/constants';
 
 // Detection types are API-driven, so use their stable setting type rather than
 // the category icon. Aliases cover the setting-type variants returned by the
@@ -61,9 +62,11 @@ const DETECTION_ICONS = {
   conveyorDetectionSettings: Factory,
   crusherDetectionSettings: Hammer,
   waterSpillageDetectionSettings: Waves,
+  'Attendance-detection': UserCheck,
 };
 
 function detectionIconFor(model, fallbackIcon) {
+  if (isAttendanceDetectionType(model?.settingType || model?.id || model?.name)) return UserCheck;
   return DETECTION_ICONS[model?.settingType || model?.id] || fallbackIcon;
 }
 
@@ -943,6 +946,7 @@ export default function DetectionDetailPanel({
   initialAlerts = [],
   onRecipientsChange,
   canEdit = true,
+  hideToggle = false,
 }) {
   const Icon = detectionIconFor(model, category?.icon);
   const color = category?.color || 'var(--blue)';
@@ -953,7 +957,7 @@ export default function DetectionDetailPanel({
   const scheduleFallback = formatScheduleMode(model.scheduleMode || model.schedule, 'N/A');
   const thresholdKeys = model.thresholds ? Object.keys(model.thresholds) : [];
   const usesThresholds = thresholdKeys.length > 0;
-  const thresholdsBlockedByInactive = !model.active;
+  const thresholdsBlockedByInactive = !hideToggle && !model.active;
   const thresholdsBlockedByAccess = !canEdit;
   const resetThresholdActionDisabled = resetThresholdDisabled || thresholdsBlockedByAccess || thresholdsBlockedByInactive;
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -1303,7 +1307,7 @@ export default function DetectionDetailPanel({
             <ListRestart size={15} style={{ flex: '0 0 auto' }} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Reset detection thresholds</span>
           </button>
-          <Toggle on={model.active} onChange={onToggle} disabled={toggleDisabled} />
+          {!hideToggle && <Toggle on={model.active} onChange={onToggle} disabled={toggleDisabled} />}
         </span>
       </div>
 

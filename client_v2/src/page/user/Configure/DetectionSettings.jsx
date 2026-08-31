@@ -14,6 +14,7 @@ import DetectionLimitDialog from '../../../components/DetectionLimitDialog';
 import NoDetectionLicense from '../../../components/NoDetectionLicense';
 import { licenseErrorFrom } from '../../../helpers/license';
 import DetectionZoneMarking from './DetectionZoneMarking';
+import { ATTENDANCE_DETECTION_NAME, isAttendanceDetectionType } from './DetectionZoneMarking/constants';
 
 const CHECK_TYPES = [
   { value: 'none', label: 'None' },
@@ -68,6 +69,9 @@ function detectionSettingIdFromEntry(entry) {
 }
 
 function detectionTypeLabel(value, fallback) {
+  if (isAttendanceDetectionType(fallback) || isAttendanceDetectionType(value?.settingType || value?.detectionType || value?.key || value?.id || value?.name || value)) {
+    return ATTENDANCE_DETECTION_NAME;
+  }
   if (typeof value === 'string') return value;
   return value?.displayName || value?.label || value?.name || value?.id?.displayName || value?.id?.name || fallback;
 }
@@ -103,7 +107,7 @@ function appliedTypesFor(camera, typeLabels) {
   }))
     .filter(type => type.key && type.label);
 
-  return masterList.sort((a, b) => {
+  return masterList.filter(type => !isAttendanceDetectionType(type.key || type.label)).sort((a, b) => {
     if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
     return a.order - b.order;
   });
@@ -896,6 +900,7 @@ export function DetectionSettingsCameraList({ onOpenCamera }) {
   // never linked to this camera (no auto-create — same as V1's real behavior).
 const handleToggleDetection = async (camera, detectionType, enable) => {
   if (!canEditDetections) return;
+  if (isAttendanceDetectionType(detectionType)) return;
   try {
     const response = await toggleChannelDetection({
       channelId: camera._id,
