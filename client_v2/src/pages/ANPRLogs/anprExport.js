@@ -8,6 +8,15 @@ import { taggedUserName } from '@/helpers/vehicleTagging';
 import logoUrl from '@/assets/videoraiq-logo-white.png';
 
 /**
+ * One source of truth for the export naming so the PDF title, the Excel sheet
+ * name and every downloaded file name stay in sync. Previously the list PDF,
+ * grid PDF and Excel each hard-coded their own "vehicle_obstruction_logs*"
+ * string, so the three downloads landed with mismatched names.
+ */
+const REPORT_TITLE = 'ANPR Logs';
+const FILE_BASE = 'anpr_logs';
+
+/**
  * Fetch the full (unpaginated) result set for export using the current filters,
  * mapped to the export row shape. Mirrors the V1 ANPRLogs export exactly.
  */
@@ -235,7 +244,7 @@ const exportToPDF = async (params) => {
     }
 
     const doc = new jsPDF('landscape');
-    await drawReportHeader(doc, 'Vehicle & Obstruction Detection Logs', allLogs.length);
+    await drawReportHeader(doc, REPORT_TITLE, allLogs.length);
 
     const headers = [
       '#',
@@ -298,7 +307,7 @@ const exportToPDF = async (params) => {
         }
       },
     });
-    doc.save('vehicle_obstruction_logs.pdf');
+    doc.save(`${FILE_BASE}.pdf`);
   } catch {
     toast.error('Failed to export PDF');
   }
@@ -354,7 +363,7 @@ const exportToGridPDF = async (params) => {
 
     doc.setFillColor(245, 247, 251);
     doc.rect(0, 0, pageWidth, pageHeight, 'F');
-    await drawReportHeader(doc, 'Vehicle & Obstruction Detection Logs', allLogs.length);
+    await drawReportHeader(doc, REPORT_TITLE, allLogs.length);
 
     const addPageIfNeeded = () => {
       if (y + cardHeight <= pageHeight - 6) return;
@@ -433,7 +442,7 @@ const exportToGridPDF = async (params) => {
       }
     }
 
-    doc.save('vehicle_obstruction_logs_grid.pdf');
+    doc.save(`${FILE_BASE}_grid.pdf`);
     toast.dismiss(progressToastId);
     toast.success('Grid PDF downloaded');
   } catch (error) {
@@ -475,8 +484,8 @@ const exportToExcel = async (params) => {
     });
 
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Vehicle Obstruction Logs');
-    XLSX.writeFile(workbook, 'vehicle_obstruction_logs.xlsx');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'ANPR Logs');
+    XLSX.writeFile(workbook, `${FILE_BASE}.xlsx`);
   } catch {
     toast.error('Failed to export Excel');
   }
