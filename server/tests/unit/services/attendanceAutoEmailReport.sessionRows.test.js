@@ -1,11 +1,11 @@
 /**
- * The PDF/CSV render each employee-day as: a "day" line (identity + first
- * check-in / last check-out / gross duration + period total), one "session"
- * line per check-in/check-out pair (each with its own worked duration and
- * snapshot link), then a "total" line (the day's Total Working Hrs + Total
- * Break Hrs + the period total), and finally one report-wide "grand" line.
- * This verifies the expansion, the aggregates and that buildCsv/buildPdf still
- * produce valid output.
+ * The PDF/CSV render each employee-day as: a "day" line (identity + the FIRST
+ * work session's check-in / check-out / worked duration), one "session" line
+ * per remaining check-in/check-out pair (sessions 2..N), then a "total" line
+ * (Σ session working hrs + the break total + the period total), and finally one
+ * report-wide "grand" line. Total Working Hrs (Day) is the sum of the Duration
+ * column and never includes break time. This verifies the expansion, the
+ * aggregates and that buildCsv/buildPdf still produce valid output.
  */
 import { describe, it, expect, vi } from "vitest";
 
@@ -28,16 +28,19 @@ function attendance(events) {
 const ev = (cameraType, time) => ({ cameraType, timestamp: `2026-08-07T${time}:00.000Z`, images: { frame: `/f/${time}.jpg` } });
 
 describe("attendanceAutoEmailReport session sub-rows", () => {
-  it("pairs each check-in with the next check-out into a session with its own duration", () => {
+  it("puts the first work session on the day line and the rest in `sessions`", () => {
     const row = rowFromAttendance(
       attendance([ev("checkin", "10:00"), ev("checkout", "10:30"), ev("checkin", "11:00"), ev("checkout", "12:15")]),
       "Asia/Kolkata",
       rules
     );
-    expect(row.sessions).toHaveLength(2);
-    expect(row.sessions[0].duration).toBe("00:30:00");
-    expect(row.sessions[1].duration).toBe("01:15:00");
-    expect(row.sessions[0].checkInImage).toContain("/f/10:00.jpg");
+    // Day line carries session 1 (10:00 → 10:30, 30 min).
+    expect(row.duration).toBe("00:30:00");
+    // Only session 2 is left to expand.
+    expect(row.sessions).toHaveLength(1);
+    expect(row.sessions[0].duration).toBe("01:15:00");
+    // Total Working Hrs (Day) = sum of every session's worked time (30 + 75).
+    expect(row.workingHoursDay).toBe("01:45:00");
   });
 
   it("keeps a trailing check-in with no check-out as an open (00:00:00) session", () => {
@@ -46,59 +49,68 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
       "Asia/Kolkata",
       rules
     );
-    expect(row.sessions).toHaveLength(2);
-    expect(row.sessions[1].checkOut).toBe("-");
-    expect(row.sessions[1].duration).toBe("00:00:00");
+    // Session 1 (09:00 → 09:45) on the day line; the open session is the sub-row.
+    expect(row.duration).toBe("00:45:00");
+    expect(row.sessions).toHaveLength(1);
+    expect(row.sessions[0].checkOut).toBe("-");
+    expect(row.sessions[0].duration).toBe("00:00:00");
   });
 
-  it("expands one employee-day into: day line + N session lines + total line", () => {
+  it("expands one employee-day into: day line + N session lines + total + grand", () => {
     const row = rowFromAttendance(
       attendance([ev("checkin", "10:00"), ev("checkout", "10:30"), ev("checkin", "11:00"), ev("checkout", "12:15")]),
       "Asia/Kolkata",
       rules
     );
-    row.workingHoursDay = "01:45:00";
-    row.breakHoursDay = "00:30:00";
     row.workingHoursPeriod = "01:45:00";
     row.workingMinutesDay = 105;
     row.breakMinutesDay = 30;
     row.workingMinutesPeriod = 105;
 
     const out = reportTableRows([row]);
-    expect(out.map((r) => r.kind)).toEqual(["day", "session", "session", "total", "grand"]);
+    expect(out.map((r) => r.kind)).toEqual(["day", "session", "total", "grand"]);
 
-    // Day line: id + name + span. Period total now lives on the total line.
+    // Day line: id + name + first session's check-in / check-out / duration.
     const day = out[0].cells;
     expect(day[0]).toBe("1");
     expect(day[1]).toBe("Nagul Lingiri");
-    expect(day[5]).toBe(row.checkIn);   // first check-in of the day
-    expect(day[6]).toBe(row.checkOut);  // last check-out of the day
-    expect(day[10]).toBe("");           // period total moved to the total line
-    expect(day[8]).toBe("");            // day working total lives on the total line
+    expect(day[7]).toBe("00:30:00"); // session 1 duration
+    expect(day[8]).toBe("");         // working total lives on the total line
+    expect(day[10]).toBe("");        // period total lives on the total line
 
-    // Session lines: no identity, own duration.
+    // Session line: session 2 only, no identity, own duration.
     expect(out[1].cells[1]).toBe("");
-    expect(out[1].cells[7]).toBe("00:30:00");
-    expect(out[2].cells[7]).toBe("01:15:00");
+    expect(out[1].cells[7]).toBe("01:15:00");
 
-    // Total line: day working + break + the period total.
-    const total = out[3].cells;
+    // Total line: Σ session working + break + the period total.
+    const total = out[2].cells;
     expect(total[8]).toBe("01:45:00");
     expect(total[9]).toBe("00:30:00");
     expect(total[10]).toBe("01:45:00");
 
     // Grand line: report-wide totals.
-    const grand = out[4].cells;
+    const grand = out[3].cells;
     expect(grand[1]).toBe("TOTAL (all employees)");
     expect(grand[8]).toBe("01:45:00");
     expect(grand[9]).toBe("00:30:00");
     expect(grand[10]).toBe("01:45:00");
   });
 
-  it("still emits a day + single session + total block when the day has one session", () => {
+  it("emits just a day + total block when the day has a single session", () => {
     const row = rowFromAttendance(attendance([ev("checkin", "09:00"), ev("checkout", "17:00")]), "Asia/Kolkata", rules);
     const out = reportTableRows([row]);
-    expect(out.map((r) => r.kind)).toEqual(["day", "session", "total", "grand"]);
+    expect(out.map((r) => r.kind)).toEqual(["day", "total", "grand"]);
+  });
+
+  it("Total Working Hrs (Day) equals the sum of the Duration column and excludes breaks", () => {
+    // 10:00→10:30 (30m), break, 12:00→14:00 (120m) → worked 150m, break 90m.
+    const row = rowFromAttendance(
+      attendance([ev("checkin", "10:00"), ev("checkout", "10:30"), ev("checkin", "12:00"), ev("checkout", "14:00")]),
+      "Asia/Kolkata",
+      rules
+    );
+    expect(row.workingHoursDay).toBe("02:30:00"); // 30 + 120, NOT 30 + 120 + 90
+    expect(row.breakHoursDay).toBe("01:30:00");
   });
 
   it("sums each employee's period total once across the grand line", () => {
@@ -114,7 +126,7 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
     expect(grand.cells[10]).toBe("12:00:00"); // 720 period counted once, not 1440
   });
 
-  it("buildCsv emits day + session + total lines with a HYPERLINK image cell", () => {
+  it("buildCsv emits day + session + total + grand lines with a HYPERLINK image cell", () => {
     const row = rowFromAttendance(
       attendance([ev("checkin", "10:00"), ev("checkout", "10:30"), ev("checkin", "11:00"), ev("checkout", "12:15")]),
       "Asia/Kolkata",
@@ -122,8 +134,8 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
     );
     const csv = buildCsv({ report: {}, rows: [row], label: "07 Aug 2026", timezone: "Asia/Kolkata" }).toString("utf8");
     const lines = csv.split("\r\n");
-    // 6 meta lines + day + 2 sessions + total + grand
-    expect(lines).toHaveLength(11);
+    // 6 meta lines + day + 1 session + total + grand
+    expect(lines).toHaveLength(10);
     expect(csv).toContain("=HYPERLINK(");
   });
 
@@ -141,14 +153,13 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
       "Asia/Kolkata",
       rules
     );
-    expect(row.sessions[0].duration).toBe("2d 3h 40m");
     expect(row.duration).toBe("2d 3h 40m");
     expect(row.workingHoursDay).toBe("2d 3h 40m");
   });
 
   it("keeps sub-24h durations as HH:MM:SS", () => {
     const row = rowFromAttendance(attendance([ev("checkin", "09:00"), ev("checkout", "17:30")]), "Asia/Kolkata", rules);
-    expect(row.sessions[0].duration).toBe("08:30:00");
+    expect(row.duration).toBe("08:30:00");
     expect(row.workingHoursDay).toBe("08:30:00");
   });
 

@@ -66,17 +66,6 @@ function minutesToHms(minutes) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-// "Total Working Hrs (Day)" as the Attendance Logs table computes it
-// (`minutesSpent` in attendanceStatus.js): last check-out − first check-in,
-// rounded to whole minutes, floored at 0. It is the elapsed span and does NOT
-// subtract breaks — the Break column is shown alongside, not deducted. Missing
-// either end → 0.
-function workingMinutesForDay(firstCheckIn, lastCheckOut) {
-  if (!firstCheckIn || !lastCheckOut) return 0;
-  const minutes = (new Date(lastCheckOut) - new Date(firstCheckIn)) / 60000;
-  return Math.max(0, Math.round(minutes));
-}
-
 // Human-readable duration used for every duration column in the report
 // (session duration, Total Working / Break Hrs for the day, and the period
 // total). Under 24h it stays HH:MM:SS; at or above 24h it breaks into the
@@ -280,23 +269,15 @@ export function rowFromAttendance(item, timezone, rules) {
   const lastCheckOut = checkouts.at(-1) || null;
   const employee = item.employee || {};
 
-  // Computed exactly as the Attendance Logs table does:
-  //   - Total Working Hrs (Day)  = last check-out − first check-in  (elapsed
-  //     span, whole minutes, floored at 0 — `minutesSpent` in
-  //     attendanceStatus.js). Breaks are NOT subtracted; the Break column is
-  //     shown alongside, not deducted.
   //   - Total Break Hrs (Day)    = Σ (checkin − checkout) gaps  (pairBreaks +
-  //     breakMinutesFromPairs), per-pair rounding.
-  //   - Duration is the same span to whole-second precision.
-  // Matches how the Attendance Logs card shows one "TIME" figure plus a
-  // separate "BREAK" figure.
+  //     breakMinutesFromPairs), per-pair rounding. Shown alongside only — never
+  //     added into any working figure.
   const breakMinutes = breakMinutesFromPairs(pairBreaks(events));
-  const workingMinutesDay = workingMinutesForDay(firstCheckIn?.timestamp, lastCheckOut?.timestamp);
 
   // Every check-in/check-out pairing for the day, each with its own worked
-  // duration and snapshot links — the report expands these into sub-rows.
+  // duration and snapshot links.
   const workSessions = pairWorkSessions(events);
-  const sessions = workSessions.map((session) => ({
+  const sessionCells = workSessions.map((session) => ({
     checkIn: session.checkin ? formatClock(session.checkin.timestamp, timezone) : "-",
     checkOut: session.checkout ? formatClock(session.checkout.timestamp, timezone) : "-",
     // HH:MM:SS under 24h, else a compact "1d 2h 30m" breakdown.
@@ -307,12 +288,17 @@ export function rowFromAttendance(item, timezone, rules) {
     checkOutImage: session.checkout ? checkInImageUrl(session.checkout) : "-",
   }));
 
-  // Day-line Duration = Σ of the individual work-session durations (actual time
-  // on the clock), so it always agrees with the sub-session rows beneath it.
-  // This differs from Total Working Hrs (Day), which is the gross first-checkin →
-  // last-checkout span (breaks included).
-  const sessionMinutesTotal = workSessions.reduce((sum, session) => sum + sessionMinutes(session), 0);
-  const grossMinutes = workSessions.length ? sessionMinutesTotal : null;
+  // The first session's clock times / worked duration go on the day line
+  // itself; the remaining sessions become the sub-rows. This avoids repeating
+  // the first check-in/check-out (once on the day line as "first in / last out",
+  // once as session 1).
+  const firstSessionCells = sessionCells[0] || null;
+  const sessions = sessionCells.slice(1);
+
+  // Total Working Hrs (Day) = Σ of every work-session's worked minutes (actual
+  // time on the clock between a check-in and its check-out). Breaks are NOT
+  // included. This is exactly the sum of the Duration column for the day.
+  const workingMinutesDay = workSessions.reduce((sum, session) => sum + sessionMinutes(session), 0);
 
   const row = {
     date: moment(item.createdAt).tz(timezone).format("DD MMM YYYY"),
@@ -327,25 +313,27 @@ export function rowFromAttendance(item, timezone, rules) {
     branch: cleanField(employee.branch),
     department: cleanField(employee.departmentId?.departmentName),
     location: cleanField(employee.location),
-    // First check-in and last check-out for the day (matches the previous export).
-    checkIn: firstCheckIn ? formatClock(firstCheckIn.timestamp, timezone) : "-",
-    checkOut: lastCheckOut ? formatClock(lastCheckOut.timestamp, timezone) : "-",
-    // All day-level durations: HH:MM:SS under 24h, else "9d 7h 40m" style
-    // (formatPeriodDuration), same as the period column.
-    duration: grossMinutes === null ? "-" : formatPeriodDuration(grossMinutes),
+    // Day line carries the FIRST work session's check-in / check-out / worked
+    // duration. Remaining sessions are the sub-rows (`sessions` below).
+    checkIn: firstSessionCells ? firstSessionCells.checkIn : (firstCheckIn ? formatClock(firstCheckIn.timestamp, timezone) : "-"),
+    checkOut: firstSessionCells ? firstSessionCells.checkOut : (lastCheckOut ? formatClock(lastCheckOut.timestamp, timezone) : "-"),
+    duration: firstSessionCells ? firstSessionCells.duration : "-",
+    // HH:MM:SS under 24h, else "9d 7h 40m" style (formatPeriodDuration).
     workingHoursDay: formatPeriodDuration(workingMinutesDay),
     breakHoursDay: formatPeriodDuration(breakMinutes),
     // Filled in by applyPeriodTotals once every day for this employee has been read.
     workingHoursPeriod: "00:00:00",
-    // Per-employee period total sums this (the elapsed-span working minutes),
-    // matching the Attendance Logs definition.
+    // Per-employee period total sums this (the summed session working minutes).
     workingMinutesDay: workingMinutesDay,
     breakMinutesDay: breakMinutes,
     checkInCount: checkins.length,
     checkOutCount: checkouts.length,
-    checkInCamera: eventCamera(firstCheckIn),
-    checkOutCamera: eventCamera(lastCheckOut),
-    viewImage: firstCheckIn ? checkInImageUrl(firstCheckIn) : "-",
+    // Day line = first session, so its cameras / snapshot are the first
+    // session's too (fall back to first-in / last-out when there are no paired
+    // sessions at all).
+    checkInCamera: firstSessionCells ? firstSessionCells.checkInCamera : eventCamera(firstCheckIn),
+    checkOutCamera: firstSessionCells ? firstSessionCells.checkOutCamera : eventCamera(lastCheckOut),
+    viewImage: firstSessionCells ? firstSessionCells.checkInImage : (firstCheckIn ? checkInImageUrl(firstCheckIn) : "-"),
     sessions,
     status: "",
   };
@@ -419,9 +407,9 @@ async function streamReportRows(report, reference, onRow) {
 }
 
 // "Total Working Hours for the period selected" = per-employee sum of Total
-// Working Hrs (Day) — i.e. of the elapsed check-in→check-out spans, the same
-// figure the Attendance Logs table sums — across every day in the report
-// range. Fillable only once all rows are collected. Mutates rows in place.
+// Working Hrs (Day) — i.e. the summed work-session minutes — across every day
+// in the report range. Fillable only once all rows are collected. Mutates rows
+// in place.
 export function applyPeriodTotals(rows) {
   const totals = new Map();
   for (const row of rows) {
@@ -463,12 +451,13 @@ function imageCell(url, text = "View Image") {
 
 // Single source of truth for the report grid. Each column declares its header
 // and a value function per line kind:
-//   day     — one per employee-day: identity + the day's first check-in /
-//             last check-out / gross span + the running period total.
-//   session — one per check-in/check-out pair from the actual event data:
-//             that pair's clock times, its own worked duration, its cameras
-//             and its snapshot link.
-//   total   — one per employee-day: the day's Total Working / Break Hrs.
+//   day     — one per employee-day: identity + the FIRST work session's
+//             check-in / check-out / worked duration.
+//   session — one per remaining check-in/check-out pair (sessions 2..N): that
+//             pair's clock times, its own worked duration, cameras, snapshot.
+//   total   — one per employee-day: Σ session working hrs, the break total and
+//             the period total.
+//   grand   — one closing line: report-wide working / break / period totals.
 // A column with no function for a kind renders blank there automatically — no
 // hand-placed "" padding, and adding/reordering a column can't misalign rows.
 const REPORT_COLUMNS = [
@@ -542,18 +531,11 @@ function lineFor(kind, ctx) {
   };
 }
 
-// Sessions come from the paired check-in/check-out events. Fall back to the
-// day's own single span only when a row carries no `sessions` array.
+// `row.sessions` already excludes the first work session (it lives on the day
+// line). An empty array means the day had one session or none — nothing extra
+// to expand.
 function sessionsFor(row) {
-  if (row.sessions?.length) return row.sessions;
-  return [{
-    checkIn: row.checkIn,
-    checkOut: row.checkOut,
-    duration: row.duration === "-" ? "00:00:00" : row.duration,
-    checkInCamera: row.checkInCamera,
-    checkOutCamera: row.checkOutCamera,
-    checkInImage: row.viewImage,
-  }];
+  return row.sessions || [];
 }
 
 // Report-wide totals for the closing "grand" line:
@@ -576,10 +558,10 @@ function grandTotals(rows) {
   return { workingMinutes, breakMinutes, periodMinutes };
 }
 
-// Expand every employee-day into: day line, one session line per check-in/
-// check-out pair, day total line. Closes with a single report-wide "grand"
-// total line. Returns `{ kind, cells }` objects so the PDF/CSV can style each
-// line kind.
+// Expand every employee-day into: a day line (first work session), one session
+// line per remaining check-in/check-out pair, then a day total line. Closes
+// with a single report-wide "grand" total line. Returns `{ kind, cells }`
+// objects so the PDF/CSV can style each line kind.
 export function reportTableRows(rows) {
   const out = [];
   rows.forEach((row, index) => {

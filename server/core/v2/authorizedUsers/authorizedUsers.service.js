@@ -656,7 +656,8 @@ class AuthUsersService {
           {
             headers: {
               'accept': 'application/json'
-            }
+            },
+            
           }
         );
 
