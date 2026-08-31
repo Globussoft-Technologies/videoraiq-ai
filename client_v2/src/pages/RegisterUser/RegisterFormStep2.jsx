@@ -70,7 +70,7 @@ const RegisterFormStep2 = ({
                   </label>
                   <button
                     type="button"
-                    onClick={() => onOpenCamera(angle)}
+                    onClick={() => onOpenCamera(angle, values.firstName)}
                     className="flex items-center justify-center gap-2 w-full py-3 bg-[var(--bg2)] text-[var(--tx2)] rounded-lg text-sm font-medium hover:bg-[var(--bd2)] transition-colors cursor-pointer"
                   >
                     <Camera className="w-4 h-4" />

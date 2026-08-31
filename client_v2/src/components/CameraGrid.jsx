@@ -1,9 +1,10 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
-import { Search, X, Maximize2, Minimize2, Calendar, VideoOff } from 'lucide-react';
+import { Search, X, Maximize2, Minimize2, VideoOff } from 'lucide-react';
 import { AsyncBoundary } from './States';
 import MultiSelect from './MultiSelect';
 import PlaybackTimeline from './PlaybackTimeline';
+import SingleDatePicker from './SingleDatePicker';
 import ActiveDetectionsPanel from './ActiveDetectionsPanel';
 import { useApi } from '../hooks/useApi';
 import { getChannels, getLocations, getNVRs, getDepartments } from '../helpers/monitoring';
@@ -256,16 +257,6 @@ export default function CameraGrid() {
     return () => document.removeEventListener('fullscreenchange', h);
   }, []);
 
-  /* pill — uses CSS vars so it works in both themes */
-  const pill = (active) => ({
-    display: 'flex', alignItems: 'center', gap: 6,
-    height: 34, padding: '0 16px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 500,
-    background: active ? 'var(--bg3)' : 'var(--bg2)',
-    color: active ? 'var(--tx)' : 'var(--tx2)',
-    border: `1px solid ${active ? 'var(--bd2)' : 'var(--bd)'}`,
-    userSelect: 'none', transition: 'all .15s',
-  });
-
   return (
     <div
       ref={pageRef}
@@ -341,15 +332,11 @@ export default function CameraGrid() {
         />
 
         {/* Playback date filter */}
-        <div style={{ position: 'relative', maxWidth: '100%', flexShrink: 0 }}>
-          <Calendar size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: dateStr !== todayStr ? 'var(--blue)' : 'var(--tx3)' }} />
-          <input
-            type="date"
+        <div style={{ maxWidth: '100%', flexShrink: 0 }}>
+          <SingleDatePicker
             value={dateStr}
-            max={todayStr}
-            onChange={e => { if (e.target.value) setDateStr(e.target.value); }}
-            title="Select playback date"
-            style={{ ...pill(dateStr !== todayStr), paddingLeft: 30, maxWidth: '100%', boxSizing: 'border-box' }}
+            maxDate={todayStr}
+            onChange={(date) => { if (date) setDateStr(date); }}
           />
         </div>
 

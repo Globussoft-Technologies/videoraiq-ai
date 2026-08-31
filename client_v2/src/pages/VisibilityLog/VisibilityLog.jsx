@@ -5,6 +5,7 @@ import moment from 'moment';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
 import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePage';
+import SingleDatePicker from '@/components/SingleDatePicker';
 import TimelineBar, { visibilityColors as colors } from './TimelineBar';
 import { axisLabels, buildSegmentsFromIncidents } from './timelineUtils';
 import { getDeskChannelGraph } from './Api';
@@ -156,15 +157,13 @@ const VisibilityLog = () => {
         }}
       >
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full">
-          <input
-            type="date"
+          <SingleDatePicker
             value={selectedDate}
-            max={moment().format('YYYY-MM-DD')}
-            onChange={(e) => {
+            maxDate={moment().format('YYYY-MM-DD')}
+            onChange={(date) => {
               setCurrentPage(1);
-              setSelectedDate(e.target.value);
+              setSelectedDate(date);
             }}
-            className="h-10 border border-[var(--bd)] rounded-lg px-3 text-sm w-full sm:w-auto bg-[var(--bg2)] text-[var(--tx)]"
           />
 
           <div className="flex items-center gap-4 text-xs text-[var(--tx2)]">

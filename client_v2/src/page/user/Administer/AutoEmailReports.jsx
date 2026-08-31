@@ -20,6 +20,7 @@ import { usePermissions } from '../../../context/PermissionContext';
 import MultiSelect from '../../../components/MultiSelect';
 import ConfirmationModal from '../../../components/DeleteConfirmation';
 import AccessDenied from '../../../components/AccessDenied';
+import SingleDatePicker from '../../../components/SingleDatePicker';
 import PageLoader from '../../../components/PageLoader';
 import { getRecipients } from '../../../api/administer';
 import { fetchTimezone, getTimezones, updateTimezone } from '../../../helpers/administer';
@@ -330,11 +331,21 @@ function ReportFormModal({
                 <>
                   <div>
                     <FieldLabel required>Start date</FieldLabel>
-                    <input type="date" value={form.startDate} onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))} style={inputStyle} />
+                    <SingleDatePicker
+                      value={form.startDate}
+                      maxDate={form.endDate || undefined}
+                      placeholder="Start date"
+                      onChange={(date) => setForm((current) => ({ ...current, startDate: date }))}
+                    />
                   </div>
                   <div>
                     <FieldLabel required>End date</FieldLabel>
-                    <input type="date" value={form.endDate} onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))} style={inputStyle} />
+                    <SingleDatePicker
+                      value={form.endDate}
+                      minDate={form.startDate || undefined}
+                      placeholder="End date"
+                      onChange={(date) => setForm((current) => ({ ...current, endDate: date }))}
+                    />
                   </div>
                 </>
               )}

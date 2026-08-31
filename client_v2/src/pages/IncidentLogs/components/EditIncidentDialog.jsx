@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import * as incidentApi from '../Api';
 import { parseTime, formatTime } from '@/pages/AttendanceLogs/components/timeUtils';
 import { UnifiedTimePicker } from '@/pages/AttendanceLogs/components/TimePickerComponents';
+import SingleDatePicker from '@/components/SingleDatePicker';
 
 const SEVERITY_OPTIONS = [
   { value: 'low', label: 'Low' },
@@ -199,12 +200,13 @@ const EditIncidentDialog = ({
           {/* Time of Incident */}
           <Field label="Time of Incident">
             <div className="flex items-start gap-2">
-              <input
-                type="date"
-                value={form.incidentDate}
-                onChange={(e) => setForm((f) => ({ ...f, incidentDate: e.target.value }))}
-                className="h-10 flex-1 min-w-0 px-3 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-sm text-[var(--tx)] outline-none focus:border-[var(--brand)] [color-scheme:light] dark:[color-scheme:dark]"
-              />
+              <div className="flex-1 min-w-0">
+                <SingleDatePicker
+                  value={form.incidentDate}
+                  maxDate={moment().format('YYYY-MM-DD')}
+                  onChange={(date) => setForm((f) => ({ ...f, incidentDate: date }))}
+                />
+              </div>
               <div className="flex-1 min-w-0">
                 <UnifiedTimePicker
                   hour={timeParts.hour}

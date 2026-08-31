@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronDown, User, Car, Loader2 } from 'lucide-react';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
+import SingleDatePicker from '@/components/SingleDatePicker';
 import { getTrackLogs, getTrackUsers, getVehicleList, getVehicleLogs } from './Api';
 
 const TrackLog = () => {
@@ -217,11 +218,9 @@ const TrackLog = () => {
 
           <div className="w-full md:w-44">
             <label className="text-xs text-[var(--tx3)] block mb-1">Date</label>
-            <input
-              type="date"
+            <SingleDatePicker
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full h-10 px-3 rounded-md bg-[var(--bg1solid)] border border-[var(--bd)] text-xs text-[var(--tx)]"
+              onChange={(date) => setStartDate(date)}
             />
           </div>
         </div>

@@ -9,6 +9,7 @@ import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePa
 import { guardColors as colors } from '@/pages/VisibilityLog/TimelineBar';
 import { axisLabels, buildSegmentsFromIncidents } from '@/pages/VisibilityLog/timelineUtils';
 import TimelineCell from './TimelineCell';
+import SingleDatePicker from '@/components/SingleDatePicker';
 import { downloadLogsExcel } from './guardExport';
 import { getGuardChannelGraph } from './Api';
 
@@ -189,15 +190,13 @@ const GuardLog = () => {
             Export Logs
           </button>
 
-          <input
-            type="date"
+          <SingleDatePicker
             value={selectedDate}
-            max={moment().format('YYYY-MM-DD')}
-            onChange={(e) => {
+            maxDate={moment().format('YYYY-MM-DD')}
+            onChange={(date) => {
               setCurrentPage(1);
-              setSelectedDate(e.target.value);
+              setSelectedDate(date);
             }}
-            className="h-10 border border-[var(--bd)] rounded-lg px-3 text-sm w-full sm:w-auto bg-[var(--bg2)] text-[var(--tx)]"
           />
 
           <div className="flex items-center gap-4 text-xs text-[var(--tx2)]">

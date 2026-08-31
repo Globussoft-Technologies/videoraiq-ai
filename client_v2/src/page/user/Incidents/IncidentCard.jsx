@@ -308,6 +308,17 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
   const sevLabel = SEV_LABEL[sevKey] || (item.severity || 'LOW').toUpperCase();
   const reported = item.report?.status === true;
 
+  // Car Model Detection cards surface the model name plus an identifier: the
+  // vehicle number when one was read, otherwise the model year.
+  const isCarModel =
+    item.incidentType === 'carModelDetection' ||
+    /car\s*model/i.test(item.incidentName || item.displayName || '');
+  const carModelName = String(
+    item.model_name || item.modelName || item.carModelName || item.carModel || ''
+  ).trim();
+  const carPlate = formatPlate(item.vehicleNumber);
+  const carYear = String(item.year ?? '').trim();
+
   function handleCardClick() {
     if (deleteMode) { onToggleDelete?.(); return; }
     if (imgSrc) onOpenLightbox?.(item);
@@ -507,15 +518,68 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
 
         {/* Info row */}
         <div style={{ padding: '11px 13px 12px', display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
-          {/* Plate + tagged user, for Vehicle Detection and friends. */}
-          <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-            {item.incidentName || det}
-          </div>
+          {isCarModel ? (
+            <>
+              {/* Title + Tag User on one row */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+                  {item.incidentName || det}
+                </span>
+                <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} showPlate={false} />
+              </div>
+              {/* Aligned key/value list. With a plate: Model + Year share a
+                  row, then Vehicle No. Without: just Model + Year. */}
+              {(() => {
+                const Cell = ({ label, value, mono, grow }) => (
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, flex: grow ? '1 1 0' : '0 0 auto' }}>
+                    <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)', flexShrink: 0 }}>
+                      {label}
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx)', fontFamily: mono ? 'var(--mono, monospace)' : undefined, letterSpacing: mono ? '.05em' : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                      {value}
+                    </span>
+                  </div>
+                );
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+                    {carPlate ? (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
+                          <Cell label="Model Name" value={`${carModelName || '--'} ,`} />
+                          <Cell label="Year" value={carYear || '--'} />
+                        </div>
+                        <Cell label="Vehicle No" value={carPlate} mono />
+                      </>
+                    ) : (
+                      <>
+                        <Cell label="Model Name" value={carModelName || '--'} />
+                        <Cell label="Year" value={carYear || '--'} />
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+            </>
+          ) : (
+            <>
+              {/* Plate + tagged user, for Vehicle Detection and friends. */}
+              <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+                {item.incidentName || det}
+              </div>
+            </>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
-            <span style={{ fontSize: 11, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: '1 1 auto' }}>
-              {cam}
-            </span>
+            {isCarModel ? (
+              <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, flex: '1 1 auto' }}>
+                <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--tx3)', flexShrink: 0 }}>Camera</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{cam || '--'}</span>
+              </span>
+            ) : (
+              <span style={{ fontSize: 11, color: 'var(--tx3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: '1 1 auto' }}>
+                {cam}
+              </span>
+            )}
             {/* Opens Playback on this camera at the second the incident was
                 recorded. Hidden rather than disabled when the incident carries
                 no camera or timestamp — a dead control is worse than none. */}

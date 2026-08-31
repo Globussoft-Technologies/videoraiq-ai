@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { ArrowLeft, X, Loader } from 'lucide-react';
-import Webcam from 'react-webcam';
+import { ArrowLeft, Loader } from 'lucide-react';
 import { toast } from 'sonner';
 import { COMPACT_TOAST } from './toastOptions';
+import FaceCaptureModal from './FaceCaptureModal';
 import {
   Dialog,
   DialogContent,
@@ -25,11 +25,6 @@ import {
 
 const orgId = import.meta.env.VITE_ORGANISATION_ID;
 const requiredImageCount = orgId === 'dubai' ? 1 : 3;
-const CAMERA_ACCESS_TOAST = {
-  ...COMPACT_TOAST,
-  id: 'camera-access-required',
-  description: "We couldn't access your camera. Please connect a camera or allow camera access in your browser settings",
-};
 
 const angleIndexMap = { Front: 0, Right: 1, Left: 2 };
 
@@ -64,8 +59,11 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
   const [originalImages, setOriginalImages] = useState(['', '', '']);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [activeCaptureAngle, setActiveCaptureAngle] = useState(null);
+  const [nameForPrefix, setNameForPrefix] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const webcamRef = useRef(null);
+  // Synchronous mirror of isCameraOpen — Radix fires onOpenChange before the
+  // isCameraOpen state update commits, so the ref is what the guard reads.
+  const cameraOpenRef = useRef(false);
 
   const loadDepartments = async () => {
     try {
@@ -102,6 +100,9 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
       setOriginalImages(pics);
       setUploadedImageUrls(['', '', '']);
       setStep(1);
+      cameraOpenRef.current = false;
+      setIsCameraOpen(false);
+      setActiveCaptureAngle(null);
       Promise.all([loadDepartments(), loadLocations()]).then(() => setOpen(true));
     }
   }, [editUser]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -125,24 +126,12 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
     toast.success('Image selected successfully', COMPACT_TOAST);
   };
 
-  const handleCapture = (folderName) => {
-    if (!webcamRef.current) return;
-    const imageSrc = webcamRef.current.getScreenshot();
-    if (!imageSrc) return;
-    const byteString = atob(imageSrc.split(',')[1]);
-    const mimeString = imageSrc.split(',')[0].split(':')[1].split(';')[0];
-    const ab = new ArrayBuffer(byteString.length);
-    const ia = new Uint8Array(ab);
-    for (let i = 0; i < byteString.length; i += 1) ia[i] = byteString.charCodeAt(i);
-    const blob = new Blob([ab], { type: mimeString });
-    const file = new File([blob], `${folderName}_${activeCaptureAngle}.jpg`, { type: mimeString });
-    uploadFile(file, folderName, angleIndexMap[activeCaptureAngle]);
-    setIsCameraOpen(false);
-    setActiveCaptureAngle(null);
-  };
-
-  const showCameraAccessError = () => {
-    toast.error('Camera access required', CAMERA_ACCESS_TOAST);
+  // The guided wizard is opened for a single angle, so onComplete returns a
+  // one-element array; route that File into the angle's slot.
+  const handleWizardComplete = (files) => {
+    const file = Array.isArray(files) ? files[0] : files;
+    if (file instanceof File) uploadFile(file, '', angleIndexMap[activeCaptureAngle]);
+    closeCamera();
   };
 
   const handleRemoveImage = (index) => {
@@ -159,9 +148,19 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
     toast.success('Image removed successfully', COMPACT_TOAST);
   };
 
-  const handleOpenCamera = (angle) => {
+  const handleOpenCamera = (angle, firstName = '') => {
+    cameraOpenRef.current = true;
     setActiveCaptureAngle(angle);
+    setNameForPrefix(firstName.trim());
     setIsCameraOpen(true);
+    setOpen(false); // hide the form dialog so its focus-trap doesn't fight the wizard
+  };
+
+  const closeCamera = () => {
+    cameraOpenRef.current = false;
+    setIsCameraOpen(false);
+    setActiveCaptureAngle(null);
+    setOpen(true); // bring the form (still on step 2) back
   };
 
   const checkEmail = async (email) => {
@@ -208,6 +207,10 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
     setUploadedImagePaths(['', '', '']);
     setUploadedImageUrls(['', '', '']);
     setOriginalImages(['', '', '']);
+    cameraOpenRef.current = false;
+    setIsCameraOpen(false);
+    setActiveCaptureAngle(null);
+    setNameForPrefix('');
   };
 
   const handleSubmit = async (values, { resetForm }) => {
@@ -274,6 +277,14 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
         // Never let the dialog close mid-submit — the request would keep running
         // with no way to see its result.
         if (!val && isSubmitting) return;
+        // The face-capture wizard portals outside this dialog, so Radix's
+        // focus-trap fights it. We deliberately close this dialog while the
+        // wizard runs and reopen it in closeCamera() — don't reset our form
+        // state on that transient close.
+        if (!val && cameraOpenRef.current) {
+          setOpen(false);
+          return;
+        }
         setOpen(val);
         if (!val) {
           resetState();
@@ -403,46 +414,22 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
                 )}
               </div>
 
-              {isCameraOpen && (
-                <div className="absolute inset-0 z-[60] bg-black/80 flex items-center justify-center p-4 rounded-2xl">
-                  <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-xl p-4 max-w-lg w-full shadow-2xl">
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-lg font-semibold text-[var(--tx)]">
-                        Take Photo - {activeCaptureAngle}
-                      </h3>
-                      <button
-                        type="button"
-                        onClick={() => setIsCameraOpen(false)}
-                        className="p-1 hover:bg-[var(--bg3)] rounded-full cursor-pointer"
-                      >
-                        <X className="w-5 h-5 text-[var(--tx2)]" />
-                      </button>
-                    </div>
-                    <div className="relative rounded-lg overflow-hidden bg-black aspect-video mb-4 border-4 border-[var(--bd)]">
-                      <Webcam
-                        audio={false}
-                        ref={webcamRef}
-                        screenshotFormat="image/jpeg"
-                        onUserMediaError={showCameraAccessError}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 border-[20px] border-black/20 pointer-events-none" />
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-56 border-2 border-white/50 rounded-[40%] pointer-events-none" />
-                    </div>
-                    <Button
-                      type="button"
-                      onClick={() => handleCapture(values.firstName?.trim() || 'employee')}
-                      className="w-full bg-[var(--blue)] hover:opacity-95 text-white"
-                    >
-                      Capture
-                    </Button>
-                  </div>
-                </div>
-              )}
             </Form>
           )}
         </Formik>
       </DialogContent>
+
+      {/* Rendered outside <DialogContent> so closing the form dialog (to sidestep
+          its focus-trap) doesn't unmount the wizard mid-capture. */}
+      <FaceCaptureModal
+        open={isCameraOpen}
+        angles={activeCaptureAngle ? [activeCaptureAngle] : ['Front']}
+        namePrefix={(nameForPrefix || 'employee').replace(/\s+/g, '')}
+        initialMode="camera"
+        allowUpload={false}
+        onClose={closeCamera}
+        onComplete={handleWizardComplete}
+      />
     </Dialog>
   );
 };

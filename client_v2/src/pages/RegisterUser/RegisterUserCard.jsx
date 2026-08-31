@@ -1,22 +1,32 @@
-import { useMemo, useRef, useState } from 'react';
-import { Loader, ArrowLeft, Camera, Upload, X, ChevronDown, ChevronUp } from 'lucide-react';
-import Webcam from 'react-webcam';
+import { useMemo, useState } from 'react';
+import {
+  Loader,
+  ArrowLeft,
+  Camera,
+  Upload,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Check,
+  ScanFace,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { createAuthorizedUser, isEmailExist } from './Api';
 import SelectField from './SelectField';
+import FaceCaptureModal from './FaceCaptureModal';
 import { COMPACT_TOAST } from './toastOptions';
+import poseLeft from '@/assets/left img.png';
+import poseFront from '@/assets/front img.png';
+import poseRight from '@/assets/right image.png';
+
+const POSE_IMG = { Left: poseLeft, Front: poseFront, Right: poseRight };
 
 const orgId = import.meta.env.VITE_ORGANISATION_ID;
 const requiredImageCount = orgId === 'dubai' ? 1 : 3;
 const captureAngles = orgId === 'dubai' ? ['Front'] : ['Front', 'Right', 'Left'];
-const angleIndexMap = { Front: 0, Right: 1, Left: 2 };
+const displayAngles = orgId === 'dubai' ? ['Front'] : ['Left', 'Front', 'Right'];
 
 const GRADIENT = 'linear-gradient(90deg,var(--blue),var(--violet))';
-const CAMERA_ACCESS_TOAST = {
-  ...COMPACT_TOAST,
-  id: 'camera-access-required',
-  description: "We couldn't access your camera. Please connect a camera or allow camera access in your browser settings",
-};
 
 const fieldLabel = 'block text-xs font-medium text-[var(--tx2)] mb-1.5';
 const Req = () => <span className="text-[var(--crit)]"> *</span>;
@@ -24,6 +34,52 @@ const fieldInput =
   'w-full h-11 px-3.5 rounded-lg bg-[var(--bg2)] border border-[var(--bd)] text-sm text-[var(--tx)] placeholder:text-[var(--tx3)] outline-none focus:border-[var(--blue)] transition-colors disabled:cursor-not-allowed';
 // Reset the browser's default <fieldset> chrome so it lays out like a plain block.
 const stepFieldset = 'space-y-5 border-0 p-0 m-0 min-w-0';
+
+const ENROLL_STYLES = `
+.enr-head{display:flex;align-items:center;gap:12px}
+.enr-head-ic{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:12px;
+  color:var(--blue);background:color-mix(in srgb,var(--blue) 12%,transparent);border:1px solid color-mix(in srgb,var(--blue) 22%,transparent)}
+.enr-progress{display:flex;gap:5px;margin-top:6px}
+.enr-progress i{width:22px;height:4px;border-radius:999px;background:var(--bg3);transition:background .3s}
+.enr-progress i.on{background:linear-gradient(90deg,var(--blue),var(--violet))}
+
+.enr-thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:560px){.enr-thumbs{grid-template-columns:1fr}}
+.enr-thumb{position:relative;border-radius:16px;border:1px solid var(--bd);background:var(--bg2);
+  overflow:hidden;transition:border-color .2s;animation:enr-in .35s ease-out both}
+.enr-thumb.filled{border-color:color-mix(in srgb,var(--ok) 50%,transparent)}
+.enr-thumb-media{position:relative;height:172px;overflow:hidden;
+  background:radial-gradient(80% 70% at 50% 40%,color-mix(in srgb,var(--blue) 8%,transparent),transparent)}
+.enr-thumb-media>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+/* pose-illustration preview (empty state): whole head, no crop */
+.enr-thumb-pose{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:center 42%;
+  filter:grayscale(.15) opacity(.95)}
+.enr-thumb-cap{display:block;text-align:center;font-size:11px;font-weight:700;color:var(--tx2);padding:7px 4px;
+  border-top:1px solid var(--bd);background:var(--bg1)}
+.enr-thumb.filled .enr-thumb-cap{color:var(--tx)}
+.enr-thumb-check{position:absolute;top:7px;left:7px;display:flex;align-items:center;justify-content:center;width:18px;height:18px;
+  border-radius:999px;color:#fff;background:var(--ok);z-index:2}
+.enr-thumb-x{position:absolute;top:7px;right:7px;display:flex;align-items:center;justify-content:center;width:20px;height:20px;
+  border-radius:999px;color:#fff;background:var(--crit);cursor:pointer;transition:.15s;z-index:2}
+.enr-thumb-x:hover{transform:scale(1.1)}
+
+.enr-start-row{display:flex;gap:10px}
+@media(max-width:480px){.enr-start-row{flex-direction:column}}
+.enr-start{position:relative;overflow:hidden;flex:1;display:flex;align-items:center;justify-content:center;gap:8px;height:46px;
+  border-radius:13px;font-size:13.5px;font-weight:650;color:var(--blue);cursor:pointer;transition:.16s;
+  background:color-mix(in srgb,var(--blue) 10%,transparent);border:1px solid color-mix(in srgb,var(--blue) 30%,transparent)}
+.enr-start:hover{background:color-mix(in srgb,var(--blue) 16%,transparent);transform:translateY(-1px)}
+.enr-start:active{transform:scale(.98)}
+.enr-start--cam{color:#fff;border:0;background:linear-gradient(90deg,var(--blue),var(--violet));
+  box-shadow:0 12px 26px -12px color-mix(in srgb,var(--blue) 70%,transparent)}
+.enr-start--cam:hover{transform:translateY(-1px);box-shadow:0 16px 30px -12px color-mix(in srgb,var(--blue) 80%,transparent)}
+.enr-start--cam::after{content:"";position:absolute;top:0;left:-60%;width:40%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent);animation:enr-shine 3s ease-in-out infinite}
+
+@keyframes enr-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes enr-shine{0%{left:-60%}55%,100%{left:130%}}
+@media(prefers-reduced-motion:reduce){.enr-thumb,.enr-start--cam::after{animation:none}}
+`;
 
 
 /**
@@ -50,8 +106,8 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
   const [imagePaths, setImagePaths] = useState(['', '', '']);
   const [imageUrls, setImageUrls] = useState(['', '', '']);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
-  const [activeAngle, setActiveAngle] = useState(null);
-  const webcamRef = useRef(null);
+  const [enrollMode, setEnrollMode] = useState(null); // 'camera' | 'upload'
+  const [activeAngle, setActiveAngle] = useState(null); // which card opened the camera
 
   const uploadedCount = imagePaths.filter((img) => img instanceof File).length;
 
@@ -62,56 +118,47 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
   );
 
   /* ---- photo helpers ---- */
+  const setImageAt = (index, file) => {
+    setImagePaths((prev) => {
+      const next = [...prev];
+      next[index] = file || '';
+      return next;
+    });
+    setImageUrls((prev) => {
+      const next = [...prev];
+      next[index] = file ? URL.createObjectURL(file) : '';
+      return next;
+    });
+  };
+
+  const removeImage = (index) => setImageAt(index, null);
+
+  // Per-card "Upload" — validate and store the file for that angle.
   const uploadFile = (file, index) => {
     if (!['image/jpeg', 'image/png'].includes(file.type)) {
-      toast.error('Please upload only JPG or PNG images', COMPACT_TOAST);
+      toast.error('Please upload only JPG or PNG images.', COMPACT_TOAST);
       return;
     }
-    setImagePaths((prev) => {
-      const next = [...prev];
-      next[index] = file;
-      return next;
-    });
-    setImageUrls((prev) => {
-      const next = [...prev];
-      next[index] = URL.createObjectURL(file);
-      return next;
-    });
+    setImageAt(index, file);
   };
 
-  const removeImage = (index) => {
-    setImagePaths((prev) => {
-      const next = [...prev];
-      next[index] = '';
-      return next;
-    });
-    setImageUrls((prev) => {
-      const next = [...prev];
-      next[index] = '';
-      return next;
-    });
+  // Per-card "Take photo" — open the camera wizard limited to that one angle.
+  const openCameraFor = (angle) => {
+    setActiveAngle(angle);
+    setEnrollMode('camera');
+    setIsCameraOpen(true);
   };
 
-  const handleCapture = () => {
-    if (!webcamRef.current) return;
-    const imageSrc = webcamRef.current.getScreenshot();
-    if (!imageSrc) return;
-    const byteString = atob(imageSrc.split(',')[1]);
-    const mimeString = imageSrc.split(',')[0].split(':')[1].split(';')[0];
-    const ab = new ArrayBuffer(byteString.length);
-    const ia = new Uint8Array(ab);
-    for (let i = 0; i < byteString.length; i += 1) ia[i] = byteString.charCodeAt(i);
-    const blob = new Blob([ab], { type: mimeString });
-    const file = new File(
-      [blob], `${(firstName || 'user').replace(/\s+/g, '')}_${activeAngle}.jpg`, { type: mimeString }
-    );
-    uploadFile(file, angleIndexMap[activeAngle]);
+  // The wizard returns one File (or '' ) per angle it was given, index-aligned.
+  const handleEnrollComplete = (files) => {
+    const wizardAngles = activeAngle ? [activeAngle] : captureAngles;
+    wizardAngles.forEach((angle, i) => {
+      const idx = captureAngles.indexOf(angle);
+      if (idx === -1) return;
+      if (files[i] instanceof File) setImageAt(idx, files[i]);
+    });
     setIsCameraOpen(false);
     setActiveAngle(null);
-  };
-
-  const showCameraAccessError = () => {
-    toast.error('Camera access required', CAMERA_ACCESS_TOAST);
   };
 
   /* ---- reset ---- */
@@ -383,10 +430,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
                       </label>
                       <button
                         type="button"
-                        onClick={() => {
-                          setActiveAngle(angle);
-                          setIsCameraOpen(true);
-                        }}
+                        onClick={() => openCameraFor(angle)}
                         className="flex items-center justify-center gap-2 w-full py-3 bg-[var(--bg2)] text-[var(--tx2)] rounded-lg text-sm font-medium hover:bg-[var(--bd2)] transition-colors cursor-pointer"
                       >
                         <Camera className="w-4 h-4" />
@@ -413,41 +457,19 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
         </fieldset>
       ))}
 
-      {/* camera modal */}
-      {isCameraOpen && (
-        <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-xl p-4 max-w-lg w-full shadow-2xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-[var(--tx)]">Take Photo - {activeAngle}</h3>
-              <button
-                type="button"
-                onClick={() => setIsCameraOpen(false)}
-                className="p-1 hover:bg-[var(--bg3)] rounded-full cursor-pointer"
-              >
-                <X className="w-5 h-5 text-[var(--tx2)]" />
-              </button>
-            </div>
-            <div className="relative rounded-lg overflow-hidden bg-black aspect-video mb-4 border-4 border-[var(--bd)]">
-              <Webcam
-                audio={false}
-                ref={webcamRef}
-                screenshotFormat="image/jpeg"
-                onUserMediaError={showCameraAccessError}
-                className="w-full h-full object-cover object-top"
-              />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-56 border-2 border-white/50 rounded-[40%] pointer-events-none" />
-            </div>
-            <button
-              type="button"
-              onClick={handleCapture}
-              className="w-full h-11 rounded-lg text-white font-medium cursor-pointer"
-              style={{ background: GRADIENT }}
-            >
-              Capture
-            </button>
-          </div>
-        </div>
-      )}
+      <FaceCaptureModal
+        open={isCameraOpen}
+        angles={activeAngle ? [activeAngle] : captureAngles}
+        namePrefix={(firstName || 'user').replace(/\s+/g, '')}
+        initial={activeAngle ? [imagePaths[captureAngles.indexOf(activeAngle)]] : imagePaths}
+        initialMode={enrollMode}
+        allowUpload={!activeAngle}
+        onClose={() => {
+          setIsCameraOpen(false);
+          setActiveAngle(null);
+        }}
+        onComplete={handleEnrollComplete}
+      />
     </div>
   );
 };

@@ -139,27 +139,36 @@ const DateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeChange }
   const nextDisabled = max && viewMonth.clone().endOf('month').isSameOrAfter(max, 'day')
     && viewMonth.isSame(max, 'month');
 
+  const today = moment();
+  const summaryLabel = lo
+    ? hi && !hi.isSame(lo, 'day')
+      ? `${lo.format('DD MMM')} – ${hi.format('DD MMM YYYY')}`
+      : lo.format('DD MMM YYYY')
+    : 'No dates selected';
+
   const calendarBody = (
     <>
       {/* Month nav */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-3">
         <button
           type="button"
           onClick={() => setViewMonth((m) => m.clone().subtract(1, 'month'))}
-          className="w-7 h-7 flex items-center justify-center rounded-md text-[var(--tx2)] hover:bg-[var(--bg2)] hover:text-[var(--tx)] cursor-pointer transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--tx2)] hover:bg-[var(--bg2)] hover:text-[var(--tx)] active:scale-95 cursor-pointer transition-all"
           aria-label="Previous month"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
-        <span className="text-sm font-semibold text-[var(--tx)]">{viewMonth.format('MMMM YYYY')}</span>
+        <span className="text-sm font-semibold text-[var(--tx)] tracking-tight">
+          {viewMonth.format('MMMM YYYY')}
+        </span>
         <button
           type="button"
           disabled={nextDisabled}
           onClick={() => setViewMonth((m) => m.clone().add(1, 'month'))}
-          className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
+          className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${
             nextDisabled
               ? 'text-[var(--tx3)] cursor-not-allowed'
-              : 'text-[var(--tx2)] hover:bg-[var(--bg2)] hover:text-[var(--tx)] cursor-pointer'
+              : 'text-[var(--tx2)] hover:bg-[var(--bg2)] hover:text-[var(--tx)] active:scale-95 cursor-pointer'
           }`}
           aria-label="Next month"
         >
@@ -168,40 +177,55 @@ const DateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeChange }
       </div>
 
       {/* Weekday header */}
-      <div className="grid grid-cols-7 mb-1">
-        {WEEKDAYS.map((w) => (
-          <div key={w} className="text-[10px] font-medium text-[var(--tx3)] text-center py-1">
+      <div className="grid grid-cols-7 mb-1.5">
+        {WEEKDAYS.map((w, i) => (
+          <div
+            key={`${w}-${i}`}
+            className="text-[10px] font-semibold uppercase tracking-wider text-[var(--tx3)] text-center py-1"
+          >
             {w}
           </div>
         ))}
       </div>
 
       {/* Days */}
-      <div className="grid grid-cols-7 gap-y-1" onMouseLeave={() => setHovered(null)}>
+      <div className="grid grid-cols-7 gap-y-0.5" onMouseLeave={() => setHovered(null)}>
         {days.map((d) => {
           const otherMonth = !d.isSame(viewMonth, 'month');
           const disabled = isDisabled(d);
           const endpoint = isEndpoint(d);
           const between = inRange(d) && !endpoint;
+          const isToday = d.isSame(today, 'day');
+          const isRangeStart = between ? false : lo && d.isSame(lo, 'day') && hi && !hi.isSame(lo, 'day');
+          const isRangeEnd = between ? false : hi && d.isSame(hi, 'day') && lo && !lo.isSame(hi, 'day');
+
+          // Continuous band behind the days that fall inside the range.
+          let band = '';
+          if (between) band = 'bg-[var(--brand)]/12';
+          else if (isRangeStart) band = 'bg-[var(--brand)]/12 rounded-l-full';
+          else if (isRangeEnd) band = 'bg-[var(--brand)]/12 rounded-r-full';
 
           const base =
-            'w-8 h-8 mx-auto text-xs font-medium flex items-center justify-center transition-colors';
+            'w-9 h-9 text-[13px] font-medium flex items-center justify-center transition-all duration-100';
           let state;
           if (endpoint) {
-            state = 'bg-[var(--brand)] text-white font-semibold rounded-full cursor-pointer';
+            state =
+              'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white font-semibold rounded-full shadow-sm cursor-pointer';
           } else if (between) {
-            state = 'bg-[var(--brand)]/25 text-[var(--tx)] rounded-md cursor-pointer';
+            state = 'text-[var(--tx)] cursor-pointer hover:bg-[var(--brand)]/20 rounded-full';
           } else if (disabled) {
-            // Future / out-of-range days: muted but still legible in both themes.
-            state = 'text-[var(--tx3)] cursor-not-allowed rounded-full';
+            state = 'text-[var(--tx3)] opacity-60 cursor-not-allowed rounded-full';
           } else if (otherMonth) {
-            state = 'text-[var(--tx2)] hover:bg-[var(--bg2)] rounded-full cursor-pointer';
+            state = 'text-[var(--tx3)] hover:bg-[var(--bg2)] hover:text-[var(--tx2)] rounded-full cursor-pointer';
           } else {
             state = 'text-[var(--tx)] hover:bg-[var(--bg2)] rounded-full cursor-pointer';
           }
+          if (isToday && !endpoint) {
+            state += ' ring-1 ring-inset ring-[var(--brand)]/50';
+          }
 
           return (
-            <div key={d.format('YYYY-MM-DD')} className="flex items-center justify-center">
+            <div key={d.format('YYYY-MM-DD')} className={`flex items-center justify-center ${band}`}>
               <button
                 type="button"
                 disabled={disabled}
@@ -217,12 +241,13 @@ const DateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeChange }
         })}
       </div>
 
-      <div className="flex items-center justify-end gap-2 pt-3 mt-2 border-t border-[var(--bd)]">
+      <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-[var(--bd)]">
+        <span className="text-[11px] font-medium text-[var(--tx2)] truncate">{summaryLabel}</span>
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={clear}
-            className="text-xs font-medium text-[var(--tx2)] hover:text-[var(--tx)] px-2.5 py-1.5 cursor-pointer transition-colors rounded-md hover:bg-[var(--bg2)]"
+            className="text-xs font-medium text-[var(--tx2)] hover:text-[var(--tx)] px-2.5 py-1.5 cursor-pointer transition-colors rounded-lg hover:bg-[var(--bg2)]"
           >
             Clear
           </button>
@@ -230,7 +255,7 @@ const DateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeChange }
             type="button"
             onClick={apply}
             disabled={!sel.start}
-            className="text-xs font-semibold bg-[var(--brand)] text-white px-4 py-1.5 rounded-md hover:bg-[var(--brand-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            className="text-xs font-semibold bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white px-4 py-1.5 rounded-lg shadow-sm hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity cursor-pointer"
           >
             Apply
           </button>
@@ -244,7 +269,9 @@ const DateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeChange }
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="h-10 w-full sm:w-auto flex items-center justify-between gap-2 px-3 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] text-xs 2xl:text-sm font-medium cursor-pointer hover:border-[var(--violet)] transition-colors sm:min-w-[180px] sm:max-w-[280px]"
+        className={`h-10 w-full sm:w-auto flex items-center justify-between gap-2 px-3 rounded-lg border bg-[var(--bg2)] text-[var(--tx2)] text-xs 2xl:text-sm font-medium cursor-pointer transition-colors sm:min-w-[180px] sm:max-w-[280px] ${
+          open ? 'border-[var(--violet)] ring-2 ring-[var(--violet)]/15' : 'border-[var(--bd)] hover:border-[var(--violet)]'
+        }`}
       >
         <span className="flex items-center gap-2 overflow-hidden">
           <CalendarIcon className="w-4 h-4 shrink-0 text-[var(--tx3)]" />
@@ -256,10 +283,10 @@ const DateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeChange }
       {open &&
         createPortal(
           isMobile ? (
-            <div className="fixed inset-0 z-[10030] flex items-center justify-center p-4 bg-black/50">
+            <div className="fixed inset-0 z-[10030] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
               <div
                 ref={panelRef}
-                className="w-[320px] max-w-full max-h-[90vh] overflow-y-auto rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-xl p-3"
+                className="w-[328px] max-w-full max-h-[90vh] overflow-y-auto rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-2xl p-4"
               >
                 {calendarBody}
               </div>
@@ -268,7 +295,7 @@ const DateRangePicker = ({ startDate, endDate, minDate, maxDate, onRangeChange }
             <div
               ref={panelRef}
               style={pos || { position: 'fixed', top: -9999, left: -9999 }}
-              className="z-[10030] w-[310px] max-w-[calc(100vw-1.5rem)] rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-xl p-3"
+              className="z-[10030] w-[320px] max-w-[calc(100vw-1.5rem)] rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-2xl p-4"
             >
               {calendarBody}
             </div>
