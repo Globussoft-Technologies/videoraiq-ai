@@ -19,6 +19,9 @@ import { trackFailedEmail, trackOutboundEmail } from "../emailMonitoring/emailTr
 
 const LOGO_URL = "https://stagingv2.videoraiq.com/src/assets/videoraiq-logo-color.png";
 const DEFAULT_TIMEZONE = "Asia/Kolkata";
+// Fixed label shown in the email, subject and PDF — the report's own title
+// (an internal name like "Email Test") is never surfaced to recipients.
+const REPORT_DISPLAY_TITLE = "Attendance Report Email";
 const V2_BLUE = "#609ff7";
 const V2_PURPLE = "#9274f5";
 let runner = null;
@@ -468,7 +471,7 @@ function csvField(value) {
 export function buildCsv({ report, rows, label, timezone }) {
   const meta = [
     ["VideoraIQ Attendance Report"],
-    ["Report", report.title],
+    ["Report", REPORT_DISPLAY_TITLE],
     ["Period", label],
     ["Timezone", timezone],
     [],
@@ -530,7 +533,7 @@ export async function buildPdf({ report, rows, label, timezone }) {
       document.rect(purpleX, 0, titleBlockWidth, 102).fill(V2_PURPLE);
       if (logoImage) document.image(logoImage, 36, 25, { fit: [145, 48] });
       document.fillColor("#ffffff").font("Helvetica-Bold").fontSize(20).text("Attendance Report", purpleX, 29, { width: titleBlockWidth - 32, align: "right" });
-      document.font("Helvetica").fontSize(9).text(report.title, purpleX, 57, { width: titleBlockWidth - 32, align: "right" });
+      document.font("Helvetica").fontSize(9).text(REPORT_DISPLAY_TITLE, purpleX, 57, { width: titleBlockWidth - 32, align: "right" });
       document.fillColor("#273657").font("Helvetica-Bold").fontSize(13).text(label, 32, 122);
       document.font("Helvetica").fontSize(9).fillColor("#61708f").text(`Timezone: ${timezone}  •  ${rows.length} attendance record${rows.length === 1 ? "" : "s"}`, 32, 142);
     };
@@ -694,7 +697,7 @@ function downloadButton(file) {
 
 function emailHtml(report, details) {
   const count = details.rowCount || 0;
-  const preheader = `${report.title} — ${count} attendance record${count === 1 ? "" : "s"} · ${details.label}`;
+  const preheader = `${REPORT_DISPLAY_TITLE} — ${count} attendance record${count === 1 ? "" : "s"} · ${details.label}`;
   const buttonRow = details.files.map(downloadButton).join("");
   const tz = details.timezone || DEFAULT_TIMEZONE;
   const nowTz = moment().tz(tz);
@@ -712,7 +715,7 @@ function emailHtml(report, details) {
   <meta name="x-apple-disable-message-reformatting">
   <meta name="color-scheme" content="light">
   <meta name="supported-color-schemes" content="light">
-  <title>${escapeHtml(report.title)}</title>
+  <title>${escapeHtml(REPORT_DISPLAY_TITLE)}</title>
   <!--[if mso]><style>table,td,div,p,a{font-family:Arial,sans-serif !important;}</style><![endif]-->
 </head>
 <body style="margin:0;padding:0;background:${MAIL.paper};">
@@ -750,7 +753,7 @@ function emailHtml(report, details) {
                 <td valign="top">
 
                   <div style="${SANS}font-size:28px;font-weight:800;color:${MAIL.tx};line-height:1.15;">
-                    ${escapeHtml(report.title)}
+                    ${escapeHtml(REPORT_DISPLAY_TITLE)}
                   </div>
 
                   <!-- meta line -->
@@ -841,8 +844,11 @@ function emailHtml(report, details) {
 </html>`;
 }
 
-function safeReportName(report) {
-  return report.title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "attendance-report";
+// Downloaded files are always named "attendance-report" (the media backend
+// prepends its own timestamp + id), so the report title never leaks into the
+// filename.
+function safeReportName() {
+  return "attendance-report";
 }
 
 // Stored media paths are relative (see toRelativeMediaPath in mediaStorage.js)
@@ -861,7 +867,7 @@ export function publicUrlFor(mediaPath) {
  * instead of attaching it, so SendGrid's ~30MB message cap never applies.
  */
 export async function uploadReportFiles(report, csvBuffer, pdfBuffer) {
-  const safeName = safeReportName(report);
+  const safeName = safeReportName();
   const files = [];
   if (pdfBuffer) {
     const path = await putMedia({ buffer: pdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.pdf` });
@@ -930,7 +936,7 @@ async function deliver(report, options = {}) {
   const email = {
     from: { name: config.get("sendgrid.name"), email: config.get("sendgrid.email") },
     to: recipients,
-    subject: `[Attendance Report] ${report.title} | ${details.label}`,
+    subject: `[Attendance Report] ${REPORT_DISPLAY_TITLE} | ${details.label}`,
     html: emailHtml(report, details),
   };
   sendGridMail.setApiKey(config.get("sendgrid.key"));
