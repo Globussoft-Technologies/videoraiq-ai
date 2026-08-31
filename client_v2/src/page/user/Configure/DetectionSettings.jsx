@@ -10,6 +10,9 @@ import { getChannels, getNvrs, getDetectionTypes, toggleChannelDetection, update
 import { Popover, PopoverTrigger, PopoverContent } from '../../../pages/AttendanceLogs/components/Popover';
 import MultiSelect from '../../../components/MultiSelect';
 import CameraStream from '../../../components/CameraStream';
+import DetectionLimitDialog from '../../../components/DetectionLimitDialog';
+import NoDetectionLicense from '../../../components/NoDetectionLicense';
+import { licenseErrorFrom } from '../../../helpers/license';
 import DetectionZoneMarking from './DetectionZoneMarking';
 
 const CHECK_TYPES = [
@@ -628,6 +631,12 @@ function AppliedTypesPopover({ camera, typeLabels, onToggleRequest, disabled = f
           </div>
           {/* Capped to ~5 visible rows (34px each incl. gap) so a long type list scrolls instead of pushing the popover off-screen. */}
           <div style={{ maxHeight: 'min(220px, calc(100vh - 180px))', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {availableTypes.length === 0 && (
+              <NoDetectionLicense
+                compact
+                fallback="No detection types are configured for this camera."
+              />
+            )}
             {availableTypes.map(type => {
               return (
                 <div key={type.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '7px 6px' }}>
@@ -839,6 +848,9 @@ export function DetectionSettingsCameraList({ onOpenCamera }) {
   const [engineFilter, setEngineFilter] = useState([]);
   const [page, setPage] = useState(0);
   const [detectionConfirm, setDetectionConfirm] = useState(null);
+  // Licensing refusal from the last enable attempt, with the camera/type to
+  // retry once the user frees a slot.
+  const [limitBlock, setLimitBlock] = useState(null);
   const [detectionActionLoading, setDetectionActionLoading] = useState(false);
   const [previewCamera, setPreviewCamera] = useState(null);
   const [checkTypeSavingId, setCheckTypeSavingId] = useState(null);
@@ -901,6 +913,14 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
 
     toast.success(message);
   } catch (err) {
+    // Licensing refusals get the "deselect a camera to continue" dialog rather
+    // than a toast the user can do nothing about.
+    const licenseError = licenseErrorFrom(err);
+    if (licenseError) {
+      setLimitBlock({ error: licenseError, camera, detectionType });
+      throw err;
+    }
+
     const msg =
       err?.response?.data?.body?.message ||
       err?.response?.data?.message ||
@@ -979,6 +999,11 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
         detectionConfirm.detectionType,
         !detectionConfirm.currentlyEnabled,
       );
+      setDetectionConfirm(null);
+    } catch {
+      // handleToggleDetection has already surfaced the failure (toast, or the
+      // licensing dialog). Close the confirmation either way so the dialog it
+      // opened is not stacked behind this one.
       setDetectionConfirm(null);
     } finally {
       setDetectionActionLoading(false);
@@ -1226,6 +1251,26 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
         onConfirm={handleConfirmDetectionToggle}
         loading={detectionActionLoading}
         confirmClass={detectionConfirm?.currentlyEnabled ? 'bg-[var(--crit)] text-white hover:opacity-90 shadow-sm shadow-[var(--crit)]/20' : 'bg-[var(--blue)] text-white hover:opacity-90 shadow-sm shadow-[var(--blue)]/20'}
+      />
+      <DetectionLimitDialog
+        open={Boolean(limitBlock)}
+        error={limitBlock?.error}
+        detectionType={limitBlock?.detectionType}
+        detectionLabel={detectionTypeLabel(
+          typeLabels?.[limitBlock?.detectionType],
+          limitBlock?.detectionType,
+        )}
+        onClose={() => setLimitBlock(null)}
+        onRetry={async () => {
+          if (!limitBlock) return;
+          try {
+            await handleToggleDetection(limitBlock.camera, limitBlock.detectionType, true);
+            setLimitBlock(null);
+          } catch {
+            // Still blocked (or blocked by a different rule) — the dialog stays
+            // open showing the refreshed refusal.
+          }
+        }}
       />
     </div>
   );

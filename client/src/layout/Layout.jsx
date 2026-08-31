@@ -6,6 +6,7 @@ import SettingsSidebar from './Sidebar/SettingsSidebar';
 import AdminSidebar from './Sidebar/AdminSidebar';
 import LogsSidebar from './Sidebar/LogsSidebar';
 import TitleUpdater from '@/components/TitleUpdater';
+import CameraLimitLock from '@/components/CameraLimitLock';
 
 const SETTINGS_ROUTES = {
   SETTINGS: '/settings',
@@ -61,6 +62,8 @@ export const Layout = () => {
   return (
     <div className="flex flex-col w-full h-screen bg-[#f7f8f8]">
       <TitleUpdater />
+      {/* App-wide lock when added cameras exceed the purchased limit. */}
+      <CameraLimitLock />
       <div className="m-[0.9375rem] sticky top-[0] z-50 flex-shrink-0 headerContainer">
         <Header />
       </div>

@@ -42,3 +42,18 @@ export const updateCameraDetection = async (adminId, cameraId, { settingType, en
   )
   return response.data
 }
+
+/**
+ * Refresh the platform detection list. Re-reads the shared catalog the client
+ * backend publishes from its DETECTION_TYPES constants, so a detection added
+ * there appears here without redeploying the superadmin service.
+ */
+export const syncDetectionCatalog = async () => {
+  const token = await waitForToken()
+  const response = await axios.post(
+    `${apiUrl}/api/v1/detection-catalog/sync`,
+    {},
+    authHeaders(token)
+  )
+  return response.data
+}

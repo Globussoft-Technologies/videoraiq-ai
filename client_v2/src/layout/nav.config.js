@@ -43,16 +43,31 @@ import {
 // each carrying their own copy.
 export const LOGS_GROUP_LABEL = 'LOGS & RECORDS';
 
-// Mining incident log tabs (conveyor, crusher, etc.) — shown for every client.
+/**
+ * `logsConfigKey` ties a log item to its flag in GET /logs-configuration.
+ *
+ * That endpoint is the single source of truth for whether a log page shows: it
+ * already folds together the admin's stored preference, auto-enable (a log
+ * switches on once its detection runs) and the detection licence (an
+ * unlicensed detection's log is forced off). The sidebar therefore renders what
+ * the server says instead of carrying its own detection→log mapping, which
+ * would drift.
+ *
+ * The key is NOT always the nav key or the permission sub-key — taggedUsers,
+ * detectedUsers, deskAbsenceLogs and anprLogs all differ from theirs, which is
+ * why this is spelled out per item.
+ */
+
+// Mining incident log tabs (conveyor, crusher, etc.).
 const stevinrockLogItems = [
-  { key: 'conveyor', label: 'Conveyor Logs', path: 'logs/conveyor', icon: Container, permissionKey: 'logs', permissionSubKey: 'conveyorLogs' },
-  { key: 'vehicle-obstruction', label: 'Vehicle Obstruction Logs', path: 'logs/vehicle-obstruction', icon: OctagonAlert, permissionKey: 'logs', permissionSubKey: 'vehicleObstructionLogs' },
-  { key: 'vehicle-count', label: 'Vehicle Count Logs', path: 'logs/vehicle-count', icon: CarFront, permissionKey: 'logs', permissionSubKey: 'vehicleCountLogs' },
-  { key: 'car', label: 'Car Logs', path: 'logs/car', icon: Car, permissionKey: 'logs', permissionSubKey: 'carLogs' },
-  { key: 'crusher', label: 'Crusher Logs', path: 'logs/crusher', icon: Hammer, permissionKey: 'logs', permissionSubKey: 'crusherLogs' },
-  { key: 'line-crossing', label: 'Line Crossing Logs', path: 'logs/line-crossing', icon: GitBranch, permissionKey: 'logs', permissionSubKey: 'lineCrossingLogs' },
-  { key: 'water-spill', label: 'Water Spill Logs', path: 'logs/water-spill', icon: Droplets, permissionKey: 'logs', permissionSubKey: 'waterSpillLogs' },
-  { key: 'unauthorized-access', label: 'Unauthorized Access Logs', path: 'logs/unauthorized-access', icon: Ban, permissionKey: 'logs', permissionSubKey: 'unauthorizedAccessLogs' },
+  { key: 'conveyor', label: 'Conveyor Logs', path: 'logs/conveyor', icon: Container, permissionKey: 'logs', permissionSubKey: 'conveyorLogs' , logsConfigKey: 'conveyorLogs' },
+  { key: 'vehicle-obstruction', label: 'Vehicle Obstruction Logs', path: 'logs/vehicle-obstruction', icon: OctagonAlert, permissionKey: 'logs', permissionSubKey: 'vehicleObstructionLogs' , logsConfigKey: 'vehicleObstructionLogs' },
+  { key: 'vehicle-count', label: 'Vehicle Count Logs', path: 'logs/vehicle-count', icon: CarFront, permissionKey: 'logs', permissionSubKey: 'vehicleCountLogs' , logsConfigKey: 'vehicleCountLogs' },
+  { key: 'car', label: 'Car Logs', path: 'logs/car', icon: Car, permissionKey: 'logs', permissionSubKey: 'carLogs' , logsConfigKey: 'carLogs' },
+  { key: 'crusher', label: 'Crusher Logs', path: 'logs/crusher', icon: Hammer, permissionKey: 'logs', permissionSubKey: 'crusherLogs' , logsConfigKey: 'crusherLogs' },
+  { key: 'line-crossing', label: 'Line Crossing Logs', path: 'logs/line-crossing', icon: GitBranch, permissionKey: 'logs', permissionSubKey: 'lineCrossingLogs' , logsConfigKey: 'lineCrossingLogs' },
+  { key: 'water-spill', label: 'Water Spill Logs', path: 'logs/water-spill', icon: Droplets, permissionKey: 'logs', permissionSubKey: 'waterSpillLogs' , logsConfigKey: 'waterSpillLogs' },
+  { key: 'unauthorized-access', label: 'Unauthorized Access Logs', path: 'logs/unauthorized-access', icon: Ban, permissionKey: 'logs', permissionSubKey: 'unauthorizedAccessLogs' , logsConfigKey: 'unauthorizedAccessLogs' },
 ];
 
 /**
@@ -99,17 +114,21 @@ export const NAV_GROUPS = [
   {
     label: LOGS_GROUP_LABEL,
     items: [
-      { key: 'attendance', label: 'Attendance Logs', path: 'logs/attendance', icon: CalendarCheck, permissionKey: 'logs', permissionSubKey: 'attendanceLogs' },
-      { key: 'access', label: 'Access Logs', path: 'logs/access', icon: DoorOpen, permissionKey: 'logs', permissionSubKey: 'accessLogs' },
-      { key: 'tagged-users', label: 'Tagged Users', path: 'logs/tagged-users', icon: Tags, permissionKey: 'logs', permissionSubKey: 'taggedUsersLogs' },
-      { key: 'detected-users', label: 'Detected Users', path: 'logs/detected-users', icon: ScanFace, permissionKey: 'logs', permissionSubKey: 'detectedUsersLogs' },
-      { key: 'person-count', label: 'Person Count Logs', path: 'logs/person-count', icon: UserCheck, permissionKey: 'logs', permissionSubKey: 'personCountLogs' },
-      { key: 'desk-absence', label: 'Desk Absence Logs', path: 'logs/desk-absence', icon: UserMinus, permissionKey: 'logs', permissionSubKey: 'deskLogs' },
-      { key: 'anpr', label: 'ANPR Logs', path: 'logs/anpr', icon: Car, permissionKey: 'logs', permissionSubKey: 'ANPRLogs' },
+      { key: 'attendance', label: 'Attendance Logs', path: 'logs/attendance', icon: CalendarCheck, permissionKey: 'logs', permissionSubKey: 'attendanceLogs' , logsConfigKey: 'attendanceLogs' },
+      { key: 'access', label: 'Access Logs', path: 'logs/access', icon: DoorOpen, permissionKey: 'logs', permissionSubKey: 'accessLogs' , logsConfigKey: 'accessLogs' },
+      { key: 'tagged-users', label: 'Tagged Users', path: 'logs/tagged-users', icon: Tags, permissionKey: 'logs', permissionSubKey: 'taggedUsersLogs' , logsConfigKey: 'taggedUsers' },
+      { key: 'detected-users', label: 'Detected Users', path: 'logs/detected-users', icon: ScanFace, permissionKey: 'logs', permissionSubKey: 'detectedUsersLogs' , logsConfigKey: 'detectedUsers' },
+      { key: 'person-count', label: 'Person Count Logs', path: 'logs/person-count', icon: UserCheck, permissionKey: 'logs', permissionSubKey: 'personCountLogs' , logsConfigKey: 'personCountLogs' },
+      { key: 'desk-absence', label: 'Desk Absence Logs', path: 'logs/desk-absence', icon: UserMinus, permissionKey: 'logs', permissionSubKey: 'deskLogs' , logsConfigKey: 'deskAbsenceLogs' },
+      { key: 'anpr', label: 'ANPR Logs', path: 'logs/anpr', icon: Car, permissionKey: 'logs', permissionSubKey: 'ANPRLogs' , logsConfigKey: 'anprLogs' },
       // { key: 'productivity', label: 'Productivity Logs', path: 'logs/productivity', icon: TrendingUp },
-      { key: 'track', label: 'Track Logs', path: 'logs/track', icon: Activity, permissionKey: 'logs', permissionSubKey: 'trackLogs' },
-      { key: 'visibility', label: 'Visibility Logs', path: 'logs/visibility', icon: Eye, permissionKey: 'logs', permissionSubKey: 'visibilityLogs' },
-      { key: 'guard', label: 'Guard Logs', path: 'logs/guard', icon: Shield, permissionKey: 'logs', permissionSubKey: 'guardLogs' },
+      // Hidden from the sidebar, and from the header search with it — Header.jsx
+      // builds its PAGE_INDEX from NAV_GROUPS, so an item that isn't listed here
+      // isn't searchable either. The routes stay live in routes.jsx (as they do
+      // for Productivity Logs above), so a direct URL still reaches the page.
+      // { key: 'track', label: 'Track Logs', path: 'logs/track', icon: Activity, permissionKey: 'logs', permissionSubKey: 'trackLogs' , logsConfigKey: 'trackLogs' },
+      // { key: 'visibility', label: 'Visibility Logs', path: 'logs/visibility', icon: Eye, permissionKey: 'logs', permissionSubKey: 'visibilityLogs' , logsConfigKey: 'visibilityLogs' },
+      // { key: 'guard', label: 'Guard Logs', path: 'logs/guard', icon: Shield, permissionKey: 'logs', permissionSubKey: 'guardLogs' , logsConfigKey: 'guardLogs' },
       // Mining incident logs — shown for every client.
       ...stevinrockLogItems,
     ],

@@ -338,7 +338,10 @@
         }
        
     } catch (err) {
-      toast.error('Failed to update detection status');
+      // A 400/4xx makes axios throw, so the API's message lives on err.response
+      // (not the response variable above). Surface it; fall back to a generic one.
+      const apiMessage = err?.response?.data?.body?.message;
+      toast.error(apiMessage || 'Failed to update detection status');
       console.error(err);
     } finally {
       setIsDetectionActionLoading(false);

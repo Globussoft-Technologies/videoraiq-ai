@@ -6,6 +6,8 @@ import { Panel } from '../../../components/primitives';
 import { useApi } from '../../../hooks/useApi';
 import { getChannels, getNvrs, getDetectionTypes, toggleChannelDetection } from '../../../helpers/configure';
 import ConfirmationModal from '../../../components/DeleteConfirmation';
+import DetectionLimitDialog from '../../../components/DetectionLimitDialog';
+import { licenseErrorFrom } from '../../../helpers/license';
 import MultiSelect from '../../../components/MultiSelect';
 import { usePermissions } from '@/context/PermissionContext';
 
@@ -180,6 +182,9 @@ export default function SystemControls() {
   const [nvrFilter, setNvrFilter] = useState([]);
   const [cameraFilter, setCameraFilter] = useState(null);
   const [detectionConfirm, setDetectionConfirm] = useState(null);
+  // Licensing refusal from the last enable attempt, kept so the dialog can
+  // retry it once the user frees a camera.
+  const [limitBlock, setLimitBlock] = useState(null);
   const [detectionActionLoading, setDetectionActionLoading] = useState(false);
 
   const nvrsApi = useApi(() => getNvrs(0, 500), []);
@@ -240,24 +245,43 @@ export default function SystemControls() {
     setDetectionConfirm({ detectionType, label, currentlyEnabled });
   };
 
-  const handleConfirmDetectionToggle = async () => {
-    if (!detectionConfirm || !selectedCamera) return;
+  // `forcedEnable` is used by the licensing dialog's retry, where
+  // detectionConfirm has already been cleared.
+  const runDetectionToggle = async ({ detectionType, label, enable }) => {
+    if (!selectedCamera) return false;
     setDetectionActionLoading(true);
     try {
-      const enable = !detectionConfirm.currentlyEnabled;
       await toggleChannelDetection({
         channelId: selectedCamera._id,
-        detectionType: detectionConfirm.detectionType,
+        detectionType,
         enable,
       });
-      toast.success(`${detectionConfirm.label} ${enable ? 'enabled' : 'disabled'} on ${selectedCamera.customName || selectedCamera.name}`);
+      toast.success(`${label} ${enable ? 'enabled' : 'disabled'} on ${selectedCamera.customName || selectedCamera.name}`);
       refetchAll();
-      setDetectionConfirm(null);
+      return true;
     } catch (err) {
+      // Licensing refusals open the dialog that lists the cameras holding a
+      // slot, so the user can free one and continue instead of being stuck.
+      const licenseError = licenseErrorFrom(err);
+      if (licenseError) {
+        setLimitBlock({ error: licenseError, detectionType, label });
+        return false;
+      }
       toast.error(err?.response?.data?.body?.message || 'Failed to update detection type.');
+      return false;
     } finally {
       setDetectionActionLoading(false);
     }
+  };
+
+  const handleConfirmDetectionToggle = async () => {
+    if (!detectionConfirm || !selectedCamera) return;
+    await runDetectionToggle({
+      detectionType: detectionConfirm.detectionType,
+      label: detectionConfirm.label,
+      enable: !detectionConfirm.currentlyEnabled,
+    });
+    setDetectionConfirm(null);
   };
 
   if (!canViewControls) return null;
@@ -327,6 +351,22 @@ export default function SystemControls() {
         onConfirm={handleConfirmDetectionToggle}
         loading={detectionActionLoading}
         confirmClass={detectionConfirm?.currentlyEnabled ? 'bg-[var(--crit)] text-white hover:opacity-90 shadow-sm shadow-[var(--crit)]/20' : 'bg-[var(--blue)] text-white hover:opacity-90 shadow-sm shadow-[var(--blue)]/20'}
+      />
+      <DetectionLimitDialog
+        open={Boolean(limitBlock)}
+        error={limitBlock?.error}
+        detectionType={limitBlock?.detectionType}
+        detectionLabel={limitBlock?.label}
+        onClose={() => setLimitBlock(null)}
+        onRetry={async () => {
+          if (!limitBlock) return;
+          const ok = await runDetectionToggle({
+            detectionType: limitBlock.detectionType,
+            label: limitBlock.label,
+            enable: true,
+          });
+          if (ok) setLimitBlock(null);
+        }}
       />
     </Panel>
   );

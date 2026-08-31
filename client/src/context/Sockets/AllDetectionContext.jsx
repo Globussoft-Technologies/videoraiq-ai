@@ -15,6 +15,17 @@ export const AllDetectionProvider = ({ children }) => {
   const [allDetections, setAllDetections] = useState([]);
   const [accessAllDetections, setAccessAllDetections] = useState([]);
   const [attendanceLogs, setAttendanceLogs] = useState([]);
+  // Live camera cap from the superadmin. remaining === null means uncapped.
+  // Populated on connect and whenever the superadmin changes the limit.
+  const [cameraLimit, setCameraLimit] = useState({
+    purchasedCameras: 0,
+    added: 0,
+    remaining: null,
+    // Assume licensed until the server says otherwise: the lock must never
+    // appear just because the socket has not delivered a snapshot yet, or is
+    // down entirely.
+    licensed: true,
+  });
   // Mute maps inversely to backend's logsSound flag: logsSound=true -> unmuted.
   // Start muted until the first fetch resolves so we don't play audio with
   // a wrong default while the preference is still loading.
@@ -141,14 +152,29 @@ export const AllDetectionProvider = ({ children }) => {
  };
 
 
+    // data = { adminId, userId, purchasedCameras, added, remaining, licensed }
+    const handleCameraLimit = (data) => {
+      setCameraLimit({
+        purchasedCameras: data.purchasedCameras,
+        added: data.added,
+        remaining: data.remaining,
+        // Whether the superadmin has licensed this client at all. Defaults to
+        // true when a payload predates the flag, so an old server can never
+        // lock the app — only an explicit `false` freezes it.
+        licensed: data.licensed !== false,
+      });
+    };
+
     socket.on(`cameradetection_${user.adminId}`, handleDetection);
-    socket.on(`accessLogs_${user.adminId}`, handleAccessLogs); 
+    socket.on(`accessLogs_${user.adminId}`, handleAccessLogs);
     socket.on(`attendanceLog_${user.adminId}`,handleAttendanceLog);
+    socket.on(`purchasedCameras_${user.adminId}`, handleCameraLimit);
 
     return () => {
       socket.off(`cameradetection_${user.adminId}`, handleDetection);
       socket.off(`accessLogs_${user.adminId}`, handleAccessLogs);
       socket.off(`attendanceLog_${user.adminId}`,handleAttendanceLog);
+      socket.off(`purchasedCameras_${user.adminId}`, handleCameraLimit);
       if (accessTimerRef.current) clearTimeout(accessTimerRef.current);
       if (attendanceTimerRef.current) clearTimeout(attendanceTimerRef.current);
     };
@@ -162,6 +188,7 @@ export const AllDetectionProvider = ({ children }) => {
     allDetections,
     accessAllDetections,
     attendanceLogs,
+    cameraLimit,
     resetAllDetections,
     isMuted,
     setIsMuted,

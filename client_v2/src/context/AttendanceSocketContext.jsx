@@ -42,6 +42,10 @@ export function AttendanceSocketProvider({ children }) {
     purchasedCameras: 0,
     added: 0,
     remaining: null,
+    // Assume licensed until the server says otherwise: the lock must never
+    // appear just because the socket has not delivered a snapshot yet, or is
+    // down entirely.
+    licensed: true,
   });
   const [isMuted, setIsMuted] = useState(true);
   const [audioLoading, setAudioLoading] = useState(true);
@@ -166,6 +170,10 @@ export function AttendanceSocketProvider({ children }) {
         purchasedCameras: Number(data?.purchasedCameras) || 0,
         added: Number(data?.added) || 0,
         remaining: data?.remaining ?? null,
+        // Whether the superadmin has licensed this client at all. Defaults to
+        // true when a payload predates the flag, so an old server can never
+        // lock the app — only an explicit `false` freezes it.
+        licensed: data?.licensed !== false,
       });
     };
 

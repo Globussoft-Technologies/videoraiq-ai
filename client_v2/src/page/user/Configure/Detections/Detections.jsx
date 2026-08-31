@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronDown, ChevronRight, Search, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, Search, ShieldCheck, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import AccessDenied from '../../../../components/AccessDenied';
@@ -26,6 +26,11 @@ import DetectionCard from './DetectionCard';
 import DetectionDetailPanel from './DetectionDetailPanel';
 import DetectionIncidents from './DetectionIncidents';
 import ConfirmDialog from '../DetectionZoneMarking/dialogs/ConfirmDialog';
+import DetectionLimitDialog from '../../../../components/DetectionLimitDialog';
+import NoDetectionLicense from '../../../../components/NoDetectionLicense';
+import { licenseErrorFrom } from '../../../../helpers/license';
+import { useLicense } from '@/context/LicenseContext';
+import { SUPPORT_CONTACT } from '../../../../helpers/support';
 import './detections.css';
 
 const STATE_TABS = [
@@ -534,6 +539,10 @@ export default function Detections() {
   const [enteredDetections, setEnteredDetections] = useState(false);
   const [zoneSettingsOpen, setZoneSettingsOpen] = useState(false);
   const [detectionToggleLoading, setDetectionToggleLoading] = useState('');
+  // Set when the backend refuses an enable on licensing grounds. Holds the
+  // refusal plus the model we were trying to turn on, so the dialog can retry
+  // the same toggle once the user frees a camera.
+  const [limitBlock, setLimitBlock] = useState(null);
   const [incidentDateFrom, setIncidentDateFrom] = useState('');
   const [incidentDateTo, setIncidentDateTo] = useState('');
   const [incidentSeverity, setIncidentSeverity] = useState('all');
@@ -555,6 +564,11 @@ export default function Detections() {
   const suppressCameraParamExitRef = useRef(false);
 
   const typesApi = useApi(() => getDetectionTypes(), [], { initialData: {} });
+  // Licensing headroom, so the limits are visible before one is hit rather than
+  // only surfacing as a refusal. Shared with the sidebar via LicenseContext, so
+  // the page does not fetch the same snapshot a second time; the provider
+  // refreshes it on every detection toggle.
+  const { license, refresh: refreshLicense } = useLicense();
   const incidentFilterTypesApi = useApi(
     () => fetchIncidentFilterTypes({ skip: 0, limit: 100 }),
     [],
@@ -652,6 +666,17 @@ export default function Detections() {
   const selectedCategory = CATEGORY_BY_KEY[selected?.category];
   const selectedSettingType = selected?.settingType || selected?.id || '';
   const selectedIncidentType = incidentTypeForDetection(selected, incidentFilterTypesApi.data);
+  // The licence row for the detection currently in focus, so the banner can show
+  // that detection's own camera allocation alongside the account-wide licence.
+  const selectedLicenseRow = (license?.detections || []).find(
+    (row) => row.settingType === selectedSettingType,
+  ) || null;
+  // Appended to the no-licence banner once support details exist; empty until
+  // then, so the sentence still reads correctly with SUPPORT_CONTACT blank.
+  const supportContactSuffix = [SUPPORT_CONTACT.email, SUPPORT_CONTACT.phone]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(' · ');
   const selectedDetectionEntry = selectedSettingType ? zoneCamera?.detections?.[selectedSettingType] : null;
   const selectedDetectionSettingId = selectedDetectionEntry?.id && typeof selectedDetectionEntry.id === 'object'
     ? selectedDetectionEntry.id._id
@@ -933,21 +958,33 @@ export default function Detections() {
     });
   };
 
-  const toggleModel = async (model) => {
+  // `enable` is passed explicitly on the dialog's retry: `model.active` is the
+  // stale pre-refusal value there, and deriving it again would flip the wrong way.
+  const toggleModel = async (model, forcedEnable) => {
     if (!canEditDetections) return;
     const detectionType = model.settingType || model.id;
     if (!zoneCamera?._id || !detectionType) {
       toast.error('Select a camera before changing detection status.');
       return;
     }
-    const enable = !model.active;
+    const enable = typeof forcedEnable === 'boolean' ? forcedEnable : !model.active;
     setDetectionToggleLoading(detectionType);
     try {
       await toggleChannelDetection({ channelId: zoneCamera._id, detectionType, enable });
       setCameraDetectionEnabled(detectionType, enable);
       toast.success(`${model.name} ${enable ? 'enabled' : 'disabled'}.`);
+      setLimitBlock(null);
       refreshZoneCamera();
+      refreshLicense();
     } catch (err) {
+      // A licensing refusal is not a plain failure: the user can free a camera
+      // and continue, so open the dialog that lists the cameras holding a slot
+      // instead of a toast that leaves them stuck.
+      const licenseError = licenseErrorFrom(err);
+      if (licenseError) {
+        setLimitBlock({ error: licenseError, model, detectionType });
+        return;
+      }
       toast.error(err?.response?.data?.body?.message || 'Failed to update detection status.');
     } finally {
       setDetectionToggleLoading('');
@@ -1516,6 +1553,57 @@ export default function Detections() {
         </div>
       </div>
 
+      {license && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 8,
+            marginBottom: 14,
+            padding: '9px 12px',
+            borderRadius: 11,
+            border: '1px solid var(--bd)',
+            background: 'var(--bg1)',
+            fontSize: 11.5,
+            color: 'var(--tx2)',
+          }}
+        >
+          <ShieldCheck size={14} style={{ color: 'var(--tx3)', flex: '0 0 auto' }} />
+          {license.purchasedCameras <= 0 ? (
+            // No licence at all — "0 of 0 cameras in use" reads like a bug, and
+            // nothing on this page can fix it. Say what is wrong and who to ask.
+            <span style={{ color: 'var(--warn)' }}>
+              You do not have any camera license. Please contact support to enable cameras.
+              {supportContactSuffix && (
+                <span style={{ color: 'var(--tx3)' }}> {supportContactSuffix}</span>
+              )}
+            </span>
+          ) : (
+            <span>
+              Camera licence:{' '}
+              <strong style={{ color: license.remaining === 0 ? 'var(--warn)' : 'var(--tx)' }}>
+                {license.camerasInUse} of {license.purchasedCameras}
+              </strong>{' '}
+              cameras in use
+            </span>
+          )}
+          {license.purchasedCameras > 0 && selectedLicenseRow && (
+            <span style={{ color: 'var(--tx3)' }}>
+              &middot; {selectedLicenseRow.name}:{' '}
+              <strong
+                style={{
+                  color: selectedLicenseRow.remaining === 0 ? 'var(--warn)' : 'var(--tx2)',
+                }}
+              >
+                {selectedLicenseRow.camerasInUse} of {selectedLicenseRow.cameraAllocation}
+              </strong>{' '}
+              cameras
+            </span>
+          )}
+        </div>
+      )}
+
       <AsyncBoundary
         loading={typesApi.loading}
         error={typesApi.error}
@@ -1523,6 +1611,7 @@ export default function Detections() {
         onRetry={typesApi.refetch}
         minH={260}
         emptyLabel="No detection types found"
+        emptyRender={<NoDetectionLicense fallback="No detection types found" />}
       >
         <div className="vq-det-shell">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
@@ -1532,13 +1621,9 @@ export default function Detections() {
                   background: 'var(--bg1)',
                   border: '1px solid var(--bd)',
                   borderRadius: 13,
-                  padding: '42px 20px',
-                  textAlign: 'center',
-                  fontSize: 12.5,
-                  color: 'var(--tx3)',
                 }}
               >
-                No detections match this filter
+                <NoDetectionLicense fallback="No detections match this filter" />
               </div>
             ) : (
               allVisibleGroupsCollapsed ? (
@@ -1758,6 +1843,17 @@ export default function Detections() {
       >
         Reset saved threshold values for <strong>{selected?.name || 'this detection'}</strong> to defaults?
       </ConfirmDialog>
+      <DetectionLimitDialog
+        open={Boolean(limitBlock)}
+        error={limitBlock?.error}
+        detectionType={limitBlock?.detectionType}
+        detectionLabel={limitBlock?.model?.name}
+        onClose={() => setLimitBlock(null)}
+        onRetry={async () => {
+          if (!limitBlock) return;
+          await toggleModel(limitBlock.model, true);
+        }}
+      />
     </div>
   );
 }

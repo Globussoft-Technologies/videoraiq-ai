@@ -7,6 +7,7 @@ import { useLogOrder, orderLogItems, moveLogItem } from '@/lib/logOrder';
 import { useOutsideClick } from '../hooks/useOutsideClick';
 import { useAuth } from '@/context/AuthContext';
 import { usePermissions } from '@/context/PermissionContext';
+import { useLogsConfig } from '@/context/LogsConfigContext';
 import { useTheme } from '@/theme/ThemeContext';
 import { ENGINE_PALETTE } from '@/lib/engineMeta';
 import videoraiqLogoColor from '@/assets/videoraiq-logo-color.png';
@@ -65,11 +66,27 @@ function isItemVisible(item, permissions) {
   return permissions?.[item.permissionKey]?.view === true;
 }
 
+/**
+ * Log & record pages follow GET /logs-configuration, which already accounts for
+ * the admin's own preference, auto-enable, and the detection licence.
+ *
+ * Fails open, and for the same reason as the permission filter above: while the
+ * config is loading — or if the request failed — show the item. Hiding pages
+ * first and revealing them later reads as the sidebar losing them, and a failed
+ * fetch must never strip a client of navigation they are entitled to.
+ */
+function isItemLogEnabled(item, logsConfig) {
+  if (!item.logsConfigKey) return true;
+  if (!logsConfig) return true;
+  return logsConfig[item.logsConfigKey] !== false;
+}
+
 const LOGS_COLLAPSE_KEY = 'vq-sidebar-logs-collapsed';
 
 export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = false, onMobileClose, camHealth = null }) {
   const { user } = useAuth();
   const { permissions } = usePermissions();
+  const { logs: logsConfig } = useLogsConfig();
   const { theme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -286,7 +303,12 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
       >
         {NAV_GROUPS
           .filter((g) => !g.hidden)
-          .map((group) => ({ ...group, items: group.items.filter((item) => isItemVisible(item, permissions)) }))
+          .map((group) => ({
+            ...group,
+            items: group.items.filter(
+              (item) => isItemVisible(item, permissions) && isItemLogEnabled(item, logsConfig),
+            ),
+          }))
           // After the permission filter, so a hidden log never leaves a gap.
           .map((group) => (group.label === LOGS_GROUP_LABEL
             ? { ...group, items: orderLogItems(group.items, logOrder) }

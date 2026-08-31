@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { CheckCircle2, ChevronDown } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '../../../../../pages/AttendanceLogs/components/Popover';
+import NoDetectionLicense from '../../../../../components/NoDetectionLicense';
 
 export default function DetectionTypeDropdown({ types, value, onChange }) {
   const [open, setOpen] = useState(false);
@@ -31,6 +32,9 @@ export default function DetectionTypeDropdown({ types, value, onChange }) {
       </PopoverTrigger>
       <PopoverContent align="start" sideOffset={6}>
         <div style={{ width: triggerWidth || 320, maxHeight: 176, overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, boxShadow: '0 18px 50px rgba(0,0,0,.35)', padding: 5 }}>
+          {types.length === 0 && (
+            <NoDetectionLicense compact fallback="No detection types available." />
+          )}
           {types.map(t => {
             const selected = t.settingType === value;
             return (

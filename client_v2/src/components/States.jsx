@@ -60,9 +60,12 @@ export function ErrorState({ error, onRetry, minH = 120, className = '' }) {
  * Convenience wrapper: renders the right state for a useApi() result, or the
  * children (via a render prop) once data is ready.
  */
-export function AsyncBoundary({ loading, error, isEmpty, onRetry, minH, emptyLabel, children }) {
+export function AsyncBoundary({ loading, error, isEmpty, onRetry, minH, emptyLabel, emptyRender, children }) {
   if (loading) return <Loading minH={minH} />;
   if (error) return <ErrorState error={error} onRetry={onRetry} minH={minH} />;
-  if (isEmpty) return <Empty label={emptyLabel} minH={minH} />;
+  // `emptyRender` lets a caller explain WHY a list is empty when the plain
+  // label would not — e.g. "no detections licensed, contact support" rather
+  // than a bare "No detection types found".
+  if (isEmpty) return emptyRender ?? <Empty label={emptyLabel} minH={minH} />;
   return typeof children === 'function' ? children() : children;
 }

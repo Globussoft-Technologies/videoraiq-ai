@@ -1,10 +1,27 @@
 import { useState } from 'react';
-import { ChevronRight, Loader2, TriangleAlert, VideoOff } from 'lucide-react';
+import { ChevronRight, LifeBuoy, Loader2, Mail, Phone, TriangleAlert, VideoOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAttendanceSocket } from '../context/AttendanceSocketContext';
 import { getNvrs } from '../helpers/configure';
+import { SUPPORT_CONTACT } from '../helpers/support';
+import { IS_LICENSING_ENABLED } from '../helpers/license';
 import { ManageCamerasModal } from '../page/user/Configure/NVRCameras';
 
+/**
+ * App-wide blocking overlay, driven entirely by the `purchasedCameras_<adminId>`
+ * socket snapshot. Two distinct states:
+ *
+ *   NO LICENCE   `licensed === false` (the superadmin has bought this client
+ *                zero cameras). Nothing the user can do in the app fixes it —
+ *                removing cameras does not grant a licence — so this state
+ *                offers the support contact and no Manage Cameras action.
+ *
+ *   OVER LIMIT   more cameras added than purchased. Recoverable in-app by
+ *                removing the excess, so Manage Cameras is offered.
+ *
+ * The lock freezes the UI only. Detections already running on the server keep
+ * running; this never stops anything.
+ */
 export default function CameraLimitLock() {
   const { cameraLimit } = useAttendanceSocket() || {};
   const [nvrs, setNvrs] = useState([]);
@@ -12,13 +29,22 @@ export default function CameraLimitLock() {
   const [loadingNvrs, setLoadingNvrs] = useState(false);
   const [activeNvr, setActiveNvr] = useState(null);
 
+  // Licensing off (on-premise): there is no camera licence to exceed, so
+  // neither lock applies.
+  if (!IS_LICENSING_ENABLED) return null;
+
   const purchasedCameras = Number(cameraLimit?.purchasedCameras) || 0;
   const added = Number(cameraLimit?.added) || 0;
+  // Only an explicit false locks: an absent flag (older server, or no snapshot
+  // delivered yet) must never freeze the app.
+  const unlicensed = cameraLimit?.licensed === false;
   const overLimit = purchasedCameras > 0 && added > purchasedCameras;
 
-  if (!overLimit) return null;
+  if (!unlicensed && !overLimit) return null;
 
   const excess = added - purchasedCameras;
+  const supportEmail = SUPPORT_CONTACT.email?.trim() || '';
+  const supportPhone = SUPPORT_CONTACT.phone?.trim() || '';
 
   const handleManageClick = async () => {
     setLoadingNvrs(true);
@@ -98,18 +124,71 @@ export default function CameraLimitLock() {
           </span>
 
           <h2 id="camera-limit-title" style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700 }}>
-            Camera Limit Exceeded
+            {unlicensed ? 'No Camera License' : 'Camera Limit Exceeded'}
           </h2>
 
-          <p style={{ margin: '0 0 4px', fontSize: 13, lineHeight: 1.5, color: 'var(--tx2)' }}>
-            You have added <strong style={{ color: 'var(--tx)' }}>{added}</strong> cameras, but your plan allows only{' '}
-            <strong style={{ color: 'var(--tx)' }}>{purchasedCameras}</strong>.
-          </p>
-          <p style={{ margin: '0 0 20px', fontSize: 13, lineHeight: 1.5, color: 'var(--tx2)' }}>
-            Remove <strong style={{ color: 'var(--crit)' }}>{excess} camera{excess === 1 ? '' : 's'}</strong> to continue.
-          </p>
+          {unlicensed ? (
+            <>
+              <p style={{ margin: '0 0 20px', fontSize: 13, lineHeight: 1.5, color: 'var(--tx2)' }}>
+                You do not have any camera license. Please contact support to enable cameras.
+              </p>
 
-          {pickingNvr ? (
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 10,
+                  textAlign: 'left',
+                  padding: '11px 12px',
+                  borderRadius: 10,
+                  border: '1px solid var(--bd)',
+                  background: 'var(--bg2)',
+                }}
+              >
+                <LifeBuoy size={15} style={{ color: 'var(--tx3)', flexShrink: 0, marginTop: 1 }} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>Contact support</div>
+                  {supportEmail || supportPhone ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                      {supportEmail && (
+                        <a
+                          href={`mailto:${supportEmail}`}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--blue)', textDecoration: 'none' }}
+                        >
+                          <Mail size={13} />
+                          {supportEmail}
+                        </a>
+                      )}
+                      {supportPhone && (
+                        <a
+                          href={`tel:${supportPhone.replace(/\s+/g, '')}`}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--blue)', textDecoration: 'none' }}
+                        >
+                          <Phone size={13} />
+                          {supportPhone}
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 11.5, color: 'var(--tx3)', lineHeight: 1.5 }}>
+                      Reach out to your VideorAIQ support contact to have cameras added to your license.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <p style={{ margin: '0 0 4px', fontSize: 13, lineHeight: 1.5, color: 'var(--tx2)' }}>
+                You have added <strong style={{ color: 'var(--tx)' }}>{added}</strong> cameras, but your plan allows only{' '}
+                <strong style={{ color: 'var(--tx)' }}>{purchasedCameras}</strong>.
+              </p>
+              <p style={{ margin: '0 0 20px', fontSize: 13, lineHeight: 1.5, color: 'var(--tx2)' }}>
+                Remove <strong style={{ color: 'var(--crit)' }}>{excess} camera{excess === 1 ? '' : 's'}</strong> to continue.
+              </p>
+            </>
+          )}
+
+          {unlicensed ? null : pickingNvr ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left' }}>
               <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--tx3)' }}>
                 Select an NVR to manage its cameras

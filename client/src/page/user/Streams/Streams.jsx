@@ -67,6 +67,14 @@ const Streams = () => {
     fetchNvrData();
   }, []);
 
+  // Re-fetch when cameras are changed elsewhere (e.g. the app-wide camera-limit
+  // lock's Manage Cameras modal), so Total Cameras / cameraCount stays fresh.
+  useEffect(() => {
+    const onCamerasChanged = () => fetchNvrData();
+    window.addEventListener('nvr-cameras-changed', onCamerasChanged);
+    return () => window.removeEventListener('nvr-cameras-changed', onCamerasChanged);
+  }, []);
+
   if (permissionsLoading) return <PageLoader />;
   if (!canView) {
     return <AccessDenied message="You don't have permission to view NVR settings." />;
