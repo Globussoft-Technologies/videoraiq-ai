@@ -14,7 +14,17 @@ const Stat = ({ label, value, accent }) => (
 )
 
 const SubscriptionCard = ({ stats, totalDetections }) => {
-  const { totalCameras = 0, configured = 0, nonConfigured = 0, detectionsEnabled = 0 } = stats || {}
+  const {
+    totalCameras = 0,
+    configured = 0,
+    nonConfigured = 0,
+    detectionsEnabled = 0,
+    licenseInUse = 0,
+  } = stats || {}
+  // Cameras holding a licence slot right now. Over the purchased total means
+  // the client is already past the limit — new enables are refused until they
+  // free one up, existing ones keep running.
+  const overLicensed = totalCameras > 0 && licenseInUse > totalCameras
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-white/8 dark:bg-[#0b0d13]">
@@ -25,6 +35,15 @@ const SubscriptionCard = ({ stats, totalDetections }) => {
 
       <div className="mt-4">
         <Stat label="Total Cameras" value={totalCameras} />
+        <Stat
+          label="License In Use"
+          value={`${licenseInUse} of ${totalCameras}`}
+          accent={
+            overLicensed
+              ? 'text-red-600 dark:text-red-400'
+              : 'text-blue-600 dark:text-blue-400'
+          }
+        />
         <Stat
           label="Configured"
           value={configured}

@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import { ArrowLeft, Save, ShieldCheck, ShieldHalf, Video, RefreshCw } from 'lucide-react'
+import {
+  ArrowLeft,
+  RefreshCw,
+  Save,
+  Search,
+  ShieldCheck,
+  ShieldHalf,
+  ToggleLeft,
+  ToggleRight,
+  Video,
+  X,
+} from 'lucide-react'
 import Topbar from '../../layout/Topbar'
 import CameraLicenseCard from './components/config/CameraLicenseCard'
 import SubscriptionCard from './components/config/SubscriptionCard'
@@ -8,7 +19,12 @@ import DetectionRow from './components/config/DetectionRow'
 import CamerasPanel from './components/config/CamerasPanel'
 import LoadingState from '../../components/UI/LoadingState'
 import { getClientConfig, getClientCameras } from './apis/get/clientConfig'
-import { updatePurchasedCameras, updateDetection, updateCameraDetection } from './apis/put'
+import {
+  updatePurchasedCameras,
+  updateDetection,
+  updateCameraDetection,
+  syncDetectionCatalog,
+} from './apis/put'
 import { getApiMessage, notifyApiError, notifyApiSuccess } from '../../utils/apiError'
 
 const getInitials = (name = '') => {
@@ -49,6 +65,30 @@ const ClientConfig = () => {
 
   // Bump to re-run the config fetch (Retry button).
   const [reloadKey, setReloadKey] = useState(0)
+
+  // Filters the Detection Configuration table only — never what gets saved.
+  const [detectionSearch, setDetectionSearch] = useState('')
+  const [syncing, setSyncing] = useState(false)
+
+  // Pull the platform detection list again. The client backend publishes its
+  // DETECTION_TYPES into a shared catalog on boot; this picks up anything added
+  // there (Car Model Detection, say) without redeploying the superadmin.
+  // Unsaved edits are intentionally discarded — the row set itself may change,
+  // so merging a half-finished edit into a different list is not safe.
+  const handleSyncDetections = async () => {
+    setSyncing(true)
+    try {
+      const res = await syncDetectionCatalog()
+      notifyApiSuccess(res, 'Detection list synced')
+      const fresh = await getClientConfig(adminId)
+      applyData(fresh)
+      setSaved(false)
+    } catch (err) {
+      notifyApiError(err, 'Failed to sync detections')
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   // Push a fetched config response into local + baseline state.
   const applyData = (res) => {
@@ -189,6 +229,61 @@ const ClientConfig = () => {
     () => detections.filter((d) => d.enabled).length,
     [detections]
   )
+
+  // Rows matching the search box. `index` is carried from the full list so a
+  // detection keeps its icon tint while filtering instead of the colours
+  // reshuffling as you type.
+  const visibleDetections = useMemo(() => {
+    const q = detectionSearch.trim().toLowerCase()
+    const withIndex = detections.map((d, index) => ({ ...d, index }))
+    return q
+      ? withIndex.filter(
+          (d) =>
+            (d.name || '').toLowerCase().includes(q) ||
+            (d.settingType || '').toLowerCase().includes(q)
+        )
+      : withIndex
+  }, [detections, detectionSearch])
+
+  const isFiltered = detectionSearch.trim().length > 0
+  const visibleEnabledCount = visibleDetections.filter((d) => d.enabled).length
+
+  // Turn every detection on or off in one go, instead of 20-odd clicks.
+  // Disabling zeroes the allocation exactly like the per-row toggle does — the
+  // server treats a disabled detection as 0, so leaving a stale number behind
+  // would make the UI disagree with what gets saved.
+  // Scoped to whatever the search box is showing. Flipping rows the admin
+  // cannot see while a filter is applied is the classic footgun, so with a
+  // search active this only touches the matches (and the button says so).
+  const setAllEnabled = (enabled) => {
+    setSaved(false)
+    const scope = new Set(visibleDetections.map((d) => d.settingType))
+    setDetections((prev) =>
+      prev.map((d) =>
+        scope.has(d.settingType)
+          ? { ...d, enabled, cameraAllocation: enabled ? d.cameraAllocation : 0 }
+          : d
+      )
+    )
+  }
+
+  // Copy one row's camera count onto every ENABLED detection. Disabled ones are
+  // left alone: giving them an allocation would silently queue a change the
+  // admin never asked for, and the server would store it against a detection
+  // the client cannot use.
+  const applyAllocationToAll = (cameraAllocation) => {
+    const next = Math.max(0, Math.min(totalCameras, Number(cameraAllocation) || 0))
+    setSaved(false)
+    const scope = new Set(visibleDetections.map((d) => d.settingType))
+    setDetections((prev) =>
+      prev.map((d) => (d.enabled && scope.has(d.settingType) ? { ...d, cameraAllocation: next } : d))
+    )
+  }
+
+  // Drives the header button's direction: once everything in view is on, it
+  // flips to "Disable all".
+  const allEnabled =
+    visibleDetections.length > 0 && visibleEnabledCount === visibleDetections.length
 
   // What changed vs the baseline?
   const dirtyDetections = useMemo(() => {
@@ -364,6 +459,7 @@ const ClientConfig = () => {
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <CameraLicenseCard
                 totalCameras={totalCameras}
+                licenseInUse={stats?.licenseInUse ?? 0}
                 onChange={(n) => {
                   setSaved(false)
                   setTotalCameras(n)
@@ -381,13 +477,78 @@ const ClientConfig = () => {
                     Detection Configuration
                   </h2>
                 </div>
-                <p className="text-sm text-gray-400 dark:text-gray-500">
-                  {enabledCount} enabled · {assigned} cam-assignments
-                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="relative">
+                    <Search
+                      size={14}
+                      strokeWidth={2}
+                      className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+                    />
+                    <input
+                      type="text"
+                      value={detectionSearch}
+                      onChange={(e) => setDetectionSearch(e.target.value)}
+                      placeholder="Search detections…"
+                      aria-label="Search detections"
+                      className="h-9 w-56 rounded-lg border border-gray-200 bg-white pr-8 pl-8 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 dark:border-white/10 dark:bg-white/4 dark:text-white dark:placeholder:text-gray-500"
+                    />
+                    {detectionSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setDetectionSearch('')}
+                        aria-label="Clear detection search"
+                        className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-0.5 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                      >
+                        <X size={13} strokeWidth={2.4} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Acts on the rows currently in view — the label says which,
+                      so a filtered "Enable all" is never a surprise. */}
+                  <button
+                    type="button"
+                    onClick={() => setAllEnabled(!allEnabled)}
+                    disabled={visibleDetections.length === 0}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/4 dark:text-gray-300 dark:hover:bg-white/8"
+                  >
+                    {allEnabled ? (
+                      <>
+                        <ToggleLeft size={15} strokeWidth={2} />
+                        {isFiltered ? `Disable ${visibleDetections.length} shown` : 'Disable all'}
+                      </>
+                    ) : (
+                      <>
+                        <ToggleRight size={15} strokeWidth={2} />
+                        {isFiltered ? `Enable ${visibleDetections.length} shown` : 'Enable all'}
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSyncDetections}
+                    disabled={syncing}
+                    title="Re-read the platform detection list published by the client backend"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/4 dark:text-gray-300 dark:hover:bg-white/8"
+                  >
+                    <RefreshCw
+                      size={14}
+                      strokeWidth={2.2}
+                      className={syncing ? 'animate-spin' : undefined}
+                    />
+                    {syncing ? 'Syncing…' : 'Sync detections'}
+                  </button>
+
+                  <p className="text-sm text-gray-400 dark:text-gray-500">
+                    {isFiltered && `${visibleDetections.length} of ${detections.length} shown · `}
+                    {enabledCount} enabled · {assigned} cam-assignments
+                  </p>
+                </div>
               </div>
 
               {/* Column header */}
-              <div className="grid grid-cols-[minmax(0,1fr)_120px_200px] gap-4 border-y border-gray-200 px-6 py-3 dark:border-white/8">
+              <div className="grid grid-cols-[minmax(0,1fr)_120px_290px] gap-4 border-y border-gray-200 px-6 py-3 dark:border-white/8">
                 <span className="font-mono text-[10px] font-semibold tracking-[0.12em] text-gray-400 uppercase dark:text-gray-600">
                   Detection Type
                 </span>
@@ -399,16 +560,27 @@ const ClientConfig = () => {
                 </span>
               </div>
 
+              {stats?.detectionsStale && (
+                <p className="border-b border-amber-200 bg-amber-50 px-6 py-2.5 text-xs font-medium text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+                  Showing a local fallback list — the client backend has not published its
+                  detection catalog yet. Restart it, then press Sync detections.
+                </p>
+              )}
+
               {detections.length === 0 ? (
                 <p className="px-6 py-10 text-center text-sm text-gray-400 dark:text-gray-500">
                   No detections available for this client.
                 </p>
+              ) : visibleDetections.length === 0 ? (
+                <p className="px-6 py-10 text-center text-sm text-gray-400 dark:text-gray-500">
+                  No detections match “{detectionSearch}”.
+                </p>
               ) : (
-                detections.map((d, i) => (
+                visibleDetections.map((d) => (
                   <DetectionRow
                     key={d.settingType}
                     detection={d}
-                    index={i}
+                    index={d.index}
                     maxCameras={totalCameras}
                     onToggle={(enabled) =>
                       setDetection(d.settingType, {
@@ -420,6 +592,8 @@ const ClientConfig = () => {
                     onAllocationChange={(cameraAllocation) =>
                       setDetection(d.settingType, { cameraAllocation })
                     }
+                    onApplyToAll={() => applyAllocationToAll(d.cameraAllocation)}
+                    applyToAllCount={visibleEnabledCount}
                   />
                 ))
               )}

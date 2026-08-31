@@ -1,4 +1,4 @@
-import { Minus, Plus, ScanEye } from 'lucide-react'
+import { CopyCheck, Minus, Plus, ScanEye } from 'lucide-react'
 
 // Rotating accent for the detection icon tile, keyed by index.
 const ICON_TINTS = [
@@ -10,14 +10,34 @@ const ICON_TINTS = [
   'bg-pink-50 text-pink-500 dark:bg-pink-500/10 dark:text-pink-300',
 ]
 
-const DetectionRow = ({ detection, index, maxCameras, onToggle, onAllocationChange }) => {
-  const { name, enabled, cameraAllocation } = detection
+const DetectionRow = ({
+  detection,
+  index,
+  maxCameras,
+  onToggle,
+  onAllocationChange,
+  onApplyToAll,
+  applyToAllCount = 0,
+}) => {
+  const { name, enabled, cameraAllocation, camerasInUse = 0, dsSupported } = detection
+  // Explicit false means DS answered and has no engine for this detection, so
+  // licensing it would never result in anything running. null means DS could
+  // not be reached — say nothing rather than a false accusation.
+  const noEngine = dsSupported === false
   const tint = ICON_TINTS[index % ICON_TINTS.length]
 
   const setAlloc = (n) => onAllocationChange(Math.max(0, Math.min(maxCameras, n)))
 
+  // The client is already running this detection on more cameras than the
+  // allocation about to be saved. Existing cameras keep running — the limit
+  // only refuses NEW ones — so this is a warning, not a blocked save.
+  const overAllocated = enabled && camerasInUse > cameraAllocation
+  // Turning a detection off revokes it: on save the client backend stops it on
+  // every camera still running it, not just hides it.
+  const disablingInUse = !enabled && camerasInUse > 0
+
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_120px_200px] items-center gap-4 border-b border-gray-100 px-6 py-4 last:border-b-0 dark:border-white/5">
+    <div className="grid grid-cols-[minmax(0,1fr)_120px_290px] items-center gap-4 border-b border-gray-100 px-6 py-4 last:border-b-0 dark:border-white/5">
       {/* Detection type */}
       <div className="flex items-center gap-3">
         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tint}`}>
@@ -28,6 +48,21 @@ const DetectionRow = ({ detection, index, maxCameras, onToggle, onAllocationChan
           <p className="truncate font-mono text-[10px] tracking-wide text-gray-400 uppercase dark:text-gray-600">
             {detection.settingType}
           </p>
+          {noEngine && (
+            <p className="mt-0.5 truncate text-[11px] font-medium text-red-600 dark:text-red-400">
+              No detection engine — cannot run even if licensed
+            </p>
+          )}
+          {overAllocated && (
+            <p className="mt-0.5 truncate text-[11px] font-medium text-amber-600 dark:text-amber-400">
+              In use on {camerasInUse} cameras — above this allocation
+            </p>
+          )}
+          {disablingInUse && (
+            <p className="mt-0.5 truncate text-[11px] font-medium text-amber-600 dark:text-amber-400">
+              Will stop on {camerasInUse} camera{camerasInUse === 1 ? '' : 's'} when saved
+            </p>
+          )}
         </div>
       </div>
 
@@ -82,8 +117,32 @@ const DetectionRow = ({ detection, index, maxCameras, onToggle, onAllocationChan
           <Plus size={15} strokeWidth={2.4} />
         </button>
 
-        <span className="ml-1 font-mono text-[11px] text-gray-400 dark:text-gray-600">
-          of {maxCameras}
+        {/* Copy this row's count onto every other enabled detection — the common
+            case is "give them all the same number of cameras". Only enabled
+            detections are touched, so it is a no-op worth disabling when this
+            row is the only one on. */}
+        <button
+          type="button"
+          onClick={onApplyToAll}
+          disabled={!enabled || applyToAllCount < 2}
+          title={
+            enabled
+              ? `Apply ${cameraAllocation} to all ${applyToAllCount} enabled detections`
+              : 'Enable this detection to apply its count to the others'
+          }
+          aria-label={`Apply this camera count to all enabled detections`}
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-500 transition-colors hover:bg-gray-100 hover:text-purple-600 disabled:opacity-40 disabled:hover:bg-gray-50 disabled:hover:text-gray-500 dark:border-white/10 dark:bg-white/4 dark:text-gray-400 dark:hover:bg-white/8 dark:hover:text-purple-300 dark:disabled:hover:bg-white/4"
+        >
+          <CopyCheck size={14} strokeWidth={2.2} />
+        </button>
+
+        <span
+          className={`ml-1 font-mono text-[11px] ${
+            overAllocated ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-600'
+          }`}
+          title={`${camerasInUse} camera${camerasInUse === 1 ? '' : 's'} currently running this detection`}
+        >
+          {camerasInUse} used · of {maxCameras}
         </span>
       </div>
     </div>
