@@ -4,9 +4,11 @@ import moment from 'moment-timezone';
 import { usePermissions } from '@/context/PermissionContext';
 import AccessDenied from '@/components/AccessDenied';
 
+import { List, LayoutGrid, Loader2 } from 'lucide-react';
 import ReusableTablePage from '@/pages/AttendanceLogs/components/ReusableTablePage';
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
 import ExportButton from '@/pages/AttendanceLogs/components/ExportButton';
+import { Popover, PopoverContent, PopoverTrigger } from '@/pages/AttendanceLogs/components/Popover';
 
 import { initialState, reducer, REFRESH_KEY, INTERVAL_KEY } from './anprState';
 import { buildColumns, renderANPRCard } from './anprColumns';
@@ -27,6 +29,51 @@ import {
 } from './Api';
 
 const HOST = import.meta.env.VITE_BACKEND;
+
+/**
+ * PDF export button with a two-way split: the plain list-table PDF, and the
+ * image-forward grid PDF that mirrors the on-screen grid cards.
+ */
+function PdfViewPopover({ open, exportingFormat, onOpenChange, onSelect }) {
+  const exporting = !!exportingFormat;
+  return (
+    <Popover open={open} onOpenChange={(next) => !exporting && onOpenChange(next)}>
+      <PopoverTrigger asChild>
+        <ExportButton>PDF</ExportButton>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-[190px] overflow-hidden rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] p-1.5 shadow-xl"
+        align="end"
+      >
+        <div className="space-y-1">
+          <button
+            type="button"
+            disabled={exporting}
+            onClick={() => onSelect('pdf')}
+            className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-sm font-semibold text-[var(--tx)] transition-colors hover:bg-[var(--bg2)] disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-red-500/10 text-red-500">
+              {exportingFormat === 'pdf' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <List className="h-3.5 w-3.5" />}
+            </span>
+            <span className="truncate">Export List View</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={exporting}
+            onClick={() => onSelect('pdf-grid')}
+            className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-sm font-semibold text-[var(--tx)] transition-colors hover:bg-[var(--bg2)] disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[var(--brand)]/10 text-[var(--brand)]">
+              {exportingFormat === 'pdf-grid' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LayoutGrid className="h-3.5 w-3.5" />}
+            </span>
+            <span className="truncate">Export Grid View</span>
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const ANPRLogs = () => {
   const maxDateDefault = useMemo(() => moment().endOf('day').toDate(), []);
@@ -76,6 +123,8 @@ const ANPRLogs = () => {
   const [untagRow, setUntagRow] = useState(null);
   // Tagged user whose full details card is open.
   const [viewUser, setViewUser] = useState(null);
+  const [pdfViewOpen, setPdfViewOpen] = useState(false);
+  const [pdfExportingFormat, setPdfExportingFormat] = useState('');
 
   const { permissions, loading: permissionsLoading } = usePermissions();
   const navigate = useNavigate();
@@ -309,28 +358,6 @@ const ANPRLogs = () => {
     [openPreview, onEdit, onTagUser, onUntagUser, onViewUser]
   );
 
-  // KPI tiles — derived from the loaded page + server total (no placeholder data).
-  const stats = useMemo(() => {
-    const list = rows || [];
-    const high = list.filter((r) => (r.severity || '').toLowerCase() === 'high').length;
-    const resolvedCount = list.filter((r) => r.resolved).length;
-    const uniquePlates = new Set(
-      list.map((r) => r.vehicleNumber).filter((v) => v && v !== '--')
-    ).size;
-    const untagged = new Set(
-      list
-        .filter((r) => !r.taggedUser && r.vehicleNumber && r.vehicleNumber !== '--')
-        .map((r) => r.vehicleNumber)
-    ).size;
-    return [
-      { label: 'Incidents', value: totalCount ?? 0, color: 'var(--blue)' },
-      { label: 'High Severity (page)', value: high, color: 'var(--crit)' },
-      { label: 'Resolved (page)', value: resolvedCount, color: 'var(--ok)' },
-      { label: 'Unique Plates (page)', value: uniquePlates, color: 'var(--cyan)' },
-      { label: 'Untagged Plates (page)', value: untagged, color: 'var(--warn)' },
-    ];
-  }, [rows, totalCount]);
-
   const handleExport = (format) =>
     handleANPRExport(format, {
       startDate,
@@ -346,6 +373,16 @@ const ANPRLogs = () => {
       tagStatus,
       searchInput,
     });
+
+  const handlePdfExport = async (format) => {
+    setPdfExportingFormat(format);
+    try {
+      await handleExport(format);
+      setPdfViewOpen(false);
+    } finally {
+      setPdfExportingFormat('');
+    }
+  };
 
   /* ─────────────── Guards ─────────────── */
   if (permissionsLoading) return null;
@@ -401,7 +438,7 @@ const ANPRLogs = () => {
       />
 
       <ReusableTablePage
-        stats={stats}
+        stats={[]}
         loading={loading}
         error={error}
         data={rows}
@@ -459,7 +496,14 @@ const ANPRLogs = () => {
         />
 
         {canEdit && <ExportButton onClick={() => handleExport('excel')}>Excel</ExportButton>}
-        {canEdit && <ExportButton onClick={() => handleExport('pdf')}>PDF</ExportButton>}
+        {canEdit && (
+          <PdfViewPopover
+            open={pdfViewOpen}
+            exportingFormat={pdfExportingFormat}
+            onOpenChange={setPdfViewOpen}
+            onSelect={handlePdfExport}
+          />
+        )}
 
         <ANPRFilterPopover
           nvrOptions={nvrOptions}

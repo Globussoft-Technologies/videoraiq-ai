@@ -1,87 +1,99 @@
 import { useFormikContext } from 'formik';
-import { Upload, Camera, X } from 'lucide-react';
-import { toast } from 'sonner';
+import { Upload, Camera, X, Check } from 'lucide-react';
+import frontView from '@/assets/front_view.png';
+import leftView from '@/assets/left_view.png';
+import rightView from '@/assets/right_view.png';
 
 const orgId = import.meta.env.VITE_ORGANISATION_ID;
 const uploadDomain = `${import.meta.env.VITE_BACKEND}/uploads`;
+
+const POSE_ART = { Front: frontView, Left: leftView, Right: rightView };
 
 const RegisterFormStep2 = ({
   uploadedImagePaths,
   uploadedImageUrls,
   onRemoveImage,
-  onUploadFile,
   onOpenCamera,
 }) => {
   const { values } = useFormikContext();
   const angles = orgId === 'dubai' ? ['Front'] : ['Front', 'Right', 'Left'];
   const requiredCount = orgId === 'dubai' ? 1 : 3;
 
-  const uploadedCount = uploadedImagePaths.filter((img) =>
-    typeof img === 'string' ? img.trim() !== '' : !!img
-  ).length;
+  const isFilled = (img) => (typeof img === 'string' ? img.trim() !== '' : !!img);
+  const uploadedCount = uploadedImagePaths.filter(isFilled).length;
 
   return (
     <div className="space-y-5">
       <p className="text-sm text-[var(--tx2)] font-medium">
-        Uploaded {uploadedCount} / {requiredCount} image{requiredCount > 1 ? 's' : ''}*
+        Added {uploadedCount} / {requiredCount} image{requiredCount > 1 ? 's' : ''}*
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-        {angles.map((angle, index) => (
-          <div key={angle} className="flex flex-col items-center gap-3">
-            <div className="w-full aspect-[4/5] max-h-[260px] bg-[var(--bg3)] rounded-2xl border border-[var(--bd)] flex items-center justify-center p-3 relative">
-              {uploadedImagePaths[index] ? (
-                <>
+        {angles.map((angle, index) => {
+          const filled = isFilled(uploadedImagePaths[index]);
+          const src =
+            uploadedImageUrls[index] ||
+            (typeof uploadedImagePaths[index] === 'string' && uploadedImagePaths[index]
+              ? `${uploadDomain}${uploadedImagePaths[index]}`
+              : '');
+
+          return (
+            <div
+              key={angle}
+              className={`relative flex flex-col rounded-2xl border overflow-hidden bg-[var(--bg2)] transition-colors ${
+                filled ? 'border-[var(--ok)]/50' : 'border-[var(--bd)]'
+              }`}
+            >
+              <div className="relative aspect-[4/3] w-full bg-[var(--bg3)] overflow-hidden">
+                {filled ? (
+                  <>
+                    <img src={src} alt={angle} className="w-full h-full object-cover object-[center_25%]" />
+                    <button
+                      type="button"
+                      onClick={() => onRemoveImage(index)}
+                      className="absolute top-2 right-2 bg-[var(--crit)] text-white p-1.5 rounded-full cursor-pointer shadow-sm hover:opacity-90"
+                      aria-label={`Remove ${angle} photo`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                ) : (
                   <img
-                    src={uploadedImageUrls[index] || `${uploadDomain}${uploadedImagePaths[index]}`}
-                    alt={angle}
-                    className="w-full h-full object-contain rounded-xl"
+                    src={POSE_ART[angle] || POSE_ART.Front}
+                    alt={`${angle} reference pose`}
+                    draggable={false}
+                    className="absolute inset-0 w-full h-full object-cover object-[center_18%]"
                   />
-                  <button
-                    type="button"
-                    onClick={() => onRemoveImage(index)}
-                    className="absolute top-2 right-2 bg-[var(--crit)] text-white p-1.5 rounded-full cursor-pointer shadow-sm hover:opacity-90"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </>
-              ) : (
-                <div className="flex flex-col items-center gap-3 w-full">
-                  <label className="w-full cursor-pointer">
-                    <input
-                      type="file"
-                      accept="image/jpeg, image/png"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        if (!['image/jpeg', 'image/png'].includes(file.type)) {
-                          toast.error('Please upload only JPG or PNG images.');
-                          e.target.value = '';
-                          return;
-                        }
-                        onUploadFile(file, values.firstName?.trim() || 'employee', index);
-                      }}
-                    />
-                    <div className="flex items-center justify-center gap-2 w-full py-3 px-3 bg-[var(--blue)]/10 text-[var(--blue)] rounded-lg text-sm font-medium hover:bg-[var(--blue)]/20 transition-colors">
-                      <Upload className="w-4 h-4" />
-                      Upload from files
-                    </div>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => onOpenCamera(angle, values.firstName)}
-                    className="flex items-center justify-center gap-2 w-full py-3 bg-[var(--bg2)] text-[var(--tx2)] rounded-lg text-sm font-medium hover:bg-[var(--bd2)] transition-colors cursor-pointer"
-                  >
-                    <Camera className="w-4 h-4" />
-                    Take photo
-                  </button>
-                </div>
-              )}
+                )}
+                <span
+                  className={`absolute top-2 left-2 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold backdrop-blur-sm ${
+                    filled ? 'bg-[var(--ok)] text-white' : 'bg-black/45 text-white'
+                  }`}
+                >
+                  {filled && <Check className="w-3 h-3" strokeWidth={3} />}
+                  {angle} view
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 p-2.5 border-t border-[var(--bd)]">
+                <button
+                  type="button"
+                  onClick={() => onOpenCamera(angle, values.firstName, 'camera')}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 h-9 rounded-lg bg-[var(--blue)] text-white text-[13px] font-medium hover:opacity-95 transition-opacity cursor-pointer"
+                >
+                  <Camera className="w-3.5 h-3.5" /> {filled ? 'Retake' : 'Take photo'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenCamera(angle, values.firstName, 'upload')}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 h-9 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] text-[13px] font-medium hover:bg-[var(--bg3)] transition-colors cursor-pointer"
+                >
+                  <Upload className="w-3.5 h-3.5" /> Upload
+                </button>
+              </div>
             </div>
-            <span className="font-medium text-[var(--tx)] text-sm">{angle}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

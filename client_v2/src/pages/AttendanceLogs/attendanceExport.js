@@ -56,27 +56,31 @@ const formatPeriodDuration = (minutes) => {
   return parts.slice(0, 3).join(' ') || '00:00:00';
 };
 
-/**
- * Total Working Hrs (Day) = last check-out − first check-in, whole minutes,
- * floored at 0 — the same `minutesSpent` figure the Attendance Logs table and
- * the auto-email report use. Breaks are NOT subtracted. Falls back to the
- * elapsed span if the server didn't send `minutesSpent`.
- */
-const workingMinutesForRow = (item) => {
+/** Break minutes as sent by the server (checkout→checkin pairing). */
+const breakMinutesForRow = (item) =>
+  Number.isFinite(item?.breakMinutes) ? Math.max(0, item.breakMinutes) : 0;
+
+/** Gross span: first check-in → last check-out, whole minutes, floored at 0. */
+const spanMinutesForRow = (item) => {
   if (Number.isFinite(item?.minutesSpent)) return Math.max(0, item.minutesSpent);
   if (!item?.logInTime || !item?.logOutTime || item.logOutTime === '--') return 0;
   const span = (new Date(item.logOutTime) - new Date(item.logInTime)) / 60000;
   return Math.max(0, Math.round(span));
 };
 
-/** Break minutes as sent by the server (checkout→checkin pairing). */
-const breakMinutesForRow = (item) =>
-  Number.isFinite(item?.breakMinutes) ? Math.max(0, item.breakMinutes) : 0;
+/**
+ * Total Working Hrs (Day) = actual time worked = gross span minus the break
+ * time, floored at 0. Breaks are NOT counted as working time. The bulk export
+ * payload carries no per-session breakdown, so this is the closest the export
+ * can get to "sum of the work sessions". Duration matches it exactly.
+ */
+const workingMinutesForRow = (item) =>
+  Math.max(0, spanMinutesForRow(item) - breakMinutesForRow(item));
 
 /**
- * Duration column — the same first-check-in → last-check-out span as Total
- * Working Hrs (Day), to whole minutes, so the two columns always agree. Shown
- * as HH:MM:SS. A day with no check-out shows "-".
+ * Duration column — the day's actual worked time, identical to Total Working
+ * Hrs (Day) so the two columns always agree. Shown as HH:MM:SS. A day with no
+ * check-out shows "-".
  */
 const durationHms = (item) => {
   if (!item?.logInTime || !item?.logOutTime || item.logOutTime === '--') return '-';

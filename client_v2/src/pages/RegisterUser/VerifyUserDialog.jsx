@@ -11,19 +11,12 @@ import {
   Camera,
   CheckCircle2,
   XCircle,
-  Loader2,
   ArrowLeft,
   ChevronRight,
-  X,
 } from 'lucide-react';
-import Webcam from 'react-webcam';
 import { toast } from 'sonner';
 import { verifyUser } from './Api';
-
-const CAMERA_ACCESS_TOAST = {
-  id: 'camera-access-required',
-  description: "We couldn't access your camera. Please connect a camera or allow camera access in your browser settings",
-};
+import VerifyCaptureModal from './VerifyCaptureModal';
 
 const VerifyUserDialog = ({ trigger }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -34,20 +27,42 @@ const VerifyUserDialog = ({ trigger }) => {
   const [apiMessage, setApiMessage] = useState('');
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const fileInputRef = useRef(null);
-  const webcamRef = useRef(null);
+  // Synchronous mirror of isCameraOpen — Radix fires onOpenChange before the
+  // state commits, so the ref is what the close-guard reads.
+  const cameraOpenRef = useRef(false);
 
   const resetDialog = () => {
     setStep(1);
     setPreviewImage(null);
     setSelectedFile(null);
     setApiMessage('');
+    // Clear the file input so re-selecting the same photo still fires onChange.
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const showCameraAccessError = () => {
-    toast.error('Camera access required', CAMERA_ACCESS_TOAST);
+  // The capture modal portals outside this dialog, so Radix's focus-trap fights
+  // it (clicks get swallowed / land on elements behind). We close this dialog
+  // while the camera runs and reopen it once done — same pattern as RegisterForm.
+  const openCamera = () => {
+    cameraOpenRef.current = true;
+    setIsCameraOpen(true);
+    setIsOpen(false);
+  };
+
+  const closeCamera = () => {
+    cameraOpenRef.current = false;
+    setIsCameraOpen(false);
+    setIsOpen(true); // bring the dialog back on whatever step we're on
   };
 
   const handleOpenChange = (open) => {
+    // Ignore the transient close while the camera modal takes over.
+    if (!open && cameraOpenRef.current) {
+      setIsOpen(false);
+      return;
+    }
+    // Don't let a stray Escape / outside-click abandon an in-flight verification.
+    if (!open && step === 3) return;
     setIsOpen(open);
     if (!open) resetDialog();
   };
@@ -65,21 +80,11 @@ const VerifyUserDialog = ({ trigger }) => {
     }
   };
 
-  const handleCapture = () => {
-    if (!webcamRef.current) return;
-    const imageSrc = webcamRef.current.getScreenshot();
-    if (!imageSrc) return;
-    const byteString = atob(imageSrc.split(',')[1]);
-    const mimeString = imageSrc.split(',')[0].split(':')[1].split(';')[0];
-    const ab = new ArrayBuffer(byteString.length);
-    const ia = new Uint8Array(ab);
-    for (let i = 0; i < byteString.length; i += 1) ia[i] = byteString.charCodeAt(i);
-    const blob = new Blob([ab], { type: mimeString });
-    const file = new File([blob], `captured_verify_${previewImage ? 1 : 0}.jpg`, { type: mimeString });
+  const handleCapture = (file, imageSrc) => {
     setSelectedFile(file);
     setPreviewImage(imageSrc);
     setStep(2);
-    setIsCameraOpen(false);
+    closeCamera();
   };
 
   const handleProcess = async () => {
@@ -118,7 +123,16 @@ const VerifyUserDialog = ({ trigger }) => {
 
   return (
     <>
-      <div onClick={() => setIsOpen(true)}>{trigger}</div>
+      <div
+        onClick={() => {
+          cameraOpenRef.current = false;
+          setIsCameraOpen(false);
+          resetDialog();
+          setIsOpen(true);
+        }}
+      >
+        {trigger}
+      </div>
 
       <Dialog open={isOpen} onOpenChange={handleOpenChange}>
         <DialogContent
@@ -147,6 +161,7 @@ const VerifyUserDialog = ({ trigger }) => {
             {step === 1 && (
               <div className="flex flex-col gap-3 sm:gap-5 w-full">
                 <button
+                  type="button"
                   onClick={() => fileInputRef.current?.click()}
                   className="group flex flex-col items-center justify-center gap-2 sm:gap-3 py-6 sm:py-10 border-2 border-dashed border-[var(--bd2)] rounded-2xl bg-[var(--bg2)] text-[var(--blue)] hover:bg-[var(--bg3)] hover:border-[var(--blue)] transition-all cursor-pointer"
                 >
@@ -167,7 +182,8 @@ const VerifyUserDialog = ({ trigger }) => {
                 />
 
                 <button
-                  onClick={() => setIsCameraOpen(true)}
+                  type="button"
+                  onClick={openCamera}
                   className="flex items-center justify-between px-4 py-3.5 sm:px-6 sm:py-5 bg-[var(--bg2)] text-[var(--tx2)] rounded-2xl hover:bg-[var(--bg3)] transition-all cursor-pointer group"
                 >
                   <div className="flex items-center gap-3 sm:gap-4">
@@ -194,12 +210,12 @@ const VerifyUserDialog = ({ trigger }) => {
                     onClick={() => setStep(1)}
                     className="flex-1 py-4 sm:py-6 rounded-xl border-[var(--bd)] text-[var(--tx2)] hover:bg-[var(--bg3)] bg-transparent gap-2 font-semibold"
                   >
-                    <ArrowLeft className="w-4 h-4" />
+                    <ArrowLeft className="w-4 h-4 cursor-pointer" />
                     Reset
                   </Button>
                   <Button
                     onClick={handleProcess}
-                    className="flex-1 py-4 sm:py-6 rounded-xl bg-[var(--blue)] text-white hover:opacity-95 font-semibold text-base sm:text-lg"
+                    className="flex-1 py-4 sm:py-6 rounded-xl bg-[var(--blue)] text-white hover:opacity-95 font-semibold text-base sm:text-lg cursor-pointer "
                   >
                     Confirm Image
                   </Button>
@@ -247,55 +263,14 @@ const VerifyUserDialog = ({ trigger }) => {
             )}
           </div>
 
-          {isCameraOpen && (
-            <div className="absolute inset-0 z-[60] bg-black/80 flex items-center justify-center p-4 rounded-3xl">
-              <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-2xl p-4 max-w-lg w-full shadow-2xl overflow-hidden">
-                <div className="flex justify-between items-center mb-4 px-2">
-                  <h3 className="text-xl font-bold text-[var(--tx)]">Capture Identity</h3>
-                  <button
-                    type="button"
-                    onClick={() => setIsCameraOpen(false)}
-                    className="p-2 hover:bg-[var(--bg3)] rounded-full transition-colors cursor-pointer"
-                  >
-                    <X className="w-6 h-6 text-[var(--tx2)]" />
-                  </button>
-                </div>
-                <div className="relative rounded-xl overflow-hidden bg-black aspect-video mb-6 border-4 border-[var(--bd)] shadow-inner">
-                  <Webcam
-                    audio={false}
-                    ref={webcamRef}
-                    screenshotFormat="image/jpeg"
-                    onUserMediaError={showCameraAccessError}
-                    className="w-full h-full object-cover"
-                    videoConstraints={{ width: 1280, height: 720, facingMode: 'user' }}
-                  />
-                  {/* Vignette frame */}
-                  <div className="absolute inset-0 border-[20px] border-black/20 pointer-events-none" />
-                  {/* Face-alignment guide */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-64 border-2 border-white/50 rounded-[40%] pointer-events-none" />
-                </div>
-                <div className="flex gap-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsCameraOpen(false)}
-                    className="flex-1 py-6 rounded-xl border-[var(--bd)] text-[var(--tx2)] hover:bg-[var(--bg3)] bg-transparent font-semibold cursor-pointer  "
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={handleCapture}
-                    className="flex-1 py-6 rounded-xl bg-[var(--blue)] text-white hover:opacity-95 font-semibold text-lg cursor-pointer"
-                  >
-                    Capture Photo
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
         </DialogContent>
       </Dialog>
+
+      <VerifyCaptureModal
+        open={isCameraOpen}
+        onClose={closeCamera}
+        onCapture={handleCapture}
+      />
     </>
   );
 };

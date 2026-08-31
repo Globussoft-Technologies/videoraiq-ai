@@ -1,12 +1,12 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Check, X, Info, Camera as CameraIcon, Upload } from "lucide-react";
-import Webcam from "react-webcam";
+import { ArrowLeft, Check, X, Info, Camera as CameraIcon, Upload, ScanFace } from "lucide-react";
 import logo from "@/assets/logo.svg";
 import heroShot from "@/assets/7.jpg";
 import { PInput, PCombo, PButton } from "./PortalFields";
 import { fetchDepartments, getEmployeeLocations, isEmailExist, createAuthorizedUser } from "@/pages/RegisterUser/Api";
+import FaceCaptureWizard from "@/pages/RegisterUser/FaceCaptureWizard";
 import getAccessToken from "@/utils/getAccessToken";
 import { decrypt } from "@/helpers/decryptNvr";
 import "./portal.css";
@@ -31,10 +31,11 @@ const PHOTO_SLOTS = [
    off. sessionStorage (not localStorage) so the draft doesn't outlive the
    browsing session or leak across a shared/public device. */
 const DRAFT_KEY_PREFIX = "vqp_employee_register_draft_";
-const CAMERA_ACCESS_TOAST = {
-  id: "camera-access-required",
-  description: "We couldn't access your camera. Please connect a camera or allow camera access in your browser settings",
-};
+
+// The guided wizard works in 'Front' | 'Left' | 'Right'; our slots are lowercase.
+const WIZARD_ANGLES = ["Front", "Left", "Right"];
+const SLOT_FOR_ANGLE = { Front: "front", Left: "left", Right: "right" };
+const ANGLE_FOR_SLOT = { front: "Front", left: "Left", right: "Right" };
 
 function draftKey() {
   const token = new URLSearchParams(window.location.search).get("token") || "default";
@@ -118,9 +119,10 @@ export default function EmployeeRegister() {
   const [departments, setDepartments] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [registered, setRegistered] = useState(false);
-  const [captureSlot, setCaptureSlot] = useState(null); // key of the slot currently using the webcam
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardStartAngle, setWizardStartAngle] = useState(null); // which pose the wizard opens on
+  const [wizardMode, setWizardMode] = useState("camera"); // 'camera' | 'upload'
   const [draftRestored, setDraftRestored] = useState(!savedDraft?.photos);
-  const webcamRef = useRef(null);
 
   // Photos are stored as data URLs (Files/blob URLs can't survive
   // sessionStorage or a tab reload), so they're decoded back into real Files
@@ -245,38 +247,28 @@ export default function EmployeeRegister() {
     setStep(2);
   };
 
-  const onPickPhoto = (key) => (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!["image/jpeg", "image/png"].includes(file.type)) {
-      toast.error("Please upload only JPG or PNG images");
-      e.target.value = "";
-      return;
-    }
-    // Keep the actual File — it's what gets uploaded on submit.
-    setPhotos((p) => ({ ...p, [key]: { file, name: file.name, url: URL.createObjectURL(file) } }));
-    e.target.value = "";
+  // Open the guided Front → Left → Right wizard, optionally starting on a
+  // specific pose / tab (camera or upload).
+  const openWizard = (slot = null, mode = "camera") => {
+    setWizardStartAngle(slot ? ANGLE_FOR_SLOT[slot] : null);
+    setWizardMode(mode);
+    setWizardOpen(true);
   };
 
-  const openCamera = (key) => () => setCaptureSlot(key);
-
-  const showCameraAccessError = () => {
-    toast.error("Camera access required", CAMERA_ACCESS_TOAST);
-  };
-
-  const capturePhoto = () => {
-    if (!webcamRef.current || !captureSlot) return;
-    const imageSrc = webcamRef.current.getScreenshot();
-    if (!imageSrc) return;
-    const byteString = atob(imageSrc.split(",")[1]);
-    const mimeString = imageSrc.split(",")[0].split(":")[1].split(";")[0];
-    const ab = new ArrayBuffer(byteString.length);
-    const ia = new Uint8Array(ab);
-    for (let i = 0; i < byteString.length; i += 1) ia[i] = byteString.charCodeAt(i);
-    const blob = new Blob([ab], { type: mimeString });
-    const file = new File([blob], `${captureSlot}.jpg`, { type: mimeString });
-    setPhotos((p) => ({ ...p, [captureSlot]: { file, name: file.name, url: URL.createObjectURL(file) } }));
-    setCaptureSlot(null);
+  // Wizard returns Files index-aligned to WIZARD_ANGLES; route each into its slot.
+  const onWizardComplete = (files) => {
+    setPhotos((prev) => {
+      const next = { ...prev };
+      WIZARD_ANGLES.forEach((angle, i) => {
+        const entry = files?.[i];
+        if (entry instanceof File) {
+          const slot = SLOT_FOR_ANGLE[angle];
+          next[slot] = { file: entry, name: entry.name, url: URL.createObjectURL(entry) };
+        }
+      });
+      return next;
+    });
+    setWizardOpen(false);
   };
 
   const removePhoto = (key) => {
@@ -521,58 +513,109 @@ export default function EmployeeRegister() {
                   <Info size={16} className="text-[#2a6fdb] mt-px shrink-0" />
                   <p className="text-[12.5px] leading-[1.5] text-[#475569] m-0">
                     Capture <strong className="text-[#0f1729]">3 clear photos</strong> — front, left, and right profile. Good lighting, no
-                    mask or sunglasses. Used only for secure face recognition.
+                    mask or sunglasses.
                   </p>
                 </div>
 
-                {/* per-pose capture slots */}
-                <div className="grid grid-cols-3 gap-3">
-                  {PHOTO_SLOTS.map((s) => {
-                    const pic = photos[s.key];
-                    return (
-                      <div key={s.key} className="flex flex-col items-center gap-2">
-                        <div className="w-full aspect-[4/5] max-h-[240px] bg-[#f2f8ff] rounded-[16px] border border-[#e3e8f0] flex items-center justify-center p-2 relative">
-                          {pic ? (
-                            <>
-                              <img src={pic.url} alt={s.label} className="w-full h-full object-contain rounded-[12px]" />
-                              <button
-                                type="button"
-                                onClick={() => removePhoto(s.key)}
-                                disabled={isSubmitting}
-                                className="absolute top-2 right-2 bg-[#ef4444] text-white p-1.5 rounded-full cursor-pointer shadow-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                <X size={14} />
-                              </button>
-                            </>
-                          ) : (
-                            <div className="flex flex-col items-center gap-2 w-full">
-                              <label
-                                htmlFor={`vqp-photo-${s.key}`}
-                                className={`flex items-center justify-center gap-1 w-full min-h-[42px] py-2 px-1 overflow-hidden bg-[#3b82f6]/10 text-[#3b82f6] rounded-[10px] text-[10px] sm:text-[12.5px] font-semibold leading-tight text-center transition-colors ${
-                                  isSubmitting ? "cursor-not-allowed opacity-50 pointer-events-none" : "cursor-pointer hover:bg-[#3b82f6]/20 active:bg-[#3b82f6]/25"
-                                }`}
-                              >
-                                <Upload size={12} className="shrink-0" />
-                                <span className="whitespace-nowrap">Browse</span>
-                              </label>
-                              <button
-                                type="button"
-                                onClick={openCamera(s.key)}
-                                disabled={isSubmitting}
-                                className="flex items-center justify-center gap-1 w-full min-h-[42px] py-2 px-1 overflow-hidden bg-[#eef1f7] text-[#475569] rounded-[10px] text-[10px] sm:text-[12.5px] font-semibold leading-tight hover:bg-[#e3e8f0] active:bg-[#e3e8f0] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                <CameraIcon size={12} className="shrink-0" />
-                                <span className="whitespace-nowrap">Take Photo</span>
-                              </button>
+                {PHOTO_SLOTS.every((s) => !photos[s.key]) ? (
+                  /* Empty state — one guided-capture card (no per-pose grid yet). */
+                  <div className="w-full rounded-[16px] border-2 border-dashed border-[#cfe0fb] bg-[#f7faff] py-10 px-6 flex flex-col items-center gap-3">
+                    <span className="flex items-center justify-center w-14 h-14 rounded-[16px] bg-[#3b82f6]/12 text-[#3b82f6]">
+                      <ScanFace size={26} />
+                    </span>
+                    <span className="text-[14px] font-semibold text-[#0f1729]">Start guided face capture</span>
+                    <span className="text-[12px] text-[#64748b] text-center max-w-xs">
+                      Add front, left and right views in one guided flow — take photos with your
+                      camera or upload existing ones.
+                    </span>
+                    <div className="mt-2 flex flex-wrap justify-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => openWizard(null, "camera")}
+                        disabled={isSubmitting}
+                        className="inline-flex items-center gap-2 h-10 px-5 rounded-[12px] text-white text-[13px] font-semibold bg-[linear-gradient(135deg,#3b82f6,#2a6fdb)] hover:opacity-95 transition-opacity cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <CameraIcon size={16} /> Take photos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openWizard(null, "upload")}
+                        disabled={isSubmitting}
+                        className="inline-flex items-center gap-2 h-10 px-5 rounded-[12px] text-[#3b82f6] text-[13px] font-semibold bg-white border-[1.5px] border-[#cfe0fb] hover:bg-[#eef5ff] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Upload size={16} /> Upload photos
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* per-pose slots — click any to open the wizard on that pose */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {PHOTO_SLOTS.map((s) => {
+                        const pic = photos[s.key];
+                        return (
+                          <div key={s.key} className="flex flex-col items-center gap-2">
+                            <div className="w-full aspect-[4/5] max-h-[240px] bg-[#f2f8ff] rounded-[16px] border border-[#e3e8f0] flex items-center justify-center p-2 relative overflow-hidden">
+                              {pic ? (
+                                <>
+                                  <img src={pic.url} alt={s.label} className="w-full h-full object-cover rounded-[12px]" />
+                                  <button
+                                    type="button"
+                                    onClick={() => removePhoto(s.key)}
+                                    disabled={isSubmitting}
+                                    className="absolute top-2 right-2 bg-[#ef4444] text-white p-1.5 rounded-full cursor-pointer shadow-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openWizard(s.key, "camera")}
+                                    disabled={isSubmitting}
+                                    className="absolute inset-x-0 bottom-0 py-1.5 text-[11px] font-semibold text-white bg-black/55 backdrop-blur-sm opacity-0 hover:opacity-100 transition-opacity cursor-pointer disabled:hidden"
+                                  >
+                                    Retake
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => openWizard(s.key, "camera")}
+                                  disabled={isSubmitting}
+                                  className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <span className="flex items-center justify-center w-9 h-9 rounded-xl bg-[#3b82f6]/12 text-[#3b82f6]">
+                                    <CameraIcon size={16} />
+                                  </span>
+                                  <span className="text-[11px] sm:text-[12px] font-semibold text-[#3b82f6]">Add {s.label.toLowerCase()}</span>
+                                </button>
+                              )}
                             </div>
-                          )}
-                        </div>
-                        <input id={`vqp-photo-${s.key}`} type="file" accept="image/*" disabled={isSubmitting} onChange={onPickPhoto(s.key)} className="hidden" />
-                        <span className="font-semibold text-[#0f1729] text-[13px]">{s.label}</span>
-                      </div>
-                    );
-                  })}
-                </div>
+                            <span className="font-semibold text-[#0f1729] text-[13px]">{s.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => openWizard(null, "camera")}
+                        disabled={isSubmitting}
+                        className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 h-11 rounded-[12px] text-white text-[13px] font-semibold bg-[linear-gradient(135deg,#3b82f6,#2a6fdb)] hover:opacity-95 transition-opacity cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <CameraIcon size={16} /> Retake all
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openWizard(null, "upload")}
+                        disabled={isSubmitting}
+                        className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 h-11 rounded-[12px] text-[#3b82f6] text-[13px] font-semibold bg-white border-[1.5px] border-[#cfe0fb] hover:bg-[#eef5ff] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Upload size={16} /> Re-upload
+                      </button>
+                    </div>
+                  </>
+                )}
 
                 <div className="flex items-stretch gap-3 mt-1">
                   <button
@@ -600,50 +643,6 @@ export default function EmployeeRegister() {
                   </div>
                 </div>
 
-                {captureSlot && (
-                  <div className="fixed inset-0 z-[100] bg-black/85 flex items-end sm:items-center justify-center sm:p-4">
-                    <div className="bg-white w-full sm:max-w-md sm:w-full rounded-t-[20px] sm:rounded-[16px] p-4 sm:p-4 pb-[max(16px,env(safe-area-inset-bottom))] shadow-2xl max-h-[92vh] overflow-y-auto">
-                      <div className="flex justify-between items-center mb-3">
-                        <h3 className="text-[14.5px] sm:text-[15px] font-semibold text-[#0f1729] truncate pr-2">
-                          Take Photo — {PHOTO_SLOTS.find((s) => s.key === captureSlot)?.label}
-                        </h3>
-                        <button
-                          type="button"
-                          onClick={() => setCaptureSlot(null)}
-                          className="p-2 -mr-2 hover:bg-[#f2f8ff] rounded-full cursor-pointer shrink-0"
-                          aria-label="Close camera"
-                        >
-                          <X size={20} className="text-[#64748b]" />
-                        </button>
-                      </div>
-                      {/* Portrait framing suits a face better than 16:9 landscape, and matches
-                          how a phone's front camera is actually held during capture. */}
-                      <div className="relative rounded-[10px] overflow-hidden bg-black aspect-[3/4] sm:aspect-video mb-3 border-4 border-[#eceff5]">
-                        <Webcam
-                          audio={false}
-                          ref={webcamRef}
-                          screenshotFormat="image/jpeg"
-                          screenshotQuality={0.95}
-                          onUserMediaError={showCameraAccessError}
-                          // Without an explicit resolution the browser picks its own default,
-                          // which on some webcams is low enough (e.g. 320x240) that the face
-                          // recognition service can't detect a face and registration fails
-                          // with "Authorized user creation failed". Ask for a real resolution.
-                          videoConstraints={{ width: { ideal: 1280 }, height: { ideal: 960 }, facingMode: "user" }}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[42%] aspect-[3/4] max-w-[180px] border-2 border-white/50 rounded-[40%] pointer-events-none" />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={capturePhoto}
-                        className="w-full h-12 rounded-[10px] font-['Space_Grotesk',sans-serif] font-semibold text-[14px] text-white bg-[#0f2744] cursor-pointer active:opacity-90"
-                      >
-                        Capture
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -703,6 +702,18 @@ export default function EmployeeRegister() {
           ))}
         </div>
       </div>
+
+      <FaceCaptureWizard
+        open={wizardOpen}
+        angles={WIZARD_ANGLES}
+        namePrefix={(form.firstName || "employee").replace(/\s+/g, "")}
+        initial={WIZARD_ANGLES.map((a) => photos[SLOT_FOR_ANGLE[a]]?.file || null)}
+        startAngle={wizardStartAngle}
+        initialMode={wizardMode}
+        theme="light"
+        onClose={() => setWizardOpen(false)}
+        onComplete={onWizardComplete}
+      />
     </div>
   );
 }

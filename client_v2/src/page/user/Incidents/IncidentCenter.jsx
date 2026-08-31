@@ -941,7 +941,7 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
             style={{
               position: 'absolute',
               top: 16,
-              left: 16,
+              right: 16,
               zIndex: 35,
               display: 'flex',
               alignItems: 'center',

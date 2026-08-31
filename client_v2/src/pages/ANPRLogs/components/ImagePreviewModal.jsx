@@ -127,8 +127,8 @@ const ImagePreviewModal = ({
     <div
       className={
         fullscreen
-          ? 'absolute top-4 left-4 z-40 flex items-center gap-1 rounded-lg border border-white/20 bg-white/95 p-1 shadow-lg'
-          : 'absolute top-5 left-5 z-20 flex items-center gap-1 rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)]/95 p-1 shadow-lg'
+          ? 'absolute top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 rounded-lg border border-white/20 bg-white/95 p-1 shadow-lg'
+          : 'absolute top-5 right-5 z-20 flex items-center gap-1 rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)]/95 p-1 shadow-lg'
       }
     >
       <button

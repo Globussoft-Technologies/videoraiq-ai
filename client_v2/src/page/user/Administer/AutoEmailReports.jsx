@@ -438,7 +438,10 @@ function imageLink(value) {
 
 function previewCell(row, key, index) {
   if (key === 'index') return index + 1;
-  const value = row?.[key];
+  // The flat preview shows one row per employee-day (no session sub-rows), so
+  // Duration here is the day's total worked time, which equals Total Working
+  // Hrs (Day). (`row.duration` alone is only the first session's slice.)
+  const value = key === 'duration' ? row?.workingHoursDay : row?.[key];
   if (key === 'viewImage') return imageLink(value);
   if (value === null || value === undefined || value === '' || value === '-') return '-';
   return String(value);
@@ -461,7 +464,7 @@ function PreviewModal({ preview, onClose }) {
   const totals = preview?.totals;
   return (
     <div role="dialog" aria-modal="true" style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(2,6,23,.68)' }}>
-      <div style={{ width: 'min(100%, 780px)', maxHeight: 'min(820px, calc(100vh - 32px))', display: 'flex', flexDirection: 'column', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ width: 'min(100%, 1200px)', maxHeight: 'min(820px, calc(100vh - 32px))', display: 'flex', flexDirection: 'column', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 16px', borderBottom: '1px solid var(--bd)' }}>
           <div>
             <div style={{ fontFamily: 'var(--disp)', fontSize: 16, fontWeight: 700, color: 'var(--tx)' }}>{preview?.label || 'Preview'}</div>
@@ -473,7 +476,7 @@ function PreviewModal({ preview, onClose }) {
           {!rows.length ? (
             <div style={{ padding: 34, textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5 }}>No preview rows returned.</div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', color: 'var(--tx)', fontSize: 12 }}>
+            <table style={{ minWidth: 'max-content', borderCollapse: 'collapse', color: 'var(--tx)', fontSize: 12 }}>
               <thead>
                 <tr>{PREVIEW_COLUMNS.map((column) => <th key={column.key} style={tableHeadStyle}>{column.label}</th>)}</tr>
               </thead>
@@ -840,6 +843,9 @@ const tableHeadStyle = {
   color: 'var(--tx2)',
   textAlign: 'left',
   fontWeight: 700,
+  whiteSpace: 'nowrap',
+  position: 'sticky',
+  top: 0,
 };
 
 const tableCellStyle = {

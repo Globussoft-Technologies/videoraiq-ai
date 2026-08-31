@@ -9,17 +9,14 @@ import {
   ChevronUp,
   Check,
   ScanFace,
+  UserRound,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { createAuthorizedUser, isEmailExist } from './Api';
 import SelectField from './SelectField';
 import FaceCaptureModal from './FaceCaptureModal';
+import FaceCaptureWizard from './FaceCaptureWizard';
 import { COMPACT_TOAST } from './toastOptions';
-import poseLeft from '@/assets/left img.png';
-import poseFront from '@/assets/front img.png';
-import poseRight from '@/assets/right image.png';
-
-const POSE_IMG = { Left: poseLeft, Front: poseFront, Right: poseRight };
 
 const orgId = import.meta.env.VITE_ORGANISATION_ID;
 const requiredImageCount = orgId === 'dubai' ? 1 : 3;
@@ -142,20 +139,29 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     setImageAt(index, file);
   };
 
-  // Per-card "Take photo" — open the camera wizard limited to that one angle.
-  const openCameraFor = (angle) => {
+  // Multi-angle orgs run the guided 3-step wizard; dubai keeps the single-Front modal.
+  const useWizard = orgId !== 'dubai';
+
+  // Open the guided capture flow on the clicked angle, starting on the chosen
+  // tab ('camera' | 'upload').
+  const openCameraFor = (angle, mode = 'camera') => {
     setActiveAngle(angle);
-    setEnrollMode('camera');
+    setEnrollMode(mode);
     setIsCameraOpen(true);
   };
 
-  // The wizard returns one File (or '' ) per angle it was given, index-aligned.
+  // The wizard/modal returns one entry per angle it was given, index-aligned to
+  // its `angles` prop (which we pass as `captureAngles` for the wizard).
   const handleEnrollComplete = (files) => {
-    const wizardAngles = activeAngle ? [activeAngle] : captureAngles;
+    // Wizard always returns a full set aligned to `captureAngles`; the single-angle
+    // modal returns one entry for `activeAngle`.
+    const wizardAngles = !useWizard && activeAngle ? [activeAngle] : captureAngles;
     wizardAngles.forEach((angle, i) => {
       const idx = captureAngles.indexOf(angle);
       if (idx === -1) return;
-      if (files[i] instanceof File) setImageAt(idx, files[i]);
+      const entry = files[i];
+      if (entry instanceof File) setImageAt(idx, entry);
+      // string entry = existing image kept as-is; null = leave current slot alone
     });
     setIsCameraOpen(false);
     setActiveAngle(null);
@@ -386,63 +392,145 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {captureAngles.map((angle, index) => (
-              <div key={angle} className="flex flex-col items-center gap-3">
-                <div className="w-full aspect-[4/5] max-h-[240px] bg-[var(--bg3)] rounded-2xl border border-[var(--bd)] flex items-center justify-center p-3 relative">
-                  {imagePaths[index] ? (
-                    <>
-                      <img
-                        src={imageUrls[index]}
-                        alt={angle}
-                        className="w-full h-full object-contain rounded-xl"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(index)}
-                        className="absolute top-2 right-2 bg-[var(--crit)] text-white p-1.5 rounded-full cursor-pointer shadow-sm hover:opacity-90"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </>
-                  ) : (
-                    <div className="flex flex-col items-center gap-3 w-full">
-                      <label className="w-full cursor-pointer">
-                        <input
-                          type="file"
-                          accept="image/jpeg, image/png"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            if (!['image/jpeg', 'image/png'].includes(file.type)) {
-                              toast.error('Please upload only JPG or PNG images.', COMPACT_TOAST);
-                              e.target.value = '';
-                              return;
-                            }
-                            uploadFile(file, index);
-                          }}
-                        />
-                        <div className="flex items-center justify-center gap-2 w-full py-3 px-3 bg-[var(--blue)]/10 text-[var(--blue)] rounded-lg text-sm font-medium hover:bg-[var(--blue)]/20 transition-colors">
-                          <Upload className="w-4 h-4" />
-                          Upload
-                        </div>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => openCameraFor(angle)}
-                        className="flex items-center justify-center gap-2 w-full py-3 bg-[var(--bg2)] text-[var(--tx2)] rounded-lg text-sm font-medium hover:bg-[var(--bd2)] transition-colors cursor-pointer"
-                      >
-                        <Camera className="w-4 h-4" />
-                        Take photo
-                      </button>
-                    </div>
-                  )}
+          {useWizard && uploadedCount === 0 ? (
+            <div className="w-full rounded-2xl border-2 border-dashed border-[var(--bd)] bg-[var(--bg2)] px-6 sm:px-8 py-8 sm:py-10 flex flex-col lg:flex-row items-center gap-7 lg:gap-12">
+              {/* left: ghosted avatar in a scan frame */}
+              <span className="relative flex items-center justify-center w-28 h-28 shrink-0">
+                <span className="absolute inset-0 rounded-full bg-[var(--blue)]/8" />
+                <span className="absolute inset-3 rounded-full bg-gradient-to-b from-[var(--blue)]/22 to-[var(--violet)]/18 flex items-end justify-center overflow-hidden">
+                  <UserRound className="w-16 h-16 text-[var(--blue)]/55 translate-y-2" strokeWidth={1.5} />
+                </span>
+                {['-top-1 -left-1 border-t-2 border-l-2 rounded-tl-lg',
+                  '-top-1 -right-1 border-t-2 border-r-2 rounded-tr-lg',
+                  '-bottom-1 -left-1 border-b-2 border-l-2 rounded-bl-lg',
+                  '-bottom-1 -right-1 border-b-2 border-r-2 rounded-br-lg'].map((c) => (
+                  <span key={c} className={`absolute w-5 h-5 border-[var(--blue)] ${c}`} />
+                ))}
+                <span className="absolute -bottom-1.5 -right-1.5 flex items-center justify-center w-7 h-7 rounded-full text-white shadow-md" style={{ background: GRADIENT }}>
+                  <Check className="w-4 h-4" strokeWidth={3} />
+                </span>
+              </span>
+
+              {/* middle: copy + actions */}
+              <div className="flex flex-col items-center lg:items-start gap-2 text-center lg:text-left flex-1 min-w-0">
+                <span className="text-[17px] font-semibold text-[var(--tx)] leading-tight">Start guided face capture</span>
+                <span className="text-xs text-[var(--tx3)] max-w-sm leading-relaxed">
+                  Add front, left and right views in one guided flow — use your camera or upload photos.
+                </span>
+                <div className="mt-2.5 flex flex-wrap justify-center lg:justify-start gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => openCameraFor(captureAngles[0], 'camera')}
+                    className="inline-flex items-center gap-2 h-10 px-5 rounded-xl text-white text-sm font-semibold hover:opacity-95 transition-opacity cursor-pointer"
+                    style={{ background: GRADIENT }}
+                  >
+                    <Camera className="w-4 h-4" /> Take Photos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openCameraFor(captureAngles[0], 'upload')}
+                    className="inline-flex items-center gap-2 h-10 px-5 rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx2)] text-sm font-semibold hover:bg-[var(--bg3)] transition-colors cursor-pointer"
+                  >
+                    <Upload className="w-4 h-4" /> Upload Photos
+                  </button>
                 </div>
-                <span className="font-medium text-[var(--tx)] text-sm">{angle}</span>
               </div>
-            ))}
+
+              {/* right: Front / Left / Right icon steps */}
+              <div className="flex items-start gap-2 lg:gap-3 shrink-0">
+                {[
+                  { label: 'Front View', hint: 'Capture full face' },
+                  { label: 'Left View', hint: 'Turn your face left' },
+                  { label: 'Right View', hint: 'Turn your face right' },
+                ].map((s, i) => (
+                  <div key={s.label} className="flex items-start">
+                    <div className="flex flex-col items-center gap-2 w-[96px]">
+                      <span className="flex items-center justify-center w-12 h-12 rounded-full border-2 border-[var(--blue)] bg-[var(--blue)]/12 text-[var(--blue)] shadow-[0_0_0_4px_color-mix(in_srgb,var(--blue)_16%,transparent)]">
+                        <UserRound className="w-5 h-5" strokeWidth={1.75} />
+                      </span>
+                      <span className="text-[12px] font-semibold text-[var(--tx)]">{s.label}</span>
+                      <span className="text-[10px] text-[var(--tx3)] text-center leading-tight">{s.hint}</span>
+                    </div>
+                    {i < 2 && <span className="mt-6 w-7 border-t border-dashed border-[var(--blue)]/50" />}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {captureAngles.map((angle, index) => {
+              const filled = !!imagePaths[index];
+              return (
+                <div
+                  key={angle}
+                  className={`relative flex flex-col rounded-2xl border overflow-hidden bg-[var(--bg2)] transition-colors ${
+                    filled ? 'border-[var(--ok)]/50' : 'border-[var(--bd)]'
+                  }`}
+                >
+                  {/* preview area */}
+                  <div className="relative aspect-[4/3] w-full bg-[var(--bg3)] overflow-hidden">
+                    {filled ? (
+                      <>
+                        <img src={imageUrls[index]} alt={angle} className="w-full h-full object-cover object-[center_25%]" />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          className="absolute top-2 right-2 bg-[var(--crit)] text-white p-1.5 rounded-full cursor-pointer shadow-sm hover:opacity-90"
+                          aria-label={`Remove ${angle} photo`}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center text-[var(--tx3)]">
+                        <ScanFace className="w-8 h-8" />
+                      </div>
+                    )}
+                    {/* persistent angle label */}
+                    <span
+                      className={`absolute top-2 left-2 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold backdrop-blur-sm ${
+                        filled ? 'bg-[var(--ok)] text-white' : 'bg-black/45 text-white'
+                      }`}
+                    >
+                      {filled && <Check className="w-3 h-3" strokeWidth={3} />}
+                      {angle} view
+                    </span>
+                  </div>
+
+                  {/* action bar */}
+                  <div className="flex items-center gap-2 p-2.5 border-t border-[var(--bd)]">
+                    <button
+                      type="button"
+                      onClick={() => openCameraFor(angle)}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 h-9 rounded-lg bg-[var(--blue)] text-white text-[13px] font-medium hover:opacity-95 transition-opacity cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5" /> {filled ? 'Retake' : 'Take photo'}
+                    </button>
+                    <label className="flex-1 cursor-pointer inline-flex items-center justify-center gap-1.5 h-9 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] text-[13px] font-medium hover:bg-[var(--bg3)] transition-colors">
+                      <input
+                        type="file"
+                        accept="image/jpeg, image/png"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (!['image/jpeg', 'image/png'].includes(file.type)) {
+                            toast.error('Please upload only JPG or PNG images.', COMPACT_TOAST);
+                            e.target.value = '';
+                            return;
+                          }
+                          uploadFile(file, index);
+                          e.target.value = '';
+                        }}
+                      />
+                      <Upload className="w-3.5 h-3.5" /> Upload
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
           </div>
+          )}
 
           <button
             type="button"
@@ -457,19 +545,35 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
         </fieldset>
       ))}
 
-      <FaceCaptureModal
-        open={isCameraOpen}
-        angles={activeAngle ? [activeAngle] : captureAngles}
-        namePrefix={(firstName || 'user').replace(/\s+/g, '')}
-        initial={activeAngle ? [imagePaths[captureAngles.indexOf(activeAngle)]] : imagePaths}
-        initialMode={enrollMode}
-        allowUpload={!activeAngle}
-        onClose={() => {
-          setIsCameraOpen(false);
-          setActiveAngle(null);
-        }}
-        onComplete={handleEnrollComplete}
-      />
+      {useWizard ? (
+        <FaceCaptureWizard
+          open={isCameraOpen}
+          angles={captureAngles}
+          namePrefix={(firstName || 'user').replace(/\s+/g, '')}
+          initial={captureAngles.map((_, i) => imagePaths[i] || null)}
+          startAngle={activeAngle}
+          initialMode={enrollMode || 'camera'}
+          onClose={() => {
+            setIsCameraOpen(false);
+            setActiveAngle(null);
+          }}
+          onComplete={handleEnrollComplete}
+        />
+      ) : (
+        <FaceCaptureModal
+          open={isCameraOpen}
+          angles={activeAngle ? [activeAngle] : captureAngles}
+          namePrefix={(firstName || 'user').replace(/\s+/g, '')}
+          initial={activeAngle ? [imagePaths[captureAngles.indexOf(activeAngle)]] : imagePaths}
+          initialMode={enrollMode}
+          allowUpload={!activeAngle}
+          onClose={() => {
+            setIsCameraOpen(false);
+            setActiveAngle(null);
+          }}
+          onComplete={handleEnrollComplete}
+        />
+      )}
     </div>
   );
 };

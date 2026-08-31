@@ -5,6 +5,7 @@ import { ArrowLeft, Loader } from 'lucide-react';
 import { toast } from 'sonner';
 import { COMPACT_TOAST } from './toastOptions';
 import FaceCaptureModal from './FaceCaptureModal';
+import FaceCaptureWizard from './FaceCaptureWizard';
 import {
   Dialog,
   DialogContent,
@@ -58,7 +59,9 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
   const [uploadedImageUrls, setUploadedImageUrls] = useState(['', '', '']);
   const [originalImages, setOriginalImages] = useState(['', '', '']);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [activeCaptureAngle, setActiveCaptureAngle] = useState(null);
+  const [captureMode, setCaptureMode] = useState('camera'); // 'camera' | 'upload'
   const [nameForPrefix, setNameForPrefix] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Synchronous mirror of isCameraOpen — Radix fires onOpenChange before the
@@ -134,6 +137,22 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
     closeCamera();
   };
 
+  const closeWizard = () => {
+    cameraOpenRef.current = false;
+    setIsWizardOpen(false);
+    setOpen(true);
+  };
+
+  // Wizard returns Files ordered by ['Front', 'Right', 'Left'] — the same order
+  // as uploadedImagePaths (see angleIndexMap). Route each non-null File in.
+  const handleWizardBulkComplete = (files) => {
+    (Array.isArray(files) ? files : []).forEach((file, index) => {
+      if (file instanceof File) uploadFile(file, '', index);
+      // string entry = an already-stored image left untouched
+    });
+    closeWizard();
+  };
+
   const handleRemoveImage = (index) => {
     setUploadedImagePaths((prev) => {
       const next = [...prev];
@@ -148,11 +167,18 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
     toast.success('Image removed successfully', COMPACT_TOAST);
   };
 
-  const handleOpenCamera = (angle, firstName = '') => {
+  const handleOpenCamera = (angle, firstName = '', mode = 'camera') => {
     cameraOpenRef.current = true;
-    setActiveCaptureAngle(angle);
     setNameForPrefix(firstName.trim());
-    setIsCameraOpen(true);
+    setCaptureMode(mode === 'upload' ? 'upload' : 'camera');
+    // dubai captures a single Front photo; every other org runs the guided
+    // three-step wizard (Front → Left → Right) regardless of which card was clicked.
+    setActiveCaptureAngle(angle);
+    if (orgId === 'dubai') {
+      setIsCameraOpen(true);
+    } else {
+      setIsWizardOpen(true);
+    }
     setOpen(false); // hide the form dialog so its focus-trap doesn't fight the wizard
   };
 
@@ -429,6 +455,18 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
         allowUpload={false}
         onClose={closeCamera}
         onComplete={handleWizardComplete}
+      />
+
+      <FaceCaptureWizard
+        open={isWizardOpen}
+        angles={['Front', 'Right', 'Left']}
+        namePrefix={(nameForPrefix || 'employee').replace(/\s+/g, '')}
+        initial={[0, 1, 2].map((i) => uploadedImagePaths[i] || null)}
+        resolveUrl={(p) => `${import.meta.env.VITE_BACKEND}/uploads${p}`}
+        startAngle={activeCaptureAngle}
+        initialMode={captureMode}
+        onClose={closeWizard}
+        onComplete={handleWizardBulkComplete}
       />
     </Dialog>
   );

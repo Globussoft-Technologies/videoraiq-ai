@@ -1,6 +1,17 @@
 import React from 'react';
 import moment from 'moment-timezone';
-import { Image, Pencil, UserPlus, UserCheck, UserMinus } from 'lucide-react';
+import {
+  Image,
+  Pencil,
+  UserPlus,
+  UserCheck,
+  UserMinus,
+  CarFront,
+  ShieldAlert,
+  Server,
+  Video,
+  Clock,
+} from 'lucide-react';
 import { styles } from './anprState';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 import { taggedUserName, hasReadablePlate } from '@/helpers/vehicleTagging';
@@ -334,6 +345,18 @@ export const buildColumns = ({
  * full-size image preview modal (ANPR's existing "big mode").
  * `ctx` = { onPreview, onEdit, onTagUser, onUntagUser, onViewUser }.
  */
+const CardRow = ({ icon: Icon, label, children }) => (
+  <div className="flex items-center gap-2 text-xs min-w-0">
+    <Icon className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+    <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
+      {label}
+    </span>
+    <span className="text-[var(--tx2)] font-medium text-[11.5px] truncate flex-1 text-right min-w-0">
+      {children}
+    </span>
+  </div>
+);
+
 export const renderANPRCard = (row, { onPreview, onEdit, onTagUser, onUntagUser, onViewUser }) => (
   <div className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[13px] overflow-hidden hover:border-[var(--bd2)] transition-colors h-full w-full min-w-0">
     {/* Snapshot fills the top of the card */}
@@ -347,7 +370,7 @@ export const renderANPRCard = (row, { onPreview, onEdit, onTagUser, onUntagUser,
             e.stopPropagation();
             onEdit(row);
           }}
-          className="absolute top-2 left-2 z-30 w-8 h-8 flex items-center justify-center rounded-lg bg-[rgba(6,8,13,.72)] text-white hover:bg-[rgba(6,8,13,.9)] cursor-pointer shadow-sm"
+          className="absolute top-2 right-2 z-30 w-8 h-8 flex items-center justify-center rounded-lg bg-[rgba(6,8,13,.72)] text-white hover:bg-[rgba(6,8,13,.9)] cursor-pointer shadow-sm"
           title="Edit incident"
           aria-label="Edit incident"
         >
@@ -367,9 +390,9 @@ export const renderANPRCard = (row, { onPreview, onEdit, onTagUser, onUntagUser,
         <Image className="w-10 h-10 text-[var(--tx3)]" />
       )}
 
-      {/* Severity badge top-right */}
+      {/* Severity badge top-left */}
       <div
-        className="absolute top-2 right-2 z-20 text-[9px] font-semibold px-[7px] py-[3px] rounded-[5px] capitalize text-white shadow-sm"
+        className="absolute top-2 left-2 z-20 text-[9px] font-semibold px-[7px] py-[3px] rounded-[5px] capitalize text-white shadow-sm"
         style={{ background: severityBg(row.severity) }}
       >
         {row.severity || '--'}
@@ -387,38 +410,42 @@ export const renderANPRCard = (row, { onPreview, onEdit, onTagUser, onUntagUser,
       </div>
     </div>
 
-    {/* Details */}
-    <div className="p-[11px]">
-      {/* Tagged user sits directly under the plate overlay — the plate and who
-          it belongs to are the two things this card exists to show. The
-          timestamp shares this row rather than the one below, which left it
-          stranded low against an empty gap beside the tag control. */}
-      <div className="flex items-center justify-between gap-2 min-h-[24px]">
-        <TaggedUserCell
-          row={row}
-          onTagUser={onTagUser}
-          onUntagUser={onUntagUser}
-          onViewUser={onViewUser}
-        />
-        <span
-          className="text-[11px] text-[var(--tx3)] whitespace-nowrap shrink-0"
-          style={{ fontFamily: 'var(--mono)' }}
-        >
-          {formatTime(row.timeOfIncident)}
+    {/* Details — aligned icon rows, matching the Car Logs card */}
+    <div className="p-[11px] space-y-[9px]">
+      <CardRow icon={CarFront} label="Vehicle No.">{formatPlate(row.vehicleNumber)}</CardRow>
+
+      {/* Tagged user gets its own row so its Tag / Untag control has room */}
+      <div className="flex items-center gap-2 text-xs min-w-0">
+        <UserCheck className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+        <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
+          Tagged User
+        </span>
+        <span className="flex-1 flex justify-end min-w-0">
+          <TaggedUserCell
+            row={row}
+            onTagUser={onTagUser}
+            onUntagUser={onUntagUser}
+            onViewUser={onViewUser}
+          />
         </span>
       </div>
-      <div className="flex items-center justify-between gap-2 mt-[5px]">
-        <span className="text-[12px] text-[var(--tx2)] truncate">{row.incidentName}</span>
+
+      <div className="flex items-center gap-2 text-xs min-w-0">
+        <ShieldAlert className="w-4 h-4 text-[var(--tx2)] shrink-0" />
+        <span className="font-semibold text-[var(--tx)] text-[9.5px] uppercase tracking-wider shrink-0">
+          Severity
+        </span>
+        <span
+          className="flex-1 text-right font-semibold text-[11.5px] truncate capitalize min-w-0"
+          style={{ color: severityBg(row.severity) }}
+        >
+          {row.severity || '--'}
+        </span>
       </div>
-      <div
-        className="text-[12.5px] font-semibold mt-[5px] capitalize truncate"
-        style={{ color: severityBg(row.severity) }}
-      >
-        {row.severity || '--'}
-      </div>
-      <div className="text-[10px] text-[var(--tx3)] mt-[2px] truncate">
-        {row.nvrName} · {row.channelName}
-      </div>
+
+      <CardRow icon={Server} label="NVR">{row.nvrName}</CardRow>
+      <CardRow icon={Video} label="Camera">{row.channelName}</CardRow>
+      <CardRow icon={Clock} label="Time">{formatTime(row.timeOfIncident)}</CardRow>
     </div>
   </div>
 );
