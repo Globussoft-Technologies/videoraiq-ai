@@ -1,4 +1,8 @@
-import { Clapperboard, useEffect, useMemo, useState } from 'react';
+// Clapperboard is used only by the commented-out Incident Preview panel and
+// was wrongly imported from 'react' (it is a lucide-react icon), which is why
+// that panel header showed no icon. Original line kept for the restore:
+// import { Clapperboard, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -1234,6 +1238,13 @@ export default function SystemSettings() {
           </div>
         </Panel>
 
+        {/* Incident Preview settings disabled along with the Preview button in
+            the Incident Center (see IncidentCard.jsx). The state and handlers
+            it uses are left in place above, so uncommenting this block is all
+            that is needed to bring it back — put Clapperboard back on the
+            lucide-react import when you do (it was wrongly imported from
+            'react', which is why this header showed no icon).
+
         <Panel>
           <PanelHeader
             icon={Clapperboard}
@@ -1294,14 +1305,17 @@ export default function SystemSettings() {
               Each preview plays{' '}
               <strong style={{ color: 'var(--tx)' }}>{previewTotal}s</strong> of recording.
             </div>
+        */}
             {/* The clip is built on demand from the recorder, so this is a real
                 request against stored footage — not a cached thumbnail. */}
+        {/* Incident Preview panel, continued — still disabled.
             <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 3 }}>
               Loaded when someone opens a preview, not with the incident list.
               Nothing plays for a moment the recorder has no footage for.
             </div>
           </div>
         </Panel>
+        */}
 
         <Panel>
           <PanelHeader
