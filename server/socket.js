@@ -287,6 +287,15 @@ export const getIO = () => {
 export const sendPayloadToUser = async (userId, channel, payload) => {
   try {
     const io = getIO();
+
+    // No userId (e.g. an unrecognized-person detection) -> there was never a
+    // socket to look up. Broadcast straight away — no warn, this is expected,
+    // not an anomaly.
+    if (!userId) {
+      io.emit(channel, payload);
+      return;
+    }
+
     const socketId = await redis.get(`socket:${userId}`);
 
     if (!socketId) {

@@ -16,8 +16,36 @@ if (!fs.existsSync(logDir)) {
 
 const { combine, timestamp, printf, errors } = format;
 
-const logFormat = printf(({ level, message, timestamp, stack }) => {
-  return `${timestamp} ${level}: ${stack || message}`;
+const SPLAT = Symbol.for("splat");
+
+// logger.error("prefix:", value) puts `value` here, not on `message` — winston
+// only merges it in automatically for %s-style tokens. Format it explicitly so
+// extra args (a plain object, a string) stop getting silently dropped from
+// every "prefix:" + value log call across the codebase. An Error arg is
+// skipped here — winston's own errors({stack:true}) already folds a lone
+// Error argument into message/stack, so re-adding it would print it twice.
+const formatExtra = (arg) => {
+  if (typeof arg === "object" && arg !== null) {
+    try {
+      return JSON.stringify(arg);
+    } catch {
+      return String(arg);
+    }
+  }
+  return String(arg);
+};
+
+const logFormat = printf((info) => {
+  const { level, message, timestamp, stack } = info;
+  const extraArgs = info[SPLAT];
+  const extra = Array.isArray(extraArgs) && extraArgs.length
+    ? extraArgs
+        .filter((arg) => !(arg instanceof Error))
+        .map(formatExtra)
+        .map((s) => " " + s)
+        .join("")
+    : "";
+  return `${timestamp} ${level}: ${stack || message}${extra}`;
 });
 
 const dailyRotateTransport = new DailyRotateFile({

@@ -1002,7 +1002,6 @@ return bypassUsers.find(
         for (const perm of permissions) {
           if (perm.permissionConfig && perm.permissionConfig.logs) {
             const logsConfig = perm.permissionConfig.logs;
-            console.log(logsConfig,'logsConfig');
             
 
             let isFlat = typeof logsConfig.view === 'boolean';

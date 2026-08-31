@@ -8,6 +8,9 @@ const options = { discriminatorKey: 'incidentType', collection: 'incidents' ,tim
 // Common Base Schema
 const incidentSchema = new Schema({
   timeOfIncident: { type: Date, required: true },
+  // Optional UTC timestamp to seek the NVR playback to, distinct from
+  // timeOfIncident (e.g. a few seconds earlier to show the lead-up).
+  playBackTime: { type: Date, default: null },
   Image:{type: String, default: null},
   videoLink: { type: String, default:null },
   description: String,
