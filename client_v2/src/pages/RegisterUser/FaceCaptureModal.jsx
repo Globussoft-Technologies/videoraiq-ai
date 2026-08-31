@@ -36,12 +36,12 @@ const ANGLE_GUIDE = {
   },
   Left: {
     title: 'Turn your face to the left',
-    text: 'Slowly rotate your head to your left until your left cheek faces the camera.',
+    text: 'Slowly rotate your head to your left until your right cheek faces the camera.',
     pose: 'left',
   },
   Right: {
     title: 'Turn your face to the right',
-    text: 'Slowly rotate your head to your right until your right cheek faces the camera.',
+    text: 'Slowly rotate your head to your right until your left cheek faces the camera.',
     pose: 'right',
   },
 };
@@ -392,37 +392,6 @@ const FaceCaptureModal = ({
           </button>
         </div>
 
-        {/* stepper — hidden for the single-shot identity check */}
-        {!verify && (
-        <div className="few-steps">
-          {order.map((a, i) => {
-            const has = !!shots[i];
-            const active = !review && i === stepIndex;
-            const done = has && !active;
-            return (
-              <div key={a} className="few-step">
-                <button
-                  type="button"
-                  onClick={() => !review && setStepIndex(i)}
-                  className={`few-step-dot ${active ? 'is-active' : ''} ${done ? 'is-done' : ''}`}
-                >
-                  {done ? <Check className="w-4 h-4" strokeWidth={3} /> : i + 1}
-                </button>
-                <div className="few-step-text">
-                  <span className="few-step-label-main">{a} view</span>
-                  <span
-                    className={`few-step-status ${done ? 'is-done' : ''} ${active ? 'is-active' : ''}`}
-                  >
-                    {done ? 'Completed' : active ? 'In progress' : `Step 0${i + 1}`}
-                  </span>
-                </div>
-                {i < order.length - 1 && <span className={`few-step-line ${done ? 'is-done' : ''}`} />}
-              </div>
-            );
-          })}
-        </div>
-        )}
-
         {review ? (
           <>
             <div className="few-review">
@@ -748,22 +717,7 @@ const FEW_STYLES = `
 .few-icon-btn:active{transform:scale(.94)}
 .few-icon-btn--close{margin-left:auto}
 
-.few-steps{display:flex;align-items:flex-start;gap:0;padding:16px 22px;flex-wrap:wrap}
-.few-step{display:flex;align-items:center;gap:10px;flex:1;min-width:180px}
-.few-step-dot{display:flex;align-items:center;justify-content:center;width:28px;height:28px;flex-shrink:0;border-radius:999px;
-  font-size:12px;font-weight:700;color:var(--tx3);background:var(--bg3);border:1px solid var(--bd);cursor:pointer;transition:.25s}
-.few-step-dot.is-active{color:#fff;background:var(--blue);border-color:var(--blue);
-  box-shadow:0 0 0 4px color-mix(in srgb,var(--blue) 22%,transparent);animation:few-pop .3s ease}
-.few-step-dot.is-done{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--blue),var(--violet))}
-.few-step-text{display:flex;flex-direction:column;min-width:0}
-.few-step-label-main{font-size:12px;font-weight:650;color:var(--tx);white-space:nowrap}
-.few-step-status{font-size:10px;font-weight:600;color:var(--tx3)}
-.few-step-status.is-done{color:var(--ok)}
-.few-step-status.is-active{color:var(--blue)}
-.few-step-line{flex:1;height:2px;min-width:16px;margin:0 10px;border-radius:2px;background:var(--bd)}
-.few-step-line.is-done{background:linear-gradient(90deg,var(--blue),var(--violet))}
-
-.few-body{display:grid;grid-template-columns:1.05fr .95fr;gap:20px;padding:6px 22px 8px}
+.few-body{display:grid;grid-template-columns:1.05fr .95fr;gap:20px;padding:16px 22px 8px}
 @media(max-width:720px){.few-body{grid-template-columns:1fr}}
 
 .few-stage{position:relative;aspect-ratio:1/1;border-radius:20px;overflow:hidden;background:#05070d;border:1px solid var(--bd);

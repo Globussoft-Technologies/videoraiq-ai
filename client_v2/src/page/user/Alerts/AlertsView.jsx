@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
-import { X } from 'lucide-react';
+import { X, Maximize2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { Panel, Badge } from '../../../components/primitives';
 import { AsyncBoundary, Loading } from '../../../components/States';
 import moment from 'moment';
@@ -136,6 +136,124 @@ function typeAccentFor(item, sevMeta) {
   if (code === 'UA' || title.includes('unauthoriz')) return 'var(--crit)';
   // default: use the severity accent if present
   return (sevMeta && (sevMeta.accent || sevMeta.color)) || 'var(--blue)';
+}
+
+const isCarModelDetection = (item) =>
+  item?.incidentType === 'carModelDetection' ||
+  /car\s*model/i.test(item?.incidentName || item?.displayName || item?.incidentType || '');
+
+function carModelDetailParts(item) {
+  const dv = (v) => {
+    const t = String(v ?? '').trim();
+    return t || '--';
+  };
+  return [
+    { label: 'Model Name', value: dv(item?.model_name || item?.modelName || item?.carModelName || item?.carModel) },
+    { label: 'Vehicle No', value: dv(item?.vehicleNumber || item?.plate || item?.numberPlate) },
+    { label: 'Company', value: dv(item?.company || item?.make || item?.carCompany) },
+    { label: 'Year', value: dv(item?.year || item?.modelYear || item?.carYear) },
+    { label: 'Color', value: dv(item?.color || item?.carColor) },
+    { label: 'NVR Name', value: dv(item?.nvrData?.nvrName) },
+  ];
+}
+
+// Fullscreen snapshot viewer with pan + wheel/pinch zoom.
+function ImageZoomModal({ url, caption, onClose }) {
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const dragRef = useRef(null);
+  const rootRef = useRef(null);
+
+  useEffect(() => {
+    const el = rootRef.current;
+    el?.requestFullscreen?.().catch(() => {});
+    return () => {
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    };
+  }, []);
+
+  const clampScale = (s) => Math.min(6, Math.max(1, s));
+  const zoomBy = (delta) => setScale((s) => {
+    const next = clampScale(s + delta);
+    if (next === 1) setOffset({ x: 0, y: 0 });
+    return next;
+  });
+  const reset = () => { setScale(1); setOffset({ x: 0, y: 0 }); };
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === '+' || e.key === '=') zoomBy(0.4);
+      if (e.key === '-') zoomBy(-0.4);
+      if (e.key === '0') reset();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const onWheel = (e) => {
+    e.preventDefault();
+    zoomBy(e.deltaY < 0 ? 0.3 : -0.3);
+  };
+  const onPointerDown = (e) => {
+    if (scale === 1) return;
+    dragRef.current = { x: e.clientX - offset.x, y: e.clientY - offset.y };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e) => {
+    if (!dragRef.current) return;
+    setOffset({ x: e.clientX - dragRef.current.x, y: e.clientY - dragRef.current.y });
+  };
+  const onPointerUp = () => { dragRef.current = null; };
+
+  const ctrlBtn = {
+    width: 34, height: 34, borderRadius: 8, border: '1px solid rgba(255,255,255,.2)',
+    background: 'rgba(7,10,18,.75)', color: '#fff', display: 'flex', alignItems: 'center',
+    justifyContent: 'center', cursor: 'pointer',
+  };
+
+  return (
+    <div
+      ref={rootRef}
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,.92)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        onWheel={onWheel}
+        style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <img
+          src={url}
+          alt=""
+          draggable={false}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onDoubleClick={() => (scale === 1 ? zoomBy(1) : reset())}
+          style={{
+            maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', userSelect: 'none',
+            transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+            transition: dragRef.current ? 'none' : 'transform .12s ease-out',
+            cursor: scale === 1 ? 'zoom-in' : (dragRef.current ? 'grabbing' : 'grab'),
+          }}
+        />
+        {caption && (
+          <div style={{ position: 'absolute', top: 14, left: 14, fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700, color: '#fff', background: 'rgba(7,10,18,.72)', border: '1px solid rgba(255,255,255,.16)', borderRadius: 6, padding: '5px 9px' }}>
+            {caption}
+          </div>
+        )}
+        <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={() => zoomBy(-0.4)} style={ctrlBtn} title="Zoom out"><ZoomOut size={16} /></button>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: '#fff', minWidth: 42, textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
+          <button onClick={() => zoomBy(0.4)} style={ctrlBtn} title="Zoom in"><ZoomIn size={16} /></button>
+          <button onClick={reset} style={ctrlBtn} title="Reset"><RotateCcw size={15} /></button>
+        </div>
+        <button onClick={onClose} style={{ ...ctrlBtn, position: 'absolute', top: 14, right: 14 }} title="Close (Esc)"><X size={16} /></button>
+      </div>
+    </div>
+  );
 }
 
 function incidentDescription(item) {
@@ -346,6 +464,7 @@ export default function AlertsView() {
   }, [initialAlertId, routedAlert]);
   const [busy, setBusy] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [imageOpen, setImageOpen] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
@@ -544,6 +663,8 @@ export default function AlertsView() {
   const activeCameraName = cameraNameOf(active) || active?.channelData?.name || '_';
   const activeLocationName = locationNameOf(active);
   const activeCameraLine = [activeCameraName, activeLocationName].filter(Boolean).join(' - ') || '_';
+  const activeIsCarModel = isCarModelDetection(active);
+  const activeCarModelParts = activeIsCarModel ? carModelDetailParts(active) : [];
 
   async function exportActiveClipImage() {
     if (!activeImageUrl) {
@@ -763,7 +884,7 @@ export default function AlertsView() {
             <>
               <div style={{ position: 'relative', aspectRatio: '16/9', background: '#0a0e15', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--bd)' }}>
                 {active.Image ? (
-                  <img src={mediaUrl(active.Image)} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img src={mediaUrl(active.Image)} alt="" onClick={() => setImageOpen(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} />
                 ) : (
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--tx3)', fontSize: 11.5 }}>No snapshot</div>
                 )}
@@ -773,6 +894,15 @@ export default function AlertsView() {
                 <span style={{ position: 'absolute', top: 10, right: 10, fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 800, color: activeSeverityMeta.color, background: 'rgba(7,10,18,.72)', border: `1px solid ${activeSeverityMeta.border}`, borderRadius: 5, padding: '4px 8px', letterSpacing: '.06em' }}>
                   {activeSeverityMeta.label === 'CRIT' ? 'CRITICAL' : activeSeverityMeta.label}
                 </span>
+                {active.Image && (
+                  <button
+                    onClick={() => setImageOpen(true)}
+                    title="Maximize & zoom"
+                    style={{ position: 'absolute', bottom: 10, right: 10, width: 30, height: 30, borderRadius: 7, border: '1px solid rgba(255,255,255,.2)', background: 'rgba(7,10,18,.72)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                  >
+                    <Maximize2 size={14} />
+                  </button>
+                )}
               </div>
               <div style={{ padding: '10px 0 0', display: 'flex', flexDirection: 'column', gap: 9, minWidth: 0 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
@@ -795,6 +925,16 @@ export default function AlertsView() {
                     </div>
                   </div>
                 </div>
+                {activeIsCarModel && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 1 }}>
+                    {activeCarModelParts.map(({ label, value }) => (
+                      <div key={label} style={{ minWidth: 0, padding: '7px 10px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
+                        <div style={{ fontSize: 9.5, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 3 }}>{label}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--tx)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 2 }}>
                   <div onClick={busy || activeResolved ? undefined : resolveActive} aria-disabled={busy || activeResolved} style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, color: activeResolved ? 'var(--tx3)' : '#fff', background: activeResolved ? 'var(--bg2)' : 'linear-gradient(135deg,var(--blue),var(--violet))', border: activeResolved ? '1px solid var(--bd)' : '1px solid transparent', borderRadius: 8, padding: '10px 10px', cursor: busy ? 'wait' : activeResolved ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}>
                     {busy ? '…' : activeResolved ? 'Resolved' : 'Resolve'}
@@ -816,6 +956,14 @@ export default function AlertsView() {
           )}
         </Panel>
       </div>
+
+      {imageOpen && activeImageUrl && (
+        <ImageZoomModal
+          url={activeImageUrl}
+          caption={activeCameraLine !== '_' ? activeCameraLine : activeCameraName}
+          onClose={() => setImageOpen(false)}
+        />
+      )}
 
       {reportOpen && active && (
         <ReportModal
