@@ -33,6 +33,7 @@ const EMPTY_STATUS_COUNTS = {
   absent: 0,
   checkedIn: 0,
   earlyLeave: 0,
+  noCheckout: 0,
   notCheckedIn: 0,
   checkinLogs: 0,
   checkoutLogs: 0,
@@ -59,9 +60,20 @@ const cameraNamesForAttendance = (item) => {
   return [...new Set(names.map((name) => String(name).trim()))].join(', ');
 };
 
+// The three ways an employee ends up inside the Absent tile, which are three
+// genuinely different situations: left before the half-day mark, never checked
+// out and waited past the grace window, or never appeared at all. They sum to
+// Absent, so the tile splits into exactly these tabs.
 const ABSENT_TABS = {
   EARLY_LEAVE: 'early_leave',
+  NO_CHECKOUT: 'no_checkout',
   NOT_CHECKED_IN: 'not_checked_in',
+};
+
+const ABSENT_TAB_LABELS = {
+  [ABSENT_TABS.EARLY_LEAVE]: 'Early Leave',
+  [ABSENT_TABS.NO_CHECKOUT]: 'No Checkout',
+  [ABSENT_TABS.NOT_CHECKED_IN]: 'Not Checked In',
 };
 
 const AttendanceLogs = () => {
@@ -89,8 +101,8 @@ const AttendanceLogs = () => {
   const [manualTrigger, setManualTrigger] = useState(0);
   const attendanceRequestRef = useRef(0);
   const [absentTab, setAbsentTab] = useState(() =>
-    navState.statusFilter === ABSENT_TABS.NOT_CHECKED_IN
-      ? ABSENT_TABS.NOT_CHECKED_IN
+    Object.values(ABSENT_TABS).includes(navState.statusFilter)
+      ? navState.statusFilter
       : ABSENT_TABS.EARLY_LEAVE
   );
   // Default to grid; a saved 'table' choice is still remembered.
@@ -141,14 +153,10 @@ const AttendanceLogs = () => {
   const { permissions, loading: permissionsLoading } = usePermissions();
   const navigate = useNavigate();
   const absentFlowActive =
-    statusFilter === 'absent' ||
-    statusFilter === ABSENT_TABS.EARLY_LEAVE ||
-    statusFilter === ABSENT_TABS.NOT_CHECKED_IN;
-  const effectiveStatusFilter = absentFlowActive
-    ? absentTab === ABSENT_TABS.NOT_CHECKED_IN
-      ? ABSENT_TABS.NOT_CHECKED_IN
-      : ABSENT_TABS.EARLY_LEAVE
-    : statusFilter;
+    statusFilter === 'absent' || Object.values(ABSENT_TABS).includes(statusFilter);
+  // Inside the Absent flow the selected tab is what actually filters, so the
+  // bare 'absent' arriving from a tile click resolves to whichever tab is open.
+  const effectiveStatusFilter = absentFlowActive ? absentTab : statusFilter;
 
   useEffect(() => {
     if (!absentFlowActive) setAbsentTab(ABSENT_TABS.EARLY_LEAVE);
@@ -441,36 +449,37 @@ const AttendanceLogs = () => {
 
   const hasActiveTileFilter = !!statusFilter;
 
+  const absentTabCounts = {
+    [ABSENT_TABS.EARLY_LEAVE]: statusCounts?.earlyLeave,
+    [ABSENT_TABS.NO_CHECKOUT]: statusCounts?.noCheckout,
+    [ABSENT_TABS.NOT_CHECKED_IN]: statusCounts?.notCheckedIn,
+  };
+
   const absentTabs = absentFlowActive ? (
     <div className="inline-flex items-center gap-[3px] rounded-[10px] border border-[var(--bd)] bg-[var(--bg2)] p-[3px]">
-      <button
-        type="button"
-        onClick={() => {
-          setAbsentTab(ABSENT_TABS.EARLY_LEAVE);
-          dispatch({ type: 'SET_STATUS_FILTER', value: ABSENT_TABS.EARLY_LEAVE });
-        }}
-        className={`h-9 rounded-[8px] px-3 text-xs font-semibold transition-colors ${
-          absentTab === ABSENT_TABS.EARLY_LEAVE
-            ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white shadow-sm'
-            : 'text-[var(--tx2)] hover:text-[var(--tx)]'
-        }`}
-      >
-        Early Leave
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          setAbsentTab(ABSENT_TABS.NOT_CHECKED_IN);
-          dispatch({ type: 'SET_STATUS_FILTER', value: ABSENT_TABS.NOT_CHECKED_IN });
-        }}
-        className={`h-9 rounded-[8px] px-3 text-xs font-semibold transition-colors ${
-          absentTab === ABSENT_TABS.NOT_CHECKED_IN
-            ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white shadow-sm'
-            : 'text-[var(--tx2)] hover:text-[var(--tx)]'
-        }`}
-      >
-        Not Checked In
-      </button>
+      {Object.values(ABSENT_TABS).map((tab) => {
+        const count = absentTabCounts[tab];
+        return (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => {
+              setAbsentTab(tab);
+              dispatch({ type: 'SET_STATUS_FILTER', value: tab });
+            }}
+            className={`h-9 rounded-[8px] px-3 text-xs font-semibold transition-colors ${
+              absentTab === tab
+                ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white shadow-sm'
+                : 'text-[var(--tx2)] hover:text-[var(--tx)]'
+            }`}
+          >
+            {ABSENT_TAB_LABELS[tab]}
+            {/* The three counts sum to the Absent tile above, which is the
+                whole point of splitting it - so each tab carries its own. */}
+            {count != null && <span className="ml-1.5 opacity-70">{count}</span>}
+          </button>
+        );
+      })}
     </div>
   ) : null;
 
@@ -501,6 +510,19 @@ const AttendanceLogs = () => {
         active: statusFilter === 'checkin',
         onClick: () => toggleStatusFilter('checkin'),
       },
+      // The day actually worked, as opposed to merely started: first check-in to
+      // last check-out spanning at least the org's full-day hours. The backend
+      // calls this status `present`, which reads as "is here" — the question
+      // Check In beside it answers — so it is labelled by what it measures.
+      // Same violet as the Attendance Analytics tile and its band in the Daily
+      // Activity chart.
+      {
+        label: 'Full Day',
+        value: statusCounts?.present || 0,
+        color: 'var(--violet)',
+        active: statusFilter === 'present',
+        onClick: () => toggleStatusFilter('present'),
+      },
       {
         label: 'Half Day',
         value: statusCounts?.halfDay || 0,
@@ -521,10 +543,26 @@ const AttendanceLogs = () => {
         active: absentFlowActive,
         onClick: toggleAbsentFlow,
       },
+      // The bucket that closes the sum. Full Day + Half Day + Absent only adds
+      // up to the roster once every open day has been graded, and a day stays
+      // open while a check-out could still arrive for it — so mid-afternoon the
+      // remainder sits here rather than being written off as absent. Without
+      // this tile that remainder is invisible and the row looks broken.
+      // Blue matches the Checked In status badge in the table below.
+      {
+        label: 'Still In',
+        value: statusCounts?.checkedIn || 0,
+        color: 'var(--blue)',
+        active: statusFilter === 'checked_in',
+        onClick: () => toggleStatusFilter('checked_in'),
+      },
+      // Cyan, not blue: blue now belongs to Still In, which has a status badge
+      // committing it to that colour. Checkout is a pseudo-status with no badge,
+      // so it is the one free to move.
       {
         label: 'Checkout',
         value: statusCounts?.checkoutLogs || 0,
-        color: 'var(--blue)',
+        color: 'var(--cyan)',
         active: statusFilter === 'checkout',
         onClick: () => toggleStatusFilter('checkout'),
       },

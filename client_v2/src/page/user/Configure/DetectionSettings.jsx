@@ -27,6 +27,11 @@ const CAM_TYPE_FILTERS = [
   ...CHECK_TYPES,
 ];
 
+// Applied Types popover shows its search box only once the type list is long
+// enough to scroll — matches the ~5 rows the popover fits at its 220px cap.
+const TYPE_SEARCH_MIN = 6;
+const TYPE_SEARCH_DEBOUNCE_MS = 300;
+
 function mergeCameraStreamFields(nextCamera, previousCamera) {
   if (!nextCamera || !previousCamera) return nextCamera;
   return {
@@ -76,7 +81,14 @@ function detectionTypeLabel(value, fallback) {
   return value?.displayName || value?.label || value?.name || value?.id?.displayName || value?.id?.name || fallback;
 }
 
-function appliedTypesFor(camera, typeLabels) {
+/**
+ * `search` is only for the camera-only fallback tail below — the catalogue
+ * itself arrives already filtered from GET /detection-settings/types?search=.
+ * Those tail entries come from camera.detections, which the types endpoint
+ * knows nothing about, so without this a narrowed catalogue would push every
+ * non-matching camera key into the tail and defeat the search.
+ */
+function appliedTypesFor(camera, typeLabels, search = '') {
   const entries = Array.isArray(typeLabels)
     ? typeLabels.map((type, index) => [
         type?.settingType || type?.detectionType || type?.key || type?.id || `type-${index}`,
@@ -85,10 +97,14 @@ function appliedTypesFor(camera, typeLabels) {
     : Object.entries(typeLabels || {});
 
   const knownKeys = new Set(entries.map(([key]) => key));
+  const normalizedSearch = search.trim().toLowerCase();
   // Keep camera-configured types visible even if the catalogue endpoint is
   // temporarily incomplete or the backend has a newer type than the catalogue.
   const cameraEntries = Object.entries(camera?.detections || {})
     .filter(([key]) => key && !knownKeys.has(key))
+    .filter(([key, value]) => !normalizedSearch
+      || key.toLowerCase().includes(normalizedSearch)
+      || String(detectionTypeLabel(value, key)).toLowerCase().includes(normalizedSearch))
     .map(([key, value], index) => [key, value, entries.length + index]);
 
   const masterList = [
@@ -601,10 +617,50 @@ function EngineFilterDropdown({ value, options, onChange }) {
  * body portal (see Popover.jsx) so it isn't clipped by the table's overflow:hidden. */
 function AppliedTypesPopover({ camera, typeLabels, onToggleRequest, disabled = false }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+
+  // Debounced so a typed word is one request, not one per keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), TYPE_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  // Server-side search: GET /detection-settings/types?search= does the matching.
+  // `enabled` keeps this inert until the user actually opens this row's popover
+  // and types — otherwise every mounted row would fire a request.
+  const searchApi = useApi(
+    () => getDetectionTypes({ search: debouncedQuery }),
+    [debouncedQuery],
+    { enabled: open && debouncedQuery.length > 0 },
+  );
+
+  // No query -> the full catalogue the parent already loaded, so opening the
+  // popover costs no request. With a query, the API response replaces it.
+  const searching = debouncedQuery.length > 0;
+  const activeTypeLabels = searching ? (searchApi.data ?? {}) : typeLabels;
 
   // Detection types API is the master list; merge each type with
   // camera.detections[key]?.enabled and show enabled items first.
-  const availableTypes = appliedTypesFor(camera, typeLabels);
+  const availableTypes = useMemo(
+    () => appliedTypesFor(camera, activeTypeLabels, debouncedQuery),
+    [camera, activeTypeLabels, debouncedQuery],
+  );
+
+  // Deliberately measured against the unsearched catalogue: keying this off the
+  // search results would yank the input away mid-typing as they narrow.
+  const showSearch = useMemo(
+    () => appliedTypesFor(camera, typeLabels).length >= TYPE_SEARCH_MIN,
+    [camera, typeLabels],
+  );
+
+  // Only true before the first response for a query — a refined search keeps the
+  // previous list on screen instead of flashing empty.
+  const awaitingResults = searching && searchApi.loading && !searchApi.data;
+  const searchFailed = searching && !searchApi.loading && !!searchApi.error;
+  // A failed search would otherwise fall through to appliedTypesFor(camera, {}),
+  // which renders the camera-only tail as if it were the whole catalogue.
+  const showList = !awaitingResults && !searchFailed;
 
   const handleToggle = (type) => {
     if (disabled) return;
@@ -613,7 +669,16 @@ function AppliedTypesPopover({ camera, typeLabels, onToggleRequest, disabled = f
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) {
+          setQuery('');
+          setDebouncedQuery('');
+        }
+      }}
+    >
       <PopoverTrigger asChild>
         <button
           disabled={disabled}
@@ -633,15 +698,63 @@ function AppliedTypesPopover({ camera, typeLabels, onToggleRequest, disabled = f
           <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.08em', color: 'var(--tx3)', padding: '2px 4px 8px' }}>
             DETECTION TYPES
           </div>
+          {showSearch && (
+            <div style={{ position: 'relative', marginBottom: 8 }}>
+              <Search size={13} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx3)', pointerEvents: 'none' }} />
+              <input
+                value={query}
+                onChange={event => setQuery(event.target.value)}
+                placeholder="Search detection types..."
+                aria-label="Search detection types"
+                style={{
+                  width: '100%',
+                  height: 32,
+                  padding: `0 ${searching && searchApi.loading ? 28 : 9}px 0 29px`,
+                  borderRadius: 8,
+                  border: '1px solid var(--bd)',
+                  background: 'var(--bg2)',
+                  color: 'var(--tx)',
+                  fontSize: 12,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              {searching && searchApi.loading && (
+                <Loader2
+                  size={13}
+                  className="animate-spin"
+                  style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--tx3)', pointerEvents: 'none' }}
+                />
+              )}
+            </div>
+          )}
           {/* Capped to ~5 visible rows (34px each incl. gap) so a long type list scrolls instead of pushing the popover off-screen. */}
           <div style={{ maxHeight: 'min(220px, calc(100vh - 180px))', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {availableTypes.length === 0 && (
+            {awaitingResults && (
+              <div style={{ padding: '10px 6px', color: 'var(--tx3)', fontSize: 12.5 }}>
+                Searching...
+              </div>
+            )}
+            {searchFailed && (
+              <div style={{ padding: '10px 6px', color: 'var(--crit)', fontSize: 12.5 }}>
+                Could not search detection types
+              </div>
+            )}
+            {/* The "no license / none configured" state is only meaningful for the
+                unsearched list; a search that matches nothing is not a licensing
+                problem, so it gets its own line below. */}
+            {!searching && availableTypes.length === 0 && (
               <NoDetectionLicense
                 compact
                 fallback="No detection types are configured for this camera."
               />
             )}
-            {availableTypes.map(type => {
+            {searching && showList && availableTypes.length === 0 && (
+              <div style={{ padding: '10px 6px', color: 'var(--tx3)', fontSize: 12.5 }}>
+                No detection types found
+              </div>
+            )}
+            {showList && availableTypes.map(type => {
               return (
                 <div key={type.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '7px 6px' }}>
                   <span style={{ fontSize: 12.5, color: 'var(--tx)' }}>{type.label}</span>
@@ -908,7 +1021,11 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
       enable,
     });
 
-    channelsApi.refetch();
+    // Silent: a non-silent refetch flips AsyncBoundary to its skeleton, which
+    // unmounts every CameraRow and collapses the page height, so the browser
+    // clamps the scroll position to the top. Awaited so the confirm dialog
+    // keeps its "Starting.../Stopping..." state until the fresh row is in.
+    await channelsApi.refetch({ silent: true });
 
     const message =
       response?.data?.body?.message ||

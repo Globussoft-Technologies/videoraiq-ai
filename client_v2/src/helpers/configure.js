@@ -48,6 +48,9 @@ export const getChannels = async ({ skip = 0, limit = 100, nvrId = '', search = 
   return { channels: data?.channels ?? [], total: data?.total ?? data?.totalCount ?? 0 };
 };
 
+/** `search` is forwarded to the API, which matches it against each type's
+ * display name and its settingType key. Omit it for the full licensed
+ * catalogue. */
 // GET /detection-settings/types is read by ~7 independent components (Detections,
 // DetectionZoneMarking, AlertRecipients, SystemControls, SystemSettings,
 // DetectionSettings, IncidentCenter), each via its own useApi — and every mount
@@ -64,11 +67,15 @@ export const getDetectionTypes = async ({ force = false } = {}) => {
   }
   if (!force && _detectionTypesInFlight) return _detectionTypesInFlight;
 
-  _detectionTypesInFlight = (async () => {
+  _detectionTypesInFlight = (async ({ search = '' } = {}) => {
     const token = getAccessToken();
-    const res = await axios.get(`${Api_url}/detection-settings/types`, {
-      headers: { 'x-access-token': token },
-    });
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    const queryString = params.toString();
+    const res = await axios.get(
+      `${Api_url}/detection-settings/types${queryString ? `?${queryString}` : ''}`,
+      { headers: { 'x-access-token': token } },
+    );
     const data = unwrap(res);
     const detectionTypes = data?.detectionTypes ?? data ?? {};
     _detectionTypesCache = { at: Date.now(), data: detectionTypes };

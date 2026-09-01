@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Search, Plus, Settings2, Eye, Pencil, Trash2, X, CheckCheck } from 'lucide-react';
+import { Search, Plus, Settings2, Eye, Pencil, Trash2, X, CheckCheck, RefreshCw, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import { useApi } from '../../../hooks/useApi';
@@ -8,7 +8,7 @@ import { useAuth } from '../../../context/AuthContext';
 import AccessDenied from '../../../components/AccessDenied';
 import PageLoader from '../../../components/PageLoader';
 import HScrollHint from '../../../components/HScrollHint';
-import { getRoles, createRole, renameRole, updateRolePermission, deleteRole, updatePermissionConfig } from '../../../api/administer';
+import { getRoles, createRole, renameRole, updateRolePermission, deleteRole, updatePermissionConfig, syncDefaultRoles } from '../../../api/administer';
 
 // Per-module permission matrix module keys, ported 1:1 from V1's
 // server/core/v1/permission/permissions.config.js. `logs` is a nested
@@ -656,6 +656,170 @@ function RoleRow({ role, perms, isOwnRole, onToggleField, onConfigure, onView, o
   );
 }
 
+// Keys the permission matrix actually renders. The server's permissionConfig is
+// a superset: `permission` is excluded by product decision (see above) and
+// `productivityLogs` is commented out of LOG_SUBMODULES, so both exist in the
+// backend template and get written by a sync but have no row to inspect here.
+const VISIBLE_MODULE_KEYS = new Set([...PERMISSION_MODULES, ...LOG_SUBMODULES]);
+
+/**
+ * Turn the sync diff's dotted keys ("logs.carLogs", "settings") into something
+ * checkable: name the modules that have a row in View Permissions, and count
+ * the rest rather than printing a raw camelCase key the user cannot find
+ * anywhere in the UI. The hidden ones are still synced — they are part of the
+ * server's canonical config — they just aren't presented as something to go
+ * and verify.
+ */
+function describeModules(keys) {
+  const leaves = keys.map(key => key.split('.').pop());
+  const named = leaves.filter(leaf => VISIBLE_MODULE_KEYS.has(leaf));
+  const hiddenCount = leaves.length - named.length;
+  const labels = named.map(leaf => MODULE_LABELS[leaf] || leaf).join(', ');
+  if (!hiddenCount) return labels;
+  // Separated rather than appended to the comma list, so the count does not
+  // read as one more module name.
+  const note = `+${hiddenCount} internal`;
+  return labels ? `${labels} · ${note}` : note;
+}
+
+// ── Sync default roles ──────────────────────────────────────────────────────
+/**
+ * The three default roles (admin/read/write) are written once, when the tenant
+ * is provisioned, from the permission templates on the server. A module that
+ * ships later — Car Logs being the case this was built for — never reaches
+ * them, and because default roles are locked in this UI and refused by the
+ * permissions API there is no way to tick the missing boxes by hand.
+ *
+ * This dialog previews the fix with a dry run before writing anything, so the
+ * user can see exactly which roles and modules a sync would touch.
+ */
+function SyncDefaultsModal({ onClose, onSynced }) {
+  const previewApi = useApi(() => syncDefaultRoles({ dryRun: true }), []);
+  const [syncing, setSyncing] = useState(false);
+  const preview = previewApi.data;
+
+  const handleConfirm = async () => {
+    setSyncing(true);
+    try {
+      const applied = await syncDefaultRoles();
+      toast.success(
+        applied.rolesTouched
+          ? `Synced ${applied.rolesTouched} default role${applied.rolesTouched === 1 ? '' : 's'}.`
+          : 'Default roles were already up to date.'
+      );
+      onSynced();
+      onClose();
+    } catch (err) {
+      toast.error(err?.message || 'Unable to sync default roles.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const upToDate = preview && preview.rolesTouched === 0;
+
+  return (
+    <div onClick={syncing ? undefined : onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 14, padding: 24,
+        width: 460, maxWidth: 'calc(100vw - 32px)', boxShadow: '0 8px 40px rgba(0,0,0,.5)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 14 }}>Sync Default Roles</span>
+          <button onClick={onClose} disabled={syncing} style={{ background: 'none', border: 'none', cursor: syncing ? 'default' : 'pointer', color: 'var(--tx3)', padding: 4 }}>
+            <X size={14} />
+          </button>
+        </div>
+
+        <div style={{ fontSize: 13, color: 'var(--tx2)', lineHeight: 1.5, marginBottom: 14 }}>
+          Re-applies the standard permission set to <strong style={{ color: 'var(--tx)' }}>admin</strong>,{' '}
+          <strong style={{ color: 'var(--tx)' }}>read</strong> and <strong style={{ color: 'var(--tx)' }}>write</strong> —
+          admin gets everything, read gets view only, write gets everything except delete.
+          Use this after a new module ships so the default roles pick it up.
+          Custom roles are not touched.
+        </div>
+
+        <AsyncBoundary
+          loading={previewApi.loading}
+          error={previewApi.error}
+          onRetry={previewApi.refetch}
+          minH={90}
+        >
+          {() => (
+            <div style={{
+              border: '1px solid var(--bd)', borderRadius: 10, background: 'var(--bg2)',
+              padding: '4px 0', marginBottom: 18, maxHeight: 220, overflowY: 'auto',
+            }}>
+              {upToDate ? (
+                <div style={{ padding: '14px 14px', fontSize: 12.5, color: 'var(--tx3)' }}>
+                  All three default roles already match the standard permission set — syncing will
+                  not change anything.
+                </div>
+              ) : preview?.roles?.map(role => {
+                const count = role.added.length + role.changed.length;
+                const summary = role.roleCreated
+                  ? 'will be created'
+                  : count === 0 && !role.flagsUpdated
+                    ? 'up to date'
+                    : [
+                        role.added.length ? `${role.added.length} missing` : '',
+                        role.changed.length ? `${role.changed.length} to correct` : '',
+                        role.flagsUpdated ? 'row flags' : '',
+                      ].filter(Boolean).join(', ');
+                return (
+                  <div key={role.roleName} style={{
+                    display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12,
+                    padding: '9px 14px',
+                  }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)' }}>{role.roleName}</div>
+                      {/* Name the modules rather than showing a bare count, so
+                          the user can open View Permissions afterwards and check
+                          the sync did what it said. */}
+                      {!!count && (
+                        <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2, wordBreak: 'break-word' }}>
+                          {describeModules([...role.added, ...role.changed])}
+                        </div>
+                      )}
+                    </div>
+                    <span style={{
+                      flexShrink: 0, fontSize: 11, fontWeight: 600,
+                      color: count || role.roleCreated || role.flagsUpdated ? 'var(--blue)' : 'var(--tx3)',
+                    }}>
+                      {summary}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </AsyncBoundary>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onClose} disabled={syncing} style={{ flex: 1, height: 36, borderRadius: 8, fontSize: 12.5, fontWeight: 600, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: syncing ? 'default' : 'pointer', color: 'var(--tx2)' }}>
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={syncing || previewApi.loading || !!previewApi.error}
+            style={{
+              flex: 1, height: 36, borderRadius: 8, fontSize: 12.5, fontWeight: 600, color: '#fff',
+              background: 'linear-gradient(135deg,var(--blue),var(--violet))', border: 'none',
+              cursor: syncing || previewApi.loading ? 'default' : 'pointer',
+              opacity: syncing || previewApi.loading || previewApi.error ? 0.6 : 1,
+            }}
+          >
+            {syncing ? 'Syncing…' : upToDate ? 'Sync Anyway' : 'Sync'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 export default function RolesPermission() {
@@ -682,12 +846,24 @@ export default function RolesPermission() {
   const [renameTarget, setRenameTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [configureTarget, setConfigureTarget] = useState(null); // { role, readOnly }
+  const [showSyncModal, setShowSyncModal] = useState(false);
 
   const rolesApi = useApi(
     () => getRoles({ skip: page * pageSize, limit: pageSize, searchQuery: search }),
     [page, pageSize, search],
     { enabled: !!canViewRole },
   );
+  // Read-only dry run of the default-role sync, used purely to decide whether
+  // to show the "new permissions available" banner. Gated on being able to act
+  // on it — a banner nobody can clear is just noise — which also keeps the
+  // request off users the endpoint would refuse anyway.
+  const pendingSyncApi = useApi(
+    () => syncDefaultRoles({ dryRun: true }),
+    [],
+    { enabled: !!(canViewRole && canEditRole && canConfigure) },
+  );
+  const pendingSync = pendingSyncApi.data?.rolesTouched ?? 0;
+
   const roles = rolesApi.data?.roles ?? [];
   const total = rolesApi.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / pageSize));
@@ -871,20 +1047,71 @@ export default function RolesPermission() {
           />
         </div>
 
-        {canCreateRole && (
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Rewrites the default roles' permission documents, so it needs the
+              same right the Configure matrix does, not just roles.edit. */}
+          {canEditRole && canConfigure && (
+            <button
+              onClick={() => setShowSyncModal(true)}
+              title="Re-apply the standard permission set to the admin, read and write roles"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                height: 40, padding: '0 14px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+                color: 'var(--tx2)', background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer',
+              }}
+            >
+              <RefreshCw size={15} /> Sync Default Roles
+            </button>
+          )}
+
+          {canCreateRole && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                height: 40, padding: '0 16px', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#fff',
+                background: 'linear-gradient(135deg,var(--blue),var(--violet))', border: 'none', cursor: 'pointer',
+                boxShadow: '0 4px 16px rgba(99,102,241,.28)',
+              }}
+            >
+              <Plus size={16} /> Add New Role
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Indicator that the shipped permission templates have moved ahead of
+          what the default roles actually hold. Driven by the same dry run the
+          Sync dialog previews, so the banner can never disagree with it.
+
+          Admins usually never see this: the login seeder reconciles them
+          automatically. It surfaces in the cases that path does not cover — a
+          module shipped while the session was already open, a sub-user who has
+          roles access but never triggers admin provisioning, or a login-time
+          reconcile that failed and was swallowed. */}
+      {pendingSync > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          padding: '11px 14px', borderRadius: 11,
+          background: 'rgba(99,102,241,.09)', border: '1px solid rgba(99,102,241,.32)',
+        }}>
+          <Sparkles size={16} style={{ color: 'var(--blue)', flexShrink: 0 }} />
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)', lineHeight: 1.45, minWidth: 0, flex: 1 }}>
+            New permissions are available for the default roles
+          </div>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => setShowSyncModal(true)}
             style={{
-              marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7,
-              height: 40, padding: '0 16px', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#fff',
-              background: 'linear-gradient(135deg,var(--blue),var(--violet))', border: 'none', cursor: 'pointer',
-              boxShadow: '0 4px 16px rgba(99,102,241,.28)',
+              flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6,
+              height: 32, padding: '0 13px', borderRadius: 8, fontSize: 12.5, fontWeight: 600,
+              color: '#fff', background: 'linear-gradient(135deg,var(--blue),var(--violet))',
+              border: 'none', cursor: 'pointer',
             }}
           >
-            <Plus size={16} /> Add New Role
+            <RefreshCw size={13} /> Sync Now
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 15, overflow: 'hidden' }}>
         {/* Horizontal scroll on narrow screens, with edge fades hinting swipeability. */}
@@ -1006,6 +1233,16 @@ export default function RolesPermission() {
 
       {showAddModal && (
         <RoleNameModal mode="add" onClose={() => setShowAddModal(false)} onSubmit={handleAddRole} />
+      )}
+      {showSyncModal && (
+        <SyncDefaultsModal
+          onClose={() => setShowSyncModal(false)}
+          onSynced={() => {
+            rolesApi.refetch({ silent: true });
+            // Clears the banner once the work is actually done.
+            pendingSyncApi.refetch({ silent: true });
+          }}
+        />
       )}
       {renameTarget && (
         <RoleNameModal

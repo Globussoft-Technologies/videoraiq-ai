@@ -151,6 +151,36 @@ export async function updateRolePermission(roleId, field, value, { alsoView = fa
   return res?.data?.body;
 }
 
+// Re-applies the canonical permission templates to the three default roles
+// (admin/read/write). Needed because those roles are seeded once at
+// provisioning and are otherwise uneditable, so a module added later (carLogs)
+// never reaches them. Pass { dryRun: true } to preview the diff without
+// writing — that is what the confirmation dialog is built from.
+// Resolves to { dryRun, rolesTouched, modules, roles: [...] }.
+export async function syncDefaultRoles({ dryRun = false } = {}) {
+  let res;
+  try {
+    res = await api.post(`/roles/sync-defaults?dryRun=${dryRun}`, { dryRun });
+  } catch (err) {
+    // A permission refusal comes back as a real 4xx, so axios rejects before
+    // the envelope check below ever runs — dig the server's own message out
+    // rather than surfacing "Request failed with status code 400".
+    throw new Error(
+      err?.response?.data?.body?.message
+      || err?.response?.data?.message
+      || err?.message
+      || 'Unable to sync default roles.'
+    );
+  }
+  // Most failures on this codebase arrive as HTTP 200 wrapping a failed
+  // envelope, so a resolved promise is not on its own a success.
+  const body = res?.data?.body;
+  if (body?.status && body.status !== 'success') {
+    throw new Error(body?.message || 'Unable to sync default roles.');
+  }
+  return body?.data ?? {};
+}
+
 export async function deleteRole(roleId) {
   const res = await api.delete(`/roles/delete?roleId=${roleId}`);
   return res?.data?.body;

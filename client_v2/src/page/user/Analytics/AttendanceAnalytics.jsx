@@ -5,6 +5,9 @@ import { useEffect } from 'react';
 import SearchableSelect from '../../../components/SearchableSelect';
 import {
   Activity,
+  CalendarCheck,
+  ChevronLeft,
+  ChevronRight,
   Hourglass,
   LogOut,
   TrendingDown,
@@ -41,15 +44,37 @@ import RangeFilter, { defaultRange, rangeParams } from './RangeFilter';
 const PLOT_H = 172;
 const LOCATION_STORAGE_KEY = 'attendance_analytics_location';
 const ALL_LOCATIONS = 'All Locations';
-// Matches the Attendance Logs status badges so a colour means the same thing on
-// both screens. "No log" is deliberately the quietest of the set - it's the
-// remainder of the roster, not an event.
+// One colour per bucket, matching the KPI tile of the same name so a colour
+// means the same thing in both places — and matching the Attendance Logs status
+// badges, so it means the same thing on that screen too.
 const COLORS = {
-  checkIn: 'var(--ok)',
+  fullDay: 'var(--violet)',
   halfDay: 'var(--warn)',
   absentees: 'var(--crit)',
-  checkout: 'var(--blue)',
+  stillIn: 'var(--blue)',
 };
+
+/**
+ * The four states a roster splits into on a given day, and the only four that
+ * are mutually exclusive: every employee is in exactly one, and they sum to the
+ * roster. That is what makes them stackable.
+ *
+ * Check In and Checkout are deliberately not here. They are "did this event
+ * happen at all", so they overlap all four — stacking them alongside these
+ * counted the same people twice and made every band the wrong height. On 28 Aug
+ * that stack totalled 619 against a roster of 562.
+ */
+function dayBuckets(row) {
+  const fullDay = Number(row?.present || 0);
+  const halfDay = Number(row?.halfDay || 0);
+  // Left before the half-day mark, never checked out and timed out, or never
+  // logged at all — the same total the Absentees tile shows.
+  const absentees = Number(row?.shortDay || 0) + Number(row?.noLog || 0);
+  // On site with no check-out yet, still inside the grace window. Empties out
+  // once a day is over, which is why finished days now add up.
+  const stillIn = Number(row?.checkedIn || 0);
+  return { fullDay, halfDay, absentees, stillIn, total: fullDay + halfDay + absentees + stillIn };
+}
 
 function numberFmt(value) {
   return Number(value || 0).toLocaleString('en-IN');
@@ -120,6 +145,22 @@ function formatRangeLabel(range) {
   return '';
 }
 
+/** "9h" / "4.5h" — the threshold a tile's count was graded against. */
+function hoursLabel(hours) {
+  const value = Number(hours);
+  if (!Number.isFinite(value) || value <= 0) return '';
+  return `${Math.round(value * 10) / 10}h`;
+}
+
+/**
+ * Tile footnote, e.g. "Full day ≥9h · 31 Aug". The threshold is dropped rather
+ * than guessed at when the server hasn't reported one.
+ */
+function ruleSubLabel(prefix, hours, dayLabel) {
+  const threshold = hoursLabel(hours);
+  return `${prefix}${threshold ? ` ≥${threshold}` : ''} · ${dayLabel}`;
+}
+
 function attendancePct(row) {
   const attended = Number(row?.attended || 0);
   const roster = Number(row?.employees || 0);
@@ -139,19 +180,101 @@ function Trend({ trend, positiveUp = true }) {
   );
 }
 
+// Worded for "the selected day" rather than "today": the day stepper beside the
+// tiles can point these at any past date.
 function tileTooltipText(label) {
   switch (label) {
     case 'Check In':
-      return 'Employees who were recorded at a check-in camera today. This includes everyone who has arrived, even if they have not checked out yet.';
+      return 'Employees who were recorded at a check-in camera on the selected day. This includes everyone who arrived, however long they stayed and whether or not they have checked out.';
+    case 'Full Day':
+      return 'Employees whose first check-in to last check-out on the selected day spans at least the full-day requirement. Anyone still on site with no check-out yet is not counted, so this figure only settles once the day is over.';
     case 'Half Day':
-      return 'Employees who checked in today and spent enough time on site for a half day, but not enough to count as a full day.';
+      return 'Employees who checked in on the selected day and spent enough time on site for a half day, but not enough to count as a full day.';
     case 'Absentees':
-      return 'Employees who are absent today. This includes people who never checked in and people who left too early to meet the half-day rule.';
+      return 'Employees who are absent on the selected day. This includes people who never checked in and people who left too early to meet the half-day rule.';
     case 'Checkout':
-      return 'Employees who were recorded at a check-out camera today after leaving the site.';
+      return 'Employees who were recorded at a check-out camera on the selected day after leaving the site.';
     default:
       return '';
   }
+}
+
+/**
+ * Day stepper for the presence tiles.
+ *
+ * None of these figures are stored — every one is re-derived from the raw
+ * check-in/check-out events on read — so the only way to check a calculation is
+ * to point it at a day that has already finished and compare it against the
+ * Attendance Logs rows for the same day. Stepping back one day at a time is
+ * what that check actually needs; the range picker beside it drives the chart
+ * and can't express "just yesterday" without switching to Custom.
+ *
+ * Forward is capped at today: there is nothing to grade in the future.
+ */
+function DayStepper({ date, maxDate, onChange }) {
+  const day = moment(date, 'YYYY-MM-DD');
+  const max = moment(maxDate, 'YYYY-MM-DD');
+  const atMax = !day.isBefore(max, 'day');
+  const isToday = day.isSame(max, 'day');
+  // Year only when it isn't the current one, so the control stays narrow in the
+  // case that's true 99% of the time. The full date is on the title attribute.
+  const label = isToday ? 'Today' : day.format(day.isSame(max, 'year') ? 'D MMM' : 'D MMM YY');
+
+  const stepButton = (delta, Icon, hint, disabled) => (
+    <button
+      type="button"
+      disabled={disabled}
+      aria-label={hint}
+      title={hint}
+      onClick={() => onChange(day.clone().add(delta, 'day').format('YYYY-MM-DD'))}
+      style={{
+        height: 24,
+        width: 24,
+        display: 'grid',
+        placeItems: 'center',
+        borderRadius: 6,
+        border: 0,
+        background: 'transparent',
+        color: disabled ? 'var(--tx3)' : 'var(--tx2)',
+        opacity: disabled ? 0.4 : 1,
+        cursor: disabled ? 'default' : 'pointer',
+      }}
+    >
+      <Icon size={14} strokeWidth={2.2} />
+    </button>
+  );
+
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 2,
+        padding: 2,
+        borderRadius: 8,
+        background: 'var(--bg2)',
+        border: '1px solid var(--bd)',
+      }}
+    >
+      {stepButton(-1, ChevronLeft, 'Previous day', false)}
+      <span
+        style={{
+          minWidth: 62,
+          textAlign: 'center',
+          fontFamily: 'var(--mono)',
+          fontSize: 11,
+          fontWeight: 700,
+          color: 'var(--tx)',
+          textTransform: 'none',
+          letterSpacing: 0,
+        }}
+        title={day.format('dddd, D MMMM YYYY')}
+      >
+        {label}
+      </span>
+      {stepButton(1, ChevronRight, 'Next day', atMax)}
+    </div>
+  );
 }
 
 function MetricTile({ icon: Icon, label, metric, color, subLabel, positiveUp = true, onClick, footerValue = null }) {
@@ -398,12 +521,8 @@ function DailyActivity({ series = [], employees = 0 }) {
           {/* Attendance bars â€” left axis */}
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end' }}>
             {rows.map((row) => {
-              const displayedCheckIn = Number(row?.checkins || 0);
-              const displayedHalfDay = Number(row?.halfDay || 0);
-              const displayedAbsentees = Number(row?.shortDay || 0) + Number(row?.noLog || 0);
-              const displayedCheckout = Number(row?.checkouts || 0);
-              const displayedTotal = displayedCheckIn + displayedHalfDay + displayedAbsentees + displayedCheckout;
-              const share = (value) => (displayedTotal > 0 ? (Number(value || 0) / displayedTotal) * 100 : 0);
+              const buckets = dayBuckets(row);
+              const share = (value) => (buckets.total > 0 ? (Number(value || 0) / buckets.total) * 100 : 0);
 
               return (
                 <div
@@ -415,7 +534,7 @@ function DailyActivity({ series = [], employees = 0 }) {
                       width: '58%',
                       minWidth: 4,
                       maxWidth: 18,
-                      height: `${roster > 0 ? (roster / left.max) * 100 : 0}%`,
+                      height: `${buckets.total > 0 ? (buckets.total / left.max) * 100 : 0}%`,
                       display: 'flex',
                       flexDirection: 'column-reverse',
                       borderRadius: 3,
@@ -423,10 +542,10 @@ function DailyActivity({ series = [], employees = 0 }) {
                       background: 'var(--bg3)',
                     }}
                   >
-                    <span style={{ height: `${share(displayedCheckIn)}%`, background: COLORS.checkIn }} />
-                    <span style={{ height: `${share(displayedHalfDay)}%`, background: COLORS.halfDay }} />
-                    <span style={{ height: `${share(displayedAbsentees)}%`, background: COLORS.absentees }} />
-                    <span style={{ height: `${share(displayedCheckout)}%`, background: COLORS.checkout }} />
+                    <span style={{ height: `${share(buckets.fullDay)}%`, background: COLORS.fullDay }} />
+                    <span style={{ height: `${share(buckets.halfDay)}%`, background: COLORS.halfDay }} />
+                    <span style={{ height: `${share(buckets.absentees)}%`, background: COLORS.absentees }} />
+                    <span style={{ height: `${share(buckets.stillIn)}%`, background: COLORS.stillIn }} />
                   </div>
                 </div>
               );
@@ -441,7 +560,7 @@ function DailyActivity({ series = [], employees = 0 }) {
                 tabIndex={0}
                 onMouseMove={(event) => onHover(event, row, index)}
                 onFocus={(event) => onHover(event, row, index)}
-                aria-label={`${moment(row.date).format('D MMM')}: ${row.employees} total employees, ${row.checkins || 0} check in, ${row.halfDay || 0} half day, ${(row.shortDay || 0) + (row.noLog || 0)} absentees, ${row.checkouts || 0} checkout`}
+                aria-label={`${moment(row.date).format('D MMM')}: ${row.employees} total employees, ${row.present || 0} full day, ${row.halfDay || 0} half day, ${(row.shortDay || 0) + (row.noLog || 0)} absentees, ${row.checkedIn || 0} still in, ${row.checkins || 0} checked in, ${row.checkouts || 0} checked out`}
                 style={{ flex: '1 1 0', minWidth: 0, outline: 'none', cursor: 'default' }}
               />
             ))}
@@ -508,14 +627,21 @@ function DailyActivity({ series = [], employees = 0 }) {
 
           <div style={{ display: 'grid', gap: 3.5, fontFamily: 'var(--mono)', fontSize: 10.5 }}>
             <TooltipRow label="Total Employees" value={numberFmt(hover.row.employees)} strong />
-            <TooltipRow color={COLORS.checkIn} label="Check In" value={numberFmt(hover.row.checkins)} />
+            <TooltipRow color={COLORS.fullDay} label="Full Day" value={numberFmt(hover.row.present)} />
             <TooltipRow color={COLORS.halfDay} label="Half Day" value={numberFmt(hover.row.halfDay)} />
             <TooltipRow
               color={COLORS.absentees}
               label="Absentees"
               value={numberFmt((hover.row.shortDay || 0) + (hover.row.noLog || 0))}
             />
-            <TooltipRow color={COLORS.checkout} label="Checkout" value={numberFmt(hover.row.checkouts)} />
+            <TooltipRow color={COLORS.stillIn} label="Still In" value={numberFmt(hover.row.checkedIn)} />
+            {/* Below the rule: not bands. These two overlap the four above —
+                everyone who arrived, and everyone who left — so they get no
+                swatch, which would promise a colour the stick doesn't have. */}
+            <div style={{ borderTop: '1px solid var(--bd2)', marginTop: 2, paddingTop: 4, display: 'grid', gap: 3.5 }}>
+              <TooltipRow label="Check In" value={numberFmt(hover.row.checkins)} />
+              <TooltipRow label="Checkout" value={numberFmt(hover.row.checkouts)} />
+            </div>
           </div>
         </div>
       )}
@@ -542,21 +668,34 @@ function hasDailyAttendanceData(series = []) {
  *
  * Rows are graded against the org's Settings > Attendance Rules thresholds:
  * Present (full day), Half Day, Absent (under half a day), and Checked In
- * (on site, no check-out yet).
+ * (on site, no check-out yet). The full-day bucket is shown as the "Full Day"
+ * tile — "checked in" and "worked a full day" are different questions and this
+ * screen now answers both separately, since an employee stays checked in long
+ * after their shift ends and a check-in on its own says nothing about hours.
  *
  * Both the KPI tiles and the Daily Activity chart are driven from the Range
  * control below rather than the page's shared Range filter (see
  * Analytics.jsx) — readers expect the chart to move with whatever range
  * they're inspecting right here, not a separate control at the top of the
  * page. It reuses the same 7/30/Custom picker the page-level filter uses.
+ *
+ * The tiles additionally carry a day stepper: none of these numbers are stored,
+ * so verifying one means re-deriving a finished day and comparing it with the
+ * Attendance Logs rows behind it, which the range picker alone can't ask for.
  */
 export default function AttendanceAnalytics({ timezone }) {
   const navigate = useNavigate();
   const today = useMemo(() => moment().format('YYYY-MM-DD'), []);
 
   const [range, setRange] = useState(defaultRange);
+  // null = follow the range's last day (the old, only behaviour). A day picked
+  // on the stepper wins until the range moves, at which point the tiles snap
+  // back to the range again rather than stranding a day outside it.
+  const [presenceDay, setPresenceDay] = useState(null);
   const [selectedLocation, setSelectedLocation] = useState(() => localStorage.getItem(LOCATION_STORAGE_KEY) || '');
   const [locationOptions, setLocationOptions] = useState([ALL_LOCATIONS]);
+
+  useEffect(() => setPresenceDay(null), [range]);
 
   useEffect(() => {
     (async () => {
@@ -589,9 +728,11 @@ export default function AttendanceAnalytics({ timezone }) {
   );
   const chartRangeKey = useMemo(() => JSON.stringify(chartRange), [chartRange]);
 
-  // Presence has no meaning over a range, so it shows the most recent day in
-  // the selected range — the one day figure a range still unambiguously implies.
-  const presenceDate = chartRange.endDate || today;
+  // Presence has no meaning over a range, so it defaults to the most recent day
+  // in the selected range — the one day figure a range still unambiguously
+  // implies — and the stepper beside the tiles can walk it back from there.
+  const defaultPresenceDate = chartRange.endDate || today;
+  const presenceDate = presenceDay || defaultPresenceDate;
 
   // `includeAccess: false` — this widget shows attendance only, so the server
   // skips the two access-log rollups it would otherwise compute and discard.
@@ -619,9 +760,18 @@ export default function AttendanceAnalytics({ timezone }) {
   const totalEmployees = Number(presence.employees || 0);
   const totalEmployeesPct = ratioPct(totalEmployees, totalEmployees);
   const checkInPct = ratioPct(presence.checkinLogs, totalEmployees);
+  // `present` is the server's name for the full-day bucket — first check-in to
+  // last check-out spanning at least the org's full-day hours. It is surfaced
+  // as "Full Day" because that is what the number means: "Present" reads as
+  // "checked in and here", which is the Check In tile beside it.
+  const fullDayPct = ratioPct(presence.present, totalEmployees);
   const halfDayPct = ratioPct(presence.halfDay, totalEmployees);
   const absentPct = ratioPct(presence.absent, totalEmployees);
   const checkoutPct = ratioPct(presence.checkoutLogs, totalEmployees);
+  // Thresholds the server actually graded this day with, so the tiles state
+  // their own rule instead of the reader having to open Attendance Rules.
+  const fullDayHours = presence.rules?.fullDayHours;
+  const halfDayHours = presence.rules?.halfDayHours;
 
   return (
     <Panel>
@@ -643,9 +793,34 @@ export default function AttendanceAnalytics({ timezone }) {
       >
         <div style={{ padding: 14, display: 'grid', gap: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--tx3)', letterSpacing: 0.4, textTransform: 'uppercase' }}>
-              Presence on {presenceDayLabel}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--tx3)', letterSpacing: 0.4, textTransform: 'uppercase' }}>
+                Presence on
+              </span>
+              <DayStepper date={presenceDate} maxDate={today} onChange={setPresenceDay} />
+              {/* One click back to the range's own day, so checking something
+                  three weeks ago isn't three weeks of clicking to undo. */}
+              {presenceDay && presenceDay !== defaultPresenceDate && (
+                <button
+                  type="button"
+                  onClick={() => setPresenceDay(null)}
+                  style={{
+                    background: 'none',
+                    border: 0,
+                    padding: 0,
+                    font: 'inherit',
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    color: 'var(--blue)',
+                    cursor: 'pointer',
+                    textTransform: 'none',
+                    letterSpacing: 0,
+                  }}
+                >
+                  {defaultPresenceDate === today ? 'Today' : moment(defaultPresenceDate).format('D MMM')}
+                </button>
+              )}
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                 <span style={{ fontFamily: 'var(--ui)', fontSize: 11.5, color: 'var(--tx3)' }}>Location</span>
@@ -702,12 +877,37 @@ export default function AttendanceAnalytics({ timezone }) {
                 })
               }
             />
+            {/* The day actually worked, as opposed to merely started. Graded on
+                elapsed time from the day's first check-in to its last
+                check-out against Settings > Attendance Rules, so an employee
+                still on site with no check-out yet is not counted here — they
+                sit in Check In until they leave. That is why this tile can
+                read 0 mid-morning and fill in over the afternoon; step the day
+                back to see a finished one. */}
+            <MetricTile
+              icon={CalendarCheck}
+              label="Full Day"
+              metric={{ count: presence.present, pct: fullDayPct }}
+              color={COLORS.fullDay}
+              subLabel={ruleSubLabel('Full day', fullDayHours, presenceDayLabel)}
+              footerValue={formatPct(fullDayPct)}
+              onClick={() =>
+                navigate('/logs/attendance', {
+                  state: {
+                    startDate: presenceDate,
+                    endDate: presenceDate,
+                    statusFilter: 'present',
+                    employeeLocations: selectedLocation ? [selectedLocation] : [],
+                  },
+                })
+              }
+            />
             <MetricTile
               icon={Hourglass}
               label="Half Day"
               metric={{ count: presence.halfDay, pct: halfDayPct }}
               color="var(--warn)"
-              subLabel={`Half day · ${presenceDayLabel}`}
+              subLabel={ruleSubLabel('Half day', halfDayHours, presenceDayLabel)}
               footerValue={formatPct(halfDayPct)}
               onClick={() =>
                 navigate('/logs/attendance', {
@@ -786,10 +986,10 @@ export default function AttendanceAnalytics({ timezone }) {
               </div>
               {showDailyActivityHelpers && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 10.5, flexWrap: 'wrap' }}>
-                  <LegendItem color={COLORS.checkIn} label="Check In" />
+                  <LegendItem color={COLORS.fullDay} label="Full Day" />
                   <LegendItem color={COLORS.halfDay} label="Half Day" />
                   <LegendItem color={COLORS.absentees} label="Absentees" />
-                  <LegendItem color={COLORS.checkout} label="Checkout" />
+                  <LegendItem color={COLORS.stillIn} label="Still In" />
                 </div>
               )}
             </div>
@@ -798,7 +998,9 @@ export default function AttendanceAnalytics({ timezone }) {
 
             {showDailyActivityHelpers && (
               <div style={{ marginTop: 8, fontSize: 10, color: 'var(--tx3)' }}>
-                Bars: each day is split into exclusive attendance buckets, so the stick and tooltip always agree.
+                Bars: the four exclusive buckets every employee falls into, so each day's stick adds up to the
+                full roster. Check In and Checkout sit below the line in the tooltip — they overlap these four
+                rather than dividing them, so they aren&apos;t bands.
               </div>
             )}
           </div>

@@ -20,13 +20,14 @@ const COLUMN_CLASS = {
   4: 'lg:grid-cols-4',
   5: 'lg:grid-cols-5',
   6: 'lg:grid-cols-6',
+  7: 'lg:grid-cols-7',
 };
 
 const StatCards = ({ stats = [] }) => {
   if (!stats.length) return null;
 
   // Was fixed at 4, which left a fifth tile stranded on its own row.
-  const columns = COLUMN_CLASS[Math.min(stats.length, 6)] || 'lg:grid-cols-4';
+  const columns = COLUMN_CLASS[Math.min(stats.length, 7)] || 'lg:grid-cols-4';
 
   return (
     <div className={`grid grid-cols-2 ${columns} gap-[14px]`}>

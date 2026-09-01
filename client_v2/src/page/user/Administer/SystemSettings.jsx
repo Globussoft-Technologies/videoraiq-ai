@@ -641,6 +641,7 @@ export default function SystemSettings() {
   const [attendanceSaving, setAttendanceSaving] = useState(false);
   const [fullDayHours, setFullDayHours] = useState('');
   const [halfDayHours, setHalfDayHours] = useState('');
+  const [graceHours, setGraceHours] = useState('');
   const [retentionSaving, setRetentionSaving] = useState(false);
   const [previewSaving, setPreviewSaving] = useState(false);
   const [previewWindow, setPreviewWindow] = useState({ beforeSeconds: 10, afterSeconds: 10 });
@@ -697,25 +698,32 @@ export default function SystemSettings() {
 
   const savedFullDayHours = attendanceSettingsApi.data?.fullDayHours;
   const savedHalfDayHours = attendanceSettingsApi.data?.halfDayHours;
+  const savedGraceHours = attendanceSettingsApi.data?.graceHours;
 
   useEffect(() => {
     if (savedFullDayHours != null) setFullDayHours(String(savedFullDayHours));
     if (savedHalfDayHours != null) setHalfDayHours(String(savedHalfDayHours));
-  }, [savedFullDayHours, savedHalfDayHours]);
+    if (savedGraceHours != null) setGraceHours(String(savedGraceHours));
+  }, [savedFullDayHours, savedHalfDayHours, savedGraceHours]);
 
   const fullDayValue = Number(fullDayHours);
   const halfDayValue = Number(halfDayHours);
+  const graceValue = Number(graceHours);
   // Mirrors the server's Joi rules so the button explains itself before a
   // round-trip; the server still validates independently.
   const attendanceError = (() => {
-    if (fullDayHours === '' || halfDayHours === '') return 'Both thresholds are required';
-    if (!Number.isFinite(fullDayValue) || !Number.isFinite(halfDayValue)) return 'Enter a number of hours';
-    if (fullDayValue < 0 || halfDayValue < 0) return 'Hours cannot be negative';
-    if (fullDayValue > 24 || halfDayValue > 24) return 'Hours cannot exceed 24';
+    if (fullDayHours === '' || halfDayHours === '' || graceHours === '') return 'All three thresholds are required';
+    if (!Number.isFinite(fullDayValue) || !Number.isFinite(halfDayValue) || !Number.isFinite(graceValue))
+      return 'Enter a number of hours';
+    if (fullDayValue < 0 || halfDayValue < 0 || graceValue < 0) return 'Hours cannot be negative';
+    if (fullDayValue > 24 || halfDayValue > 24 || graceValue > 24) return 'Hours cannot exceed 24';
     if (halfDayValue > fullDayValue) return 'Half day cannot be longer than a full day';
     return null;
   })();
-  const attendanceChanged = fullDayValue !== savedFullDayHours || halfDayValue !== savedHalfDayHours;
+  const attendanceChanged =
+    fullDayValue !== savedFullDayHours ||
+    halfDayValue !== savedHalfDayHours ||
+    graceValue !== savedGraceHours;
 
   const handleSaveAttendance = async () => {
     if (!canEditSettings) {
@@ -728,7 +736,11 @@ export default function SystemSettings() {
     }
     setAttendanceSaving(true);
     try {
-      await updateAttendanceSettings({ fullDayHours: fullDayValue, halfDayHours: halfDayValue });
+      await updateAttendanceSettings({
+        fullDayHours: fullDayValue,
+        halfDayHours: halfDayValue,
+        graceHours: graceValue,
+      });
       await attendanceSettingsApi.refetch();
       toast.success('Attendance rules updated');
     } catch (err) {
@@ -1321,7 +1333,7 @@ export default function SystemSettings() {
           <PanelHeader
             icon={Clock}
             title="Attendance Rules"
-            sub="Hours on site that count as a full or half day. Applies to every employee in this organisation."
+            sub="Hours on site that count as a full or half day, and how long a day waits for a missing check-out. Applies to every employee in this organisation."
             action={attendanceSettingsApi.loading ? <Loader2 size={16} className="animate-spin" style={{ color: 'var(--blue)' }} /> : null}
           />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 11 }}>
@@ -1351,6 +1363,22 @@ export default function SystemSettings() {
                 style={ATTENDANCE_INPUT_STYLE}
               />
             </div>
+            {/* Not lateness grace - there are no fixed shift starts here to be
+                late against. This is how long a day keeps waiting for a
+                check-out that may never come. */}
+            <div>
+              <FieldLabel>Grace after full day (hours)</FieldLabel>
+              <input
+                type="number"
+                min={0}
+                max={24}
+                step={0.25}
+                value={graceHours}
+                onChange={(e) => setGraceHours(e.target.value)}
+                disabled={!canEditSettings || attendanceSaving || attendanceSettingsApi.loading}
+                style={ATTENDANCE_INPUT_STYLE}
+              />
+            </div>
           </div>
 
           <div style={{ marginTop: 13, padding: 12, borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--bd)' }}>
@@ -1361,11 +1389,27 @@ export default function SystemSettings() {
               <StatusRule color="var(--ok)" label="Present" detail={`On site ${formatHours(fullDayValue)} or more`} />
               <StatusRule color="var(--warn)" label="Half Day" detail={`${formatHours(halfDayValue)} up to ${formatHours(fullDayValue)}`} />
               <StatusRule color="var(--crit)" label="Absent" detail={`Under ${formatHours(halfDayValue)}`} />
-              <StatusRule color="var(--blue)" label="Checked In" detail="Checked in, no check-out yet" />
+              <StatusRule
+                color="var(--blue)"
+                label="Checked In"
+                detail={`Checked in, no check-out yet - up to ${formatHours(fullDayValue + graceValue)} after arriving`}
+              />
+              <StatusRule
+                color="var(--crit)"
+                label="No Checkout"
+                detail={`Still no check-out after ${formatHours(fullDayValue + graceValue)} - counts as Absent`}
+              />
             </div>
             <div style={{ marginTop: 9, fontSize: 11, color: 'var(--tx3)', lineHeight: 1.4 }}>
               Time on site is the last check-out minus the first check-in. Changing these re-grades existing
               attendance logs the next time they're loaded.
+            </div>
+            <div style={{ marginTop: 7, fontSize: 11, color: 'var(--tx3)', lineHeight: 1.4 }}>
+              Grace does double duty: a check-out arriving within{' '}
+              {formatHours(fullDayValue + graceValue)} of the check-in still closes that day even if it lands
+              after midnight, which is how an overnight shift records its hours. Past that same point the day
+              stops waiting and grades Absent - so a day is never written off while a check-out could still
+              arrive to complete it.
             </div>
           </div>
 
