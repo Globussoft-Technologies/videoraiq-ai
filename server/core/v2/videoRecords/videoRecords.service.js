@@ -6,6 +6,7 @@ import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
 import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
 import authService from "../Auth/auth.service.js";
+import { sendPayloadToUser } from "../../../socket.js";
 
 const DETECTION_KEYS = Object.keys(DETECTION_TYPES);
 
@@ -339,6 +340,17 @@ class VideoRecordsService {
       const record = await videoRecordModel.findOneAndUpdate(filter, update, { new: true });
       if (!record) {
         return res.status(404).json(Response.notFoundResp("Video record not found"));
+      }
+
+      if (videoId && dsVideoUrl !== undefined) {
+        const triggerUserId = record.userId;
+        if (triggerUserId) {
+          await sendPayloadToUser(
+            triggerUserId,
+            `videoRecord_updated_${record._id}`,
+            { recordId: record._id, videos: record.videos }
+          ).catch((err) => logger.warn(`Socket trigger failed for ${triggerUserId}: ${err.message}`));
+        }
       }
 
       return res
