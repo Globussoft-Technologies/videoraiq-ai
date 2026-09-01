@@ -61,13 +61,36 @@ function cameraLabel(detection) {
   );
 }
 
+// Human labels for detection slugs / settingTypes that arrive on the socket
+// payload as raw identifiers (e.g. "guardSleepingDetection"). Extend as needed;
+// anything not listed falls back to a title-cased version of the slug.
+const DETECTION_LABELS = {
+  guardSleepingDetection: 'Sleep Activity Detection',
+  guardSleepingDetectionSettings: 'Sleep Activity Detection',
+  guardAbsence: 'Guard Absence Detection',
+  guardAbsenceSettings: 'Guard Absence Detection',
+  deskAbsence: 'Desk Absence Detection',
+  deskAbsenceSettings: 'Desk Absence Detection',
+};
+
+function prettifySlug(value) {
+  return String(value || '')
+    .replace(/Settings$/i, '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function detectionTitle(detection) {
-  return (
+  const raw =
     detection?.incidentType ||
     detection?.incidentName ||
     detection?.displayName ||
-    'Detection'
-  );
+    detection?.detectionType;
+  if (!raw) return 'Detection';
+  return DETECTION_LABELS[raw] || prettifySlug(raw);
 }
 
 function detectionTime(detection) {

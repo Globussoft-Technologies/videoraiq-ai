@@ -31,7 +31,7 @@ import {
   Activity,
   TrendingUp,
   Eye,
-  Shield,
+  Moon,
   ScanEye,
   SlidersHorizontal,
   Settings2,
@@ -129,6 +129,10 @@ export const NAV_GROUPS = [
       // { key: 'track', label: 'Track Logs', path: 'logs/track', icon: Activity, permissionKey: 'logs', permissionSubKey: 'trackLogs' , logsConfigKey: 'trackLogs' },
       // { key: 'visibility', label: 'Visibility Logs', path: 'logs/visibility', icon: Eye, permissionKey: 'logs', permissionSubKey: 'visibilityLogs' , logsConfigKey: 'visibilityLogs' },
       // { key: 'guard', label: 'Guard Logs', path: 'logs/guard', icon: Shield, permissionKey: 'logs', permissionSubKey: 'guardLogs' , logsConfigKey: 'guardLogs' },
+      // Sleep Activity Logs — permission-gated (logs.sleepActivityLogs). The
+      // route in routes.jsx stays live so a direct URL still reaches the page.
+      // A logsConfigKey can be added once GET /logs-configuration exposes one.
+      { key: 'sleep-activity', label: 'Sleep Activity Logs', path: 'logs/sleep-activity', icon: Moon, permissionKey: 'logs', permissionSubKey: 'sleepActivityLogs' },
       // Mining incident logs — shown for every client.
       ...stevinrockLogItems,
     ],
@@ -189,6 +193,7 @@ export const VIEW_META = {
   track: { title: 'Track Logs', sub: 'Live user & vehicle activity tracking' },
   visibility: { title: 'Visibility Logs', sub: 'Per-channel presence/absence timeline' },
   guard: { title: 'Guard Logs', sub: 'Guard presence/absence timeline & export' },
+  'sleep-activity': { title: 'Sleep Activity Logs', sub: 'Sleeping / awake detection events' },
   conveyor: { title: 'Conveyor Logs', sub: 'Conveyor load / running-state detections' },
   'vehicle-obstruction': { title: 'Vehicle Obstruction Logs', sub: 'Blocked-path & obstruction detections' },
   'vehicle-count': { title: 'Vehicle Count Logs', sub: 'Vehicle throughput over time' },

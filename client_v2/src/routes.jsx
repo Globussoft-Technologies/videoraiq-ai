@@ -42,6 +42,7 @@ import ProductivityLog from './pages/ProductivityLog/ProductivityLog';
 import TrackLog from './pages/TrackLog/TrackLog';
 import VisibilityLog from './pages/VisibilityLog/VisibilityLog';
 import GuardLog from './pages/GuardLog/GuardLog';
+import SleepActivityLogs from './pages/SleepActivityLogs/SleepActivityLogs';
 import EmailMonitoringDashboard from './page/user/EmailMonitoring/EmailMonitoringDashboard';
 import AssistantPage from './page/user/Assistant/AssistantPage';
 import LiveDemo from './pages/LiveDemo/LiveDemo';
@@ -94,6 +95,7 @@ export const v2Routes = (
     <Route path="logs/track" element={guard('logs', 'trackLogs', <TrackLog />)} />
     <Route path="logs/visibility" element={guard('logs', 'visibilityLogs', <VisibilityLog />)} />
     <Route path="logs/guard" element={guard('logs', 'guardLogs', <GuardLog />)} />
+    <Route path="logs/sleep-activity" element={guard('logs', 'sleepActivityLogs', <SleepActivityLogs />)} />
 
     {/* Stevinrock incident logs — each is a thin component wrapping the shared
         IncidentLogsPage with its config; Vehicle Count is a chart page. */}

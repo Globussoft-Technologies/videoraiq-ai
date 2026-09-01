@@ -48,13 +48,38 @@ export const getChannels = async ({ skip = 0, limit = 100, nvrId = '', search = 
   return { channels: data?.channels ?? [], total: data?.total ?? data?.totalCount ?? 0 };
 };
 
-export const getDetectionTypes = async () => {
-  const token = getAccessToken();
-  const res = await axios.get(`${Api_url}/detection-settings/types`, {
-    headers: { 'x-access-token': token },
-  });
-  const data = unwrap(res);
-  return data?.detectionTypes ?? data ?? {};
+// GET /detection-settings/types is read by ~7 independent components (Detections,
+// DetectionZoneMarking, AlertRecipients, SystemControls, SystemSettings,
+// DetectionSettings, IncidentCenter), each via its own useApi — and every mount
+// double-fires under React StrictMode in dev. The catalogue changes rarely, so a
+// short-lived shared cache + in-flight dedupe collapses that burst into one
+// request without any component needing to know.
+const DETECTION_TYPES_TTL = 30_000;
+let _detectionTypesCache = null; // { at: number, data: object }
+let _detectionTypesInFlight = null;
+
+export const getDetectionTypes = async ({ force = false } = {}) => {
+  if (!force && _detectionTypesCache && Date.now() - _detectionTypesCache.at < DETECTION_TYPES_TTL) {
+    return _detectionTypesCache.data;
+  }
+  if (!force && _detectionTypesInFlight) return _detectionTypesInFlight;
+
+  _detectionTypesInFlight = (async () => {
+    const token = getAccessToken();
+    const res = await axios.get(`${Api_url}/detection-settings/types`, {
+      headers: { 'x-access-token': token },
+    });
+    const data = unwrap(res);
+    const detectionTypes = data?.detectionTypes ?? data ?? {};
+    _detectionTypesCache = { at: Date.now(), data: detectionTypes };
+    return detectionTypes;
+  })();
+
+  try {
+    return await _detectionTypesInFlight;
+  } finally {
+    _detectionTypesInFlight = null;
+  }
 };
 
 export const getDetectionSettings = async ({

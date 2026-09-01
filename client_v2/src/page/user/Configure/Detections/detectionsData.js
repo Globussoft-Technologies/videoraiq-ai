@@ -49,6 +49,8 @@ export const DETECTION_THRESHOLDS = {
   zoneIntrusionSettings: ['person_threshold'],
   deskAbsenceSettings: ['person_threshold'],
   deskAbsenceDetection: ['person_threshold'],
+  guardSleepingDetectionSettings: ['person_threshold'],
+  guardSleepingDetection: ['person_threshold'],
   tableOccupancyDetectionSettings: ['person_threshold'],
   tableOccupancySettings: ['person_threshold'],
   loiteringDetectionSettings: ['person_threshold'],
