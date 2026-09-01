@@ -291,6 +291,8 @@ class VideoRecordsService {
         videoId,
         videoUrl,
         dsVideoUrl,
+        zones,
+        zone_configs,
         addVideos,
       } = req.body;
       const { adminId, system: isSystem } = req?.verified?.userData || {};
@@ -333,6 +335,8 @@ class VideoRecordsService {
         filter["videos._id"] = videoId;
         if (videoUrl !== undefined) set["videos.$.videoUrl"] = videoUrl;
         if (dsVideoUrl !== undefined) set["videos.$.dsVideoUrl"] = dsVideoUrl;
+        if (zones !== undefined) set["videos.$.zones"] = Array.isArray(zones) ? zones : [];
+        if (zone_configs !== undefined) set["videos.$.zone_configs"] = Array.isArray(zone_configs) ? zone_configs : [];
       }
 
       const update = {};
