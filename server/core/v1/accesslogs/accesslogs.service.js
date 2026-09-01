@@ -363,20 +363,32 @@ class AccessLogsService {
         let isUserExist = await userModel.findOne({ _id: userId }).populate("departmentId");
 
         if(!isUserExist){
-          personName 
+          personName
         }else{
           personName = `${isUserExist.firstName} ${isUserExist.lastName}`;
         }
 
-        //check if camera exist
-        let isChannelExist = await channelModel.findOne({ _id: cameraId });
-        if(!isChannelExist){
-          return res.send(Response.userFailResp("Camera not found","Validation failed!"));
+        // cameraId/nvrId are optional for live-demo sessions (no real
+        // camera/NVR behind them); required otherwise, and validated
+        // against the DB whenever they are actually supplied.
+        let isChannelExist = null;
+        if (cameraId) {
+          isChannelExist = await channelModel.findOne({ _id: cameraId });
+          if (!isChannelExist) {
+            return res.send(Response.userFailResp("Camera not found","Validation failed!"));
+          }
+        } else if (!liveDemoData) {
+          return res.send(Response.userFailResp("cameraId is required","Validation failed!"));
         }
-        //check if nvr exist
-        let isNvrExist = await nvrModel.findOne({ _id: nvrId });
-        if(!isNvrExist){
-          return res.send(Response.userFailResp("NVR not found","Validation failed!"));
+
+        let isNvrExist = null;
+        if (nvrId) {
+          isNvrExist = await nvrModel.findOne({ _id: nvrId });
+          if (!isNvrExist) {
+            return res.send(Response.userFailResp("NVR not found","Validation failed!"));
+          }
+        } else if (!liveDemoData) {
+          return res.send(Response.userFailResp("nvrId is required","Validation failed!"));
         }
 
           //validate request body

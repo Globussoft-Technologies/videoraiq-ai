@@ -38,9 +38,9 @@ const sanitizeByDetection = (byDetection = {}) => {
 // Override with config key MediaBaseUrl; defaults to the backend domain.
 const mediaBaseUrl = () =>
   String(
-    config.has("MediaBaseUrl")
-      ? config.get("MediaBaseUrl")
-      : `https://${config.get("backendDomain")}`
+    config.has("ImageView")
+      ? config.get("ImageView")
+      : `${config.get("ImageView")}`
   ).replace(/\/+$/, "");
 
 const toAbsoluteMediaUrl = (p) =>

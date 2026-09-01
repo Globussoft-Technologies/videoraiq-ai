@@ -16,8 +16,10 @@ const incidentSchema = new Schema({
   description: String,
   incidentName: String,
   cameraId: String,
-  nvrId:{type:mongoose.Schema.Types.ObjectId,ref:"NVR",required: true},
-  channelId:{type:mongoose.Schema.Types.ObjectId,ref:"Channel",required:true},
+  // Optional for live-demo incidents (no real NVR/camera behind them);
+  // required for everything else.
+  nvrId:{type:mongoose.Schema.Types.ObjectId,ref:"NVR",required: function () { return !this.liveDemoData; }},
+  channelId:{type:mongoose.Schema.Types.ObjectId,ref:"Channel",required: function () { return !this.liveDemoData; }},
   userId:{type:String,required:true},
   zone: String,
   severity: { type: String, enum: ['low', 'moderate', 'high'] },

@@ -209,13 +209,19 @@ class IncidentsService {
         );
       }
 
-      const userId = isAdminExist.user_id?.toString();   
-      let channel = await Channel.findOne({ _id: channelId })
-        .populate("profile")
-        .lean();
-        // return res.status(200).json({ channel });
-      if (!channel) {
-        return res.status(400).json({ error: "Invalid Channel or NVR ID" });
+      const userId = isAdminExist.user_id?.toString();
+      // nvrId/channelId are optional for live-demo incidents (no real
+      // NVR/camera behind them); required otherwise.
+      let channel = null;
+      if (channelId) {
+        channel = await Channel.findOne({ _id: channelId })
+          .populate("profile")
+          .lean();
+        if (!channel) {
+          return res.status(400).json({ error: "Invalid Channel or NVR ID" });
+        }
+      } else if (!liveDemoData) {
+        return res.status(400).json({ error: "channelId is required" });
       }
 
       const Model = modelMap[incidentType];
@@ -227,8 +233,11 @@ class IncidentsService {
 
       const currentTime = new Date();
 
-      // Check if the incidentType needs special update logic
+      // Check if the incidentType needs special update logic. Requires a
+      // real channelId — live-demo incidents without one skip straight to
+      // the generic single-document creation path below.
       if (
+        channelId &&
         [
           "countPersons",
           "countVehicles",
@@ -571,6 +580,19 @@ class IncidentsService {
 
       const incidentObj = await newIncident.save();
       let saved = incidentObj.toObject();
+
+      // No real channel to enrich from / route alerts through — live-demo
+      // incidents without a channelId stop here.
+      if (!channelId) {
+        delete saved.timeSeries;
+        return res
+          .status(200)
+          .json(
+            Response.userSuccessResp("Incident created successfully", {
+              Incident: saved,
+            }),
+          );
+      }
 
       const channelData = await channelsModel
         .findOne({ _id: channelId })

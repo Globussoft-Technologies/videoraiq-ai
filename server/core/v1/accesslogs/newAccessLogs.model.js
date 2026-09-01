@@ -1,8 +1,18 @@
 import mongoose from "mongoose";
 
 const sessionSchema = new mongoose.Schema({
-  nvr: { type: mongoose.Schema.Types.ObjectId, ref: "NVR", required: true },
-  channel: { type: mongoose.Schema.Types.ObjectId, ref: "Channel", required: true },
+  // Optional for live-demo sessions (no real camera/NVR behind them);
+  // required for everything else.
+  nvr: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "NVR",
+    required: function () { return !this.ownerDocument()?.liveDemoData; },
+  },
+  channel: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Channel",
+    required: function () { return !this.ownerDocument()?.liveDemoData; },
+  },
   personName: { type: String, required: true },
   timestamp: { type: Date, default: Date.now, index: true },
   images: {
