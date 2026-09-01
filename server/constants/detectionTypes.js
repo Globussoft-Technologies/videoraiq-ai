@@ -160,7 +160,7 @@ export const DS_DETECTOR_BY_MODE = {
   door: "doorDetectionSettings",
   light: "lightDetectionSettings",
   guard_absence: "guardAbsenceSettings",
-  guard_sleeping: "guardSleepingDetectionSettings",
+  guard_sleeping: "sleepActivitySettings",
   attendanceSettings: "attendanceSettings"
 };
 
