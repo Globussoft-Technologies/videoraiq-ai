@@ -5,17 +5,26 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  FileVideo,
   ImagePlus,
   Loader,
+  Maximize2,
+  Minimize2,
+  Minus,
+  Pencil,
   Plus,
+  Save,
   Search,
   SlidersHorizontal,
+  Trash2,
+  Undo2,
   Upload,
   User,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DETECTION_CATEGORIES } from '@/page/user/Configure/Detections/detectionsData';
+import { ZONE_EXTRA_FIELDS } from '@/page/user/Configure/DetectionZoneMarking/constants';
 import {
   createAuthorizedUser,
   fetchDepartments,
@@ -24,34 +33,37 @@ import {
 } from '../RegisterUser/Api';
 import SelectField from '../RegisterUser/SelectField';
 import { COMPACT_TOAST } from '../RegisterUser/toastOptions';
+import { getVideoRecordAnalytics, getVideoRecordVideos } from './api/get';
+import { deleteDemoMedia } from './api/delete';
+import { createVideoRecord, getDemoAttendanceLogs, getDemoIncidents, processVideoRecord, updateVideoRecord, uploadDemoClip } from './api/post';
 import howToTakeFacePhotos from './assets/howto.jpg';
 
 const categories = [{ key: 'all', label: 'All', color: null }, ...DETECTION_CATEGORIES];
 
 const detections = [
-  { name: 'Count Person Detection', subtitle: 'Occupancy', category: 'people', color: '#4f7cff' },
-  { name: 'Crowd Detection', subtitle: 'Density', category: 'people', color: '#6366f1' },
-  { name: 'Face Recognition', subtitle: 'Biometric', category: 'people', color: '#2f80ed' },
-  { name: 'Zone Intrusion Detection', subtitle: 'Perimeter', category: 'perimeter', color: '#f05252' },
-  { name: 'Line Crossing Detection', subtitle: 'Tripwire', category: 'perimeter', color: '#ff5a5f' },
-  { name: 'Loitering Detection', subtitle: 'Dwell time', category: 'perimeter', color: '#ef4444' },
+  { name: 'Count Person Detection', subtitle: 'Occupancy', category: 'people', color: '#4f7cff', settingType: 'countPersonsSettings' },
+  { name: 'Crowd Detection', subtitle: 'Density', category: 'people', color: '#6366f1', settingType: 'crowdDetectionSettings' },
+  { name: 'Face Recognition', subtitle: 'Biometric', category: 'people', color: '#2f80ed', settingType: 'attendanceSettings' },
+  { name: 'Zone Intrusion Detection', subtitle: 'Perimeter', category: 'perimeter', color: '#f05252', settingType: 'unauthorizedAccessSettings' },
+  { name: 'Line Crossing Detection', subtitle: 'Tripwire', category: 'perimeter', color: '#ff5a5f', settingType: 'lineCrossingSettings' },
+  { name: 'Loitering Detection', subtitle: 'Dwell time', category: 'perimeter', color: '#ef4444', settingType: 'loiteringDetectionSettings' },
   { name: 'Bag Detection', subtitle: 'Unattended object', category: 'perimeter', color: '#fb4d4d' },
-  { name: 'Count Vehicles Detection', subtitle: 'Flow', category: 'vehicles', color: '#a855f7' },
-  { name: 'Num Plate Detection (ANPR)', subtitle: 'ANPR', category: 'vehicles', color: '#b43df1' },
-  { name: 'Vehicle Type Detection', subtitle: 'Classification', category: 'vehicles', color: '#9333ea' },
-  { name: 'Vehicle Traffic Obstruction', subtitle: 'Blockage', category: 'vehicles', color: '#7c3aed' },
-  { name: 'PPE Detection', subtitle: 'Hard hat / vest', category: 'safety', color: '#f59e0b' },
-  { name: 'Food Service PPE Detection', subtitle: 'Hygiene', category: 'safety', color: '#f6a51a' },
+  { name: 'Count Vehicles Detection', subtitle: 'Flow', category: 'vehicles', color: '#a855f7', settingType: 'countVehiclesSettings' },
+  { name: 'Num Plate Detection (ANPR)', subtitle: 'ANPR', category: 'vehicles', color: '#b43df1', settingType: 'vehicleDetectionSettings' },
+  { name: 'Vehicle Type Detection', subtitle: 'Classification', category: 'vehicles', color: '#9333ea', settingType: 'vehicleTypeDetectionSettings' },
+  { name: 'Vehicle Traffic Obstruction', subtitle: 'Blockage', category: 'vehicles', color: '#7c3aed', settingType: 'vehicleObstructionSettings' },
+  { name: 'PPE Detection', subtitle: 'Hard hat / vest', category: 'safety', color: '#f59e0b', settingType: 'personalProtectiveEquipmentSettings' },
+  { name: 'Food Service PPE Detection', subtitle: 'Hygiene', category: 'safety', color: '#f6a51a', settingType: 'foodServicePPEDetectionSettings' },
   { name: 'Fire & Smoke Detection', subtitle: 'Hazard', category: 'safety', color: '#fb923c' },
-  { name: 'Desk Absence Detection', subtitle: 'Workstation', category: 'workplace', color: '#38c5dd' },
-  { name: 'Guard Absence Detection', subtitle: 'Post coverage', category: 'workplace', color: '#22c7d8' },
-  { name: 'Restaurant Table Occupancy', subtitle: 'Seating', category: 'workplace', color: '#06b6d4' },
-  { name: 'Door Detection', subtitle: 'Open / closed', category: 'workplace', color: '#14b8a6' },
-  { name: 'Water Spillage Detection', subtitle: 'Floor hazard', category: 'industrial', color: '#10b981' },
+  { name: 'Desk Absence Detection', subtitle: 'Workstation', category: 'workplace', color: '#38c5dd', settingType: 'deskAbsenceSettings' },
+  { name: 'Guard Absence Detection', subtitle: 'Post coverage', category: 'workplace', color: '#22c7d8', settingType: 'guardAbsenceSettings' },
+  { name: 'Restaurant Table Occupancy', subtitle: 'Seating', category: 'workplace', color: '#06b6d4', settingType: 'tableOccupancyDetectionSettings' },
+  { name: 'Door Detection', subtitle: 'Open / closed', category: 'workplace', color: '#14b8a6', settingType: 'doorDetectionSettings' },
+  { name: 'Water Spillage Detection', subtitle: 'Floor hazard', category: 'industrial', color: '#10b981', settingType: 'waterSpillageDetectionSettings' },
   { name: 'Oil Spillage Detection', subtitle: 'Floor hazard', category: 'industrial', color: '#0ea5a4' },
-  { name: 'Conveyor Belt Status Detection', subtitle: 'Equipment', category: 'industrial', color: '#059669' },
-  { name: 'Crusher Status Detection', subtitle: 'Equipment', category: 'industrial', color: '#0d9488' },
-  { name: 'Light Detection', subtitle: 'Illumination', category: 'industrial', color: '#84cc16' },
+  { name: 'Conveyor Belt Status Detection', subtitle: 'Equipment', category: 'industrial', color: '#059669', settingType: 'conveyorDetectionSettings' },
+  { name: 'Crusher Status Detection', subtitle: 'Equipment', category: 'industrial', color: '#0d9488', settingType: 'crusherDetectionSettings' },
+  { name: 'Light Detection', subtitle: 'Illumination', category: 'industrial', color: '#84cc16', settingType: 'lightDetectionSettings' },
 ];
 
 const steps = [
@@ -67,6 +79,384 @@ function colorWithAlpha(hex, alpha) {
   const green = parseInt(value.slice(2, 4), 16);
   const blue = parseInt(value.slice(4, 6), 16);
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function mediaSrc(path) {
+  if (!path) return '';
+  if (/^(https?:)?\/\//i.test(path) || /^blob:/i.test(path) || /^data:/i.test(path)) return path;
+  return `${import.meta.env.VITE_BACKEND}/${String(path).replace(/^\/+/, '')}`;
+}
+
+function fileSizeLabel(size = 0) {
+  if (!size) return '';
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function recordIdOf(record) {
+  return record?._id || record?.id || '';
+}
+
+function firstVideoOf(record) {
+  return Array.isArray(record?.videos) ? record.videos[0] : null;
+}
+
+function containRect(containerW, containerH, videoW, videoH) {
+  if (!containerW || !containerH || !videoW || !videoH) {
+    return { left: 0, top: 0, width: containerW || 0, height: containerH || 0 };
+  }
+  const containerRatio = containerW / containerH;
+  const videoRatio = videoW / videoH;
+  if (containerRatio > videoRatio) {
+    const height = containerH;
+    const width = height * videoRatio;
+    return { left: (containerW - width) / 2, top: 0, width, height };
+  }
+  const width = containerW;
+  const height = width / videoRatio;
+  return { left: 0, top: (containerH - height) / 2, width, height };
+}
+
+function pointsToAttr(points) {
+  return points.map((point) => `${point.x},${point.y}`).join(' ');
+}
+
+function valueForPayload(value) {
+  const trimmed = String(value ?? '').trim();
+  if (trimmed !== '' && !Number.isNaN(Number(trimmed))) return Number(trimmed);
+  return trimmed;
+}
+
+function defaultZoneSetting(index) {
+  return {
+    name: `Zone ${index + 1}`,
+    capacity: '',
+    threshold: '',
+  };
+}
+
+function syncZoneSettings(settings = [], count = 0) {
+  return Array.from({ length: count }, (_, index) => ({
+    ...defaultZoneSetting(index),
+    ...(settings[index] || {}),
+  }));
+}
+
+function ConfirmModal({
+  open,
+  title,
+  message,
+  confirmLabel = 'Confirm',
+  busy = false,
+  onCancel,
+  onConfirm,
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[1100] grid place-items-center bg-black/45 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-2xl">
+        <div className="px-5 py-4">
+          <h3 className="text-base font-bold text-[var(--tx)]">{title}</h3>
+          <p className="mt-2 text-xs leading-5 text-[var(--tx2)]">{message}</p>
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t border-[var(--bd)] px-5 py-4">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="h-10 cursor-pointer rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] px-5 text-sm font-bold text-[var(--tx2)] hover:bg-[var(--bg2)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy}
+            className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg bg-red-500 px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {busy && <Loader className="h-4 w-4 animate-spin" />}
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DemoDrawingToolbar({
+  drawing,
+  pointCount,
+  maxPoints,
+  disabled,
+  onDraw,
+  onMaxArea,
+  onMinArea,
+  onDecrease,
+  onIncrease,
+  onUndo,
+  onClear,
+  onSave,
+}) {
+  const buttonBase = 'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] px-2.5 text-[11px] font-bold text-[var(--tx2)] transition-colors hover:border-[var(--blue)] hover:text-[var(--blue)] disabled:cursor-not-allowed disabled:opacity-50';
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <button type="button" onClick={onMaxArea} disabled={disabled} className={buttonBase}>
+        <Maximize2 className="h-3.5 w-3.5" />
+        Max Area
+      </button>
+      <button type="button" onClick={onMinArea} disabled={disabled} className={buttonBase}>
+        <Minimize2 className="h-3.5 w-3.5" />
+        Min Area
+      </button>
+      <button type="button" onClick={onDraw} disabled={disabled} className={`${buttonBase} ${drawing ? 'border-[var(--blue)] text-[var(--blue)]' : ''}`}>
+        <Pencil className="h-3.5 w-3.5" />
+        {drawing ? 'Stop Drawing' : 'Start Drawing'}
+      </button>
+      <div className="inline-flex h-8 items-center overflow-hidden rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)]">
+        <button type="button" onClick={onDecrease} disabled={disabled || maxPoints <= 3} className="grid h-8 w-8 cursor-pointer place-items-center text-[var(--tx2)] disabled:cursor-not-allowed disabled:opacity-40">
+          <Minus className="h-3.5 w-3.5" />
+        </button>
+        <span className="min-w-8 border-x border-[var(--bd)] px-2 text-center text-[11px] font-bold text-[var(--tx)]">{maxPoints}</span>
+        <button type="button" onClick={onIncrease} disabled={disabled} className="grid h-8 w-8 cursor-pointer place-items-center text-[var(--tx2)] disabled:cursor-not-allowed disabled:opacity-40">
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <button type="button" onClick={onUndo} disabled={disabled || pointCount === 0} className={buttonBase}>
+        <Undo2 className="h-3.5 w-3.5" />
+        Undo
+      </button>
+      <button type="button" onClick={onClear} disabled={disabled || pointCount === 0} className={buttonBase}>
+        <Trash2 className="h-3.5 w-3.5" />
+        Clear
+      </button>
+      <button type="button" onClick={onSave} disabled={disabled || pointCount < 3} className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] px-3 text-[11px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+        <Save className="h-3.5 w-3.5" />
+        Save Area
+      </button>
+    </div>
+  );
+}
+
+function FullscreenDrawingMenu({
+  drawing,
+  pointCount,
+  disabled,
+  onDraw,
+  onMaxArea,
+  onMinArea,
+  onUndo,
+  onClear,
+}) {
+  const actions = [
+    { label: 'Max Area', icon: Maximize2, onClick: onMaxArea },
+    { label: 'Min Area', icon: Minimize2, onClick: onMinArea },
+    { label: drawing ? 'Stop Drawing' : 'Start Drawing', icon: Pencil, onClick: onDraw },
+    { label: 'Undo', icon: Undo2, onClick: onUndo, disabled: pointCount === 0 },
+    { label: 'Clear All', icon: Trash2, onClick: onClear, disabled: pointCount === 0 },
+  ];
+
+  return (
+    <div className="w-40 rounded-lg border border-white/10 bg-[#0d1118]/95 p-1.5 shadow-2xl backdrop-blur">
+      {actions.map((action) => {
+        const Icon = action.icon;
+        const actionDisabled = disabled || action.disabled;
+        return (
+          <button
+            key={action.label}
+            type="button"
+            disabled={actionDisabled}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (!actionDisabled) {
+                action.onClick();
+              }
+            }}
+            className={`flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-3 text-left text-[11px] font-bold transition-colors ${
+              actionDisabled
+                ? 'cursor-not-allowed text-white/30'
+                : 'bg-white/[0.06] text-white hover:bg-white/[0.12]'
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {action.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SaveDemoAreaModal({
+  open,
+  detectionName,
+  settingType,
+  zoneCount,
+  zoneOffset = 0,
+  initialZoneSettings,
+  saving,
+  onClose,
+  onSubmit,
+}) {
+  const [name, setName] = useState(detectionName || '');
+  const [zoneDrafts, setZoneDrafts] = useState([]);
+  const [collapsed, setCollapsed] = useState({});
+  const extraFields = ZONE_EXTRA_FIELDS[settingType] || [];
+
+  useEffect(() => {
+    if (!open) return;
+    setName(detectionName || '');
+    setZoneDrafts(Array.from({ length: Math.max(1, zoneCount) }, (_, index) => ({
+      name: `Zone ${zoneOffset + index + 1}`,
+      capacity: '',
+      threshold: '',
+      ...(initialZoneSettings?.[index] || {}),
+    })));
+    setCollapsed({});
+  }, [open, detectionName, settingType, zoneCount, zoneOffset, initialZoneSettings]);
+
+  const toggleCollapsed = (index) => {
+    setCollapsed((current) => ({ ...current, [index]: !current[index] }));
+  };
+
+  if (!open) return null;
+
+  const inputClass = 'h-11 w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 text-sm font-semibold text-[var(--tx)] outline-none focus:border-[var(--blue)]';
+  const labelClass = 'mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--tx3)]';
+
+  return (
+    <div className="fixed inset-0 z-[1000] grid place-items-center bg-black/45 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[var(--bd)] px-5 py-4">
+          <h3 className="text-base font-bold text-[var(--tx)]">Save Detection Area</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-[var(--tx3)] hover:bg-[var(--bg2)] hover:text-[var(--tx)] disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Close save area"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-4 px-5 py-4">
+          <div>
+            <label className={labelClass}>Detection Name</label>
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className={inputClass}
+              placeholder="Enter detection name"
+            />
+          </div>
+
+          <div className="rounded-xl border border-[var(--bd)] bg-[var(--bg2)] p-3">
+            <div className="mb-3 text-xs font-bold text-[var(--tx)]">
+              {zoneCount > 1 ? `${zoneCount} New Zones` : 'New Zone'}
+            </div>
+            <div className="max-h-[196px] space-y-3 overflow-y-auto pr-1">
+              {zoneDrafts.map((zone, index) => {
+                const isCollapsed = !!collapsed[index];
+                return (
+                  <div key={`save-zone-${index}`} className="rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)]">
+                    <button
+                      type="button"
+                      onClick={() => toggleCollapsed(index)}
+                      className="flex w-full cursor-pointer items-center justify-between px-3 py-2 text-left"
+                      aria-expanded={!isCollapsed}
+                    >
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--tx)]">
+                        {isCollapsed ? <ChevronDown className="h-3.5 w-3.5 text-[var(--tx3)]" /> : <ChevronUp className="h-3.5 w-3.5 text-[var(--tx3)]" />}
+                        {zone.name || `Zone ${index + 1}`}
+                      </span>
+                    </button>
+                    {!isCollapsed && (
+                      <div className="space-y-3 border-t border-[var(--bd)] p-3">
+                        <div>
+                          <label className={labelClass}>Zone Name *</label>
+                          <input
+                            value={zone.name}
+                            onChange={(event) => {
+                              const next = [...zoneDrafts];
+                              next[index] = { ...next[index], name: event.target.value };
+                              setZoneDrafts(next);
+                            }}
+                            className={inputClass}
+                            placeholder="Enter zone name"
+                          />
+                        </div>
+                        {extraFields.includes('capacity') && (
+                          <div>
+                            <label className={labelClass}>Capacity *</label>
+                            <input
+                              type="number"
+                              value={zone.capacity}
+                              onChange={(event) => {
+                                const next = [...zoneDrafts];
+                                next[index] = { ...next[index], capacity: event.target.value };
+                                setZoneDrafts(next);
+                              }}
+                              className={inputClass}
+                              placeholder="e.g. 10"
+                            />
+                          </div>
+                        )}
+                        {extraFields.includes('threshold') && (
+                          <div>
+                            <label className={labelClass}>Threshold (sec) *</label>
+                            <input
+                              type="number"
+                              value={zone.threshold}
+                              onChange={(event) => {
+                                const next = [...zoneDrafts];
+                                next[index] = { ...next[index], threshold: event.target.value };
+                                setZoneDrafts(next);
+                              }}
+                              className={inputClass}
+                              placeholder="e.g. 30"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 border-t border-[var(--bd)] px-5 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="h-10 cursor-pointer rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] px-5 text-sm font-bold text-[var(--tx2)] hover:bg-[var(--bg2)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onSubmit({
+              detectionName: name.trim(),
+              severity: 'moderate',
+              zoneDrafts: zoneDrafts.map((zone) => ({
+                name: zone.name.trim(),
+                capacity: zone.capacity,
+                threshold: zone.threshold,
+              })),
+            })}
+            disabled={saving}
+            className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] px-5 text-sm font-bold text-white shadow-lg shadow-[var(--violet)]/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving && <Loader className="h-4 w-4 animate-spin" />}
+            Submit
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const detectionConfigs = {
@@ -282,7 +672,141 @@ function AnprConfig() {
   );
 }
 
-function DetectionConfigPanel({ detectionName, config, confidence, setConfidence }) {
+function DemoZoneSettingsPanel({
+  settingType,
+  zones,
+  zoneSettings,
+  saving,
+  onChange,
+  onDelete,
+  onSave,
+}) {
+  const [collapsed, setCollapsed] = useState({});
+
+  if (!zones.length) return null;
+
+  const extraFields = ZONE_EXTRA_FIELDS[settingType] || [];
+  const inputClass = 'h-10 w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 text-xs font-semibold text-[var(--tx)] outline-none focus:border-[var(--blue)]';
+  const labelClass = 'mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--tx3)]';
+
+  const toggleCollapsed = (index) => {
+    setCollapsed((current) => ({ ...current, [index]: !current[index] }));
+  };
+
+  return (
+    <div className="mt-4 rounded-xl border border-[var(--bd)] bg-[var(--bg2)] p-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-bold text-[var(--tx)]">Zone Settings</div>
+          <div className="mt-1 text-[11px] text-[var(--tx3)]">
+            {zones.length} zone{zones.length === 1 ? '' : 's'} drawn for this detection type.
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] px-3 text-[11px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {saving ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+          Save
+        </button>
+      </div>
+
+      <div className="max-h-[260px] space-y-3 overflow-y-auto pr-1">
+        {zones.map((_, index) => {
+          const zone = zoneSettings[index] || defaultZoneSetting(index);
+          const isCollapsed = !!collapsed[index];
+          return (
+            <div key={`config-zone-${index}`} className="rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)]">
+              <button
+                type="button"
+                onClick={() => toggleCollapsed(index)}
+                className="flex w-full cursor-pointer items-center justify-between border-b border-[var(--bd)] px-3 py-2 text-left"
+                aria-expanded={!isCollapsed}
+              >
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--tx)]">
+                  {isCollapsed ? <ChevronDown className="h-3.5 w-3.5 text-[var(--tx3)]" /> : <ChevronUp className="h-3.5 w-3.5 text-[var(--tx3)]" />}
+                  {zone.name || `Zone ${index + 1}`}
+                </span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (!saving) onDelete(index);
+                  }}
+                  onKeyDown={(event) => {
+                    if ((event.key === 'Enter' || event.key === ' ') && !saving) {
+                      event.preventDefault();
+                      onDelete(index);
+                    }
+                  }}
+                  aria-disabled={saving}
+                  aria-label={`Delete zone ${index + 1}`}
+                  className={`grid h-7 w-7 place-items-center rounded-md text-red-500 hover:bg-red-50 ${saving ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </span>
+              </button>
+              {!isCollapsed && (
+                <div className="space-y-3 p-3">
+                  <div>
+                    <label className={labelClass}>Zone Name *</label>
+                    <input
+                      value={zone.name}
+                      onChange={(event) => onChange(index, 'name', event.target.value)}
+                      className={inputClass}
+                      placeholder="Enter zone name"
+                    />
+                  </div>
+                  {extraFields.includes('capacity') && (
+                    <div>
+                      <label className={labelClass}>Capacity *</label>
+                      <input
+                        type="number"
+                        value={zone.capacity}
+                        onChange={(event) => onChange(index, 'capacity', event.target.value)}
+                        className={inputClass}
+                        placeholder="e.g. 10"
+                      />
+                    </div>
+                  )}
+                  {extraFields.includes('threshold') && (
+                    <div>
+                      <label className={labelClass}>Threshold (sec) *</label>
+                      <input
+                        type="number"
+                        value={zone.threshold}
+                        onChange={(event) => onChange(index, 'threshold', event.target.value)}
+                        className={inputClass}
+                        placeholder="e.g. 30"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DetectionConfigPanel({
+  detectionName,
+  config,
+  confidence,
+  setConfidence,
+  settingType,
+  zones,
+  zoneSettings,
+  savingArea,
+  onZoneSettingChange,
+  onZoneDelete,
+  onZoneSettingsSave,
+}) {
   return (
     <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
       <h2 className="text-[15px] font-bold text-[var(--tx)]">3. Configure {detectionName}</h2>
@@ -292,13 +816,17 @@ function DetectionConfigPanel({ detectionName, config, confidence, setConfidence
 
       {config.anpr ? (
         <AnprConfig />
-      ) : (
-        <div className="mt-4 space-y-4">
-          {config.fields.map((field) => (
-            <TextInput key={field.label} label={field.label} placeholder={field.label} value={field.value} unit={field.unit} readOnly />
-          ))}
-        </div>
-      )}
+      ) : null}
+
+      <DemoZoneSettingsPanel
+        settingType={settingType}
+        zones={zones}
+        zoneSettings={zoneSettings}
+        saving={savingArea}
+        onChange={onZoneSettingChange}
+        onDelete={onZoneDelete}
+        onSave={onZoneSettingsSave}
+      />
 
       <ConfidenceControl confidence={confidence} setConfidence={setConfidence} />
     </section>
@@ -679,11 +1207,58 @@ export default function LiveDemo() {
   const [showList, setShowList] = useState(true);
   const [search, setSearch] = useState('');
   const [confidence, setConfidence] = useState(82);
+  const [clipFile, setClipFile] = useState(null);
+  const [clipPreviewUrl, setClipPreviewUrl] = useState('');
+  const [uploadedVideoPath, setUploadedVideoPath] = useState('');
+  const [uploadedVideoUrl, setUploadedVideoUrl] = useState('');
+  const [videoRecord, setVideoRecord] = useState(null);
+  const [recordVideos, setRecordVideos] = useState([]);
+  const [sessionAnalytics, setSessionAnalytics] = useState(null);
+  const [processJob, setProcessJob] = useState(null);
+  const [demoIncidents, setDemoIncidents] = useState({ items: [], totalCount: 0 });
+  const [demoAttendanceLogs, setDemoAttendanceLogs] = useState(null);
+  const [clipStatus, setClipStatus] = useState('idle');
+  const [clipProgress, setClipProgress] = useState(0);
   const clipInputRef = useRef(null);
+  const videoRef = useRef(null);
+  const stageRef = useRef(null);
+  const [videoSize, setVideoSize] = useState({ w: 0, h: 0 });
+  const [videoRect, setVideoRect] = useState({ left: 0, top: 0, width: 0, height: 0 });
+  const [drawing, setDrawing] = useState(false);
+  const [maxPoints, setMaxPoints] = useState(4);
+  const [points, setPoints] = useState([]);
+  const [draftZones, setDraftZones] = useState([]);
+  const [savedZones, setSavedZones] = useState([]);
+  const pointsRef = useRef([]);
+  const draftZonesRef = useRef([]);
+  const savedZonesRef = useRef([]);
+  const [isClipFullscreen, setIsClipFullscreen] = useState(false);
+  const [showDrawingActions, setShowDrawingActions] = useState(false);
+  const [savingArea, setSavingArea] = useState(false);
+  const [showSaveAreaModal, setShowSaveAreaModal] = useState(false);
+  const [zoneSettings, setZoneSettings] = useState([]);
+  // Zone names shown on the video overlay — set only from a confirmed save
+  // response, never from live edits in the Zone Settings panel, so the label
+  // on screen never gets ahead of what the server actually has.
+  const [confirmedZoneNames, setConfirmedZoneNames] = useState([]);
+  const [confirmDeleteIndex, setConfirmDeleteIndex] = useState(null);
+  const [zoneActionBusy, setZoneActionBusy] = useState(false);
 
   const selected = detections.find((item) => item.name === selectedDetection) || detections[0];
   const selectedConfig = detectionConfigs[selectedDetection];
   const configurationAvailable = selectedDetection === 'Face Recognition' || selectedConfig;
+  const isClipBusy = clipStatus === 'uploading' || clipStatus === 'processing';
+  const processedVideo = recordVideos.find((video) => video?.dsVideoUrl)?.dsVideoUrl;
+  const playerVideoUrl = mediaSrc(processedVideo || clipPreviewUrl || uploadedVideoUrl || uploadedVideoPath);
+  const statusLabel = clipStatus === 'uploading'
+    ? `Uploading - ${clipProgress}%`
+    : clipStatus === 'processing'
+      ? `Processing - ${clipProgress}%`
+      : clipStatus === 'ready'
+        ? 'Processed'
+        : clipStatus === 'uploaded'
+          ? 'Uploaded - ready to process'
+        : 'Waiting for clip';
   const filteredDetections = useMemo(() => {
     const query = search.trim().toLowerCase();
     return detections.filter((item) => {
@@ -692,6 +1267,599 @@ export default function LiveDemo() {
       return true;
     });
   }, [activeCategory, search]);
+
+  useEffect(() => {
+    return () => {
+      if (clipPreviewUrl) URL.revokeObjectURL(clipPreviewUrl);
+    };
+  }, [clipPreviewUrl]);
+
+  useEffect(() => {
+    const syncFullscreen = () => setIsClipFullscreen(document.fullscreenElement === stageRef.current);
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen);
+  }, []);
+
+  useEffect(() => {
+    if (!isClipFullscreen) setShowDrawingActions(false);
+  }, [isClipFullscreen]);
+
+  useEffect(() => {
+    let frameId = 0;
+    const updateVideoRect = () => {
+      const stage = stageRef.current;
+      if (!stage) return;
+      const rect = stage.getBoundingClientRect();
+      setVideoRect(containRect(rect.width, rect.height, videoSize.w || 1000, videoSize.h || 562));
+    };
+    frameId = requestAnimationFrame(updateVideoRect);
+    window.addEventListener('resize', updateVideoRect);
+    return () => {
+      cancelAnimationFrame(frameId);
+      window.removeEventListener('resize', updateVideoRect);
+    };
+  }, [playerVideoUrl, videoSize, isClipFullscreen]);
+
+  const resetClipState = async ({ deleteRemote = false } = {}) => {
+    if (deleteRemote && uploadedVideoPath) {
+      try {
+        await deleteDemoMedia(uploadedVideoPath);
+      } catch (error) {
+        console.error('Failed to remove demo clip', error);
+      }
+    }
+    if (clipPreviewUrl) URL.revokeObjectURL(clipPreviewUrl);
+    setClipFile(null);
+    setClipPreviewUrl('');
+    setUploadedVideoPath('');
+    setUploadedVideoUrl('');
+    setVideoRecord(null);
+    setRecordVideos([]);
+    setSessionAnalytics(null);
+    setProcessJob(null);
+    setDemoIncidents({ items: [], totalCount: 0 });
+    setDemoAttendanceLogs(null);
+    setClipStatus('idle');
+    setClipProgress(0);
+    setDrawing(false);
+    setShowDrawingActions(false);
+    setShowSaveAreaModal(false);
+    pointsRef.current = [];
+    draftZonesRef.current = [];
+    savedZonesRef.current = [];
+    setPoints([]);
+    setDraftZones([]);
+    setSavedZones([]);
+    setZoneSettings([]);
+  };
+
+  const handleVideoMetadata = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    setVideoSize({
+      w: video.videoWidth || 1000,
+      h: video.videoHeight || 562,
+    });
+  };
+
+  const drawingPoint = (event) => {
+    const targetBox = event.currentTarget.getBoundingClientRect();
+    if (!targetBox.width || !targetBox.height) return null;
+    const w = videoSize.w || 1000;
+    const h = videoSize.h || 562;
+    const xInVideo = event.clientX - targetBox.left;
+    const yInVideo = event.clientY - targetBox.top;
+    if (xInVideo < 0 || yInVideo < 0 || xInVideo > targetBox.width || yInVideo > targetBox.height) return null;
+    return {
+      x: Math.round((xInVideo / targetBox.width) * w),
+      y: Math.round((yInVideo / targetBox.height) * h),
+    };
+  };
+
+  const handleDrawingClick = (event) => {
+    if (!drawing || !playerVideoUrl) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const nextPoint = drawingPoint(event);
+    if (!nextPoint) return;
+    // Read/derive everything from the current ref (not the setPoints updater)
+    // so this handler stays a plain event handler with no in-updater side
+    // effects — React 18 StrictMode double-invokes updater functions in dev,
+    // which was pushing a completed zone into draftZonesRef twice per click.
+    const current = pointsRef.current;
+    if (current.length >= maxPoints) return;
+    const updated = [...current, nextPoint];
+
+    if (updated.length >= maxPoints) {
+      const nextDraftZones = [...draftZonesRef.current, updated];
+      draftZonesRef.current = nextDraftZones;
+      pointsRef.current = [];
+      setDraftZones(nextDraftZones);
+      setZoneSettings((prev) => syncZoneSettings(prev, savedZonesRef.current.length + nextDraftZones.length));
+      setPoints([]);
+      return;
+    }
+
+    pointsRef.current = updated;
+    setPoints(updated);
+  };
+
+  const handleMaxArea = () => {
+    const w = videoSize.w || 1000;
+    const h = videoSize.h || 562;
+    const nextPoints = [
+      { x: 0, y: 0 },
+      { x: w, y: 0 },
+      { x: w, y: h },
+      { x: 0, y: h },
+    ];
+    pointsRef.current = nextPoints;
+    setPoints(nextPoints);
+    setDrawing(false);
+  };
+
+  const handleMinArea = () => {
+    const w = videoSize.w || 1000;
+    const h = videoSize.h || 562;
+    const nextPoints = [
+      { x: Math.round(w * 0.28), y: Math.round(h * 0.28) },
+      { x: Math.round(w * 0.72), y: Math.round(h * 0.28) },
+      { x: Math.round(w * 0.72), y: Math.round(h * 0.72) },
+      { x: Math.round(w * 0.28), y: Math.round(h * 0.72) },
+    ];
+    pointsRef.current = nextPoints;
+    setPoints(nextPoints);
+    setDrawing(false);
+  };
+
+  const buildPendingZones = () => {
+    const latestPoints = pointsRef.current;
+    const latestDraftZones = draftZonesRef.current;
+    const latestSavedZones = savedZonesRef.current;
+    return latestPoints.length >= 3 ? [...latestSavedZones, ...latestDraftZones, latestPoints] : [...latestSavedZones, ...latestDraftZones];
+  };
+
+  // Zones drawn since the last save — draft zones plus the in-progress one,
+  // excluding anything already saved on the server (that's savedZones).
+  const buildNewZones = () => {
+    const latestPoints = pointsRef.current;
+    const latestDraftZones = draftZonesRef.current;
+    return latestPoints.length >= 3 ? [...latestDraftZones, latestPoints] : [...latestDraftZones];
+  };
+
+  const pendingZones = buildPendingZones();
+  const newZones = buildNewZones();
+  const visibleZoneSettings = syncZoneSettings(zoneSettings, pendingZones.length);
+  const savedZoneSettings = syncZoneSettings(zoneSettings, savedZones.length);
+  const newZoneSettings = visibleZoneSettings.slice(savedZones.length);
+
+  const handleZoneSettingChange = (index, field, value) => {
+    setZoneSettings((current) => {
+      const updated = syncZoneSettings(current, pendingZones.length);
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  // Shared by delete-zone / clear-all / zone-settings-save: pushes the given
+  // zones + configs to the server (update the existing record if we have one,
+  // otherwise create it), then re-fetches so the screen only ever shows what
+  // the server actually confirms is stored — never a local guess.
+  const persistZones = async ({ zones, zoneConfigs, detectionName, severity = 'moderate' }) => {
+    const detectionKey = selected.name === 'Zone Intrusion Detection'
+      ? 'zoneIntrusionSettings'
+      : selected.settingType;
+    const extraFields = ZONE_EXTRA_FIELDS[selected.settingType] || [];
+    const zonesPayload = zones.map((zone) => zone.map((point) => [point.x, point.y]));
+    const zoneConfigsPayload = zonesPayload.map((_, index) => {
+      const zone = zoneConfigs[index] || {};
+      return {
+        name: zone.name || `Zone ${index + 1}`,
+        detection_name: detectionName || selected.name,
+        levelOfImportance: zone.severity || severity,
+        ...(extraFields.includes('capacity') && String(zone.capacity ?? '').trim() !== ''
+          ? { capacity: valueForPayload(zone.capacity) }
+          : {}),
+        ...(extraFields.includes('threshold') && String(zone.threshold ?? '').trim() !== ''
+          ? { threshold_sec: valueForPayload(zone.threshold) }
+          : {}),
+        camera_type: 'hikvision',
+      };
+    });
+
+    const existingRecordId = recordIdOf(videoRecord);
+    const existingVideoId = firstVideoOf(videoRecord)?._id;
+
+    let record;
+    if (existingRecordId && existingVideoId) {
+      record = await updateVideoRecord(existingRecordId, {
+        videoId: existingVideoId,
+        zones: zonesPayload,
+        zone_configs: zoneConfigsPayload,
+      });
+    } else {
+      record = await createVideoRecord({
+        videos: [{ videoUrl: uploadedVideoPath, zones: zonesPayload, zone_configs: zoneConfigsPayload }],
+        detections: { [detectionKey]: true },
+      });
+    }
+    setVideoRecord(record);
+
+    const recordId = recordIdOf(record);
+    const videosData = recordId ? await getVideoRecordVideos(recordId) : null;
+    const savedVideo = firstVideoOf(videosData) || firstVideoOf(record);
+    const confirmedZones = Array.isArray(savedVideo?.zones)
+      ? savedVideo.zones.map((zone) => zone.map(([x, y]) => ({ x, y })))
+      : zones;
+    const confirmedConfigs = Array.isArray(savedVideo?.zone_configs)
+      ? savedVideo.zone_configs.map((config, index) => ({
+          name: config.name || `Zone ${index + 1}`,
+          capacity: config.capacity ?? '',
+          threshold: config.threshold_sec ?? '',
+        }))
+      : zoneConfigs;
+
+    savedZonesRef.current = confirmedZones;
+    pointsRef.current = [];
+    draftZonesRef.current = [];
+    setSavedZones(confirmedZones);
+    setDraftZones([]);
+    setPoints([]);
+    setZoneSettings(syncZoneSettings(confirmedConfigs, confirmedZones.length));
+    setConfirmedZoneNames(confirmedConfigs.map((config, index) => config.name || `Zone ${index + 1}`));
+    setDrawing(false);
+  };
+
+  const handleDeleteZone = (index) => {
+    // Zone Settings only ever lists saved zones, so any delete here targets
+    // something already on the server — confirm before touching it.
+    if (index < savedZonesRef.current.length) {
+      setConfirmDeleteIndex(index);
+      return;
+    }
+
+    const savedCount = savedZonesRef.current.length;
+    const draftCount = draftZonesRef.current.length;
+    if (index < savedCount + draftCount) {
+      const draftIndex = index - savedCount;
+      const nextDraft = draftZonesRef.current.filter((_, zoneIndex) => zoneIndex !== draftIndex);
+      draftZonesRef.current = nextDraft;
+      setDraftZones(nextDraft);
+    } else {
+      pointsRef.current = [];
+      setPoints([]);
+    }
+
+    setZoneSettings((current) => current.filter((_, zoneIndex) => zoneIndex !== index));
+  };
+
+  const confirmDeleteZone = async () => {
+    const index = confirmDeleteIndex;
+    if (index === null) return;
+
+    const remainingZones = savedZonesRef.current.filter((_, zoneIndex) => zoneIndex !== index);
+    const remainingConfigs = zoneSettings.filter((_, zoneIndex) => zoneIndex !== index);
+
+    setZoneActionBusy(true);
+    try {
+      await persistZones({ zones: remainingZones, zoneConfigs: remainingConfigs, detectionName: selectedDetection });
+      toast.success('Zone deleted', COMPACT_TOAST);
+      setConfirmDeleteIndex(null);
+    } catch (error) {
+      console.error('Live demo zone delete failed', error);
+      const message =
+        error?.response?.data?.body?.message ||
+        error?.response?.data?.body?.error ||
+        error?.message ||
+        'Failed to delete zone';
+      toast.error(message, COMPACT_TOAST);
+    } finally {
+      setZoneActionBusy(false);
+    }
+  };
+
+  const handleSaveArea = async () => {
+    const nextNewZones = buildNewZones();
+    if (nextNewZones.length === 0) {
+      toast.error('Place at least 3 points before saving area', COMPACT_TOAST);
+      return;
+    }
+    if (!uploadedVideoPath) {
+      toast.error('Upload a clip before saving area', COMPACT_TOAST);
+      return;
+    }
+    if (!selected.settingType) {
+      toast.error(`${selected.name} is not available in the Live Demo API yet`, COMPACT_TOAST);
+      return;
+    }
+    if (document.fullscreenElement === stageRef.current) {
+      setShowDrawingActions(false);
+      await document.exitFullscreen?.();
+    }
+    setShowSaveAreaModal(true);
+  };
+
+  const handleSubmitSaveArea = async ({ detectionName, severity, zoneDrafts: submittedZones = [] }) => {
+    const nextNewZones = buildNewZones();
+    if (nextNewZones.length === 0) {
+      toast.error('Place at least 3 points before saving area', COMPACT_TOAST);
+      return;
+    }
+    if (!uploadedVideoPath) {
+      toast.error('Upload a clip before saving area', COMPACT_TOAST);
+      return;
+    }
+    if (!selected.settingType) {
+      toast.error(`${selected.name} is not available in the Live Demo API yet`, COMPACT_TOAST);
+      return;
+    }
+
+    // Merge the newly drawn zones (from the modal) with what's already saved,
+    // so submitting doesn't wipe out zones saved earlier in this session.
+    const allZones = [...savedZonesRef.current, ...nextNewZones];
+    const allZoneConfigs = [...savedZoneSettings, ...submittedZones.map((zone) => ({ ...zone, severity }))];
+
+    setSavingArea(true);
+    try {
+      await persistZones({
+        zones: allZones,
+        zoneConfigs: allZoneConfigs,
+        detectionName,
+        severity,
+      });
+      setShowSaveAreaModal(false);
+      toast.success('Area saved for this demo clip', COMPACT_TOAST);
+    } catch (error) {
+      console.error('Live demo area save failed', error);
+      const message =
+        error?.response?.data?.body?.message ||
+        error?.response?.data?.body?.error ||
+        error?.message ||
+        'Failed to save area';
+      toast.error(message, COMPACT_TOAST);
+    } finally {
+      setSavingArea(false);
+    }
+  };
+
+  // Zone Settings panel's own Save button — persists edits (name/capacity/
+  // threshold) made to zones that are already saved, no drawing involved.
+  const handleZoneSettingsPanelSave = async () => {
+    if (savedZones.length === 0) return;
+
+    setSavingArea(true);
+    try {
+      await persistZones({
+        zones: savedZones,
+        zoneConfigs: savedZoneSettings,
+        detectionName: selectedDetection,
+      });
+      toast.success('Zone settings saved', COMPACT_TOAST);
+    } catch (error) {
+      console.error('Live demo zone settings save failed', error);
+      const message =
+        error?.response?.data?.body?.message ||
+        error?.response?.data?.body?.error ||
+        error?.message ||
+        'Failed to save zone settings';
+      toast.error(message, COMPACT_TOAST);
+    } finally {
+      setSavingArea(false);
+    }
+  };
+
+  const toggleClipFullscreen = async () => {
+    if (!stageRef.current) return;
+    if (document.fullscreenElement === stageRef.current) {
+      setShowDrawingActions(false);
+      await document.exitFullscreen?.();
+      return;
+    }
+    await stageRef.current.requestFullscreen?.();
+  };
+
+  const drawingToolbarProps = {
+    drawing,
+    pointCount: points.length + draftZones.reduce((sum, zone) => sum + zone.length, 0) + savedZones.reduce((sum, zone) => sum + zone.length, 0),
+    maxPoints,
+    disabled: !playerVideoUrl || isClipBusy || savingArea,
+    onDraw: () => setDrawing((value) => !value),
+    onMaxArea: handleMaxArea,
+    onMinArea: handleMinArea,
+    onDecrease: () => setMaxPoints((value) => Math.max(3, value - 1)),
+    onIncrease: () => setMaxPoints((value) => value + 1),
+    onUndo: () => {
+      if (pointsRef.current.length > 0) {
+        const updated = pointsRef.current.slice(0, -1);
+        pointsRef.current = updated;
+        setPoints(updated);
+        return;
+      }
+      if (draftZonesRef.current.length > 0) {
+        const updated = draftZonesRef.current.slice(0, -1);
+        draftZonesRef.current = updated;
+        setDraftZones(updated);
+        return;
+      }
+      const updated = savedZonesRef.current.slice(0, -1);
+      savedZonesRef.current = updated;
+      setSavedZones(updated);
+    },
+    onClear: () => {
+      // Only the drawing-in-progress (never saved) — clear locally, nothing to tell the server.
+      if (savedZonesRef.current.length === 0) {
+        pointsRef.current = [];
+        draftZonesRef.current = [];
+        setPoints([]);
+        setDraftZones([]);
+        return;
+      }
+      // Zones already saved on the server — clear them there too, no confirmation.
+      handleClearAll();
+    },
+    onSave: handleSaveArea,
+  };
+
+  const handleClearAll = async () => {
+    setZoneActionBusy(true);
+    try {
+      pointsRef.current = [];
+      draftZonesRef.current = [];
+      setPoints([]);
+      setDraftZones([]);
+      await persistZones({ zones: [], zoneConfigs: [], detectionName: selectedDetection });
+      toast.success('All zones cleared', COMPACT_TOAST);
+    } catch (error) {
+      console.error('Live demo clear zones failed', error);
+      const message =
+        error?.response?.data?.body?.message ||
+        error?.response?.data?.body?.error ||
+        error?.message ||
+        'Failed to clear zones';
+      toast.error(message, COMPACT_TOAST);
+    } finally {
+      setZoneActionBusy(false);
+    }
+  };
+
+  const handleClipFile = async (file) => {
+    if (!file) return;
+    if (!selected.settingType) {
+      toast.error(`${selected.name} is not available in the Live Demo API yet`, COMPACT_TOAST);
+      return;
+    }
+    if (!['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska'].includes(file.type)) {
+      toast.error('Please upload MP4, MOV, AVI, or MKV clips', COMPACT_TOAST);
+      return;
+    }
+    if (file.size > 30 * 1024 * 1024) {
+      toast.error('Clip must be 30 MB or smaller', COMPACT_TOAST);
+      return;
+    }
+
+    await resetClipState();
+    const localUrl = URL.createObjectURL(file);
+    setClipFile(file);
+    setClipPreviewUrl(localUrl);
+    setClipStatus('uploading');
+    setClipProgress(1);
+
+    try {
+      const uploaded = await uploadDemoClip(file, {
+        onUploadProgress: (event) => {
+          if (!event.total) return;
+          setClipProgress(Math.min(95, Math.round((event.loaded / event.total) * 100)));
+        },
+      });
+
+      if (!uploaded.videoUrl) throw new Error('Upload did not return a video path');
+      setUploadedVideoPath(uploaded.videoUrl);
+      setUploadedVideoUrl(uploaded.fullUrl || '');
+
+      const record = await createVideoRecord({
+        videos: [{ videoUrl: uploaded.videoUrl }],
+        detections: { [selected.settingType]: true },
+      });
+      setVideoRecord(record);
+      setClipProgress(100);
+      setClipStatus('uploaded');
+      toast.success('Demo clip uploaded. Click Process clip to run detection.', COMPACT_TOAST);
+    } catch (error) {
+      console.error('Live demo clip upload failed', error);
+      const message =
+        error?.response?.data?.body?.message ||
+        error?.response?.data?.body?.error ||
+        error?.message ||
+        'Failed to upload demo clip';
+      setClipStatus('error');
+      toast.error(message, COMPACT_TOAST);
+    }
+  };
+
+  const handleProcessClip = async () => {
+    if (!clipFile && !uploadedVideoPath) {
+      toast.error('Select a clip before processing', COMPACT_TOAST);
+      return;
+    }
+    if (!selected.settingType) {
+      toast.error(`${selected.name} is not available in the Live Demo API yet`, COMPACT_TOAST);
+      return;
+    }
+
+    setClipStatus('processing');
+    setClipProgress(10);
+    setProcessJob(null);
+    setRecordVideos([]);
+    setSessionAnalytics(null);
+    setDemoIncidents({ items: [], totalCount: 0 });
+    setDemoAttendanceLogs(null);
+
+    let videoPath = uploadedVideoPath;
+    try {
+      let record = videoRecord;
+
+      if (!videoPath && clipFile) {
+        setClipStatus('uploading');
+        const uploaded = await uploadDemoClip(clipFile, {
+          onUploadProgress: (event) => {
+            if (!event.total) return;
+            setClipProgress(Math.min(80, Math.round((event.loaded / event.total) * 80)));
+          },
+        });
+        if (!uploaded.videoUrl) throw new Error('Upload did not return a video path');
+        videoPath = uploaded.videoUrl;
+        setUploadedVideoPath(videoPath);
+        setUploadedVideoUrl(uploaded.fullUrl || '');
+      }
+
+      if (!recordIdOf(record)) {
+        record = await createVideoRecord({
+          videos: [{ videoUrl: videoPath }],
+          detections: { [selected.settingType]: true },
+        });
+        setVideoRecord(record);
+      }
+
+      const recordId = recordIdOf(record);
+      const video = firstVideoOf(record);
+      if (!recordId || !video?._id) throw new Error('Demo record did not return a video id');
+      setClipStatus('processing');
+      setClipProgress(10);
+
+      const job = await processVideoRecord(recordId, {
+        videoId: video._id || video.id,
+        detectors: [{ name: selected.settingType }],
+      });
+      setProcessJob(job);
+      setClipProgress(45);
+
+      const [videosData, analyticsData, incidentsData, attendanceData] = await Promise.all([
+        getVideoRecordVideos(recordId),
+        getVideoRecordAnalytics(recordId),
+        getDemoIncidents({ limit: 10, incidentTypeFilter: [selected.settingType] }),
+        selected.settingType === 'attendanceSettings'
+          ? getDemoAttendanceLogs({ limit: 10, isExport: false })
+          : Promise.resolve(null),
+      ]);
+
+      setRecordVideos(videosData?.videos || []);
+      setSessionAnalytics(analyticsData || null);
+      setDemoIncidents(incidentsData || { items: [], totalCount: 0 });
+      setDemoAttendanceLogs(attendanceData);
+      setClipProgress(100);
+      setClipStatus('ready');
+      toast.success('Demo processing started', COMPACT_TOAST);
+    } catch (error) {
+      console.error('Live demo clip processing failed', error);
+      const message =
+        error?.response?.data?.body?.message ||
+        error?.response?.data?.body?.error ||
+        error?.message ||
+        'Failed to process demo clip';
+      setClipStatus(videoPath ? 'uploaded' : 'error');
+      toast.error(message, COMPACT_TOAST);
+    }
+  };
 
   return (
     <div className="min-h-full bg-[var(--bg2)] p-3 sm:p-4 lg:p-[22px]">
@@ -835,34 +2003,323 @@ export default function LiveDemo() {
               {selectedDetection}
             </span>
           </div>
-          <input ref={clipInputRef} type="file" accept="video/mp4,video/quicktime,video/webm" className="hidden" />
-          <button
-            type="button"
-            onClick={() => clipInputRef.current?.click()}
-            className="grid min-h-[216px] w-full cursor-pointer place-items-center rounded-xl border border-dashed border-[var(--bd2)] bg-[var(--bg2)] p-6 text-center transition-colors hover:border-[var(--blue)]"
-          >
-            <div>
-              <span className="mx-auto grid h-14 w-14 place-items-center rounded-full border border-[var(--violet)]/25 bg-gradient-to-br from-[var(--blue)]/15 to-[var(--violet)]/20 text-[var(--blue)]">
-                <Upload className="h-6 w-6" />
-              </span>
-              <div className="mt-4 text-base font-bold text-[var(--tx)]">Drop your clip here, or click to browse</div>
-              <div className="mt-2 text-xs text-[var(--tx2)]">Use a short, clear clip from the camera angle you want to test.</div>
-              <div className="mt-4 flex flex-wrap justify-center gap-2">
-                {['MP4', 'MOV', 'WEBM', '10-60 SEC CLIP', 'MAX 30 MB'].map((tag) => (
-                  <span key={tag} className="rounded-md border border-[var(--bd)] bg-[var(--bg1solid)] px-2 py-1 text-[10px] font-bold tracking-[0.08em] text-[var(--tx3)]">
-                    {tag}
-                  </span>
-                ))}
+          <input
+            ref={clipInputRef}
+            type="file"
+            accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,.mp4,.mov,.avi,.mkv"
+            className="hidden"
+            onChange={(event) => {
+              handleClipFile(event.target.files?.[0]);
+              event.target.value = '';
+            }}
+          />
+          {clipFile ? (
+            <div className="overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg2)]">
+              <div
+                ref={stageRef}
+                className={`relative grid min-h-[260px] place-items-center overflow-hidden bg-black ${drawing ? 'cursor-crosshair' : ''} ${isClipFullscreen ? 'h-screen w-screen' : ''}`}
+              >
+                {playerVideoUrl ? (
+                  <video
+                    ref={videoRef}
+                    src={playerVideoUrl}
+                    className={`${isClipFullscreen ? 'h-screen w-screen max-h-none' : 'h-full max-h-[420px] w-full'} object-contain`}
+                    controls
+                    muted
+                    onLoadedMetadata={handleVideoMetadata}
+                    onClick={(event) => {
+                      if (!drawing) event.preventDefault();
+                    }}
+                  />
+                ) : (
+                  <FileVideo className="h-10 w-10 text-white/70" />
+                )}
+                {playerVideoUrl && (
+                  <>
+                    <svg
+                      className="pointer-events-none absolute z-[3]"
+                      style={{
+                        left: videoRect.left,
+                        top: videoRect.top,
+                        width: videoRect.width,
+                        height: videoRect.height,
+                      }}
+                      viewBox={`0 0 ${videoSize.w || 1000} ${videoSize.h || 562}`}
+                      preserveAspectRatio="none"
+                    >
+                      {savedZones.map((zone, index) => (
+                        <g key={`zone-${index}`}>
+                          <polygon
+                            points={pointsToAttr(zone)}
+                            fill="rgba(245,166,35,.18)"
+                            stroke="rgba(245,166,35,.95)"
+                            strokeWidth="3"
+                          />
+                          {zone.map((point, pointIndex) => (
+                            <circle key={`zone-${index}-point-${pointIndex}`} cx={point.x} cy={point.y} r="6" fill="#fff" stroke="rgba(245,166,35,.95)" strokeWidth="3" />
+                          ))}
+                        </g>
+                      ))}
+                      {draftZones.map((zone, index) => (
+                        <g key={`draft-zone-${index}`}>
+                          <polygon
+                            points={pointsToAttr(zone)}
+                            fill="rgba(59,130,246,.14)"
+                            stroke="rgba(59,130,246,.95)"
+                            strokeWidth="3"
+                          />
+                          {zone.map((point, pointIndex) => (
+                            <circle key={`draft-zone-${index}-point-${pointIndex}`} cx={point.x} cy={point.y} r="6" fill="#fff" stroke="rgba(59,130,246,.95)" strokeWidth="3" />
+                          ))}
+                        </g>
+                      ))}
+                      {points.length >= 2 && (
+                        <polyline
+                          points={pointsToAttr(points)}
+                          fill="none"
+                          stroke="rgba(59,130,246,.95)"
+                          strokeWidth="3"
+                        />
+                      )}
+                      {points.length >= 3 && (
+                        <polygon
+                          points={pointsToAttr(points)}
+                          fill="rgba(59,130,246,.14)"
+                          stroke="rgba(59,130,246,.95)"
+                          strokeWidth="3"
+                        />
+                      )}
+                      {points.map((point, index) => (
+                        <circle key={`point-${index}`} cx={point.x} cy={point.y} r="7" fill="#fff" stroke="rgba(59,130,246,.95)" strokeWidth="3" />
+                      ))}
+                    </svg>
+                    <div
+                      className="pointer-events-none absolute z-[3]"
+                      style={{ left: videoRect.left, top: videoRect.top, width: videoRect.width, height: videoRect.height }}
+                    >
+                      {savedZones.map((zone, index) => {
+                        const w = videoSize.w || 1000;
+                        const h = videoSize.h || 562;
+                        const topPoint = zone.reduce((top, point) => (point.y < top.y ? point : top), zone[0]);
+                        const label = confirmedZoneNames[index] || `Zone ${index + 1}`;
+                        return (
+                          <div
+                            key={`zone-label-${index}`}
+                            className="absolute -translate-x-1/2 -translate-y-full"
+                            style={{ left: `${(topPoint.x / w) * 100}%`, top: `${(topPoint.y / h) * 100}%`, marginTop: '-8px' }}
+                          >
+                            <span className="block rounded-md bg-[#e6395c] px-2.5 py-1 text-[11px] font-bold whitespace-nowrap text-white shadow-md">
+                              {label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {drawing && (
+                      <button
+                        type="button"
+                        className="absolute z-[4] cursor-crosshair border-0 bg-transparent p-0"
+                        style={{
+                          left: videoRect.left,
+                          top: videoRect.top,
+                          width: videoRect.width,
+                          height: videoRect.height,
+                        }}
+                        onClick={handleDrawingClick}
+                        aria-label="Place zone point"
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleClipFullscreen();
+                      }}
+                      className="absolute right-3 top-3 z-20 grid h-9 w-9 cursor-pointer place-items-center rounded-lg border border-white/15 bg-black/60 text-white backdrop-blur"
+                      aria-label={isClipFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                    >
+                      {isClipFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                    </button>
+                    {isClipFullscreen && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setShowDrawingActions((value) => !value);
+                          }}
+                          className={`absolute right-14 top-3 z-30 grid h-9 w-9 cursor-pointer place-items-center rounded-lg border border-white/15 bg-black/60 text-white backdrop-blur ${showDrawingActions ? 'border-white/40 bg-black/80' : ''}`}
+                          aria-label="Drawing actions"
+                          title="Drawing actions"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        {showDrawingActions && (
+                          <div
+                            className="absolute right-3 top-14 z-30"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <FullscreenDrawingMenu {...drawingToolbarProps} />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+                {isClipBusy && (
+                  <div className="absolute inset-0 grid place-items-center bg-black/55 text-center text-white">
+                    <div>
+                      <div className="text-3xl font-bold">{clipProgress}%</div>
+                      <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white/75">{statusLabel}</div>
+                      <div className="mx-auto mt-4 h-1.5 w-48 overflow-hidden rounded-full bg-white/20">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-[var(--blue)] to-[var(--violet)] transition-all"
+                          style={{ width: `${clipProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {!isClipFullscreen && (
+                <div className="border-t border-[var(--bd)] bg-[var(--bg1solid)] p-3">
+                  <DemoDrawingToolbar {...drawingToolbarProps} />
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--bd)] p-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[var(--blue)]/10 text-[var(--blue)]">
+                    <FileVideo className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold text-[var(--tx)]">{clipFile.name}</div>
+                    <div className="mt-1 text-[11px] font-semibold text-[var(--tx3)]">
+                      {statusLabel}
+                      {fileSizeLabel(clipFile.size) ? ` - ${fileSizeLabel(clipFile.size)}` : ''}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleProcessClip}
+                    disabled={isClipBusy || (!clipFile && !uploadedVideoPath) || clipStatus === 'ready'}
+                    className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] px-3 text-xs font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {clipStatus === 'processing' ? <Loader className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    {clipStatus === 'ready' ? 'Processed' : 'Process clip'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => clipInputRef.current?.click()}
+                    disabled={isClipBusy}
+                    className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-[var(--blue)]/35 bg-[var(--blue)]/10 px-3 text-xs font-bold text-[var(--blue)] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Upload className="h-4 w-4" />
+                    Replace clip
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => resetClipState({ deleteRemote: true })}
+                    disabled={isClipBusy}
+                    className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-bold text-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Remove clip
+                  </button>
+                </div>
+              </div>
+
+              {(processJob || sessionAnalytics || demoIncidents.totalCount > 0 || demoAttendanceLogs) && (
+                <div className="grid gap-2 border-t border-[var(--bd)] p-3 text-[11px] text-[var(--tx2)] sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] p-2">
+                    <div className="font-bold text-[var(--tx)]">Job</div>
+                    <div className="mt-1 truncate">{processJob?.job_id || processJob?.status || 'Submitted'}</div>
+                  </div>
+                  <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] p-2">
+                    <div className="font-bold text-[var(--tx)]">Events</div>
+                    <div className="mt-1">{sessionAnalytics?.eventsDetected ?? demoIncidents.totalCount ?? 0}</div>
+                  </div>
+                  <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] p-2">
+                    <div className="font-bold text-[var(--tx)]">Avg Confidence</div>
+                    <div className="mt-1">{sessionAnalytics?.avgConfidence ?? confidence}%</div>
+                  </div>
+                  <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] p-2">
+                    <div className="font-bold text-[var(--tx)]">Record</div>
+                    <div className="mt-1 truncate">{recordIdOf(videoRecord) || '-'}</div>
+                  </div>
+                </div>
+              )}
             </div>
-          </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => clipInputRef.current?.click()}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                handleClipFile(event.dataTransfer.files?.[0]);
+              }}
+              className="grid min-h-[216px] w-full cursor-pointer place-items-center rounded-xl border border-dashed border-[var(--bd2)] bg-[var(--bg2)] p-6 text-center transition-colors hover:border-[var(--blue)]"
+            >
+              <div>
+                <span className="mx-auto grid h-14 w-14 place-items-center rounded-full border border-[var(--violet)]/25 bg-gradient-to-br from-[var(--blue)]/15 to-[var(--violet)]/20 text-[var(--blue)]">
+                  <Upload className="h-6 w-6" />
+                </span>
+                <div className="mt-4 text-base font-bold text-[var(--tx)]">Drop your clip here, or click to browse</div>
+                <div className="mt-2 text-xs text-[var(--tx2)]">Use a short, clear clip from the camera angle you want to test.</div>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  {['MP4', 'MOV', 'AVI', 'MKV', '10-60 SEC CLIP', 'MAX 30 MB'].map((tag) => (
+                    <span key={tag} className="rounded-md border border-[var(--bd)] bg-[var(--bg1solid)] px-2 py-1 text-[10px] font-bold tracking-[0.08em] text-[var(--tx3)]">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </button>
+          )}
         </section>
 
         {selectedDetection === 'Face Recognition' && <FaceRecognitionConfig confidence={confidence} setConfidence={setConfidence} />}
         {selectedDetection !== 'Face Recognition' && selectedConfig && (
-          <DetectionConfigPanel detectionName={selectedDetection} config={selectedConfig} confidence={confidence} setConfidence={setConfidence} />
+          <DetectionConfigPanel
+            detectionName={selectedDetection}
+            config={selectedConfig}
+            confidence={confidence}
+            setConfidence={setConfidence}
+            settingType={selected.settingType}
+            zones={savedZones}
+            zoneSettings={savedZoneSettings}
+            savingArea={savingArea}
+            onZoneSettingChange={handleZoneSettingChange}
+            onZoneDelete={handleDeleteZone}
+            onZoneSettingsSave={handleZoneSettingsPanelSave}
+          />
         )}
       </div>
+      <SaveDemoAreaModal
+        open={showSaveAreaModal}
+        detectionName={selectedDetection}
+        settingType={selected.settingType}
+        zoneCount={newZones.length}
+        zoneOffset={savedZones.length}
+        initialZoneSettings={newZoneSettings}
+        saving={savingArea}
+        onClose={() => !savingArea && setShowSaveAreaModal(false)}
+        onSubmit={handleSubmitSaveArea}
+      />
+      <ConfirmModal
+        open={confirmDeleteIndex !== null}
+        title="Delete this zone?"
+        message={`This removes ${savedZoneSettings[confirmDeleteIndex]?.name || `Zone ${(confirmDeleteIndex ?? 0) + 1}`} zone. This cannot be undone.`}
+        confirmLabel="Delete Zone"
+        busy={zoneActionBusy}
+        onCancel={() => !zoneActionBusy && setConfirmDeleteIndex(null)}
+        onConfirm={confirmDeleteZone}
+      />
     </div>
   );
 }
