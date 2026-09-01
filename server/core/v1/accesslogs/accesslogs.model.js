@@ -31,6 +31,8 @@ const accessLogSchema = new mongoose.Schema({
     required: false,     // not mandatory
     default: null,       // only set when provided
   },
+  liveDemoData: { type: Boolean, default: false },
+  videoId: { type: mongoose.Schema.Types.ObjectId, ref: "LiveDemo", default: null },
 
   sessions: { type: [sessionSchema], default: [] }, // multiple enter/exit pairs
 }, { timestamps: true });

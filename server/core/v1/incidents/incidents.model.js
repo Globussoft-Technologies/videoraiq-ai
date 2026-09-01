@@ -27,6 +27,7 @@ const incidentSchema = new Schema({
   ConfidenceScoreInPercentage:{type:Number,default:null},
   resolved:{type:Boolean,default:false},
   liveDemoData:{type:Boolean,default:false},
+  videoId:{type:mongoose.Schema.Types.ObjectId,ref:'LiveDemo',default:null},
   report:{
     status:{type:Boolean,default:false},
     description:{type:String,default:""},

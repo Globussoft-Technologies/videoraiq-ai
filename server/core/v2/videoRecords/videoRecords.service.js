@@ -149,7 +149,12 @@ class VideoRecordsService {
       }
 
       const record = await videoRecordModel.create({
-        videos: entries.map((v) => ({ videoUrl: v.videoUrl, dsVideoUrl: v.dsVideoUrl ?? null })),
+        videos: entries.map((v) => ({
+          videoUrl: v.videoUrl,
+          dsVideoUrl: v.dsVideoUrl ?? null,
+          zones: Array.isArray(v.zones) ? v.zones : [],
+          zone_configs: Array.isArray(v.zone_configs) ? v.zone_configs : [],
+        })),
         adminId,
         userId,
         plan: { name: latestPlan.plan, expiryDate: latestPlan.expiry },
@@ -247,7 +252,12 @@ class VideoRecordsService {
         admin_id: adminId.toString(),
         video_id: video._id.toString(),
         source_url: toAbsoluteMediaUrl(video.videoUrl),
-        detectors: names.map((name) => ({ name })),
+        detectors: names.map((name) => {
+          const detector = { name };
+          if (video.zones && video.zones.length) detector.zones = video.zones;
+          if (video.zone_configs && video.zone_configs.length) detector.zone_configs = video.zone_configs;
+          return detector;
+        }),
       };
 
       const job = await pythonService.processVideoJob(payload);

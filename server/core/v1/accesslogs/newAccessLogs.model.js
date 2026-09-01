@@ -23,6 +23,7 @@ const accessLogSchema = new mongoose.Schema({
   tag: { type: Boolean, default: false },
 
   liveDemoData: { type: Boolean, default: false },
+  videoId: { type: mongoose.Schema.Types.ObjectId, ref: "LiveDemo", default: null },
 
   // Denormalized $max of sessions[].timestamp. The access-logs list sorts on
   // this; computing it with $max at query time forced a blocking in-memory sort

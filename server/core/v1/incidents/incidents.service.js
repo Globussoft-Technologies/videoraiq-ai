@@ -182,13 +182,19 @@ class IncidentsService {
   async createIncidents(req, res, next) {
     try {
       normalizeVehicleObstructionPayload(req.body);
-      const { incidentType, nvrId, channelId, triggerNotification, adminId, liveDemoData } =
+      const { incidentType, nvrId, channelId, triggerNotification, adminId, liveDemoData, videoId } =
         req.body;
       // const userId = req?.verified?.userData?.user_id;
 
       if (liveDemoData !== undefined && typeof liveDemoData !== "boolean") {
         return res.send(
           Response.validationFailResp("liveDemoData must be a boolean", "Validation Failed!"),
+        );
+      }
+
+      if (videoId !== undefined && !mongoose.Types.ObjectId.isValid(videoId)) {
+        return res.send(
+          Response.validationFailResp("videoId must be a valid ObjectId", "Validation Failed!"),
         );
       }
 

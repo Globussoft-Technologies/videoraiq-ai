@@ -348,7 +348,12 @@ class AccessLogsService {
     async createAccessLogRecord(req,res,next){
      try {
         let body = req.body;
-        let { userId, personName, date, timestamp, images ,cameraId,nvrId,adminId, confidenceScore = 0, liveDemoData} = body;
+        let { userId, personName, date, timestamp, images ,cameraId,nvrId,adminId, confidenceScore = 0, liveDemoData, videoId} = body;
+
+        if (videoId !== undefined && !mongoose.Types.ObjectId.isValid(videoId)) {
+          return res.send(Response.userFailResp("videoId must be a valid ObjectId", "Validation failed!"));
+        }
+
         let isAdminExist = await adminModel.findOne({ _id: adminId });
         if(!isAdminExist){
           return res.send(Response.userFailResp("Admin not found","Validation failed!"));

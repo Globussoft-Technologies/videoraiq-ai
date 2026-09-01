@@ -21,11 +21,15 @@ const detectionStatsFields = Object.fromEntries(
 );
 
 // dsVideoUrl is filled in later by the DS team via the update API, once
-// they've processed videoUrl. Each entry keeps its own _id so a single video
-// can be targeted for that update without touching the rest of the array.
+// they've processed videoUrl. zones and zone_configs come from attendanceSettings
+// linked to the camera, captured at record creation time and sent to video-process.
+// Each entry keeps its own _id so a single video can be targeted for that update
+// without touching the rest of the array.
 const videoEntrySchema = new mongoose.Schema({
   videoUrl: { type: String, required: true },
   dsVideoUrl: { type: String, default: null },
+  zones: { type: [mongoose.Schema.Types.Mixed], default: [] },
+  zone_configs: { type: [mongoose.Schema.Types.Mixed], default: [] },
 });
 
 const videoRecordSchema = new mongoose.Schema(
