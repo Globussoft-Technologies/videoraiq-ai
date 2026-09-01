@@ -361,6 +361,46 @@ class VideoRecordsService {
       return res.status(500).json(Response.errorResp("Internal server error"));
     }
   }
+
+  async updateVideoByVideoId(req, res, _next) {
+    try {
+      const { videoId } = req.params;
+      const { dsVideoUrl } = req.body || {};
+
+      if (!videoId || !mongoose.Types.ObjectId.isValid(videoId)) {
+        return res.status(400).json(Response.userFailResp("Invalid videoId"));
+      }
+      if (dsVideoUrl === undefined || typeof dsVideoUrl !== "string") {
+        return res.status(400).json(Response.userFailResp("dsVideoUrl is required and must be a string"));
+      }
+
+      const record = await videoRecordModel.findOneAndUpdate(
+        { "videos._id": videoId },
+        { $set: { "videos.$.dsVideoUrl": dsVideoUrl } },
+        { new: true }
+      );
+
+      if (!record) {
+        return res.status(404).json(Response.notFoundResp("Video not found"));
+      }
+
+      const triggerUserId = record.userId;
+      if (triggerUserId) {
+        await sendPayloadToUser(
+          triggerUserId,
+          `videoRecord_updated_${record._id}`,
+          { recordId: record._id, videos: record.videos }
+        ).catch((err) => logger.warn(`Socket trigger failed for ${triggerUserId}: ${err.message}`));
+      }
+
+      return res
+        .status(200)
+        .json(Response.userSuccessResp("Video updated", { videoId, record }));
+    } catch (error) {
+      logger.error("Error updating video by videoId:", error);
+      return res.status(500).json(Response.errorResp("Internal server error"));
+    }
+  }
 }
 
 export default new VideoRecordsService();

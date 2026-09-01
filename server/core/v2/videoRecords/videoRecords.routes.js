@@ -10,5 +10,6 @@ router.post("/", createAccessCheck, videoRecordsController.createVideoRecord);
 router.post("/:id/process", createAccessCheck, videoRecordsController.processVideo);
 router.get("/:id/videos", viewAccessCheck, videoRecordsController.getVideos);
 router.patch("/:id", editAccessCheck, videoRecordsController.updateVideoRecord);
+router.patch("/videos/:videoId", videoRecordsController.updateVideoByVideoId);
 
 export default router;

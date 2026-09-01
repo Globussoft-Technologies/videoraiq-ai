@@ -101,6 +101,25 @@ class VideoRecordsController {
     */
     return videoRecordsService.updateVideoRecord(req, res, next);
   }
+
+  async updateVideoByVideoId(req, res, next) {
+    /*
+    #swagger.tags = ['VideoRecords']
+    #swagger.description = 'Update dsVideoUrl for a specific video by videoId alone (DS team use case). No record ownership check — DS service token can update any video.'
+    #swagger.parameters['videoId'] = { in: 'path', required: true, description: 'Video id from the initial process response' }
+    #swagger.requestBody = {
+      required: true,
+      schema: {
+        dsVideoUrl: "https://ds.example.com/processed/abc123.mp4"
+      }
+    }
+    #swagger.responses[200] = { description: 'Video updated successfully' }
+    #swagger.responses[400] = { description: 'Invalid videoId or missing dsVideoUrl' }
+    #swagger.responses[404] = { description: 'Video not found' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return videoRecordsService.updateVideoByVideoId(req, res, next);
+  }
 }
 
 export default new VideoRecordsController();
