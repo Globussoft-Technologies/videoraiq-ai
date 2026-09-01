@@ -1282,7 +1282,24 @@ class AttendanceService {
   async exportAttendance(req, res, _next) {
     try {
       const format = String(req.query.format || "excel").toLowerCase();
-      const { pipeline } = await this.buildAttendancePipeline(req, true);
+
+      // "Not Checked In" is roster-derived (those employees have no attendance
+      // document at all), so the session-based report layout can't represent
+      // it. The Attendance Logs grid shows it via a separate code path.
+      if (req.query.status === "not_checked_in") {
+        return res
+          .status(200)
+          .json(Response.userSuccessResp("The Not Checked In view can't be exported as a report", []));
+      }
+
+      const built = await this.buildAttendancePipeline(req, true);
+      // Unauthorized channel/NVR request → buildAttendancePipeline returns a
+      // bare `[{ $match: { _id: null } }]` array instead of `{ pipeline }`.
+      // Treat that (and any other non-standard shape) as "nothing to export".
+      const pipeline = Array.isArray(built?.pipeline) ? built.pipeline : null;
+      if (!pipeline) {
+        return res.status(200).json(Response.userSuccessResp("No attendance data to export", []));
+      }
 
       // Match on-screen ordering: case-insensitive alphabetical sort.
       const data = await Attendance.aggregate(pipeline).collation({
@@ -1302,6 +1319,12 @@ class AttendanceService {
         .filter((item) => item.employee)
         .map((item) => rowFromAttendance(item, timezone, rules));
       applyPeriodTotals(rows);
+
+      // Nothing matched the filters — return a plain JSON message instead of an
+      // empty file. The client sniffs the blob's type and shows this as a toast.
+      if (!rows.length) {
+        return res.status(200).json(Response.userSuccessResp("No attendance data to export", []));
+      }
 
       const report = { formats: [format] };
       if (format === "pdf") {
