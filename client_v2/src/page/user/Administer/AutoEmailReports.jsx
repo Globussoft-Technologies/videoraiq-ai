@@ -413,93 +413,96 @@ function ReportFormModal({
   );
 }
 
-const PREVIEW_COLUMNS = [
-  { key: 'index', label: 'ID' },
-  { key: 'employee', label: 'Name' },
-  { key: 'department', label: 'Department' },
-  { key: 'date', label: 'Date' },
-  { key: 'location', label: 'Location' },
-  { key: 'checkIn', label: 'Check in' },
-  { key: 'checkOut', label: 'Check out' },
-  { key: 'duration', label: 'Duration' },
-  { key: 'workingHoursDay', label: 'Total Working Hrs (Day)' },
-  { key: 'breakHoursDay', label: 'Total Break Hrs (Day)' },
-  { key: 'workingHoursPeriod', label: 'Total Working Hrs (Period)' },
-  { key: 'checkInCamera', label: 'Checkin Camera' },
-  { key: 'checkOutCamera', label: 'Checkout Camera' },
-  { key: 'viewImage', label: 'View Image' },
+// Fallback column list, only used if the server response predates `headers`.
+const PREVIEW_HEADERS_FALLBACK = [
+  'ID', 'Name', 'Department', 'Date', 'Location', 'Check in', 'Check out',
+  'Duration', 'Total Working Hrs (Day)', 'Total Break Hrs (Day)',
+  'Total Working Hrs (Period)', 'Checkin Camera', 'Checkout Camera', 'View Image',
 ];
 
-function imageLink(value) {
-  return value && value !== '-'
-    ? <a href={String(value)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)', fontWeight: 600 }}>View Image</a>
-    : '-';
+// The server sends the same expanded line list the PDF/CSV render: each entry is
+// { kind, cells }, where kind is 'day' | 'session' | 'total' | 'grand' and a
+// cell is either a string or an image link { text, link }.
+function previewCellContent(cell) {
+  if (cell && typeof cell === 'object' && cell.link) {
+    return (
+      <a href={String(cell.link)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)', fontWeight: 600 }}>
+        {cell.text || 'View Image'}
+      </a>
+    );
+  }
+  const text = cell && typeof cell === 'object' ? cell.text : cell;
+  return text === '' || text === null || text === undefined ? '' : String(text);
 }
 
-function previewCell(row, key, index) {
-  if (key === 'index') return index + 1;
-  // The flat preview shows one row per employee-day (no session sub-rows), so
-  // Duration here is the day's total worked time, which equals Total Working
-  // Hrs (Day). (`row.duration` alone is only the first session's slice.)
-  const value = key === 'duration' ? row?.workingHoursDay : row?.[key];
-  if (key === 'viewImage') return imageLink(value);
-  if (value === null || value === undefined || value === '' || value === '-') return '-';
-  return String(value);
-}
-
-const GRAND_TOTAL_BY_KEY = {
-  workingHoursDay: 'workingHours',
-  breakHoursDay: 'breakHours',
-  workingHoursPeriod: 'workingHoursPeriod',
+const PREVIEW_LINE_STYLE = {
+  day: { fontWeight: 700, background: 'var(--bg2)' },
+  session: {},
+  total: { fontWeight: 700, background: 'rgba(59,130,246,.08)' },
+  grand: { fontWeight: 700, background: 'var(--bg2)', borderTop: '2px solid var(--bd2)' },
 };
 
-function grandTotalCell(totals, key) {
-  if (key === 'employee') return 'TOTAL (all employees)';
-  const totalKey = GRAND_TOTAL_BY_KEY[key];
-  return totalKey && totals?.[totalKey] ? String(totals[totalKey]) : '';
+// Backward-compatible flat renderer for a server response that only has `rows`.
+function flatCell(row, header, index) {
+  if (header === 'ID') return index + 1;
+  const map = {
+    Name: 'employee', Department: 'department', Date: 'date', Location: 'location',
+    'Check in': 'checkIn', 'Check out': 'checkOut', Duration: 'workingHoursDay',
+    'Total Working Hrs (Day)': 'workingHoursDay', 'Total Break Hrs (Day)': 'breakHoursDay',
+    'Total Working Hrs (Period)': 'workingHoursPeriod', 'Checkin Camera': 'checkInCamera',
+    'Checkout Camera': 'checkOutCamera', 'View Image': 'viewImage',
+  };
+  const value = row?.[map[header]];
+  if (header === 'View Image') {
+    return value && value !== '-'
+      ? <a href={String(value)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--blue)', fontWeight: 600 }}>View Image</a>
+      : '-';
+  }
+  return value === null || value === undefined || value === '' || value === '-' ? '-' : String(value);
 }
 
 function PreviewModal({ preview, onClose }) {
   const rows = Array.isArray(preview?.rows) ? preview.rows : [];
-  const totals = preview?.totals;
+  const tableRows = Array.isArray(preview?.tableRows) ? preview.tableRows : null;
+  const headers = Array.isArray(preview?.headers) && preview.headers.length
+    ? preview.headers
+    : PREVIEW_HEADERS_FALLBACK;
   return (
     <div role="dialog" aria-modal="true" style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(2,6,23,.68)' }}>
       <div style={{ width: 'min(100%, 1200px)', maxHeight: 'min(820px, calc(100vh - 32px))', display: 'flex', flexDirection: 'column', background: 'var(--bg1solid)', border: '1px solid var(--bd2)', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 16px', borderBottom: '1px solid var(--bd)' }}>
           <div>
             <div style={{ fontFamily: 'var(--disp)', fontSize: 16, fontWeight: 700, color: 'var(--tx)' }}>{preview?.label || 'Preview'}</div>
-            <div style={{ marginTop: 3, color: 'var(--tx3)', fontSize: 11.5 }}>{preview?.timezone || 'Timezone not set'} - {rows.length} row{rows.length === 1 ? '' : 's'}</div>
+            <div style={{ marginTop: 3, color: 'var(--tx3)', fontSize: 11.5 }}>{preview?.timezone || 'Timezone not set'} - {rows.length} attendance record{rows.length === 1 ? '' : 's'}</div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close preview" style={{ width: 30, height: 30, display: 'grid', placeItems: 'center', border: '1px solid var(--bd)', borderRadius: 8, background: 'var(--bg2)', color: 'var(--tx2)', cursor: 'pointer' }}><X size={16} /></button>
         </div>
         <div style={{ overflow: 'auto', padding: 16 }}>
-          {!rows.length ? (
+          {(tableRows ? !tableRows.length : !rows.length) ? (
             <div style={{ padding: 34, textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5 }}>No preview rows returned.</div>
           ) : (
             <table style={{ minWidth: 'max-content', borderCollapse: 'collapse', color: 'var(--tx)', fontSize: 12 }}>
               <thead>
-                <tr>{PREVIEW_COLUMNS.map((column) => <th key={column.key} style={tableHeadStyle}>{column.label}</th>)}</tr>
+                <tr>{headers.map((label) => <th key={label} style={tableHeadStyle}>{label}</th>)}</tr>
               </thead>
               <tbody>
-                {rows.map((row, index) => (
-                  <tr key={row?._id || index}>
-                    {PREVIEW_COLUMNS.map((column) => (
-                      <td key={column.key} style={tableCellStyle}>{previewCell(row, column.key, index)}</td>
-                    ))}
-                  </tr>
-                ))}
-                {totals && (
-                  <tr>
-                    {PREVIEW_COLUMNS.map((column) => (
-                      <td
-                        key={column.key}
-                        style={{ ...tableCellStyle, fontWeight: 700, background: 'var(--bg2)', borderTop: '2px solid var(--bd2)' }}
-                      >
-                        {grandTotalCell(totals, column.key) || '-'}
-                      </td>
-                    ))}
-                  </tr>
-                )}
+                {tableRows
+                  ? tableRows.map((line, index) => (
+                    <tr key={index}>
+                      {line.cells.map((cell, cellIndex) => (
+                        <td key={cellIndex} style={{ ...tableCellStyle, ...(PREVIEW_LINE_STYLE[line.kind] || {}) }}>
+                          {previewCellContent(cell)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                  : rows.map((row, index) => (
+                    <tr key={row?._id || index}>
+                      {headers.map((label) => (
+                        <td key={label} style={tableCellStyle}>{flatCell(row, label, index)}</td>
+                      ))}
+                    </tr>
+                  ))}
               </tbody>
             </table>
           )}

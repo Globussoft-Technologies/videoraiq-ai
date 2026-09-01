@@ -5,7 +5,9 @@ import { viewAccessCheck, editAccessCheck, createAccessCheck, deleteAccessCheck 
 
 // GET attendance
 router.post("/get",viewAccessCheck,attendanceController.getAttendance);
-router.get("/export",viewAccessCheck,attendanceController.exportAttendance);
+// POST (not GET) so the client can send employeeLocations in the body, exactly
+// like /get. Filters still travel in the query string.
+router.post("/export",viewAccessCheck,attendanceController.exportAttendance);
 // POST attendance (log attendance)
 router.post("/", attendanceController.logAttendance);
 

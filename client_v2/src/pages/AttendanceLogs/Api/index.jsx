@@ -57,6 +57,55 @@ export const getAttendanceLogs = async (
   });
 };
 
+/**
+ * Server-rendered attendance export (PDF or CSV). Returns the exact spreadsheet
+ * layout the scheduled Auto Email Report sends — multi-row check-in/check-out
+ * sessions and a per-employee-day total row. Response is a binary file blob.
+ */
+export const exportAttendanceReport = async ({
+  format,
+  searchInput,
+  nvrId,
+  cameraId,
+  startDate,
+  endDate,
+  sortField = 'name',
+  sortOrder = 'asc',
+  departmentIds,
+  fromTime,
+  toTime,
+  timeType,
+  employeeLocations,
+  status,
+  timezone,
+}) => {
+  return axios.post(
+    `${HOST}/attendance/export`,
+    { employeeLocations: Array.isArray(employeeLocations) ? employeeLocations : [] },
+    {
+      params: {
+        format,
+        name: searchInput || '',
+        channelId: cameraId,
+        nvrId,
+        startDate: startDate || '',
+        endDate: endDate || '',
+        sortOrder,
+        sortField,
+        departmentIds,
+        fromTime,
+        toTime,
+        timeType,
+        export: true,
+        status: status || '',
+        timezone: timezone || '',
+      },
+      headers: jsonHeaders(),
+      responseType: 'blob',
+    }
+  );
+};
+
 /** Detailed check-in/out pairs for a single employee on a given day (break logs). */
 export const getAttendanceUserLogs = async (employeeId, date) => {
   return axios.post(
