@@ -25,7 +25,7 @@ export const DETECTION_TYPES = {
   vehicleObstructionSettings: "Vehicle & Obstruction Detection",
   deskAbsenceSettings: "Desk Absence Detection",
   guardAbsenceSettings: "Guard Absence Detection",
-  guardSleepingDetectionSettings: "Guard Sleeping Detection",
+  guardSleepingDetectionSettings: "Sleep Activity Detection",
 
   countPersonsSettings: "Count Persons Detection",
 
@@ -870,7 +870,7 @@ export const guardSleepingDetectionSettings = {
   channelId: ["664f8a09a9d345001ee326b2"],
   NVRId: "664f895da9d345001ee326a9",
   settingType: "guardSleepingDetectionSettings",
-  name: "Guard Sleeping Detection - Guard 1",
+  name: "Sleep Activity Detection - Guard 1",
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {
