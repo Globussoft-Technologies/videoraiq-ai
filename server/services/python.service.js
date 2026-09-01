@@ -504,6 +504,19 @@ class PythonService {
         });
       }
 
+      if (detection_modes?.includes("guard_sleeping")) {
+        detectors.push({
+          name: "sleepActivitySettings",
+          zones: zones || [],
+          zone_configs,
+          only_guard: confidence_thresholds?.only_guard !== false,
+          person_threshold: confidence_thresholds?.person_threshold || 0.5,
+          sleep_min_duration_sec: confidence_thresholds?.sleep_min_duration_sec || 30,
+          sleep_posture_score: confidence_thresholds?.sleep_posture_score || 0.55,
+          min_person_px_height: confidence_thresholds?.min_person_px_height || 60,
+          severity,
+        });
+      }
 
       // ❗️ Validation
       if (!detectors.length) {
