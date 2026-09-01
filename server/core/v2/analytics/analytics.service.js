@@ -165,7 +165,12 @@ function emptyAccessRollup() {
 // Attended that day and no longer on site: every graded status except the
 // still-inside one.
 function gradedCheckedOut(day) {
-  return (day?.present || 0) + (day?.halfDay || 0) + (day?.shortDay || 0);
+  // shortDay now also holds rows that timed out without ever checking out (see
+  // the grace window in attendanceStatusStage), and those employees did not
+  // "leave" in any sense we recorded - subtract them back out so this keeps
+  // meaning what its name says.
+  const shortDayWhoLeft = Math.max((day?.shortDay || 0) - (day?.noCheckout || 0), 0);
+  return (day?.present || 0) + (day?.halfDay || 0) + shortDayWhoLeft;
 }
 
 // Most recent day in the rollup that has at least one attendance log — the
@@ -469,6 +474,24 @@ class AnalyticsService {
                 present: { $sum: { $cond: [{ $eq: ["$status", ATTENDANCE_STATUS.PRESENT] }, 1, 0] } },
                 halfDay: { $sum: { $cond: [{ $eq: ["$status", ATTENDANCE_STATUS.HALF_DAY] }, 1, 0] } },
                 shortDay: { $sum: { $cond: [{ $eq: ["$status", ATTENDANCE_STATUS.ABSENT] }, 1, 0] } },
+                // The part of shortDay that never checked out at all, rather
+                // than leaving before the half-day mark. Broken out so
+                // gradedCheckedOut() below can still mean "attended and left".
+                noCheckout: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          { $eq: ["$status", ATTENDANCE_STATUS.ABSENT] },
+                          { $ne: [{ $ifNull: ["$firstCheckIn", null] }, null] },
+                          { $eq: [{ $ifNull: ["$lastCheckOut", null] }, null] },
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
                 checkedIn: { $sum: { $cond: [{ $eq: ["$status", ATTENDANCE_STATUS.CHECKED_IN] }, 1, 0] } },
                 checkinLogs: { $sum: { $cond: [{ $gt: ["$checkins", 0] }, 1, 0] } },
                 checkoutLogs: { $sum: { $cond: [{ $gt: ["$checkouts", 0] }, 1, 0] } },
@@ -483,6 +506,7 @@ class AnalyticsService {
                 present: 1,
                 halfDay: 1,
                 shortDay: 1,
+                noCheckout: 1,
                 checkedIn: 1,
                 checkinLogs: 1,
                 checkoutLogs: 1,
@@ -846,6 +870,10 @@ class AnalyticsService {
           logs: { $sum: 1 },
           present: countByStatus(ATTENDANCE_STATUS.PRESENT),
           halfDay: countByStatus(ATTENDANCE_STATUS.HALF_DAY),
+          // Split apart because they are different situations: `earlyLeave` has
+          // both timestamps and too few hours between them, `noCheckout` never
+          // received a check-out and waited past the point one could still
+          // arrive. Both grade ABSENT and both sum into the Absentees tile.
           earlyLeave: {
             $sum: {
               $cond: [
@@ -853,6 +881,22 @@ class AnalyticsService {
                   $and: [
                     { $eq: ["$status", ATTENDANCE_STATUS.ABSENT] },
                     { $ne: [{ $ifNull: ["$firstCheckIn", null] }, null] },
+                    { $ne: [{ $ifNull: ["$lastCheckOut", null] }, null] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+          noCheckout: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ["$status", ATTENDANCE_STATUS.ABSENT] },
+                    { $ne: [{ $ifNull: ["$firstCheckIn", null] }, null] },
+                    { $eq: [{ $ifNull: ["$lastCheckOut", null] }, null] },
                   ],
                 },
                 1,
@@ -873,31 +917,47 @@ class AnalyticsService {
         },
       });
 
-      const [counts = {}, notCheckedInSummary] = await Promise.all([
+      const [counts = {}, notCheckedInSummary, rules] = await Promise.all([
         Attendance.aggregate(countPipeline)
           .collation({ locale: "en", strength: 2 })
           .then((rows) => rows[0]),
         AttendanceService.buildNotCheckedInDataset(logsReq),
+        // Echoed back with the counts so the Full Day / Half Day tiles can say
+        // which threshold produced them. A figure nothing stores can only be
+        // checked against the rule it was graded by, and reading that rule from
+        // a second endpoint would let the two drift.
+        resolveAttendanceSettings(adminId),
       ]);
       const employees = notCheckedInSummary.totalEmployees || 0;
 
       const checkinLogs = counts?.checkinLogs || 0;
       const earlyLeave = counts?.earlyLeave || 0;
+      const noCheckout = counts?.noCheckout || 0;
       const notCheckedIn = notCheckedInSummary.rows.length;
-      const absent = earlyLeave + notCheckedIn;
+      const absent = earlyLeave + noCheckout + notCheckedIn;
 
       return res.status(200).json(Response.userSuccessResp("Attendance presence fetched successfully", {
         date,
         employees,
         logs: counts?.logs || 0,
+        // The full-day bucket: first check-in to last check-out spans at least
+        // fullDayHours. Named `present` for the status it comes from; the
+        // Attendance Analytics tile labels it "Full Day", which is what the
+        // number actually means to a reader.
         present: counts?.present || 0,
         halfDay: counts?.halfDay || 0,
         absent,
         checkedIn: counts?.checkedIn || 0,
         earlyLeave,
+        noCheckout,
         notCheckedIn,
         checkinLogs,
         checkoutLogs: counts?.checkoutLogs || 0,
+        rules: {
+          fullDayHours: rules?.fullDayHours ?? null,
+          halfDayHours: rules?.halfDayHours ?? null,
+          graceHours: rules?.graceHours ?? null,
+        },
       }));
     } catch (error) {
       logger.error(error);

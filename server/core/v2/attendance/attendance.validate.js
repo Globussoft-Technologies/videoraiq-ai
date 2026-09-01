@@ -45,6 +45,14 @@ export const attendanceSettingsSchema = Joi.object({
     "number.max": "halfDayHours cannot exceed 24",
     "number.multiple": "halfDayHours must be in steps of 0.25 (15 minutes)",
   }),
+  // Optional, not defaulted: a caller that omits it leaves the saved value
+  // alone rather than silently resetting it to the default. Zero is allowed and
+  // means "close the day the moment full-day hours are up", which is a valid
+  // choice — it just leaves no room for an overnight shift's late check-out.
+  graceHours: Joi.number().min(0).max(24).multiple(0.25).optional().messages({
+    "number.max": "graceHours cannot exceed 24",
+    "number.multiple": "graceHours must be in steps of 0.25 (15 minutes)",
+  }),
 })
   // A half day longer than a full day would make the Present branch
   // unreachable, so every row would grade as Half Day.

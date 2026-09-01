@@ -13,6 +13,10 @@ import moment from "moment-timezone";
 import config from "config";
 import MailResponse from "../../../mailService/mail.helper.js";
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
+import {
+  findOpenCheckinToCarryOver,
+  resolveCarryOverWindowMs,
+} from "./checkoutCarryOver.js";
 const ImageView = config.get("ImageView");
 
 class AttendanceService {
@@ -82,25 +86,46 @@ class AttendanceService {
         createdAt: { $gte: startOfDay, $lte: endOfDay },
       });
 
+      // Set only when this check-out belongs to a shift that started yesterday
+      // and has to be appended to that day's row instead of today's. Null on
+      // every ordinary event, which is every event that isn't a check-out
+      // arriving with no open check-in today — so the common paths below run
+      // exactly as they always have, with no extra queries.
+      let carriedOverRow = null;
+
       if (cameraType === "checkout") {
-        if (!existingAttendance) {
-          return res
-            .status(400)
-            .json(Response.errorResp("Cannot checkout before check-in"));
-        }
         const hasCheckin =
           Array.isArray(existingAttendance?.events) &&
           existingAttendance.events?.some((e) => e.cameraType === "checkin");
 
         if (!hasCheckin) {
-          return res
-            .status(400)
-            .json(Response.errorResp("Cannot checkout before check-in"));
+          // A shift crossing midnight logs its check-out on the day AFTER its
+          // check-in, where there is no row to close. Rejecting it here is what
+          // lost every overnight shift's hours permanently. Close yesterday's
+          // still-open row instead — see checkoutCarryOver.js.
+          carriedOverRow = await findOpenCheckinToCarryOver({
+            userId: user?._id,
+            employeeId,
+            startOfDay,
+            windowMs: await resolveCarryOverWindowMs(user?._id),
+          });
+
+          if (!carriedOverRow) {
+            return res
+              .status(400)
+              .json(Response.errorResp("Cannot checkout before check-in"));
+          }
         }
       }
 
       // findOrCreate (upsert)
-      const attendance = await Attendance.findOneAndUpdate(
+      const attendance = carriedOverRow
+        ? await Attendance.findByIdAndUpdate(
+            carriedOverRow._id,
+            { $push: { events: event } },
+            { new: true }
+          )
+        : await Attendance.findOneAndUpdate(
         {
           user: user?._id,
           employee: employeeId,

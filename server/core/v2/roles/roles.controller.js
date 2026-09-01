@@ -65,6 +65,17 @@ class RolesController{
         return await RolesService.update(req, res, next);
     }
 
+    async syncDefaultRoles(req, res, next) {
+        /* #swagger.tags = ['Roles']
+                            #swagger.description = 'Re-applies the canonical permission templates to the three default roles (admin/read/write). Use after a new module ships, since default roles are seeded once at provisioning and cannot be edited by hand.' */
+        /* #swagger.parameters['dryRun'] = {
+              in: 'query',
+              description: 'When true, report what would change without writing anything.',
+              enum: ['true', 'false'],
+      }*/
+        return await RolesService.syncDefaultRoles(req, res, next);
+    }
+
     async delete(req, res, next) {
         /* #swagger.tags = ['Roles']
                             #swagger.description = 'This routes is used to delete the Role' */

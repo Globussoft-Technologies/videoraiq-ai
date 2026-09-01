@@ -95,7 +95,18 @@ describe("AnalyticsService.attendancePresence — location filter", () => {
     const data = payload(res).data;
     expect(data.employees).toBe(1);
     expect(data.checkinLogs).toBe(1);
-    expect(data.absent).toBe(0);
+    // The Mumbai employee is out of scope entirely. If the location filter ever
+    // leaked they would surface here as a second, never-checked-in absentee, so
+    // this is the assertion that actually guards the scoping.
+    expect(data.notCheckedIn).toBe(0);
+    // The row above has a check-in and no check-out, and its date is
+    // deliberately weeks in the past — far outside the grace window. It
+    // therefore grades absent rather than going on claiming the employee is
+    // still on site, and lands in the noCheckout bucket rather than earlyLeave
+    // (they never left; no check-out was ever recorded).
+    expect(data.earlyLeave).toBe(0);
+    expect(data.noCheckout).toBe(1);
+    expect(data.absent).toBe(1);
   });
 
   it("reports absent as early-leave plus not-checked-in for the selected location", async () => {

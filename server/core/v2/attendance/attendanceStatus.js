@@ -1,6 +1,7 @@
 import AttendanceSettings, {
   DEFAULT_FULL_DAY_HOURS,
   DEFAULT_HALF_DAY_HOURS,
+  DEFAULT_GRACE_HOURS,
 } from "./attendanceSettings.model.js";
 
 /**
@@ -8,7 +9,10 @@ import AttendanceSettings, {
  *
  * CHECKED_IN is deliberately not a kind of absence: the employee is on site and
  * the day simply isn't over, so grading it against the full-day threshold would
- * mark everyone absent every morning.
+ * mark everyone absent every morning. It is not permanent either — see the
+ * grace window in attendanceStatusStage. A row that never receives a check-out
+ * stops claiming the employee is on site once no check-out could still arrive
+ * for it, and grades ABSENT from then on.
  */
 export const ATTENDANCE_STATUS = {
   PRESENT: "present",
@@ -27,13 +31,18 @@ export const ATTENDANCE_STATUS_LABELS = {
 /** An org's rules, falling back to the defaults when none have been saved. */
 export async function resolveAttendanceSettings(adminId) {
   if (!adminId) {
-    return { fullDayHours: DEFAULT_FULL_DAY_HOURS, halfDayHours: DEFAULT_HALF_DAY_HOURS };
+    return {
+      fullDayHours: DEFAULT_FULL_DAY_HOURS,
+      halfDayHours: DEFAULT_HALF_DAY_HOURS,
+      graceHours: DEFAULT_GRACE_HOURS,
+    };
   }
 
   const saved = await AttendanceSettings.findOne({ adminId }).lean();
   return {
     fullDayHours: saved?.fullDayHours ?? DEFAULT_FULL_DAY_HOURS,
     halfDayHours: saved?.halfDayHours ?? DEFAULT_HALF_DAY_HOURS,
+    graceHours: saved?.graceHours ?? DEFAULT_GRACE_HOURS,
   };
 }
 
@@ -50,12 +59,36 @@ export async function resolveAttendanceSettings(adminId) {
  * Grading is on elapsed time (last check-out minus first check-in), matching
  * how `minutesSpent` has always been computed on this screen.
  */
-export function attendanceStatusStage({ fullDayHours, halfDayHours }) {
+export function attendanceStatusStage({
+  fullDayHours,
+  halfDayHours,
+  graceHours,
+  now = new Date(),
+}) {
   const fullDayMinutes = Math.round(Number(fullDayHours || 0) * 60);
   const halfDayMinutes = Math.round(Number(halfDayHours || 0) * 60);
 
   const hasCheckIn = { $ne: [{ $ifNull: ["$firstCheckIn", null] }, null] };
   const hasCheckOut = { $ne: [{ $ifNull: ["$lastCheckOut", null] }, null] };
+
+  // How long a row with no check-out may go on claiming the employee is still
+  // on site: their own check-in plus the full day they owe plus the grace on
+  // top. Deliberately the same window checkoutCarryOver.js pairs a late
+  // check-out within, so the two can never disagree — while a check-out could
+  // still arrive and complete this row, the row is never yet graded absent, and
+  // the moment it grades absent no check-out can still arrive to contradict it.
+  //
+  // `now` is baked in at pipeline-build time rather than read as $$NOW so every
+  // branch of one request grades against a single instant. Omitting graceHours
+  // disables the timeout entirely, which is the pre-grace behaviour.
+  const graceEnabled = graceHours != null;
+  const openWindowMs = Math.max(
+    0,
+    Math.round((Number(fullDayHours || 0) + Number(graceHours || 0)) * 60 * 60 * 1000),
+  );
+  const withinOpenWindow = graceEnabled
+    ? [{ $lte: [{ $subtract: [now, "$firstCheckIn"] }, openWindowMs] }]
+    : [];
 
   return {
     $addFields: {
@@ -79,9 +112,15 @@ export function attendanceStatusStage({ fullDayHours, halfDayHours }) {
       status: {
         $switch: {
           branches: [
-            // On site, day not finished.
+            // On site, day not finished — but only while a check-out could
+            // still arrive. Past the window this case stops matching and the
+            // row falls through: $subtract on a null lastCheckOut yields null,
+            // both duration branches are false, and the default grades it
+            // ABSENT. That is the whole timeout; no extra branch is needed.
             {
-              case: { $and: [hasCheckIn, { $not: [hasCheckOut] }] },
+              case: {
+                $and: [hasCheckIn, { $not: [hasCheckOut] }, ...withinOpenWindow],
+              },
               then: ATTENDANCE_STATUS.CHECKED_IN,
             },
             // A check-out with no check-in is malformed data, not a worked day.

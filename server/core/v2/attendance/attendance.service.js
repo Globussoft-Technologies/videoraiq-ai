@@ -20,6 +20,13 @@ import {
   attendanceStatusStage,
   resolveAttendanceSettings,
 } from "./attendanceStatus.js";
+// v1's copy, not a duplicate: both versions expose POST /attendance and the CV
+// service posts to the v1 one, so the two write paths must pair check-outs
+// identically or an overnight shift records differently depending on the route.
+import {
+  findOpenCheckinToCarryOver,
+  resolveCarryOverWindowMs,
+} from "../../v1/attendance/checkoutCarryOver.js";
 // Reused so Attendance Logs exports render byte-for-byte the same spreadsheet
 // layout as the scheduled auto email report (multi-row sessions + totals).
 import {
@@ -79,7 +86,32 @@ const SHIFT_DAY_KEYS = [
   "friday",
   "saturday",
 ];
+// Pseudo-statuses for the Absent breakdown tabs. Not ATTENDANCE_STATUS values —
+// all three grade as ABSENT, and these only say which kind of absence, so the
+// tabs can filter and count the same three groups the Absent tile sums.
 const EARLY_LEAVE_STATUS = "early_leave";
+const NO_CHECKOUT_STATUS = "no_checkout";
+
+// Left before the half-day mark: has both timestamps, just too few hours
+// between them.
+const EARLY_LEAVE_MATCH = {
+  $and: [
+    { $eq: ["$status", ATTENDANCE_STATUS.ABSENT] },
+    { $ne: [{ $ifNull: ["$firstCheckIn", null] }, null] },
+    { $ne: [{ $ifNull: ["$lastCheckOut", null] }, null] },
+  ],
+};
+
+// Checked in and no check-out ever arrived, past the point where one still
+// could. Distinct from Checked In, which is the same row while it is still
+// waiting, and from Not Checked In, which never appeared at all.
+const NO_CHECKOUT_MATCH = {
+  $and: [
+    { $eq: ["$status", ATTENDANCE_STATUS.ABSENT] },
+    { $ne: [{ $ifNull: ["$firstCheckIn", null] }, null] },
+    { $eq: [{ $ifNull: ["$lastCheckOut", null] }, null] },
+  ],
+};
 
 const collator = new Intl.Collator("en", { sensitivity: "base", numeric: true });
 
@@ -367,25 +399,46 @@ class AttendanceService {
         createdAt: { $gte: startOfDay, $lte: endOfDay },
       });
 
+      // Set only when this check-out belongs to a shift that started yesterday
+      // and has to be appended to that day's row instead of today's. Null on
+      // every ordinary event, which is every event that isn't a check-out
+      // arriving with no open check-in today — so the common paths below run
+      // exactly as they always have, with no extra queries.
+      let carriedOverRow = null;
+
       if (cameraType === "checkout") {
-        if (!existingAttendance) {
-          return res
-            .status(400)
-            .json(Response.errorResp("Cannot checkout before check-in"));
-        }
         const hasCheckin =
           Array.isArray(existingAttendance?.events) &&
           existingAttendance.events?.some((e) => e.cameraType === "checkin");
 
         if (!hasCheckin) {
-          return res
-            .status(400)
-            .json(Response.errorResp("Cannot checkout before check-in"));
+          // A shift crossing midnight logs its check-out on the day AFTER its
+          // check-in, where there is no row to close. Rejecting it here is what
+          // lost every overnight shift's hours permanently. Close yesterday's
+          // still-open row instead — see checkoutCarryOver.js.
+          carriedOverRow = await findOpenCheckinToCarryOver({
+            userId: user?._id,
+            employeeId,
+            startOfDay,
+            windowMs: await resolveCarryOverWindowMs(user?._id),
+          });
+
+          if (!carriedOverRow) {
+            return res
+              .status(400)
+              .json(Response.errorResp("Cannot checkout before check-in"));
+          }
         }
       }
 
       // findOrCreate (upsert)
-      const attendance = await Attendance.findOneAndUpdate(
+      const attendance = carriedOverRow
+        ? await Attendance.findByIdAndUpdate(
+            carriedOverRow._id,
+            { $push: { events: event } },
+            { new: true }
+          )
+        : await Attendance.findOneAndUpdate(
         {
           user: user?._id,
           employee: employeeId,
@@ -507,20 +560,14 @@ class AttendanceService {
         _id: null,
         present: countByStatus(ATTENDANCE_STATUS.PRESENT),
         halfDay: countByStatus(ATTENDANCE_STATUS.HALF_DAY),
-        earlyLeave: {
-          $sum: {
-            $cond: [
-              {
-                $and: [
-                  { $eq: ["$status", ATTENDANCE_STATUS.ABSENT] },
-                  { $ne: [{ $ifNull: ["$firstCheckIn", null] }, null] },
-                ],
-              },
-              1,
-              0,
-            ],
-          },
-        },
+        // The two ways a row with a check-in still grades absent, counted apart
+        // because they are different situations and the Absent breakdown tabs
+        // name them differently. Before the grace timeout only the first could
+        // happen, so `earlyLeave` alone covered it; now a row that never
+        // received a check-out also grades ABSENT, and calling that "left early"
+        // would be untrue — they never left at all as far as we know.
+        earlyLeave: { $sum: { $cond: [EARLY_LEAVE_MATCH, 1, 0] } },
+        noCheckout: { $sum: { $cond: [NO_CHECKOUT_MATCH, 1, 0] } },
         checkedIn: countByStatus(ATTENDANCE_STATUS.CHECKED_IN),
         // Duration-agnostic: "did this employee check in/out at all today",
         // regardless of what status that graded to. Feeds the Check In /
@@ -665,8 +712,11 @@ class AttendanceService {
       const checkoutLogs = counts.checkoutLogs || 0;
       const totalEmployees = notCheckedInSummary.totalEmployees || 0;
       const earlyLeave = counts.earlyLeave || 0;
+      // Rows whose check-out never arrived and can no longer arrive. A third
+      // way to be absent, and the third tab in the Absent breakdown.
+      const noCheckout = counts.noCheckout || 0;
       const notCheckedIn = notCheckedInSummary.rows.length;
-      const absent = earlyLeave + notCheckedIn;
+      const absent = earlyLeave + noCheckout + notCheckedIn;
 
       return res.status(200).json(
         Response.userSuccessResp("Attendance summary", {
@@ -679,6 +729,7 @@ class AttendanceService {
             absent,
             checkedIn: counts.checkedIn || 0,
             earlyLeave,
+            noCheckout,
             notCheckedIn,
             checkinLogs,
             checkoutLogs,
@@ -785,6 +836,10 @@ class AttendanceService {
           $set: {
             fullDayHours: value.fullDayHours,
             halfDayHours: value.halfDayHours,
+            // Only when the caller sent one. Writing `undefined` here would
+            // wipe a saved grace window for any client still posting just the
+            // two original fields.
+            ...(value.graceHours === undefined ? {} : { graceHours: value.graceHours }),
           },
         },
         { new: true, upsert: true, setDefaultsOnInsert: true }
@@ -794,6 +849,7 @@ class AttendanceService {
         Response.userSuccessResp("Attendance settings updated successfully", {
           fullDayHours: settings.fullDayHours,
           halfDayHours: settings.halfDayHours,
+          graceHours: settings.graceHours,
         })
       );
     } catch (error) {
@@ -1118,7 +1174,28 @@ class AttendanceService {
           : status === "checkout"
           ? [{ $match: { lastCheckOut: { $ne: null } } }]
           : status === EARLY_LEAVE_STATUS
-          ? [{ $match: { status: ATTENDANCE_STATUS.ABSENT, firstCheckIn: { $ne: null } } }]
+          ? [
+              {
+                $match: {
+                  status: ATTENDANCE_STATUS.ABSENT,
+                  firstCheckIn: { $ne: null },
+                  // Both timestamps present, so this really is "left early".
+                  // Without this the tab would also list rows that timed out
+                  // with no check-out at all, which is the tab beside it.
+                  lastCheckOut: { $ne: null },
+                },
+              },
+            ]
+          : status === NO_CHECKOUT_STATUS
+          ? [
+              {
+                $match: {
+                  status: ATTENDANCE_STATUS.ABSENT,
+                  firstCheckIn: { $ne: null },
+                  lastCheckOut: null,
+                },
+              },
+            ]
           : status && Object.values(ATTENDANCE_STATUS).includes(status)
           ? [{ $match: { status } }]
           : []),

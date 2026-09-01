@@ -17,6 +17,7 @@ import {
   readConfig,
   writeConfig,
 } from "../permission/permissions.config.js";
+import { reconcileDefaultRolesOnLogin } from "../roles/defaultRoles.sync.js";
 import permissionModel from "../permission/permissions.model.js";
 import locationModel from "../locations/location.model.js";
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
@@ -928,71 +929,28 @@ return bypassUsers.find(
         streamHost: `${(adminData?.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
       };
 
-      // Preset configs for each role
-      const rolePresets = [
-        {
-          roleName: "admin",
-          config: adminConfig,
-          view: true,
-          create: true,
-          edit: true,
-          delete: true,
-          isEmpRole: false,
-        },
-        {
-          roleName: "read",
-          config: readConfig,
-          view: true,
-          create: false,
-          edit: false,
-          delete: false,
-          isEmpRole: false,
-        },
-        {
-          roleName: "write",
-          config: writeConfig,
-          view: false,
-          create: true,
-          edit: true,
-          delete: false,
-          isEmpRole: false,
-        },
-      ];
-
-      for (const preset of rolePresets) {
-        // check if role already exists for this admin
-        let existingRole = await rolesModel.findOne({
-          adminId: adminData?._id,
-          roleName: preset.roleName,
-        });
-
-        if (!existingRole) {
-          // create permission
-          let permission = await permissionModel.create({
-            adminId: adminData?._id,
-            permissionConfig: preset.config,
-            permissionName: `${preset.roleName}Permission`,
-            is_default: true,
-          });
-
-          // create role
-          await rolesModel.create({
-            adminId: adminData?._id,
-            roleName: preset.roleName,
-            isEmpRole: preset.isEmpRole,
-            view: preset.view,
-            create: preset.create,
-            edit: preset.edit,
-            delete: preset.delete,
-            is_default: true,
-            permissionId: permission?._id,
-          });
-
-          console.log(`✅ Created role: ${preset.roleName}`);
-        } else {
-          // console.log(`ℹ️ Role already exists: ${preset.roleName}`);
-        }
-      }
+      // Presets live in permissions.config.js so that this seeder and
+      // POST /roles/sync-defaults can never disagree about what a default role
+      // should contain — the sync endpoint exists to repair tenants seeded
+      // before a module was added, which only works if both read one list.
+      // Create-or-reconcile, both against the same DEFAULT_ROLE_PRESETS.
+      //
+      // This used to be create-only ("if (!existingRole) … else do nothing"),
+      // which is why a module added to permissions.config.js after a tenant was
+      // provisioned never reached it: the templates are a stamp copied into the
+      // permission document once, not a live reference, so editing them only
+      // changed what NEW tenants received. Reconciling here makes the fix
+      // automatic on the next login instead of requiring someone to find and
+      // press "Sync Default Roles".
+      //
+      // Cost in the steady state is three findOne calls and zero writes — the
+      // diff comes back empty and nothing is saved. It can never block a login:
+      // reconcileDefaultRolesOnLogin swallows and logs its own failures.
+      await reconcileDefaultRolesOnLogin({
+        adminId: adminData?._id,
+        userId: adminData?.user_id ?? null,
+        logger,
+      });
 
       // ✅ Migrate permissions logs backward compatibility step
       try {

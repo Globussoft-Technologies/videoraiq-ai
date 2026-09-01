@@ -175,3 +175,42 @@ export let writeConfig = {
 
 
 
+
+/**
+ * Canonical definition of the three seeded roles.
+ *
+ * Single source for BOTH the login-time seeder (v2 Auth.service) and
+ * POST /roles/sync-defaults, so that adding a module to the configs above is
+ * the only edit needed — new tenants get it at provisioning, existing tenants
+ * get it on the next sync, and the two can never disagree.
+ *
+ * `flags` are the flat view/create/edit/delete columns on the role document.
+ * They are display-only — permissionMiddleware enforces against
+ * permissionConfig, never these — but they are what the Roles table renders,
+ * so they must agree with the config they sit next to. Note `write` carries
+ * view:true here: writeConfig grants view on every module, so the role row has
+ * to say so ("everything except delete").
+ */
+export const DEFAULT_ROLE_PRESETS = [
+    {
+        roleName: "admin",
+        config: adminConfig,
+        flags: { view: true, create: true, edit: true, delete: true },
+        isEmpRole: false,
+    },
+    {
+        roleName: "read",
+        config: readConfig,
+        flags: { view: true, create: false, edit: false, delete: false },
+        isEmpRole: false,
+    },
+    {
+        roleName: "write",
+        config: writeConfig,
+        flags: { view: true, create: true, edit: true, delete: false },
+        isEmpRole: false,
+    },
+];
+
+/** Deep copy, so a caller can never mutate the shared template literals above. */
+export const cloneConfig = (config) => JSON.parse(JSON.stringify(config));

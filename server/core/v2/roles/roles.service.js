@@ -3,6 +3,7 @@ import rolesModel from "./roles.model.js";
 import RoleValidation from './roles.validate.js';
 import {RolesMessageNew,PermissionMiddlewareMessage} from '../../../language/language.translator.js';
 import { completeConfig, adminConfig, readConfig, writeConfig } from './../permission/permissions.config.js';
+import { reconcileDefaultRoles } from './defaultRoles.sync.js';
 import logger from "../../../utils/logger.js";
 import permissionModel from "../permission/permissions.model.js";
 import mongoose from "mongoose";
@@ -10,6 +11,7 @@ const { ObjectId } = mongoose.Types;
 import userModel from "../authorizedUsers/authorizedUsers.model.js";
 import adminModel from "../admin/admin.model.js";
 import userSchema from "../../v1/users/users.model.js"
+
 
 class RolesServices{
 
@@ -395,6 +397,74 @@ class RolesServices{
         } catch (err) {
             console.log(err);
            return resp.send(Response.userFailResp('Something went wrong', err))
+        }
+    }
+
+    /**
+     * Re-apply the canonical DEFAULT_ROLE_PRESETS to this admin's three default
+     * roles (admin / read / write).
+     *
+     * Why this exists: the default roles are written once, at provisioning, from
+     * the templates in permissions.config.js. When a new module ships (carLogs
+     * being the case that prompted this) the templates gain it but every
+     * already-provisioned tenant keeps the permissionConfig it was seeded with.
+     * Those roles are locked in the UI and refused by PermissionService
+     * .updatePermissions, so there is no way to fix them by hand — hence a
+     * dedicated endpoint.
+     *
+     * The template is re-applied WHOLESALE rather than merged: a default role is
+     * meant to BE the canonical matrix, so anything that drifted from it is
+     * drift to correct. `dryRun` reports the same diff without writing, which is
+     * what the confirmation dialog shows before the user commits.
+     */
+    async syncDefaultRoles(req, res) {
+        const result = req.verified;
+        const { adminId, user_id } = result?.userData ?? {};
+        const dryRun = req?.query?.dryRun === "true" || req?.body?.dryRun === true;
+
+        try {
+            if (!adminId) {
+                return res.send(Response.FailResp(RolesMessageNew["ADMIN_NOT_EXIST"]["en"], null));
+            }
+            const isAdminExist = await adminModel.findOne({ _id: adminId });
+            if (!isAdminExist) {
+                return res.send(Response.FailResp(RolesMessageNew["ADMIN_NOT_EXIST"]["en"], null));
+            }
+
+            // The route already gates on roles.edit. This rewrites permission
+            // documents too, so it additionally needs permission.edit — the same
+            // right PermissionService.updatePermissions demands for the granular
+            // editor. Sub-users carry their config on the token; an admin has no
+            // such array and is unrestricted.
+            const tokenPermission = result?.permissionConfig?.[0]?.permissionConfig;
+            if (tokenPermission && !tokenPermission?.permission?.edit) {
+                return res.status(400).send(Response.accessDeniedResp(
+                    `${PermissionMiddlewareMessage["EDIT_ACCESS_DENIED"]["en"]} permission module.`,
+                ));
+            }
+
+            const { rolesTouched, modules, roles } = await reconcileDefaultRoles({
+                adminId,
+                userId: user_id ?? null,
+                dryRun,
+            });
+
+            logger.info(
+                `[ROLES] sync-defaults${dryRun ? " (dry run)" : ""} admin=${adminId} ` +
+                `roles=${rolesTouched}/${roles.length} modules=${modules}`,
+            );
+
+            return res.send(Response.userSuccessResp(
+                dryRun
+                    ? "Default role differences calculated."
+                    : (rolesTouched
+                        ? "Default roles synced successfully."
+                        : "Default roles are already up to date."),
+                { dryRun, rolesTouched, modules, roles },
+            ));
+        } catch (err) {
+            logger.error(`Error while syncing default roles ${err.message}`);
+            return res.send(Response.FailResp("Unable to sync default roles.", err.message));
         }
     }
 

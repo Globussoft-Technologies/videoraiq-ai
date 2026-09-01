@@ -3,6 +3,12 @@ class DetectionSettingsController {
   async getDetectionTypes(req, res, next) {
     /* #swagger.tags = ['Detection Settings']
        #swagger.description = 'Get available detection types'
+       #swagger.parameters['search'] = {
+           in: 'query',
+           description: 'Case-insensitive substring match against the detection type display name or its settingType key',
+           required: false,
+           type: 'string'
+       }
        #swagger.responses[200] = {
            description: 'Detection types fetched successfully'
        }

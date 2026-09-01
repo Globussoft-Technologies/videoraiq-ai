@@ -379,9 +379,24 @@ class DetectionSettingService {
         userId: req?.verified?.userData?.user_id,
       });
 
+      // Optional `?search=` narrows the licensed catalogue server-side. Matched
+      // against the display name AND the settingType key, because the two often
+      // share no words — "vehicle" has to reach vehicleDetectionSettings even
+      // though it is labelled "ANPR Detection".
+      const search = String(req?.query?.search ?? "").trim().toLowerCase();
+      const detectionTypes = filterDetectionTypes(allowedTypes);
+
       return res.status(200).json(
         Response.userSuccessResp("Detection types fetched successfully", {
-          detectionTypes: filterDetectionTypes(allowedTypes),
+          detectionTypes: search
+            ? Object.fromEntries(
+                Object.entries(detectionTypes).filter(
+                  ([settingType, label]) =>
+                    String(label).toLowerCase().includes(search) ||
+                    settingType.toLowerCase().includes(search),
+                ),
+              )
+            : detectionTypes,
         }),
       );
     } catch (error) {

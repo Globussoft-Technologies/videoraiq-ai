@@ -22,7 +22,7 @@ class AnalyticsController {
   async attendancePresence(req, res, next) {
     /*
     #swagger.tags = ['Analytics']
-    #swagger.description = "Attendance status headcount for a single calendar day, for the Attendance Analytics KPI tiles. Counted from the Attendance Logs pipeline itself, so the figures always agree with the Attendance Logs page for the same day. Rows are graded against the org's configured thresholds (see GET /attendance/settings): present = on site at least fullDayHours, halfDay = at least halfDayHours, absent = below that, checkedIn = no check-out yet. Analytics-only."
+    #swagger.description = "Attendance status headcount for a single calendar day, for the Attendance Analytics KPI tiles. Counted from the Attendance Logs pipeline itself, so the figures always agree with the Attendance Logs page for the same day. Rows are graded on elapsed time between the day's first check-in and last check-out, against the org's configured thresholds (see GET /attendance/settings): present = a full day, at least fullDayHours (surfaced as the \"Full Day\" tile), halfDay = at least halfDayHours, absent = below that, checkedIn = no check-out yet. `rules` echoes back the thresholds the day was graded with. Any past date may be requested — nothing is precomputed, so every day is re-graded on read. Analytics-only."
     #swagger.parameters['date'] = { in: 'query', description: 'Day to report on (YYYY-MM-DD). Defaults to today.', required: false, type: 'String', example: '2026-08-07' }
     #swagger.parameters['nvrId'] = { in: 'query', description: 'Filter by one or more NVR ids', required: false, type: 'String' }
     #swagger.parameters['channelId'] = { in: 'query', description: 'Filter by one or more channel ids', required: false, type: 'String' }
@@ -40,7 +40,8 @@ class AnalyticsController {
             present: 5,
             halfDay: 2,
             absent: 1,
-            checkedIn: 1
+            checkedIn: 1,
+            rules: { fullDayHours: 9, halfDayHours: 4.5 }
           }
         }
       }
