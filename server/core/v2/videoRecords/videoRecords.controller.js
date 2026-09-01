@@ -73,7 +73,7 @@ class VideoRecordsController {
         detectors: [{ name: "countPersonsSettings" }]
       }
     }
-    #swagger.responses[200] = { description: 'Video is processing - returns the queued job: job_id, video_id, status, accepted_detectors, estimated_completion_seconds, estimate_quality, status_path' }
+    #swagger.responses[200] = { description: 'Job submitted; returns the video-process service response' }
     #swagger.responses[400] = { description: 'Invalid id, unknown detectors, or no detectors selected' }
     #swagger.responses[404] = { description: 'Record or targeted video not found' }
     #swagger.responses[502] = { description: 'Video-process service unreachable or rejected the job' }

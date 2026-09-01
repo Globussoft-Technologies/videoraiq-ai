@@ -157,6 +157,25 @@ describe("AuthUsersService.fetchAuthUser — deeper branches", () => {
     expect(payload(res).data.totalCount).toBe(2);
   });
 
+  it("liveDemoData: omitted -> real users only; true -> demo users only", async () => {
+    await seedEmployee({ firstName: "Real" });
+    await seedEmployee({ firstName: "Demo", liveDemoData: true });
+
+    // Default (omitted): only the real user, and the demo one stays hidden.
+    let ctx = serviceCtx({ adminId: admin._id, query: {}, body: {} });
+    await AuthUsersService.fetchAuthUser(ctx.req, ctx.res, ctx.next);
+    expect(ctx.res.statusCode).toBe(200);
+    expect(payload(ctx.res).data.totalCount).toBe(1);
+    expect(payload(ctx.res).data.users[0].firstName).toBe("Real");
+
+    // liveDemoData: true — only the demo user.
+    ctx = serviceCtx({ adminId: admin._id, query: {}, body: { liveDemoData: true } });
+    await AuthUsersService.fetchAuthUser(ctx.req, ctx.res, ctx.next);
+    expect(ctx.res.statusCode).toBe(200);
+    expect(payload(ctx.res).data.totalCount).toBe(1);
+    expect(payload(ctx.res).data.users[0].firstName).toBe("Demo");
+  });
+
   it("filters by verified flag from the query", async () => {
     await seedEmployee({ verified: true });
     await seedEmployee({ verified: false });

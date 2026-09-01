@@ -121,8 +121,9 @@ const authorizedUsersSchema = new mongoose.Schema({
   tag: {
     type: Boolean,
     default: false
-  }
-  // password: {type: String, required: true},  
+  },
+  liveDemoData: { type: Boolean, default: false }
+  // password: {type: String, required: true},
 }, {
   timestamps: true,
 });

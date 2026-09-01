@@ -239,6 +239,7 @@ class AuthUsersService {
             locations,
             status,
             verified: verifiedBody,
+            liveDemoData,
           } = req.body;
           
           let authorizedChannel = req?.verified?.authorizedChannel?.channels || [];
@@ -300,7 +301,11 @@ class AuthUsersService {
           }
           
           // Build filter condition dynamically
-          const filter = { adminId: data?.adminId };
+          // liveDemoData: true -> demo users only | false/omitted -> real users only
+          const filter = {
+            adminId: data?.adminId,
+            liveDemoData: liveDemoData ? true : { $ne: true },
+          };
 
           if (typeof verifiedBody === "boolean") {
             filter.verified = verifiedBody;
@@ -418,6 +423,8 @@ class AuthUsersService {
         // Self-registration via an invite link. multipart/form-data delivers
         // every field as a string, so "true" is what actually arrives.
         const userRegistrByLink = String(req.body.userRegistrByLink) === "true";
+        // Same multipart-string caveat as above.
+        const liveDemoData = String(req.body.liveDemoData) === "true";
 
         // const { error ,value} = AuthUsersValidator.createAuthUser(req?.body);
 
@@ -534,7 +541,8 @@ class AuthUsersService {
           branch,
           numberPlate,
           vehicleNumber,
-          location
+          location,
+          liveDemoData
         });
 
 
