@@ -428,20 +428,19 @@ async function reportRows(report, reference) {
   const rows = [];
   const { timezone, label } = await streamReportRows(report, reference, (row) => rows.push(row));
   applyPeriodTotals(rows);
-  // Drop internal accumulation fields before the rows go out over the preview
-  // API, but keep numeric minute fields the preview needs for a grand-total row
-  // (parsing the "9d 7h 40m" display strings back to minutes would be lossy).
+  // Drop the internal per-employee grouping key before the rows go out over the
+  // preview API.
   const cleanRows = rows.map(({ employeeKey, ...rest }) => rest);
-  const totals = grandTotals(rows);
+  // Same expanded day / session / (per-employee-day) total line list the PDF and
+  // CSV render, so the preview modal shows the exact layout recipients receive
+  // (multi-row check-in/check-out sessions + a per-day total row) instead of a
+  // flattened one-row-per-day view. `headers` pairs with each line's `cells`.
   return {
     rows: cleanRows,
+    headers: REPORT_HEADERS,
+    tableRows: reportTableRows(rows),
     timezone,
     label,
-    totals: {
-      workingHours: formatPeriodDuration(totals.workingMinutes),
-      breakHours: formatPeriodDuration(totals.breakMinutes),
-      workingHoursPeriod: formatPeriodDuration(totals.periodMinutes),
-    },
   };
 }
 
@@ -457,7 +456,6 @@ function imageCell(url, text = "View Image") {
 //             pair's clock times, its own worked duration, cameras, snapshot.
 //   total   — one per employee-day: Σ session working hrs, the break total and
 //             the period total.
-//   grand   — one closing line: report-wide working / break / period totals.
 // A column with no function for a kind renders blank there automatically — no
 // hand-placed "" padding, and adding/reordering a column can't misalign rows.
 const REPORT_COLUMNS = [
@@ -465,7 +463,6 @@ const REPORT_COLUMNS = [
   {
     header: "Name",
     day: (ctx) => ctx.row.employee,
-    grand: () => "TOTAL (all employees)",
   },
   { header: "Department", day: (ctx) => ctx.row.department },
   { header: "Date", day: (ctx) => ctx.row.date },
@@ -488,17 +485,14 @@ const REPORT_COLUMNS = [
   {
     header: "Total Working Hours for the Day",
     total: (ctx) => ctx.row.workingHoursDay,
-    grand: (ctx) => formatPeriodDuration(ctx.totals.workingMinutes),
   },
   {
     header: "Total Break Hours for the Day",
     total: (ctx) => ctx.row.breakHoursDay,
-    grand: (ctx) => formatPeriodDuration(ctx.totals.breakMinutes),
   },
   {
     header: "Total Working Hours for the period selected",
     total: (ctx) => ctx.row.workingHoursPeriod,
-    grand: (ctx) => formatPeriodDuration(ctx.totals.periodMinutes),
   },
   {
     header: "Checkin Camera",
@@ -538,30 +532,9 @@ function sessionsFor(row) {
   return row.sessions || [];
 }
 
-// Report-wide totals for the closing "grand" line:
-//   - workingMinutes / breakMinutes — summed over every employee-day.
-//   - periodMinutes — each employee's period total counted once (it already
-//     spans all their days, so summing it per-row would multiply by day count).
-function grandTotals(rows) {
-  let workingMinutes = 0;
-  let breakMinutes = 0;
-  const periodByEmployee = new Map();
-  for (const row of rows) {
-    workingMinutes += row.workingMinutesDay || 0;
-    breakMinutes += row.breakMinutesDay || 0;
-    if (!periodByEmployee.has(row.employeeKey)) {
-      periodByEmployee.set(row.employeeKey, row.workingMinutesPeriod || 0);
-    }
-  }
-  let periodMinutes = 0;
-  for (const value of periodByEmployee.values()) periodMinutes += value;
-  return { workingMinutes, breakMinutes, periodMinutes };
-}
-
 // Expand every employee-day into: a day line (first work session), one session
-// line per remaining check-in/check-out pair, then a day total line. Closes
-// with a single report-wide "grand" total line. Returns `{ kind, cells }`
-// objects so the PDF/CSV can style each line kind.
+// line per remaining check-in/check-out pair, then a day total line. Returns
+// `{ kind, cells }` objects so the PDF/CSV can style each line kind.
 export function reportTableRows(rows) {
   const out = [];
   rows.forEach((row, index) => {
@@ -569,7 +542,6 @@ export function reportTableRows(rows) {
     for (const session of sessionsFor(row)) out.push(lineFor("session", { row, session }));
     out.push(lineFor("total", { row, index }));
   });
-  if (rows.length) out.push(lineFor("grand", { totals: grandTotals(rows) }));
   return out;
 }
 
@@ -694,10 +666,10 @@ export async function buildPdf({ report, rows, label, timezone }) {
     // Line kinds: "day" (identity + span, shaded, bold identity), "session"
     // (one check-in/out pair, plain), "total" (day working/break totals, shaded).
     const drawLine = (line, kind) => {
-      const emphasise = kind === "day" || kind === "total" || kind === "grand";
-      document.font(emphasise ? "Helvetica-Bold" : "Helvetica").fontSize(kind === "grand" ? 8.5 : 8);
+      const emphasise = kind === "day" || kind === "total";
+      document.font(emphasise ? "Helvetica-Bold" : "Helvetica").fontSize(8);
       const height = lineHeight(line);
-      const rowFill = kind === "day" ? "#eef2fb" : kind === "total" ? "#e6edfa" : kind === "grand" ? "#d7e2f7" : null;
+      const rowFill = kind === "day" ? "#eef2fb" : kind === "total" ? "#e6edfa" : null;
       if (rowFill) document.fillColor(rowFill).rect(32, y, pageWidth, height).fill();
       let x = 32;
       line.forEach((value, columnIndex) => {
@@ -711,8 +683,8 @@ export async function buildPdf({ report, rows, label, timezone }) {
         }
         x += col.width;
       });
-      // A heavier rule under the total / grand line closes each block.
-      const heavyRule = kind === "total" || kind === "grand";
+      // A heavier rule under the total line closes each employee-day block.
+      const heavyRule = kind === "total";
       document.strokeColor(heavyRule ? "#9db6e8" : "#e6ecf7").lineWidth(heavyRule ? 0.8 : 0.4)
         .moveTo(32, y + height).lineTo(32 + pageWidth, y + height).stroke();
       y += height;

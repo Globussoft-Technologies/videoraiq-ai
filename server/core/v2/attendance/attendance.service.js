@@ -20,6 +20,14 @@ import {
   attendanceStatusStage,
   resolveAttendanceSettings,
 } from "./attendanceStatus.js";
+// Reused so Attendance Logs exports render byte-for-byte the same spreadsheet
+// layout as the scheduled auto email report (multi-row sessions + totals).
+import {
+  rowFromAttendance,
+  applyPeriodTotals,
+  buildCsv,
+  buildPdf,
+} from "../attendanceAutoEmailReport/attendanceAutoEmailReport.service.js";
 const ImageView = config.get("ImageView");
 
 /**
@@ -1249,9 +1257,31 @@ class AttendanceService {
     }
   }
 
+  // Reshape one grouped pipeline document (employee + events pushed per
+  // employee-day) into the raw-ish shape `rowFromAttendance` in the auto email
+  // report service expects, so Attendance Logs exports the *exact* spreadsheet
+  // layout recipients get in the scheduled report — day line + one sub-row per
+  // extra check-in/check-out session + a per-employee-day total row.
+  // The pipeline already resolved each event's camera name onto
+  // `channelName` / `customName`; nest it back under `channel` for eventCamera().
+  #groupedDocToReportInput(doc) {
+    const events = (doc.events || []).map((event) => ({
+      cameraType: event.cameraType,
+      timestamp: event.timestamp,
+      images: event.images,
+      channel: { customName: event.customName, name: event.channelName },
+    }));
+    return {
+      // `date` column is derived from createdAt; the group key holds the day.
+      createdAt: doc._id?.date ? new Date(`${doc._id.date}T00:00:00Z`) : new Date(),
+      employee: doc.employee || null,
+      events,
+    };
+  }
+
   async exportAttendance(req, res, _next) {
     try {
-      const format = req.query.format || "excel";
+      const format = String(req.query.format || "excel").toLowerCase();
       const { pipeline } = await this.buildAttendancePipeline(req, true);
 
       // Match on-screen ordering: case-insensitive alphabetical sort.
@@ -1260,20 +1290,32 @@ class AttendanceService {
         strength: 2,
       });
 
-      if (!data || data.length === 0) {
-        return res
-          .status(200)
-          .json(Response.userSuccessResp("No attendance data to export", []));
-      }
-
+      const adminId = req?.verified?.userData?.adminId;
       const timezone = req.query.timezone || "UTC";
-      if (format === "excel") {
-        return this.#exportExcel(res, data, timezone);
+      const rules = await resolveAttendanceSettings(adminId);
+      const start = req.query.startDate ? moment(req.query.startDate).format("DD MMM YYYY") : "";
+      const end = req.query.endDate ? moment(req.query.endDate).format("DD MMM YYYY") : start;
+      const label = start ? `${start} – ${end}` : "Attendance Logs";
+
+      const rows = (data || [])
+        .map((doc) => this.#groupedDocToReportInput(doc))
+        .filter((item) => item.employee)
+        .map((item) => rowFromAttendance(item, timezone, rules));
+      applyPeriodTotals(rows);
+
+      const report = { formats: [format] };
+      if (format === "pdf") {
+        const buffer = await buildPdf({ report, rows, label, timezone });
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", "attachment; filename=AttendanceReport.pdf");
+        return res.end(buffer);
       }
 
-      if (format === "pdf") {
-        return this.#exportPdf(res, data, timezone);
-      }
+      // CSV (opens in Excel / Sheets, with clickable image hyperlinks).
+      const buffer = buildCsv({ report, rows, label, timezone });
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", "attachment; filename=AttendanceReport.csv");
+      return res.end(buffer);
     } catch (error) {
       logger.error(error);
       return res

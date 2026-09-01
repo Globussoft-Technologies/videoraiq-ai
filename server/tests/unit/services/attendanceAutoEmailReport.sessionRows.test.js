@@ -56,7 +56,7 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
     expect(row.sessions[0].duration).toBe("00:00:00");
   });
 
-  it("expands one employee-day into: day line + N session lines + total + grand", () => {
+  it("expands one employee-day into: day line + N session lines + total", () => {
     const row = rowFromAttendance(
       attendance([ev("checkin", "10:00"), ev("checkout", "10:30"), ev("checkin", "11:00"), ev("checkout", "12:15")]),
       "Asia/Kolkata",
@@ -68,7 +68,7 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
     row.workingMinutesPeriod = 105;
 
     const out = reportTableRows([row]);
-    expect(out.map((r) => r.kind)).toEqual(["day", "session", "total", "grand"]);
+    expect(out.map((r) => r.kind)).toEqual(["day", "session", "total"]);
 
     // Day line: id + name + first session's check-in / check-out / duration.
     const day = out[0].cells;
@@ -87,19 +87,12 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
     expect(total[8]).toBe("01:45:00");
     expect(total[9]).toBe("00:30:00");
     expect(total[10]).toBe("01:45:00");
-
-    // Grand line: report-wide totals.
-    const grand = out[3].cells;
-    expect(grand[1]).toBe("TOTAL (all employees)");
-    expect(grand[8]).toBe("01:45:00");
-    expect(grand[9]).toBe("00:30:00");
-    expect(grand[10]).toBe("01:45:00");
   });
 
   it("emits just a day + total block when the day has a single session", () => {
     const row = rowFromAttendance(attendance([ev("checkin", "09:00"), ev("checkout", "17:00")]), "Asia/Kolkata", rules);
     const out = reportTableRows([row]);
-    expect(out.map((r) => r.kind)).toEqual(["day", "total", "grand"]);
+    expect(out.map((r) => r.kind)).toEqual(["day", "total"]);
   });
 
   it("Total Working Hrs (Day) equals the sum of the Duration column and excludes breaks", () => {
@@ -113,20 +106,16 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
     expect(row.breakHoursDay).toBe("01:30:00");
   });
 
-  it("sums each employee's period total once across the grand line", () => {
+  it("keeps each employee-day's own total line (no report-wide grand line)", () => {
     const a1 = rowFromAttendance(attendance([ev("checkin", "09:00"), ev("checkout", "17:00")]), "Asia/Kolkata", rules);
     const a2 = rowFromAttendance(attendance([ev("checkin", "09:00"), ev("checkout", "13:00")]), "Asia/Kolkata", rules);
-    // Same employee, two days — 8h + 4h worked, one 12h period total.
     a1.workingMinutesDay = 480; a1.breakMinutesDay = 0; a1.workingMinutesPeriod = 720;
     a2.workingMinutesDay = 240; a2.breakMinutesDay = 0; a2.workingMinutesPeriod = 720;
     const out = reportTableRows([a1, a2]);
-    const grand = out.at(-1);
-    expect(grand.kind).toBe("grand");
-    expect(grand.cells[8]).toBe("12:00:00");  // 480 + 240 worked minutes
-    expect(grand.cells[10]).toBe("12:00:00"); // 720 period counted once, not 1440
+    expect(out.map((r) => r.kind)).toEqual(["day", "total", "day", "total"]);
   });
 
-  it("buildCsv emits day + session + total + grand lines with a HYPERLINK image cell", () => {
+  it("buildCsv emits day + session + total lines with a HYPERLINK image cell", () => {
     const row = rowFromAttendance(
       attendance([ev("checkin", "10:00"), ev("checkout", "10:30"), ev("checkin", "11:00"), ev("checkout", "12:15")]),
       "Asia/Kolkata",
@@ -134,8 +123,8 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
     );
     const csv = buildCsv({ report: {}, rows: [row], label: "07 Aug 2026", timezone: "Asia/Kolkata" }).toString("utf8");
     const lines = csv.split("\r\n");
-    // 6 meta lines + day + 1 session + total + grand
-    expect(lines).toHaveLength(10);
+    // 6 meta lines + day + 1 session + total
+    expect(lines).toHaveLength(9);
     expect(csv).toContain("=HYPERLINK(");
   });
 
