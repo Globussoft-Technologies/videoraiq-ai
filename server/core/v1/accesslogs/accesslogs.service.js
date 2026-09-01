@@ -369,26 +369,27 @@ class AccessLogsService {
         }
 
         // cameraId/nvrId are optional for live-demo sessions (no real
-        // camera/NVR behind them); required otherwise, and validated
-        // against the DB whenever they are actually supplied.
+        // camera/NVR behind them — the demo pipeline sends a synthetic id
+        // like "video:<id>" that isn't a real ObjectId at all). Required
+        // and validated against the DB otherwise.
         let isChannelExist = null;
-        if (cameraId) {
+        if (cameraId && mongoose.Types.ObjectId.isValid(cameraId)) {
           isChannelExist = await channelModel.findOne({ _id: cameraId });
           if (!isChannelExist) {
             return res.send(Response.userFailResp("Camera not found","Validation failed!"));
           }
         } else if (!liveDemoData) {
-          return res.send(Response.userFailResp("cameraId is required","Validation failed!"));
+          return res.send(Response.userFailResp("A valid cameraId is required","Validation failed!"));
         }
 
         let isNvrExist = null;
-        if (nvrId) {
+        if (nvrId && mongoose.Types.ObjectId.isValid(nvrId)) {
           isNvrExist = await nvrModel.findOne({ _id: nvrId });
           if (!isNvrExist) {
             return res.send(Response.userFailResp("NVR not found","Validation failed!"));
           }
         } else if (!liveDemoData) {
-          return res.send(Response.userFailResp("nvrId is required","Validation failed!"));
+          return res.send(Response.userFailResp("A valid nvrId is required","Validation failed!"));
         }
 
           //validate request body
@@ -431,9 +432,12 @@ class AccessLogsService {
           // ---------------------------
           // BUILD NEW SESSION ENTRY
           // ---------------------------
+          // Only carry nvr/channel through when they're real ObjectIds — the
+          // demo pipeline's synthetic "video:<id>" cameraId would otherwise
+          // fail the ObjectId cast at save time.
           const newSession = {
-            nvr: nvrId,
-            channel: cameraId,
+            ...(nvrId && mongoose.Types.ObjectId.isValid(nvrId) && { nvr: nvrId }),
+            ...(cameraId && mongoose.Types.ObjectId.isValid(cameraId) && { channel: cameraId }),
             personName,
             timestamp: timestamp || new Date(),
             images: {
@@ -455,6 +459,7 @@ class AccessLogsService {
               // real recognized identity — mark it tagged immediately.
               tag: false,
               liveDemoData: !!liveDemoData,
+              videoId: videoId || null,
               // date: startOfDay,
               sessions: [newSession]
             });
@@ -486,6 +491,7 @@ class AccessLogsService {
               userId: userId || null,
               tag: false,
               liveDemoData: !!liveDemoData,
+              videoId: videoId || null,
               // date: startOfDay,
               sessions: [newSession]
             });
@@ -504,8 +510,8 @@ class AccessLogsService {
         }else if(!isUserExist){
           //For Unknown people create new document
           const newSession = {
-            nvr: nvrId,
-            channel: cameraId,
+            ...(nvrId && mongoose.Types.ObjectId.isValid(nvrId) && { nvr: nvrId }),
+            ...(cameraId && mongoose.Types.ObjectId.isValid(cameraId) && { channel: cameraId }),
             personName,
             timestamp: timestamp || new Date(),
             images: {
@@ -519,6 +525,7 @@ class AccessLogsService {
               admin: adminId,
               userId: userId || null,
               liveDemoData: !!liveDemoData,
+              videoId: videoId || null,
               // date: startOfDay,
               sessions: [newSession]
             });

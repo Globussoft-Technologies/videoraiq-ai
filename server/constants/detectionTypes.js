@@ -7,7 +7,7 @@
 */
 
 export const DETECTION_TYPES = {
-  attendanceSettings:"Attendance Settings",
+  faceAuthenticationSettings:"Attendance Settings",
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
   vehicleDetectionSettings: "ANPR Detection",
   unauthorizedAccessSettings: "Intrusion Detection",

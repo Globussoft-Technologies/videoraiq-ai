@@ -42,11 +42,20 @@ class AccessLogsValidation {
       personName: Joi.string().trim().required(),
       date: Joi.date().optional(),          // should be Date
       timestamp: Joi.date().optional(), // should be Date
+      // Real cameraId/nvrId are ObjectIds, but the live-demo pipeline sends
+      // a synthetic non-ObjectId id (e.g. "video:<hex>") since there's no
+      // real camera/NVR behind a demo session. The service layer is the
+      // actual gatekeeper (ObjectId.isValid + DB lookup for real records,
+      // liveDemoData required otherwise) — Joi just accepts any string here.
       cameraId: Joi.alternatives().try(
-        Joi.string().regex(/^[0-9a-fA-F]{24}$/), // ObjectId as string
+        Joi.string(),
         Joi.object().instance(mongoose.Types.ObjectId)
       ).allow(null).optional(),
       nvrId: Joi.alternatives().try(
+        Joi.string(),
+        Joi.object().instance(mongoose.Types.ObjectId)
+      ).allow(null).optional(),
+      videoId: Joi.alternatives().try(
         Joi.string().regex(/^[0-9a-fA-F]{24}$/), // ObjectId as string
         Joi.object().instance(mongoose.Types.ObjectId)
       ).allow(null).optional(),
