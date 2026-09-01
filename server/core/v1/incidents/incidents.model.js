@@ -396,6 +396,15 @@ const GuardAbsenceIncident = Incident.discriminator(
   GuardAbsenceSchema,
 );
 
+const GuardSleepingSchema = new Schema({
+  isSleeping: { type: Boolean, default: true },
+  triggerNotification: { type: Boolean, default: true },
+});
+const GuardSleepingIncident = Incident.discriminator(
+  "guardSleepingDetection",
+  GuardSleepingSchema,
+);
+
 const ConveyorDetectionSchema = new Schema({
   currentStatus: {
     type: String,
@@ -565,6 +574,7 @@ export  {
   VehicleObstructionIncident,
   DeskAbsenceIncident,
   GuardAbsenceIncident,
+  GuardSleepingIncident,
   ConveyorDetectionIncident,
   CrusherDetectionIncident,
   VehicleTypeDetectionIncident,

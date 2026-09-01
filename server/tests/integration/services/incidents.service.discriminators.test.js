@@ -49,6 +49,7 @@ const {
   CrowdDetectionSetting,
   VehiclDetectionSetting,
   DeskAbsenceDetectionSetting,
+  GuardSleepingDetectionSetting,
   UnattendedBaggageDetectionSetting,
   carModelDetectionSchemaSetting,
 } = await import(
@@ -338,6 +339,38 @@ describe("IncidentsService.createIncidents — deskAbsence", () => {
     expect(stored.incidentType).toBe("deskAbsence");
     expect(stored.personPresent).toBe(false);
     expect(stored.Image).toBe("img/desk.jpg");
+    expect(triggerAlertOnIncident).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("IncidentsService.createIncidents — guardSleeping", () => {
+  it("creates a guardSleeping incident and persists isSleeping", async () => {
+    const { admin, nvrId, channel } = await seedScene({
+      SettingModel: GuardSleepingDetectionSetting,
+      settingType: "guardSleepingDetectionSettings",
+      channelDetections: (s) => ({
+        guardSleepingDetectionSettings: { id: s._id, enabled: true },
+      }),
+    });
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "guardSleepingDetection",
+        incidentName: "Guard Sleeping Detection",
+        nvrId: nvrId.toString(),
+        channelId: channel._id.toString(),
+        adminId: admin._id.toString(),
+        isSleeping: true,
+        Image: "img/guard.jpg",
+        timeOfIncident: new Date(),
+      },
+    });
+    await IncidentsService.createIncidents(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    const stored = await Incident.findOne({ channelId: channel._id });
+    expect(stored.incidentType).toBe("guardSleepingDetection");
+    expect(stored.isSleeping).toBe(true);
+    expect(stored.Image).toBe("img/guard.jpg");
     expect(triggerAlertOnIncident).toHaveBeenCalledTimes(1);
   });
 });

@@ -758,6 +758,41 @@ const GuardAbsenceDetectionSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: GuardAbsenceDetectionSchema }),
 );
 
+const GuardSleepingDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
+  person_threshold: confidenceThresholdFields.person_threshold,
+  imageRequired: {
+    type: Boolean,
+    default: false,
+  },
+  videoLinkRequirement: {
+    type: Boolean,
+    default: false,
+  },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "moderate",
+  },
+  sleepingThreshold: { type: Number, default: 300 },
+  videoResolution: [Number],
+  detectionTimeGap: { type: Number, default: 30 },
+  referencePoints: Object,
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+
+const GuardSleepingDetectionSetting = DetectionSetting.discriminator(
+  "guardSleepingDetectionSettings",
+  new mongoose.Schema({ settings: GuardSleepingDetectionSchema }),
+);
+
 const ConveyorDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
   imageRequired: {
@@ -1165,6 +1200,7 @@ export {
   VehiclDetectionSetting,
   DeskAbsenceDetectionSetting,
   GuardAbsenceDetectionSetting,
+  GuardSleepingDetectionSetting,
   ConveyorDetectionSetting,
   CrusherDetectionSetting,
   WaterSpillageDetectionSetting,

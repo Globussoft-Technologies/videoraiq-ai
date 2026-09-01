@@ -113,6 +113,11 @@ router.post(
   incidentsController.getDeskAbsenceLogs,
 );
 router.post(
+  "/logs/guard-sleeping",
+  viewAccessCheck,
+  incidentsController.getGuardSleepingLogs,
+);
+router.post(
   "/logs/car-model-detection",
   viewAccessCheck,
   incidentsController.getCarModelDetectionLogs,

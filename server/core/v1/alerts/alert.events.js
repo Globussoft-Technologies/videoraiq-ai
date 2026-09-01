@@ -144,6 +144,8 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
           let mailResponse = await MailResponse.deskAbsence(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="guardAbsence"){
           let mailResponse = await MailResponse.guardAbsence(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
+        } else if(detectionType==="guardSleepingDetection"){
+          let mailResponse = await MailResponse.guardSleepingDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="conveyorDetection"){
           let mailResponse = await MailResponse.conveyorDetection(emailAddresses,incidentData,detectionType,nvrData,channelData,adminTz)
         } else if(detectionType==="crusherDetection"){

@@ -39,6 +39,7 @@ import {
   VehicleObstructionIncident,
   DeskAbsenceIncident,
   GuardAbsenceIncident,
+  GuardSleepingIncident,
   ConveyorDetectionIncident,
   CrusherDetectionIncident,
   VehicleTypeDetectionIncident,
@@ -68,6 +69,7 @@ const modelMap = {
   vehicleObstruction: VehicleObstructionIncident,
   deskAbsence: DeskAbsenceIncident,
   guardAbsence: GuardAbsenceIncident,
+  guardSleepingDetection: GuardSleepingIncident,
   conveyorDetection: ConveyorDetectionIncident,
   crusherDetection: CrusherDetectionIncident,
   waterSpillageDetection: WaterSpillageDetectionIncident,
@@ -97,6 +99,7 @@ import {
   UnattendedBaggageDetectionSetting,
   DeskAbsenceDetectionSetting,
   GuardAbsenceDetectionSetting,
+  GuardSleepingDetectionSetting,
 } from "./../detectionSettings/detectionSettings.model.js";
 const DetectionModelMap = {
   countPersons: CountPersonsDetectionSetting,
@@ -109,6 +112,7 @@ const DetectionModelMap = {
   lineCrossing: LineCrossingSetting,
   deskAbsence: DeskAbsenceDetectionSetting,
   guardAbsence: GuardAbsenceDetectionSetting,
+  guardSleepingDetection: GuardSleepingDetectionSetting,
 };
 import JobsService from "../jobs/jobs.service.js";
 
@@ -494,6 +498,10 @@ class IncidentsService {
       } else if (incidentType === "guardAbsence") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.personPresent = req?.body?.personPresent;
+        newIncident.Image = req?.body?.Image;
+      } else if (incidentType === "guardSleepingDetection") {
+        newIncident.timeOfIncident = req?.body?.timeOfIncident;
+        newIncident.isSleeping = req?.body?.isSleeping;
         newIncident.Image = req?.body?.Image;
       } else if (incidentType === "vehicleObstruction") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
@@ -3399,6 +3407,118 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch desk absence logs", 500));
+    }
+  }
+
+  async getGuardSleepingLogs(req, res, next) {
+    try {
+      const data = req?.verified?.userData;
+      if (!data?.user_id) {
+        return res.send(
+          Response.userFailResp("User authentication failed.", "Unauthorized"),
+        );
+      }
+
+      const {
+        skip = 0,
+        limit = 10,
+        startDate,
+        endDate,
+        nvrId,
+        nvrIds,
+        channelId,
+        channelIds,
+        isSleeping,
+      } = req.body;
+
+      const toArray = (v) =>
+        v ? v.split(",").map((x) => x.trim()).filter(Boolean) : [];
+
+      // Each guard-sleeping detection is its own document (no timeSeries),
+      // so this is a straight paginated list, unlike the desk-absence graph.
+      const matchStage = {
+        userId: data.user_id.toString(),
+        incidentType: "guardSleepingDetection",
+      };
+
+      if (isSleeping !== undefined) {
+        matchStage.isSleeping = isSleeping === true || isSleeping === "true";
+      }
+
+      if (startDate && endDate) {
+        matchStage.timeOfIncident = {
+          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+        };
+      }
+
+      const nvrFilter = nvrId ? [nvrId] : toArray(nvrIds);
+      if (nvrFilter.length) {
+        matchStage.nvrId = {
+          $in: nvrFilter.map((id) => new mongoose.Types.ObjectId(id)),
+        };
+      }
+
+      const channelFilter = channelId ? [channelId] : toArray(channelIds);
+      const authorizedChannels = req?.verified?.authorizedChannel?.channels;
+      let effectiveChannelIds = null;
+      if (channelFilter.length && Array.isArray(authorizedChannels)) {
+        const authSet = new Set(authorizedChannels.map((c) => c.toString()));
+        effectiveChannelIds = channelFilter.filter((c) => authSet.has(c));
+      } else if (channelFilter.length) {
+        effectiveChannelIds = channelFilter;
+      } else if (Array.isArray(authorizedChannels)) {
+        effectiveChannelIds = authorizedChannels.map((c) => c.toString());
+      }
+      if (Array.isArray(effectiveChannelIds)) {
+        matchStage.channelId = {
+          $in: effectiveChannelIds.map((id) => new mongoose.Types.ObjectId(id)),
+        };
+      }
+
+      const basePipeline = [
+        { $match: matchStage },
+        { $sort: { timeOfIncident: -1 } },
+        {
+          $lookup: {
+            from: "nvrs",
+            localField: "nvrId",
+            foreignField: "_id",
+            pipeline: [{ $project: { _id: 1, nvrName: 1 } }],
+            as: "nvrData",
+          },
+        },
+        { $unwind: { path: "$nvrData", preserveNullAndEmptyArrays: true } },
+        {
+          $lookup: {
+            from: "channels",
+            localField: "channelId",
+            foreignField: "_id",
+            pipeline: [{ $project: { _id: 1, name: 1, customName: 1 } }],
+            as: "channelData",
+          },
+        },
+        { $unwind: { path: "$channelData", preserveNullAndEmptyArrays: true } },
+      ];
+
+      const [countResult, logs] = await Promise.all([
+        Incident.aggregate([...basePipeline, { $count: "totalCount" }]),
+        Incident.aggregate([
+          ...basePipeline,
+          { $skip: parseInt(skip) },
+          { $limit: parseInt(limit) },
+        ]),
+      ]);
+
+      return res.status(200).json(
+        Response.userSuccessResp("guardSleeping logs fetched successfully", {
+          totalCount: countResult[0]?.totalCount || 0,
+          data: logs,
+        }),
+      );
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch guard sleeping logs", 500));
     }
   }
 

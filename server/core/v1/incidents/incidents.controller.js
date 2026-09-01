@@ -656,6 +656,23 @@ class IncidentsController {
     return await incidentsService.getDeskAbsenceLogs(req, res, next);
   }
 
+  async getGuardSleepingLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Guard Sleeping (guardSleeping) incident logs, paginated, newest first. Each record is a single detection event with isSleeping, Image, timeOfIncident, plus nvrData and channelData.'
+    #swagger.parameters['data'] = {
+      in: 'body',
+      description: 'Filter parameters. isSleeping (boolean, optional) filters to only sleeping / only awake events.',
+      required: false,
+      schema: { $ref: "#/definitions/DeskAbsenceLogsFilter" }
+    }
+    #swagger.responses[200] = { description: 'Guard sleeping logs fetched successfully' }
+    #swagger.responses[400] = { description: 'Validation error' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.getGuardSleepingLogs(req, res, next);
+  }
+
   async getDeskAbsenceZoneNames(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get unique zone names for desk absence logs filtering'

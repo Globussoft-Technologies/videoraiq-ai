@@ -3977,6 +3977,199 @@ Please do not reply to this email.
 </html>`;
 };
 
+export const guardSleepingTemplate = (
+  incidentData,
+  nvrData,
+  channelData,
+  timezone,
+) => {
+  const {
+    incidentName,
+    timeOfIncident,
+    zone,
+    severity,
+    description,
+    Image,
+    isSleeping, // true | false
+  } = incidentData;
+
+  const getSeverityStyles = (level = "low") => {
+    switch (level) {
+      case "high":
+        return { bg: "#FDECEA", text: "#B42318", label: "High" };
+      case "moderate":
+        return { bg: "#FFF4E5", text: "#B54708", label: "Moderate" };
+      case "low":
+      default:
+        return { bg: "#E8F1FF", text: "#1D4ED8", label: "Low" };
+    }
+  };
+
+  const getSleepingStyles = (sleeping) => {
+    if (sleeping) {
+      return {
+        bg: "#FEE2E2",
+        text: "#B91C1C",
+        label: "Guard Sleeping",
+      };
+    }
+
+    return {
+      bg: "#DCFCE7",
+      text: "#15803D",
+      label: "Guard Awake",
+    };
+  };
+
+  const severityStyle = getSeverityStyles(severity);
+  const sleepingStyle = getSleepingStyles(isSleeping);
+
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Guard Sleeping Incident Report</title>
+</head>
+
+<body style="margin:0;padding:0;background-color:#F4F6F8;font-family:Arial,Helvetica,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0">
+<tr>
+<td align="center" style="padding:24px;">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;">
+
+<!-- Logo -->
+<tr>
+<td align="center" style="padding:20px 0;">
+<img
+src="https://videoraiq.com/wp-content/uploads/2025/06/videoraIQ-dark-blue.webp"
+alt="VideoraIQ"
+style="max-width:200px;display:block;"
+>
+</td>
+</tr>
+
+<!-- Header -->
+<tr>
+<td style="padding:20px 24px;background:#0F172A;color:#ffffff;">
+<h2 style="margin:0;font-size:20px;">Guard Sleeping Alert</h2>
+<p style="margin:4px 0 0;font-size:13px;opacity:0.9;">
+Automated Incident Notification
+</p>
+</td>
+</tr>
+
+<!-- Incident Summary -->
+<tr>
+<td style="padding:20px 24px;">
+<table width="100%" cellpadding="0" cellspacing="0">
+
+<tr>
+<td style="font-size:14px;padding-bottom:6px;">
+<strong>Incident Type:</strong> ${incidentName || "Guard Sleeping"}
+</td>
+</tr>
+
+<tr>
+<td style="font-size:14px;padding-bottom:6px;">
+<strong>Zone:</strong> ${zone || "N/A"}
+</td>
+</tr>
+
+<tr>
+<td style="font-size:14px;padding-bottom:6px;">
+<strong>Day:</strong> ${dayOf(timeOfIncident, timezone)}
+</td>
+</tr>
+
+<tr>
+<td style="font-size:14px;padding-bottom:6px;">
+<strong>Time of Incident:</strong> ${formattedTime}
+</td>
+</tr>
+
+<tr>
+<td style="padding-top:10px;">
+
+<span style="
+display:inline-block;
+padding:6px 12px;
+font-size:12px;
+border-radius:20px;
+background:${severityStyle.bg};
+color:${severityStyle.text};
+font-weight:bold;
+margin-right:8px;
+">
+Severity: ${severityStyle.label}
+</span>
+
+<span style="
+display:inline-block;
+padding:6px 12px;
+font-size:12px;
+border-radius:20px;
+background:${sleepingStyle.bg};
+color:${sleepingStyle.text};
+font-weight:bold;
+">
+${sleepingStyle.label}
+</span>
+
+</td>
+</tr>
+
+</table>
+</td>
+</tr>
+
+<!-- Incident Snapshot -->
+<tr>
+<td style="padding:0 24px 20px;">
+<h3 style="font-size:16px;margin-bottom:10px;color:#0F172A;">
+Incident Snapshot
+</h3>
+<img
+src="${config.get("ImageView") + Image}"
+alt="Guard Sleeping Image"
+width="100%"
+style="
+max-width:552px;
+border-radius:8px;
+border:1px solid #E2E8F0;
+display:block;
+"
+/>
+</td>
+</tr>
+
+<!-- Description -->
+<tr>
+<td style="padding:0 24px 20px;">
+<strong>Description:</strong>
+<p style="margin:6px 0 0;font-size:14px;color:#334155;">
+${description || "No additional description provided."}
+</p>
+</td>
+</tr>
+
+<!-- Footer -->
+<tr>
+<td style="padding:16px 24px;background:#F8FAFC;font-size:12px;color:#64748B;">
+This is an automated system-generated alert.
+Please do not reply to this email.
+</td>
+</tr>
+
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>`;
+};
+
 
 
 

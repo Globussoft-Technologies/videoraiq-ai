@@ -106,6 +106,7 @@ const detectionFields = {
   mobilePhoneDetectionSettings: detectionSettingSchema,
   carModelDetectionSettings: detectionSettingSchema,
   attendanceSettings: detectionSettingSchema,
+  guardSleepingDetectionSettings: detectionSettingSchema,
 };
 
 // ! old

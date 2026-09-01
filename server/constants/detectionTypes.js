@@ -25,6 +25,7 @@ export const DETECTION_TYPES = {
   vehicleObstructionSettings: "Vehicle & Obstruction Detection",
   deskAbsenceSettings: "Desk Absence Detection",
   guardAbsenceSettings: "Guard Absence Detection",
+  guardSleepingDetectionSettings: "Guard Sleeping Detection",
 
   countPersonsSettings: "Count Persons Detection",
 
@@ -74,6 +75,7 @@ export const TYPE_MAP = {
   vehicleDetectionSettings: "vehicleDetection",
   deskAbsenceSettings: "deskAbsence",
   guardAbsenceSettings: "guardAbsence",
+  guardSleepingDetectionSettings: "guardSleepingDetection",
   conveyorDetectionSettings: "conveyorDetection",
   crusherDetectionSettings: "crusherDetection",
   waterSpillageDetectionSettings: "waterSpillageDetection",
@@ -95,6 +97,7 @@ export const DETECTION_MODES_MAP = {
   lineCrossingSettings: ["line_crossing"],
   deskAbsenceSettings: ["desk_absence"],
   guardAbsenceSettings: ["guard_absence"],
+  guardSleepingDetectionSettings: ["guard_sleeping"],
   countVehiclesSettings: ["vehicles"],
   countPersonsSettings: ["persons"],
   unauthorizedAccessSettings: ["intrusion"],
@@ -157,6 +160,7 @@ export const DS_DETECTOR_BY_MODE = {
   door: "doorDetectionSettings",
   light: "lightDetectionSettings",
   guard_absence: "guardAbsenceSettings",
+  guard_sleeping: "guardSleepingDetectionSettings",
   attendanceSettings: "attendanceSettings"
 };
 
@@ -251,6 +255,7 @@ export const toPopulateDetections = [
   { path: "detections.vehicleDetectionSettings.id" },
   { path: "detections.deskAbsenceSettings.id" },
   { path: "detections.guardAbsenceSettings.id" },
+  { path: "detections.guardSleepingDetectionSettings.id" },
   { path: "detections.conveyorDetectionSettings.id" },
   { path: "detections.crusherDetectionSettings.id" },
   { path: "detections.waterSpillageDetectionSettings.id" },
@@ -848,6 +853,38 @@ export const guardAbsenceSettings = {
     videoDuration: 10,
     levelOfImportance: "moderate",
     absenceThreshold: 300,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const guardSleepingDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "guardSleepingDetectionSettings",
+  name: "Guard Sleeping Detection - Guard 1",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    sleepingThreshold: 300,
     videoResolution: [1280, 720],
     referencePoints: {
       1: [
