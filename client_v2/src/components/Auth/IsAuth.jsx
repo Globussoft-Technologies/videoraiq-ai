@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Cookies from 'js-cookie';
 import getAccessToken from '@/utils/getAccessToken';
 import { useAuth } from '@/context/AuthContext';
 import { logout } from '@/hooks/logout';
 import { sessionHeaders } from '@/utils/sessionIdentity';
-import PageLoader from '@/components/PageLoader';
 
 const HOST = import.meta.env.VITE_BACKEND;
 const envValue = (key) => String(import.meta.env[key] || '').trim();
@@ -101,18 +100,6 @@ const SESSION_REVOKED_CODES = new Set([
 ]);
 const SESSION_CHECK_INTERVAL_MS = 15000;
 
-// The aMember credential handoff (amember_login/amember_pass -> access token)
-// must run at most once for a given page load: it deletes the handoff cookies
-// and a second attempt would fail and loop. These live at module scope (not
-// refs) so React StrictMode's double effect invocation in development — mount,
-// cleanup, mount again — still only exchanges once, and so the second pass can
-// tell an exchange is mid-flight and wait for it rather than redirecting to
-// login on the not-yet-written token. Plain token validation is idempotent and
-// deliberately NOT guarded by these, so it re-runs on the second invocation and
-// always resolves the loading state.
-let amemberExchangeStarted = false;
-let amemberExchangeInFlight = false;
-
 /**
  * Route guard for the V2 app. It validates the access token against the backend
  * (or exchanges a short-lived aMember credential handoff for one) and keeps
@@ -125,6 +112,7 @@ export default function IsAuth({ children }) {
   const { setUser } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [failure, setFailure] = useState(null);
+  const exchangeStarted = useRef(false);
 
   const toLogin = () => {
     const target = loginRedirectUrl();
@@ -137,22 +125,16 @@ export default function IsAuth({ children }) {
   };
 
   useEffect(() => {
-    // A pending aMember handoff we haven't already consumed on this page load.
-    const hasAmemberHandoff =
-      !amemberExchangeStarted &&
-      Boolean(Cookies.get('amember_login') && Cookies.get('amember_pass'));
-    const amemberLogin = hasAmemberHandoff ? Cookies.get('amember_login') : undefined;
-    const amemberPass = hasAmemberHandoff ? Cookies.get('amember_pass') : undefined;
+    // React StrictMode runs effects twice in development. Exchange the
+    // short-lived credential handoff only once.
+    if (exchangeStarted.current) return;
+    exchangeStarted.current = true;
+
+    const amemberLogin = Cookies.get('amember_login')
+    const amemberPass = Cookies.get('amember_pass')
     const token = getAccessToken();
     let cancelled = false;
     let sessionCheckTimer;
-
-    // StrictMode's second pass (or a remount) landing while the one-shot aMember
-    // exchange is still running: the token isn't written yet, so don't treat it
-    // as "no session" — hold the loader and let the in-flight exchange finish.
-    if (!hasAmemberHandoff && !token && amemberExchangeInFlight) {
-      return undefined;
-    }
 
     const endLocalSession = ({ keepSessionId = false } = {}) => {
       logout({ clearSession: !keepSessionId, syncServer: false });
@@ -169,10 +151,6 @@ export default function IsAuth({ children }) {
     async function checkAccess({ initial = false } = {}) {
       try {
         if (amemberLogin && amemberPass) {
-          // Consume the handoff once per page load — StrictMode's second effect
-          // pass (and the background poll) must fall through to token validation.
-          amemberExchangeStarted = true;
-          amemberExchangeInFlight = true;
           const response = await fetch(`${HOST}/auth/by-login-pass`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -181,7 +159,6 @@ export default function IsAuth({ children }) {
           const result = await response.json().catch(() => ({}));
 
           if (!result?.ok || !result?.token) {
-            amemberExchangeInFlight = false;
             logout();
             // The plugin creates parent-domain cookies. Removing only a host
             // cookie leaves them intact and causes an endless exchange loop.
@@ -222,7 +199,6 @@ export default function IsAuth({ children }) {
           });
           deleteCookie('amember_login');
           deleteCookie('amember_pass');
-          amemberExchangeInFlight = false;
           setUser(result.user);
           setIsLoading(false);
           return true;
@@ -252,7 +228,6 @@ export default function IsAuth({ children }) {
         if (initial) setIsLoading(false);
         return true;
       } catch {
-        amemberExchangeInFlight = false;
         if (cancelled) return false;
         if (!initial) return false;
 
@@ -286,7 +261,7 @@ export default function IsAuth({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (isLoading) return <PageLoader />;
+  if (isLoading) return <div />;
   if (failure) {
     return (
       <main
