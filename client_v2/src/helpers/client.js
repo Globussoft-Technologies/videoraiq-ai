@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { waitForToken } from '@/utils/waitForToken';
+import { sessionHeaders } from '@/utils/sessionIdentity';
 
 /**
  * Shared axios instance for the V2 UI. Mirrors the auth scheme used by the
@@ -17,6 +18,7 @@ export const api = axios.create({
 api.interceptors.request.use(async (config) => {
   const token = await waitForToken();
   if (token) config.headers['x-access-token'] = token;
+  Object.assign(config.headers, await sessionHeaders());
   return config;
 });
 

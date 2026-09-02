@@ -10,6 +10,7 @@ import { LogsConfigProvider } from '@/context/LogsConfigContext';
 import { AttendanceSocketProvider } from '@/context/AttendanceSocketContext';
 import { DetectionNotificationProvider } from '@/context/DetectionNotificationContext';
 import { router } from './App';
+import './utils/setupAxiosSession';
 import './index.css';
 
 createRoot(document.getElementById('root')).render(

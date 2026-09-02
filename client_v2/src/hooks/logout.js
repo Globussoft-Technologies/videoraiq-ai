@@ -1,6 +1,9 @@
 import Cookies from 'js-cookie';
+import axios from 'axios';
+import { clearSessionId, getSessionId } from '@/utils/sessionIdentity';
 
 const url = import.meta.env.VITE_ENV;
+const apiUrl = import.meta.env.VITE_BACKEND;
 
 const cookieName = () =>
   url === 'dev' ? 'dev-access-token' : url === 'prod' ? 'prod-access-token' : 'access-token';
@@ -29,6 +32,11 @@ const PRESERVED_STORAGE_KEYS = [
   // mute is server-backed via logsSound/updateLogsSound, so it already
   // survives logout without this list; see context/AttendanceSocketContext.jsx).
   'lineCrossingAudioMuted',
+  // Session Management — per-browser device identity (sessionIdentity.js).
+  // Must survive logout: it's what lets the server recognize this browser as
+  // the same device across separate login sessions (multi-system/browser
+  // blocking, and avoiding false "new device" churn on every re-login).
+  'vq_client_id',
 ];
 
 const shouldPreserveStorageKey = (key) =>
@@ -42,9 +50,27 @@ const shouldPreserveStorageKey = (key) =>
  * Clears the session, mirroring the V1 logout hook (client/src/hooks/logout.js):
  * access-token cookies are removed, remember-me cookies are preserved, and
  * local/session storage is cleared while keeping V2 display/refresh preferences.
+ * Also syncs the logout to the server (Session Management) so the session row
+ * is marked logged_out instead of lingering as "active".
  */
-export function logout() {
+export async function logout({ clearSession = true, syncServer = true } = {}) {
   const name = cookieName();
+  const token = Cookies.get(name);
+  const sessionId = getSessionId();
+
+  if (syncServer && sessionId && token) {
+    try {
+      await axios.delete(`${apiUrl}/sessions/${sessionId}`, {
+        headers: {
+          'x-access-token': token,
+          'x-session-id': sessionId,
+        },
+        skipSessionRedirect: true,
+      });
+    } catch {
+      // Logout must continue locally even if the server session update fails.
+    }
+  }
 
   const preservedStorage = {};
   Object.keys(localStorage).forEach((key) => {
@@ -69,4 +95,6 @@ export function logout() {
   });
 
   sessionStorage.clear();
+
+  if (clearSession) clearSessionId();
 }

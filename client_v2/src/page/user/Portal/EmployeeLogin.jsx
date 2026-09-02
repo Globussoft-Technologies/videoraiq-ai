@@ -8,6 +8,7 @@ import heroShot from "@/assets/21.jpg";
 import { PInput, PEye, PButton } from "./PortalFields";
 import { userLogin, forgotPassword } from "@/page/user/Users/api/post/Index";
 import AuthLoader from "@/page/user/Users/AuthLoader";
+import { setSessionId } from "@/utils/sessionIdentity";
 import "./portal.css";
 
 const url = import.meta.env.VITE_ENV;
@@ -144,6 +145,7 @@ export default function EmployeeLogin() {
       });
       if (response?.data?.body?.status === "success") {
         const token = response?.data?.body?.data?.token;
+        setSessionId(response?.data?.body?.data?.sessionId);
         Cookies.set(accessCookieName(), token, {
           expires: 1,
           secure: window.location.protocol === "https:",

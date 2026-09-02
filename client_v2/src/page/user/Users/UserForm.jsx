@@ -12,6 +12,7 @@ import AuthLoader from "./AuthLoader";
 import AuthHero from "./AuthHero";
 import RegisterForm from "./RegisterForm";
 import { Txt, labelStyle, fieldWrap, errStyle, EyeToggle, CtaButton } from "./AuthFields";
+import { setSessionId } from "@/utils/sessionIdentity";
 import "./login.css";
 
 const url = import.meta.env.VITE_ENV;
@@ -89,6 +90,7 @@ const LoginForm = () => {
         const result = response?.data;
 
         if (result?.ok && result?.token) {
+          setSessionId(result.sessionId);
           // V1 hardcodes secure:true; we only require it over HTTPS so the
           // standalone app also works on http://localhost during dev.
           Cookies.set(accessCookieName(), result.token, {
@@ -124,7 +126,12 @@ const LoginForm = () => {
         }
       } catch (error) {
         console.log("Login failed:", error.response?.data || error.message);
-        toast.error(error?.response?.data?.msg || "Invalid email/username or password");
+        toast.error(
+          error?.response?.data?.body?.message ||
+          error?.response?.data?.message ||
+          error?.response?.data?.msg ||
+          "Invalid email/username or password"
+        );
         setSubmitting(false);
       }
     },

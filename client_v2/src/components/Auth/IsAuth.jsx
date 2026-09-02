@@ -4,6 +4,7 @@ import Cookies from 'js-cookie';
 import getAccessToken from '@/utils/getAccessToken';
 import { useAuth } from '@/context/AuthContext';
 import { logout } from '@/hooks/logout';
+import { sessionHeaders } from '@/utils/sessionIdentity';
 
 const HOST = import.meta.env.VITE_BACKEND;
 const envValue = (key) => String(import.meta.env[key] || '').trim();
@@ -91,6 +92,20 @@ const authFailure = (result, response) => {
   };
 };
 
+const SESSION_REVOKED_CODES = new Set([
+  'SESSION_BLOCKED',
+  'SESSION_LOGGED_OUT',
+  'SESSION_INVALID',
+  'DEVICE_BLOCKED',
+]);
+const SESSION_CHECK_INTERVAL_MS = 15000;
+
+/**
+ * Route guard for the V2 app. It validates the access token against the backend
+ * (or exchanges a short-lived aMember credential handoff for one) and keeps
+ * checking the active session so blocked devices/sessions are removed from the
+ * logged-in browser automatically.
+ */
 export default function IsAuth({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -115,17 +130,25 @@ export default function IsAuth({ children }) {
     if (exchangeStarted.current) return;
     exchangeStarted.current = true;
 
-    const amemberLogin = Cookies.get('amember_login');
-    const amemberPass = Cookies.get('amember_pass');
+    const amemberLogin = Cookies.get('amember_login')
+    const amemberPass = Cookies.get('amember_pass')
     const token = getAccessToken();
+    let cancelled = false;
+    let sessionCheckTimer;
+
+    const endLocalSession = ({ keepSessionId = false } = {}) => {
+      logout({ clearSession: !keepSessionId, syncServer: false });
+      setIsLoading(false);
+      toLogin();
+    };
 
     if (!token && !(amemberLogin && amemberPass)) {
       setIsLoading(false);
       toLogin();
-      return;
+      return undefined;
     }
 
-    async function checkAccess() {
+    async function checkAccess({ initial = false } = {}) {
       try {
         if (amemberLogin && amemberPass) {
           const response = await fetch(`${HOST}/auth/by-login-pass`, {
@@ -161,12 +184,12 @@ export default function IsAuth({ children }) {
 
             if (hasInactiveAccess) {
               window.location.replace(memberUrl());
-              return;
+              return false;
             }
 
             setFailure(authFailure(result, response));
             setIsLoading(false);
-            return;
+            return false;
           }
 
           Cookies.set(accessCookieName(), result.token, {
@@ -178,25 +201,38 @@ export default function IsAuth({ children }) {
           deleteCookie('amember_pass');
           setUser(result.user);
           setIsLoading(false);
-          return;
+          return true;
         }
 
         const response = await fetch(`${HOST}/auth/by-login-token`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(await sessionHeaders()) },
           body: JSON.stringify({ token }),
         });
         const result = await response.json();
+        const revokedCode = result?.code || result?.body?.code;
+
+        if (cancelled) return false;
+
+        if (SESSION_REVOKED_CODES.has(revokedCode)) {
+          endLocalSession({ keepSessionId: true });
+          return false;
+        }
 
         if (!result?.success) {
-          logout();
-          setIsLoading(false);
-          toLogin();
-          return;
+          endLocalSession();
+          return false;
         }
+
         setUser(result.data);
-        setIsLoading(false);
+        if (initial) setIsLoading(false);
+        return true;
       } catch {
+        if (cancelled) return false;
+        if (!initial) return false;
+
+        // Only the initial check surfaces a hard failure UI — a transient
+        // network error on a background poll shouldn't kick the user out.
         logout();
         deleteCookie('amember_login');
         deleteCookie('amember_pass');
@@ -206,10 +242,22 @@ export default function IsAuth({ children }) {
           message: 'VideoraIQ could not verify your account. Please try again in a few minutes.',
         });
         setIsLoading(false);
+        return false;
       }
     }
 
-    checkAccess();
+    checkAccess({ initial: true }).then((allowed) => {
+      if (!cancelled && allowed) {
+        sessionCheckTimer = window.setInterval(() => {
+          checkAccess();
+        }, SESSION_CHECK_INTERVAL_MS);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      if (sessionCheckTimer) window.clearInterval(sessionCheckTimer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -38,13 +38,21 @@ export default function Logout() {
   const { setUser } = useAuth();
 
   useEffect(() => {
-    logout();
-    setUser(null);
-    if (isLocalSetup() && !envValue('VITE_AMEMBER_LOGIN_URL')) {
-      navigate('/admin-login', { replace: true });
-    } else {
-      window.location.replace(logoutRedirectUrl());
-    }
+    let mounted = true;
+    const signOut = async () => {
+      await logout();
+      if (!mounted) return;
+      setUser(null);
+      if (isLocalSetup() && !envValue('VITE_AMEMBER_LOGIN_URL')) {
+        navigate('/admin-login', { replace: true });
+      } else {
+        window.location.replace(logoutRedirectUrl());
+      }
+    };
+    signOut();
+    return () => {
+      mounted = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
