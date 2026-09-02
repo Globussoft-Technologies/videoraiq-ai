@@ -111,7 +111,7 @@ const modelMap = {
   mobilePhoneDetectionSettings: MobilePhoneDetectionSetting,
   foodServicePPEDetectionSettings: FoodServicePPEDetectionSetting,
   carModelDetectionSettings: carModelDetectionSchemaSetting,
-  attendanceDetectionSettings: attendanceDetectionSetting,
+  faceAuthenticationSettings: attendanceDetectionSetting,
 };
 
 const DEFAULT_DETECTION_SCHEDULE = { mode: "always" };

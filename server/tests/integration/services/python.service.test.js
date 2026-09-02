@@ -551,10 +551,10 @@ describe("PythonService.registerChannel", () => {
     expect(axios.post).not.toHaveBeenCalled();
   });
 
-  // A populated attendanceSettings link (the `id.settings` branch) so the
-  // guard passes without a DetectionSetting.findById DB call.
+  // A populated faceAuthenticationSettings link (the `id.settings` branch) so
+  // the guard passes without a DetectionSetting.findById DB call.
   const attendanceLink = (cameraId) => ({
-    attendanceSettings: {
+    faceAuthenticationSettings: {
       id: {
         settings: {
           referencePoints: {
@@ -606,7 +606,7 @@ describe("PythonService.registerChannel", () => {
     expect(body.detection_modes).toEqual(["face"]);
   });
 
-  it("starts with empty zones when no attendanceSettings is linked (optional)", async () => {
+  it("starts with empty zones when no faceAuthenticationSettings is linked (optional)", async () => {
     NVR.findById.mockResolvedValueOnce({ _id: "nvr-1", brand: "hikvision" });
     axios.post.mockResolvedValueOnce({ data: { ok: true } });
     const out = await PythonService.registerChannel(

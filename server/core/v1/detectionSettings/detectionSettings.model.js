@@ -1176,7 +1176,7 @@ const attendanceDetectionSchema = new mongoose.Schema({
 });
 
 const attendanceDetectionSetting = DetectionSetting.discriminator(
-  "attendanceSettings",
+  "faceAuthenticationSettings",
   new mongoose.Schema({ settings: attendanceDetectionSchema }),
 );  
 

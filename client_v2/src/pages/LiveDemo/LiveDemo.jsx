@@ -47,7 +47,7 @@ const categories = [{ key: 'all', label: 'All', color: null }, ...DETECTION_CATE
 const detections = [
   { name: 'Count Person Detection', subtitle: 'Occupancy', category: 'people', color: '#4f7cff', settingType: 'countPersonsSettings' },
   { name: 'Crowd Detection', subtitle: 'Density', category: 'people', color: '#6366f1', settingType: 'crowdDetectionSettings' },
-  { name: 'Face Recognition', subtitle: 'Biometric', category: 'people', color: '#2f80ed', settingType: 'attendanceSettings' },
+  { name: 'Face Recognition', subtitle: 'Biometric', category: 'people', color: '#2f80ed', settingType: 'faceAuthenticationSettings' },
   { name: 'Zone Intrusion Detection', subtitle: 'Perimeter', category: 'perimeter', color: '#f05252', settingType: 'unauthorizedAccessSettings' },
   { name: 'Line Crossing Detection', subtitle: 'Tripwire', category: 'perimeter', color: '#ff5a5f', settingType: 'lineCrossingSettings' },
   { name: 'Loitering Detection', subtitle: 'Dwell time', category: 'perimeter', color: '#ef4444', settingType: 'loiteringDetectionSettings' },
@@ -1589,7 +1589,7 @@ export default function LiveDemo() {
       // Now that processing is actually finished, pull the real numbers —
       // attendance log only applies to Face Recognition's detector.
       try {
-        const isFaceRecognition = processingSettingTypeRef.current === 'attendanceSettings';
+        const isFaceRecognition = processingSettingTypeRef.current === 'faceAuthenticationSettings';
         const [analyticsData, attendanceData] = await Promise.all([
           getVideoRecordAnalytics(recordId),
           isFaceRecognition ? getDemoAttendanceLogs({ limit: 10, isExport: false, removeUnknown: true }) : Promise.resolve(null),
@@ -2202,14 +2202,9 @@ export default function LiveDemo() {
       setClipProgress(10);
       processingSettingTypeRef.current = selected.settingType;
 
-      // The video-process service expects a different detector name for face
-      // recognition than the settingType used everywhere else in this app.
-      const processDetectorName = selected.settingType === 'attendanceSettings'
-        ? 'faceAuthenticationSettings'
-        : selected.settingType;
       const job = await processVideoRecord(recordId, {
         videoId: video._id || video.id,
-        detectors: [{ name: processDetectorName }],
+        detectors: [{ name: selected.settingType }],
       });
       setProcessJob(job?.job || job);
       const estimate = Number(job?.job?.estimated_completion_seconds);
@@ -2219,8 +2214,8 @@ export default function LiveDemo() {
       const [analyticsData, incidentsData, attendanceData] = await Promise.all([
         getVideoRecordAnalytics(recordId),
         getDemoIncidents({ limit: 10, incidentTypeFilter: [selected.settingType] }),
-        selected.settingType === 'attendanceSettings'
-          ? getDemoAttendanceLogs({ limit: 10, isExport: false, removeUnknown: true })
+        selected.settingType === 'faceAuthenticationSettings'
+          ? getDemoAttendanceLogs({ limit: 10, isExport: false })
           : Promise.resolve(null),
       ]);
 

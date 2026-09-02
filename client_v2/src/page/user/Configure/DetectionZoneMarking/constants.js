@@ -9,18 +9,22 @@ export const DETECTION_FIELD_KEYS = [
   'conveyorDetectionSettings', 'crusherDetectionSettings', 'waterSpillageDetectionSettings',
   'vehicleTypeDetectionSettings', 'loiteringDetectionSettings', 'vehicleObstructionSettings',
   'tableOccupancyDetectionSettings', 'foodServicePPEDetectionSettings', 'mobilePhoneDetectionSettings',
-  'carModelDetectionSettings', 'attendanceSettings',
+  'carModelDetectionSettings', 'faceAuthenticationSettings',
 ];
 
 export const ATTENDANCE_DETECTION_NAME = 'Attendance-detection';
-export const ATTENDANCE_DETECTION_SETTING_TYPE = 'attendanceSettings';
+export const ATTENDANCE_DETECTION_SETTING_TYPE = 'faceAuthenticationSettings';
 
 export function isAttendanceDetectionType(value) {
   const normalized = String(value || '')
     .replace(/settings$/i, '')
     .replace(/[^a-z0-9]/gi, '')
     .toLowerCase();
-  return normalized === 'attendancedetection' || normalized === 'attendance';
+  return (
+    normalized === 'attendancedetection' ||
+    normalized === 'attendance' ||
+    normalized === 'faceauthentication'
+  );
 }
 
 export const DEFAULT_MAX_POINTS = 4;

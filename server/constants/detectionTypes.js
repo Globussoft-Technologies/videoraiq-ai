@@ -86,7 +86,7 @@ export const TYPE_MAP = {
   foodServicePPEDetectionSettings: "foodServicePPEDetection",
   mobilePhoneDetectionSettings: "mobilePhoneDetection",
   carModelDetectionSettings: "carModelDetection",
-  attendanceSettings: "attendanceSettings",
+  faceAuthenticationSettings: "attendanceSettings",
 };
 
 export const DETECTION_MODES_MAP = {
@@ -113,7 +113,7 @@ export const DETECTION_MODES_MAP = {
   countPersonsSettings: ["countPersons"],
   mobilePhoneDetectionSettings: ["mobilePhoneDetection"],
   carModelDetectionSettings: ["carModelDetection"],
-  attendanceSettings: ["attendanceSettings"]
+  faceAuthenticationSettings: ["attendanceSettings"]
 };
 
 /**
@@ -161,7 +161,7 @@ export const DS_DETECTOR_BY_MODE = {
   light: "lightDetectionSettings",
   guard_absence: "guardAbsenceSettings",
   guard_sleeping: "sleepActivitySettings",
-  attendanceSettings: "attendanceSettings"
+  faceAuthenticationSettings: "attendanceSettings"
 };
 
 /**
@@ -224,7 +224,7 @@ export const DS_LOGIC_BY_MODE = {
   mobilePhoneDetection: "mobilePhoneDetectionSettings",
   foodServicePPEDetection: "foodServicePPEDetection",
   carModelDetection: "carModelDetectionSettings",
-  attendanceSettings: "attendanceSettings"
+  faceAuthenticationSettings: "attendanceSettings"
 };
 
 /** DS logic names for one of our setting types. */
@@ -266,7 +266,7 @@ export const toPopulateDetections = [
   { path: "detections.foodServicePPEDetectionSettings.id" },
   { path: "detections.mobilePhoneDetectionSettings.id" },
   { path: "detections.carModelDetectionSettings.id" },
-  { path: "detections.attendanceSettings.id" }
+  { path: "detections.faceAuthenticationSettings.id" }
 ];
 
 // sample payloads
@@ -1233,8 +1233,8 @@ export const carModelDetectionSettings = {
 export const attendanceSettings = {
   channelId: ["664f89e8a9d345001ee326b1"],
   NVRId: "664f895da9d345001ee326a9",
-  settingType: "attendanceSettings",
-  name: "Attendance Settings - Zone A",
+  settingType: "faceAuthenticationSettings",
+  name: "Face Authentication Settings - Zone A",
   enabled: true,
   alerts: ["68493b14b176a495112b6522"],
   settings: {

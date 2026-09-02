@@ -166,20 +166,20 @@ class PythonService {
     try {
       const nvr = await NVR.findById(channel?.nvrId);
       if (channel && type && admin_id && nvr) {
-        // Zones come from the camera's linked attendanceSettings detection
-        // setting when one exists; without one the start proceeds with empty
-        // zones (whole-frame attendance).
-        const linkedAttendance = channel?.detections?.attendanceSettings?.id;
-        const attendanceSetting = linkedAttendance?.settings
-          ? linkedAttendance // already populated
-          : linkedAttendance
-            ? await DetectionSetting.findById(linkedAttendance)
+        // Zones come from the camera's linked faceAuthenticationSettings
+        // detection setting when one exists; without one the start proceeds
+        // with empty zones (whole-frame face authentication).
+        const linkedFaceAuth = channel?.detections?.faceAuthenticationSettings?.id;
+        const faceAuthSetting = linkedFaceAuth?.settings
+          ? linkedFaceAuth // already populated
+          : linkedFaceAuth
+            ? await DetectionSetting.findById(linkedFaceAuth)
             : null;
 
         const cameraId = channel?._id?.toString();
         const zones =
-          attendanceSetting?.settings?.referencePoints?.[cameraId] || [];
-        const zone_configs = attendanceSetting?.settings?.zone_configs || [];
+          faceAuthSetting?.settings?.referencePoints?.[cameraId] || [];
+        const zone_configs = faceAuthSetting?.settings?.zone_configs || [];
 
         // ! old
         // const uid = `${nvr?._id}-${channel?._id}`;

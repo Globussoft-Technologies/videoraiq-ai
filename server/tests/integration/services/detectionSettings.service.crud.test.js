@@ -127,6 +127,34 @@ describe("DetectionSettingsService.createDetectionSettings — happy path", () =
     expect(res.statusCode).toBe(400);
   });
 
+  it("creates a faceAuthenticationSettings discriminator document (renamed from attendanceSettings)", async () => {
+    // Regression guard: modelMap['faceAuthenticationSettings'] must resolve
+    // to the discriminator registered under that same key in the model, or
+    // this 500s / silently drops the typed sub-schema.
+    const nvr = await makeNVR();
+    const ch = await makeChannel(nvr._id);
+
+    const { req, res, next } = serviceCtx({
+      user_id: "u1",
+      body: {
+        name: "face-auth-new",
+        settingType: "faceAuthenticationSettings",
+        NVRId: nvr._id.toString(),
+        channelId: [ch._id.toString()],
+        enabled: true,
+        settings: { metricType: "gauge" },
+      },
+    });
+    await DetectionSettingsService.createDetectionSettings(req, res, next);
+    expect(res.statusCode).toBe(201);
+    expect(payload(res).status).toBe("success");
+
+    const reloaded = await Channel.findById(ch._id);
+    expect(
+      reloaded.detections?.faceAuthenticationSettings?.id?.toString()
+    ).toBeTruthy();
+  });
+
   it("records skippedChannels for an unknown channelId (when other channels are valid)", async () => {
     const nvr = await makeNVR();
     const ghostId = new mongoose.Types.ObjectId();
