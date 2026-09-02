@@ -6,6 +6,11 @@ import { toast } from 'sonner';
 
 /** Row shape used by both the on-page Attendance Log table and this export —
  * built once from the raw usersLogs entries returned by getDemoAttendanceLogs. */
+function sessionSnap(session) {
+  const images = session?.images || {};
+  return images.frameImage || images.personImage || images.faceImage || '';
+}
+
 export function buildAttendanceRows(usersLogs = []) {
   return usersLogs.map((log) => {
     const sessions = log.sessions || [];
@@ -16,6 +21,7 @@ export function buildAttendanceRows(usersLogs = []) {
       ? Math.round(confidences.reduce((sum, n) => sum + n, 0) / confidences.length)
       : null;
 
+    // Duration is simply check-out minus check-in.
     let durationLabel = '--';
     if (checkIn && checkOut) {
       const minutes = Math.max(0, moment(checkOut).diff(moment(checkIn), 'minutes'));
@@ -23,6 +29,7 @@ export function buildAttendanceRows(usersLogs = []) {
     }
 
     return {
+      photo: sessionSnap(sessions[0]) || log.userInfo?.profilePics?.[0] || '',
       name: log.userInfo?.userName || 'Unknown',
       checkIn: checkIn ? moment(checkIn).format('HH:mm:ss') : '--',
       checkOut: checkOut ? moment(checkOut).format('HH:mm:ss') : '--',

@@ -34,11 +34,12 @@ import {
 import SelectField from '../RegisterUser/SelectField';
 import { COMPACT_TOAST } from '../RegisterUser/toastOptions';
 import FaceCaptureWizard from '../RegisterUser/FaceCaptureWizard';
-import { getVideoRecordAnalytics, getVideoRecordVideos } from './api/get';
+import { getVideoRecordAnalytics, getVideoRecordVideos, getVideoRecords } from './api/get';
 import { deleteDemoMedia } from './api/delete';
 import { createVideoRecord, getDemoAttendanceLogs, getDemoIncidents, processVideoRecord, updateVideoRecord, uploadDemoClip } from './api/post';
 import howToTakeFacePhotos from './assets/howto.jpg';
 import { useSocket } from '@/context/SocketContext';
+import { useAuth } from '@/context/AuthContext';
 import { buildAttendanceRows, handleLiveDemoExport } from './liveDemoExport';
 
 const categories = [{ key: 'all', label: 'All', color: null }, ...DETECTION_CATEGORIES];
@@ -54,7 +55,7 @@ const detections = [
   { name: 'Count Vehicles Detection', subtitle: 'Flow', category: 'vehicles', color: '#a855f7', settingType: 'countVehiclesSettings' },
   { name: 'Num Plate Detection (ANPR)', subtitle: 'ANPR', category: 'vehicles', color: '#b43df1', settingType: 'vehicleDetectionSettings' },
   { name: 'Vehicle Type Detection', subtitle: 'Classification', category: 'vehicles', color: '#9333ea', settingType: 'vehicleTypeDetectionSettings' },
-  { name: 'Vehicle Traffic Obstruction', subtitle: 'Blockage', category: 'vehicles', color: '#7c3aed', settingType: 'vehicleObstructionSettings' },
+  // { name: 'Vehicle Traffic Obstruction', subtitle: 'Blockage', category: 'vehicles', color: '#7c3aed', settingType: 'vehicleObstructionSettings' },
   { name: 'PPE Detection', subtitle: 'Hard hat / vest', category: 'safety', color: '#f59e0b', settingType: 'personalProtectiveEquipmentSettings' },
   { name: 'Food Service PPE Detection', subtitle: 'Hygiene', category: 'safety', color: '#f6a51a', settingType: 'foodServicePPEDetectionSettings' },
   { name: 'Fire & Smoke Detection', subtitle: 'Hazard', category: 'safety', color: '#fb923c' },
@@ -62,8 +63,8 @@ const detections = [
   { name: 'Guard Absence Detection', subtitle: 'Post coverage', category: 'workplace', color: '#22c7d8', settingType: 'guardAbsenceSettings' },
   { name: 'Restaurant Table Occupancy', subtitle: 'Seating', category: 'workplace', color: '#06b6d4', settingType: 'tableOccupancyDetectionSettings' },
   { name: 'Door Detection', subtitle: 'Open / closed', category: 'workplace', color: '#14b8a6', settingType: 'doorDetectionSettings' },
-  { name: 'Water Spillage Detection', subtitle: 'Floor hazard', category: 'industrial', color: '#10b981', settingType: 'waterSpillageDetectionSettings' },
-  { name: 'Oil Spillage Detection', subtitle: 'Floor hazard', category: 'industrial', color: '#0ea5a4' },
+  { name: 'Oil/Water Spillage Detection', subtitle: 'Floor hazard', category: 'industrial', color: '#10b981', settingType: 'waterSpillageDetectionSettings' },
+  // { name: 'Oil Spillage Detection', subtitle: 'Floor hazard', category: 'industrial', color: '#0ea5a4' },
   { name: 'Conveyor Belt Status Detection', subtitle: 'Equipment', category: 'industrial', color: '#059669', settingType: 'conveyorDetectionSettings' },
   { name: 'Crusher Status Detection', subtitle: 'Equipment', category: 'industrial', color: '#0d9488', settingType: 'crusherDetectionSettings' },
   { name: 'Light Detection', subtitle: 'Illumination', category: 'industrial', color: '#84cc16', settingType: 'lightDetectionSettings' },
@@ -845,6 +846,55 @@ function DetectionConfigPanel({
   );
 }
 
+function MatchedAlertsPanel({ alerts }) {
+  return (
+    <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="inline-flex items-center gap-2 text-[15px] font-bold text-[var(--tx)]">
+          4 · Matched alerts
+          {alerts.length > 0 && (
+            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white">
+              {alerts.length}
+            </span>
+          )}
+        </h2>
+      </div>
+
+      {alerts.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-[var(--bd2)] bg-[var(--bg2)] p-6 text-center text-xs text-[var(--tx3)]">
+          No matches yet — process a clip to see face matches here.
+        </div>
+      ) : (
+        <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+          {alerts.map((alert) => {
+            const photo = alert.images?.face || alert.profilePics?.[0];
+            const time = alert.timestamp ? new Date(alert.timestamp).toLocaleTimeString([], { hour12: false }) : '--';
+            return (
+              <div key={alert.key} className="flex items-center gap-3 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-2.5">
+                <img
+                  src={photo ? dsVideoSrc(photo) : ''}
+                  alt={alert.personName}
+                  className="h-10 w-10 shrink-0 rounded-md border border-[var(--bd)] bg-[var(--bg1solid)] object-cover"
+                  onError={(event) => { event.currentTarget.style.visibility = 'hidden'; }}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-bold text-[var(--tx)]">Face match — {alert.personName}</div>
+                  <div className="mt-0.5 truncate text-[11px] text-[var(--tx3)]">
+                    {time}{alert.cameraName ? ` · ${alert.cameraName}` : ''}{alert.department ? ` · ${alert.department}` : ''}
+                  </div>
+                </div>
+                <span className="shrink-0 rounded-md border border-[var(--blue)]/40 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--blue)]">
+                  Info
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function FaceRecognitionConfig({ confidence, setConfidence }) {
   const frontInputRef = useRef(null);
   const rightInputRef = useRef(null);
@@ -1252,7 +1302,7 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
   );
 }
 
-function AttendanceReportPanel({ usersLogs, clipName, minConfidence }) {
+function AttendanceLogPanel({ usersLogs }) {
   const rows = useMemo(() => buildAttendanceRows(usersLogs), [usersLogs]);
   const avgConfidence = useMemo(() => {
     const values = rows
@@ -1260,8 +1310,6 @@ function AttendanceReportPanel({ usersLogs, clipName, minConfidence }) {
       .filter((n) => !Number.isNaN(n));
     return values.length ? Math.round(values.reduce((sum, n) => sum + n, 0) / values.length) : null;
   }, [rows]);
-
-  const exportParams = { rows, detectionName: 'Face Recognition', clipName, minConfidence };
 
   return (
     <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
@@ -1283,9 +1331,10 @@ function AttendanceReportPanel({ usersLogs, clipName, minConfidence }) {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-[var(--bd)]">
-          <table className="w-full min-w-[560px] text-left text-xs">
+          <table className="w-full min-w-[620px] text-left text-xs">
             <thead className="bg-[var(--bg2)] text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--tx3)]">
               <tr>
+                <th className="px-3 py-2">Snap</th>
                 <th className="px-3 py-2">Person</th>
                 <th className="px-3 py-2">Check-in</th>
                 <th className="px-3 py-2">Check-out</th>
@@ -1296,6 +1345,20 @@ function AttendanceReportPanel({ usersLogs, clipName, minConfidence }) {
             <tbody>
               {rows.map((row, index) => (
                 <tr key={`attendance-${index}`} className="border-t border-[var(--bd)]">
+                  <td className="px-3 py-2">
+                    {row.photo ? (
+                      <img
+                        src={dsVideoSrc(row.photo)}
+                        alt={row.name}
+                        className="h-9 w-9 rounded-md border border-[var(--bd)] object-cover"
+                        onError={(event) => { event.currentTarget.style.visibility = 'hidden'; }}
+                      />
+                    ) : (
+                      <span className="grid h-9 w-9 place-items-center rounded-md border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx3)]">
+                        <User className="h-4 w-4" />
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 font-semibold text-[var(--tx)]">{row.name}</td>
                   <td className="px-3 py-2 text-[var(--tx2)]">{row.checkIn}</td>
                   <td className="px-3 py-2 text-[var(--tx2)]">{row.checkOut}</td>
@@ -1307,8 +1370,77 @@ function AttendanceReportPanel({ usersLogs, clipName, minConfidence }) {
           </table>
         </div>
       )}
+    </section>
+  );
+}
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--bd)] pt-4">
+function SessionAnalyticsPanel({ analytics }) {
+  const demosRun = analytics?.demosRun ?? 0;
+  const eventsDetected = analytics?.eventsDetected ?? 0;
+  const avgConfidence = analytics?.avgConfidence ?? 0;
+  const detectionsTested = analytics?.detectionsTested ?? 0;
+  const byDetection = Object.entries(analytics?.byDetection || {});
+  const maxEvents = Math.max(1, ...byDetection.map(([, stats]) => stats?.events || 0));
+
+  return (
+    <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
+      <div className="mb-3 flex items-center gap-2">
+        <h2 className="text-[15px] font-bold text-[var(--tx)]">Session Analytics</h2>
+        <span className="rounded-md border border-[var(--bd)] bg-[var(--bg2)] px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--tx3)]">
+          Included in every report
+        </span>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-3">
+          <div className="text-[11px] font-semibold text-[var(--tx3)]">Demos run</div>
+          <div className="mt-1 text-2xl font-bold text-[var(--blue)]">{demosRun}</div>
+        </div>
+        <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-3">
+          <div className="text-[11px] font-semibold text-[var(--tx3)]">Events detected</div>
+          <div className="mt-1 text-2xl font-bold text-[var(--tx)]">{eventsDetected}</div>
+        </div>
+        <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-3">
+          <div className="text-[11px] font-semibold text-[var(--tx3)]">Avg confidence</div>
+          <div className="mt-1 text-2xl font-bold text-emerald-500">{avgConfidence}%</div>
+        </div>
+        <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-3">
+          <div className="text-[11px] font-semibold text-[var(--tx3)]">Detections tested</div>
+          <div className="mt-1 text-2xl font-bold text-[var(--violet)]">{detectionsTested}</div>
+        </div>
+      </div>
+
+      {byDetection.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {byDetection.map(([key, stats]) => (
+            <div key={key} className="flex items-center gap-3 text-xs">
+              <span className="w-40 shrink-0 truncate font-semibold text-[var(--tx)]">
+                {detections.find((item) => item.settingType === key)?.name || key}
+              </span>
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--bg2)]">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[var(--blue)] to-[var(--violet)]"
+                  style={{ width: `${Math.min(100, ((stats?.events || 0) / maxEvents) * 100)}%` }}
+                />
+              </div>
+              <span className="w-28 shrink-0 text-right text-[var(--tx3)]">
+                {stats?.runs || 0} run{stats?.runs === 1 ? '' : 's'} · {stats?.events || 0} events
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DemoReportsPanel({ usersLogs, clipName, minConfidence }) {
+  const rows = useMemo(() => buildAttendanceRows(usersLogs), [usersLogs]);
+  const exportParams = { rows, detectionName: 'Face Recognition', clipName, minConfidence };
+
+  return (
+    <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-sm font-bold text-[var(--tx)]">Demo reports</div>
           <div className="mt-1 text-[11px] text-[var(--tx3)]">Every processed demo is kept here for this session.</div>
@@ -1387,6 +1519,8 @@ export default function LiveDemo() {
   const processingSettingTypeRef = useRef('');
 
   const { socket } = useSocket();
+  const { user } = useAuth();
+  const [matchedAlerts, setMatchedAlerts] = useState([]);
 
   const selected = detections.find((item) => item.name === selectedDetection) || detections[0];
   const selectedConfig = detectionConfigs[selectedDetection];
@@ -1458,7 +1592,7 @@ export default function LiveDemo() {
         const isFaceRecognition = processingSettingTypeRef.current === 'attendanceSettings';
         const [analyticsData, attendanceData] = await Promise.all([
           getVideoRecordAnalytics(recordId),
-          isFaceRecognition ? getDemoAttendanceLogs({ limit: 10, isExport: false }) : Promise.resolve(null),
+          isFaceRecognition ? getDemoAttendanceLogs({ limit: 10, isExport: false, removeUnknown: true }) : Promise.resolve(null),
         ]);
         setSessionAnalytics(analyticsData || null);
         if (isFaceRecognition) setDemoAttendanceLogs(attendanceData);
@@ -1470,6 +1604,47 @@ export default function LiveDemo() {
     socket.on(eventName, handleVideoRecordUpdated);
     return () => socket.off(eventName, handleVideoRecordUpdated);
   }, [socket, videoRecord]);
+
+  // Face-match alerts (same accessLogs_${adminId} channel the real app uses —
+  // there's no Live Demo-specific event yet). Unrecognized/"Unknown" matches
+  // are dropped; only named matches are worth showing here.
+  useEffect(() => {
+    if (!socket || !user?.adminId) return;
+
+    const eventName = `accessLogs_${user.adminId}`;
+    const handleAccessLogMatch = (data) => {
+      const name = String(data?.personName || '').trim();
+      if (!name || name.toLowerCase() === 'unknown') return;
+      setMatchedAlerts((current) => [{ ...data, key: `${data?.userId || name}-${data?.timestamp || Date.now()}` }, ...current].slice(0, 20));
+    };
+
+    socket.on(eventName, handleAccessLogMatch);
+    return () => socket.off(eventName, handleAccessLogMatch);
+  }, [socket, user?.adminId]);
+
+  // Attendance Log / Session Analytics / Demo Reports are always visible for
+  // Face Recognition, not just after processing a clip in this session — so
+  // fetch them as soon as the detection is selected (and again once a new
+  // clip finishes processing, via the videoRecord_updated handler above).
+  useEffect(() => {
+    if (selectedDetection !== 'Face Recognition') return;
+    let cancelled = false;
+
+    getDemoAttendanceLogs({ limit: 10, isExport: false, removeUnknown: true })
+      .then((data) => { if (!cancelled) setDemoAttendanceLogs(data); })
+      .catch((error) => console.error('Failed to load live demo attendance log', error));
+
+    getVideoRecords({ limit: 1 })
+      .then(({ records }) => {
+        const latestId = recordIdOf(records?.[0]);
+        if (!latestId) return null;
+        return getVideoRecordAnalytics(latestId);
+      })
+      .then((analyticsData) => { if (!cancelled && analyticsData) setSessionAnalytics(analyticsData); })
+      .catch((error) => console.error('Failed to load live demo session analytics', error));
+
+    return () => { cancelled = true; };
+  }, [selectedDetection]);
 
   // Ticks the estimate down toward 0 while waiting — a guide for the user,
   // not a guarantee; the socket event above is what actually ends the wait.
@@ -1516,6 +1691,7 @@ export default function LiveDemo() {
     setSecondsRemaining(null);
     setDemoIncidents({ items: [], totalCount: 0 });
     setDemoAttendanceLogs(null);
+    setMatchedAlerts([]);
     setClipStatus('idle');
     setClipProgress(0);
     setDrawing(false);
@@ -1991,6 +2167,7 @@ export default function LiveDemo() {
     setSessionAnalytics(null);
     setDemoIncidents({ items: [], totalCount: 0 });
     setDemoAttendanceLogs(null);
+    setMatchedAlerts([]);
 
     let videoPath = uploadedVideoPath;
     try {
@@ -2043,7 +2220,7 @@ export default function LiveDemo() {
         getVideoRecordAnalytics(recordId),
         getDemoIncidents({ limit: 10, incidentTypeFilter: [selected.settingType] }),
         selected.settingType === 'attendanceSettings'
-          ? getDemoAttendanceLogs({ limit: 10, isExport: false })
+          ? getDemoAttendanceLogs({ limit: 10, isExport: false, removeUnknown: true })
           : Promise.resolve(null),
       ]);
 
@@ -2447,26 +2624,6 @@ export default function LiveDemo() {
                 </div>
               </div>
 
-              {(processJob || sessionAnalytics || demoIncidents.totalCount > 0 || demoAttendanceLogs) && (
-                <div className="grid gap-2 border-t border-[var(--bd)] p-3 text-[11px] text-[var(--tx2)] sm:grid-cols-2 xl:grid-cols-4">
-                  <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] p-2">
-                    <div className="font-bold text-[var(--tx)]">Job</div>
-                    <div className="mt-1 truncate">{processJob?.job_id || processJob?.status || 'Submitted'}</div>
-                  </div>
-                  <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] p-2">
-                    <div className="font-bold text-[var(--tx)]">Events</div>
-                    <div className="mt-1">{sessionAnalytics?.eventsDetected ?? demoIncidents.totalCount ?? 0}</div>
-                  </div>
-                  <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] p-2">
-                    <div className="font-bold text-[var(--tx)]">Avg Confidence</div>
-                    <div className="mt-1">{sessionAnalytics?.avgConfidence ?? confidence}%</div>
-                  </div>
-                  <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] p-2">
-                    <div className="font-bold text-[var(--tx)]">Record</div>
-                    <div className="mt-1 truncate">{recordIdOf(videoRecord) || '-'}</div>
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
             <button
@@ -2497,10 +2654,20 @@ export default function LiveDemo() {
           )}
         </section>
 
-        {selectedDetection === 'Face Recognition' && <FaceRecognitionConfig confidence={confidence} setConfidence={setConfidence} />}
-        {selectedDetection === 'Face Recognition' && demoAttendanceLogs && (
-          <AttendanceReportPanel
-            usersLogs={demoAttendanceLogs.usersLogs || []}
+        {selectedDetection === 'Face Recognition' && clipStatus === 'ready' ? (
+          <MatchedAlertsPanel alerts={matchedAlerts} />
+        ) : (
+          selectedDetection === 'Face Recognition' && <FaceRecognitionConfig confidence={confidence} setConfidence={setConfidence} />
+        )}
+        {selectedDetection === 'Face Recognition' && (
+          <AttendanceLogPanel usersLogs={demoAttendanceLogs?.usersLogs || []} />
+        )}
+        {selectedDetection === 'Face Recognition' && (
+          <SessionAnalyticsPanel analytics={sessionAnalytics} />
+        )}
+        {selectedDetection === 'Face Recognition' && (
+          <DemoReportsPanel
+            usersLogs={demoAttendanceLogs?.usersLogs || []}
             clipName={clipFile?.name}
             minConfidence={confidence}
           />
