@@ -9,6 +9,7 @@ import roleModel from "../core/v1/roles/roles.model.js";
 import authorizedChannelsModel from "../core/v1/cameraRestrictions/authorizedChannels.model.js";
 import { checkActivePlan } from "./checkActivePlan.js";
 import { getEmpAuthInfo } from "../utils/helperFunctions.js";
+import sessionsService from "../core/v2/sessions/sessions.service.js";
 
 const backendToken = config.get("Backend.token");
 let jwtSecret = config.get("jwt.secretKey");
@@ -126,6 +127,15 @@ async function verifyToken(req, res, next) {
           /\/[0-9a-fA-F]{24}(?=\/|$)/g,
           ":id",
         );
+
+        const sessionAccess = await sessionsService.enforceRequestSession(req, decoded);
+        if (!sessionAccess.allowed) {
+          return res.status(sessionAccess.statusCode).send({
+            statusCode: sessionAccess.statusCode,
+            body: sessionAccess.body,
+          });
+        }
+
         checkActivePlan(req, res, next)
         // next();
       } else {

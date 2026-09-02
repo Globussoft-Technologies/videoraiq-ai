@@ -66,7 +66,20 @@ app.use(
   cors({
     origin: "*",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "x-access-token"],
+    // x-device-id/x-session-id/x-browser/x-operating-system/x-device-name are sent on
+    // every request by sessionHeaders() (client_v2/src/utils/sessionIdentity.js) for
+    // Session Management device/session tracking — without them explicitly allowed
+    // here, the browser's CORS preflight silently blocks every cross-origin request
+    // (client on one port, server on another) with no response body at all.
+    allowedHeaders: [
+      "Content-Type",
+      "x-access-token",
+      "x-device-id",
+      "x-session-id",
+      "x-browser",
+      "x-operating-system",
+      "x-device-name",
+    ],
   })
 );
 app.options("*", cors());

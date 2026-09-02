@@ -22,6 +22,8 @@ import permissionModel from "../permission/permissions.model.js";
 import locationModel from "../locations/location.model.js";
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
 import NVRModel from "../NVR/nvr.model.js";
+import sessionsService from "../sessions/sessions.service.js";
+import usersModel from "../users/users.model.js";
 import { autoSyncLocations, syncPermissionLocations, syncStevinrockLogPermissions, syncAlertsAnalyticsPermissions } from "../../../utils/helperFunctions.js";
 const backendToken = config.get("Backend.token");
 const detectionHost = config.get("PythonService.detectionUrl");
@@ -1049,6 +1051,11 @@ return bypassUsers.find(
         ? firstIncidentCreatedDate[0]?.timeOfIncident
         : "no Incidents found to provide firstIncidentCreatedDate";
 
+      const sessionAccess = await sessionsService.ensureDeviceCanLogin(req, tokenPayload);
+      if (!sessionAccess.allowed) {
+        return res.status(sessionAccess.statusCode).json({ statusCode: sessionAccess.statusCode, body: sessionAccess.body });
+      }
+
       let jwtToken = "";
 
       if (Object.keys(userData.subscriptions)[0] == this.customPlanID) {
@@ -1061,12 +1068,6 @@ return bypassUsers.find(
           this.secretKey,
           this.tokenExpiryTime
         );
-        return res.status(200).json({
-          ok: true,
-          msg: "User verified",
-          token: jwtToken,
-          user: tokenPayload,
-        });
       } else if (
         Object.keys(userData?.subscriptions)?.[0] == this.topUpPlanID
       ) {
@@ -1080,25 +1081,23 @@ return bypassUsers.find(
           this.secretKey,
           this.tokenExpiryTime
         );
-        return res.status(200).json({
-          ok: true,
-          msg: "User verified",
-          token: jwtToken,
-          user: tokenPayload,
-        });
       } else {
         jwtToken = generateToken(
           tokenPayload,
           this.secretKey,
           this.tokenExpiryTime
         );
-        return res.status(200).json({
-          ok: true,
-          msg: "User verified",
-          token: jwtToken,
-          user: tokenPayload,
-        });
       }
+
+      const session = sessionsService.toClient(await sessionsService.createForLogin(req, tokenPayload));
+      return res.status(200).json({
+        ok: true,
+        msg: "User verified",
+        token: jwtToken,
+        user: tokenPayload,
+        sessionId: session?.sessionId || null,
+        session,
+      });
     } catch (error) {
       console.log(error);
       logger.error(error);
@@ -1134,6 +1133,14 @@ return bypassUsers.find(
       // Try main application token
       decoded = jwt.verify(token, this.secretKey);
 
+      const sessionAccess = await sessionsService.enforceRequestSession(req, decoded);
+      if (!sessionAccess.allowed) {
+        return res.status(sessionAccess.statusCode).json({
+          success: false,
+          ...sessionAccess.body,
+        });
+      }
+
       return res
         .status(200)
         .json({
@@ -1161,9 +1168,73 @@ return bypassUsers.find(
       let isUserExist = await adminModel.findOne({ login: username });
 
       if (!isUserExist) {
-        return res.status(404).json({
-          success: false,
-          message: `No Admin found with username ${username} `,
+        const memberUser = await usersModel
+          .findOne({ $or: [{ userName: username }, { email: username }] })
+          .populate("roleIds", "role empRoleId")
+          .populate("adminId", "user_id streamHost")
+          .lean();
+
+        if (!memberUser) {
+          return res.status(404).json({
+            success: false,
+            message: `No admin or user found with username ${username} `,
+          });
+        }
+
+        if (memberUser?.active === false) {
+          return res.status(403).json({
+            success: false,
+            message: "User account is deactivated. Please contact administrator.",
+          });
+        }
+
+        const parentAdmin = await adminModel.findById(memberUser.adminId?._id).select("user_id streamHost").lean();
+        if (!parentAdmin) {
+          return res.status(404).json({ success: false, message: "Parent admin not found for this user" });
+        }
+
+        const allsubscriptions = await this.getAmemberAccessByUserId(parseInt(parentAdmin?.user_id));
+        const formattedSubscriptions = this.extractSubscriptions(allsubscriptions);
+
+        const tokenPayload = {
+          status: true,
+          user_id: Number(memberUser?.adminId?.user_id),
+          login: memberUser.userName,
+          adminId: memberUser.adminId?._id,
+          orgId: memberUser.orgId,
+          user_name: memberUser.userName,
+          user_email: memberUser.email,
+          name_f: memberUser.firstName,
+          name_l: memberUser.lastName,
+          roleId: memberUser?.roleIds,
+          emp_id: memberUser.emp_id,
+          profilePics: memberUser.profilePics,
+          created_from: "EMP",
+          createdAt: memberUser?.createdAt,
+          enablePhoneRecipients: config.get("enablePhoneRecipients"),
+          memberId: memberUser?._id,
+          userSubscriptionType: formattedSubscriptions,
+          streamHost: `${(parentAdmin?.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
+        };
+
+        const sessionAccess = await sessionsService.ensureDeviceCanLogin(req, tokenPayload);
+        if (!sessionAccess.allowed) {
+          return res.status(sessionAccess.statusCode).json({ statusCode: sessionAccess.statusCode, body: sessionAccess.body });
+        }
+
+        const jwtToken = generateToken(tokenPayload, this.secretKey, this.tokenExpiryTime);
+        await syncPermissionLocations(memberUser.adminId?._id);
+        await syncStevinrockLogPermissions(memberUser.adminId?._id);
+        await syncAlertsAnalyticsPermissions(memberUser.adminId?._id);
+
+        const session = sessionsService.toClient(await sessionsService.createForLogin(req, tokenPayload));
+        return res.status(200).json({
+          ok: true,
+          msg: "User verified",
+          token: jwtToken,
+          user: tokenPayload,
+          sessionId: session?.sessionId || null,
+          session,
         });
       }
 
@@ -1201,17 +1272,24 @@ return bypassUsers.find(
         // normalised to always end with a single trailing slash.
         streamHost: `${(isUserExist?.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
       };
+      const sessionAccess = await sessionsService.ensureDeviceCanLogin(req, tokenPayload);
+      if (!sessionAccess.allowed) {
+        return res.status(sessionAccess.statusCode).json({ statusCode: sessionAccess.statusCode, body: sessionAccess.body });
+      }
       let jwtToken = "";
       jwtToken = generateToken(
         tokenPayload,
         this.secretKey,
         this.tokenExpiryTime
       );
+      const session = sessionsService.toClient(await sessionsService.createForLogin(req, tokenPayload));
       return res.status(200).json({
         ok: true,
         msg: "User verified",
         token: jwtToken,
         user: tokenPayload,
+        sessionId: session?.sessionId || null,
+        session,
       });
     } catch (error) {
       return res.status(500).json({

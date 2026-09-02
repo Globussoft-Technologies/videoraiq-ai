@@ -37,6 +37,7 @@ import Channel from "./../channels/channels.model.js";
 import departmentModel from "../departments/departments.model.js";
 import mongoose from "mongoose";
 import AuthService from "../Auth/auth.service.js"
+import sessionsService from "../sessions/sessions.service.js";
 import { getEmpAuthInfo, syncPermissionLocations, syncStevinrockLogPermissions, syncAlertsAnalyticsPermissions } from "../../../utils/helperFunctions.js"
 
 let cacheDir = path.join('/tmp', 'media-cache'); // You can change this to './cache' or any path
@@ -929,16 +930,25 @@ class UsersService {
             streamHost: `${(admin?.streamHost || config.get('RTSPStream.host')).replace(/\/+$/, "")}/`,
           };
 
+          const sessionAccess = await sessionsService.ensureDeviceCanLogin(req, tokenPayload);
+          if (!sessionAccess.allowed) {
+            return res.status(sessionAccess.statusCode).json({ statusCode: sessionAccess.statusCode, body: sessionAccess.body });
+          }
+
           let jwtToken = generateToken(tokenPayload, this.secretKey, this.tokenExpiryTime);
           
           await syncPermissionLocations(user.adminId?._id);
           await syncStevinrockLogPermissions(user.adminId?._id);
           await syncAlertsAnalyticsPermissions(user.adminId?._id);
 
+          const session = sessionsService.toClient(await sessionsService.createForLogin(req, tokenPayload));
+
           return res.status(200).json(
             Response.userSuccessResp("Login successful", {
               token: jwtToken,
-              userData:tokenPayload
+              userData:tokenPayload,
+              sessionId: session?.sessionId || null,
+              session,
             })
           );
         } catch (error) {
