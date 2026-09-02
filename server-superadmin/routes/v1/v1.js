@@ -35,10 +35,13 @@ import clientRoutes from "../../core/v1/client/client.routes.js";
 import clientConfigRoutes from "../../core/v1/clientConfig/clientConfig.routes.js";
 import detectionCatalogRoutes from "../../core/v1/detectionCatalog/detectionCatalog.routes.js";
 import plansRoutes from "../../core/v1/plans/plans.routes.js";
+import sessionRoutes from "../../core/v1/sessions/sessions.routes.js";
+import verifySessionAccess from "../../core/v1/sessions/sessions.auth.js";
 
 const router = express.Router();
 
 router.use("/auth", authRoutes);
+router.use("/sessions", verifySessionAccess, sessionRoutes);
 router.use("/uploads", uploadRoutes);
 router.use("/admin", adminRoutes);
 router.use("/authorizedUsers", authorizedUsersRoutes);
