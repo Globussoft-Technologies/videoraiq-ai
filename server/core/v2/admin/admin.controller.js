@@ -310,6 +310,30 @@ class AdminController {
     return await adminService.fetchLogsSound(req, res, next);
   }
 
+  async fetchOnboarding(req, res, next) {
+    /* #swagger.tags = ['Admin']
+    #swagger.description = 'Fetch the guided-tour onboarding state for the calling Admin or User'
+    #swagger.responses[200] = { description: 'Onboarding state fetched successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return await adminService.fetchOnboarding(req, res, next);
+  }
+
+  async updateOnboarding(req, res, next) {
+    /* #swagger.tags = ['Admin']
+    #swagger.description = 'Update the guided-tour onboarding state for the calling Admin or User. Sent as true when the global tour is completed or globally skipped; skipping a single module does not call this.'
+    #swagger.parameters['data'] = {
+        in: 'body',
+        description: 'onboarded boolean flag',
+        required: true,
+        schema: { onboarded: true }
+    }
+    #swagger.responses[200] = { description: 'Onboarding state updated successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return await adminService.updateOnboarding(req, res, next);
+  }
+
   async getTimezones(req, res, next) {
     /* #swagger.tags = ['Admin']
     #swagger.description = 'Get all IANA timezones for the timezone dropdown. Optional ?search filters by case-insensitive substring.'

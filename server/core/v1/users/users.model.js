@@ -65,6 +65,10 @@ const usersSchema = new mongoose.Schema({
     default:null
   },
   logsSound: { type: Boolean, default: false },
+  // Guided-tour state for an authorized (sub) user — same contract as the
+  // admin model's field. Rows predating it are backfilled to true at login
+  // (users.service.js) so existing users don't suddenly get onboarded.
+  onboarded: { type: Boolean, default: false },
   profilePics: {
     type: [String],
     required: false, // allow empty array

@@ -833,6 +833,103 @@ class AdminService {
     }
   }
 
+  /**
+   * Guided-tour state for whoever is calling.
+   *
+   * Both identities carry their own `onboarded` flag — a sub-user's tour
+   * progress is theirs, not their parent admin's — so this resolves the same
+   * way logsSound does: memberId wins when present, otherwise adminId.
+   *
+   * Reads deliberately go through this endpoint rather than the JWT: the token
+   * is only minted at login, so an `onboarded` claim baked into it would still
+   * read false on every request after the user finishes the tour.
+   */
+  async fetchOnboarding(req, res, next) {
+    try {
+      const { adminId, memberId } = req?.verified?.userData || {};
+
+      if (memberId) {
+        const userSettings = await users.findById(memberId).select("onboarded");
+        if (!userSettings) {
+          return res.send(Response.userFailResp("User not found!", "Validation Failed!"));
+        }
+        return res.send(
+          Response.userSuccessResp("Onboarding state fetched successfully for user.", {
+            onboarded: userSettings.onboarded === true,
+          })
+        );
+      }
+
+      if (adminId) {
+        const adminSettings = await adminModel.findById(adminId).select("onboarded");
+        if (!adminSettings) {
+          return res.send(Response.userFailResp("Admin not found!", "Validation Failed!"));
+        }
+        return res.send(
+          Response.userSuccessResp("Onboarding state fetched successfully for admin.", {
+            onboarded: adminSettings.onboarded === true,
+          })
+        );
+      }
+
+      return res.send(Response.userFailResp("Invalid Token!", "Validation Failed!"));
+    } catch (error) {
+      next(new AppError(error, 500));
+    }
+  }
+
+  /**
+   * Set the caller's `onboarded` flag.
+   *
+   * The client sends true when the global tour is completed or globally
+   * skipped. Skipping a single module must NOT call this — that leaves the
+   * overall onboarding flow unfinished by design.
+   */
+  async updateOnboarding(req, res, next) {
+    try {
+      const { adminId, memberId } = req?.verified?.userData || {};
+      const { onboarded } = req.body;
+
+      if (typeof onboarded !== "boolean") {
+        return res.send(
+          Response.userFailResp("onboarded boolean value is required.", "Validation Failed!")
+        );
+      }
+
+      if (memberId) {
+        const updatedUser = await users
+          .findByIdAndUpdate(memberId, { $set: { onboarded } }, { new: true })
+          .select("onboarded");
+        if (!updatedUser) {
+          return res.send(Response.userFailResp("User not found!", "Validation Failed!"));
+        }
+        return res.send(
+          Response.userSuccessResp("Onboarding state updated successfully for user.", {
+            onboarded: updatedUser.onboarded === true,
+          })
+        );
+      }
+
+      if (adminId) {
+        const updatedAdmin = await adminModel
+          .findByIdAndUpdate(adminId, { $set: { onboarded } }, { new: true })
+          .select("onboarded");
+        if (!updatedAdmin) {
+          return res.send(Response.userFailResp("Admin not found!", "Validation Failed!"));
+        }
+        return res.send(
+          Response.userSuccessResp("Onboarding state updated successfully for admin.", {
+            onboarded: updatedAdmin.onboarded === true,
+          })
+        );
+      }
+
+      return res.send(Response.userFailResp("Invalid Token!", "Validation Failed!"));
+    } catch (error) {
+      next(new AppError(error, 500));
+    }
+  }
+
   // All IANA timezones for the frontend dropdown (built-in, no dependency).
   // Optional ?search= filters by case-insensitive substring on the zone name.
   async getTimezones(req, res, next) {

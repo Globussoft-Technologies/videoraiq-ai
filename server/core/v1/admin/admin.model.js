@@ -38,6 +38,13 @@ const adminSchema = new mongoose.Schema({
     }
   },
   logsSound: { type: Boolean, default: false },
+  // Guided-tour state. `false` means the global onboarding tour still runs on
+  // login; it flips to true only when the admin finishes the whole flow or
+  // uses the global "Skip entire tour" action — skipping a single module
+  // deliberately leaves it false. Admin rows created before this field
+  // existed are backfilled to true on login (auth.service.js), so existing
+  // customers are never shown the tour retroactively.
+  onboarded: { type: Boolean, default: false },
   // True while this admin's detection/face-auth streams have been stopped due to
   // plan expiry. Set when stop-all fires; cleared (and resume-all fired) when the
   // admin logs in again with an active plan.

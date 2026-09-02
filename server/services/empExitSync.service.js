@@ -15,11 +15,14 @@
  *     "intervalHours": 1
  *   }
  *
- * Match rule per employee: only a VideoRDB user with status "active" AND a
- * non-empty EmpMonitor date_of_exit gets flipped to "suspended". Already-
- * suspended users and employees with no exit date are left untouched, and the
- * update itself is filtered on status:"active" so a repeat run against the
- * same exited employee matches zero documents (no-op, no log noise).
+ * Match rule per employee: any VideoRDB user whose status is NOT "suspended"
+ * (i.e. "active", or the field is simply absent — plenty of real rows predate
+ * it or were inserted outside Mongoose, so "missing" has to mean the schema's
+ * own declared default rather than "no match") gets flipped to "suspended"
+ * when EmpMonitor reports a non-empty date_of_exit. Already-suspended users
+ * and employees with no exit date are left untouched, and the update itself
+ * is filtered the same way so a repeat run against the same exited employee
+ * matches zero documents (no-op, no log noise).
  *
  * Safety properties (mirrors services/retention.service.js — this runs
  * inside the API process, which exits on any unhandled rejection):
@@ -94,11 +97,19 @@ async function suspendIfActive(adminId, employee, summary) {
     `[EMP-EXIT-SYNC] admin ${adminId}: ${email} has date_of_exit=${employee.date_of_exit} — checking VideoRDB`,
   );
   try {
+    // status:"active" is the schema default, but that default only applies
+    // when Mongoose constructs a document — plenty of real rows predate the
+    // field entirely (or were inserted outside Mongoose) and simply have no
+    // status key at all. An exact { status: "active" } match silently skips
+    // every one of those, which is indistinguishable in the logs from
+    // "already suspended". $ne: "suspended" treats "missing" the same as
+    // "active", matching the schema's own declared default, while still
+    // leaving an explicitly suspended user untouched (repeat-run safe).
     const result = await authorizedUsersModel.updateOne(
       {
         adminId,
         email: new RegExp(`^${escapeRegex(email)}$`, "i"),
-        status: "active",
+        status: { $ne: "suspended" },
       },
       { $set: { status: "suspended" } },
     );

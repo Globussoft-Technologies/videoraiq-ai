@@ -844,6 +844,24 @@ return bypassUsers.find(
          );
       }
 
+      // ✅ Backfill `onboarded` for admins that predate the guided tour.
+      // The absence of the key is what marks a pre-tour row: adminModel.create()
+      // in registerAdminIfNotExists applies the schema default, so every admin
+      // created from here on persists `onboarded: false` and is skipped by this
+      // guard — which is precisely the split we want (existing accounts are
+      // treated as already onboarded, brand-new ones get the tour on first login).
+      // Guarded so it can never block login.
+      try {
+        if (adminData?._id) {
+          await adminModel.updateOne(
+            { _id: adminData._id, onboarded: { $exists: false } },
+            { $set: { onboarded: true } }
+          );
+        }
+      } catch (err) {
+        logger.error("Error backfilling onboarded flag:", err?.message);
+      }
+
       // ✅ Backfill the autoEmailReports module for permission configs seeded
       // before that module existed. Defaults follow the same shape as the role
       // presets below: admin gets everything, write everything but delete, read

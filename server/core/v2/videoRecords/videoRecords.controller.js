@@ -28,6 +28,28 @@ class VideoRecordsController {
     return videoRecordsService.getSessionAnalytics(req, res, next);
   }
 
+  async getLiveDemoAnalytics(req, res, next) {
+    /*
+    #swagger.tags = ['VideoRecords']
+    #swagger.description = 'Live Demo analytics for the session admin across all demo records, optionally narrowed to one or more detection types. POST because the detection filter is a list; it is a read, same as POST /incidents. Unlike /:id/analytics (which reads the sessionAnalytics counters DS writes onto a single record), these numbers are derived from the demo events themselves: incidents with liveDemoData=true for every detection, plus access-log sessions with liveDemoData=true for Face Recognition/attendance. Returns demosRun, eventsDetected, avgConfidence, detectionsTested and a per-detection runs/events breakdown, with the DS-reported counters alongside for comparison.'
+    #swagger.parameters['data'] = {
+      in: 'body',
+      required: false,
+      schema: {
+        detectionTypes: ["attendanceSettings", "crowdDetectionSettings"],
+        search: "face",
+        startDate: "2026-08-01",
+        endDate: "2026-08-31"
+      }
+    }
+    #swagger.responses[200] = { description: 'Live demo analytics fetched successfully' }
+    #swagger.responses[400] = { description: 'Missing/invalid adminId in session, or unknown detection type' }
+    #swagger.responses[404] = { description: 'Admin not found' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return videoRecordsService.getLiveDemoAnalytics(req, res, next);
+  }
+
   async createVideoRecord(req, res, next) {
     /*
     #swagger.tags = ['VideoRecords']

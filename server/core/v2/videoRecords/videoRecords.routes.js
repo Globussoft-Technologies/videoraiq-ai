@@ -6,6 +6,9 @@ const router = express.Router();
 
 router.get("/", viewAccessCheck, videoRecordsController.getVideoRecords);
 router.get("/:id/analytics", viewAccessCheck, videoRecordsController.getSessionAnalytics);
+// POST because the detection filter is a list — same read-via-POST shape as
+// POST /incidents and POST /accessLogs/get. Read-only, hence viewAccessCheck.
+router.post("/live-demo-analytics", viewAccessCheck, videoRecordsController.getLiveDemoAnalytics);
 router.post("/", createAccessCheck, videoRecordsController.createVideoRecord);
 router.post("/:id/process", createAccessCheck, videoRecordsController.processVideo);
 router.get("/:id/videos", viewAccessCheck, videoRecordsController.getVideos);

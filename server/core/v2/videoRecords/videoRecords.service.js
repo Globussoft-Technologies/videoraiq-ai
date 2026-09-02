@@ -1,14 +1,74 @@
 import mongoose from "mongoose";
+import momentTz from "moment-timezone";
 import config from "config";
 import videoRecordModel from "./videoRecords.model.js";
 import pythonService from "../../../services/python.service.js";
-import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
+import { DETECTION_TYPES, TYPE_MAP } from "../../../constants/detectionTypes.js";
 import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
 import authService from "../Auth/auth.service.js";
+import adminModel from "../admin/admin.model.js";
+import { Incident } from "../incidents/incidents.model.js";
+import OptimizedAccessLogs from "../accesslogs/newAccessLogs.model.js";
 import { sendPayloadToUser } from "../../../socket.js";
 
 const DETECTION_KEYS = Object.keys(DETECTION_TYPES);
+
+// Face Recognition is the one detection whose demo events are not incidents —
+// they land in the access logs as attendance sessions. Every other setting type
+// resolves to an `incidentType` through TYPE_MAP and is counted off `incidents`.
+const ATTENDANCE_SETTING_TYPE = "attendanceSettings";
+
+/**
+ * TYPE_MAP entries that do not name a real incident discriminator.
+ *
+ * TYPE_MAP says tableOccupancyDetectionSettings -> "tableOccupancySettings",
+ * but incidents.model.js registers the discriminator as
+ * "tableOccupancyDetection". Matching on the TYPE_MAP value would quietly
+ * return zero events for Table Occupancy forever. Corrected here rather than in
+ * the constant because TYPE_MAP also feeds DetectionSetting.detectionType (a
+ * persisted field) and the DS detector naming, so changing it would rewrite
+ * meaning for existing rows — that is a separate migration, not this endpoint's
+ * call to make.
+ */
+const INCIDENT_TYPE_OVERRIDES = {
+  tableOccupancyDetectionSettings: "tableOccupancyDetection",
+};
+
+// settingType (what the Live Demo UI and the LiveDemo.detections map use)
+// -> incidentType (what the incidents collection is keyed on). Attendance is
+// excluded because it has no incident counterpart.
+const INCIDENT_TYPE_BY_SETTING = Object.fromEntries(
+  DETECTION_KEYS.filter((key) => key !== ATTENDANCE_SETTING_TYPE).map((key) => [
+    key,
+    INCIDENT_TYPE_OVERRIDES[key] || TYPE_MAP[key] || key,
+  ])
+);
+
+const SETTING_BY_INCIDENT_TYPE = Object.fromEntries(
+  Object.entries(INCIDENT_TYPE_BY_SETTING).map(([setting, incidentType]) => [incidentType, setting])
+);
+
+// Incidents store 0-100 (ConfidenceScoreInPercentage); access-log sessions store
+// whatever DS sent, which is a 0-1 ratio for the face matcher. Both averages end
+// up in the same tile, so normalize to a percentage inside the aggregation.
+const confidencePercentExpr = (field) => ({
+  $let: {
+    vars: { c: { $ifNull: [field, 0] } },
+    in: { $cond: [{ $lte: ["$$c", 1] }, { $multiply: ["$$c", 100] }, "$$c"] },
+  },
+});
+
+const confidenceCountExpr = (field) => ({ $cond: [{ $gt: [{ $ifNull: [field, 0] }, 0] }, 1, 0] });
+
+const DEFAULT_REPORT_TZ = "Asia/Kolkata";
+
+const splitCsv = (value) =>
+  (Array.isArray(value) ? value : String(value ?? "").split(","))
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+
+const round1 = (num) => Math.round(num * 10) / 10;
 
 // Keep only known detection keys with boolean values; drop everything else.
 const sanitizeDetections = (detections = {}) => {
@@ -116,6 +176,342 @@ class VideoRecordsService {
       );
     } catch (error) {
       logger.error("Error fetching session analytics:", error);
+      return res.status(500).json(Response.errorResp("Internal server error"));
+    }
+  }
+
+  /**
+   * Live Demo analytics for one admin, optionally narrowed to a detection type.
+   *
+   * This is the admin-wide counterpart to getSessionAnalytics above, which only
+   * reports one LiveDemo record and only reports what DS has pushed into
+   * `sessionAnalytics`. Those stored counters are written by the DS team through
+   * the update API and are still zero while a clip is being processed, so the
+   * numbers here are DERIVED from the events themselves and the stored counters
+   * are only reported alongside, for comparison.
+   *
+   * Where the data lives — all in the one `videora` database, so this is three
+   * aggregations that could be joined but are deliberately not (each has its own
+   * index-friendly match, and $lookup across them would scan far more):
+   *
+   *   runs    LiveDemo   { adminId, detections.<settingType>: true }
+   *   events  incidents  { userId: admin.user_id, liveDemoData: true, incidentType }
+   *   events  optimizedaccesslogs { admin: adminId, liveDemoData: true }  <- Face
+   *           Recognition only; attendance demo hits are access-log sessions,
+   *           not incidents, which is why they need their own pass.
+   *
+   * `liveDemoData: true` is the flag that separates demo data from real tenant
+   * data on both event collections; it is never inferred, always matched.
+   *
+   * POST rather than GET because the detection filter is a list, matching the
+   * other list-with-filters reads in this codebase (POST /incidents,
+   * POST /accessLogs/get) — all of them read-only, all behind viewAccessCheck.
+   */
+  async getLiveDemoAnalytics(req, res, _next) {
+    try {
+      const {
+        // The detections to report on. Send one, send several, or omit the
+        // field entirely to get every detection the admin has demoed.
+        detectionTypes,
+        settingType,
+        search,
+        startDate,
+        endDate,
+      } = req.body || {};
+      const { adminId } = req?.verified?.userData || {};
+
+      if (!adminId || !mongoose.Types.ObjectId.isValid(adminId)) {
+        return res.status(400).json(Response.userFailResp("Missing or invalid adminId in session"));
+      }
+
+      // Accepts an array (the documented shape) or a comma-separated string, and
+      // `settingType` as an alias, so a caller sending either spelling works.
+      const requestedTypes = [...new Set([...splitCsv(detectionTypes), ...splitCsv(settingType)])];
+      const unknown = requestedTypes.filter((type) => !DETECTION_KEYS.includes(type));
+      if (unknown.length) {
+        return res
+          .status(400)
+          .json(Response.userFailResp(`Unknown detection type: ${unknown.join(", ")}`));
+      }
+
+      // Free-text narrowing over the detection's display name and its key, so
+      // "face" finds attendanceSettings and "vehicle" finds all three vehicle
+      // engines. It resolves to a set of types and then narrows exactly like an
+      // explicit detectionTypes list, which keeps the tiles consistent with the
+      // rows underneath them — a search that filtered only the breakdown would
+      // leave the totals describing detections the caller cannot see.
+      const searchTerm = typeof search === "string" ? search.trim().toLowerCase() : "";
+      let effectiveTypes = requestedTypes;
+      let searchMatchedNothing = false;
+      if (searchTerm) {
+        const matches = DETECTION_KEYS.filter(
+          (key) =>
+            key.toLowerCase().includes(searchTerm) ||
+            String(DETECTION_TYPES[key] || "").toLowerCase().includes(searchTerm)
+        );
+        effectiveTypes = requestedTypes.length
+          ? requestedTypes.filter((type) => matches.includes(type))
+          : matches;
+        // An empty intersection means "nothing matched", never "everything".
+        searchMatchedNothing = effectiveTypes.length === 0;
+      }
+
+      // Step 1 — resolve the admin. user_id is what the incidents collection is
+      // scoped by (it carries no adminId of its own), so this lookup is load
+      // bearing, not just a validation.
+      const admin = await adminModel.findById(adminId).select("user_id timezone").lean();
+      if (!admin) {
+        return res.status(404).json(Response.notFoundResp("Admin not found"));
+      }
+      const adminObjectId = new mongoose.Types.ObjectId(adminId);
+      const ownerUserId = admin.user_id?.toString();
+      const tz = admin.timezone || DEFAULT_REPORT_TZ;
+
+      // Optional YYYY-MM-DD window, bounded in the admin's own timezone the way
+      // every other report in this codebase does it.
+      let from = null;
+      let to = null;
+      if (startDate && endDate) {
+        from = momentTz.tz(startDate, "YYYY-MM-DD", tz).startOf("day").toDate();
+        to = momentTz.tz(endDate, "YYYY-MM-DD", tz).endOf("day").toDate();
+        if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+          return res
+            .status(400)
+            .json(Response.userFailResp("startDate and endDate must be YYYY-MM-DD"));
+        }
+      }
+      const dateWindow = (field) => (from && to ? { [field]: { $gte: from, $lte: to } } : {});
+
+      // A search that matched no detection is an empty result, not an unfiltered
+      // one. Answered here rather than by running three aggregations whose
+      // filters would collapse back to "everything".
+      if (searchMatchedNothing) {
+        return res.status(200).json(
+          Response.userSuccessResp("Live demo analytics fetched", {
+            scope: { adminId: adminObjectId, settingTypes: [], search, timezone: tz, from, to },
+            demosRun: 0,
+            eventsDetected: 0,
+            avgConfidence: 0,
+            detectionsTested: 0,
+            byDetection: [],
+            firstRunAt: null,
+            lastRunAt: null,
+            reportedByDs: { demosRun: 0, eventsDetected: 0 },
+          })
+        );
+      }
+
+      // Step 2/3 — the admin's demo records, narrowed to the requested detection.
+      // A record counts as a "run" of a detection when that detection was enabled
+      // on it, which is exactly what the process call sends to DS.
+      const recordMatch = { adminId: adminObjectId, ...dateWindow("createdAt") };
+      if (effectiveTypes.length === 1) {
+        recordMatch[`detections.${effectiveTypes[0]}`] = true;
+      } else if (effectiveTypes.length > 1) {
+        recordMatch.$or = effectiveTypes.map((type) => ({ [`detections.${type}`]: true }));
+      }
+
+      // Events. Attendance is only queried when it is in scope, and the incident
+      // pass is skipped entirely when the only requested type is attendance —
+      // or when the admin has no user_id, since matching incidents on an
+      // undefined userId would silently select every ownerless row.
+      const incidentTypes = !ownerUserId
+        ? []
+        : (effectiveTypes.length ? effectiveTypes : DETECTION_KEYS)
+            .filter((type) => INCIDENT_TYPE_BY_SETTING[type])
+            .map((type) => INCIDENT_TYPE_BY_SETTING[type]);
+      const wantsAttendance =
+        !effectiveTypes.length || effectiveTypes.includes(ATTENDANCE_SETTING_TYPE);
+
+      const incidentMatch = {
+        userId: ownerUserId,
+        liveDemoData: true,
+        incidentType: { $in: incidentTypes },
+        ...dateWindow("timeOfIncident"),
+      };
+
+      const accessMatch = {
+        admin: adminObjectId,
+        liveDemoData: true,
+        ...dateWindow("createdAt"),
+      };
+
+      const [recordFacet, incidentRows, accessRows] = await Promise.all([
+        videoRecordModel.aggregate([
+          { $match: recordMatch },
+          {
+            $facet: {
+              totals: [
+                {
+                  $group: {
+                    _id: null,
+                    demoRecords: { $sum: 1 },
+                    storedDemosRun: { $sum: { $ifNull: ["$sessionAnalytics.demosRun", 0] } },
+                    storedEventsDetected: {
+                      $sum: { $ifNull: ["$sessionAnalytics.eventsDetected", 0] },
+                    },
+                    firstRunAt: { $min: "$createdAt" },
+                    lastRunAt: { $max: "$createdAt" },
+                  },
+                },
+              ],
+              // One row per detection that was enabled on at least one record.
+              byDetection: [
+                {
+                  $project: {
+                    createdAt: 1,
+                    detections: { $objectToArray: { $ifNull: ["$detections", {}] } },
+                  },
+                },
+                { $unwind: "$detections" },
+                { $match: { "detections.v": true } },
+                {
+                  $group: {
+                    _id: "$detections.k",
+                    runs: { $sum: 1 },
+                    lastRunAt: { $max: "$createdAt" },
+                  },
+                },
+              ],
+            },
+          },
+        ]),
+
+        incidentTypes.length
+          ? Incident.aggregate([
+              { $match: incidentMatch },
+              {
+                $group: {
+                  _id: "$incidentType",
+                  events: { $sum: 1 },
+                  confidenceSum: {
+                    $sum: confidencePercentExpr("$ConfidenceScoreInPercentage"),
+                  },
+                  confidenceCount: {
+                    $sum: confidenceCountExpr("$ConfidenceScoreInPercentage"),
+                  },
+                  cameras: { $addToSet: "$channelId" },
+                  lastEventAt: { $max: "$timeOfIncident" },
+                },
+              },
+            ])
+          : Promise.resolve([]),
+
+        wantsAttendance
+          ? OptimizedAccessLogs.aggregate([
+              { $match: accessMatch },
+              { $unwind: "$sessions" },
+              {
+                $group: {
+                  _id: null,
+                  events: { $sum: 1 },
+                  confidenceSum: {
+                    $sum: confidencePercentExpr("$sessions.confidenceScore"),
+                  },
+                  confidenceCount: {
+                    $sum: confidenceCountExpr("$sessions.confidenceScore"),
+                  },
+                  cameras: { $addToSet: "$sessions.channel" },
+                  people: { $addToSet: "$sessions.personName" },
+                  lastEventAt: { $max: "$sessions.timestamp" },
+                },
+              },
+            ])
+          : Promise.resolve([]),
+      ]);
+
+      const totals = recordFacet?.[0]?.totals?.[0] || {};
+      const runsByType = new Map(
+        (recordFacet?.[0]?.byDetection || [])
+          .filter((row) => DETECTION_KEYS.includes(row._id))
+          .map((row) => [row._id, row])
+      );
+
+      // Fold both event sources into one settingType-keyed shape.
+      const eventsByType = new Map();
+      for (const row of incidentRows) {
+        const key = SETTING_BY_INCIDENT_TYPE[row._id];
+        if (key) eventsByType.set(key, row);
+      }
+      const accessRow = accessRows?.[0];
+      if (accessRow) eventsByType.set(ATTENDANCE_SETTING_TYPE, accessRow);
+
+      // Report every detection the admin either ran or produced events for, then
+      // narrow to what was asked for. Ordered by events so the busiest engine
+      // leads the breakdown, the way the panel renders it.
+      const keys = effectiveTypes.length
+        ? effectiveTypes
+        : [...new Set([...runsByType.keys(), ...eventsByType.keys()])];
+
+      const byDetection = keys
+        .map((key) => {
+          const runRow = runsByType.get(key);
+          const eventRow = eventsByType.get(key);
+          const confidenceCount = eventRow?.confidenceCount || 0;
+          return {
+            settingType: key,
+            name: DETECTION_TYPES[key] || key,
+            incidentType: INCIDENT_TYPE_BY_SETTING[key] || null,
+            source: key === ATTENDANCE_SETTING_TYPE ? "accessLogs" : "incidents",
+            runs: runRow?.runs || 0,
+            events: eventRow?.events || 0,
+            avgConfidence: confidenceCount
+              ? round1(eventRow.confidenceSum / confidenceCount)
+              : null,
+            camerasUsed: (eventRow?.cameras || []).filter(Boolean).length,
+            // Face Recognition only — distinct people the demo matched. Every
+            // other engine has no person identity on its events.
+            peopleRecognized: eventRow?.people
+              ? eventRow.people.filter(Boolean).length
+              : null,
+            lastRunAt: runRow?.lastRunAt || null,
+            lastEventAt: eventRow?.lastEventAt || null,
+          };
+        })
+        .sort((a, b) => b.events - a.events || b.runs - a.runs);
+
+      const eventsDetected = byDetection.reduce((sum, row) => sum + row.events, 0);
+      const confidenceSum = byDetection.reduce((sum, row) => {
+        const eventRow = eventsByType.get(row.settingType);
+        return sum + (eventRow?.confidenceSum || 0);
+      }, 0);
+      const confidenceCount = byDetection.reduce((sum, row) => {
+        const eventRow = eventsByType.get(row.settingType);
+        return sum + (eventRow?.confidenceCount || 0);
+      }, 0);
+
+      return res.status(200).json(
+        Response.userSuccessResp("Live demo analytics fetched", {
+          scope: {
+            adminId: adminObjectId,
+            // What was actually reported on, after search narrowing. Empty means
+            // "every detection this admin has demoed".
+            settingTypes: effectiveTypes,
+            search: searchTerm || null,
+            timezone: tz,
+            from,
+            to,
+          },
+          // The four tiles of the Session analytics panel.
+          demosRun: totals.demoRecords || 0,
+          eventsDetected,
+          avgConfidence: confidenceCount ? round1(confidenceSum / confidenceCount) : 0,
+          detectionsTested: byDetection.filter((row) => row.runs > 0 || row.events > 0).length,
+          byDetection,
+          firstRunAt: totals.firstRunAt || null,
+          lastRunAt: totals.lastRunAt || null,
+          // What DS pushed into sessionAnalytics for the same records. Kept
+          // separate rather than merged: a mismatch here means DS is behind on
+          // its update calls, and silently preferring one over the other would
+          // hide that.
+          reportedByDs: {
+            demosRun: totals.storedDemosRun || 0,
+            eventsDetected: totals.storedEventsDetected || 0,
+          },
+        })
+      );
+    } catch (error) {
+      logger.error("Error fetching live demo analytics:", error);
       return res.status(500).json(Response.errorResp("Internal server error"));
     }
   }

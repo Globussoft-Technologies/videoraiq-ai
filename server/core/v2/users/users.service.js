@@ -906,6 +906,18 @@ class UsersService {
                { $set: { logsSound: false } }
              );
           }
+
+          // Backfill `onboarded` for users created before the guided tour
+          // existed. Same contract as the admin backfill in auth.service.js:
+          // a missing key means a pre-tour row (treat as onboarded), while any
+          // user created after the schema change already carries the `false`
+          // default and so still gets the tour on first login.
+          if (user?._id) {
+            await authorizedUsersModel.updateOne(
+              { _id: user._id, onboarded: { $exists: false } },
+              { $set: { onboarded: true } }
+            );
+          }
           
           
           const tokenPayload = {

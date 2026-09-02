@@ -21,6 +21,8 @@ router.put("/alert-switches/email",verifyToken,adminController.updateEmailAlerts
 router.put("/alert-switches/telegram",verifyToken,adminController.updateTelegramAlertsEnabled);
 router.put("/update-logs-sound",verifyToken,adminController.updateLogsSound);
 router.get("/fetch-logs-sound",verifyToken,adminController.fetchLogsSound);
+router.get("/onboarding",verifyToken,adminController.fetchOnboarding);
+router.put("/onboarding",verifyToken,adminController.updateOnboarding);
 router.put("/update-stream-host",verifyToken,adminController.updateStreamHost);
 router.get("/timezones",verifyToken,adminController.getTimezones);
 router.get("/timezone",verifyToken,adminController.fetchTimezone);
