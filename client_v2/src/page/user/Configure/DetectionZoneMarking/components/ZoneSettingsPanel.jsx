@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, Save, Trash2 } from 'lucide-react';
 import ZoneScheduleFields, { TimezoneField } from '../../ZoneScheduleFields';
 import TelegramChannelMultiSelect from './TelegramChannelMultiSelect';
+import { CAR_COMPANIES } from '../constants';
 
 function normalizeTelegramChannels(channels = []) {
   return (Array.isArray(channels) ? channels : [])
@@ -167,6 +168,27 @@ export default function ZoneSettingsPanel({
                       />
                       {errors[`zone-${i}-threshold`] && (
                         <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{errors[`zone-${i}-threshold`]}</div>
+                      )}
+                    </div>
+                  )}
+                  {extraFields.includes('company') && (
+                    <div>
+                      <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Company *</label>
+                      <select
+                        value={z.company || ''}
+                        onChange={e => onUpdateField(i, 'company', e.target.value)}
+                        style={{
+                          width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
+                          background: 'var(--bg2)', border: `1px solid ${errors[`zone-${i}-company`] ? '#ef4444' : 'var(--bd)'}`, fontSize: 12, color: 'var(--tx)', outline: 'none', cursor: 'pointer',
+                        }}
+                      >
+                        <option value="">Select company</option>
+                        {CAR_COMPANIES.map(company => (
+                          <option key={company} value={company}>{company}</option>
+                        ))}
+                      </select>
+                      {errors[`zone-${i}-company`] && (
+                        <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{errors[`zone-${i}-company`]}</div>
                       )}
                     </div>
                   )}

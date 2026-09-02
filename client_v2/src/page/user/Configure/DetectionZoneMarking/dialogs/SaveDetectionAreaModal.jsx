@@ -4,7 +4,7 @@ import { AlertTriangle, X } from 'lucide-react';
 import { toast } from 'sonner';
 import ZoneScheduleFields, { TimezoneField, scheduleError, emptySchedule, formatTime } from '../../ZoneScheduleFields';
 import TelegramChannelMultiSelect from '../components/TelegramChannelMultiSelect';
-import { PRIORITY_OPTIONS } from '../constants';
+import { PRIORITY_OPTIONS, CAR_COMPANIES } from '../constants';
 
 function normalizeTelegramChannels(channels = []) {
   return (Array.isArray(channels) ? channels : [])
@@ -78,6 +78,9 @@ export default function SaveDetectionAreaModal({
       }
       if (extraFields.includes('threshold') && String(z.threshold ?? '').trim() === '') {
         nextErrors[`zone-${i}-threshold`] = true;
+      }
+      if (extraFields.includes('company') && !String(z.company ?? '').trim()) {
+        nextErrors[`zone-${i}-company`] = true;
       }
       if (hasSchedule && !hasTelegramChannel) {
         nextErrors[`zone-${i}-telegramChatId`] = true;
@@ -273,6 +276,27 @@ export default function SaveDetectionAreaModal({
                   />
                   {errors[`zone-${i}-threshold`] && (
                     <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>Threshold is required.</div>
+                  )}
+                </div>
+              )}
+              {extraFields.includes('company') && (
+                <div>
+                  <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Company *</label>
+                  <select
+                    value={z.company || ''}
+                    onChange={e => updateZoneField(i, 'company', e.target.value)}
+                    style={{
+                      width: '100%', height: 36, padding: '0 11px', borderRadius: 8, boxSizing: 'border-box',
+                      background: 'var(--bg2)', border: `1px solid ${errors[`zone-${i}-company`] ? 'var(--danger, #ef4444)' : 'var(--bd)'}`, fontSize: 12.5, color: 'var(--tx)', outline: 'none', cursor: 'pointer',
+                    }}
+                  >
+                    <option value="">Select company</option>
+                    {CAR_COMPANIES.map(company => (
+                      <option key={company} value={company}>{company}</option>
+                    ))}
+                  </select>
+                  {errors[`zone-${i}-company`] && (
+                    <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>Company is required.</div>
                   )}
                 </div>
               )}

@@ -25,6 +25,7 @@ export function zonesFor(setting, cameraId) {
     name: configs[i]?.name || `Zone ${i + 1}`,
     capacity: configs[i]?.capacity ?? '',
     threshold: configs[i]?.threshold_sec ?? '',
+    company: configs[i]?.company ?? '',
     countMode: setting?.settings?.count_mode === 'all' ? 'both' : (setting?.settings?.count_mode || 'entry'),
     schedule: scheduleFromConfig(configs[i]),
     telegramChatIds: Array.isArray(configs[i]?.telegramChatIds)

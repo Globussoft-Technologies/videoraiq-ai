@@ -40,6 +40,7 @@ export const ZONE_EXTRA_FIELDS = {
   tableOccupancyDetectionSettings: ['threshold'],
   deskAbsenceSettings: ['threshold', 'capacity'],
   crowdDetectionSettings: ['capacity'],
+  carModelDetectionSettings: ['company'],
 };
 
 export const PRIORITY_OPTIONS = [
@@ -47,3 +48,5 @@ export const PRIORITY_OPTIONS = [
   { value: 'moderate', label: 'Moderate' },
   { value: 'high', label: 'High' },
 ];
+
+export const CAR_COMPANIES = ['Ford', 'Honda', 'Volvo', 'Maruti Suzuki', 'Mahindra'];

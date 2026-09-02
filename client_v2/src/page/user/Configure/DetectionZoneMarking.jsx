@@ -279,6 +279,7 @@ export default function DetectionZoneMarking({
     name: `Zone ${index + 1}`,
     capacity: '',
     threshold: '',
+    company: '',
     telegramChatIds: [],
     telegramChatId: '',
     countMode: isLineCrossing ? 'entry' : '',
@@ -411,6 +412,7 @@ export default function DetectionZoneMarking({
     if (!String(zone?.name || '').trim()) nextErrors[`zone-${index}-name`] = `${nameLabel} is required.`;
     if (fields.includes('capacity') && String(zone?.capacity ?? '').trim() === '') nextErrors[`zone-${index}-capacity`] = 'Capacity is required.';
     if (fields.includes('threshold') && String(zone?.threshold ?? '').trim() === '') nextErrors[`zone-${index}-threshold`] = 'Threshold is required.';
+    if (fields.includes('company') && String(zone?.company ?? '').trim() === '') nextErrors[`zone-${index}-company`] = 'Company is required.';
     if (hasSchedule && !hasTelegramChannel) {
       nextErrors[`zone-${index}-telegramChatId`] = 'Please select at least one Telegram channel when a schedule is configured.';
     }
@@ -437,6 +439,7 @@ export default function DetectionZoneMarking({
       telegramChatId: z.telegramChatId || undefined,
       ...(fields.includes('capacity') ? { capacity: z.capacity === '' ? undefined : Number(z.capacity) } : {}),
       ...(fields.includes('threshold') ? { threshold_sec: z.threshold === '' ? undefined : Number(z.threshold) } : {}),
+      ...(fields.includes('company') && String(z.company ?? '').trim() !== '' ? { company: z.company } : {}),
       // startTime/endTime added only when fully selected in the schedule picker.
       ...buildScheduleFields(z.schedule),
     }));
