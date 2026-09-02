@@ -821,7 +821,7 @@ function DetectionConfigPanel({
   onZoneSettingsSave,
 }) {
   return (
-    <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
+    <section data-tour="demo-config" className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
       <h2 className="text-[15px] font-bold text-[var(--tx)]">3. Configure {detectionName}</h2>
       <p className="mt-2 text-xs leading-5 text-[var(--tx2)]">{config.description}</p>
 
@@ -1081,7 +1081,7 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
   };
 
   return (
-    <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
+    <section data-tour="demo-config" className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
       <h2 className="text-[15px] font-bold text-[var(--tx)]">3. Configure Face Recognition</h2>
       <p className="mt-2 text-xs leading-5 text-[var(--tx2)]">
         Register the people to find in your clip. VideorAIQ matches every frame against the registered faces and builds an attendance log with check-in / check-out times.
@@ -2256,7 +2256,7 @@ export default function LiveDemo() {
             <p className="mt-1 text-xs text-[var(--tx3)]">Upload a clip, pick a detection, and watch VideoraIQ work.</p>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div data-tour="demo-steps" className="flex items-center gap-4">
             {steps.map(([number, label], index) => {
               const active = index <= 1;
               return (
@@ -2275,7 +2275,7 @@ export default function LiveDemo() {
           </div>
         </div>
 
-        <section className="min-w-0 p-4">
+        <section data-tour="demo-detection" className="min-w-0 p-4">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-3">
               <h2 className="text-[15px] font-bold text-[var(--tx)]">1. Detection</h2>
@@ -2316,7 +2316,7 @@ export default function LiveDemo() {
 
           {showList && (
             <>
-              <div className="mb-3 flex flex-wrap items-center gap-2">
+              <div data-tour="demo-categories" className="mb-3 flex flex-wrap items-center gap-2">
                 <span className="rounded-md border border-[var(--bd)] bg-[var(--bg2)] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--tx3)]">
                   23 Models
                 </span>
@@ -2338,7 +2338,7 @@ export default function LiveDemo() {
                 </div>
               </div>
 
-              <div className="grid max-h-[258px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              <div data-tour="demo-models" className="grid max-h-[258px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {filteredDetections.map((item) => {
                   const selectedCard = selectedDetection === item.name;
                   return (
@@ -2375,7 +2375,7 @@ export default function LiveDemo() {
       </div>
 
       <div className={`mt-4 grid gap-4 ${configurationAvailable ? 'xl:grid-cols-[minmax(0,1fr)_minmax(360px,580px)]' : ''}`}>
-        <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
+        <section data-tour="demo-upload" className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="text-[15px] font-bold text-[var(--tx)]">2. Upload a test clip</h2>
             <span className="inline-flex h-7 items-center gap-2 rounded-lg border border-[var(--blue)]/35 bg-[var(--blue)]/10 px-3 text-[10px] font-semibold tracking-[0.08em] text-[var(--blue)]">
@@ -2591,6 +2591,7 @@ export default function LiveDemo() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
+                    data-tour="demo-process"
                     onClick={handleProcessClip}
                     disabled={isClipBusy || (!clipFile && !uploadedVideoPath) || clipStatus === 'ready'}
                     className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] px-3 text-xs font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
@@ -2623,6 +2624,7 @@ export default function LiveDemo() {
           ) : (
             <button
               type="button"
+              data-tour="demo-dropzone"
               onClick={() => clipInputRef.current?.click()}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => {

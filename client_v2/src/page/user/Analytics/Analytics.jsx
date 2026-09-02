@@ -85,14 +85,18 @@ export default function Analytics() {
   return (
     <AnalyticsRefreshProvider>
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <AnalyticsToolbar range={range} onRangeChange={setRange} timezone={timezone} onTimezoneChange={setTimezone} />
+      <div data-tour="analytics-toolbar">
+        <AnalyticsToolbar range={range} onRangeChange={setRange} timezone={timezone} onTimezoneChange={setTimezone} />
+      </div>
 
-      <OverviewKpiRow params={params} />
+      <div data-tour="analytics-kpis">
+        <OverviewKpiRow params={params} />
+      </div>
 
       <AttendanceAnalytics timezone={timezone} />
 
       {/* Detection Volume | Share by Engine */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 18 }} className="vq-analytics-row">
+      <div data-tour="analytics-charts" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 18 }} className="vq-analytics-row">
         <DetectionVolumeCard params={params} />
         <EngineShareCard params={params} />
       </div>

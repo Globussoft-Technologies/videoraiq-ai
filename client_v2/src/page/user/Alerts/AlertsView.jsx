@@ -757,7 +757,7 @@ export default function AlertsView() {
           .vq-alerts-row { grid-template-columns: 38px 1fr 60px !important; }
         }
       `}</style>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div data-tour="alerts-filters" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         {TABS.map((t) => <div key={t.key} onClick={() => setSev(t.key)} style={tab(sev === t.key)}>{t.label} ({sevCounts[t.key]})</div>)}
         <div style={{ width: 1, height: 20, background: 'var(--bd2)' }} />
         {STATUS_TABS.map((t) => <div key={t.key} onClick={() => setStatusFilter(t.key)} style={tab(statusFilter === t.key)}>{t.label} ({statusCounts[t.key]})</div>)}
@@ -782,7 +782,7 @@ export default function AlertsView() {
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 16, minWidth: 0 }} className="vq-cc-grid vq-alerts-grid">
+      <div data-tour="alerts-list" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 16, minWidth: 0 }} className="vq-cc-grid vq-alerts-grid">
         {/* Table */}
         <Panel style={{ overflow: 'hidden', minWidth: 0 }}>
           <div className="vq-alerts-row-head" style={{ display: 'grid', gridTemplateColumns: '64px minmax(0,1fr) 110px 100px', gap: 8, padding: '11px 16px', borderBottom: '1px solid var(--bd)', fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.06em', color: 'var(--tx3)' }}>

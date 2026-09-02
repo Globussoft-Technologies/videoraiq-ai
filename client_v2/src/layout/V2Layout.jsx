@@ -5,6 +5,8 @@ import { V2ThemeProvider, useTheme } from '../theme/ThemeContext';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import AssistantLauncher from '../components/AssistantLauncher';
+import AppTour from '../components/Tour/AppTour';
+import { TourProvider, useTour } from '../context/TourContext';
 import CameraLimitLock from '../components/CameraLimitLock';
 import { VIEW_META } from './nav.config';
 import { getLocations, getChannels } from '../helpers/monitoring';
@@ -87,6 +89,9 @@ function Shell() {
   useDetectionScheduleEvents();
 
   const { theme } = useTheme();
+  // The tour needs the sidebar visible for its nav-anchored steps; below md the
+  // sidebar is a drawer, so it has to be opened on the tour's behalf.
+  const { needsSidebar } = useTour();
   const location = useLocation();
   const navigate = useNavigate();
   const viewKey = currentViewKey(location.pathname);
@@ -109,6 +114,12 @@ function Shell() {
   }, []);
   // Close the drawer on navigation.
   useEffect(() => setNavOpen(false), [location.pathname]);
+  // ...but re-open it when the tour is pointing at a sidebar item. Declared
+  // after the close effect and keyed on the pathname too, so it wins on the
+  // render where the tour has just navigated to the next module's page.
+  useEffect(() => {
+    if (isMobile && needsSidebar) setNavOpen(true);
+  }, [isMobile, needsSidebar, location.pathname]);
 
   // Sites for the switcher (locations master data).
   const { data: locations, refetch: refreshSites } = useApi(() => getLocations(0, 100), []);
@@ -303,6 +314,7 @@ function Shell() {
         {/* Hidden on the assistant's own page — nothing to launch from there. */}
         {/* {viewKey !== 'assistant' && <AssistantLauncher />} */}
       </main>
+      <AppTour />
     </div>
   );
 }
@@ -310,7 +322,12 @@ function Shell() {
 export default function V2Layout() {
   return (
     <V2ThemeProvider defaultTheme="light">
-      <Shell />
+      {/* TourProvider wraps Shell rather than sitting inside it: it needs the
+          router and the permission/logs-config contexts (all above this point),
+          while Shell needs to read tour state to drive the mobile drawer. */}
+      <TourProvider>
+        <Shell />
+      </TourProvider>
     </V2ThemeProvider>
   );
 }

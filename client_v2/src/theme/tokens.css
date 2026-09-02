@@ -271,3 +271,21 @@
   .vq-fs-nav-prev { left: 6px !important; }
   .vq-fs-nav-next { right: 6px !important; }
 }
+
+/* ---- Guided tour ---- */
+/* The header's "Start a Tour" button drops to icon-only on narrow headers,
+   the same way the clock and theme toggle are hidden there — the label is the
+   first thing worth losing when the header runs out of room. */
+@media (max-width: 1100px) {
+  .vq-tour-btn-label { display: none; }
+}
+
+/* Joyride portals its overlay and floater onto <body>, outside .vq-root. The
+   design tokens still resolve there because ThemeContext's applyTheme() stamps
+   data-vq-theme on <html> and <body> as well — the same reason the log pages'
+   Popover works in a portal. Only the font needs restating, since that comes
+   from .vq-root rather than from a token. */
+#react-joyride-portal,
+[id^='react-joyride-step'] {
+  font-family: var(--ui);
+}

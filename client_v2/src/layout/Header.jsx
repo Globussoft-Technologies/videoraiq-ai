@@ -9,6 +9,7 @@ import { NAV_GROUPS } from './nav.config';
 import { getChannels } from '../helpers/monitoring';
 import { networkRatingInfo } from '../lib/networkStatus';
 import { timeAgo } from '../lib/format';
+import StartTourMenu from '../components/Tour/StartTourMenu';
 
 // Static index of navigable pages, built once from the sidebar config.
 const PAGE_INDEX = NAV_GROUPS.filter((g) => !g.hidden).flatMap((g) =>
@@ -302,7 +303,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
           <Menu size={18} strokeWidth={1.8} style={{ color: 'var(--tx2)' }} />
         </button>
       )}
-      <div style={{ flex: '0 1 auto', minWidth: 0 }}>
+      <div data-tour="hdr-title" style={{ flex: '0 1 auto', minWidth: 0 }}>
         <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: isNarrow ? 15 : 17, letterSpacing: '-.01em', lineHeight: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {title}
         </div>
@@ -352,7 +353,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
           Sidebar's footer widget, which shows the same reading). Hidden on
           narrower headers, same as the clock/theme controls. */}
       {serverNetworks.length > 0 && !hideNetwork && (
-        <div ref={networkRef} style={{ position: 'relative', flex: '0 0 auto' }}>
+        <div ref={networkRef} data-tour="hdr-network" style={{ position: 'relative', flex: '0 0 auto' }}>
           <div
             onClick={() => setNetworkOpen((o) => !o)}
             title="Server network status"
@@ -569,7 +570,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
       )}
 
       {/* Site switcher */}
-      <div ref={siteRef} style={{ position: 'relative', flex: '0 0 auto' }}>
+      <div ref={siteRef} data-tour="hdr-sites" style={{ position: 'relative', flex: '0 0 auto' }}>
         <div
           onClick={() => setSiteOpen((o) => !o)}
           style={{ display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 12px', borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)', cursor: 'pointer' }}
@@ -617,7 +618,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
 
       {/* Theme toggle */}
       {!hideTheme && (
-        <div style={{ display: 'flex', gap: 3, height: 36, padding: 3, borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)', flex: '0 0 auto' }} title="Theme">
+        <div data-tour="hdr-theme" style={{ display: 'flex', gap: 3, height: 36, padding: 3, borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--bd)', flex: '0 0 auto' }} title="Theme">
           <button type="button" aria-label="Light theme" aria-pressed={theme === 'light'} onClick={() => setTheme('light')} style={themeBtn(theme === 'light')}>
             <Sun size={15} strokeWidth={1.8} />
           </button>
@@ -728,8 +729,12 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
         </div>
       )}
 
+      {/* Start a Tour — available to everyone, onboarded or not, so any module
+          can be revisited on demand. */}
+      <StartTourMenu />
+
       {/* Notifications */}
-      <div ref={notifRef} style={{ position: 'relative', flex: '0 0 auto' }}>
+      <div ref={notifRef} data-tour="hdr-notifications" style={{ position: 'relative', flex: '0 0 auto' }}>
         <div
           onClick={() => setNotifOpen((o) => !o)}
           role="button"

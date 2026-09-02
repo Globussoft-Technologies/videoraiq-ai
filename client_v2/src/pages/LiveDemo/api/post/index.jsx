@@ -93,6 +93,35 @@ export const getDemoIncidents = async ({ skip = 0, limit = 10, ...filter } = {})
   };
 };
 
+/**
+ * Session analytics across every demo this admin has run, optionally scoped to
+ * a set of detections. Unlike getVideoRecordAnalytics (one record, and only the
+ * counters DS has pushed onto it), the numbers here are derived from the demo
+ * events themselves, so they are populated as soon as the events land.
+ *
+ * A POST because the detection filter is a list, not because it writes anything.
+ *
+ * detectionTypes holds the same keys the detection chips use (e.g.
+ * attendanceSettings), not the display names. Omit it for every detection.
+ * search narrows by detection name or key, e.g. 'face' or 'vehicle'.
+ */
+export const getLiveDemoAnalytics = async ({ detectionTypes, search, startDate, endDate } = {}) => {
+  const body = {};
+  if (detectionTypes) {
+    body.detectionTypes = Array.isArray(detectionTypes) ? detectionTypes : [detectionTypes];
+  }
+  if (search) body.search = search;
+  if (startDate && endDate) {
+    body.startDate = startDate;
+    body.endDate = endDate;
+  }
+
+  const res = await axios.post(`${HOST}/video-records/live-demo-analytics`, body, {
+    headers: jsonHeaders(),
+  });
+  return unwrap(res) || {};
+};
+
 export const getDemoAttendanceLogs = async ({ skip = 0, limit = 10, isExport = false, ...filter } = {}) => {
   const res = await axios.post(
     `${HOST}/accessLogs/get`,

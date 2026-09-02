@@ -147,14 +147,14 @@ const ReusableTablePage = ({
   return (
     <div className="w-full flex flex-1 flex-col">
       {Array.isArray(stats) && stats.length > 0 && (
-        <div className="mb-[18px]">
+        <div data-tour="log-stats" className="mb-[18px]">
           <StatCards stats={stats} />
         </div>
       )}
       <div className="w-full flex flex-1 flex-col bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] p-4 sm:p-5 space-y-4">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative w-full md:w-[240px] flex items-center h-10 rounded-[10px] bg-[var(--bg2)] border border-[var(--bd)] focus-within:border-[var(--violet)] focus-within:ring-2 focus-within:ring-[var(--violet)]/15 transition-colors">
+          <div data-tour="log-search" className="relative w-full md:w-[240px] flex items-center h-10 rounded-[10px] bg-[var(--bg2)] border border-[var(--bd)] focus-within:border-[var(--violet)] focus-within:ring-2 focus-within:ring-[var(--violet)]/15 transition-colors">
             <Search className="absolute left-3 w-4 h-4 text-[var(--tx3)] pointer-events-none" />
             <input
               type="text"
@@ -166,18 +166,20 @@ const ReusableTablePage = ({
           </div>
 
           {from !== 'visibility' && (
-            <DateFilter
-              startDate={dateRange.start}
-              endDate={dateRange.end}
-              minDate={minDate}
-              maxDate={maxDate}
-              onRangeChange={(range) => setDateRange(range)}
-            />
+            <div data-tour="log-daterange" className="flex items-center">
+              <DateFilter
+                startDate={dateRange.start}
+                endDate={dateRange.end}
+                minDate={minDate}
+                maxDate={maxDate}
+                onRangeChange={(range) => setDateRange(range)}
+              />
+            </div>
           )}
 
           <div className="w-full md:flex md:items-center md:ml-auto md:w-auto gap-3 flex flex-wrap">
             {hasGrid && (
-              <div className="flex items-center gap-[3px] bg-[var(--bg2)] border border-[var(--bd)] rounded-[8px] p-[3px] h-10">
+              <div data-tour="log-viewmode" className="flex items-center gap-[3px] bg-[var(--bg2)] border border-[var(--bd)] rounded-[8px] p-[3px] h-10">
                 <button
                   type="button"
                   onClick={() => setViewMode('table')}
@@ -208,7 +210,11 @@ const ReusableTablePage = ({
                 </button>
               </div>
             )}
-            {children}
+            {children ? (
+              <div data-tour="log-actions" className="flex flex-wrap items-center gap-3">
+                {children}
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -232,7 +238,7 @@ const ReusableTablePage = ({
                 </div>
               )
             ) : (
-              <div className="w-full overflow-x-auto overflow-y-auto max-h-[60vh] rounded-xl border border-[var(--bd)]">
+              <div data-tour="log-table" className="w-full overflow-x-auto overflow-y-auto max-h-[60vh] rounded-xl border border-[var(--bd)]">
                 <ProfilesTable data={paginated} columns={columns} loading={false} />
               </div>
             )}
@@ -261,6 +267,7 @@ const ReusableTablePage = ({
       {!loading && !isEmpty && (
         <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 items-center gap-4">
           <div
+            data-tour="log-total"
             className={`text-sm text-[var(--tx2)] bg-[var(--bg2)] px-3 py-1.5 font-normal rounded-[8px] w-fit inline-flex items-center gap-2 ${
               from === 'visibility' ? 'invisible' : ''
             }`}
@@ -271,7 +278,7 @@ const ReusableTablePage = ({
             </span>
           </div>
 
-          <div className="flex items-center justify-center gap-2">
+          <div data-tour="log-pagination" className="flex items-center justify-center gap-2">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
@@ -362,7 +369,7 @@ const ReusableTablePage = ({
               </button>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div data-tour="log-rows" className="flex items-center gap-1.5">
               <span className="text-xs text-[var(--tx2)] whitespace-nowrap">Rows:</span>
               <select
                 value={limit}

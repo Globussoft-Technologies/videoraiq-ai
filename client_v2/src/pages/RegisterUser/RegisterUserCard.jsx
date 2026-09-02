@@ -261,7 +261,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
   };
 
   return (
-    <div className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] p-6">
+    <div data-tour="reg-form" className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] p-6">
       <div className="mb-5 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-[var(--tx)]">Register New User</h2>
@@ -365,6 +365,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
 
           <button
             type="button"
+            data-tour="reg-next"
             onClick={handleNext}
             disabled={checkingEmail}
             className="w-full h-12 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-70"

@@ -990,6 +990,7 @@ export default function SystemSettings() {
 
   return (
     <div
+      data-tour="settings-sections"
       style={{
         padding: 22,
         display: 'grid',

@@ -1606,7 +1606,7 @@ export default function IncidentCenter() {
       `}</style>
 
       {/* ── KPI row ─────────────────────────────────────────────────────────── */}
-      <div className="vq-inc-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+      <div data-tour="incidents-kpis" className="vq-inc-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
         {kpis.map((k) => (
           <div key={k.label} style={{
             background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 12,
@@ -1870,7 +1870,7 @@ export default function IncidentCenter() {
               )}
             </div>
           ) : (
-            <div className="vq-inc-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+            <div data-tour="incidents-cards" className="vq-inc-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
               {items.map((item, i) => (
                 <IncidentCard
                   key={item._id || item.id}

@@ -5,6 +5,7 @@ import { LogOut, ChevronsLeft, ChevronsRight, X, ChevronDown, GripVertical } fro
 import { NAV_GROUPS, LOGS_GROUP_LABEL } from './nav.config';
 import { useLogOrder, orderLogItems, moveLogItem } from '@/lib/logOrder';
 import { useOutsideClick } from '../hooks/useOutsideClick';
+import { isItemVisible, isItemLogEnabled } from '@/lib/navVisibility';
 import { useAuth } from '@/context/AuthContext';
 import { usePermissions } from '@/context/PermissionContext';
 import { useLogsConfig } from '@/context/LogsConfigContext';
@@ -48,38 +49,6 @@ function groupLabelStyle() {
 }
 
 const STORAGE_KEY = 'vq-sidebar-collapsed';
-
-// Same rule as V1's Header.jsx navLinks.filter(): while permissions haven't
-// loaded yet (empty object) show everything, so the sidebar doesn't flash
-// empty on first render; once loaded, an item with a permissionKey needs
-// permissions[key]?.view === true to appear at all — hidden, not disabled.
-function isItemVisible(item, permissions) {
-  if (!item.permissionKey) return true;
-  if (!permissions || Object.keys(permissions).length === 0) return true;
-  if (item.permissionSubKey) {
-    const module = permissions?.[item.permissionKey];
-    if (module?.[item.permissionSubKey]?.view === true) return true;
-    if (module?.global?.view === true) return true;
-    if (module?.view === true) return true;
-    return false;
-  }
-  return permissions?.[item.permissionKey]?.view === true;
-}
-
-/**
- * Log & record pages follow GET /logs-configuration, which already accounts for
- * the admin's own preference, auto-enable, and the detection licence.
- *
- * Fails open, and for the same reason as the permission filter above: while the
- * config is loading — or if the request failed — show the item. Hiding pages
- * first and revealing them later reads as the sidebar losing them, and a failed
- * fetch must never strip a client of navigation they are entitled to.
- */
-function isItemLogEnabled(item, logsConfig) {
-  if (!item.logsConfigKey) return true;
-  if (!logsConfig) return true;
-  return logsConfig[item.logsConfigKey] !== false;
-}
 
 const LOGS_COLLAPSE_KEY = 'vq-sidebar-logs-collapsed';
 
@@ -228,6 +197,7 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
     >
       {/* Logo + collapse toggle */}
       <div
+        data-tour="sidebar-logo"
         style={{
           flex: '0 0 auto',
           padding: collapsed ? '4px 0 14px' : '4px 8px 14px',
@@ -289,6 +259,7 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
       {/* Nav */}
       <div
         className="vq-scroll"
+        data-tour="sidebar-nav"
         style={{
           flex: 1,
           minHeight: 0,
@@ -377,6 +348,11 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
               return (
                 <NavLink
                   key={item.key}
+                  // Anchor for the guided tour. Every module's tour opens on
+                  // its own nav item, so tagging here once covers the whole
+                  // sidebar — including items added later — instead of needing
+                  // a per-page anchor for the "where does this live" step.
+                  data-tour={`nav-${item.key}`}
                   to={item.path}
                   end={item.end}
                   title={collapsed ? item.label : undefined}

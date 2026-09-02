@@ -552,6 +552,7 @@ export default function CommandCenter() {
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
       {/* ── Filter bar ────────────────────────────────────────────────────────── */}
       <div
+        data-tour="cc-filters"
         style={{
           display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
           justifyContent: 'flex-end',
@@ -596,7 +597,8 @@ export default function CommandCenter() {
         </div>
       </div>
 
-      <KpiRow
+      <div data-tour="cc-kpis">
+        <KpiRow
         stats={header.data || {}}
         incidentCounts={incidentCounts.data}
         todayIncidentCounts={todayIncidentCounts.data}
@@ -607,11 +609,12 @@ export default function CommandCenter() {
         sitesCount={sites.length}
         onlineCameras={camerasOnline}
         loading={header.loading || incidentCounts.loading}
-      />
+        />
+      </div>
 
       {/* Live camera + attendance | latest incident + controls */}
       <div ref={dashboardGridRef} style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 18 }} className="vq-cc-grid">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
+        <div data-tour="cc-live" style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
           <LiveCamera
             channels={networkChannels}
             loading={networkChannelsApi.loading}
@@ -639,7 +642,7 @@ export default function CommandCenter() {
             </div>
           )}
         </div>
-        <div ref={rightColumnRef} style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
+        <div ref={rightColumnRef} data-tour="cc-feed" style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
           <LatestIncident
             incident={latestIncident}
             loading={latestApi.loading}
@@ -672,6 +675,7 @@ export default function CommandCenter() {
       )}
 
       {/* Engine activity + 24h detection events */}
+      <div data-tour="cc-engines">
       <EngineActivity
         todayEngines={todayEngines}
         events24h={events24h}
@@ -684,6 +688,7 @@ export default function CommandCenter() {
           dayApi.refetch();
         }}
       />
+      </div>
     </div>
   );
 }

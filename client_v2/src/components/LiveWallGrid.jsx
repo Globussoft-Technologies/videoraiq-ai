@@ -514,10 +514,10 @@ export default function LiveWallGrid() {
 
       {/* ── Toolbar ──────────────────────────────────────────────── */}
       {!hideFullscreenChrome && (
-      <div className="vq-wall-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: 'var(--bg1solid)', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap', flexShrink: 0 }}>
+      <div data-tour="wall-toolbar" className="vq-wall-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: 'var(--bg1solid)', borderBottom: '1px solid var(--bd)', flexWrap: 'wrap', flexShrink: 0 }}>
 
         {/* Grid size toggles */}
-        <div className="vq-wall-sizetoggle" style={{ display: 'flex', gap: 3, background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 9, padding: 3 }}>
+        <div data-tour="wall-layout" className="vq-wall-sizetoggle" style={{ display: 'flex', gap: 3, background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 9, padding: 3 }}>
           {SIZES.map((s) => {
             const realIdx = SIZES.indexOf(s);
             const active  = realIdx === sizeIdx;
@@ -542,7 +542,7 @@ export default function LiveWallGrid() {
         </div>
 
         {/* Search (placed right after the grid toggles) */}
-        <div className="vq-wall-search" style={{ display: 'flex', alignItems: 'center', gap: 7, height: 40, padding: '0 11px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', width: 210, maxWidth: '100%', flex: '0 0 210px' }}>
+        <div data-tour="wall-search" className="vq-wall-search" style={{ display: 'flex', alignItems: 'center', gap: 7, height: 40, padding: '0 11px', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', width: 210, maxWidth: '100%', flex: '0 0 210px' }}>
           <Search size={13} style={{ color: 'var(--ph)', flexShrink: 0 }} />
           <input
             value={search}
@@ -714,7 +714,7 @@ export default function LiveWallGrid() {
                   />
                 </div>
               ) : (
-                <div className="vq-wall-grid" data-cols={size.cols} style={{ display: 'grid', gridTemplateColumns: `repeat(${size.cols},1fr)`, gap: 4 }}>
+                <div data-tour="wall-grid" className="vq-wall-grid" data-cols={size.cols} style={{ display: 'grid', gridTemplateColumns: `repeat(${size.cols},1fr)`, gap: 4 }}>
                   {visible.map((c, idx) => {
                     const id = c._id || c.channelId;
                     const camLabel = `CAM-${String(safePage * size.perPage + idx + 1).padStart(3, '0')}`;

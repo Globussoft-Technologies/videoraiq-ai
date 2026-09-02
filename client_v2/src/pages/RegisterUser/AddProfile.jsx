@@ -369,10 +369,10 @@ const AddProfile = () => {
         onCreated={fetchUsers}
       />
 
-      <div className="w-full flex-1 flex flex-col p-6 bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px]">
+      <div data-tour="reg-directory" className="w-full flex-1 flex flex-col p-6 bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px]">
         {/* Top bar */}
         <div className="flex flex-wrap items-center gap-3 justify-between">
-          <div className="relative w-full md:w-56">
+          <div data-tour="reg-search" className="relative w-full md:w-56">
             <Input
               type="text"
               placeholder="Search employees..."
@@ -383,7 +383,7 @@ const AddProfile = () => {
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--tx3)]" />
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div data-tour="reg-actions" className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center rounded-[14px] border border-[var(--bd)] bg-[var(--bg2)] p-1 h-10 shadow-sm">
               {[
                 { value: 'active', label: 'Active' },
