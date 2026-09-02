@@ -7,6 +7,7 @@ import {
   ScanEye,
   CreditCard,
   Menu,
+  MonitorCog,
   Shield,
   LogOut,
   ChevronDown,
@@ -26,6 +27,7 @@ const NAV = [
   { to: '/detection-catalog', label: 'Detection Catalog', Icon: ScanEye },
   { to: '/subscription-plans', label: 'Subscription Plans', Icon: CreditCard },
   { to: '/feature-roadmap', label: 'Feature Roadmap', Icon: Menu },
+  { to: '/session-management', label: 'Session Management', Icon: MonitorCog },
 ]
 
 const Sidebar = () => {

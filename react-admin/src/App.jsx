@@ -9,6 +9,7 @@ import ClientConfig from './pages/clients/ClientConfig'
 import DetectionCatalog from './pages/detectionCatalog/DetectionCatalog'
 import SubscriptionPlans from './pages/subscriptionPlans/SubscriptionPlans'
 import FleetOverview from './pages/fleet/FleetOverview'
+import SessionManagement from './pages/sessionManagement/SessionManagement'
 import ComingSoon from './pages/placeholder/ComingSoon'
 
 const App = () => {
@@ -30,6 +31,8 @@ const App = () => {
         <Route path="/detection-catalog" element={<DetectionCatalog />} />
         <Route path="/subscription-plans" element={<SubscriptionPlans />} />
         <Route path="/fleet" element={<FleetOverview />} />
+        <Route path="/session-management" element={<SessionManagement />} />
+        <Route path="/session-management/:ownerType/:ownerId" element={<SessionManagement />} />
         <Route path="/feature-roadmap" element={<ComingSoon title="Feature Roadmap" />} />
       </Route>
 
