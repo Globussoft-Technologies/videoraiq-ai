@@ -37,6 +37,8 @@ import { getVideoRecordAnalytics, getVideoRecordVideos } from './api/get';
 import { deleteDemoMedia } from './api/delete';
 import { createVideoRecord, getDemoAttendanceLogs, getDemoIncidents, processVideoRecord, updateVideoRecord, uploadDemoClip } from './api/post';
 import howToTakeFacePhotos from './assets/howto.jpg';
+import { useSocket } from '@/context/SocketContext';
+import { buildAttendanceRows, handleLiveDemoExport } from './liveDemoExport';
 
 const categories = [{ key: 'all', label: 'All', color: null }, ...DETECTION_CATEGORIES];
 
@@ -85,6 +87,15 @@ function mediaSrc(path) {
   if (!path) return '';
   if (/^(https?:)?\/\//i.test(path) || /^blob:/i.test(path) || /^data:/i.test(path)) return path;
   return `${import.meta.env.VITE_BACKEND}/${String(path).replace(/^\/+/, '')}`;
+}
+
+// The DS/video-process pipeline's dsVideoUrl is served from a different host
+// than the rest of the app's media — VITE_INCIDENT_URL, not VITE_BACKEND.
+function dsVideoSrc(path) {
+  if (!path) return '';
+  if (/^(https?:)?\/\//i.test(path) || /^blob:/i.test(path) || /^data:/i.test(path)) return path;
+  const host = import.meta.env.VITE_INCIDENT_URL || import.meta.env.VITE_BACKEND;
+  return `${String(host).replace(/\/+$/, '')}/${String(path).replace(/^\/+/, '')}`;
 }
 
 function fileSizeLabel(size = 0) {
@@ -975,6 +986,7 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
       payload.append('designation', form.designation.trim());
       payload.append('departmentId', form.departmentId);
       if (form.location) payload.append('location', form.location);
+      payload.append('liveDemo', 'true');
       imageFiles.forEach((file) => {
         if (file instanceof File) payload.append('file', file);
       });
@@ -1201,6 +1213,92 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
   );
 }
 
+function AttendanceReportPanel({ usersLogs, clipName, minConfidence }) {
+  const rows = useMemo(() => buildAttendanceRows(usersLogs), [usersLogs]);
+  const avgConfidence = useMemo(() => {
+    const values = rows
+      .map((row) => Number(String(row.confidence).replace('%', '')))
+      .filter((n) => !Number.isNaN(n));
+    return values.length ? Math.round(values.reduce((sum, n) => sum + n, 0) / values.length) : null;
+  }, [rows]);
+
+  const exportParams = { rows, detectionName: 'Face Recognition', clipName, minConfidence };
+
+  return (
+    <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-[15px] font-bold text-[var(--tx)]">Attendance Log</h2>
+          <span className="rounded-md border border-[var(--bd)] bg-[var(--bg2)] px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--tx3)]">
+            Generated from your clip
+          </span>
+        </div>
+        <div className="text-[11px] text-[var(--tx3)]">
+          {rows.length} registered · {rows.length} events{avgConfidence != null ? ` · avg ${avgConfidence}% conf` : ''}
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-[var(--bd2)] bg-[var(--bg2)] p-6 text-center text-xs text-[var(--tx3)]">
+          No attendance events yet — process a clip to populate this log.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-[var(--bd)]">
+          <table className="w-full min-w-[560px] text-left text-xs">
+            <thead className="bg-[var(--bg2)] text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--tx3)]">
+              <tr>
+                <th className="px-3 py-2">Person</th>
+                <th className="px-3 py-2">Check-in</th>
+                <th className="px-3 py-2">Check-out</th>
+                <th className="px-3 py-2">Duration</th>
+                <th className="px-3 py-2 text-right">Confidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr key={`attendance-${index}`} className="border-t border-[var(--bd)]">
+                  <td className="px-3 py-2 font-semibold text-[var(--tx)]">{row.name}</td>
+                  <td className="px-3 py-2 text-[var(--tx2)]">{row.checkIn}</td>
+                  <td className="px-3 py-2 text-[var(--tx2)]">{row.checkOut}</td>
+                  <td className="px-3 py-2 font-semibold text-emerald-500">{row.duration}</td>
+                  <td className="px-3 py-2 text-right font-semibold text-[var(--tx)]">{row.confidence}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--bd)] pt-4">
+        <div>
+          <div className="text-sm font-bold text-[var(--tx)]">Demo reports</div>
+          <div className="mt-1 text-[11px] text-[var(--tx3)]">Every processed demo is kept here for this session.</div>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={rows.length === 0}
+            onClick={() => handleLiveDemoExport('excel', exportParams)}
+            className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-emerald-400 px-3 text-xs font-bold text-emerald-500 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Save className="h-3.5 w-3.5" />
+            Excel
+          </button>
+          <button
+            type="button"
+            disabled={rows.length === 0}
+            onClick={() => handleLiveDemoExport('pdf', exportParams)}
+            className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] px-3 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Save className="h-3.5 w-3.5" />
+            PDF
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function LiveDemo() {
   const [selectedDetection, setSelectedDetection] = useState('Face Recognition');
   const [activeCategory, setActiveCategory] = useState('all');
@@ -1215,6 +1313,7 @@ export default function LiveDemo() {
   const [recordVideos, setRecordVideos] = useState([]);
   const [sessionAnalytics, setSessionAnalytics] = useState(null);
   const [processJob, setProcessJob] = useState(null);
+  const [secondsRemaining, setSecondsRemaining] = useState(null);
   const [demoIncidents, setDemoIncidents] = useState({ items: [], totalCount: 0 });
   const [demoAttendanceLogs, setDemoAttendanceLogs] = useState(null);
   const [clipStatus, setClipStatus] = useState('idle');
@@ -1243,17 +1342,29 @@ export default function LiveDemo() {
   const [confirmedZoneNames, setConfirmedZoneNames] = useState([]);
   const [confirmDeleteIndex, setConfirmDeleteIndex] = useState(null);
   const [zoneActionBusy, setZoneActionBusy] = useState(false);
+  // Which settingType the in-flight /process job was submitted for — read by
+  // the socket handler instead of the live `selected` detection, since the
+  // user could switch detections while a job is still processing.
+  const processingSettingTypeRef = useRef('');
+
+  const { socket } = useSocket();
 
   const selected = detections.find((item) => item.name === selectedDetection) || detections[0];
   const selectedConfig = detectionConfigs[selectedDetection];
   const configurationAvailable = selectedDetection === 'Face Recognition' || selectedConfig;
-  const isClipBusy = clipStatus === 'uploading' || clipStatus === 'processing';
+  const isClipBusy = clipStatus === 'uploading' || clipStatus === 'processing' || clipStatus === 'awaiting-ds';
   const processedVideo = recordVideos.find((video) => video?.dsVideoUrl)?.dsVideoUrl;
-  const playerVideoUrl = mediaSrc(processedVideo || clipPreviewUrl || uploadedVideoUrl || uploadedVideoPath);
+  const playerVideoUrl = processedVideo
+    ? dsVideoSrc(processedVideo)
+    : mediaSrc(clipPreviewUrl || uploadedVideoUrl || uploadedVideoPath);
   const statusLabel = clipStatus === 'uploading'
     ? `Uploading - ${clipProgress}%`
     : clipStatus === 'processing'
       ? `Processing - ${clipProgress}%`
+      : clipStatus === 'awaiting-ds'
+        ? secondsRemaining != null
+          ? `Analyzing your clip - about ${secondsRemaining}s remaining`
+          : 'Analyzing your clip - this can take a moment'
       : clipStatus === 'ready'
         ? 'Processed'
         : clipStatus === 'uploaded'
@@ -1283,6 +1394,52 @@ export default function LiveDemo() {
   useEffect(() => {
     if (!isClipFullscreen) setShowDrawingActions(false);
   }, [isClipFullscreen]);
+
+  // The DS/video-process pipeline runs after the /process call returns and
+  // attaches the finished clip asynchronously via this per-record socket
+  // event — the processing loader stays up until it arrives.
+  useEffect(() => {
+    const recordId = recordIdOf(videoRecord);
+    if (!socket || !recordId) return;
+
+    const eventName = `videoRecord_updated_${recordId}`;
+    const handleVideoRecordUpdated = async (payload) => {
+      const videos = Array.isArray(payload?.videos) ? payload.videos : [];
+      setRecordVideos(videos);
+      if (!videos.some((video) => video?.dsVideoUrl)) return;
+
+      setClipProgress(100);
+      setClipStatus('ready');
+      setSecondsRemaining(null);
+      toast.success('Demo clip processed', COMPACT_TOAST);
+
+      // Now that processing is actually finished, pull the real numbers —
+      // attendance log only applies to Face Recognition's detector.
+      try {
+        const isFaceRecognition = processingSettingTypeRef.current === 'attendanceSettings';
+        const [analyticsData, attendanceData] = await Promise.all([
+          getVideoRecordAnalytics(recordId),
+          isFaceRecognition ? getDemoAttendanceLogs({ limit: 10, isExport: false }) : Promise.resolve(null),
+        ]);
+        setSessionAnalytics(analyticsData || null);
+        if (isFaceRecognition) setDemoAttendanceLogs(attendanceData);
+      } catch (error) {
+        console.error('Failed to refresh live demo results after processing', error);
+      }
+    };
+
+    socket.on(eventName, handleVideoRecordUpdated);
+    return () => socket.off(eventName, handleVideoRecordUpdated);
+  }, [socket, videoRecord]);
+
+  // Ticks the estimate down toward 0 while waiting — a guide for the user,
+  // not a guarantee; the socket event above is what actually ends the wait.
+  useEffect(() => {
+    if (clipStatus !== 'awaiting-ds' || secondsRemaining == null) return;
+    if (secondsRemaining <= 0) return;
+    const timer = setTimeout(() => setSecondsRemaining((value) => (value != null ? value - 1 : value)), 1000);
+    return () => clearTimeout(timer);
+  }, [clipStatus, secondsRemaining]);
 
   useEffect(() => {
     let frameId = 0;
@@ -1317,6 +1474,7 @@ export default function LiveDemo() {
     setRecordVideos([]);
     setSessionAnalytics(null);
     setProcessJob(null);
+    setSecondsRemaining(null);
     setDemoIncidents({ items: [], totalCount: 0 });
     setDemoAttendanceLogs(null);
     setClipStatus('idle');
@@ -1789,6 +1947,7 @@ export default function LiveDemo() {
     setClipStatus('processing');
     setClipProgress(10);
     setProcessJob(null);
+    setSecondsRemaining(null);
     setRecordVideos([]);
     setSessionAnalytics(null);
     setDemoIncidents({ items: [], totalCount: 0 });
@@ -1825,16 +1984,23 @@ export default function LiveDemo() {
       if (!recordId || !video?._id) throw new Error('Demo record did not return a video id');
       setClipStatus('processing');
       setClipProgress(10);
+      processingSettingTypeRef.current = selected.settingType;
 
+      // The video-process service expects a different detector name for face
+      // recognition than the settingType used everywhere else in this app.
+      const processDetectorName = selected.settingType === 'attendanceSettings'
+        ? 'faceAuthenticationSettings'
+        : selected.settingType;
       const job = await processVideoRecord(recordId, {
         videoId: video._id || video.id,
-        detectors: [{ name: selected.settingType }],
+        detectors: [{ name: processDetectorName }],
       });
-      setProcessJob(job);
-      setClipProgress(45);
+      setProcessJob(job?.job || job);
+      const estimate = Number(job?.job?.estimated_completion_seconds);
+      setSecondsRemaining(Number.isFinite(estimate) && estimate > 0 ? Math.round(estimate) : null);
+      setClipProgress(60);
 
-      const [videosData, analyticsData, incidentsData, attendanceData] = await Promise.all([
-        getVideoRecordVideos(recordId),
+      const [analyticsData, incidentsData, attendanceData] = await Promise.all([
         getVideoRecordAnalytics(recordId),
         getDemoIncidents({ limit: 10, incidentTypeFilter: [selected.settingType] }),
         selected.settingType === 'attendanceSettings'
@@ -1842,12 +2008,14 @@ export default function LiveDemo() {
           : Promise.resolve(null),
       ]);
 
-      setRecordVideos(videosData?.videos || []);
       setSessionAnalytics(analyticsData || null);
       setDemoIncidents(incidentsData || { items: [], totalCount: 0 });
       setDemoAttendanceLogs(attendanceData);
-      setClipProgress(100);
-      setClipStatus('ready');
+      // The DS pipeline processes the clip asynchronously — the processed
+      // video isn't ready yet. Keep the loader up until the
+      // videoRecord_updated_${recordId} socket event delivers dsVideoUrl.
+      setClipProgress(75);
+      setClipStatus('awaiting-ds');
       toast.success('Demo processing started', COMPACT_TOAST);
     } catch (error) {
       console.error('Live demo clip processing failed', error);
@@ -1857,6 +2025,7 @@ export default function LiveDemo() {
         error?.message ||
         'Failed to process demo clip';
       setClipStatus(videoPath ? 'uploaded' : 'error');
+      setSecondsRemaining(null);
       toast.error(message, COMPACT_TOAST);
     }
   };
@@ -2167,16 +2336,22 @@ export default function LiveDemo() {
                   </>
                 )}
                 {isClipBusy && (
-                  <div className="absolute inset-0 grid place-items-center bg-black/55 text-center text-white">
+                  <div className="absolute inset-0 z-10 grid place-items-center bg-black/55 text-center text-white backdrop-blur-sm">
                     <div>
-                      <div className="text-3xl font-bold">{clipProgress}%</div>
-                      <div className="mt-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white/75">{statusLabel}</div>
-                      <div className="mx-auto mt-4 h-1.5 w-48 overflow-hidden rounded-full bg-white/20">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-[var(--blue)] to-[var(--violet)] transition-all"
-                          style={{ width: `${clipProgress}%` }}
-                        />
-                      </div>
+                      {clipStatus === 'awaiting-ds' ? (
+                        <Loader className="mx-auto h-9 w-9 animate-spin text-white" />
+                      ) : (
+                        <div className="text-3xl font-bold">{clipProgress}%</div>
+                      )}
+                      <div className="mt-3 max-w-[260px] text-[11px] font-bold uppercase tracking-[0.2em] text-white/75">{statusLabel}</div>
+                      {clipStatus !== 'awaiting-ds' && (
+                        <div className="mx-auto mt-4 h-1.5 w-48 overflow-hidden rounded-full bg-white/20">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-[var(--blue)] to-[var(--violet)] transition-all"
+                            style={{ width: `${clipProgress}%` }}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -2209,7 +2384,7 @@ export default function LiveDemo() {
                     disabled={isClipBusy || (!clipFile && !uploadedVideoPath) || clipStatus === 'ready'}
                     className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] px-3 text-xs font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {clipStatus === 'processing' ? <Loader className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    {clipStatus === 'processing' || clipStatus === 'awaiting-ds' ? <Loader className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                     {clipStatus === 'ready' ? 'Processed' : 'Process clip'}
                   </button>
                   <button
@@ -2284,6 +2459,13 @@ export default function LiveDemo() {
         </section>
 
         {selectedDetection === 'Face Recognition' && <FaceRecognitionConfig confidence={confidence} setConfidence={setConfidence} />}
+        {selectedDetection === 'Face Recognition' && demoAttendanceLogs && (
+          <AttendanceReportPanel
+            usersLogs={demoAttendanceLogs.usersLogs || []}
+            clipName={clipFile?.name}
+            minConfidence={confidence}
+          />
+        )}
         {selectedDetection !== 'Face Recognition' && selectedConfig && (
           <DetectionConfigPanel
             detectionName={selectedDetection}
