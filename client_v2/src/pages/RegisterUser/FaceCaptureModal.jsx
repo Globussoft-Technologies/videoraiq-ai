@@ -148,7 +148,10 @@ const FaceCaptureModal = ({
   useEffect(() => {
     if (!open) return;
     setFaceOk(null);
-    setCamState('checking');
+    // Only reset to "checking" if the camera isn't already live — with the
+    // <Webcam> now kept mounted across steps the same stream is reused, so a
+    // ready camera stays ready and we skip the multi-second re-acquire.
+    setCamState((s) => (s === 'ready' && flowRef.current === 'camera' ? 'ready' : 'checking'));
     if (currentShot) {
       setMode(null);
     } else if (flowRef.current === 'camera') {
@@ -277,7 +280,9 @@ const FaceCaptureModal = ({
     setShotAt(stepIndex, null);
     if (flowRef.current === 'camera') {
       setMode('camera');
-      setCamState('checking');
+      // Don't force 'checking' — the <Webcam> stayed mounted and its stream is
+      // still live, so onUserMedia won't fire again to clear it.
+      setCamState((s) => (s === 'ready' ? 'ready' : 'checking'));
     } else if (flowRef.current === 'upload') {
       setTimeout(() => fileRef.current?.click(), 60);
     } else {
@@ -293,7 +298,7 @@ const FaceCaptureModal = ({
     setReview(false);
     if (flowRef.current === 'camera') {
       setMode('camera');
-      setCamState('checking');
+      setCamState((s) => (s === 'ready' ? 'ready' : 'checking'));
     } else if (flowRef.current === 'upload') {
       setMode(null);
       setTimeout(() => fileRef.current?.click(), 60);
@@ -315,7 +320,7 @@ const FaceCaptureModal = ({
     setReview(false);
     if (flowRef.current === 'camera') {
       setMode('camera');
-      setCamState('checking');
+      setCamState((s) => (s === 'ready' ? 'ready' : 'checking'));
     } else if (flowRef.current === 'upload') {
       setMode(null);
       setTimeout(() => fileRef.current?.click(), 60);
@@ -425,6 +430,28 @@ const FaceCaptureModal = ({
         <div className="few-body">
           {/* stage: chooser / camera / captured shot / error */}
           <div className={`few-stage ${mode === 'camera' && camState === 'ready' && !currentShot ? 'is-live' : ''}`}>
+            {/* Keep the webcam mounted across every step of the camera flow so
+               the media stream is acquired once, not re-negotiated (a 1–3s
+               getUserMedia hit) each time we move between capture / shot /
+               next angle. Overlays (captured shot, error) render on top. */}
+            {flow === 'camera' && camState !== 'error' && (
+              <Webcam
+                key={retryKey}
+                audio={false}
+                ref={webcamRef}
+                mirrored
+                screenshotFormat="image/jpeg"
+                videoConstraints={{
+                  facingMode: 'user',
+                  width: { ideal: 640 },
+                  height: { ideal: 640 },
+                }}
+                onUserMedia={handleUserMedia}
+                onUserMediaError={handleUserMediaError}
+                className={`few-video ${camState === 'ready' && !currentShot ? 'is-live' : ''}`}
+                style={currentShot ? { visibility: 'hidden' } : undefined}
+              />
+            )}
             {currentShot ? (
               <div className="few-shot-wrap">
                 <img src={currentShot.url} alt={verify ? 'captured photo' : `${angle} view`} className="few-shot" />
@@ -501,17 +528,6 @@ const FaceCaptureModal = ({
               </div>
             ) : (
               <>
-                <Webcam
-                  key={retryKey}
-                  audio={false}
-                  ref={webcamRef}
-                  mirrored
-                  screenshotFormat="image/jpeg"
-                  videoConstraints={{ facingMode: 'user' }}
-                  onUserMedia={handleUserMedia}
-                  onUserMediaError={handleUserMediaError}
-                  className={`few-video ${camState === 'ready' ? 'is-live' : ''}`}
-                />
                 {camState !== 'ready' && (
                   <div className="few-loading">
                     <span className="few-loading-orb">
@@ -723,7 +739,7 @@ const FEW_STYLES = `
 .few-stage{position:relative;aspect-ratio:1/1;border-radius:20px;overflow:hidden;background:#05070d;border:1px solid var(--bd);
   display:flex;align-items:center;justify-content:center;transition:box-shadow .4s}
 .few-stage.is-live{box-shadow:0 0 0 1px color-mix(in srgb,var(--blue) 40%,transparent),0 22px 48px -15px color-mix(in srgb,var(--blue) 45%,transparent)}
-.few-video{width:100%;height:100%;object-fit:cover;opacity:0;transform:scale(1.06);transition:opacity .5s,transform .6s cubic-bezier(.16,1,.3,1)}
+.few-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transform:scale(1.06);transition:opacity .5s,transform .6s cubic-bezier(.16,1,.3,1)}
 .few-video.is-live{opacity:1;transform:scale(1)}
 .few-oval{position:absolute;width:58%;height:76%;border:2px dashed rgba(255,255,255,.65);border-radius:50% 50% 48% 48%;
   pointer-events:none;box-shadow:0 0 0 999px rgba(5,7,13,.34);animation:few-pulse 2.6s ease-in-out infinite;transition:border-color .3s}

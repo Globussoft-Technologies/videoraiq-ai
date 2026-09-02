@@ -104,7 +104,11 @@ const FaceCaptureWizard = ({
   /* seed / reset when (re)opened — shots are indexed by STEPS order */
   useEffect(() => {
     if (!open) return;
+    const requested = STEPS.findIndex((s) => s.key === startAngle);
     const seeded = STEPS.map((s) => {
+      if (requested !== -1 && s.key === startAngle && ['camera', 'upload'].includes(initialMode)) {
+        return null;
+      }
       const v = initial[angles.indexOf(s.key)];
       if (v instanceof File) return { file: v, url: URL.createObjectURL(v) };
       if (typeof v === 'string' && v)
@@ -112,7 +116,6 @@ const FaceCaptureWizard = ({
       return null;
     });
     setShots(seeded);
-    const requested = STEPS.findIndex((s) => s.key === startAngle);
     const firstEmpty = seeded.findIndex((s) => !s);
     setStepIndex(requested !== -1 ? requested : firstEmpty === -1 ? 0 : firstEmpty);
     setMode(initialMode === 'upload' ? 'upload' : 'camera');
@@ -122,11 +125,27 @@ const FaceCaptureWizard = ({
     setReview(false);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* per-step reset of camera state */
+  /* per-step camera state — the <Webcam> is kept mounted across steps (see the
+     stage render), so its stream is acquired once. Only drop back to 'checking'
+     if the camera isn't already live; otherwise onUserMedia would never fire
+     again to clear it and the step would hang on "Starting camera…". */
   useEffect(() => {
     if (!open) return;
-    setCamState('checking');
+    setCamState((s) => (s === 'ready' ? 'ready' : 'checking'));
   }, [stepIndex, open]);
+
+  /* Safety net: the webcam is mounted persistently, so onUserMedia fires only
+     once. If camState is 'checking' but the underlying <video> is actually
+     playing (e.g. we switched step mid-startup, or React kept the element),
+     promote it to 'ready' so the capture button doesn't stay disabled. */
+  useEffect(() => {
+    if (!open || camState !== 'checking' || mode !== 'camera') return;
+    const id = setInterval(() => {
+      const v = webcamRef.current?.video;
+      if (v && v.readyState >= 2 && v.videoWidth) setCamState('ready');
+    }, 300);
+    return () => clearInterval(id);
+  }, [open, camState, mode, stepIndex, retryKey]);
 
   /* body scroll lock + escape */
   useEffect(() => {
@@ -181,9 +200,20 @@ const FaceCaptureWizard = ({
   };
 
   const capture = () => {
-    if (camState !== 'ready' || !webcamRef.current) return;
-    const src = webcamRef.current.getScreenshot();
-    if (!src) return;
+    const cam = webcamRef.current;
+    if (!cam) return;
+    const video = cam.video;
+    // The webcam stays mounted across steps; if the stream is momentarily not
+    // playing (just switched back to this step) getScreenshot() returns null.
+    if (!video || video.readyState < 2 || !video.videoWidth) {
+      toast.error('Camera is still starting — try again in a moment.', COMPACT_TOAST);
+      return;
+    }
+    const src = cam.getScreenshot({ width: video.videoWidth, height: video.videoHeight }) || cam.getScreenshot();
+    if (!src) {
+      toast.error('Could not capture the photo. Please try again.', COMPACT_TOAST);
+      return;
+    }
     setFlash(true);
     setTimeout(() => setFlash(false), 320);
     setShotAt(stepIndex, { file: dataUrlToFile(src), url: src });
@@ -204,7 +234,7 @@ const FaceCaptureWizard = ({
 
   const retake = () => {
     setShotAt(stepIndex, null);
-    if (mode === 'camera') setCamState('checking');
+    if (mode === 'camera') setCamState((s) => (s === 'ready' ? 'ready' : 'checking'));
     else setTimeout(() => fileRef.current?.click(), 60);
   };
 
@@ -342,7 +372,7 @@ const FaceCaptureWizard = ({
                         setShotAt(i, null);
                         setStepIndex(i);
                         setReview(false);
-                        if (mode === 'camera') setCamState('checking');
+                        if (mode === 'camera') setCamState((s) => (s === 'ready' ? 'ready' : 'checking'));
                       }}
                       className="fcw-review-del"
                       aria-label={`Retake ${s.key}`}
@@ -359,6 +389,28 @@ const FaceCaptureWizard = ({
         <div className="fcw-body">
           {/* left: capture stage */}
           <div className={`fcw-stage ${mode === 'camera' && camState === 'ready' && !currentShot ? 'is-live' : ''}`}>
+            {/* Persistent webcam: mounted for the whole camera flow so the media
+               stream is acquired once, not re-negotiated (a 1–3s getUserMedia
+               hit, and a hang if onUserMedia never refires) every time you
+               switch step / pose card or capture a shot. Overlays sit on top. */}
+            {mode === 'camera' && camState !== 'error' && (
+              <Webcam
+                key={retryKey}
+                audio={false}
+                ref={webcamRef}
+                mirrored
+                screenshotFormat="image/jpeg"
+                videoConstraints={{
+                  facingMode: 'user',
+                  width: { ideal: 640 },
+                  height: { ideal: 640 },
+                }}
+                onUserMedia={handleUserMedia}
+                onUserMediaError={handleUserMediaError}
+                className={`fcw-video ${camState === 'ready' && !currentShot ? 'is-live' : ''}`}
+                style={currentShot ? { visibility: 'hidden' } : undefined}
+              />
+            )}
             {currentShot ? (
               <div className={`fcw-shot-wrap ${justCaptured === stepIndex ? 'is-burst' : ''}`}>
                 <img src={currentShot.url} alt={`${step.key} view`} className="fcw-shot" />
@@ -407,17 +459,6 @@ const FaceCaptureWizard = ({
               </div>
             ) : (
               <>
-                <Webcam
-                  key={retryKey}
-                  audio={false}
-                  ref={webcamRef}
-                  mirrored
-                  screenshotFormat="image/jpeg"
-                  videoConstraints={{ facingMode: 'user' }}
-                  onUserMedia={handleUserMedia}
-                  onUserMediaError={handleUserMediaError}
-                  className={`fcw-video ${camState === 'ready' ? 'is-live' : ''}`}
-                />
                 {camState !== 'ready' && (
                   <div className="fcw-loading">
                     <span className="fcw-loading-orb">
@@ -701,7 +742,7 @@ const FCW_STYLES = `
 .fcw-stage{position:relative;aspect-ratio:1/1;border-radius:20px;overflow:hidden;
   background:#05070d;border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;transition:box-shadow .4s}
 .fcw-stage.is-live{box-shadow:0 0 0 1px color-mix(in srgb,var(--blue) 40%,transparent),0 22px 48px -15px color-mix(in srgb,var(--blue) 45%,transparent)}
-.fcw-video{width:100%;height:100%;object-fit:cover;opacity:0;transform:scale(1.06);transition:opacity .5s,transform .6s cubic-bezier(.16,1,.3,1)}
+.fcw-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transform:scale(1.06);transition:opacity .5s,transform .6s cubic-bezier(.16,1,.3,1)}
 .fcw-video.is-live{opacity:1;transform:scale(1)}
 .fcw-oval{position:absolute;width:58%;height:76%;border:2px dashed rgba(255,255,255,.6);border-radius:50% 50% 48% 48%;
   pointer-events:none;box-shadow:0 0 0 999px rgba(5,7,13,.32);animation:fcw-pulse 2.6s ease-in-out infinite}
@@ -846,6 +887,45 @@ const FCW_STYLES = `
 @keyframes fcw-burst-ring{0%{opacity:.9;transform:scale(.85)}100%{opacity:0;transform:scale(1.35)}}
 @keyframes fcw-burst-check{0%{opacity:0;transform:scale(.3)}55%{opacity:1;transform:scale(1.15)}100%{opacity:0;transform:scale(1)}}
 @keyframes fcw-burst-bright{0%{filter:brightness(1)}20%{filter:brightness(1.9) saturate(1.2)}100%{filter:brightness(1)}}
+@media(max-width:640px){
+  .fcw-overlay{align-items:stretch;padding:0}
+  .fcw-panel{height:100dvh;max-height:100dvh;max-width:none;border-radius:0;border:0}
+  .fcw-header{padding:16px 16px 10px;gap:10px}
+  .fcw-title{font-size:22px;line-height:1.12}
+  .fcw-subtitle{font-size:12px;line-height:1.45}
+  .fcw-icon-btn{width:34px;height:34px;border-radius:12px}
+  .fcw-steps{gap:8px;padding:4px 16px 10px}
+  .fcw-steps-row{display:grid;grid-template-columns:1fr;gap:6px}
+  .fcw-step-row{min-width:0;width:100%;gap:0}
+  .fcw-step{padding:7px 8px}
+  .fcw-step-sep{display:none}
+  .fcw-body{display:block;padding:8px 16px 10px}
+  .fcw-stage{height:min(38dvh,300px);min-height:230px;aspect-ratio:auto;border-radius:18px}
+  .fcw-guide{display:flex;min-height:0;gap:10px;padding:10px 0 0;justify-content:flex-start}
+  .fcw-guide-card{padding:10px 12px;border-radius:12px}
+  .fcw-guide-head{font-size:12.5px;margin-bottom:3px}
+  .fcw-guide-text{font-size:11.5px;line-height:1.45}
+  .fcw-poses{display:none}
+  .fcw-tips{display:grid;grid-template-columns:1fr;gap:7px}
+  .fcw-tips li{gap:8px;font-size:11px;line-height:1.35}
+  .fcw-tip-ic{width:22px;height:22px;border-radius:7px}
+  .fcw-choose{max-width:100%;padding:18px 16px}
+  .fcw-choose-drop{width:58px;height:58px;border-radius:16px}
+  .fcw-choose-title{font-size:15px}
+  .fcw-choose-sub{max-width:240px;font-size:12px}
+  .fcw-choose-cta{height:42px;padding:0 18px}
+  .fcw-footer{position:sticky;bottom:0;z-index:5;display:flex;flex-direction:column;gap:10px;padding:10px 16px 14px;margin-top:auto;
+    background:linear-gradient(180deg,color-mix(in srgb,var(--bg1solid) 84%,transparent),var(--bg1solid) 34%);
+    border-top:1px solid color-mix(in srgb,var(--bd) 70%,transparent)}
+  .fcw-mode{width:100%;flex:0 0 auto}
+  .fcw-mode-btn{flex:1;justify-content:center;padding:8px 10px}
+  .fcw-footer-actions{width:100%;min-width:0;gap:8px}
+  .fcw-btn{height:46px;min-width:0;padding:0 12px;font-size:12.5px}
+  .fcw-btn--ghost{flex:0 0 92px;padding:0 12px}
+  .fcw-review{padding:8px 16px 6px}
+  .fcw-review-grid{grid-template-columns:1fr;gap:10px}
+  .fcw-review-media{aspect-ratio:16/10}
+}
 @media(prefers-reduced-motion:reduce){.fcw-overlay *{animation-duration:.001s!important;animation-iteration-count:1!important}}
 `;
 

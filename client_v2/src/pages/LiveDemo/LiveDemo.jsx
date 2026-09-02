@@ -33,6 +33,7 @@ import {
 } from '../RegisterUser/Api';
 import SelectField from '../RegisterUser/SelectField';
 import { COMPACT_TOAST } from '../RegisterUser/toastOptions';
+import FaceCaptureWizard from '../RegisterUser/FaceCaptureWizard';
 import { getVideoRecordAnalytics, getVideoRecordVideos } from './api/get';
 import { deleteDemoMedia } from './api/delete';
 import { createVideoRecord, getDemoAttendanceLogs, getDemoIncidents, processVideoRecord, updateVideoRecord, uploadDemoClip } from './api/post';
@@ -849,6 +850,9 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
   const rightInputRef = useRef(null);
   const leftInputRef = useRef(null);
   const [showGuide, setShowGuide] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [activeCaptureAngle, setActiveCaptureAngle] = useState('Front');
+  const [captureMode, setCaptureMode] = useState('camera');
   const [registeredFace, setRegisteredFace] = useState(false);
   const [departments, setDepartments] = useState([]);
   const [locations, setLocations] = useState([]);
@@ -867,9 +871,9 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
   const [imageFiles, setImageFiles] = useState([null, null, null]);
   const [imageUrls, setImageUrls] = useState(['', '', '']);
   const photoInputs = [
-    { label: 'Front face', ref: frontInputRef, index: 0 },
-    { label: 'Right profile', ref: rightInputRef, index: 1 },
-    { label: 'Left profile', ref: leftInputRef, index: 2 },
+    { label: 'Front face', angle: 'Front', ref: frontInputRef, index: 0 },
+    { label: 'Right profile', angle: 'Right', ref: rightInputRef, index: 1 },
+    { label: 'Left profile', angle: 'Left', ref: leftInputRef, index: 2 },
   ];
   const locationOptions = useMemo(() => locations.map((location) => ({ value: location, label: location })), [locations]);
   const departmentOptions = useMemo(
@@ -932,6 +936,19 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
       return next;
     });
     setErrors((current) => ({ ...current, photos: undefined }));
+  };
+
+  const openCaptureWizard = (angle, mode = 'camera') => {
+    setActiveCaptureAngle(angle);
+    setCaptureMode(mode === 'upload' ? 'upload' : 'camera');
+    setIsWizardOpen(true);
+  };
+
+  const handleWizardComplete = (files) => {
+    (Array.isArray(files) ? files : []).forEach((file, index) => {
+      if (file instanceof File) handlePhotoUpload(file, index);
+    });
+    setIsWizardOpen(false);
   };
 
   const removePhoto = (index) => {
@@ -1081,10 +1098,10 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
         </div>
 
         <div className="mt-3 grid gap-2 sm:grid-cols-3">
-          {photoInputs.map(({ label, ref, index }) => (
+          {photoInputs.map(({ label, angle, ref, index }) => (
             <div key={label} className="overflow-hidden rounded-lg border border-dashed border-[var(--bd2)] bg-[var(--bg1solid)]">
-              <div className="grid h-[144px] place-items-center">
-                {imageUrls[index] ? (
+              {imageUrls[index] ? (
+                <div className="grid h-[144px] place-items-center">
                   <div className="relative h-full w-full">
                     <img src={imageUrls[index]} alt={label} className="h-full w-full object-cover" />
                     <button
@@ -1095,10 +1112,17 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                ) : (
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => openCaptureWizard(angle, 'camera')}
+                  className="grid h-[144px] w-full cursor-pointer place-items-center text-[var(--tx3)] transition-colors hover:bg-[var(--bg2)] hover:text-[var(--blue)]"
+                  aria-label={`Capture ${label}`}
+                >
                   <User className="h-5 w-5 text-[var(--tx3)]" />
-                )}
-              </div>
+                </button>
+              )}
               <div className="border-t border-[var(--bd)] px-3 py-2">
                 <div className="mb-2 text-center text-[10px] font-semibold text-[var(--tx3)]">{label}</div>
                 <input
@@ -1112,14 +1136,18 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
                   }}
                 />
                 <div className="flex items-center justify-between gap-2">
-                  <button className="inline-flex cursor-pointer items-center gap-1 text-[10px] font-bold text-[var(--blue)]">
+                  <button
+                    type="button"
+                    onClick={() => openCaptureWizard(angle, 'camera')}
+                    className="inline-flex h-8 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md bg-[var(--blue)] px-2 text-[10px] font-bold text-white transition-opacity hover:opacity-95"
+                  >
                     <Camera className="h-3 w-3" />
                     Capture
                   </button>
                   <button
                     type="button"
-                    onClick={() => ref.current?.click()}
-                    className="inline-flex cursor-pointer items-center gap-1 text-[10px] font-bold text-[var(--tx2)]"
+                    onClick={() => openCaptureWizard(angle, 'upload')}
+                    className="inline-flex h-8 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-[var(--bd)] bg-[var(--bg2)] px-2 text-[10px] font-bold text-[var(--tx2)] transition-colors hover:bg-[var(--bg3)]"
                   >
                     <ImagePlus className="h-3 w-3" />
                     Upload
@@ -1209,6 +1237,17 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
           </div>
         </div>
       )}
+
+      <FaceCaptureWizard
+        open={isWizardOpen}
+        angles={['Front', 'Right', 'Left']}
+        namePrefix={(form.firstName.trim() || 'demo-user').replace(/\s+/g, '')}
+        initial={imageFiles}
+        startAngle={activeCaptureAngle}
+        initialMode={captureMode}
+        onClose={() => setIsWizardOpen(false)}
+        onComplete={handleWizardComplete}
+      />
     </section>
   );
 }

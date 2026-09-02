@@ -550,12 +550,12 @@ export default function EmployeeRegister() {
                 ) : (
                   <>
                     {/* per-pose slots — click any to open the wizard on that pose */}
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                       {PHOTO_SLOTS.map((s) => {
                         const pic = photos[s.key];
                         return (
-                          <div key={s.key} className="flex flex-col items-center gap-2">
-                            <div className="w-full aspect-[4/5] max-h-[240px] bg-[#f2f8ff] rounded-[16px] border border-[#e3e8f0] flex items-center justify-center p-2 relative overflow-hidden">
+                          <div key={s.key} className="flex overflow-hidden rounded-[16px] border border-[#e3e8f0] bg-white shadow-[0_8px_20px_rgba(15,23,42,0.04)] sm:block">
+                            <div className="group relative flex aspect-[4/5] w-[104px] shrink-0 items-center justify-center overflow-hidden bg-[#f2f8ff] p-2 sm:w-full sm:max-h-[240px]">
                               {pic ? (
                                 <>
                                   <img src={pic.url} alt={s.label} className="w-full h-full object-cover rounded-[12px]" />
@@ -567,14 +567,26 @@ export default function EmployeeRegister() {
                                   >
                                     <X size={14} />
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => openWizard(s.key, "camera")}
-                                    disabled={isSubmitting}
-                                    className="absolute inset-x-0 bottom-0 py-1.5 text-[11px] font-semibold text-white bg-black/55 backdrop-blur-sm opacity-0 hover:opacity-100 transition-opacity cursor-pointer disabled:hidden"
-                                  >
-                                    Retake
-                                  </button>
+                                  <div className="absolute inset-x-2 bottom-2 hidden items-center gap-1.5 opacity-0 transition-opacity duration-150 sm:flex sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                                    <button
+                                      type="button"
+                                      onClick={() => openWizard(s.key, "camera")}
+                                      disabled={isSubmitting}
+                                      className="inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[10px] bg-[#2563eb]/92 px-2 text-[11px] font-semibold text-white shadow-[0_8px_20px_rgba(37,99,235,0.28)] backdrop-blur-md transition-colors hover:bg-[#1d4ed8] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      <CameraIcon size={12} /> Retake
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openWizard(s.key, "upload")}
+                                      disabled={isSubmitting}
+                                      title={`Re-upload ${s.label}`}
+                                      aria-label={`Re-upload ${s.label}`}
+                                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-white/70 bg-white/95 text-[#2563eb] shadow-[0_8px_20px_rgba(15,23,42,0.18)] backdrop-blur-md transition-colors hover:bg-[#eef4ff] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      <Upload size={13} />
+                                    </button>
+                                  </div>
                                 </>
                               ) : (
                                 <button
@@ -590,7 +602,38 @@ export default function EmployeeRegister() {
                                 </button>
                               )}
                             </div>
-                            <span className="font-semibold text-[#0f1729] text-[13px]">{s.label}</span>
+                            <div className="flex min-w-0 flex-1 flex-col justify-center border-l border-[#edf2f7] px-3 py-2 sm:block sm:border-l-0 sm:border-t sm:px-2">
+                              <div className="mb-2 text-left text-[12.5px] font-semibold text-[#0f1729] sm:text-center">{s.label}</div>
+                              {pic ? (
+                                <div className="flex items-center gap-2 sm:hidden">
+                                  <button
+                                    type="button"
+                                    onClick={() => openWizard(s.key, "camera")}
+                                    disabled={isSubmitting}
+                                    className="inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[9px] bg-[#eef4ff] px-2 text-[11px] font-semibold text-[#315eea] transition-colors hover:bg-[#dfeaff] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    <CameraIcon size={12} /> Retake
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openWizard(s.key, "upload")}
+                                    disabled={isSubmitting}
+                                    className="inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[9px] border border-[#cfe0fb] bg-white px-2 text-[11px] font-semibold text-[#315eea] transition-colors hover:bg-[#f7faff] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    <Upload size={12} /> Upload
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => openWizard(s.key, "camera")}
+                                  disabled={isSubmitting}
+                                  className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-[9px] bg-[#eef4ff] px-2 text-[11px] font-semibold text-[#315eea] transition-colors hover:bg-[#dfeaff] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <CameraIcon size={12} /> Add photo
+                                </button>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
@@ -611,7 +654,7 @@ export default function EmployeeRegister() {
                         disabled={isSubmitting}
                         className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 h-11 rounded-[12px] text-[#3b82f6] text-[13px] font-semibold bg-white border-[1.5px] border-[#cfe0fb] hover:bg-[#eef5ff] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Upload size={16} /> Re-upload
+                        <Upload size={16} /> Re-upload all
                       </button>
                     </div>
                   </>
@@ -707,7 +750,11 @@ export default function EmployeeRegister() {
         open={wizardOpen}
         angles={WIZARD_ANGLES}
         namePrefix={(form.firstName || "employee").replace(/\s+/g, "")}
-        initial={WIZARD_ANGLES.map((a) => photos[SLOT_FOR_ANGLE[a]]?.file || null)}
+        initial={
+          wizardStartAngle
+            ? WIZARD_ANGLES.map((a) => photos[SLOT_FOR_ANGLE[a]]?.file || null)
+            : WIZARD_ANGLES.map(() => null)
+        }
         startAngle={wizardStartAngle}
         initialMode={wizardMode}
         theme="light"
