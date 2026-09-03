@@ -43,6 +43,7 @@ const {
   getAllowedDetectionTypes,
   assertCanEnableDetection,
   assertDetectionLicensed,
+  reconcileAddedCameraLicenses,
 } = await import("../../../core/v2/clientConfig/detectionLicense.service.js");
 const { DETECTION_TYPES } = await import("../../../constants/detectionTypes.js");
 const { default: ChannelsService } = await import(
@@ -137,5 +138,11 @@ describe("on-premise: licensing is switched off", () => {
   it("imposes no camera-add limit", async () => {
     await Admin.create({ user_id: USER_ID, login: "a", email: "a@t.com", purchasedCameras: 0 });
     expect(await NVRService.getRemainingCameraLimit(USER_ID)).toBe(Infinity);
+  });
+
+  it("boot reconciliation is a no-op — there is no licence to default", async () => {
+    await Admin.create({ user_id: USER_ID, login: "a", email: "a@t.com", purchasedCameras: 0 });
+    await expect(reconcileAddedCameraLicenses()).resolves.toMatchObject({ scanned: 0, granted: 0 });
+    expect((await Admin.findOne({ user_id: USER_ID }).lean()).planCamerasGranted).toBeFalsy();
   });
 });

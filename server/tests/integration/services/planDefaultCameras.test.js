@@ -18,10 +18,18 @@ vi.mock("../../../services/python.service.js", () => ({
 }));
 
 const { connectMongo, disconnectMongo, clearCollections } = await import("../dbSetup.js");
-const { defaultCamerasForPlan, grantPlanDefaultCameras } = await import(
-  "../../../core/v2/clientConfig/detectionLicense.service.js"
-);
+const { defaultCamerasForPlan, grantPlanDefaultCameras, reconcileAddedCameraLicenses } =
+  await import("../../../core/v2/clientConfig/detectionLicense.service.js");
 const { default: Admin } = await import("../../../core/v2/admin/admin.model.js");
+const { default: Channel } = await import("../../../core/v2/channels/channels.model.js");
+const { default: DetectionAllocation } = await import(
+  "../../../core/v2/clientConfig/clientDetectionAllocation.model.js"
+);
+const { DETECTION_TYPES } = await import("../../../constants/detectionTypes.js");
+const { redis } = await import("../../../utils/database.js");
+const mongoose = (await import("mongoose")).default;
+
+const ALL_TYPES = Object.keys(DETECTION_TYPES);
 
 // The real dev catalogue: 5 Basic, 6 Free Trial, 7 Pro. Production may number
 // them differently — which is exactly why the match is on the name.
@@ -45,15 +53,35 @@ function mockProducts(payload = PRODUCTS) {
 beforeAll(async () => { await connectMongo(); });
 afterAll(async () => { await disconnectMongo(); vi.unstubAllGlobals(); });
 beforeEach(async () => {
+  vi.restoreAllMocks();
   await clearCollections();
   vi.useFakeTimers({ shouldAdvanceTime: true });
   // Jump past the product cache window so each test fetches fresh.
   vi.setSystemTime(Date.now() + 60 * 60 * 1000);
   mockProducts();
+  // No real Redis in the test environment. grantPlanDefaultCameras publishes
+  // fire-and-forget (never awaited on the caller's path), so leaving the real
+  // client would just queue against an unreachable host — stub it so the live
+  // -update call can actually be asserted on instead.
+  vi.spyOn(redis, "publish").mockResolvedValue(1);
 });
 
 const makeAdmin = (over = {}) =>
   Admin.create({ user_id: "4242", login: "t", email: "t@test.com", ...over });
+
+let channelSeq = 0;
+const makeCamera = (userId, detections = {}) => {
+  channelSeq += 1;
+  return Channel.create({
+    nvrId: new mongoose.Types.ObjectId(),
+    userId,
+    streamingPath: `/Streaming/Channels/${100 + channelSeq}`,
+    localChannelId: String(channelSeq),
+    name: `Cam-${channelSeq}`,
+    isAdded: true,
+    detections,
+  });
+};
 
 describe("defaultCamerasForPlan — matched by product name", () => {
   it("grants 5 for Surveillance Free Trial", async () => {
@@ -138,16 +166,144 @@ describe("grantPlanDefaultCameras", () => {
     expect(fresh.planCamerasGranted).toBe(true);
   });
 
-  it("does not touch a paying client", async () => {
+  it("gives a paying client with no cameras yet a flat default of 1", async () => {
     const admin = await makeAdmin({ purchasedCameras: 0 });
-    expect(await grantPlanDefaultCameras(admin, { [PRO]: "x" })).toBe(0);
-    expect((await Admin.findById(admin._id).lean()).purchasedCameras).toBe(0);
+    expect(await grantPlanDefaultCameras(admin, { [PRO]: "x" })).toBe(1);
+    const fresh = await Admin.findById(admin._id).lean();
+    expect(fresh.purchasedCameras).toBe(1);
+    expect(fresh.planCamerasGranted).toBe(true);
+  });
+
+  it("gives a client with no recognisable plan the same flat default of 1", async () => {
+    const admin = await makeAdmin({ purchasedCameras: 0 });
+    expect(await grantPlanDefaultCameras(admin, {})).toBe(1);
+    expect((await Admin.findById(admin._id).lean()).purchasedCameras).toBe(1);
+  });
+
+  it("gives an existing client a licence matching the cameras already added", async () => {
+    const admin = await makeAdmin({ purchasedCameras: 0 });
+    await makeCamera(admin.user_id);
+    await makeCamera(admin.user_id);
+    await makeCamera(admin.user_id);
+
+    expect(await grantPlanDefaultCameras(admin, { [PRO]: "x" })).toBe(3);
+    const fresh = await Admin.findById(admin._id).lean();
+    expect(fresh.purchasedCameras).toBe(3);
+    expect(fresh.planCamerasGranted).toBe(true);
+  });
+
+  it("cameras already added take priority over the free trial default", async () => {
+    const admin = await makeAdmin({ purchasedCameras: 0 });
+    await makeCamera(admin.user_id);
+    await makeCamera(admin.user_id);
+
+    // 2 cameras added, but on the trial (worth 5) — added count wins because
+    // this client is no longer "new".
+    expect(await grantPlanDefaultCameras(admin, { [TRIAL]: "x" })).toBe(2);
+    expect((await Admin.findById(admin._id).lean()).purchasedCameras).toBe(2);
+  });
+
+  it("backfills EVERY detection type at the granted count, not only ones already running", async () => {
+    const admin = await makeAdmin({ purchasedCameras: 0 });
+    await makeCamera(admin.user_id, {
+      vehicleDetectionSettings: { enabled: true },
+    });
+    await makeCamera(admin.user_id); // a second camera, nothing running on it
+
+    expect(await grantPlanDefaultCameras(admin, { [PRO]: "x" })).toBe(2);
+
+    const rows = await DetectionAllocation.find({ adminId: admin._id }).lean();
+    expect(rows).toHaveLength(ALL_TYPES.length);
+    for (const row of rows) {
+      expect(row).toMatchObject({ enabled: true, cameraAllocation: 2 });
+    }
+    // A type that was never switched on anywhere still gets the full allowance
+    // — whether it happens to be running is irrelevant to what this client, at
+    // this camera count, is entitled to configure.
+    const byType = Object.fromEntries(rows.map((r) => [r.settingType, r]));
+    expect(byType.countPersonsSettings).toMatchObject({ enabled: true, cameraAllocation: 2 });
+  });
+
+  it("backfills every type for a brand-new client too, at their starting allowance", async () => {
+    const admin = await makeAdmin({ purchasedCameras: 0 });
+    expect(await grantPlanDefaultCameras(admin, { [TRIAL]: "x" })).toBe(5);
+
+    const rows = await DetectionAllocation.find({ adminId: admin._id }).lean();
+    expect(rows).toHaveLength(ALL_TYPES.length);
+    expect(rows.every((r) => r.enabled === true && r.cameraAllocation === 5)).toBe(true);
+  });
+
+  it("does not overwrite an allocation row that already exists", async () => {
+    const admin = await makeAdmin({ purchasedCameras: 0 });
+    await makeCamera(admin.user_id, {
+      vehicleDetectionSettings: { enabled: true },
+    });
+    await DetectionAllocation.create({
+      adminId: admin._id,
+      settingType: "vehicleDetectionSettings",
+      enabled: false,
+      cameraAllocation: 0,
+    });
+
+    await grantPlanDefaultCameras(admin, { [PRO]: "x" });
+
+    const row = await DetectionAllocation.findOne({
+      adminId: admin._id,
+      settingType: "vehicleDetectionSettings",
+    }).lean();
+    expect(row).toMatchObject({ enabled: false, cameraAllocation: 0 });
+    // Every OTHER type is still backfilled — the pre-existing row is the only
+    // one left untouched.
+    const total = await DetectionAllocation.countDocuments({ adminId: admin._id });
+    expect(total).toBe(ALL_TYPES.length);
+  });
+
+  it("pushes the grant live to any client already connected over the socket", async () => {
+    const admin = await makeAdmin({ purchasedCameras: 0 });
+    await grantPlanDefaultCameras(admin, { [TRIAL]: "x" });
+
+    expect(redis.publish).toHaveBeenCalledWith(
+      "detectionAllocation:update",
+      expect.stringContaining(`"adminId":"${admin._id}"`),
+    );
+    const [, payload] = redis.publish.mock.calls.find(
+      ([channel]) => channel === "detectionAllocation:update",
+    );
+    expect(JSON.parse(payload)).toMatchObject({
+      adminId: String(admin._id),
+      userId: admin.user_id,
+      enabled: true,
+    });
+  });
+
+  it("does not publish when nothing was granted (already licensed)", async () => {
+    const admin = await makeAdmin({ purchasedCameras: 20 });
+    await grantPlanDefaultCameras(admin, { [TRIAL]: "x" });
+    expect(redis.publish).not.toHaveBeenCalled();
   });
 
   it("never overwrites a licence the superadmin already set", async () => {
     const admin = await makeAdmin({ purchasedCameras: 20 });
     expect(await grantPlanDefaultCameras(admin, { [TRIAL]: "x" })).toBe(20);
     expect((await Admin.findById(admin._id).lean()).purchasedCameras).toBe(20);
+  });
+
+  it("a client the superadmin blocked at 0 from the start is never defaulted", async () => {
+    // Distinct from "granted then blocked" below: this is a client the
+    // superadmin's updatePurchasedCameras set to 0 (planCamerasGranted: true)
+    // BEFORE any grant ever ran — e.g. a brand-new signup blocked immediately.
+    // A bare purchasedCameras: 0 alone cannot tell that apart from "never
+    // configured"; planCamerasGranted is what makes the block stick even
+    // though this client has cameras added that would otherwise earn a
+    // non-zero default.
+    const admin = await makeAdmin({ purchasedCameras: 0, planCamerasGranted: true });
+    await makeCamera(admin.user_id);
+    await makeCamera(admin.user_id);
+
+    expect(await grantPlanDefaultCameras(admin, { [TRIAL]: "x" })).toBe(0);
+    expect((await Admin.findById(admin._id).lean()).purchasedCameras).toBe(0);
+    expect(await DetectionAllocation.countDocuments({ adminId: admin._id })).toBe(0);
+    expect(redis.publish).not.toHaveBeenCalled();
   });
 
   it("is one-time: a superadmin blocking a trial client at 0 sticks", async () => {
@@ -165,5 +321,59 @@ describe("grantPlanDefaultCameras", () => {
   it("never throws — a login must not fail because of this", async () => {
     await expect(grantPlanDefaultCameras(null, { [TRIAL]: "x" })).resolves.toBe(0);
     await expect(grantPlanDefaultCameras({ _id: undefined }, undefined)).resolves.toBe(0);
+  });
+});
+
+describe("reconcileAddedCameraLicenses — boot-time fix for clients already deployed at 0", () => {
+  it("grants a licence matching cameras already added, without waiting for login", async () => {
+    const admin = await makeAdmin({ purchasedCameras: 0 });
+    await makeCamera(admin.user_id);
+    await makeCamera(admin.user_id);
+
+    const result = await reconcileAddedCameraLicenses();
+    expect(result).toMatchObject({ scanned: 1, granted: 1 });
+
+    const fresh = await Admin.findById(admin._id).lean();
+    expect(fresh.purchasedCameras).toBe(2);
+    expect(fresh.planCamerasGranted).toBe(true);
+    expect(
+      await DetectionAllocation.countDocuments({ adminId: admin._id }),
+    ).toBe(ALL_TYPES.length);
+    // The whole point: it happens now, and is pushed live, not deferred to login.
+    expect(redis.publish).toHaveBeenCalled();
+  });
+
+  it("leaves a client with no cameras yet for the login path — no plan info to resolve here", async () => {
+    const admin = await makeAdmin({ purchasedCameras: 0 });
+
+    const result = await reconcileAddedCameraLicenses();
+    expect(result).toMatchObject({ scanned: 1, granted: 0 });
+
+    const fresh = await Admin.findById(admin._id).lean();
+    expect(fresh.purchasedCameras).toBe(0);
+    expect(fresh.planCamerasGranted).toBeFalsy();
+    expect(redis.publish).not.toHaveBeenCalled();
+  });
+
+  it("skips a client already granted or already licensed by the superadmin", async () => {
+    const granted = await makeAdmin({
+      login: "granted", email: "granted@test.com", purchasedCameras: 0, planCamerasGranted: true,
+    });
+    const licensed = await makeAdmin({
+      login: "licensed", email: "licensed@test.com", user_id: "9999", purchasedCameras: 7,
+    });
+    await makeCamera(granted.user_id);
+    await makeCamera(licensed.user_id);
+
+    const result = await reconcileAddedCameraLicenses();
+    expect(result.granted).toBe(0);
+
+    expect((await Admin.findById(granted._id).lean()).purchasedCameras).toBe(0);
+    expect((await Admin.findById(licensed._id).lean()).purchasedCameras).toBe(7);
+    expect(redis.publish).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op when there is nothing to reconcile", async () => {
+    await expect(reconcileAddedCameraLicenses()).resolves.toMatchObject({ scanned: 0, granted: 0 });
   });
 });

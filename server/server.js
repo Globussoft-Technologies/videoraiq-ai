@@ -22,6 +22,7 @@ import logger from "./utils/logger.js";
 import { auth, swaggerAuthLogger } from "./views/swaggerAuth.js";
 import { initSocket } from "./socket.js"; // <-- Socket.io setup
 import { syncDetectionCatalog } from "./core/v2/detectionCatalog/detectionCatalog.service.js";
+import { reconcileAddedCameraLicenses } from "./core/v2/clientConfig/detectionLicense.service.js";
 import pythonService from "./services/python.service.js";
 import { mustRunInsideContainer } from "./scripts/check.js";
 import { prometheusMiddleware } from "./middlewares/prometheusMiddleware.js";
@@ -158,6 +159,17 @@ const startServer = async () => {
 
     const server = http.createServer(app); // 👈 Create HTTP server
     initSocket(server); // 👈 Initialize Socket.IO with HTTP server
+
+    // Existing clients who added cameras before licensing existed default to
+    // purchasedCameras: 0 until their next login. For anyone already using the
+    // app that could be a long wait, so reconcile them now instead — this also
+    // pushes the corrected licence to any client already connected over the
+    // socket (see reconcileAddedCameraLicenses / grantPlanDefaultCameras).
+    // Runs after initSocket so the redis subscriber is already listening.
+    // Fire-and-forget — a reconciliation failure must not stop the server.
+    reconcileAddedCameraLicenses().catch((err) =>
+      logger.error(`Camera licence reconciliation failed: ${err.message}`)
+    );
 
     server.listen(PORT, () => {
       logger.info(

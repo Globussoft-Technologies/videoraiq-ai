@@ -4,6 +4,7 @@ import allocationModel from "./clientDetectionAllocation.model.js";
 import { DETECTION_TYPES, TYPE_MAP } from "../../../constants/detectionTypes.js";
 import logger from "../../../utils/logger.js";
 import pythonService from "../../../services/python.service.js";
+import { redis } from "../../../utils/database.js";
 import config from "config";
 
 /**
@@ -212,16 +213,84 @@ export const defaultCamerasForPlan = async (source) => {
 };
 
 /**
- * Give a client their plan's default camera allowance, once.
+ * Cameras currently added for this client. Deliberately NOT scoped to the
+ * client's current NVR ids the way server-superadmin's availableCameras check
+ * is — a channel orphaned by a deleted NVR only inflates a ONE-TIME default
+ * that the superadmin can always correct downward afterwards, and requiring
+ * perfect NVR referential integrity here would risk silently under-granting a
+ * paying customer instead, which is the worse failure mode for a default.
+ */
+const currentCameraCount = async (userId) => (userId ? Channel.countDocuments({ userId }) : 0);
+
+/**
+ * Push the freshly-granted licence to any client already connected over the
+ * socket, rather than making them wait for their next login/token refresh.
+ * Reuses the exact channel and payload shape server-superadmin already
+ * publishes on manual changes (see clientConfig.service.js
+ * updateDetectionAllocation) — server/socket.js's existing subscriber does the
+ * rest: it re-emits `purchasedCameras_<adminId>`, `detectionLicense_<adminId>`
+ * and refreshes the logs configuration, all from one message. `enabled: true`
+ * (not `false`) so the subscriber's revoke branch is skipped — nothing here
+ * was disabled, only defaulted for the first time.
+ *
+ * Fire-and-forget: the redis client here queues indefinitely when Redis is
+ * unreachable (`maxRetriesPerRequest: null`), so this must never be awaited
+ * on a path a login or boot sequence depends on.
+ */
+const publishLicenseGranted = (adminId, userId) => {
+  redis
+    .publish("detectionAllocation:update", JSON.stringify({ adminId, userId, enabled: true }))
+    .catch((err) =>
+      logger.error(`grantPlanDefaultCameras(${adminId}): live-update publish failed: ${err.message}`),
+    );
+};
+
+/**
+ * Give a client their default camera allowance, once — the licence they get
+ * before the superadmin has configured anything for them.
  *
  * Called from the login paths, where the subscriptions are already fetched for
  * the token — so this costs no extra aMember call and covers existing clients,
- * not just new signups.
+ * not just new signups. Also called from `reconcileAddedCameraLicenses` at
+ * boot, for clients who added cameras before this existed and may not log in
+ * again soon enough for the login path to reach them.
+ *
+ * Three tiers, checked in order:
+ *
+ *   1. Cameras already added. A client who added cameras before licensing
+ *      existed (or between signup and the superadmin licensing them) keeps
+ *      running at that count — this is the common case for every pre-existing
+ *      paying customer, and takes priority over any plan default: someone who
+ *      has already added cameras is no longer a "new user" even if they
+ *      happen to be on the trial.
+ *   2. No cameras yet, on the free trial. A starting allowance (5, see
+ *      PLAN_DEFAULT_CAMERAS_BY_NAME) so the trial is usable at all.
+ *   3. No cameras yet, any other/no plan. A flat 1, so a brand-new paying
+ *      client can explore the app immediately rather than being locked out
+ *      at 0 before the superadmin has looked at their account. This is a
+ *      floor applied here, not in PLAN_DEFAULT_CAMERAS_BY_NAME — that map
+ *      stays "what does THIS plan grant", separate from "what does a client
+ *      with no plan match get by default".
  *
  * Applies only when the client has never been granted before AND currently has
  * no licence. `planCamerasGranted` is what makes it one-time: a superadmin who
  * later sets the client to 0 (to block them) must not have that undone on the
  * next login.
+ *
+ * Also backfills ClientDetectionAllocation for EVERY detection type, at the
+ * same granted count — not only the ones already running. Whether a detection
+ * happens to be switched on right now is irrelevant to what this client is
+ * entitled to configure: a pre-existing customer with a 10-camera licence gets
+ * every detection type available across those 10 cameras, exactly as if the
+ * superadmin had licensed all of them, and a brand-new client gets to try any
+ * detection type on their starting allowance rather than only ones that are
+ * (by definition, for a client with zero cameras) impossible to have running
+ * yet. Only creates rows that do not already exist; never touches one the
+ * superadmin (or an earlier grant) already set.
+ *
+ * Live clients are notified over the socket immediately (see
+ * `publishLicenseGranted`) — the caller does not need a fresh login for this
+ * to show up.
  *
  * Returns the client's EFFECTIVE camera licence so the caller can put the
  * granted value straight on the token instead of a stale 0.
@@ -235,22 +304,113 @@ export const grantPlanDefaultCameras = async (admin, subscriptions) => {
     if (!admin?._id || admin.planCamerasGranted) return current;
     if (current > 0) return current;
 
-    const cameras = await defaultCamerasForPlan(subscriptions);
-    if (cameras <= 0) return current;
+    const added = await currentCameraCount(admin.user_id);
+    const cameras = added > 0 ? added : (await defaultCamerasForPlan(subscriptions)) || 1;
 
     await adminModel.updateOne(
       { _id: admin._id, planCamerasGranted: { $ne: true } },
       { $set: { purchasedCameras: cameras, planCamerasGranted: true } },
     );
+
+    const allTypes = Object.keys(DETECTION_TYPES);
+    try {
+      const existingRows = await allocationModel
+        .find({ adminId: admin._id, settingType: { $in: allTypes } })
+        .select("settingType")
+        .lean();
+      const already = new Set(existingRows.map((row) => row.settingType));
+      const toCreate = allTypes.filter((type) => !already.has(type));
+      if (toCreate.length) {
+        await allocationModel.insertMany(
+          toCreate.map((settingType) => ({
+            adminId: admin._id,
+            settingType,
+            enabled: true,
+            cameraAllocation: cameras,
+          })),
+          { ordered: false },
+        );
+      }
+    } catch (allocErr) {
+      // The camera licence above is already committed — a backfill failure
+      // must not undo or misreport that. Logged and swallowed; the client
+      // simply keeps whatever allocation rows already existed.
+      logger.error(
+        `grantPlanDefaultCameras(${admin._id}): allocation backfill failed: ${allocErr.message}`,
+      );
+    }
+
+    publishLicenseGranted(String(admin._id), admin.user_id);
+
     logger.info(
-      `[LICENSE] granted ${cameras} default camera(s) to admin=${admin._id} ` +
-        `from plan(s) ${Object.keys(subscriptions || {}).join(", ")}`,
+      `[LICENSE] granted ${cameras} default camera(s) + full detection allocation to admin=${admin._id}` +
+        (added > 0
+          ? ` (matches ${added} camera(s) already added)`
+          : ` from plan(s) ${Object.keys(subscriptions || {}).join(", ")}`),
     );
     return cameras;
   } catch (err) {
     logger.error(`grantPlanDefaultCameras(${admin?._id}): ${err.message}`);
     return current;
   }
+};
+
+/**
+ * Boot-time reconciliation for clients already sitting at the deployed
+ * default of `purchasedCameras: 0` who added cameras before this feature
+ * existed and might not log in again soon. Without this, a client's fix would
+ * wait for their next login — but for someone already mid-session with the
+ * app open, that could be days. Run once per boot, fire-and-forget, alongside
+ * the other startup reconciliation passes (detection catalog sync, DS
+ * detector name sync) in server.js.
+ *
+ * Deliberately scoped to clients who have cameras added (count > 0) only. A
+ * client with zero cameras needs their PLAN resolved to pick 5 (trial) vs 1
+ * (everything else), which requires the aMember subscriptions this batch pass
+ * does not have — calling aMember per-admin at boot for accounts that have not
+ * even logged in yet is unnecessary risk for no urgency (they have not been
+ * blocked by anything, having added nothing). Those clients still get their
+ * correct default the normal way, the next time they log in.
+ *
+ * `grantPlanDefaultCameras` already contains every other guarantee this needs
+ * (one-time via `planCamerasGranted`, never overwrites a superadmin-set value,
+ * never throws) — this only supplies the trigger and the candidate list.
+ */
+export const reconcileAddedCameraLicenses = async () => {
+  if (!isLicensingEnforced()) return { scanned: 0, granted: 0 };
+
+  let scanned = 0;
+  let granted = 0;
+  try {
+    const cursor = adminModel
+      .find({
+        planCamerasGranted: { $ne: true },
+        $or: [{ purchasedCameras: { $exists: false } }, { purchasedCameras: { $lte: 0 } }],
+      })
+      .select("_id user_id purchasedCameras planCamerasGranted")
+      .lean()
+      .cursor();
+
+    for await (const admin of cursor) {
+      scanned += 1;
+      const added = await currentCameraCount(admin.user_id);
+      if (added <= 0) continue; // no cameras yet — left for the login path, see above
+
+      const before = Number(admin.purchasedCameras) || 0;
+      const result = await grantPlanDefaultCameras(admin, {});
+      if (result > before) granted += 1;
+    }
+
+    if (granted) {
+      logger.info(
+        `[LICENSE] boot reconciliation: granted a default camera licence to ${granted} ` +
+          `existing client(s) out of ${scanned} scanned at purchasedCameras=0`,
+      );
+    }
+  } catch (err) {
+    logger.error(`reconcileAddedCameraLicenses: ${err.message}`);
+  }
+  return { scanned, granted };
 };
 
 /**
@@ -667,4 +827,5 @@ export default {
   revokeDetectionEverywhere,
   defaultCamerasForPlan,
   grantPlanDefaultCameras,
+  reconcileAddedCameraLicenses,
 };
