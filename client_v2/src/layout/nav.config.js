@@ -17,6 +17,7 @@ import {
   Settings,
   MapPin,
   Building2,
+  Clock,
   UserPlus,
   ShieldCheck,
   Bell,
@@ -152,6 +153,7 @@ export const NAV_GROUPS = [
       { key: 'roles', label: 'Roles & Permission', path: 'roles', icon: ShieldCheck, permissionKey: 'roles' },
       { key: 'locations', label: 'Locations', path: 'locations', icon: MapPin, permissionKey: 'locations' },
       { key: 'departments', label: 'Departments', path: 'departments', icon: Building2, permissionKey: 'departments' },
+      { key: 'shifts', label: 'Shift Management', path: 'shifts', icon: Clock, permissionKey: 'shifts' },
       { key: 'register', label: 'Register your User', path: 'register-users', icon: UserPlus, permissionKey: 'Users' },
     ],
   },
@@ -213,6 +215,7 @@ export const VIEW_META = {
   departments: { title: 'Departments', sub: 'Departments ' },
   locations: { title: 'Locations', sub: 'Manage organization locations' },
   departments: { title: 'Departments', sub: 'Manage departments and teams' },
+  shifts: { title: 'Shift Management', sub: 'Shift rules, working days & staff assignment' },
   'register-users': { title: 'Register your User', sub: 'Create a new employee profile and capture enrollment images' },
 };
 

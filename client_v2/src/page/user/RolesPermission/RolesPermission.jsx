@@ -22,7 +22,7 @@ import { getRoles, createRole, renameRole, updateRolePermission, deleteRole, upd
 const PERMISSION_MODULES = [
   'NVR', 'channels', 'LIVE', 'dashboard', 'alerts', 'analytics', 'incidents', 'Users',
   'roles', 'settings', 'departments', 'detectionSettings', 'profiles', 'recipients',
-  'locations', 'playbacks', 'autoEmailReports',
+  'locations', 'playbacks', 'autoEmailReports', 'shifts',
 ];
 // Every sub-module the backend seeds under permissionConfig.logs (see
 // server/core/v1/permission/permissions.config.js's completeConfig.logs) —
@@ -44,6 +44,7 @@ const MODULE_LABELS = {
   incidents: 'Incident Center', Users: 'Users', permission: 'Permissions', roles: 'Roles', settings: 'Settings',
   departments: 'Departments', detectionSettings: 'Detection Settings', profiles: 'Profiles',
   recipients: 'Alert Recipients', locations: 'Locations', playbacks: 'Playbacks',
+  shifts: 'Shift Management',
   global: 'Global', accessLogs: 'Access Logs', attendanceLogs: 'Attendance Logs',
   taggedUsersLogs: 'Tagged Users', detectedUsersLogs: 'Detected Users',
   personCountLogs: 'Person Count Logs', deskLogs: 'Desk Absence Logs',

@@ -32,3 +32,25 @@ export const updateOnboarding = async (onboarded) => {
   );
   return res?.data?.body?.data ?? res?.data?.body ?? {};
 };
+
+/**
+ * The modules this user may tour, filtered server-side.
+ *
+ * The catalogue and the search both live on the backend (GET
+ * /admin/tour-modules?search=) so the menu is filtered by the same authority
+ * the sidebar answers to — role permissions plus the resolved logs
+ * configuration — rather than by a copy of those rules in the browser.
+ *
+ * Pass an AbortSignal so a superseded keystroke's request can be dropped
+ * instead of racing the current one.
+ */
+export const fetchTourModules = async (search = '', { signal } = {}) => {
+  const token = getAccessToken();
+  const res = await axios.get(`${Api_url}/admin/tour-modules`, {
+    params: search ? { search } : undefined,
+    headers: { 'x-access-token': token },
+    signal,
+  });
+  const body = res?.data?.body?.data ?? res?.data?.body ?? {};
+  return Array.isArray(body.modules) ? body.modules : [];
+};

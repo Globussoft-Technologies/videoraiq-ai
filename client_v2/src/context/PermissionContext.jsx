@@ -5,24 +5,39 @@ import { useAuth } from "./AuthContext";
 
 const PermissionContext = createContext();
 
-const LEGACY_SETTINGS_PERMISSIONS = {
-  admin: { view: true, create: true, edit: true, delete: true },
-  read: { view: true, create: false, edit: false, delete: false },
-  write: { view: true, create: true, edit: true, delete: false },
-};
-const DENY_SETTINGS = { view: false, create: false, edit: false, delete: false };
+const FULL_ACCESS = { view: true, create: true, edit: true, delete: true };
+const VIEW_ONLY = { view: true, create: false, edit: false, delete: false };
+const NO_DELETE = { view: true, create: true, edit: true, delete: false };
+const DENY = { view: false, create: false, edit: false, delete: false };
 
-// Roles stored before the Settings permission was introduced do not have the
-// key yet. Preserve the three built-in role presets; custom roles remain
-// denied until an admin explicitly grants Settings in Roles & Permission.
+// Modules added to permissions.config.js after roles were first seeded. A role
+// stored before the module existed has no key for it, which reads as a denial
+// and hides the page from everyone — including admins — until someone re-saves
+// the role in Roles & Permission. Each entry mirrors that module's row in the
+// server's four role presets, keyed by role name.
+const BACKFILLED_MODULES = {
+  settings: { admin: FULL_ACCESS, read: VIEW_ONLY, write: NO_DELETE },
+  shifts: { admin: FULL_ACCESS, read: VIEW_ONLY, write: NO_DELETE },
+};
+
+/**
+ * Fill in modules a stored role predates, preserving the three built-in role
+ * presets. Custom roles stay denied until an admin explicitly grants the
+ * module in Roles & Permission.
+ */
 function normalizePermissionConfig(roleData) {
   const config = roleData?.permissionConfig;
   if (!config) return {};
-  if (config.settings) return config;
+
   const roleName = String(roleData?.roleName || '').toLowerCase();
+  const missing = Object.entries(BACKFILLED_MODULES).filter(([key]) => !config[key]);
+  if (!missing.length) return config;
+
   return {
     ...config,
-    settings: { ...(LEGACY_SETTINGS_PERMISSIONS[roleName] || DENY_SETTINGS) },
+    ...Object.fromEntries(
+      missing.map(([key, presets]) => [key, { ...(presets[roleName] || DENY) }]),
+    ),
   };
 }
 

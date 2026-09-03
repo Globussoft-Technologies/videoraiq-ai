@@ -12,6 +12,13 @@ import { cn } from '@/lib/utils';
  * room below) so it isn't clipped by an ancestor's `overflow: hidden` — e.g.
  * table rows near the bottom of a scrollable card.
  *
+ * The exception is a MultiSelect inside a Radix dialog, where the panel is
+ * rendered in place instead. A modal Radix dialog sets `pointer-events: none`
+ * on <body> and only re-enables it on its own content, so a panel portalled to
+ * <body> paints normally but is inert — clicks fall straight through to the
+ * page behind it. Rendering inside the dialog also stops the dialog treating a
+ * click on the panel as an outside click and closing itself.
+ *
  * Props:
  * - options: [{ id, label }]
  * - value:   array of selected ids
@@ -24,6 +31,10 @@ import { cn } from '@/lib/utils';
  * - tint: optional hex color (e.g. '#8b5cf6') to accent the trigger's border/
  *   background once a selection is made — lets callers give sibling fields
  *   distinct colors instead of every MultiSelect on a page reading identically.
+ * - onSearchChange(query): notified as the search box is typed in, for callers
+ *   whose option list comes from the server. Local filtering still runs on
+ *   whatever `options` currently holds, so a caller that ignores this prop
+ *   behaves exactly as before.
  */
 const MultiSelect = ({
   options = [],
@@ -37,6 +48,7 @@ const MultiSelect = ({
   msg = 'No options',
   openUp = false,
   tint = null,
+  onSearchChange = null,
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -55,6 +67,15 @@ const MultiSelect = ({
     return () => document.removeEventListener('fullscreenchange', sync);
   }, []);
 
+  // See the note above the component: inside a modal dialog the panel has to
+  // live in the dialog's own subtree to receive clicks at all. Resolved from
+  // the mounted trigger rather than a prop so every MultiSelect already sitting
+  // in a dialog is fixed without its caller having to know about this.
+  const [inDialog, setInDialog] = useState(false);
+  useEffect(() => {
+    setInDialog(Boolean(triggerRef.current?.closest('[data-slot="dialog-content"]')));
+  }, []);
+
   useEffect(() => {
     const onClick = (e) => {
       if (
@@ -69,7 +90,10 @@ const MultiSelect = ({
   }, []);
 
   useLayoutEffect(() => {
-    if (!open) return;
+    // An in-dialog panel is positioned by CSS against its own wrapper, so the
+    // viewport maths below would only fight it. `pos` stays null and the panel
+    // renders from the `open` flag alone.
+    if (!open || inDialog) return;
     const update = () => {
       const trigger = triggerRef.current;
       if (!trigger) return;
@@ -108,7 +132,7 @@ const MultiSelect = ({
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
     };
-  }, [open, openUp]);
+  }, [open, openUp, inDialog]);
 
   // An option with `isHeader` is a non-selectable section label (e.g. an NVR
   // name above its cameras). Searching matches real options only; a header is
@@ -143,6 +167,11 @@ const MultiSelect = ({
 
   const selectedLabels = options.filter((o) => isPickable(o) && value.includes(o.id)).map((o) => o.label);
   const hasSelection = selectedLabels.length > 0;
+
+  // Portalled when free-standing, so an `overflow: hidden` ancestor can't clip
+  // it; rendered in place inside a dialog, so the dialog's pointer-events
+  // lockout can't make it inert.
+  const renderPanel = (node) => (inDialog ? node : createPortal(node, portalHost));
 
   return (
     <div className={`relative ${className}`} ref={wrapperRef}>
@@ -189,12 +218,18 @@ const MultiSelect = ({
         </div>
       </button>
 
-      {open && pos && createPortal(
+      {open && (inDialog || pos) && renderPanel(
         <div
           ref={panelRef}
           data-vq-portal-panel
-          style={pos}
-          className="z-[10030] rounded-[10px] border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg overflow-hidden"
+          style={inDialog ? undefined : pos}
+          className={cn(
+            'z-[10030] rounded-[10px] border border-[var(--bd)] bg-[var(--bg1solid)] shadow-lg overflow-hidden',
+            inDialog &&
+              (openUp
+                ? 'absolute bottom-full mb-1 left-0 right-0 min-w-[220px]'
+                : 'absolute top-full mt-1 left-0 right-0 min-w-[220px]'),
+          )}
         >
           <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--bd)]">
             <button
@@ -220,7 +255,10 @@ const MultiSelect = ({
                 <input
                   type="text"
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    onSearchChange?.(e.target.value);
+                  }}
                   placeholder={searchPlaceholder}
                   className="w-full h-8 pl-8 pr-2 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx)] text-xs focus:outline-none focus:border-[var(--brand)]"
                 />
@@ -264,8 +302,7 @@ const MultiSelect = ({
               })
             )}
           </div>
-        </div>,
-        portalHost
+        </div>
       )}
     </div>
   );

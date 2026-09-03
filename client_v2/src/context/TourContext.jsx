@@ -12,7 +12,7 @@ import { usePermissions } from '@/context/PermissionContext';
 import { useLogsConfig } from '@/context/LogsConfigContext';
 import { visibleNavItems } from '@/lib/navVisibility';
 import { SHELL_TOUR, resolveSteps, tourForItem } from '@/lib/tour/steps';
-import { fetchOnboarding, updateOnboarding } from '@/helpers/onboarding';
+import { fetchOnboarding, updateOnboarding, fetchTourModules } from '@/helpers/onboarding';
 
 const TourContext = createContext(null);
 
@@ -200,9 +200,30 @@ export function TourProvider({ children }) {
   /* Public actions                                                      */
   /* ------------------------------------------------------------------ */
 
-  /** The first-login run: shell orientation, then every visible module. */
+  /**
+   * The complete run: shell orientation, then every module THIS user may open.
+   *
+   * "Complete" means complete for them — a role with two modules gets a
+   * three-stop tour, not a walk through the whole product. The list comes from
+   * the server rather than this tab's permission snapshot, so a module revoked
+   * moments ago is already gone from it.
+   */
   const startGlobalTour = useCallback(async () => {
-    const list = [SHELL_TOUR, ...modules.map(tourForItem)];
+    let items = null;
+    try {
+      const served = await fetchTourModules('');
+      // An empty array is a legitimate answer — a role may be entitled to
+      // nothing. Only a thrown request falls back; treating "no modules" as a
+      // failure would quietly tour them through pages they cannot open.
+      if (Array.isArray(served)) items = served;
+    } catch {
+      // Fall through to the locally filtered list below.
+    }
+    // Fallback keeps first-login onboarding working if that call fails. It is
+    // still permission-filtered (visibleNavItems), just from this tab's copy.
+    const source = items ?? modules;
+
+    const list = [SHELL_TOUR, ...source.map(tourForItem)];
     setMode(MODE_GLOBAL);
     setQueue(list);
     for (let i = 0; i < list.length; i += 1) {
@@ -218,8 +239,21 @@ export function TourProvider({ children }) {
 
   /** One module, by nav key, started from the header menu. */
   const startModuleTour = useCallback(
-    async (key) => {
-      const item = key === SHELL_TOUR.key ? null : modules.find((m) => m.key === key);
+    async (target) => {
+      // `target` is the entry the server returned for the menu — already
+      // permission- and licence-filtered. Using it directly (rather than looking
+      // the key up in a local list) is what guarantees a revoked module cannot
+      // be started: if the server did not offer it, there is nothing to click.
+      // A bare key is still accepted, and is resolved ONLY against the
+      // permission-filtered set — never the full nav config.
+      const key = typeof target === 'string' ? target : target?.key;
+      if (!key) return;
+
+      const item =
+        key === SHELL_TOUR.key
+          ? null
+          : (typeof target === 'object' && target?.path ? target : null) ||
+            modules.find((m) => m.key === key);
       const module = key === SHELL_TOUR.key ? SHELL_TOUR : item && tourForItem(item);
       if (!module) return;
 

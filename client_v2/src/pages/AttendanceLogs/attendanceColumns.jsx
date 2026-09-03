@@ -54,6 +54,28 @@ const validMoment = (value) => {
   return parsed.isValid() ? parsed : null;
 };
 
+/** Compact badge for a shift-derived flag (late / early / overtime). */
+const ShiftFlag = ({ children, tint }) => (
+  <span
+    className="px-1.5 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap"
+    style={{
+      color: tint,
+      background: `color-mix(in srgb, ${tint} 15%, transparent)`,
+    }}
+  >
+    {children}
+  </span>
+);
+
+/** 150 -> "2h 30m", so an overtime badge stays readable past an hour. */
+const formatMinutes = (minutes) => {
+  const total = Math.max(0, Math.round(minutes || 0));
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  if (!hours) return `${mins}m`;
+  return mins ? `${hours}h ${mins}m` : `${hours}h`;
+};
+
 /**
  * Derive check-in/out strings, working-hours and status from a mapped
  * attendance row. Shared by the table columns and the grid card so both
@@ -232,13 +254,59 @@ export const buildColumns = ({ dispatch, sortField, sortOrder, region, convertTo
       header: 'Status',
       cell: ({ row }) => {
         const { statusLabel, statusColor } = attendanceMeta(row.original, region, convertToRegionTime);
+        const { lateMinutes, earlyLeaveMinutes, overtimeMinutes, isWeekOff, shiftName } =
+          row.original || {};
         return (
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-[6px] h-[6px] rounded-full" style={{ background: statusColor }} />
-            <span className="text-xs font-semibold" style={{ color: statusColor }}>
-              {statusLabel}
+          <div className="flex flex-col gap-1">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-[6px] h-[6px] rounded-full" style={{ background: statusColor }} />
+              <span className="text-xs font-semibold" style={{ color: statusColor }}>
+                {statusLabel}
+              </span>
             </span>
-          </span>
+            {/* Only rendered for an employee who actually holds a shift — with
+                no shift there is nothing to be late against, so an absent
+                badge here would be a claim the data cannot support. */}
+            {shiftName && (
+              <div className="flex flex-wrap items-center gap-1">
+                {lateMinutes > 0 && <ShiftFlag tint="var(--crit)">{`${lateMinutes}m late`}</ShiftFlag>}
+                {earlyLeaveMinutes > 0 && (
+                  <ShiftFlag tint="var(--warn)">{`${earlyLeaveMinutes}m early`}</ShiftFlag>
+                )}
+                {overtimeMinutes > 0 && (
+                  <ShiftFlag tint="var(--ok)">{`+${formatMinutes(overtimeMinutes)} OT`}</ShiftFlag>
+                )}
+                {isWeekOff && <ShiftFlag tint="var(--violet)">Week off</ShiftFlag>}
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'shift',
+      header: 'Shift',
+      cell: ({ row }) => {
+        const { shiftName, shiftStartTime, shiftEndTime, isNightShift, shift } = row.original || {};
+        if (!shiftName) {
+          return <span className="text-[var(--tx3)] text-xs">No shift</span>;
+        }
+        return (
+          <div className="flex items-center gap-2">
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ background: shift?.color || 'var(--blue)' }}
+            />
+            <div className="flex flex-col">
+              <span className="text-[var(--tx)] text-xs font-medium">
+                {shiftName}
+                {isNightShift && <span className="ml-1 text-[var(--violet)]">·</span>}
+              </span>
+              <span className="text-[var(--tx3)] text-[11px]" style={mono}>
+                {shiftStartTime} - {shiftEndTime}
+              </span>
+            </div>
+          </div>
         );
       },
     },
