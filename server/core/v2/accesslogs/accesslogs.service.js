@@ -654,7 +654,7 @@ async getLogs(req, res, next) {
           return res.status(400).json(Response.errorResp("Missing adminId"));
         }
 
-        let { skip = 0, limit = 10, startDate, endDate, searchQuery, departmentIds, channelIds, nvrIds ,removeUnknown, fromTime, toTime,isExport=false,employeeLocations=[],tag,liveDemoData} = req.body;
+        let { skip = 0, limit = 10, startDate, endDate, searchQuery, departmentIds, channelIds, nvrIds ,removeUnknown, fromTime, toTime,isExport=false,employeeLocations=[],tag,liveDemoData,videoId} = req.body;
         const shouldRemoveUnknown = ["true", true, 1, "1", "yes"].includes(removeUnknown);
         skip = Number(skip);
         limit = Number(limit);
@@ -787,6 +787,12 @@ async getLogs(req, res, next) {
               admin: new ObjectId(adminId),
               // liveDemoData: true -> demo logs only | false/omitted -> real logs only
               liveDemoData: liveDemoData ? true : { $ne: true },
+              // Narrows a demo's attendance log to the one video record clicked
+              // in the Live Demo history list — only meaningful alongside
+              // liveDemoData: true.
+              ...(videoId && mongoose.Types.ObjectId.isValid(videoId)
+                ? { videoId: new ObjectId(videoId) }
+                : {}),
               createdAt: {
                 $gte: !startDate ? moment.tz("Asia/Kolkata").startOf("day").toDate() : moment.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
                 $lte: !endDate ? moment.tz("Asia/Kolkata").endOf("day").toDate() : moment.tz(endDate, "Asia/Kolkata").endOf("day").toDate()

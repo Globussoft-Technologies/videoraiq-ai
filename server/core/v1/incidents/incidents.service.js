@@ -805,6 +805,7 @@ class IncidentsService {
         search,
         tagStatus,
         liveDemoData,
+        videoId,
       } = req.body;
 
       const matchStage = {
@@ -815,6 +816,12 @@ class IncidentsService {
         // liveDemoData: true -> demo incidents only | false/omitted -> real incidents only
         liveDemoData: liveDemoData ? true : { $ne: true },
       };
+
+      // Narrows a demo's incidents to the one video record clicked in the Live
+      // Demo history list — only meaningful alongside liveDemoData: true.
+      if (videoId && mongoose.Types.ObjectId.isValid(videoId)) {
+        matchStage.videoId = new mongoose.Types.ObjectId(videoId);
+      }
 
       // Filter: status (new / acknowledged / resolved). Defaults to
       // unresolved-only (previous hardcoded behavior) when nothing is selected.
