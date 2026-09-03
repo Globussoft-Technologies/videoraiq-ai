@@ -518,52 +518,61 @@ class PermissionService {
         }
     }
 
+    /**
+     * Resolve the caller's role + permissionConfig.
+     *
+     * Both identities run the same aggregate and differ only in the $match: a
+     * sub-user resolves through its own roleIds, an admin through its default
+     * "admin" role. Extracted from userPermissions so other endpoints (the
+     * guided tour's module list) resolve permissions identically instead of
+     * carrying a second copy of this pipeline.
+     *
+     * Returns { roles } on success or { error } with a PermissionMessageNew key.
+     */
+    async resolveRolePermission({ memberId, adminId } = {}) {
+        const pipelineFor = (match) => ([
+            { $match: match },
+            {
+                $lookup: {
+                    from: "permissionschemas",
+                    localField: "permissionId",
+                    foreignField: "_id",
+                    as: "permissionDetails",
+                    pipeline: [{ $project: { permissionConfig: 1, _id: 0 } }],
+                },
+            },
+            { $unwind: "$permissionDetails" },
+            { $project: { roleName: 1, permissionConfig: "$permissionDetails.permissionConfig" } },
+        ]);
+
+        if (memberId) {
+            const isUserExist = await usersModel.findOne({ _id: memberId });
+            if (!isUserExist) return { error: "USER_NOT_FOUND" };
+            return {
+                roles: await roleModel.aggregate(
+                    pipelineFor({ _id: new ObjectId(isUserExist.roleIds) })
+                ),
+            };
+        }
+
+        const isAdminExist = await adminModel.findOne({ _id: adminId });
+        if (!isAdminExist) return { error: "ADMIN_NOT_EXIST" };
+        return {
+            roles: await roleModel.aggregate(
+                pipelineFor({ roleName: "admin", adminId: new ObjectId(adminId), is_default: true })
+            ),
+        };
+    }
+
     async userPermissions(req,res,next){
         const result = req.verified;
         try{
             let {memberId,adminId} = result.userData;
 
-            if(memberId){
-            let isUserExist = await usersModel.findOne({_id:memberId});
-            if(!isUserExist) return res.send(Response.FailResp(PermissionMessageNew["USER_NOT_FOUND"]['en']));
-            const roleWithPermission = await roleModel.aggregate([
-                { $match: { _id: new ObjectId(isUserExist.roleIds) } },
-                {
-                  $lookup: {
-                      from: "permissionschemas",
-                      localField: "permissionId",
-                      foreignField: "_id",
-                      as: "permissionDetails",
-                      pipeline: [{ $project: { permissionConfig: 1, _id: 0 } }],
-                  },
-              },
-              { $unwind: "$permissionDetails" },
-              { $project: { roleName:1,permissionConfig: "$permissionDetails.permissionConfig" } },
-              ]);
-              if(roleWithPermission){
-                res.send(Response.SuccessResp(PermissionMessageNew["PERMISSION_FETCH_SUCCESS"]["en"],roleWithPermission));
-              }
-            }else{
-                let isAdminExist = await adminModel.findOne({_id:adminId});
-                if(!isAdminExist) return res.send(Response.FailResp(PermissionMessageNew["ADMIN_NOT_EXIST"]["en"]));
-                const roleWithPermission = await roleModel.aggregate([
-                    { $match: { roleName:"admin",adminId: new ObjectId(adminId), is_default:true } },
-                    {
-                      $lookup: {
-                          from: "permissionschemas",
-                          localField: "permissionId",
-                          foreignField: "_id",
-                          as: "permissionDetails",
-                          pipeline: [{ $project: { permissionConfig: 1, _id: 0 } }],
-                      },
-                  },
-                  { $unwind: "$permissionDetails" },
-                  { $project: { roleName:1,permissionConfig: "$permissionDetails.permissionConfig" } },
-                  ]);
-                  if(roleWithPermission){
-                    res.send(Response.SuccessResp(PermissionMessageNew["PERMISSION_FETCH_SUCCESS"]["en"],roleWithPermission));
-                  }
-            }
+            const { roles, error } = await this.resolveRolePermission({ memberId, adminId });
+            if (error) return res.send(Response.FailResp(PermissionMessageNew[error]['en']));
+
+            res.send(Response.SuccessResp(PermissionMessageNew["PERMISSION_FETCH_SUCCESS"]["en"], roles));
 
         }catch(error){
             logger.error(`error ${error}`);

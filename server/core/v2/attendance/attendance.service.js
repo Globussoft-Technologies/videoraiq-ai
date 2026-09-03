@@ -14,11 +14,19 @@ import config from "config";
 import MailResponse from "../../../mailService/mail.helper.js";
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
 import AttendanceSettings from "./attendanceSettings.model.js";
-import ShiftModel from "../shifts/shifts.model.js";
+import ShiftModel, {
+  SHIFT_DAY_KEYS,
+  resolveShiftDay,
+} from "../shifts/shifts.model.js";
 import {
   ATTENDANCE_STATUS,
   attendanceStatusStage,
   resolveAttendanceSettings,
+  shiftJoinStages,
+  shiftContextStage,
+  shiftOvertimeStage,
+  shiftDayBucketExpr,
+  DEFAULT_SHIFT_TZ,
 } from "./attendanceStatus.js";
 // v1's copy, not a duplicate: both versions expose POST /attendance and the CV
 // service posts to the v1 one, so the two write paths must pair check-outs
@@ -77,15 +85,6 @@ function breakMinutesFromPairs(pairs) {
   }, 0);
 }
 
-const SHIFT_DAY_KEYS = [
-  "sunday",
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-];
 // Pseudo-statuses for the Absent breakdown tabs. Not ATTENDANCE_STATUS values —
 // all three grade as ABSENT, and these only say which kind of absence, so the
 // tabs can filter and count the same three groups the Absent tile sums.
@@ -148,13 +147,34 @@ function buildLocationMatch(locations = []) {
   };
 }
 
+/**
+ * The zone shift wall-clock times are read in.
+ *
+ * Shift times are local ("09:00") and timestamps are UTC instants, so grading
+ * late/early needs a zone. The admin's own IANA setting is the right answer;
+ * a request may override it (the export already accepts one), and everything
+ * falls back to the same default the Analytics reports use.
+ */
+async function resolveShiftTimezone(adminId, requested) {
+  if (requested && moment.tz.zone(requested)) return requested;
+  const admin = adminId
+    ? await Admin.findById(adminId).select("timezone").lean()
+    : null;
+  const configured = admin?.timezone;
+  return configured && moment.tz.zone(configured) ? configured : DEFAULT_SHIFT_TZ;
+}
+
 function shiftExpectsEmployeeOnDate(shift, date) {
   if (!shift) return true;
   if (shift.isActive === false) return false;
   const dayKey = SHIFT_DAY_KEYS[new Date(date).getDay()];
-  const dayConfig = shift?.timings?.[dayKey];
+  // `resolveShiftDay` reads the current `workingDays` block and falls back to
+  // the legacy `timings` one, so this stays correct for shifts saved either
+  // side of the Shift Management rework. A half day still expects the
+  // employee on site, so only an explicit "off" excuses them.
+  const dayConfig = resolveShiftDay(shift, dayKey);
   if (!dayConfig) return true;
-  return dayConfig.enabled !== false;
+  return dayConfig.type !== "off";
 }
 
 function sortNotCheckedInRows(rows, sortField = "checkin", sortOrder = "desc") {
@@ -269,7 +289,7 @@ class AttendanceService {
       ? await ShiftModel.find({
           _id: { $in: shiftIds.map((id) => asObjectId(id)) },
         })
-          .select("name color timings isActive")
+          .select("name color timings workingDays startTime endTime isActive")
           .lean()
       : [];
     const shiftMap = new Map(
@@ -684,8 +704,33 @@ class AttendanceService {
 
         return {
           employee: att.employee,
-          // shift: att.shift,
-          // date: att._id.date,
+          date: att._id?.date || null,
+          // The assigned shift and what it implied for this particular day.
+          // Null throughout for an employee with no shift, which is how the
+          // client tells "on time" from "no shift to be late against".
+          shift: att.shift
+            ? {
+                _id: att.shift._id,
+                name: att.shift.name,
+                color: att.shift.color,
+                startTime: att.shift.startTime,
+                endTime: att.shift.endTime,
+              }
+            : null,
+          shiftName: att.shiftName ?? null,
+          shiftStartTime: att.shiftStartTime ?? null,
+          shiftEndTime: att.shiftEndTime ?? null,
+          shiftDayType: att.shiftDayType ?? null,
+          isNightShift: att.isNightShift ?? null,
+          // Minutes past the grace period, not raw minutes past the start
+          // time — an arrival inside the grace reads as 0, never as "a bit
+          // late", which is the whole point of configuring a grace.
+          lateMinutes: att.lateMinutes ?? null,
+          earlyLeaveMinutes: att.earlyLeaveMinutes ?? null,
+          overtimeMinutes: att.overtimeMinutes ?? null,
+          isLate: att.shift ? Boolean(att.isLate) : false,
+          isEarlyLeave: att.shift ? Boolean(att.isEarlyLeave) : false,
+          isWeekOff: att.shift ? Boolean(att.isWeekOff) : false,
           logInTime: firstCheckIn?.timestamp || null,
           logOutTime: lastCheckOut?.timestamp || null,
           checkinCam:
@@ -995,6 +1040,7 @@ class AttendanceService {
       // This org's Present / Half Day / Absent thresholds, read once per
       // pipeline build and baked into the aggregation below.
       const attendanceRules = await resolveAttendanceSettings(adminId);
+      const shiftTimezone = await resolveShiftTimezone(adminId, req.query?.timezone);
 
       const pipeline = [
         { $match: matchStage },
@@ -1043,16 +1089,9 @@ class AttendanceService {
         { $unwind: { path: "$department", preserveNullAndEmptyArrays: true } },
         { $addFields: { "employee.departmentId": "$department" } },
 
-        // ! Incomplete -  Lookup Shift
-        // {
-        //   $lookup: {
-        //     from: "shifts",
-        //     localField: "shiftId",
-        //     foreignField: "_id",
-        //     as: "shift",
-        //   },
-        // },
-        // { $unwind: { path: "$shift", preserveNullAndEmptyArrays: true } },
+        // Lookup Shift. Rows whose employee holds no shift keep a null `shift`
+        // and go on being graded by the org-wide duration thresholds.
+        ...shiftJoinStages("$employee.shiftId"),
 
         ...(req.query.departmentIds
           ? [
@@ -1112,11 +1151,12 @@ class AttendanceService {
           $group: {
             _id: {
               employee: "$employee._id",
-              date: {
+              date: shiftDayBucketExpr(shiftTimezone, {
                 $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
-              },
+              }),
             },
             employee: { $first: "$employee" },
+            shift: { $first: "$shift" },
             events: { $push: "$events" },
           },
         },
@@ -1160,7 +1200,9 @@ class AttendanceService {
         // this org's configured thresholds. Placed immediately after
         // firstCheckIn/lastCheckOut so every stage below — and every caller
         // that reuses this pipeline — can read `status`.
+        ...shiftContextStage(shiftTimezone),
         attendanceStatusStage(attendanceRules),
+        shiftOvertimeStage(),
 
         // --- Status filter (Present / Half Day / Absent / Checked In) ---
         // Validated against the known set rather than passed through raw, so

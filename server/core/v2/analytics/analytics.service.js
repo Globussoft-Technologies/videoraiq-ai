@@ -13,6 +13,9 @@ import AttendanceService from "../attendance/attendance.service.js";
 import {
   ATTENDANCE_STATUS,
   attendanceStatusStage,
+  employeeShiftJoinStages,
+  shiftContextStage,
+  shiftDayBucketExpr,
   resolveAttendanceSettings,
 } from "../attendance/attendanceStatus.js";
 import AnalyticsValidator from "./analytics.validate.js";
@@ -437,6 +440,9 @@ class AnalyticsService {
       },
       { $unwind: "$events" },
       ...cameraStages,
+      // Resolve each row's shift before grouping — a night shift's day bucket
+      // is derived from its start time, so this cannot wait until after.
+      ...employeeShiftJoinStages("$employee"),
       {
         // One document per attendance log row. First check-in / last check-out
         // are derived from $min/$max per camera type rather than a $sort +
@@ -446,8 +452,11 @@ class AnalyticsService {
         $group: {
           _id: {
             employee: "$employee",
-            date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: REPORT_TZ } },
+            date: shiftDayBucketExpr(REPORT_TZ, {
+              $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: REPORT_TZ },
+            }),
           },
+          shift: { $first: "$shift" },
           firstCheckIn: {
             $min: { $cond: [{ $eq: ["$events.cameraType", "checkin"] }, "$events.timestamp", null] },
           },
@@ -463,6 +472,9 @@ class AnalyticsService {
       // pipeline uses. The chart used to colour "Present" by a local
       // still-inside rule, which is what this codebase now calls Checked In —
       // so the chart was contradicting the KPI tiles beside it.
+      // Same shift context the Attendance Logs pipeline applies, so the chart
+      // and the logs list can never grade the same employee-day differently.
+      ...shiftContextStage(REPORT_TZ),
       attendanceStatusStage(rules),
       {
         $facet: {

@@ -13,6 +13,12 @@
  * branch order and the window arithmetic — the two things a later edit could
  * silently invert.
  *
+ * The window is now resolved per row: an employee holding a shift is bounded by
+ * that shift's own window (`$openWindowMs`, set by shiftContextStage), and
+ * everyone else falls back to the org-wide constant computed here. The helpers
+ * below read through that `$ifNull` so these tests keep asserting the org
+ * fallback while `windowOverride` pins the precedence itself.
+ *
  * Mocks (1):
  *   1. attendanceSettings.model.js — the module is imported for its defaults
  *      and its model; no query is made on these paths.
@@ -45,23 +51,51 @@ function checkedInCase(rules) {
   return first.case.$and;
 }
 
+/**
+ * The window term, which is an $or of "this row has no window at all" and the
+ * actual bound. Returns both halves so a test can assert either.
+ */
+function windowTerm(rules) {
+  const term = checkedInCase(rules).at(-1);
+  expect(Object.keys(term)).toEqual(["$or"]);
+  const [nullCheck, bound] = term.$or;
+  return { nullCheck, bound, override: bound.$lte?.[1] };
+}
+
+/** The org-wide fallback baked into the per-row $ifNull. */
+function orgWindowMs(rules) {
+  return windowTerm(rules).override.$ifNull[1];
+}
+
 describe("attendanceStatusStage — grace window", () => {
   it("bounds Checked In by fullDay + grace from the check-in", () => {
-    const conditions = checkedInCase({ fullDayHours: 8, halfDayHours: 4, graceHours: 8 });
-    const bound = conditions.at(-1);
+    const { bound } = windowTerm({ fullDayHours: 8, halfDayHours: 4, graceHours: 8 });
 
     expect(bound).toEqual({
-      $lte: [{ $subtract: [NOW, "$firstCheckIn"] }, 16 * HOUR_MS],
+      $lte: [
+        { $subtract: [NOW, "$firstCheckIn"] },
+        { $ifNull: ["$openWindowMs", 16 * HOUR_MS] },
+      ],
     });
   });
 
   it("tracks the org's own hours rather than a fixed 16", () => {
-    const conditions = checkedInCase({ fullDayHours: 9, halfDayHours: 4, graceHours: 2.5 });
-    expect(conditions.at(-1).$lte[1]).toBe(11.5 * HOUR_MS);
+    expect(orgWindowMs({ fullDayHours: 9, halfDayHours: 4, graceHours: 2.5 })).toBe(
+      11.5 * HOUR_MS,
+    );
+  });
+
+  // An employee on a shift is bounded by that shift instead: shiftContextStage
+  // sets $openWindowMs to the shift window plus its own overtime allowance, and
+  // the $ifNull is what lets it win over the org constant.
+  it("lets a shift's own window override the org fallback", () => {
+    const { override } = windowTerm({ fullDayHours: 8, halfDayHours: 4, graceHours: 8 });
+    expect(override.$ifNull[0]).toBe("$openWindowMs");
   });
 
   it("still requires a check-in and no check-out before the window is consulted", () => {
     const conditions = checkedInCase({ fullDayHours: 8, halfDayHours: 4, graceHours: 8 });
+    // check-in present, check-out absent, then the window — in that order.
     expect(conditions).toHaveLength(3);
     expect(conditions[0]).toEqual({ $ne: [{ $ifNull: ["$firstCheckIn", null] }, null] });
     expect(conditions[1]).toEqual({
@@ -69,15 +103,15 @@ describe("attendanceStatusStage — grace window", () => {
   });
 
   it("a zero grace still allows the full day itself", () => {
-    const conditions = checkedInCase({ fullDayHours: 8, halfDayHours: 4, graceHours: 0 });
-    expect(conditions.at(-1).$lte[1]).toBe(8 * HOUR_MS);
+    expect(orgWindowMs({ fullDayHours: 8, halfDayHours: 4, graceHours: 0 })).toBe(8 * HOUR_MS);
   });
 
   it("omitting graceHours disables the timeout — the pre-grace behaviour", () => {
-    const conditions = checkedInCase({ fullDayHours: 8, halfDayHours: 4 });
-    // No window term at all, so Checked In is unbounded exactly as before.
-    expect(conditions).toHaveLength(2);
-    expect(JSON.stringify(conditions)).not.toContain("$subtract");
+    const { nullCheck, override } = windowTerm({ fullDayHours: 8, halfDayHours: 4 });
+    // The fallback is null, so for a row with no shift the $or's first arm
+    // matches and Checked In stays unbounded exactly as before.
+    expect(override.$ifNull[1]).toBeNull();
+    expect(nullCheck).toEqual({ $eq: [override, null] });
   });
 
   it("leaves the duration branches alone, so a timed-out row lands on ABSENT", () => {

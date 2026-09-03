@@ -92,6 +92,168 @@ export const detectionNotLicensedMessage = (settingType) =>
   `${detectionName(settingType)} is not enabled for your account. Contact your administrator to add it to your plan.`;
 
 /**
+ * Cameras a plan grants by default, keyed by aMember product NAME.
+ *
+ * Keyed by name rather than product_id because the ids differ between the dev
+ * and production aMember installs, while the product title is the same in both
+ * — an id map would silently grant nothing (or the wrong thing) in one of them.
+ *
+ * Compared case-insensitively with surrounding whitespace collapsed, so
+ * "Surveillance Free Trial" and "surveillance  free trial" both match.
+ *
+ * Only the free trial has an entry. Every other plan stays at 0, so a paying
+ * client's licence is whatever the superadmin sets and nothing is implicit.
+ */
+const PLAN_DEFAULT_CAMERAS_BY_NAME = config.has("licensing.planDefaultCameras")
+  ? config.get("licensing.planDefaultCameras")
+  : {
+      // Free for 3 days. A trial client left on a licence of 0 could not enable
+      // a single detection, which makes the trial pointless.
+      "surveillance free trial": 5,
+    };
+
+const normalisePlanName = (name) =>
+  String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
+
+// aMember's product list keyed by id. Products change about never, so this is
+// fetched once and reused; the login path must not pay for it every time.
+const PRODUCT_CACHE_MS = 10 * 60 * 1000;
+let productCache = { fetchedAt: 0, byId: null };
+
+/**
+ * { product_id: title } from aMember.
+ *
+ * NOTE: /products is the only aMember endpoint this codebase does not already
+ * use, so the response shape is assumed rather than proven. It is read
+ * defensively and any failure returns null, which means "no grant" — a trial
+ * client would simply start at 0, exactly as before this feature. Nothing
+ * breaks if the endpoint is absent or shaped differently; the warning below
+ * says so once per cache window.
+ */
+const amemberProductsById = async () => {
+  const fresh = Date.now() - productCache.fetchedAt < PRODUCT_CACHE_MS;
+  if (fresh && productCache.byId) return productCache.byId;
+
+  try {
+    const baseUrl = config.get("aMember.baseUrl");
+    const apiKey = config.get("aMember.apiKey");
+    const res = await fetch(`${baseUrl}/products?_key=${apiKey}`);
+    const data = await res.json();
+
+    // aMember returns either an array of products or an object keyed by index,
+    // with a `_total` entry to ignore. Handle both.
+    const rows = Array.isArray(data)
+      ? data
+      : Object.entries(data || {})
+          .filter(([key]) => key !== "_total")
+          .map(([, value]) => value);
+
+    const byId = {};
+    for (const row of rows) {
+      const id = row?.product_id ?? row?.id;
+      const title = row?.title ?? row?.name;
+      if (id !== undefined && title) byId[String(id)] = title;
+    }
+
+    productCache = { fetchedAt: Date.now(), byId };
+    return byId;
+  } catch (err) {
+    productCache = { fetchedAt: Date.now(), byId: null };
+    logger.warn(
+      `[LICENSE] aMember /products unavailable (${err.message}) — ` +
+        `plan default cameras cannot be resolved by name; clients start at 0`,
+    );
+    return null;
+  }
+};
+
+/**
+ * How many cameras a client's subscriptions entitle them to by default.
+ *
+ * Accepts either a full token payload or the bare { product_id: expire_date }
+ * map. Prefers `currentPlan.name` when the token carries it (no API call);
+ * otherwise resolves the product ids to names through the cached catalogue.
+ *
+ * Returns the HIGHEST default across everything held: someone on both a trial
+ * and a paid plan should not be dropped to the smaller of the two. Returns 0
+ * when nothing matches, which is the existing "unconfigured means denied".
+ */
+export const defaultCamerasForPlan = async (source) => {
+  if (!source || typeof source !== "object") return 0;
+
+  // 1. The plan name straight off the token. Tokens minted upstream (EMP) carry
+  //    `currentPlan: { id, name, expiresAt }`, and verifyToken puts the whole
+  //    decoded payload on req.verified.userData — so when it is there, the name
+  //    needs no API call at all. This is the preferred path.
+  const fromToken = PLAN_DEFAULT_CAMERAS_BY_NAME[
+    normalisePlanName(source?.currentPlan?.name)
+  ];
+  if (Number(fromToken) > 0) return Number(fromToken);
+
+  // 2. Otherwise resolve ids to names. This is the login path: aMember's
+  //    /access returns only { product_id: expire_date }, so the titles have to
+  //    be looked up (cached). Accepts either a token payload or the bare
+  //    subscriptions map.
+  const subscriptions =
+    source.userSubscriptionType && typeof source.userSubscriptionType === "object"
+      ? source.userSubscriptionType
+      : source;
+
+  const byId = await amemberProductsById();
+  if (!byId) return 0;
+
+  let best = 0;
+  for (const productId of Object.keys(subscriptions)) {
+    const name = normalisePlanName(byId[String(productId)]);
+    const granted = Number(PLAN_DEFAULT_CAMERAS_BY_NAME[name]) || 0;
+    if (granted > best) best = granted;
+  }
+  return best;
+};
+
+/**
+ * Give a client their plan's default camera allowance, once.
+ *
+ * Called from the login paths, where the subscriptions are already fetched for
+ * the token — so this costs no extra aMember call and covers existing clients,
+ * not just new signups.
+ *
+ * Applies only when the client has never been granted before AND currently has
+ * no licence. `planCamerasGranted` is what makes it one-time: a superadmin who
+ * later sets the client to 0 (to block them) must not have that undone on the
+ * next login.
+ *
+ * Returns the client's EFFECTIVE camera licence so the caller can put the
+ * granted value straight on the token instead of a stale 0.
+ *
+ * Never throws — a login must not fail because of this.
+ */
+export const grantPlanDefaultCameras = async (admin, subscriptions) => {
+  const current = Number(admin?.purchasedCameras) || 0;
+  try {
+    if (!isLicensingEnforced()) return current; // on-prem has no licence at all
+    if (!admin?._id || admin.planCamerasGranted) return current;
+    if (current > 0) return current;
+
+    const cameras = await defaultCamerasForPlan(subscriptions);
+    if (cameras <= 0) return current;
+
+    await adminModel.updateOne(
+      { _id: admin._id, planCamerasGranted: { $ne: true } },
+      { $set: { purchasedCameras: cameras, planCamerasGranted: true } },
+    );
+    logger.info(
+      `[LICENSE] granted ${cameras} default camera(s) to admin=${admin._id} ` +
+        `from plan(s) ${Object.keys(subscriptions || {}).join(", ")}`,
+    );
+    return cameras;
+  } catch (err) {
+    logger.error(`grantPlanDefaultCameras(${admin?._id}): ${err.message}`);
+    return current;
+  }
+};
+
+/**
  * Resolve the tenant (Admin doc) behind a request. Tokens carry either an
  * adminId (admin login) or only a user_id (member login); channelUserId is the
  * last-resort fallback used by the detection-settings paths that already
@@ -503,4 +665,6 @@ export default {
   filterDetectionTypes,
   allowedIncidentTypes,
   revokeDetectionEverywhere,
+  defaultCamerasForPlan,
+  grantPlanDefaultCameras,
 };

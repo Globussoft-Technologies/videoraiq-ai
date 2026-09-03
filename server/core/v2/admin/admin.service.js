@@ -16,6 +16,15 @@ import { isAllowedRetentionSpec, RETENTION_OPTION_MONTHS } from "../../../servic
 import Channel from "../channels/channels.model.js";
 import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
 import AttendanceAutoEmailReport from "../attendanceAutoEmailReport/attendanceAutoEmailReport.model.js";
+import permissionService from "../permission/permissions.utility.js";
+import logsConfigService from "../logsConfiguration/logsConfiguration.service.js";
+import {
+  TOUR_MODULES,
+  normalizePermissionConfig,
+  isModuleVisible,
+  isModuleLogEnabled,
+  matchesSearch,
+} from "../../../constants/tourModules.js";
 
 async function runWithConcurrency(tasks, limit) {
   const executing = new Set();
@@ -828,6 +837,83 @@ class AdminService {
       } else {
         return res.send(Response.userFailResp("Invalid Token!", "Validation Failed!"));
       }
+    } catch (error) {
+      next(new AppError(error, 500));
+    }
+  }
+
+  /**
+   * The modules this caller may take a guided tour of, optionally filtered by
+   * `?search=`.
+   *
+   * Filtering happens here rather than in the browser so the tour menu asks the
+   * same authority the sidebar does: role permissions and the resolved logs
+   * configuration (stored preference + auto-enable + licensing). Both are
+   * resolved through the very services that serve /permissions/user-permissions
+   * and /logs-configuration, so a module can never appear in the tour menu that
+   * the user cannot actually open.
+   *
+   * Search matches the module name or its sidebar group — "logs" finds the whole
+   * LOGS & RECORDS section, which is how people tend to remember where a page
+   * lives.
+   */
+  async fetchTourModules(req, res, next) {
+    try {
+      const { adminId, memberId, user_id } = req?.verified?.userData || {};
+      const search = typeof req.query?.search === "string" ? req.query.search : "";
+
+      if (!adminId && !memberId) {
+        return res.send(Response.userFailResp("Invalid Token!", "Validation Failed!"));
+      }
+
+      // Role permissions. Failing open here matches the client's long-standing
+      // rule: a lookup problem must never strip a user of navigation they are
+      // entitled to, so an unresolved config shows everything rather than
+      // nothing.
+      let permissions = {};
+      try {
+        const { roles, error } = await permissionService.resolveRolePermission({
+          memberId,
+          adminId,
+        });
+        if (!error) {
+          const role = Array.isArray(roles) ? roles[0] : null;
+          permissions = normalizePermissionConfig(role?.permissionConfig, role?.roleName);
+        }
+      } catch (err) {
+        logger.error("[TOUR_MODULES] permission resolve failed:", err?.message);
+      }
+
+      // Log pages follow the resolved logs configuration. Same fail-open rule.
+      let logs = null;
+      try {
+        if (adminId) {
+          logs = await logsConfigService.resolveLogsForAdmin({ adminId, userId: user_id });
+        }
+      } catch (err) {
+        logger.error("[TOUR_MODULES] logs config resolve failed:", err?.message);
+      }
+
+      const modules = TOUR_MODULES.filter(
+        (module) =>
+          isModuleVisible(module, permissions) &&
+          isModuleLogEnabled(module, logs) &&
+          matchesSearch(module, search)
+      ).map(({ key, label, group, path }) => ({ key, label, group, path }));
+
+      // Never cache this. The whole point of resolving it server-side is that a
+      // permission revoked a minute ago is reflected immediately — a browser or
+      // proxy replaying an earlier 200 would hand back a module the user has
+      // just lost access to.
+      res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.set("Pragma", "no-cache");
+
+      return res.send(
+        Response.userSuccessResp("Tour modules fetched successfully.", {
+          totalCount: modules.length,
+          modules,
+        })
+      );
     } catch (error) {
       next(new AppError(error, 500));
     }

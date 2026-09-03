@@ -527,6 +527,19 @@ class AuthUsersService {
         const cleanedFirstName = firstName?.trim();
         const cleanedLastName = lastName?.trim();
 
+        // No shift picked for this employee: fall back to the organisation's
+        // default shift, which is what the Create Shift form's "Default Shift"
+        // toggle marks. Resolved here rather than beside the shiftId lookup
+        // above because `isAdminExist` — which scopes it to this tenant — isn't
+        // available until further down.
+        if (!isShiftExist) {
+          isShiftExist = await shiftModel.findOne({
+            adminId: isAdminExist._id,
+            isDefault: true,
+            isActive: true,
+          });
+        }
+
         const newUser = await authorizedUsersModel.create({
           adminId: isAdminExist._id,
           shiftId: isShiftExist?._id || null,

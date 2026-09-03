@@ -310,6 +310,16 @@ class AdminController {
     return await adminService.fetchLogsSound(req, res, next);
   }
 
+  async fetchTourModules(req, res, next) {
+    /* #swagger.tags = ['Admin']
+    #swagger.description = 'List the guided-tour modules the caller may open, filtered by role permissions and the resolved logs configuration. Optional ?search= filters by module name or sidebar group.'
+    #swagger.parameters['search'] = { in: 'query', type: 'string', description: 'Case-insensitive substring filter, e.g. logs' }
+    #swagger.responses[200] = { description: 'Tour modules fetched successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    */
+    return await adminService.fetchTourModules(req, res, next);
+  }
+
   async fetchOnboarding(req, res, next) {
     /* #swagger.tags = ['Admin']
     #swagger.description = 'Fetch the guided-tour onboarding state for the calling Admin or User'

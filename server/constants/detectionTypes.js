@@ -1209,6 +1209,8 @@ export const carModelDetectionSettings = {
       { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
       { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
     ],
+    // Any manufacturer - whatever the frontend sends. Not fixed to one make.
+    company: "<manufacturer>",
     imageRequired: true,
     videoLinkRequirement: false,
     videoMinLength: 10,

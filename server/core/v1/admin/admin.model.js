@@ -55,6 +55,11 @@ const adminSchema = new mongoose.Schema({
   // this many cameras (channels) across all their NVRs. 0 = no cameras allowed
   // until the super-admin provisions a limit.
   purchasedCameras: { type: Number, default: 0 },
+  // Set once when a plan's default camera allowance is granted (see
+  // defaultCamerasForPlan). Without it, a superadmin who deliberately drops a
+  // trial client to 0 would have the grant handed straight back on their next
+  // login — the flag makes the grant a one-time starting value, not a floor.
+  planCamerasGranted: { type: Boolean, default: false },
   // Optional per-admin service endpoint overrides. null = use the global
   // value from config (default for all admins).
   // - streamHost / streamToken  -> RTSPStream.host / RTSPStream.token

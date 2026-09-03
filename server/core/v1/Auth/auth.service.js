@@ -1,4 +1,5 @@
 import { generateToken } from "../../../middlewares/decodeToken.js";
+import { grantPlanDefaultCameras } from "../../v2/clientConfig/detectionLicense.service.js";
 import { encrypt } from "../../../utils/cryptoUtils.js";
 import logger from "../../../utils/logger.js";
 import { resolveAdminEndpoints } from "../../../utils/adminEndpoints.js";
@@ -284,6 +285,12 @@ class AUTHService {
       } catch (e) {
         logger.error(`generateAdminToken subscriptions(${admin.user_id}): ${e.message}`);
       }
+
+      // Give a trial client their plan's default camera allowance the first time
+      // they log in. The subscriptions are already fetched for the token, so
+      // this costs no extra aMember call, and it is one-time — a superadmin who
+      // later changes the licence keeps that change.
+      await grantPlanDefaultCameras(admin, subscriptions);
 
       // Identical field set to the login token (verifyUser).
       const tokenPayload = {
@@ -789,6 +796,12 @@ return bypassUsers.find(
         }
       }
 
+      // Same one-time plan grant as the other login paths.
+      const effectiveCameras = await grantPlanDefaultCameras(
+        adminData,
+        userData?.subscriptions,
+      );
+
       const tokenPayload = {
         status: userData?.ok,
         user_id: userData?.user_id,
@@ -805,7 +818,7 @@ return bypassUsers.find(
         // Superadmin-set camera limit, so the client has it immediately at login.
         // The socket sends the full { purchasedCameras, added, remaining } snapshot
         // on connect and on any change; this is just the initial raw limit.
-        purchasedCameras: adminData?.purchasedCameras ?? 0,
+        purchasedCameras: effectiveCameras,
         // Resolved RTSP stream host (per-admin override or global default),
         // normalised to always end with a single trailing slash.
         streamHost: `${(adminData?.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
@@ -1107,6 +1120,15 @@ return bypassUsers.find(
         formattedSubscriptions = this.extractSubscriptions(allsubscriptions);
       }
 
+      // Give a trial client their plan's default camera allowance the first time
+      // they log in. The subscriptions are already fetched for the token, so
+      // this costs no extra aMember call, and it is one-time — a superadmin who
+      // later changes the licence keeps that change.
+      const effectiveCameras = await grantPlanDefaultCameras(
+        isUserExist,
+        formattedSubscriptions,
+      );
+
       const tokenPayload = {
         status: true,
         user_id: Number.parseInt(isUserExist?.user_id ?? "", 10) || null,
@@ -1124,7 +1146,7 @@ return bypassUsers.find(
         enablePhoneRecipients: config.get("enablePhoneRecipients"),
         // Superadmin-set camera limit, so the client has it immediately at login.
         // The socket keeps { purchasedCameras, added, remaining } live thereafter.
-        purchasedCameras: isUserExist?.purchasedCameras ?? 0,
+        purchasedCameras: effectiveCameras,
         // Resolved RTSP stream host (per-admin override or global default),
         // normalised to always end with a single trailing slash.
         streamHost: `${(isUserExist?.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,

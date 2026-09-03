@@ -22,7 +22,7 @@ function buildCaseInsensitiveLocationIn(values = []) {
 const authorizedUsersSchema = new mongoose.Schema({
   orgId: { type: Number, default: null },
   emp_id: { type: Number, default: null },
-  shiftId: { type: mongoose.Schema.Types.ObjectId, ref: 'shift', default: null },
+  shiftId: { type: mongoose.Schema.Types.ObjectId, ref: 'Shift', default: null },
   adminId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin',

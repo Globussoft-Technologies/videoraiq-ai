@@ -14,10 +14,25 @@ import { sendPayloadToUser } from "../../../socket.js";
 
 const DETECTION_KEYS = Object.keys(DETECTION_TYPES);
 
-// Face Recognition is the one detection whose demo events are not incidents —
-// they land in the access logs as attendance sessions. Every other setting type
-// resolves to an `incidentType` through TYPE_MAP and is counted off `incidents`.
-const ATTENDANCE_SETTING_TYPE = "attendanceSettings";
+/**
+ * Face Recognition is the one detection whose demo events are not incidents —
+ * they land in the access logs as attendance sessions. Every other setting type
+ * resolves to an `incidentType` through TYPE_MAP and is counted off `incidents`.
+ *
+ * Resolved from the constants rather than hardcoded: this key has already been
+ * renamed once (attendanceSettings -> faceAuthenticationSettings), and a stale
+ * name here fails silently in the worst way — Face Recognition would be treated
+ * as an incident type and report zero events forever, because there is no
+ * matching incident discriminator to notice the mistake.
+ */
+const ATTENDANCE_SETTING_TYPE =
+  ["faceAuthenticationSettings", "attendanceSettings"].find((key) =>
+    DETECTION_KEYS.includes(key)
+  ) || "faceAuthenticationSettings";
+
+// Renamed keys a caller may still be sending. Accepted on input and resolved to
+// the current key so an older client does not get "Unknown detection type".
+const LEGACY_SETTING_ALIASES = { attendanceSettings: ATTENDANCE_SETTING_TYPE };
 
 /**
  * TYPE_MAP entries that do not name a real incident discriminator.
@@ -226,7 +241,14 @@ class VideoRecordsService {
 
       // Accepts an array (the documented shape) or a comma-separated string, and
       // `settingType` as an alias, so a caller sending either spelling works.
-      const requestedTypes = [...new Set([...splitCsv(detectionTypes), ...splitCsv(settingType)])];
+      // Renamed keys are mapped forward before validation.
+      const requestedTypes = [
+        ...new Set(
+          [...splitCsv(detectionTypes), ...splitCsv(settingType)].map(
+            (type) => LEGACY_SETTING_ALIASES[type] || type
+          )
+        ),
+      ];
       const unknown = requestedTypes.filter((type) => !DETECTION_KEYS.includes(type));
       if (unknown.length) {
         return res
@@ -330,11 +352,37 @@ class VideoRecordsService {
         ...dateWindow("timeOfIncident"),
       };
 
+      /**
+       * Access-log events are windowed on the session's OWN timestamp — the
+       * instant DS says the face was seen — not on the row's `createdAt`. That
+       * makes the date range mean the same thing on both event sources:
+       * `timeOfIncident` for incidents, `sessions[].timestamp` here. Windowing
+       * on createdAt instead would drop a backfilled demo entirely, because the
+       * row is written now while its sessions are timestamped in the past.
+       *
+       * Note this differs from the Attendance Logs page and the analytics
+       * module, which deliberately window access logs on `createdAt` (a row
+       * there means "one employee, one day"). That rule is not changed — it
+       * just isn't the right one for a demo event count, and this filter is
+       * local to this endpoint.
+       */
       const accessMatch = {
         admin: adminObjectId,
         liveDemoData: true,
-        ...dateWindow("createdAt"),
+        ...dateWindow("sessions.timestamp"),
       };
+
+      /**
+       * The same window, re-applied after $unwind — and it has to be both.
+       *
+       * Pre-unwind it prunes whole documents off the sessions.timestamp index.
+       * But a document qualifies when ANY one of its sessions is in range, and
+       * $unwind then emits every session that row holds. Without this second
+       * pass, one in-window session would drag the row's whole history into the
+       * count.
+       */
+      const accessSessionWindow =
+        from && to ? [{ $match: { "sessions.timestamp": { $gte: from, $lte: to } } }] : [];
 
       const [recordFacet, incidentRows, accessRows] = await Promise.all([
         videoRecordModel.aggregate([
@@ -401,6 +449,7 @@ class VideoRecordsService {
           ? OptimizedAccessLogs.aggregate([
               { $match: accessMatch },
               { $unwind: "$sessions" },
+              ...accessSessionWindow,
               {
                 $group: {
                   _id: null,
@@ -628,6 +677,17 @@ class VideoRecordsService {
             .map(([key]) => key)
       ).filter(Boolean);
 
+      // Vehicle manufacturer for car model detection. Mapping detectors -> names
+      // above drops every field but the name, so keep it keyed by detector here.
+      // Accepts either spelling from the frontend and always emits DS's
+      // `car_company` on the wire.
+      const carCompanyByName = new Map(
+        (Array.isArray(detectors) ? detectors : [])
+          .filter((d) => d && typeof d === "object" && d.name)
+          .map((d) => [d.name, String(d.car_company ?? d.company ?? "").trim()])
+          .filter(([, value]) => value)
+      );
+
       const unknown = names.filter((n) => !DETECTION_KEYS.includes(n));
       if (unknown.length) {
         return res
@@ -650,6 +710,8 @@ class VideoRecordsService {
         source_url: toAbsoluteMediaUrl(video.videoUrl),
         detectors: names.map((name) => {
           const detector = { name };
+          const carCompany = carCompanyByName.get(name);
+          if (carCompany) detector.car_company = carCompany;
           if (video.zones && video.zones.length) detector.zones = video.zones;
           if (video.zone_configs && video.zone_configs.length) detector.zone_configs = video.zone_configs;
           return detector;

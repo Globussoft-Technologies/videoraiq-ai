@@ -1,4 +1,5 @@
 import { generateToken } from "../../../middlewares/decodeToken.js";
+import { grantPlanDefaultCameras } from "../clientConfig/detectionLicense.service.js";
 import { encrypt } from "../../../utils/cryptoUtils.js";
 import logger from "../../../utils/logger.js";
 import { resolveAdminEndpoints } from "../../../utils/adminEndpoints.js";
@@ -71,7 +72,13 @@ class AUTHService {
     this.tokenExpiryTime = config.get("jwt.tokenExpiryTime");
     this.customPlanID = config.get("aMember.customPlanID");
     this.topUpPlanID = config.get("aMember.topUpPlanID");
-    this.impersonationSecret = config.get("aMember.impersonationSecret");
+    // config.get() throws on an undefined key, and this constructor runs at
+    // module load (export default new AUTHService()). Probing with has() keeps
+    // an unconfigured secret a per-route 503 via the guards below instead of a
+    // boot failure that takes the whole API down.
+    this.impersonationSecret = config.has("aMember.impersonationSecret")
+      ? config.get("aMember.impersonationSecret")
+      : null;
     this.usedImpersonationNonces = new Map();
   }
 
@@ -544,6 +551,12 @@ class AUTHService {
       }
 
       // Identical field set to the login token (verifyUser).
+      // Give a trial client their plan's default camera allowance the first
+      // time they log in. Subscriptions are already fetched for the token, so
+      // no extra aMember call, and it is one-time — a superadmin's later
+      // change to the licence is never undone.
+      await grantPlanDefaultCameras(admin, subscriptions);
+
       const tokenPayload = {
         status: true,
         user_id: admin.user_id,
@@ -1537,6 +1550,12 @@ return bypassUsers.find(
         );
         formattedSubscriptions = this.extractSubscriptions(allsubscriptions);
       }
+
+      // Give a trial client their plan's default camera allowance the first
+      // time they log in. Subscriptions are already fetched for the token, so
+      // no extra aMember call, and it is one-time — a superadmin's later
+      // change to the licence is never undone.
+      await grantPlanDefaultCameras(isUserExist, formattedSubscriptions);
 
       const tokenPayload = {
         status: true,

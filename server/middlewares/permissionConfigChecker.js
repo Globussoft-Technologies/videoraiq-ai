@@ -31,6 +31,7 @@ const viewPathMap = [
     { path: '/alerts', module: 'alerts' },
     { path: '/analytics', module: 'dashboard' },
     { path: '/departments', module: 'departments' },
+    { path: '/shifts', module: 'shifts' },
     { path: '/detection-settings', module: 'detectionSettings' },
     { path: '/global-schedules', module: 'detectionSettings' },
     { path: '/detection-objects', module: 'detectionSettings' },

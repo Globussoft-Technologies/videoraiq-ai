@@ -137,6 +137,56 @@ class LogsConfigurationService {
       logger.error(`Error refreshing logs configuration for admin ${adminId}:`, error);
     }
   }
+  /**
+   * Resolve the effective logs configuration for an admin.
+   *
+   * Extracted from getLogsConfiguration so other endpoints (the guided tour's
+   * module list) can reuse the exact same rules — stored preference, then
+   * auto-enable from cameras and running detections, then licensing on top —
+   * rather than carrying a second, drifting copy of them.
+   *
+   * Returns null when the admin does not exist, so callers can distinguish
+   * "not found" from "no logs enabled".
+   */
+  async resolveLogsForAdmin({ adminId, userId } = {}) {
+    if (!adminId) return null;
+
+    const admin = await adminModel.findById(adminId);
+    if (!admin) return null;
+
+    // Get or create default config
+    let config = await logsConfigModel.findOne({ adminId });
+    if (!config) {
+      config = await logsConfigModel.create({ adminId });
+    }
+
+    // Check if admin has any cameras with checkin/checkout checkType
+    const hasCheckInCheckOut = await channelsModel.exists({
+      userId: adminId.toString(),
+      checkType: { $in: ["checkin", "checkout"] },
+    });
+
+    // Auto-enable attendance/access logs if cameras have checkin/checkout
+    const logs = { ...config.logs };
+    if (hasCheckInCheckOut) {
+      logs.attendanceLogs = true;
+      logs.accessLogs = true;
+    }
+
+    // Auto-enable logs based on enabled detections for each camera
+    for (const [detectionField, logType] of Object.entries(DETECTION_TO_LOGS_MAP)) {
+      const isEnabled = await this.isDetectionEnabled(adminId, detectionField);
+      if (isEnabled) {
+        logs[logType] = true;
+      }
+    }
+
+    // Licensing wins over both the stored preference and the auto-enable above.
+    applyLicenseToLogs(logs, await getAllowedDetectionTypes({ adminId, userId }));
+
+    return logs;
+  }
+
   async getLogsConfiguration(req, res, _next) {
     try {
       const data = req?.verified?.userData;
@@ -144,44 +194,13 @@ class LogsConfigurationService {
         return res.status(400).json(Response.userFailResp("Missing adminId"));
       }
 
-      // Verify admin exists
-      const admin = await adminModel.findById(data.adminId);
-      if (!admin) {
+      const logs = await this.resolveLogsForAdmin({
+        adminId: data.adminId,
+        userId: data.user_id,
+      });
+      if (!logs) {
         return res.status(404).json(Response.userFailResp("Admin not found"));
       }
-
-      // Get or create default config
-      let config = await logsConfigModel.findOne({ adminId: data.adminId });
-      if (!config) {
-        config = await logsConfigModel.create({ adminId: data.adminId });
-      }
-
-      // Check if admin has any cameras with checkin/checkout checkType
-      const hasCheckInCheckOut = await channelsModel.exists({
-        userId: data.adminId.toString(),
-        checkType: { $in: ["checkin", "checkout"] },
-      });
-
-      // Auto-enable attendance/access logs if cameras have checkin/checkout
-      const logs = { ...config.logs };
-      if (hasCheckInCheckOut) {
-        logs.attendanceLogs = true;
-        logs.accessLogs = true;
-      }
-
-      // Auto-enable logs based on enabled detections for each camera
-      for (const [detectionField, logType] of Object.entries(DETECTION_TO_LOGS_MAP)) {
-        const isEnabled = await this.isDetectionEnabled(data.adminId, detectionField);
-        if (isEnabled) {
-          logs[logType] = true;
-        }
-      }
-
-      // Licensing wins over both the stored preference and the auto-enable above.
-      applyLicenseToLogs(
-        logs,
-        await getAllowedDetectionTypes({ adminId: data.adminId, userId: data.user_id }),
-      );
 
       return res.status(200).json(
         Response.userSuccessResp("Logs configuration fetched", logs)

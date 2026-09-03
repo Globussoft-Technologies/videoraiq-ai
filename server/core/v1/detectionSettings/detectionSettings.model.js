@@ -1114,6 +1114,10 @@ const MobilePhoneDetectionSetting = DetectionSetting.discriminator(
 
 const carModelDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  // Car model detection only. Comes from the frontend and is forwarded to DS
+  // on the /stream detector payload. No default: an unset company stays
+  // undefined so it is omitted from the DS request instead of being sent as "".
+  company: { type: String, trim: true },
   imageRequired: {
     type: Boolean,
     default: false,

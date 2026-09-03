@@ -500,7 +500,14 @@ class PythonService {
         detectors.push({
           name: "carModelDetectionSettings",
           zones: zones || [],
-          zone_configs
+          zone_configs,
+          // Stored on the setting as `company` (what the frontend sends); DS
+          // calls it `car_company` on the wire, so the rename happens here and
+          // nowhere else. `confidence_thresholds` is the whole settings object
+          // on every call path, so nothing extra has to be plumbed through.
+          // Left off the payload entirely when unset (undefined is dropped by
+          // JSON.stringify) rather than sent as an empty string.
+          car_company: confidence_thresholds?.company || undefined,
         });
       }
 
@@ -732,7 +739,14 @@ class PythonService {
         detectors.push({
           name: "carModelDetectionSettings",
           zones: zones || [],
-          zone_configs
+          zone_configs,
+          // Stored on the setting as `company` (what the frontend sends); DS
+          // calls it `car_company` on the wire, so the rename happens here and
+          // nowhere else. `confidence_thresholds` is the whole settings object
+          // on every call path, so nothing extra has to be plumbed through.
+          // Left off the payload entirely when unset (undefined is dropped by
+          // JSON.stringify) rather than sent as an empty string.
+          car_company: confidence_thresholds?.company || undefined,
         });
       }
 

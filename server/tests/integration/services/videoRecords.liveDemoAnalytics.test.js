@@ -116,10 +116,10 @@ describe("getLiveDemoAnalytics — scoping", () => {
   });
 
   it("counts only the requesting admin's demo records", async () => {
-    await makeRecord(admin._id, { attendanceSettings: true });
-    await makeRecord(otherAdmin._id, { attendanceSettings: true });
+    await makeRecord(admin._id, { faceAuthenticationSettings: true });
+    await makeRecord(otherAdmin._id, { faceAuthenticationSettings: true });
 
-    const { data } = await run({ detectionTypes: ["attendanceSettings"] });
+    const { data } = await run({ detectionTypes: ["faceAuthenticationSettings"] });
     expect(data.demosRun).toBe(1);
   });
 
@@ -274,46 +274,78 @@ describe("getLiveDemoAnalytics — search", () => {
     expect(data.eventsDetected).toBe(0);
   });
 
-  it("finds Face Recognition by its 'attendance' key", async () => {
-    await makeRecord(admin._id, { attendanceSettings: true });
+  it("finds Face Recognition by its 'attendance' display name", async () => {
+    await makeRecord(admin._id, { faceAuthenticationSettings: true });
     await makeAccessLog();
 
     const { data } = await run({ search: "attendance" });
     expect(data.eventsDetected).toBe(1);
-    expect(rowFor(data, "attendanceSettings").source).toBe("accessLogs");
+    expect(rowFor(data, "faceAuthenticationSettings").source).toBe("accessLogs");
+  });
+});
+
+describe("getLiveDemoAnalytics — the renamed Face Recognition key", () => {
+  /**
+   * faceAuthenticationSettings used to be called attendanceSettings. A stale
+   * name in the service fails in the worst possible way: the detection gets
+   * treated as an incident type, finds no matching discriminator, and reports
+   * zero events forever without erroring. These two lock that down.
+   */
+  it("routes the current key to the access logs, not to incidents", async () => {
+    await makeRecord(admin._id, { faceAuthenticationSettings: true });
+    await makeAccessLog();
+
+    const { data } = await run({ detectionTypes: ["faceAuthenticationSettings"] });
+    const row = rowFor(data, "faceAuthenticationSettings");
+    expect(row.source).toBe("accessLogs");
+    // No incident discriminator exists for it — proof it is not being looked
+    // for in the wrong collection.
+    expect(row.incidentType).toBeNull();
+    expect(data.eventsDetected).toBe(1);
+  });
+
+  it("still accepts the old attendanceSettings name from older clients", async () => {
+    await makeRecord(admin._id, { faceAuthenticationSettings: true });
+    await makeAccessLog();
+
+    const { res, data } = await run({ detectionTypes: ["attendanceSettings"] });
+    expect(res.statusCode).toBe(200);
+    expect(data.eventsDetected).toBe(1);
+    // Reported under the current key, not the alias the caller sent.
+    expect(data.scope.settingTypes).toEqual(["faceAuthenticationSettings"]);
   });
 });
 
 describe("getLiveDemoAnalytics — Face Recognition reads the access logs", () => {
   it("counts access-log sessions as attendance events", async () => {
-    await makeRecord(admin._id, { attendanceSettings: true });
+    await makeRecord(admin._id, { faceAuthenticationSettings: true });
     await makeAccessLog();
     await makeAccessLog();
 
-    const { data } = await run({ detectionTypes: ["attendanceSettings"] });
+    const { data } = await run({ detectionTypes: ["faceAuthenticationSettings"] });
     expect(data.eventsDetected).toBe(2);
-    expect(rowFor(data, "attendanceSettings").source).toBe("accessLogs");
+    expect(rowFor(data, "faceAuthenticationSettings").source).toBe("accessLogs");
   });
 
   it("ignores real attendance logs", async () => {
-    await makeRecord(admin._id, { attendanceSettings: true });
+    await makeRecord(admin._id, { faceAuthenticationSettings: true });
     await makeAccessLog({ liveDemoData: true });
     await makeAccessLog({ liveDemoData: false });
 
-    const { data } = await run({ detectionTypes: ["attendanceSettings"] });
+    const { data } = await run({ detectionTypes: ["faceAuthenticationSettings"] });
     expect(data.eventsDetected).toBe(1);
   });
 
   it("normalizes the 0-1 face confidence to a percentage", async () => {
-    await makeRecord(admin._id, { attendanceSettings: true });
+    await makeRecord(admin._id, { faceAuthenticationSettings: true });
     await makeAccessLog();
 
-    const { data } = await run({ detectionTypes: ["attendanceSettings"] });
+    const { data } = await run({ detectionTypes: ["faceAuthenticationSettings"] });
     expect(data.avgConfidence).toBe(91);
   });
 
   it("reports distinct people recognized", async () => {
-    await makeRecord(admin._id, { attendanceSettings: true });
+    await makeRecord(admin._id, { faceAuthenticationSettings: true });
     await makeAccessLog();
     await makeAccessLog({
       sessions: [
@@ -327,8 +359,8 @@ describe("getLiveDemoAnalytics — Face Recognition reads the access logs", () =
       ],
     });
 
-    const { data } = await run({ detectionTypes: ["attendanceSettings"] });
-    expect(rowFor(data, "attendanceSettings").peopleRecognized).toBe(2);
+    const { data } = await run({ detectionTypes: ["faceAuthenticationSettings"] });
+    expect(rowFor(data, "faceAuthenticationSettings").peopleRecognized).toBe(2);
   });
 });
 
@@ -368,6 +400,84 @@ describe("getLiveDemoAnalytics — confidence and DS counters", () => {
 });
 
 describe("getLiveDemoAnalytics — date window", () => {
+  it("windows access logs on the session timestamp, not the row's createdAt", async () => {
+    await makeRecord(admin._id, { faceAuthenticationSettings: true });
+    // Row is written now; DS timestamps the session back in August. Windowing
+    // on createdAt would miss this entirely.
+    await makeAccessLog({
+      sessions: [
+        {
+          nvr: new mongoose.Types.ObjectId(),
+          channel: new mongoose.Types.ObjectId(),
+          personName: "Asha",
+          confidenceScore: 0.91,
+          timestamp: new Date("2026-08-12T09:00:00Z"),
+        },
+      ],
+    });
+
+    const { data } = await run({
+      detectionTypes: ["faceAuthenticationSettings"],
+      startDate: "2026-08-01",
+      endDate: "2026-08-31",
+    });
+    expect(data.eventsDetected).toBe(1);
+  });
+
+  it("drops out-of-window sessions from a row that qualified on another", async () => {
+    await makeRecord(admin._id, { faceAuthenticationSettings: true });
+    // One row, two sessions, only one inside the window. Filtering only before
+    // $unwind would count both.
+    await makeAccessLog({
+      sessions: [
+        {
+          nvr: new mongoose.Types.ObjectId(),
+          channel: new mongoose.Types.ObjectId(),
+          personName: "Asha",
+          confidenceScore: 0.9,
+          timestamp: new Date("2026-08-12T09:00:00Z"),
+        },
+        {
+          nvr: new mongoose.Types.ObjectId(),
+          channel: new mongoose.Types.ObjectId(),
+          personName: "Ravi",
+          confidenceScore: 0.8,
+          timestamp: new Date("2026-06-01T09:00:00Z"),
+        },
+      ],
+    });
+
+    const { data } = await run({
+      detectionTypes: ["faceAuthenticationSettings"],
+      startDate: "2026-08-01",
+      endDate: "2026-08-31",
+    });
+    expect(data.eventsDetected).toBe(1);
+    expect(rowFor(data, "faceAuthenticationSettings").peopleRecognized).toBe(1);
+  });
+
+  it("accepts the microsecond-precision timestamps DS sends", async () => {
+    await makeRecord(admin._id, { faceAuthenticationSettings: true });
+    await makeAccessLog({
+      sessions: [
+        {
+          nvr: new mongoose.Types.ObjectId(),
+          channel: new mongoose.Types.ObjectId(),
+          personName: "Asha",
+          confidenceScore: 0.91,
+          timestamp: "2026-08-12T07:51:58.908380Z",
+        },
+      ],
+    });
+
+    const { data } = await run({
+      detectionTypes: ["faceAuthenticationSettings"],
+      startDate: "2026-08-01",
+      endDate: "2026-08-31",
+    });
+    expect(data.eventsDetected).toBe(1);
+  });
+
   it("keeps only events inside the requested range", async () => {
     await makeRecord(admin._id, { crowdDetectionSettings: true });
     await makeIncident({ timeOfIncident: new Date("2026-08-10T10:00:00Z") });

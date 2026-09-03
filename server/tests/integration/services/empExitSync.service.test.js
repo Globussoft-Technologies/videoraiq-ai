@@ -135,6 +135,34 @@ describe("runEmpExitSync", () => {
     expect(totals.suspended).toBe(0);
   });
 
+  it("suspends a legacy user with no status field stored at all", async () => {
+    // Real rows found via Compass predate the status field / were inserted
+    // outside Mongoose, so they carry no status key whatsoever — not even
+    // the schema's declared default. Insert via the raw driver, bypassing
+    // Mongoose document construction, to reproduce that exactly.
+    const admin = await makeAdmin([{ email: "org@x.com", orgId: "111" }]);
+    await AuthorizedUser.collection.insertOne({
+      adminId: admin._id,
+      email: "legacy@x.com",
+    });
+
+    axios.post.mockResolvedValueOnce({
+      data: {
+        data: {
+          users: [{ email: "legacy@x.com", date_of_exit: "2026-07-03" }],
+          count: 1,
+        },
+      },
+    });
+
+    const totals = await runEmpExitSync();
+
+    expect(totals.matched).toBe(1);
+    expect(totals.suspended).toBe(1);
+    const user = await AuthorizedUser.findOne({ adminId: admin._id });
+    expect(user.status).toBe("suspended");
+  });
+
   it("is a no-op when no VideoRDB user exists for that email", async () => {
     const admin = await makeAdmin([{ email: "org@x.com", orgId: "111" }]);
 
