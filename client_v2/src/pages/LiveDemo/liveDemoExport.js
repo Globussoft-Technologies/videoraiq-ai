@@ -30,6 +30,35 @@ export function buildAttendanceRows(usersLogs = []) {
   });
 }
 
+/**
+ * Flatten the per-person usersLogs into one row per individual face session,
+ * carrying the raw session timestamp. Demo attendance logs accumulate sessions
+ * from every run of the day into per-person documents, so partitioning by time
+ * window (per Demo report) has to happen at the session level, not the doc.
+ */
+export function buildSessionRows(usersLogs = []) {
+  const out = [];
+  (Array.isArray(usersLogs) ? usersLogs : []).forEach((log) => {
+    const name = log.userInfo?.userName || log.personName || 'Unknown';
+    const photo = log.userInfo?.profilePics?.[0] || '';
+    (Array.isArray(log.sessions) ? log.sessions : []).forEach((session, i) => {
+      const at = session?.timestamp || log.date || null;
+      out.push({
+        id: `${log.userId || name}-${session?._id || at || i}`,
+        _at: at ? new Date(at).getTime() : 0,
+        photo: sessionSnap(session) || photo,
+        name,
+        checkIn: session?.checkIn && session.checkIn !== session?.timestamp
+          ? moment(session.checkIn).format('HH:mm:ss')
+          : at ? moment(at).format('HH:mm:ss') : '--',
+        checkOut: session?.checkOut ? moment(session.checkOut).format('HH:mm:ss') : '--',
+        timestamp: at ? moment.tz(at, 'Asia/Kolkata').format('DD MMM YYYY, HH:mm:ss') : '--',
+      });
+    });
+  });
+  return out.sort((a, b) => b._at - a._at);
+}
+
 // ---------------------------------------------------------------------------
 // Report model
 // ---------------------------------------------------------------------------
@@ -154,14 +183,27 @@ function exportPdf(input, { filename } = {}) {
   doc.setFont('helvetica');
 
   const pageWidth = doc.internal.pageSize.getWidth();
-  // Deep-navy banner mirroring the Auto Email Attendance Report header.
-  const NAVY = [18, 58, 143];
+  // Banner mirroring the Auto Email Attendance Report header: a blue field on
+  // the left with a violet block on the right. jsPDF has no gradient fill, so
+  // approximate it with a few vertical bands that step from blue to violet.
+  const BLUE = [107, 143, 232];
+  const VIOLET = [168, 85, 247];
+  const TABLE_HEAD = [18, 58, 143];
 
   reports.forEach((report, i) => {
     if (i > 0) doc.addPage();
 
-    doc.setFillColor(...NAVY);
-    doc.rect(0, 0, pageWidth, 26, 'F');
+    const bands = 24;
+    const bandW = pageWidth / bands;
+    for (let b = 0; b < bands; b += 1) {
+      const t = b / (bands - 1);
+      doc.setFillColor(
+        Math.round(BLUE[0] + (VIOLET[0] - BLUE[0]) * t),
+        Math.round(BLUE[1] + (VIOLET[1] - BLUE[1]) * t),
+        Math.round(BLUE[2] + (VIOLET[2] - BLUE[2]) * t),
+      );
+      doc.rect(b * bandW, 0, bandW + 0.5, 26, 'F');
+    }
     doc.setTextColor(255);
     doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
@@ -188,8 +230,8 @@ function exportPdf(input, { filename } = {}) {
       ]),
       startY: 40,
       styles: { fontSize: 8 },
-      // Match the Auto Email Attendance Report's deep-navy header.
-      headStyles: { fillColor: NAVY },
+      // Match the Auto Email Attendance Report's deep-navy table header.
+      headStyles: { fillColor: TABLE_HEAD },
     });
   });
 

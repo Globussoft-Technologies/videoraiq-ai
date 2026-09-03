@@ -41,7 +41,7 @@ import { createVideoRecord, getDemoAttendanceLogs, getDemoIncidents, getLiveDemo
 import howToTakeFacePhotos from './assets/howto.jpg';
 import { useSocket } from '@/context/SocketContext';
 import { useAuth } from '@/context/AuthContext';
-import { buildAttendanceRows, handleLiveDemoExport, handleLiveDemoExportAll } from './liveDemoExport';
+import { buildAttendanceRows, buildSessionRows, handleLiveDemoExport, handleLiveDemoExportAll } from './liveDemoExport';
 import { clearLiveDemoSession, readLiveDemoSession, updateLiveDemoSession } from './liveDemoSession';
 import SessionAnalyticsPanel from './SessionAnalyticsPanel';
 import VideoProcessingLoader from './VideoProcessingLoader';
@@ -938,7 +938,7 @@ function ExpandableSnap({ src, alt, size = 'h-10 w-10' }) {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="absolute -right-3 -top-3 z-20 grid h-8 w-8 cursor-pointer place-items-center rounded-full border border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx)] shadow-lg transition-colors hover:bg-[var(--bg2)]"
+              className="absolute -right-3 -top-3 z-20 grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx)] shadow-lg transition-colors hover:bg-[var(--bg2)]"
               aria-label="Close"
               title="Close"
             >
@@ -947,7 +947,7 @@ function ExpandableSnap({ src, alt, size = 'h-10 w-10' }) {
             <img
               src={src}
               alt={alt}
-              className="max-h-[78vh] w-auto max-w-[88vw] rounded-xl object-contain"
+              className="h-[80vh] max-h-[900px] w-auto min-w-[320px] max-w-[92vw] rounded-xl bg-[var(--bg2)] object-contain"
             />
           </div>
         </div>
@@ -1471,9 +1471,9 @@ function AttendanceLogPanel({ usersLogs, onDelete }) {
           No attendance events yet — process a clip to populate this log.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-[var(--bd)]">
+        <div className="max-h-[360px] overflow-auto rounded-lg border border-[var(--bd)]">
           <table className="w-full min-w-[600px] text-left text-xs">
-            <thead className="bg-[var(--bg2)] text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--tx3)]">
+            <thead className="sticky top-0 z-10 bg-[var(--bg2)] text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--tx3)]">
               <tr>
                 <th className="w-10 px-3 py-2">
                   <input
@@ -1541,21 +1541,27 @@ function AttendanceLogPanel({ usersLogs, onDelete }) {
   );
 }
 
-// One Face Recognition demo record -> its attendance log fetched per-video, so
-// Demo reports can list a separate report for every processed run rather than
-// just the current session.
+// One Demo report per processed Face Recognition run. The demo attendance log
+// accumulates every run's sessions into per-person documents, so a run's own
+// events can't be fetched in isolation — instead we pull the full log once and
+// slice its sessions into each run's time window [record.createdAt, nextRun).
 function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipName }) {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // The Face Recognition records that have finished processing, newest first.
+  // Processed Face Recognition records, oldest -> newest so windows are easy to
+  // bound; the list is reversed to newest-first before returning.
   const faceRecords = useMemo(
     () =>
-      (Array.isArray(history) ? history : []).filter(
-        (record) =>
-          record?.detections?.faceAuthenticationSettings &&
-          (record?.videos || []).some((video) => video?.dsVideoUrl),
-      ),
+      (Array.isArray(history) ? history : [])
+        .filter(
+          (record) =>
+            record?.detections?.faceAuthenticationSettings &&
+            (record?.videos || []).some((video) => video?.dsVideoUrl) &&
+            record?.createdAt,
+        )
+        .slice()
+        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)),
     [history],
   );
 
@@ -1564,22 +1570,20 @@ function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipN
 
     const run = async () => {
       if (!faceRecords.length) {
-        // No history yet — fall back to the current session's rows.
+        // No processed history — show the current session's log as one report.
         const rows = buildAttendanceRows(currentUsersLogs);
         if (!cancelled) {
           setReports(
             rows.length
-              ? [
-                  {
-                    id: 'current-session',
-                    title: 'Face Recognition — Attendance Log',
-                    detectionName: 'Face Recognition',
-                    clipName: currentClipName || 'Demo clip',
-                    minConfidence,
-                    generatedAt: null,
-                    rows,
-                  },
-                ]
+              ? [{
+                  id: 'current-session',
+                  title: 'Face Recognition — Attendance Log',
+                  detectionName: 'Face Recognition',
+                  clipName: currentClipName || 'Demo clip',
+                  minConfidence,
+                  generatedAt: null,
+                  rows,
+                }]
               : [],
           );
         }
@@ -1587,37 +1591,47 @@ function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipN
       }
 
       setLoading(true);
-      const results = await Promise.all(
-        faceRecords.map(async (record) => {
-          const recordId = recordIdOf(record);
-          const video = firstVideoOf(record);
-          const videoId = video?._id || video?.id;
-          // The accessLogs/get date window defaults to "today"; widen it around
-          // the record's own createdAt so older demos still return their log.
-          const day = record?.createdAt ? new Date(record.createdAt) : null;
-          const ymd = day ? day.toISOString().slice(0, 10) : null;
-          const data = await getDemoAttendanceLogs({
-            limit: 50,
-            isExport: false,
-            removeUnknown: true,
-            ...(videoId ? { videoId } : {}),
-            ...(ymd ? { startDate: ymd, endDate: ymd } : {}),
-          }).catch(() => null);
-          const rows = buildAttendanceRows(data?.usersLogs || []);
-          if (!rows.length) return null;
-          return {
-            id: recordId || videoId || Math.random().toString(36).slice(2),
-            title: 'Face Recognition — Attendance Log',
-            detectionName: 'Face Recognition',
-            clipName: video?.videoUrl?.split('/').pop() || currentClipName || 'Demo clip',
-            minConfidence,
-            generatedAt: record?.createdAt || null,
-            rows,
-          };
-        }),
-      );
+      // Span the earliest run's day to the latest run's day.
+      const first = new Date(faceRecords[0].createdAt);
+      const last = new Date(faceRecords[faceRecords.length - 1].createdAt);
+      const data = await getDemoAttendanceLogs({
+        limit: 500,
+        isExport: false,
+        removeUnknown: true,
+        startDate: first.toISOString().slice(0, 10),
+        endDate: last.toISOString().slice(0, 10),
+      }).catch(() => null);
+
+      const allSessions = buildSessionRows(data?.usersLogs || []);
+
+      const built = faceRecords.map((record, index) => {
+        const startMs = new Date(record.createdAt).getTime();
+        // A run "owns" sessions from its createdAt until the next run started;
+        // the last run keeps everything after it (+ a small grace so a session
+        // logged a beat before the record row still lands in the right window).
+        const nextMs = faceRecords[index + 1]
+          ? new Date(faceRecords[index + 1].createdAt).getTime()
+          : Infinity;
+        const GRACE = 5 * 60 * 1000;
+        const rows = allSessions.filter(
+          (session) => session._at >= startMs - GRACE && session._at < nextMs - GRACE,
+        );
+        const video = firstVideoOf(record);
+        return {
+          id: recordIdOf(record) || `run-${index}`,
+          title: 'Face Recognition — Attendance Log',
+          detectionName: 'Face Recognition',
+          clipName: video?.videoUrl?.split('/').pop() || currentClipName || 'Demo clip',
+          minConfidence,
+          generatedAt: record.createdAt,
+          rows,
+        };
+      });
+
       if (!cancelled) {
-        setReports(results.filter(Boolean));
+        // Newest run first; keep runs even with zero matched sessions so the
+        // list mirrors Recent Demos.
+        setReports(built.reverse());
         setLoading(false);
       }
     };
@@ -1636,7 +1650,7 @@ function DemoReportsPanel({ usersLogs, clipName, minConfidence, history }) {
     minConfidence,
     currentClipName: clipName,
   });
-  const hasData = reports.length > 0;
+  const hasData = reports.some((report) => report.rows.length > 0);
 
   return (
     <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
@@ -1682,7 +1696,7 @@ function DemoReportsPanel({ usersLogs, clipName, minConfidence, history }) {
           {loading ? 'Loading reports…' : 'No reports yet — process a clip to generate one.'}
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
           {reports.map((report) => {
             const events = report.rows.length;
             const meta = [
@@ -1710,18 +1724,20 @@ function DemoReportsPanel({ usersLogs, clipName, minConfidence, history }) {
               <div className="flex shrink-0 items-center gap-2">
                 <button
                   type="button"
+                  disabled={events === 0}
                   onClick={() => handleLiveDemoExport('excel', report)}
                   title="Export this report as Excel"
-                  className="inline-flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(34,197,94,0.45)] px-3 text-[11.5px] font-semibold text-[var(--ok)] transition-colors hover:bg-[rgba(34,197,94,0.1)]"
+                  className="inline-flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(34,197,94,0.45)] px-3 text-[11.5px] font-semibold text-[var(--ok)] transition-colors hover:bg-[rgba(34,197,94,0.1)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Download className="h-3 w-3" />
                   Excel
                 </button>
                 <button
                   type="button"
+                  disabled={events === 0}
                   onClick={() => handleLiveDemoExport('pdf', report)}
                   title="Export this report as PDF"
-                  className="inline-flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(59,130,246,0.4)] px-3 text-[11.5px] font-semibold text-[var(--blue)] transition-colors hover:bg-[rgba(59,130,246,0.1)]"
+                  className="inline-flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(59,130,246,0.4)] px-3 text-[11.5px] font-semibold text-[var(--blue)] transition-colors hover:bg-[rgba(59,130,246,0.1)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Download className="h-3 w-3" />
                   PDF
