@@ -555,7 +555,7 @@ class AUTHService {
       // time they log in. Subscriptions are already fetched for the token, so
       // no extra aMember call, and it is one-time — a superadmin's later
       // change to the licence is never undone.
-      await grantPlanDefaultCameras(admin, subscriptions);
+      const effectiveCameras = await grantPlanDefaultCameras(admin, subscriptions);
 
       const tokenPayload = {
         status: true,
@@ -570,6 +570,9 @@ class AUTHService {
         userSubscriptionType: subscriptions,
         created_from: "EMP",
         enablePhoneRecipients: config.get("enablePhoneRecipients"),
+        // Superadmin-set camera limit, so the client has it immediately at
+        // login instead of a stale 0 baked into this token.
+        purchasedCameras: effectiveCameras,
         streamHost: `${(admin.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
       };
 
@@ -1210,6 +1213,17 @@ return bypassUsers.find(
         bypassUser
       );
 
+      // Same one-time plan grant as the other login paths (generateAdminToken,
+      // getAmemberUserDetails, v1's verifyUser). This is client_v2's actual
+      // login endpoint (POST /auth/by-login-pass) — without this call, a
+      // brand-new user's very first token carries purchasedCameras: 0 and
+      // never gets defaulted, landing them on the "No Camera License" screen
+      // with nothing to recover from.
+      const effectiveCameras = await grantPlanDefaultCameras(
+        adminData,
+        userData?.subscriptions,
+      );
+
       const tokenPayload = {
         status: userData?.ok,
         user_id: userData?.user_id,
@@ -1224,6 +1238,9 @@ return bypassUsers.find(
         currentPlan,
         created_from: "EMP",
         enablePhoneRecipients: config.get("enablePhoneRecipients"),
+        // Superadmin-set camera limit, so the client has it immediately at
+        // login instead of a stale 0 baked into this token.
+        purchasedCameras: effectiveCameras,
         // Resolved RTSP stream host (per-admin override or global default),
         // normalised to always end with a single trailing slash.
         streamHost: `${(adminData?.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
@@ -1555,7 +1572,7 @@ return bypassUsers.find(
       // time they log in. Subscriptions are already fetched for the token, so
       // no extra aMember call, and it is one-time — a superadmin's later
       // change to the licence is never undone.
-      await grantPlanDefaultCameras(isUserExist, formattedSubscriptions);
+      const effectiveCameras = await grantPlanDefaultCameras(isUserExist, formattedSubscriptions);
 
       const tokenPayload = {
         status: true,
@@ -1572,6 +1589,9 @@ return bypassUsers.find(
         created_from: "EMP",
         createdAt: isUserExist?.createdAt,
         enablePhoneRecipients: config.get("enablePhoneRecipients"),
+        // Superadmin-set camera limit, so the client has it immediately at
+        // login instead of a stale 0 baked into this token.
+        purchasedCameras: effectiveCameras,
         // Resolved RTSP stream host (per-admin override or global default),
         // normalised to always end with a single trailing slash.
         streamHost: `${(isUserExist?.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
