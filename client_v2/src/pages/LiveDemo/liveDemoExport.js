@@ -12,7 +12,7 @@ function sessionSnap(session) {
 }
 
 export function buildAttendanceRows(usersLogs = []) {
-  return usersLogs.map((log) => {
+  return usersLogs.map((log, index) => {
     const sessions = log.sessions || [];
     const checkIn = sessions[0]?.timestamp || log.date || null;
     const checkOut = sessions.length > 1 ? sessions[sessions.length - 1]?.timestamp : null;
@@ -29,10 +29,14 @@ export function buildAttendanceRows(usersLogs = []) {
     }
 
     return {
+      // Stable-ish identity for row selection / deletion in the demo UI.
+      id: log.logId || log._id || log.userId || `row-${index}`,
       photo: sessionSnap(sessions[0]) || log.userInfo?.profilePics?.[0] || '',
       name: log.userInfo?.userName || 'Unknown',
       checkIn: checkIn ? moment(checkIn).format('HH:mm:ss') : '--',
       checkOut: checkOut ? moment(checkOut).format('HH:mm:ss') : '--',
+      // Event time rendered in IST (Asia/Kolkata), the demo's reporting zone.
+      timestamp: checkIn ? moment.tz(checkIn, 'Asia/Kolkata').format('DD MMM YYYY, HH:mm:ss') : '--',
       duration: durationLabel,
       confidence: avgConfidence != null ? `${avgConfidence}%` : '--',
     };

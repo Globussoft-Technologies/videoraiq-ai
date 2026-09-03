@@ -4,6 +4,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Download,
   ExternalLink,
   FileVideo,
   ImagePlus,
@@ -36,12 +37,14 @@ import { COMPACT_TOAST } from '../RegisterUser/toastOptions';
 import FaceCaptureWizard from '../RegisterUser/FaceCaptureWizard';
 import { getVideoRecordAnalytics, getVideoRecordVideos, getVideoRecords } from './api/get';
 import { deleteDemoMedia } from './api/delete';
-import { createVideoRecord, getDemoAttendanceLogs, getDemoIncidents, processVideoRecord, updateVideoRecord, uploadDemoClip } from './api/post';
+import { createVideoRecord, getDemoAttendanceLogs, getDemoIncidents, getLiveDemoAnalytics, processVideoRecord, updateVideoRecord, uploadDemoClip } from './api/post';
 import howToTakeFacePhotos from './assets/howto.jpg';
 import { useSocket } from '@/context/SocketContext';
 import { useAuth } from '@/context/AuthContext';
 import { buildAttendanceRows, handleLiveDemoExport } from './liveDemoExport';
 import { clearLiveDemoSession, readLiveDemoSession, updateLiveDemoSession } from './liveDemoSession';
+import SessionAnalyticsPanel from './SessionAnalyticsPanel';
+import VideoProcessingLoader from './VideoProcessingLoader';
 
 const categories = [{ key: 'all', label: 'All', color: null }, ...DETECTION_CATEGORIES];
 
@@ -109,6 +112,14 @@ function fileSizeLabel(size = 0) {
 
 function recordIdOf(record) {
   return record?._id || record?.id || '';
+}
+
+// The live-demo-analytics endpoint keys on the canonical setting type
+// (`faceAuthenticationSettings`), the same one the detection catalogue and the
+// video record's `detections` field use — pass it straight through.
+function analyticsSettingType(settingType) {
+  if (!settingType) return '';
+  return settingType === 'attendanceSettings' ? 'faceAuthenticationSettings' : settingType;
 }
 
 function firstVideoOf(record) {
@@ -847,6 +858,50 @@ function DetectionConfigPanel({
   );
 }
 
+// A snapshot thumbnail that toggles between a small chip and a large preview on
+// click, with an explicit close button while expanded. Shared by the Matched
+// Alerts list and the Attendance Log table.
+function ExpandableSnap({ src, alt, size = 'h-10 w-10' }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!src) {
+    return (
+      <span className={`grid ${size} shrink-0 place-items-center rounded-md border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx3)]`}>
+        <User className="h-4 w-4" />
+      </span>
+    );
+  }
+
+  return (
+    <div className={`relative shrink-0 ${expanded ? 'z-20' : ''}`}>
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        className="block cursor-pointer overflow-hidden rounded-md border border-[var(--bd)] transition-all hover:border-[var(--blue)]"
+        aria-label={expanded ? 'Collapse snapshot' : 'Expand snapshot'}
+        aria-expanded={expanded}
+      >
+        <img
+          src={src}
+          alt={alt}
+          className={`object-cover transition-all duration-200 ${expanded ? 'h-48 w-48' : size}`}
+          onError={(event) => { event.currentTarget.style.visibility = 'hidden'; }}
+        />
+      </button>
+      {expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="absolute right-1.5 top-1.5 grid h-6 w-6 cursor-pointer place-items-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
+          aria-label="Close snapshot"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 function MatchedAlertsPanel({ alerts }) {
   return (
     <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
@@ -872,12 +927,7 @@ function MatchedAlertsPanel({ alerts }) {
             const time = alert.timestamp ? new Date(alert.timestamp).toLocaleTimeString([], { hour12: false }) : '--';
             return (
               <div key={alert.key} className="flex items-center gap-3 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-2.5">
-                <img
-                  src={photo ? dsVideoSrc(photo) : ''}
-                  alt={alert.personName}
-                  className="h-10 w-10 shrink-0 rounded-md border border-[var(--bd)] bg-[var(--bg1solid)] object-cover"
-                  onError={(event) => { event.currentTarget.style.visibility = 'hidden'; }}
-                />
+                <ExpandableSnap src={photo ? dsVideoSrc(photo) : ''} alt={alert.personName} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-bold text-[var(--tx)]">Face match — {alert.personName}</div>
                   <div className="mt-0.5 truncate text-[11px] text-[var(--tx3)]">
@@ -1303,14 +1353,38 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
   );
 }
 
-function AttendanceLogPanel({ usersLogs }) {
+function AttendanceLogPanel({ usersLogs, onDelete }) {
   const rows = useMemo(() => buildAttendanceRows(usersLogs), [usersLogs]);
-  const avgConfidence = useMemo(() => {
-    const values = rows
-      .map((row) => Number(String(row.confidence).replace('%', '')))
-      .filter((n) => !Number.isNaN(n));
-    return values.length ? Math.round(values.reduce((sum, n) => sum + n, 0) / values.length) : null;
+  const [selected, setSelected] = useState(() => new Set());
+
+  // Drop selections that no longer exist after an external refresh.
+  useEffect(() => {
+    setSelected((current) => {
+      const ids = new Set(rows.map((row) => row.id));
+      const next = new Set([...current].filter((id) => ids.has(id)));
+      return next.size === current.size ? current : next;
+    });
   }, [rows]);
+
+  const allSelected = rows.length > 0 && selected.size === rows.length;
+  const toggleOne = (id) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(rows.map((row) => row.id)));
+
+  const deleteIds = (ids) => {
+    if (!ids.length) return;
+    onDelete?.(ids);
+    setSelected((current) => {
+      const next = new Set(current);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+  };
 
   return (
     <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
@@ -1321,8 +1395,20 @@ function AttendanceLogPanel({ usersLogs }) {
             Generated from your clip
           </span>
         </div>
-        <div className="text-[11px] text-[var(--tx3)]">
-          {rows.length} registered · {rows.length} events{avgConfidence != null ? ` · avg ${avgConfidence}% conf` : ''}
+        <div className="flex items-center gap-3">
+          {selected.size > 0 && (
+            <button
+              type="button"
+              onClick={() => deleteIds([...selected])}
+              className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 text-[11px] font-bold text-red-500 transition-colors hover:bg-red-100"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete {selected.size} selected
+            </button>
+          )}
+          <span className="text-[11px] text-[var(--tx3)]">
+            {rows.length} registered · {rows.length} events
+          </span>
         </div>
       </div>
 
@@ -1332,41 +1418,67 @@ function AttendanceLogPanel({ usersLogs }) {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-[var(--bd)]">
-          <table className="w-full min-w-[620px] text-left text-xs">
+          <table className="w-full min-w-[600px] text-left text-xs">
             <thead className="bg-[var(--bg2)] text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--tx3)]">
               <tr>
+                <th className="w-10 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="h-3.5 w-3.5 cursor-pointer accent-[var(--blue)]"
+                    aria-label="Select all rows"
+                  />
+                </th>
                 <th className="px-3 py-2">Snap</th>
                 <th className="px-3 py-2">Person</th>
                 <th className="px-3 py-2">Check-in</th>
                 <th className="px-3 py-2">Check-out</th>
-                <th className="px-3 py-2">Duration</th>
-                <th className="px-3 py-2 text-right">Confidence</th>
+                <th className="px-3 py-2">Timestamp</th>
+                <th className="w-12 px-3 py-2 text-right">Del</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, index) => (
-                <tr key={`attendance-${index}`} className="border-t border-[var(--bd)]">
-                  <td className="px-3 py-2">
-                    {row.photo ? (
-                      <img
-                        src={dsVideoSrc(row.photo)}
-                        alt={row.name}
-                        className="h-9 w-9 rounded-md border border-[var(--bd)] object-cover"
-                        onError={(event) => { event.currentTarget.style.visibility = 'hidden'; }}
+              {rows.map((row) => {
+                const isSelected = selected.has(row.id);
+                return (
+                  <tr
+                    key={row.id}
+                    className={`border-t border-[var(--bd)] align-top ${isSelected ? 'bg-[var(--blue)]/5' : ''}`}
+                  >
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleOne(row.id)}
+                        className="h-3.5 w-3.5 cursor-pointer accent-[var(--blue)]"
+                        aria-label={`Select ${row.name}`}
                       />
-                    ) : (
-                      <span className="grid h-9 w-9 place-items-center rounded-md border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx3)]">
-                        <User className="h-4 w-4" />
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 font-semibold text-[var(--tx)]">{row.name}</td>
-                  <td className="px-3 py-2 text-[var(--tx2)]">{row.checkIn}</td>
-                  <td className="px-3 py-2 text-[var(--tx2)]">{row.checkOut}</td>
-                  <td className="px-3 py-2 font-semibold text-emerald-500">{row.duration}</td>
-                  <td className="px-3 py-2 text-right font-semibold text-[var(--tx)]">{row.confidence}</td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-3 py-2">
+                      <ExpandableSnap
+                        src={row.photo ? dsVideoSrc(row.photo) : ''}
+                        alt={row.name}
+                        size="h-9 w-9"
+                      />
+                    </td>
+                    <td className="px-3 py-2 font-semibold text-[var(--tx)]">{row.name}</td>
+                    <td className="px-3 py-2 text-[var(--tx2)]">{row.checkIn}</td>
+                    <td className="px-3 py-2 text-[var(--tx2)]">{row.checkOut}</td>
+                    <td className="whitespace-nowrap px-3 py-2 font-semibold text-[var(--tx)]">{row.timestamp}</td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => deleteIds([row.id])}
+                        className="grid h-7 w-7 cursor-pointer place-items-center rounded-md text-red-500 transition-colors hover:bg-red-50"
+                        aria-label={`Delete ${row.name}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1375,98 +1487,117 @@ function AttendanceLogPanel({ usersLogs }) {
   );
 }
 
-function SessionAnalyticsPanel({ analytics }) {
-  const demosRun = analytics?.demosRun ?? 0;
-  const eventsDetected = analytics?.eventsDetected ?? 0;
-  const avgConfidence = analytics?.avgConfidence ?? 0;
-  const detectionsTested = analytics?.detectionsTested ?? 0;
-  const byDetection = Object.entries(analytics?.byDetection || {});
-  const maxEvents = Math.max(1, ...byDetection.map(([, stats]) => stats?.events || 0));
+function DemoReportsPanel({ usersLogs, clipName, minConfidence, analytics }) {
+  const rows = useMemo(() => buildAttendanceRows(usersLogs), [usersLogs]);
+  const hasData = rows.length > 0;
+  const exportParams = { rows, detectionName: 'Face Recognition', clipName, minConfidence, analytics };
+
+  // Prefer the live-demo-analytics figures (event count, confidence, last run)
+  // over the in-session attendance rows when the endpoint has responded.
+  const analyticsRows = Array.isArray(analytics?.byDetection) ? analytics.byDetection : [];
+  const faceRow = analyticsRows.find(
+    (row) => row.settingType === 'faceAuthenticationSettings' || row.settingType === 'attendanceSettings',
+  );
+  const lastRunAt = faceRow?.lastEventAt || faceRow?.lastRunAt;
+
+  // One processed clip = one report entry for this session.
+  const reports = hasData
+    ? [
+        {
+          id: 'face-recognition-attendance',
+          title: 'Face Recognition — Attendance Log',
+          meta: [
+            lastRunAt
+              ? new Date(lastRunAt).toLocaleString([], { hour12: false })
+              : new Date().toLocaleTimeString([], { hour12: false }),
+            clipName,
+            minConfidence != null ? `min conf ${minConfidence}%` : null,
+            faceRow?.avgConfidence != null ? `avg ${faceRow.avgConfidence}% conf` : null,
+          ]
+            .filter(Boolean)
+            .join('  ·  '),
+          events: faceRow?.events ?? rows.length,
+        },
+      ]
+    : [];
 
   return (
     <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
-      <div className="mb-3 flex items-center gap-2">
-        <h2 className="text-[15px] font-bold text-[var(--tx)]">Session Analytics</h2>
-        <span className="rounded-md border border-[var(--bd)] bg-[var(--bg2)] px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--tx3)]">
-          Included in every report
-        </span>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="text-sm font-bold text-[var(--tx)]">Demo reports</div>
+          {hasData && (
+            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] px-1.5 text-[11px] font-bold text-white">
+              {reports.length}
+            </span>
+          )}
+          <span className="truncate text-[11px] text-[var(--tx3)]">
+            Every processed demo is kept here for this session.
+          </span>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <button
+            type="button"
+            disabled={!hasData}
+            onClick={() => handleLiveDemoExport('excel', exportParams)}
+            className="inline-flex h-[34px] cursor-pointer items-center gap-[7px] rounded-[9px] bg-gradient-to-br from-[#14b8a6] to-[#22c55e] px-[15px] text-xs font-semibold text-white shadow-[0_6px_16px_rgba(34,197,94,0.28)] transition-shadow hover:shadow-[0_8px_22px_rgba(34,197,94,0.45)] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+          >
+            <Download className="h-3.5 w-3.5" />
+            All · Excel
+          </button>
+          <button
+            type="button"
+            disabled={!hasData}
+            onClick={() => handleLiveDemoExport('pdf', exportParams)}
+            className="inline-flex h-[34px] cursor-pointer items-center gap-[7px] rounded-[9px] bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] px-[15px] text-xs font-semibold text-white shadow-[0_6px_16px_rgba(99,102,241,0.3)] transition-shadow hover:shadow-[0_8px_22px_rgba(124,92,255,0.45)] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+          >
+            <Download className="h-3.5 w-3.5" />
+            All · PDF
+          </button>
+        </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-3">
-          <div className="text-[11px] font-semibold text-[var(--tx3)]">Demos run</div>
-          <div className="mt-1 text-2xl font-bold text-[var(--blue)]">{demosRun}</div>
+      {reports.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-[var(--bd2)] bg-[var(--bg2)] p-6 text-center text-xs text-[var(--tx3)]">
+          No reports yet — process a clip to generate one.
         </div>
-        <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-3">
-          <div className="text-[11px] font-semibold text-[var(--tx3)]">Events detected</div>
-          <div className="mt-1 text-2xl font-bold text-[var(--tx)]">{eventsDetected}</div>
-        </div>
-        <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-3">
-          <div className="text-[11px] font-semibold text-[var(--tx3)]">Avg confidence</div>
-          <div className="mt-1 text-2xl font-bold text-emerald-500">{avgConfidence}%</div>
-        </div>
-        <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-3">
-          <div className="text-[11px] font-semibold text-[var(--tx3)]">Detections tested</div>
-          <div className="mt-1 text-2xl font-bold text-[var(--violet)]">{detectionsTested}</div>
-        </div>
-      </div>
-
-      {byDetection.length > 0 && (
-        <div className="mt-3 space-y-2">
-          {byDetection.map(([key, stats]) => (
-            <div key={key} className="flex items-center gap-3 text-xs">
-              <span className="w-40 shrink-0 truncate font-semibold text-[var(--tx)]">
-                {detections.find((item) => item.settingType === key)?.name || key}
-              </span>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--bg2)]">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-[var(--blue)] to-[var(--violet)]"
-                  style={{ width: `${Math.min(100, ((stats?.events || 0) / maxEvents) * 100)}%` }}
-                />
+      ) : (
+        <div className="space-y-2">
+          {reports.map((report) => (
+            <div
+              key={report.id}
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-3"
+            >
+              <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--blue)]" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-bold text-[var(--tx)]">{report.title}</div>
+                <div className="mt-0.5 truncate text-[11px] text-[var(--tx3)]">{report.meta}</div>
               </div>
-              <span className="w-28 shrink-0 text-right text-[var(--tx3)]">
-                {stats?.runs || 0} run{stats?.runs === 1 ? '' : 's'} · {stats?.events || 0} events
+              <span className="shrink-0 rounded-md border border-[var(--bd)] bg-[var(--bg1solid)] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--tx3)]">
+                {report.events} event{report.events === 1 ? '' : 's'}
               </span>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleLiveDemoExport('excel', exportParams)}
+                  className="inline-flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(34,197,94,0.45)] px-3 text-[11.5px] font-semibold text-[var(--ok)] transition-colors hover:bg-[rgba(34,197,94,0.1)]"
+                >
+                  <Download className="h-3 w-3" />
+                  Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleLiveDemoExport('pdf', exportParams)}
+                  className="inline-flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(59,130,246,0.4)] px-3 text-[11.5px] font-semibold text-[var(--blue)] transition-colors hover:bg-[rgba(59,130,246,0.1)]"
+                >
+                  <Download className="h-3 w-3" />
+                  PDF
+                </button>
+              </div>
             </div>
           ))}
         </div>
       )}
-    </section>
-  );
-}
-
-function DemoReportsPanel({ usersLogs, clipName, minConfidence }) {
-  const rows = useMemo(() => buildAttendanceRows(usersLogs), [usersLogs]);
-  const exportParams = { rows, detectionName: 'Face Recognition', clipName, minConfidence };
-
-  return (
-    <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-sm font-bold text-[var(--tx)]">Demo reports</div>
-          <div className="mt-1 text-[11px] text-[var(--tx3)]">Every processed demo is kept here for this session.</div>
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={rows.length === 0}
-            onClick={() => handleLiveDemoExport('excel', exportParams)}
-            className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-emerald-400 px-3 text-xs font-bold text-emerald-500 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Save className="h-3.5 w-3.5" />
-            Excel
-          </button>
-          <button
-            type="button"
-            disabled={rows.length === 0}
-            onClick={() => handleLiveDemoExport('pdf', exportParams)}
-            className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] px-3 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Save className="h-3.5 w-3.5" />
-            PDF
-          </button>
-        </div>
-      </div>
     </section>
   );
 }
@@ -1538,6 +1669,7 @@ export default function LiveDemo({ active = true }) {
   const [videoRecord, setVideoRecord] = useState(null);
   const [recordVideos, setRecordVideos] = useState([]);
   const [sessionAnalytics, setSessionAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [processJob, setProcessJob] = useState(null);
   const [secondsRemaining, setSecondsRemaining] = useState(null);
   const [demoIncidents, setDemoIncidents] = useState({ items: [], totalCount: 0 });
@@ -1609,6 +1741,28 @@ export default function LiveDemo({ active = true }) {
       return true;
     });
   }, [activeCategory, search]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const settingType = analyticsSettingType(selected.settingType);
+
+    setAnalyticsLoading(true);
+    getLiveDemoAnalytics({ detectionTypes: settingType ? [settingType] : undefined })
+      .then((analyticsData) => {
+        if (!cancelled) setSessionAnalytics(analyticsData || null);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Failed to load live demo detection analytics', error);
+          toast.error('Failed to load detection analytics', COMPACT_TOAST);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAnalyticsLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [selected.settingType]);
 
   useEffect(() => {
     return () => {
@@ -1847,7 +2001,7 @@ export default function LiveDemo({ active = true }) {
       try {
         const isFaceRecognition = processingSettingTypeRef.current === 'faceAuthenticationSettings';
         const [analyticsData, attendanceData] = await Promise.all([
-          getVideoRecordAnalytics(recordId),
+          getLiveDemoAnalytics({ detectionTypes: [analyticsSettingType(processingSettingTypeRef.current)] }),
           isFaceRecognition ? getDemoAttendanceLogs({ limit: 10, isExport: false, removeUnknown: true }) : Promise.resolve(null),
         ]);
         setSessionAnalytics(analyticsData || null);
@@ -1893,20 +2047,43 @@ export default function LiveDemo({ active = true }) {
   }, [clipStatus, secondsRemaining]);
 
   useEffect(() => {
-    let frameId = 0;
+    const timers = [];
     const updateVideoRect = () => {
       const stage = stageRef.current;
       if (!stage) return;
       const rect = stage.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
       setVideoRect(containRect(rect.width, rect.height, videoSize.w || 1000, videoSize.h || 562));
     };
-    frameId = requestAnimationFrame(updateVideoRect);
+    // rAF catches the first paint; the timeouts re-measure after the browser
+    // fullscreen transition settles (the stage only reaches its final
+    // h-screen/w-screen size a frame or two later, which is why the drawing
+    // overlay was mis-sized in fullscreen).
+    timers.push(requestAnimationFrame(updateVideoRect));
+    [60, 160, 320].forEach((delay) => timers.push(setTimeout(updateVideoRect, delay)));
     window.addEventListener('resize', updateVideoRect);
+    document.addEventListener('fullscreenchange', updateVideoRect);
     return () => {
-      cancelAnimationFrame(frameId);
+      cancelAnimationFrame(timers[0]);
+      timers.slice(1).forEach(clearTimeout);
       window.removeEventListener('resize', updateVideoRect);
+      document.removeEventListener('fullscreenchange', updateVideoRect);
     };
   }, [playerVideoUrl, videoSize, isClipFullscreen]);
+
+  // Demo attendance rows have no delete endpoint — they regenerate on the next
+  // process — so removal here just prunes the locally-held list.
+  const handleDeleteAttendanceRows = (ids) => {
+    const drop = new Set(ids);
+    setDemoAttendanceLogs((current) => {
+      if (!current?.usersLogs?.length) return current;
+      const usersLogs = current.usersLogs.filter((log, index) => {
+        const id = log.logId || log._id || log.userId || `row-${index}`;
+        return !drop.has(id);
+      });
+      return { ...current, usersLogs };
+    });
+  };
 
   const resetClipState = async ({ deleteRemote = false } = {}) => {
     if (deleteRemote && uploadedVideoPath) {
@@ -1965,6 +2142,48 @@ export default function LiveDemo({ active = true }) {
       x: Math.round((xInVideo / targetBox.width) * w),
       y: Math.round((yInVideo / targetBox.height) * h),
     };
+  };
+
+  // Map a pointer position to video-space coordinates against the visible video
+  // box (videoRect), clamped inside it. Used by the corner-drag handles.
+  const pointerToVideoSpace = (event) => {
+    const stage = stageRef.current;
+    if (!stage || !videoRect.width || !videoRect.height) return null;
+    const stageBox = stage.getBoundingClientRect();
+    const w = videoSize.w || 1000;
+    const h = videoSize.h || 562;
+    const relX = event.clientX - stageBox.left - videoRect.left;
+    const relY = event.clientY - stageBox.top - videoRect.top;
+    const clampedX = Math.min(Math.max(relX, 0), videoRect.width);
+    const clampedY = Math.min(Math.max(relY, 0), videoRect.height);
+    return {
+      x: Math.round((clampedX / videoRect.width) * w),
+      y: Math.round((clampedY / videoRect.height) * h),
+    };
+  };
+
+  // Drag a single corner of the in-progress polygon (`points`) — the zone drawn
+  // via Start Drawing / Min Area / Max Area, before it is saved. Works with a
+  // full polygon, so users can reshape after placing all points.
+  const handlePointDragStart = (pointIndex) => (event) => {
+    if (drawing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+
+    const move = (moveEvent) => {
+      const next = pointerToVideoSpace(moveEvent);
+      if (!next) return;
+      const updated = pointsRef.current.map((point, index) => (index === pointIndex ? next : point));
+      pointsRef.current = updated;
+      setPoints(updated);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
   };
 
   const handleDrawingClick = (event) => {
@@ -2478,7 +2697,7 @@ export default function LiveDemo({ active = true }) {
       setClipProgress(60);
 
       const [analyticsData, incidentsData, attendanceData] = await Promise.all([
-        getVideoRecordAnalytics(recordId),
+        getLiveDemoAnalytics({ detectionTypes: [analyticsSettingType(selected.settingType)] }),
         getDemoIncidents({ limit: 10, incidentTypeFilter: [selected.settingType] }),
         selected.settingType === 'faceAuthenticationSettings'
           ? getDemoAttendanceLogs({ limit: 10, isExport: false })
@@ -2672,17 +2891,33 @@ export default function LiveDemo({ active = true }) {
                 className={`relative grid min-h-[260px] place-items-center overflow-hidden bg-black ${drawing ? 'cursor-crosshair' : ''} ${isClipFullscreen ? 'h-screen w-screen' : ''}`}
               >
                 {playerVideoUrl ? (
-                  <video
-                    ref={videoRef}
-                    src={playerVideoUrl}
-                    className={`${isClipFullscreen ? 'h-screen w-screen max-h-none' : 'h-full max-h-[420px] w-full'} object-contain`}
-                    controls
-                    muted
-                    onLoadedMetadata={handleVideoMetadata}
-                    onClick={(event) => {
-                      if (!drawing) event.preventDefault();
-                    }}
-                  />
+                  <>
+                    {/* Keep every native control (including the ⋮ overflow menu)
+                        but drop the fullscreen button — only the custom expand
+                        button drives the drawing overlay, so two fullscreen
+                        affordances don't confuse users. */}
+                    <style>{`
+                      .live-demo-video::-webkit-media-controls-fullscreen-button { display: none !important; }
+                    `}</style>
+                    <video
+                      ref={videoRef}
+                      src={playerVideoUrl}
+                      className={`live-demo-video ${isClipFullscreen ? 'h-screen w-screen max-h-none' : 'h-full max-h-[420px] w-full'} object-contain`}
+                      controls
+                      muted
+                      controlsList="nofullscreen"
+                      onLoadedMetadata={handleVideoMetadata}
+                      onClick={(event) => {
+                        if (!drawing) event.preventDefault();
+                      }}
+                      onDoubleClick={(event) => {
+                        // Double-click toggles the custom expand/collapse
+                        // (never the browser's native fullscreen).
+                        event.preventDefault();
+                        if (!drawing) toggleClipFullscreen();
+                      }}
+                    />
+                  </>
                 ) : (
                   <FileVideo className="h-10 w-10 text-white/70" />
                 )}
@@ -2742,7 +2977,17 @@ export default function LiveDemo({ active = true }) {
                         />
                       )}
                       {points.map((point, index) => (
-                        <circle key={`point-${index}`} cx={point.x} cy={point.y} r="7" fill="#fff" stroke="rgba(59,130,246,.95)" strokeWidth="3" />
+                        <circle
+                          key={`point-${index}`}
+                          cx={point.x}
+                          cy={point.y}
+                          r={drawing ? 7 : 10}
+                          fill="#fff"
+                          stroke="rgba(59,130,246,.95)"
+                          strokeWidth="3"
+                          style={{ pointerEvents: drawing ? 'none' : 'auto', cursor: drawing ? 'default' : 'grab', touchAction: 'none' }}
+                          onPointerDown={handlePointDragStart(index)}
+                        />
                       ))}
                     </svg>
                     <div
@@ -2819,24 +3064,23 @@ export default function LiveDemo({ active = true }) {
                   </>
                 )}
                 {isClipBusy && (
-                  <div className="absolute inset-0 z-10 grid place-items-center bg-black/55 text-center text-white backdrop-blur-sm">
-                    <div>
-                      {clipStatus === 'awaiting-ds' ? (
-                        <Loader className="mx-auto h-9 w-9 animate-spin text-white" />
-                      ) : (
-                        <div className="text-3xl font-bold">{clipProgress}%</div>
-                      )}
-                      <div className="mt-3 max-w-[260px] text-[11px] font-bold uppercase tracking-[0.2em] text-white/75">{statusLabel}</div>
-                      {clipStatus !== 'awaiting-ds' && (
-                        <div className="mx-auto mt-4 h-1.5 w-48 overflow-hidden rounded-full bg-white/20">
-                          <div
-                            className="h-full rounded-full bg-gradient-to-r from-[var(--blue)] to-[var(--violet)] transition-all"
-                            style={{ width: `${clipProgress}%` }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <VideoProcessingLoader
+                    title={
+                      clipStatus === 'uploading'
+                        ? 'Uploading Video…'
+                        : 'Processing Video…'
+                    }
+                    subtitle={
+                      clipStatus === 'uploading'
+                        ? 'Uploading your clip, please wait'
+                        : clipStatus === 'awaiting-ds'
+                          ? (secondsRemaining != null
+                              ? `Analyzing video content — about ${secondsRemaining}s remaining`
+                              : 'Analyzing video content, please wait')
+                          : 'Analyzing video content, please wait'
+                    }
+                    progress={clipStatus === 'awaiting-ds' ? null : clipProgress}
+                  />
                 )}
               </div>
 
@@ -2935,19 +3179,6 @@ export default function LiveDemo({ active = true }) {
         ) : (
           selectedDetection === 'Face Recognition' && <FaceRecognitionConfig confidence={confidence} setConfidence={setConfidence} />
         )}
-        {selectedDetection === 'Face Recognition' && (
-          <AttendanceLogPanel usersLogs={demoAttendanceLogs?.usersLogs || []} />
-        )}
-        {selectedDetection === 'Face Recognition' && (
-          <SessionAnalyticsPanel analytics={sessionAnalytics} />
-        )}
-        {selectedDetection === 'Face Recognition' && (
-          <DemoReportsPanel
-            usersLogs={demoAttendanceLogs?.usersLogs || []}
-            clipName={clipFile?.name}
-            minConfidence={confidence}
-          />
-        )}
         {selectedDetection !== 'Face Recognition' && selectedConfig && (
           <DetectionConfigPanel
             detectionName={selectedDetection}
@@ -2964,6 +3195,29 @@ export default function LiveDemo({ active = true }) {
           />
         )}
       </div>
+
+      <div className="mt-4 space-y-4">
+        {selectedDetection === 'Face Recognition' && (
+          <AttendanceLogPanel
+            usersLogs={demoAttendanceLogs?.usersLogs || []}
+            onDelete={handleDeleteAttendanceRows}
+          />
+        )}
+        <SessionAnalyticsPanel
+          analytics={sessionAnalytics}
+          loading={analyticsLoading}
+          selectedDetectionName={selectedDetection}
+        />
+        {selectedDetection === 'Face Recognition' && (
+          <DemoReportsPanel
+            usersLogs={demoAttendanceLogs?.usersLogs || []}
+            clipName={clipFile?.name}
+            minConfidence={confidence}
+            analytics={sessionAnalytics}
+          />
+        )}
+      </div>
+
       <SaveDemoAreaModal
         open={showSaveAreaModal}
         detectionName={selectedDetection}
