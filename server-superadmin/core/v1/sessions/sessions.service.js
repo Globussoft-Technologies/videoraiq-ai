@@ -3,6 +3,7 @@ import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
 import sessionModel from "./sessions.model.js";
 import blockedDeviceModel from "./blockedDevice.model.js";
+import { getOnlineSessionIds } from "./sessionPresence.js";
 import usersModel from "../users/users.model.js";
 import adminModel from "../admin/admin.model.js";
 
@@ -35,9 +36,18 @@ function pagination(req) {
   return { skip, limit };
 }
 
+function requestedStatus(req) {
+  return req.query?.status ?? req.body?.status;
+}
+
+// "online" is a live Redis-presence filter, not a stored status. For the DB
+// query it means status: "active"; the online/offline split is applied after
+// withOnlineFlag(). Every other value maps straight through.
 function statusFilter(req) {
-  const status = req.query?.status ?? req.body?.status;
-  return status ? { status } : {};
+  const status = requestedStatus(req);
+  if (!status) return {};
+  if (status === "online") return { status: "active" };
+  return { status };
 }
 
 function sessionQueryFilters(req) {
@@ -93,16 +103,43 @@ async function filterForUserId(req, userId) {
   return { filter: { adminId, memberId: managedUser._id, userType: "user" } };
 }
 
+// Adds `online: true/false` to each session row from live Redis presence.
+// Only "active" sessions can meaningfully be online — a logged_out / blocked /
+// expired row is always offline regardless of any stale presence key.
+async function withOnlineFlag(sessions = []) {
+  const activeIds = sessions
+    .filter((session) => session.status === "active")
+    .map((session) => session.sessionId);
+  const onlineIds = await getOnlineSessionIds(activeIds);
+  return sessions.map((session) => ({
+    ...session,
+    online: session.status === "active" && onlineIds.has(session.sessionId),
+  }));
+}
+
 class SessionsService {
   async getUserSessions(req, res) {
     try {
       const { skip, limit } = pagination(req);
       const filter = { ...currentUserFilter(req), ...statusFilter(req) };
+
+      if (requestedStatus(req) === "online") {
+        const activeSessions = await sessionModel.find(filter).sort({ lastActiveAt: -1 }).lean();
+        const onlineSessions = (await withOnlineFlag(activeSessions)).filter((session) => session.online);
+        return res.status(200).send(Response.userSuccessResp("Sessions fetched successfully.", {
+          totalCount: onlineSessions.length,
+          skip,
+          limit,
+          data: onlineSessions.slice(skip, skip + limit),
+        }));
+      }
+
       const [sessions, totalCount] = await Promise.all([
         sessionModel.find(filter).sort({ lastActiveAt: -1 }).skip(skip).limit(limit).lean(),
         sessionModel.countDocuments(filter),
       ]);
-      return res.status(200).send(Response.userSuccessResp("Sessions fetched successfully.", { totalCount, skip, limit, data: sessions }));
+      const data = await withOnlineFlag(sessions);
+      return res.status(200).send(Response.userSuccessResp("Sessions fetched successfully.", { totalCount, skip, limit, data }));
     } catch (error) {
       logger.error(error);
       return res.status(500).send(Response.errorResp("Failed to fetch sessions", error.message));
@@ -121,11 +158,26 @@ class SessionsService {
         filter = { ...resolved.filter, ...statusFilter(req), ...sessionQueryFilters(req) };
       }
 
+      if (requestedStatus(req) === "online") {
+        // Presence lives in Redis, so it can't be paginated at the DB level:
+        // pull every active row for this filter, flag them, keep the online
+        // ones, and page in memory.
+        const activeSessions = await sessionModel.find(filter).sort({ lastActiveAt: -1 }).lean();
+        const onlineSessions = (await withOnlineFlag(activeSessions)).filter((session) => session.online);
+        return res.status(200).send(Response.userSuccessResp("Admin sessions fetched successfully.", {
+          totalCount: onlineSessions.length,
+          skip,
+          limit,
+          data: onlineSessions.slice(skip, skip + limit),
+        }));
+      }
+
       const [sessions, totalCount] = await Promise.all([
         sessionModel.find(filter).sort({ lastActiveAt: -1 }).skip(skip).limit(limit).lean(),
         sessionModel.countDocuments(filter),
       ]);
-      return res.status(200).send(Response.userSuccessResp("Admin sessions fetched successfully.", { totalCount, skip, limit, data: sessions }));
+      const data = await withOnlineFlag(sessions);
+      return res.status(200).send(Response.userSuccessResp("Admin sessions fetched successfully.", { totalCount, skip, limit, data }));
     } catch (error) {
       logger.error(error);
       return res.status(500).send(Response.errorResp("Failed to fetch admin sessions", error.message));
@@ -199,6 +251,22 @@ class SessionsService {
       const adminMap = new Map(admins.map((admin) => [String(admin._id), admin]));
       const userMap = new Map(users.map((user) => [String(user._id), user]));
 
+      // Live "how many of this owner's active sessions are online right now".
+      // The aggregation above doesn't keep individual sessionIds, so pull the
+      // active ones for the owners in this summary and check Redis presence.
+      const activeSessions = await sessionModel
+        .find({ ...filter, status: "active" })
+        .select("sessionId adminId memberId userType")
+        .lean();
+      const onlineIds = await getOnlineSessionIds(activeSessions.map((s) => s.sessionId));
+      const onlineCountByOwner = new Map();
+      activeSessions.forEach((s) => {
+        if (!onlineIds.has(s.sessionId)) return;
+        const ownerId = s.userType === "user" ? s.memberId : s.adminId;
+        const key = `${s.userType}:${String(ownerId || "")}`;
+        onlineCountByOwner.set(key, (onlineCountByOwner.get(key) || 0) + 1);
+      });
+
       const data = rows.map((row) => {
         const ownerId = row._id.userType === "user" ? row._id.memberId : row._id.adminId;
         const owner = row._id.userType === "user" ? userMap.get(String(ownerId)) : adminMap.get(String(ownerId));
@@ -214,6 +282,7 @@ class SessionsService {
           ownerEmail: owner?.email || "",
           sessionCount: row.sessionCount,
           activeCount: row.activeCount,
+          onlineCount: onlineCountByOwner.get(`${row._id.userType}:${String(ownerId || "")}`) || 0,
           blockedCount: row.blockedCount,
           loggedOutCount: row.loggedOutCount,
           lastActiveAt: row.lastActiveAt,
@@ -234,7 +303,8 @@ class SessionsService {
       if (!isSuperAdmin(req) && !authUser(req).memberId) delete filter.memberId;
       const session = await sessionModel.findOne({ ...filter, sessionId: req.params.sessionId }).lean();
       if (!session) return res.status(404).send(Response.notFoundResp("Session not found"));
-      return res.status(200).send(Response.userSuccessResp("Session fetched successfully.", session));
+      const [withOnline] = await withOnlineFlag([session]);
+      return res.status(200).send(Response.userSuccessResp("Session fetched successfully.", withOnline));
     } catch (error) {
       logger.error(error);
       return res.status(500).send(Response.errorResp("Failed to fetch session", error.message));
