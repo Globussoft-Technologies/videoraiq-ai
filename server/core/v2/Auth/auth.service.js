@@ -171,10 +171,14 @@ class AUTHService {
       const userData = await this._getAmemberUserForSso(payload);
       this.usedImpersonationNonces.set(payload.nonce, payload.exp);
 
-      return this.verifyUser({
-        body: { login: userData.login, pass: "__signed_amember_sso__" },
-        amemberSsoUserData: userData,
-      }, res);
+      req.body = {
+        ...req.body,
+        login: userData.login,
+        pass: "__signed_amember_sso__",
+      };
+      req.amemberSsoUserData = userData;
+
+      return this.verifyUser(req, res);
     } catch (error) {
       logger.warn("aMember user SSO rejected:", error.message);
       const configurationError = error.message === "aMember SSO is not configured";
@@ -337,6 +341,115 @@ class AUTHService {
       }
     }
     return latest;
+  }
+
+  async getAmemberProductNameFromInvoices(userId, productId) {
+    if (!userId) return null;
+
+    const userParams = new URLSearchParams({
+      _key: this.apiKey,
+      "_filter[user_id]": String(userId),
+      "_nested[]": "invoices",
+      _count: "1",
+    });
+    const userResponse = await fetchWithTimeout(
+      `${this.baseUrl}/users?${userParams}`
+    );
+    if (!userResponse.ok) {
+      throw new Error(`aMember user invoices API returned ${userResponse.status}`);
+    }
+
+    const users = await userResponse.json();
+    const invoices = [...(users?.[0]?.nested?.invoices || [])].sort(
+      (left, right) => Number(right.invoice_id) - Number(left.invoice_id)
+    );
+
+    for (const invoice of invoices) {
+      const invoiceParams = new URLSearchParams({ _key: this.apiKey });
+      const invoiceResponse = await fetchWithTimeout(
+        `${this.baseUrl}/invoices/${encodeURIComponent(invoice.invoice_id)}?${invoiceParams}`
+      );
+      if (!invoiceResponse.ok) continue;
+
+      const invoiceResult = await invoiceResponse.json();
+      const invoiceRecord = Array.isArray(invoiceResult)
+        ? invoiceResult[0]
+        : invoiceResult?.[0] || invoiceResult;
+      const product = invoiceRecord?.nested?.["invoice-items"]?.find(
+        (item) => String(item?.item_id) === String(productId)
+      );
+      if (product?.item_title) return product.item_title;
+    }
+
+    return null;
+  }
+
+  async getCurrentPlanDetails(
+    subscriptions,
+    userId,
+    bypassUser = null
+  ) {
+    const currentSubscription = this._resolveLatestSubscription(subscriptions);
+    if (!currentSubscription) return null;
+
+    const rawProductId = String(currentSubscription.plan);
+    const numericProductId = Number.parseInt(rawProductId, 10);
+    const id = Number.isNaN(numericProductId) ? rawProductId : numericProductId;
+
+    if (bypassUser) {
+      return {
+        id,
+        name: bypassUser.planName || bypassUser.plan || "Bypass plan",
+        expiresAt: currentSubscription.expiry,
+      };
+    }
+
+    let productLookupError = null;
+    try {
+      const params = new URLSearchParams({ _key: this.apiKey });
+      const response = await fetchWithTimeout(
+        `${this.baseUrl}/products/${encodeURIComponent(rawProductId)}?${params}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`aMember product API returned ${response.status}`);
+      }
+
+      const result = await response.json();
+      const product = Array.isArray(result) ? result[0] : result?.[0] || result;
+      const name = product?.title || product?.name;
+      if (name) {
+        return { id, name, expiresAt: currentSubscription.expiry };
+      }
+    } catch (error) {
+      productLookupError = error;
+    }
+
+    // Existing deployments may not grant products:get to the aMember API key.
+    // Invoice items contain the same product title, so use the permissions the
+    // login integration already has as a backward-compatible fallback.
+    try {
+      const name = await this.getAmemberProductNameFromInvoices(
+        userId,
+        rawProductId
+      );
+      if (name) {
+        return { id, name, expiresAt: currentSubscription.expiry };
+      }
+    } catch (error) {
+      logger.warn(
+        `Unable to load aMember product ${rawProductId} from invoices: ${error.message}`
+      );
+    }
+
+    // Product metadata must not make an otherwise valid login fail. The ID
+    // and expiry still identify the current plan if aMember is unavailable.
+    if (productLookupError) {
+      logger.warn(
+        `Unable to load aMember product ${rawProductId}: ${productLookupError.message}`
+      );
+    }
+    return { id, name: null, expiresAt: currentSubscription.expiry };
   }
 
   // POST a license payload to a single endpoint. Best-effort: never throws.
@@ -1078,6 +1191,12 @@ return bypassUsers.find(
         }
       }
 
+      const currentPlan = await this.getCurrentPlanDetails(
+        userData?.subscriptions,
+        userData?.user_id,
+        bypassUser
+      );
+
       const tokenPayload = {
         status: userData?.ok,
         user_id: userData?.user_id,
@@ -1089,6 +1208,7 @@ return bypassUsers.find(
         name_f: userData?.name_f ?? "",
         name_l: userData?.name_l ?? "",
         userSubscriptionType: userData?.subscriptions,
+        currentPlan,
         created_from: "EMP",
         enablePhoneRecipients: config.get("enablePhoneRecipients"),
         // Resolved RTSP stream host (per-admin override or global default),
