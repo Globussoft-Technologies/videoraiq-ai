@@ -1471,6 +1471,60 @@ function DemoReportsPanel({ usersLogs, clipName, minConfidence }) {
   );
 }
 
+function DemoHistoryPanel({ history, loading, activeRecordId, onSelect }) {
+  return (
+    <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
+      <div className="mb-3">
+        <div className="text-sm font-bold text-[var(--tx)]">Recent Demos</div>
+        <div className="mt-1 text-[11px] text-[var(--tx3)]">Demos you've run before, most recent first. Click one to load it.</div>
+      </div>
+
+      {loading ? (
+        <div className="grid h-20 place-items-center text-[var(--tx3)]">
+          <Loader className="h-4 w-4 animate-spin" />
+        </div>
+      ) : history.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-[var(--bd2)] bg-[var(--bg2)] p-4 text-center text-xs text-[var(--tx3)]">
+          No demos run yet.
+        </div>
+      ) : (
+        <div className="max-h-[240px] space-y-2 overflow-y-auto pr-1">
+          {history.map((record) => {
+            const id = recordIdOf(record);
+            const settingType = Object.entries(record?.detections || {}).find(([, enabled]) => enabled)?.[0];
+            const name = detections.find((item) => item.settingType === settingType)?.name || 'Live Demo';
+            const ranAt = record?.createdAt ? new Date(record.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+            const ready = (record?.videos || []).some((video) => video?.dsVideoUrl);
+            const isActive = id === activeRecordId;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onSelect(record)}
+                className={`flex w-full cursor-pointer items-center justify-between gap-3 rounded-lg border p-2.5 text-left transition-colors ${
+                  isActive ? 'border-[var(--blue)] bg-[var(--bg2)]' : 'border-[var(--bd)] hover:border-[var(--bd2)] hover:bg-[var(--bg2)]'
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-bold text-[var(--tx)]">{name}</div>
+                  <div className="mt-0.5 truncate text-[11px] text-[var(--tx3)]">{ranAt}</div>
+                </div>
+                <span
+                  className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] ${
+                    ready ? 'border border-emerald-400 text-emerald-500' : 'border border-orange-300 text-orange-500'
+                  }`}
+                >
+                  {ready ? 'Processed' : 'Pending'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function LiveDemo({ active = true }) {
   const [selectedDetection, setSelectedDetection] = useState('Face Recognition');
   const [activeCategory, setActiveCategory] = useState('all');
@@ -1522,6 +1576,8 @@ export default function LiveDemo({ active = true }) {
   const { socket } = useSocket();
   const { user } = useAuth();
   const [matchedAlerts, setMatchedAlerts] = useState([]);
+  const [demoHistory, setDemoHistory] = useState([]);
+  const [demoHistoryLoading, setDemoHistoryLoading] = useState(false);
 
   const selected = detections.find((item) => item.name === selectedDetection) || detections[0];
   const selectedConfig = detectionConfigs[selectedDetection];
@@ -1574,6 +1630,78 @@ export default function LiveDemo({ active = true }) {
     if (!active) videoRef.current?.pause();
   }, [active]);
 
+  // Loads one Live Demo record into every component on the page: video player,
+  // zones, session analytics, and (scoped to that record's video) the matched
+  // alerts / attendance log / incidents panels. Shared by the mount-restore
+  // effect below and by clicking a row in the Recent Demos history list —
+  // both cases are "make this record the active demo", they just start from
+  // a different source (sessionStorage vs. a list click).
+  const loadDemoRecord = async (recordId, { fallbackRecord = null, fallbackStatus, fallbackVideos } = {}) => {
+    const [{ records }, videosData, analyticsData] = await Promise.all([
+      getVideoRecords({ id: recordId, limit: 1 }),
+      getVideoRecordVideos(recordId),
+      getVideoRecordAnalytics(recordId),
+    ]);
+
+    const record = records?.[0] || fallbackRecord;
+    const serverVideos = videosData?.videos || record?.videos || [];
+    const latestSaved = readLiveDemoSession();
+    const videos = serverVideos.some((video) => video?.dsVideoUrl)
+      ? serverVideos
+      : fallbackVideos?.some((video) => video?.dsVideoUrl)
+        ? fallbackVideos
+        : latestSaved?.videos?.some((video) => video?.dsVideoUrl)
+          ? latestSaved.videos
+          : serverVideos;
+    const ready = videos.some((video) => video?.dsVideoUrl);
+    const nextStatus = ready ? 'ready' : fallbackStatus === 'uploaded' ? 'uploaded' : 'awaiting-ds';
+    const video = firstVideoOf(videos);
+    const restoredZones = Array.isArray(video?.zones)
+      ? video.zones.map((zone) => zone.map(([x, y]) => ({ x, y })))
+      : [];
+    const restoredConfigs = Array.isArray(video?.zone_configs)
+      ? video.zone_configs.map((config, index) => ({
+          name: config.name || `Zone ${index + 1}`,
+          capacity: config.capacity ?? '',
+          threshold: config.threshold_sec ?? '',
+        }))
+      : [];
+    const settingType = Object.entries(record?.detections || {}).find(([, enabled]) => enabled)?.[0];
+    const videoId = video?._id || video?.id;
+
+    setVideoRecord(record);
+    setRecordVideos(videos);
+    setSessionAnalytics(analyticsData || null);
+    setClipStatus(nextStatus);
+    setClipProgress(ready || nextStatus === 'uploaded' ? 100 : 75);
+    savedZonesRef.current = restoredZones;
+    setSavedZones(restoredZones);
+    setZoneSettings(syncZoneSettings(restoredConfigs, restoredZones.length));
+    setConfirmedZoneNames(restoredConfigs.map((config, index) => config.name || `Zone ${index + 1}`));
+    if (settingType) processingSettingTypeRef.current = settingType;
+    updateLiveDemoSession({ recordId, videoRecord: record, videos, status: nextStatus, settingType });
+
+    // Scope the event panels to this record's video, not all-time demo data —
+    // a clicked history row should read as "what this run produced".
+    const isFaceRecognition = settingType === 'faceAuthenticationSettings';
+    const [incidentsData, attendanceData] = await Promise.all([
+      videoId
+        ? getDemoIncidents({ limit: 10, videoId, ...(settingType ? { incidentTypeFilter: [settingType] } : {}) })
+        : Promise.resolve({ items: [], totalCount: 0 }),
+      isFaceRecognition && videoId
+        ? getDemoAttendanceLogs({ limit: 10, isExport: false, removeUnknown: true, videoId })
+        : Promise.resolve(null),
+    ]);
+    setDemoIncidents(incidentsData || { items: [], totalCount: 0 });
+    setDemoAttendanceLogs(attendanceData);
+    // Matched Alerts is a live socket feed (accessLogs_${adminId}), not a
+    // fetch — there is nothing to "recover" for a past run beyond what the
+    // attendance log above already shows, so it just clears for the new record.
+    setMatchedAlerts([]);
+
+    return record;
+  };
+
   // Route changes unmount this page. Restore the active record from the small
   // session snapshot, then ask the server whether DS finished while we were away.
   useEffect(() => {
@@ -1605,50 +1733,90 @@ export default function LiveDemo({ active = true }) {
     setClipStatus(restoredStatus);
     setClipProgress(restoredStatus === 'ready' || restoredStatus === 'uploaded' ? 100 : 75);
 
-    Promise.all([
-      getVideoRecords({ id: recordId, limit: 1 }),
-      getVideoRecordVideos(recordId),
-      getVideoRecordAnalytics(recordId),
-    ])
-      .then(([{ records }, videosData, analyticsData]) => {
-        if (cancelled) return;
-        const record = records?.[0] || saved.videoRecord;
-        const serverVideos = videosData?.videos || record?.videos || [];
-        const latestSaved = readLiveDemoSession();
-        const videos = serverVideos.some((video) => video?.dsVideoUrl)
-          ? serverVideos
-          : latestSaved?.videos?.some((video) => video?.dsVideoUrl)
-            ? latestSaved.videos
-            : serverVideos;
-        const ready = videos.some((video) => video?.dsVideoUrl);
-        const nextStatus = ready ? 'ready' : restoredStatus === 'uploaded' ? 'uploaded' : 'awaiting-ds';
-        const savedVideo = firstVideoOf(videos);
-        const restoredZones = Array.isArray(savedVideo?.zones)
-          ? savedVideo.zones.map((zone) => zone.map(([x, y]) => ({ x, y })))
-          : [];
-        const restoredConfigs = Array.isArray(savedVideo?.zone_configs)
-          ? savedVideo.zone_configs.map((config, index) => ({
-              name: config.name || `Zone ${index + 1}`,
-              capacity: config.capacity ?? '',
-              threshold: config.threshold_sec ?? '',
-            }))
-          : [];
-
-        setVideoRecord(record);
-        setRecordVideos(videos);
-        setSessionAnalytics(analyticsData || null);
-        setClipStatus(nextStatus);
-        setClipProgress(ready || nextStatus === 'uploaded' ? 100 : 75);
-        savedZonesRef.current = restoredZones;
-        setSavedZones(restoredZones);
-        setZoneSettings(syncZoneSettings(restoredConfigs, restoredZones.length));
-        setConfirmedZoneNames(restoredConfigs.map((config, index) => config.name || `Zone ${index + 1}`));
-        updateLiveDemoSession({ videoRecord: record, videos, status: nextStatus });
-      })
-      .catch((error) => console.error('Failed to restore active live demo', error));
+    loadDemoRecord(recordId, { fallbackRecord: saved.videoRecord, fallbackStatus: restoredStatus, fallbackVideos: saved.videos })
+      .catch((error) => { if (!cancelled) console.error('Failed to restore active live demo', error); });
 
     return () => { cancelled = true; };
   }, [user?.adminId]);
+
+  // Recent Demos history list — every record this admin has run, newest
+  // first. GET /video-records already sorts { createdAt: -1 } and scopes to
+  // the session admin, so this is a straight list call with no client sort.
+  const loadDemoHistory = async () => {
+    setDemoHistoryLoading(true);
+    try {
+      const { records } = await getVideoRecords({ limit: 20 });
+      setDemoHistory(Array.isArray(records) ? records : []);
+    } catch (error) {
+      console.error('Failed to load live demo history', error);
+    } finally {
+      setDemoHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user?.adminId) return;
+    loadDemoHistory();
+  }, [user?.adminId]);
+
+  // First paint, no in-progress session to restore: if the default detection
+  // (Face Recognition) already has a past run, open it instead of the empty
+  // upload state — same "click a tile with history" behavior as
+  // handleSelectDetection, just for the tile that's selected before any click.
+  useEffect(() => {
+    if (demoHistoryLoading || recordIdOf(videoRecord) || readLiveDemoSession()) return;
+    const item = detections.find((d) => d.name === selectedDetection);
+    const pastRecord = demoHistory.find((record) => record?.detections?.[item?.settingType]);
+    if (pastRecord) openDemoRecord(pastRecord).catch((error) => console.error('Failed to open last demo on load', error));
+    // Only run once history first finishes loading, not on every re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demoHistoryLoading]);
+
+  // Loads a past record's clip/zones/results into the player and panels
+  // without touching selectedDetection — callers that already know (or are
+  // about to set) the detection name do that themselves.
+  const openDemoRecord = async (record) => {
+    const recordId = recordIdOf(record);
+    if (!recordId || recordId === recordIdOf(videoRecord)) return;
+    const video = firstVideoOf(record);
+    setClipFile({ name: 'Demo clip', size: 0 });
+    setUploadedVideoPath(video?.videoUrl || '');
+    setUploadedVideoUrl('');
+    await loadDemoRecord(recordId, { fallbackRecord: record });
+  };
+
+  const handleSelectDemoHistory = async (record) => {
+    try {
+      const restoredDetection = Object.entries(record?.detections || {}).find(([, enabled]) => enabled)?.[0];
+      const detectionName = detections.find((item) => item.settingType === restoredDetection)?.name || 'Face Recognition';
+      setSelectedDetection(detectionName);
+      await openDemoRecord(record);
+    } catch (error) {
+      console.error('Failed to load selected live demo', error);
+      toast.error('Failed to load this demo', COMPACT_TOAST);
+    }
+  };
+
+  // Picking a detection tile: if this admin already ran that detection before,
+  // load its most recent demo (video, zones, incidents, attendance) instead of
+  // showing the empty upload state. Newest-first, same order as demoHistory.
+  const handleSelectDetection = async (item) => {
+    setSelectedDetection(item.name);
+    if (item.name === selectedDetection) return;
+
+    const pastRecord = demoHistory.find((record) => record?.detections?.[item.settingType]);
+    try {
+      if (pastRecord) {
+        await openDemoRecord(pastRecord);
+      } else {
+        await resetClipState();
+        setSelectedDetection(item.name);
+      }
+    } catch (error) {
+      console.error('Failed to load last demo for detection', error);
+      toast.error('Failed to load the last demo for this detection', COMPACT_TOAST);
+    }
+  };
 
   // The DS/video-process pipeline runs after the /process call returns and
   // attaches the finished clip asynchronously via this per-record socket
@@ -1672,6 +1840,7 @@ export default function LiveDemo({ active = true }) {
         status: 'ready',
       });
       toast.success('Demo clip processed', COMPACT_TOAST);
+      loadDemoHistory();
 
       // Now that processing is actually finished, pull the real numbers —
       // attendance log only applies to Face Recognition's detector.
@@ -1713,30 +1882,6 @@ export default function LiveDemo({ active = true }) {
     socket.on(eventName, handleAccessLogMatch);
     return () => socket.off(eventName, handleAccessLogMatch);
   }, [socket, user?.adminId, currentVideoId]);
-
-  // Attendance Log / Session Analytics / Demo Reports are always visible for
-  // Face Recognition, not just after processing a clip in this session — so
-  // fetch them as soon as the detection is selected (and again once a new
-  // clip finishes processing, via the videoRecord_updated handler above).
-  useEffect(() => {
-    if (selectedDetection !== 'Face Recognition') return;
-    let cancelled = false;
-
-    getDemoAttendanceLogs({ limit: 10, isExport: false, removeUnknown: true })
-      .then((data) => { if (!cancelled) setDemoAttendanceLogs(data); })
-      .catch((error) => console.error('Failed to load live demo attendance log', error));
-
-    getVideoRecords({ limit: 1 })
-      .then(({ records }) => {
-        const latestId = recordIdOf(records?.[0]);
-        if (!latestId) return null;
-        return getVideoRecordAnalytics(latestId);
-      })
-      .then((analyticsData) => { if (!cancelled && analyticsData) setSessionAnalytics(analyticsData); })
-      .catch((error) => console.error('Failed to load live demo session analytics', error));
-
-    return () => { cancelled = true; };
-  }, [selectedDetection]);
 
   // Ticks the estimate down toward 0 while waiting — a guide for the user,
   // not a guarantee; the socket event above is what actually ends the wait.
@@ -2353,6 +2498,7 @@ export default function LiveDemo({ active = true }) {
         return nextStatus;
       });
       toast.success('Demo processing started', COMPACT_TOAST);
+      loadDemoHistory();
     } catch (error) {
       console.error('Live demo clip processing failed', error);
       const message =
@@ -2471,7 +2617,7 @@ export default function LiveDemo({ active = true }) {
                     <button
                       key={item.name}
                       type="button"
-                      onClick={() => setSelectedDetection(item.name)}
+                      onClick={() => handleSelectDetection(item)}
                       className="flex min-h-[58px] cursor-pointer items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:border-[var(--bd2)]"
                       style={
                         selectedCard
@@ -2776,6 +2922,13 @@ export default function LiveDemo({ active = true }) {
             </button>
           )}
         </section>
+
+        <DemoHistoryPanel
+          history={demoHistory}
+          loading={demoHistoryLoading}
+          activeRecordId={recordIdOf(videoRecord)}
+          onSelect={handleSelectDemoHistory}
+        />
 
         {selectedDetection === 'Face Recognition' && clipStatus === 'ready' ? (
           <MatchedAlertsPanel alerts={matchedAlerts} />

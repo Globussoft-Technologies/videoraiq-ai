@@ -71,6 +71,8 @@ export const updateVideoRecord = async (id, payload) => {
   return unwrap(res);
 };
 
+// Pass videoId to scope to one Live Demo record's video (e.g. after clicking
+// a past demo in the history list); omit it for all-time demo data.
 export const getDemoIncidents = async ({ skip = 0, limit = 10, ...filter } = {}) => {
   const res = await axios.post(
     `${HOST}/incidents?skip=${skip}&limit=${limit}`,
