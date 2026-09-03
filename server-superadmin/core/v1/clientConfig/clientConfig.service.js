@@ -130,7 +130,17 @@ class ClientConfigService {
           .send(Response.userFailResp(`purchasedCameras exceeds available cameras (${availableCameras})`));
       }
 
-      await adminModel.updateOne({ _id: adminId }, { purchasedCameras: count });
+      // planCamerasGranted: true marks this as an EXPLICIT superadmin decision
+      // — including count === 0 to deliberately block a client. Without it, a
+      // client this screen has never touched before looks identical to one
+      // just set to 0 on purpose (both are bare purchasedCameras: 0), and
+      // server's own default-camera grant would silently overwrite the block
+      // on that client's next login. See detectionLicense.service.js
+      // grantPlanDefaultCameras.
+      await adminModel.updateOne(
+        { _id: adminId },
+        { purchasedCameras: count, planCamerasGranted: true },
+      );
 
       // Notify the client app (separate process) so connected users see the new
       // limit live. Fire-and-forget over Redis pub/sub — never blocks/fails the

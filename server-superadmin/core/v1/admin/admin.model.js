@@ -42,6 +42,15 @@ const adminSchema = new mongoose.Schema({
   // field on the Client Configuration screen; also the "/N" limit in the
   // Clients table's cameras-used/purchased column.
   purchasedCameras: { type: Number, default: 0 },
+  // True once purchasedCameras has been explicitly set — either by this
+  // screen (updatePurchasedCameras, including to 0 to deliberately block a
+  // client) or by server's own default-camera grant on first login. This is
+  // what tells server/core/v2/clientConfig/detectionLicense.service.js's
+  // grantPlanDefaultCameras the difference between "never configured yet" and
+  // "the superadmin decided 0 on purpose" — both look identical as a bare
+  // purchasedCameras: 0, so without this flag a deliberate 0 would be
+  // silently overwritten by that default grant on the client's next login.
+  planCamerasGranted: { type: Boolean, default: false },
   // Optional per-admin service endpoint overrides. null = use the global
   // value from config (default for all admins).
   // - streamHost / streamToken  -> RTSPStream.host / RTSPStream.token
