@@ -5,6 +5,7 @@ import { resolveAdminEndpoints } from "../../../utils/adminEndpoints.js";
 import { stopAllStreams, resumeAllStreams } from "../../../utils/stopStreams.js";
 import config from "config";
 import jwt from "jsonwebtoken";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import axios from "axios";
 import Admin from "../admin/admin.model.js";
 import dashboardSidebarModel from "../dashboard/dashboardSidebar.model.js";
@@ -70,6 +71,147 @@ class AUTHService {
     this.tokenExpiryTime = config.get("jwt.tokenExpiryTime");
     this.customPlanID = config.get("aMember.customPlanID");
     this.topUpPlanID = config.get("aMember.topUpPlanID");
+    this.impersonationSecret = config.get("aMember.impersonationSecret");
+    this.usedImpersonationNonces = new Map();
+  }
+
+  _verifyImpersonationToken(token) {
+    if (!this.impersonationSecret) throw new Error("Impersonation SSO is not configured");
+    const parts = String(token || "").split(".");
+    if (parts.length !== 2 || !parts[0] || !parts[1]) throw new Error("Invalid impersonation token");
+
+    const expected = createHmac("sha256", this.impersonationSecret).update(parts[0]).digest();
+    const supplied = Buffer.from(parts[1], "base64url");
+    if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+      throw new Error("Invalid impersonation token signature");
+    }
+
+    let payload;
+    try { payload = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8")); }
+    catch (_) { throw new Error("Invalid impersonation token payload"); }
+
+    const now = Math.floor(Date.now() / 1000);
+    if (payload?.purpose !== "videoraiq-admin-impersonation" ||
+        !Number.isInteger(payload?.user_id) || !payload?.nonce ||
+        !Number.isInteger(payload?.iat) || !Number.isInteger(payload?.exp) ||
+        payload.iat > now + 5 || payload.exp < now || payload.exp - payload.iat > 60) {
+      throw new Error("Expired or invalid impersonation token");
+    }
+    for (const [nonce, expiry] of this.usedImpersonationNonces) {
+      if (expiry < now) this.usedImpersonationNonces.delete(nonce);
+    }
+    if (this.usedImpersonationNonces.has(payload.nonce)) throw new Error("Impersonation token has already been used");
+    return payload;
+  }
+
+  _verifyUserSsoToken(token) {
+    if (!this.impersonationSecret) throw new Error("aMember SSO is not configured");
+    const parts = String(token || "").split(".");
+    if (parts.length !== 2 || !parts[0] || !parts[1]) throw new Error("Invalid aMember SSO token");
+
+    const expected = createHmac("sha256", this.impersonationSecret).update(parts[0]).digest();
+    const supplied = Buffer.from(parts[1], "base64url");
+    if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+      throw new Error("Invalid aMember SSO token signature");
+    }
+
+    let payload;
+    try { payload = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8")); }
+    catch (_) { throw new Error("Invalid aMember SSO token payload"); }
+
+    const now = Math.floor(Date.now() / 1000);
+    if (payload?.purpose !== "videoraiq-user-sso" ||
+        !Number.isInteger(payload?.user_id) || !String(payload?.login || "").trim() ||
+        !payload?.nonce || !Number.isInteger(payload?.iat) || !Number.isInteger(payload?.exp) ||
+        payload.iat > now + 5 || payload.exp < now || payload.exp - payload.iat > 60) {
+      throw new Error("Expired or invalid aMember SSO token");
+    }
+    for (const [nonce, expiry] of this.usedImpersonationNonces) {
+      if (expiry < now) this.usedImpersonationNonces.delete(nonce);
+    }
+    if (this.usedImpersonationNonces.has(payload.nonce)) {
+      throw new Error("aMember SSO token has already been used");
+    }
+    return payload;
+  }
+
+  async _getAmemberUserForSso(payload) {
+    const params = new URLSearchParams({
+      _key: this.apiKey,
+      "_filter[user_id]": String(payload.user_id),
+      _count: "1",
+    });
+    const response = await fetchWithTimeout(`${this.baseUrl}/users?${params}`);
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`aMember user API failed: ${text || response.status}`);
+    }
+
+    const users = await response.json();
+    const user = Array.isArray(users) ? users[0] : users?.[0];
+    if (!user || Number(user.user_id) !== payload.user_id || user.login !== payload.login) {
+      throw new Error("aMember SSO identity does not match");
+    }
+
+    const access = await this.getAmemberAccessByUserId(payload.user_id);
+    return {
+      ok: true,
+      user_id: Number(user.user_id),
+      login: user.login,
+      email: user.email,
+      name_f: user.name_f || "",
+      name_l: user.name_l || "",
+      subscriptions: this.extractSubscriptions(access) || {},
+    };
+  }
+
+  async verifyAmemberSso(req, res) {
+    try {
+      const payload = this._verifyUserSsoToken(req.body?.token);
+      const userData = await this._getAmemberUserForSso(payload);
+      this.usedImpersonationNonces.set(payload.nonce, payload.exp);
+
+      return this.verifyUser({
+        body: { login: userData.login, pass: "__signed_amember_sso__" },
+        amemberSsoUserData: userData,
+      }, res);
+    } catch (error) {
+      logger.warn("aMember user SSO rejected:", error.message);
+      const configurationError = error.message === "aMember SSO is not configured";
+      return res.status(configurationError ? 503 : 403).json({ ok: false, message: error.message });
+    }
+  }
+
+  async verifyImpersonation(req, res) {
+    try {
+      const payload = this._verifyImpersonationToken(req.body?.token);
+      const admin = await adminModel.findOne({ user_id: payload.user_id });
+      if (!admin || admin.login !== payload.login) {
+        return res.status(403).json({ ok: false, message: "Dashboard user not found" });
+      }
+      const access = await this.getAmemberAccessByUserId(payload.user_id);
+      const subscriptions = this.extractSubscriptions(access);
+      if (!this.isPlanActive({ subscriptions })) {
+        return res.status(403).json({ ok: false, expired: true, message: "Subscription is not active" });
+      }
+      const tokenPayload = {
+        status: true, user_id: Number(payload.user_id), login: admin.login,
+        adminId: admin._id, orgId: admin.orgId,
+        user_name: `${admin.name_f ?? ""} ${admin.name_l ?? ""}`.trim(),
+        user_email: admin.email, name_f: admin.name_f ?? "", name_l: admin.name_l ?? "",
+        userSubscriptionType: subscriptions, created_from: "EMP",
+        impersonatedByAdminId: payload.admin_id,
+        enablePhoneRecipients: config.get("enablePhoneRecipients"),
+        streamHost: `${(admin.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
+      };
+      this.usedImpersonationNonces.set(payload.nonce, payload.exp);
+      const dashboardToken = generateToken(tokenPayload, this.secretKey, this.tokenExpiryTime);
+      return res.status(200).json({ ok: true, msg: "User impersonation verified", token: dashboardToken, user: tokenPayload });
+    } catch (error) {
+      logger.warn("Impersonation SSO rejected:", error.message);
+      const configurationError = error.message === "Impersonation SSO is not configured";
+      return res.status(configurationError ? 503 : 403).json({ ok: false, message: error.message });
+    }
   }
 
   extractSubscriptions(accessResponse) {
@@ -703,15 +845,20 @@ return bypassUsers.find(
 
   async verifyUser(req, res) {
     const login = req.body;
+    const trustedSsoUserData = req.amemberSsoUserData;
     try {
-      if (!login?.login || !login?.pass) {
+      if (!trustedSsoUserData && (!login?.login || !login?.pass)) {
         return res.status(403).json({ message: "login and password required" });
       }
 
       // Bypass aMember for users defined in config bypass_users
-      const bypassUser = this._getBypassUser(login.login, login.pass);
+      const bypassUser = trustedSsoUserData
+        ? null
+        : this._getBypassUser(login.login, login.pass);
       let userData;
-      if (bypassUser) {
+      if (trustedSsoUserData) {
+        userData = trustedSsoUserData;
+      } else if (bypassUser) {
         userData = this._buildBypassUserData(bypassUser);
       } else {
         userData = await this.fetchUserDataByName(login);

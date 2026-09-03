@@ -29,6 +29,14 @@ class authController {
        return await AUTHService.decodeToken(req, res, next);
     }
 
+    async verifyImpersonation(req, res, next) {
+        return await AUTHService.verifyImpersonation(req, res, next);
+    }
+
+    async verifyAmemberSso(req, res, next) {
+        return await AUTHService.verifyAmemberSso(req, res, next);
+    }
+
     async generateAdminToken(req, res, next) {
         /* #swagger.tags = ['Auth']
                             #swagger.description = 'Generate an encrypted admin token valid for N days (max 5). Body: { adminId, days }. Requires an authenticated token.' */
