@@ -118,8 +118,18 @@ export default function IsAuth({ children }) {
     const amemberLogin = Cookies.get('amember_login');
     const amemberPass = Cookies.get('amember_pass');
     const token = getAccessToken();
+    const searchParams = new URLSearchParams(window.location.search);
+    const impersonationToken = searchParams.get('amember_impersonation') || '';
+    const amemberSsoToken = searchParams.get('amember_sso') || '';
 
-    if (!token && !(amemberLogin && amemberPass)) {
+    if (impersonationToken || amemberSsoToken) {
+      searchParams.delete('amember_impersonation');
+      searchParams.delete('amember_sso');
+      const cleanQuery = searchParams.toString();
+      window.history.replaceState({}, document.title, `${window.location.pathname}${cleanQuery ? `?${cleanQuery}` : ''}${window.location.hash}`);
+    }
+
+    if (!token && !(amemberLogin && amemberPass) && !impersonationToken && !amemberSsoToken) {
       setIsLoading(false);
       toLogin();
       return;
@@ -127,6 +137,64 @@ export default function IsAuth({ children }) {
 
     async function checkAccess() {
       try {
+        if (impersonationToken) {
+          const response = await fetch(`${HOST}/auth/by-impersonation-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: impersonationToken }),
+          });
+          const result = await response.json();
+          if (!response.ok || !result?.ok || !result?.token) {
+            logout();
+            setIsLoading(false);
+            toLogin();
+            return;
+          }
+          Cookies.set(accessCookieName(), result.token, {
+            expires: 1,
+            secure: window.location.protocol === 'https:',
+            path: '/',
+          });
+          setUser(result.user);
+          setIsLoading(false);
+          return;
+        }
+
+        if (amemberSsoToken) {
+          const response = await fetch(`${HOST}/auth/by-amember-sso-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: amemberSsoToken }),
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok || !result?.ok || !result?.token) {
+            logout();
+            setUser(null);
+
+            const hasInactiveAccess =
+              (result?.authenticated === true && result?.access === false) ||
+              result?.expired === true ||
+              result?.reason === 'subscription_inactive' ||
+              result?.reason === 'subscription_expired';
+            if (hasInactiveAccess) {
+              window.location.replace(memberUrl());
+              return;
+            }
+
+            setFailure(authFailure(result, response));
+            setIsLoading(false);
+            return;
+          }
+          Cookies.set(accessCookieName(), result.token, {
+            expires: 1,
+            secure: window.location.protocol === 'https:',
+            path: '/',
+          });
+          setUser(result.user);
+          setIsLoading(false);
+          return;
+        }
+
         if (amemberLogin && amemberPass) {
           const response = await fetch(`${HOST}/auth/by-login-pass`, {
             method: 'POST',
