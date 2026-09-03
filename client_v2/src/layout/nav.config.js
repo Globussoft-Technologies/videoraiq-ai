@@ -83,12 +83,13 @@ const stevinrockLogItems = [
 // Center/Analytics). Sidebar.jsx hides (not disables) any item whose module
 // resolves to view:false, matching V1's Header.jsx nav filtering exactly.
 export const NAV_GROUPS = [
-  {
-    label: 'EXPERIENCE',
-    items: [
-      { key: 'live-demo', label: 'Live Demo', path: 'live-demo', icon: CirclePlay, badge: 'NEW' },
-    ],
-  },
+  // Live Demo disabled for now.
+  // {
+  //   label: 'EXPERIENCE',
+  //   items: [
+  //     { key: 'live-demo', label: 'Live Demo', path: 'live-demo', icon: CirclePlay, badge: 'NEW' },
+  //   ],
+  // },
   {
     label: 'MONITOR',
     items: [
