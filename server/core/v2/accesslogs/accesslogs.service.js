@@ -22,7 +22,7 @@ class AccessLogsService {
   async createAccessLog(req, res, next) {
     try {
         let body = req.body;
-        let { userId, personName, date, timestamp, images ,cameraId,nvrId,adminId} = body;
+        let { userId, personName, date, timestamp, images ,cameraId,nvrId,adminId,liveDemoData,videoId} = body;
         let isAdminExist = await adminModel.findOne({ _id: adminId });
         if(!isAdminExist){
           return res.send(Response.userFailResp("Admin not found","Validation failed!"));
@@ -69,7 +69,9 @@ class AccessLogsService {
           profilePics:isUserExist?.profilePics || null,
           department:isUserExist?.departmentId?.departmentName || null,
           ...(timestamp && !isNaN(new Date(timestamp).getTime()) && { timestamp: new Date(timestamp) }),
-          images
+          images,
+          liveDemoData: !!liveDemoData,
+          videoId: videoId || null
 
         }
 
@@ -414,7 +416,9 @@ class AccessLogsService {
           profilePics:isUserExist?.profilePics || null,
           department:isUserExist?.departmentId?.departmentName || null,
           ...(timestamp && !isNaN(new Date(timestamp).getTime()) && { timestamp: new Date(timestamp) }),
-          images
+          images,
+          liveDemoData: !!liveDemoData,
+          videoId: videoId || null
 
         }
 

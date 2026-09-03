@@ -16,6 +16,7 @@ vi.mock("../../../socket.js", () => ({
 const { default: AccessLogsService } = await import(
   "../../../core/v1/accesslogs/accesslogs.service.js"
 );
+const { sendPayloadToUser } = await import("../../../socket.js");
 const { default: Admin } = await import("../../../core/v1/admin/admin.model.js");
 const { default: OptimizedAccessLogs } = await import(
   "../../../core/v1/accesslogs/newAccessLogs.model.js"
@@ -29,6 +30,7 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   await clearCollections();
+  sendPayloadToUser.mockClear();
 });
 
 describe("AccessLogsService.createAccessLogRecord — liveDemoData without cameraId/nvrId", () => {
@@ -58,6 +60,7 @@ describe("AccessLogsService.createAccessLogRecord — liveDemoData without camer
     // "video:<hex>" cameraId (not a real ObjectId) and a 32-hex (non-24)
     // nvrId — both previously threw an unhandled Mongoose CastError.
     const admin = await Admin.create({ user_id: "demo-al-3", login: "a3", email: "a3@test.com" });
+    const videoId = new mongoose.Types.ObjectId().toString();
     const { req, res, next } = serviceCtx({
       body: {
         adminId: admin._id.toString(),
@@ -65,7 +68,7 @@ describe("AccessLogsService.createAccessLogRecord — liveDemoData without camer
         cameraId: "video:e82c0cfc49724e36a727e4a96104d5b5",
         nvrId: "e82c0cfc49724e36a727e4a96104d5b5",
         liveDemoData: true,
-        videoId: new mongoose.Types.ObjectId().toString(),
+        videoId,
         images: { person: "https://nas.example.com/crop.jpg" },
       },
     });
@@ -79,6 +82,11 @@ describe("AccessLogsService.createAccessLogRecord — liveDemoData without camer
     expect(stored.videoId).not.toBeNull();
     expect(stored.sessions[0].nvr).toBeUndefined();
     expect(stored.sessions[0].channel).toBeUndefined();
+    expect(sendPayloadToUser).toHaveBeenCalledWith(
+      undefined,
+      `accessLogs_${admin._id}`,
+      expect.objectContaining({ liveDemoData: true, videoId }),
+    );
   });
 
   it("rejects a non-demo record missing cameraId", async () => {
