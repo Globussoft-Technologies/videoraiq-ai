@@ -41,6 +41,7 @@ import howToTakeFacePhotos from './assets/howto.jpg';
 import { useSocket } from '@/context/SocketContext';
 import { useAuth } from '@/context/AuthContext';
 import { buildAttendanceRows, handleLiveDemoExport } from './liveDemoExport';
+import { clearLiveDemoSession, readLiveDemoSession, updateLiveDemoSession } from './liveDemoSession';
 
 const categories = [{ key: 'all', label: 'All', color: null }, ...DETECTION_CATEGORIES];
 
@@ -1470,7 +1471,7 @@ function DemoReportsPanel({ usersLogs, clipName, minConfidence }) {
   );
 }
 
-export default function LiveDemo() {
+export default function LiveDemo({ active = true }) {
   const [selectedDetection, setSelectedDetection] = useState('Face Recognition');
   const [activeCategory, setActiveCategory] = useState('all');
   const [showList, setShowList] = useState(true);
@@ -1526,6 +1527,7 @@ export default function LiveDemo() {
   const selectedConfig = detectionConfigs[selectedDetection];
   const configurationAvailable = selectedDetection === 'Face Recognition' || selectedConfig;
   const isClipBusy = clipStatus === 'uploading' || clipStatus === 'processing' || clipStatus === 'awaiting-ds';
+  const currentVideoId = firstVideoOf(videoRecord)?._id || firstVideoOf(videoRecord)?.id || '';
   const processedVideo = recordVideos.find((video) => video?.dsVideoUrl)?.dsVideoUrl;
   const playerVideoUrl = processedVideo
     ? dsVideoSrc(processedVideo)
@@ -1568,6 +1570,86 @@ export default function LiveDemo() {
     if (!isClipFullscreen) setShowDrawingActions(false);
   }, [isClipFullscreen]);
 
+  useEffect(() => {
+    if (!active) videoRef.current?.pause();
+  }, [active]);
+
+  // Route changes unmount this page. Restore the active record from the small
+  // session snapshot, then ask the server whether DS finished while we were away.
+  useEffect(() => {
+    const saved = readLiveDemoSession();
+    if (!user?.adminId || !saved || String(saved.adminId) !== String(user.adminId)) return;
+
+    const recordId = saved.recordId || recordIdOf(saved.videoRecord);
+    if (!recordId || !saved.uploadedVideoPath) {
+      clearLiveDemoSession();
+      return;
+    }
+
+    let cancelled = false;
+    const restoredDetection = detections.find((item) => item.settingType === saved.settingType)?.name
+      || saved.selectedDetection
+      || 'Face Recognition';
+    const restoredStatus = saved.status === 'ready' || saved.status === 'uploaded'
+      ? saved.status
+      : 'awaiting-ds';
+
+    setSelectedDetection(restoredDetection);
+    processingSettingTypeRef.current = saved.settingType || '';
+    setClipFile({ name: saved.clipName || 'Demo clip', size: saved.clipSize || 0 });
+    setUploadedVideoPath(saved.uploadedVideoPath);
+    setUploadedVideoUrl(saved.uploadedVideoUrl || '');
+    setVideoRecord(saved.videoRecord || null);
+    setRecordVideos(saved.videos || saved.videoRecord?.videos || []);
+    setMatchedAlerts(Array.isArray(saved.matchedAlerts) ? saved.matchedAlerts : []);
+    setClipStatus(restoredStatus);
+    setClipProgress(restoredStatus === 'ready' || restoredStatus === 'uploaded' ? 100 : 75);
+
+    Promise.all([
+      getVideoRecords({ id: recordId, limit: 1 }),
+      getVideoRecordVideos(recordId),
+      getVideoRecordAnalytics(recordId),
+    ])
+      .then(([{ records }, videosData, analyticsData]) => {
+        if (cancelled) return;
+        const record = records?.[0] || saved.videoRecord;
+        const serverVideos = videosData?.videos || record?.videos || [];
+        const latestSaved = readLiveDemoSession();
+        const videos = serverVideos.some((video) => video?.dsVideoUrl)
+          ? serverVideos
+          : latestSaved?.videos?.some((video) => video?.dsVideoUrl)
+            ? latestSaved.videos
+            : serverVideos;
+        const ready = videos.some((video) => video?.dsVideoUrl);
+        const nextStatus = ready ? 'ready' : restoredStatus === 'uploaded' ? 'uploaded' : 'awaiting-ds';
+        const savedVideo = firstVideoOf(videos);
+        const restoredZones = Array.isArray(savedVideo?.zones)
+          ? savedVideo.zones.map((zone) => zone.map(([x, y]) => ({ x, y })))
+          : [];
+        const restoredConfigs = Array.isArray(savedVideo?.zone_configs)
+          ? savedVideo.zone_configs.map((config, index) => ({
+              name: config.name || `Zone ${index + 1}`,
+              capacity: config.capacity ?? '',
+              threshold: config.threshold_sec ?? '',
+            }))
+          : [];
+
+        setVideoRecord(record);
+        setRecordVideos(videos);
+        setSessionAnalytics(analyticsData || null);
+        setClipStatus(nextStatus);
+        setClipProgress(ready || nextStatus === 'uploaded' ? 100 : 75);
+        savedZonesRef.current = restoredZones;
+        setSavedZones(restoredZones);
+        setZoneSettings(syncZoneSettings(restoredConfigs, restoredZones.length));
+        setConfirmedZoneNames(restoredConfigs.map((config, index) => config.name || `Zone ${index + 1}`));
+        updateLiveDemoSession({ videoRecord: record, videos, status: nextStatus });
+      })
+      .catch((error) => console.error('Failed to restore active live demo', error));
+
+    return () => { cancelled = true; };
+  }, [user?.adminId]);
+
   // The DS/video-process pipeline runs after the /process call returns and
   // attaches the finished clip asynchronously via this per-record socket
   // event — the processing loader stays up until it arrives.
@@ -1584,6 +1666,11 @@ export default function LiveDemo() {
       setClipProgress(100);
       setClipStatus('ready');
       setSecondsRemaining(null);
+      updateLiveDemoSession({
+        videoRecord: { ...videoRecord, videos },
+        videos,
+        status: 'ready',
+      });
       toast.success('Demo clip processed', COMPACT_TOAST);
 
       // Now that processing is actually finished, pull the real numbers —
@@ -1609,18 +1696,23 @@ export default function LiveDemo() {
   // there's no Live Demo-specific event yet). Unrecognized/"Unknown" matches
   // are dropped; only named matches are worth showing here.
   useEffect(() => {
-    if (!socket || !user?.adminId) return;
+    if (!socket || !user?.adminId || !currentVideoId) return;
 
     const eventName = `accessLogs_${user.adminId}`;
     const handleAccessLogMatch = (data) => {
+      if (data?.liveDemoData !== true || String(data?.videoId || '') !== String(currentVideoId)) return;
       const name = String(data?.personName || '').trim();
       if (!name || name.toLowerCase() === 'unknown') return;
-      setMatchedAlerts((current) => [{ ...data, key: `${data?.userId || name}-${data?.timestamp || Date.now()}` }, ...current].slice(0, 20));
+      setMatchedAlerts((current) => {
+        const next = [{ ...data, key: `${data?.userId || name}-${data?.timestamp || Date.now()}` }, ...current].slice(0, 20);
+        updateLiveDemoSession({ matchedAlerts: next });
+        return next;
+      });
     };
 
     socket.on(eventName, handleAccessLogMatch);
     return () => socket.off(eventName, handleAccessLogMatch);
-  }, [socket, user?.adminId]);
+  }, [socket, user?.adminId, currentVideoId]);
 
   // Attendance Log / Session Analytics / Demo Reports are always visible for
   // Face Recognition, not just after processing a clip in this session — so
@@ -1704,6 +1796,7 @@ export default function LiveDemo() {
     setDraftZones([]);
     setSavedZones([]);
     setZoneSettings([]);
+    clearLiveDemoSession();
   };
 
   const handleVideoMetadata = () => {
@@ -2136,6 +2229,20 @@ export default function LiveDemo() {
       setVideoRecord(record);
       setClipProgress(100);
       setClipStatus('uploaded');
+      updateLiveDemoSession({
+        adminId: user?.adminId,
+        recordId: recordIdOf(record),
+        videoRecord: record,
+        videos: record?.videos || [],
+        uploadedVideoPath: uploaded.videoUrl,
+        uploadedVideoUrl: uploaded.fullUrl || '',
+        clipName: file.name,
+        clipSize: file.size,
+        selectedDetection,
+        settingType: selected.settingType,
+        status: 'uploaded',
+        matchedAlerts: [],
+      });
       toast.success('Demo clip uploaded. Click Process clip to run detection.', COMPACT_TOAST);
     } catch (error) {
       console.error('Live demo clip upload failed', error);
@@ -2201,6 +2308,20 @@ export default function LiveDemo() {
       setClipStatus('processing');
       setClipProgress(10);
       processingSettingTypeRef.current = selected.settingType;
+      updateLiveDemoSession({
+        adminId: user?.adminId,
+        recordId,
+        videoRecord: record,
+        videos: record?.videos || [],
+        uploadedVideoPath: videoPath,
+        uploadedVideoUrl,
+        clipName: clipFile?.name,
+        clipSize: clipFile?.size,
+        selectedDetection,
+        settingType: selected.settingType,
+        status: 'processing',
+        matchedAlerts: [],
+      });
 
       const job = await processVideoRecord(recordId, {
         videoId: video._id || video.id,
@@ -2225,8 +2346,12 @@ export default function LiveDemo() {
       // The DS pipeline processes the clip asynchronously — the processed
       // video isn't ready yet. Keep the loader up until the
       // videoRecord_updated_${recordId} socket event delivers dsVideoUrl.
-      setClipProgress(75);
-      setClipStatus('awaiting-ds');
+      setClipProgress((current) => Math.max(current, 75));
+      setClipStatus((current) => {
+        const nextStatus = current === 'ready' ? 'ready' : 'awaiting-ds';
+        updateLiveDemoSession({ status: nextStatus });
+        return nextStatus;
+      });
       toast.success('Demo processing started', COMPACT_TOAST);
     } catch (error) {
       console.error('Live demo clip processing failed', error);
@@ -2237,6 +2362,7 @@ export default function LiveDemo() {
         'Failed to process demo clip';
       setClipStatus(videoPath ? 'uploaded' : 'error');
       setSecondsRemaining(null);
+      updateLiveDemoSession({ status: videoPath ? 'uploaded' : 'error' });
       toast.error(message, COMPACT_TOAST);
     }
   };

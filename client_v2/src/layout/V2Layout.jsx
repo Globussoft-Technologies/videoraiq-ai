@@ -15,6 +15,7 @@ import { cameraStatusId } from '../helpers/cameraStatus';
 import { useApi } from '../hooks/useApi';
 import { useCameraStatusStream } from '../hooks/useCameraStatusStream';
 import { timeAgo } from '../lib/format';
+import LiveDemo from '../pages/LiveDemo/LiveDemo';
 
 const SEV_COLOR = { high: 'var(--crit)', critical: 'var(--crit)', moderate: 'var(--warn)', medium: 'var(--warn)', low: 'var(--tx3)' };
 
@@ -97,6 +98,12 @@ function Shell() {
   const viewKey = currentViewKey(location.pathname);
   const meta = VIEW_META[viewKey] || VIEW_META.overview;
   const fixedViewportPage = viewKey === 'camera';
+  const isLiveDemo = viewKey === 'live-demo';
+  const [hasVisitedLiveDemo, setHasVisitedLiveDemo] = useState(isLiveDemo);
+
+  useEffect(() => {
+    if (isLiveDemo) setHasVisitedLiveDemo(true);
+  }, [isLiveDemo]);
 
   const [siteFilter, setSiteFilter] = useState('All Sites');
   const [siteRaw, setSiteRaw] = useState(null);
@@ -295,7 +302,14 @@ function Shell() {
           style={{ flex: 1, minHeight: 0, overflowY: fixedViewportPage ? 'hidden' : 'auto', overflowX: 'hidden' }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: fixedViewportPage ? 0 : '100%', height: fixedViewportPage ? '100%' : undefined }}>
-            <Outlet context={outletCtx} />
+            {(hasVisitedLiveDemo || isLiveDemo) && (
+              <div style={{ display: isLiveDemo ? 'contents' : 'none' }}>
+                <LiveDemo active={isLiveDemo} />
+              </div>
+            )}
+            <div style={{ display: isLiveDemo ? 'none' : 'contents' }}>
+              <Outlet context={outletCtx} />
+            </div>
             {!fixedViewportPage && (
               <footer
               style={{
