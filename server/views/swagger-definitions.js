@@ -924,52 +924,44 @@ export const definitions = {
     },
     addShift: {
       name: "Night Shift",
-      color: "#3B82F6",
+      startTime: "22:00",
+      endTime: "06:00",
+      breakMinutes: 60,
+      graceLateMinutes: 15,
+      graceEarlyMinutes: 15,
+      // 0 falls back to the system default of 12 hours.
+      maxOvertimeMinutes: 0,
+      isNightShift: true,
+      isDefault: false,
+      isActive: true,
 
-      timings: {
-        monday: {
-          enabled: true,
-          start: "22:00",
-          end: "06:00",
-        },
-        tuesday: {
-          enabled: true,
-          start: "22:00",
-          end: "06:00",
-        },
-        wednesday: {
-          enabled: true,
-          start: "22:00",
-          end: "06:00",
-        },
-        thursday: {
-          enabled: true,
-          start: "22:00",
-          end: "06:00",
-        },
-        friday: {
-          enabled: true,
-          start: "22:00",
-          end: "06:00",
-        },
-        saturday: {
-          enabled: false,
-        },
-        sunday: {
-          enabled: false,
-        },
-      },
-
-      settings: {
-        lateLogin: 10,
-        earlyLogout: 15,
-        halfDay: "04:00",
-        overTime: "01:00",
-        halfDayProductiveTime: "04:30",
-        fullDayProductiveTime: "08:30",
+      // off | full | half per day. Days omitted here keep their stored value on
+      // update, and fall back to a Mon-Fri week on create.
+      workingDays: {
+        sunday: { type: "off" },
+        monday: { type: "full" },
+        tuesday: { type: "full" },
+        wednesday: { type: "full" },
+        thursday: { type: "full" },
+        friday: { type: "full" },
+        // Per-day override of the shift-level window.
+        saturday: { type: "half", start: "22:00", end: "02:00" },
       },
 
       note: "Night shift for security and operations team",
+    },
+    shiftAssignmentFilters: {
+      // Individual assignment. Combine with, or use instead of, the group
+      // filters below - they are ANDed.
+      employeeIds: ["6512f1c0a1b2c3d4e5f60718"],
+      locations: ["Bangalore", "Chennai"],
+      departmentIds: ["68493b14b176a495112b6522"],
+      // Required to act on an empty filter set, so a mistyped filter can never
+      // silently re-shift the whole organisation.
+      allEmployees: false,
+      // false leaves employees who already hold a different shift alone.
+      overwriteExisting: true,
+      includeSuspended: false,
     },
     autoEmailReportCreate: {
       reportsTitle: "AdminReport",
