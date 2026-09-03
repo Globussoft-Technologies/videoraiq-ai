@@ -3,7 +3,12 @@ import momentTz from "moment-timezone";
 import config from "config";
 import videoRecordModel from "./videoRecords.model.js";
 import pythonService from "../../../services/python.service.js";
-import { DETECTION_TYPES, TYPE_MAP } from "../../../constants/detectionTypes.js";
+import {
+  DETECTION_TYPES,
+  TYPE_MAP,
+  DETECTION_MODES_MAP,
+  dsDetectorsForModes,
+} from "../../../constants/detectionTypes.js";
 import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
 import authService from "../Auth/auth.service.js";
@@ -708,8 +713,14 @@ class VideoRecordsService {
         admin_id: adminId.toString(),
         video_id: video._id.toString(),
         source_url: toAbsoluteMediaUrl(video.videoUrl),
+        // DS's detector enum doesn't always match our own setting-type keys
+        // (e.g. our unauthorizedAccessSettings is DS's zoneIntrusionSettings) —
+        // DS_DETECTOR_BY_MODE is the single source of truth for that translation,
+        // same one the live-channel start/stop path (python.service.js) already
+        // uses. Sending the raw key when it differs fails DS validation silently.
         detectors: names.map((name) => {
-          const detector = { name };
+          const { detectors: dsNames } = dsDetectorsForModes(DETECTION_MODES_MAP[name] || []);
+          const detector = { name: dsNames[0] || name };
           const carCompany = carCompanyByName.get(name);
           if (carCompany) detector.car_company = carCompany;
           if (video.zones && video.zones.length) detector.zones = video.zones;
