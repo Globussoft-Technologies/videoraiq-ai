@@ -847,6 +847,7 @@ class DetectionSettingService {
           const confidence_thresholds = detectionSetting?.settings || {};
           const line_crossing_settings = detectionSetting?.settings || {};
           const mobile_phone_confidence = detectionSetting?.settings || {};
+          const vehicle_check_in_out_settings = detectionSetting?.settings || {};
 
 
 
@@ -863,7 +864,8 @@ class DetectionSettingService {
             zoneName,
             confidence_thresholds,
             line_crossing_settings,
-            mobile_phone_confidence
+            mobile_phone_confidence,
+            vehicle_check_in_out_settings,
           );
           await updateModelThresholds(detectionSetting, backendResponse);
         } catch (error) {
@@ -1277,6 +1279,7 @@ class DetectionSettingService {
       const zoneName = detectionSetting?.settings?.zoneName || [];
       const confidence_thresholds = detectionSetting?.settings || {};
       const line_crossing_settings = detectionSetting?.settings || {};
+      const vehicle_check_in_out_settings = detectionSetting?.settings || {};
 
       const operation = shouldEnable ? "resume" : "stop";
       const logContext =
@@ -1325,6 +1328,7 @@ class DetectionSettingService {
             severity,
             confidence_thresholds,
             line_crossing_settings,
+            vehicle_check_in_out_settings,
           ]);
         }
       } catch (error) {

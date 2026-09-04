@@ -888,6 +888,10 @@ class PythonService {
     zoneName,
     confidence_thresholds = {},
     line_crossing_settings = {},
+    // Declared because every caller passes it in this position. Unused here --
+    // the DS payload carries thresholds via confidence_thresholds -- but naming
+    // it stops the next parameter from silently capturing it.
+    mobile_phone_confidence = {},
     vehicle_check_in_out_settings = {},
   ) {
     const nvr = await NVR.findById(channel?.nvrId?._id);

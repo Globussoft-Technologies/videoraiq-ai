@@ -1687,6 +1687,9 @@ class ChannelService {
         const severity = detectionSettingDoc?.settings?.levelOfImportance;
         const confidence_thresholds = detectionSettingDoc?.settings || {};
         const line_crossing_settings = detectionSettingDoc?.settings || {};
+        // Same document, passed under its own name: each picker takes only
+        // the fields its own detector understands.
+        const vehicle_check_in_out_settings = detectionSettingDoc?.settings || {};
         if (String(channel.userId) === "32") {
           return res
             .status(403)
@@ -1708,7 +1711,8 @@ class ChannelService {
           obstruction_threshold_sec,
           severity,
           confidence_thresholds,
-          line_crossing_settings
+          line_crossing_settings,
+          vehicle_check_in_out_settings,
           );
         await updateModelThresholds(detectionSettingDoc, beResponse);
 
