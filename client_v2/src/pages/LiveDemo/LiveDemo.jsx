@@ -26,13 +26,7 @@ import {
 import { toast } from 'sonner';
 import { DETECTION_CATEGORIES } from '@/page/user/Configure/Detections/detectionsData';
 import { ZONE_EXTRA_FIELDS } from '@/page/user/Configure/DetectionZoneMarking/constants';
-import {
-  createAuthorizedUser,
-  fetchDepartments,
-  getEmployeeLocations,
-  isEmailExist,
-} from '../RegisterUser/Api';
-import SelectField from '../RegisterUser/SelectField';
+import { createAuthorizedUser, isEmailExist } from '../RegisterUser/Api';
 import { COMPACT_TOAST } from '../RegisterUser/toastOptions';
 import FaceCaptureWizard from '../RegisterUser/FaceCaptureWizard';
 import { getVideoRecordVideos, getVideoRecords } from './api/get';
@@ -1009,17 +1003,12 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
   const [activeCaptureAngle, setActiveCaptureAngle] = useState('Front');
   const [captureMode, setCaptureMode] = useState('camera');
   const [registeredFace, setRegisteredFace] = useState(false);
-  const [departments, setDepartments] = useState([]);
-  const [locations, setLocations] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [registeredUser, setRegisteredUser] = useState(null);
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
     email: '',
-    designation: '',
-    location: '',
-    departmentId: '',
     vehicleNumber: '',
   });
   const [errors, setErrors] = useState({});
@@ -1030,42 +1019,7 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
     { label: 'Right profile', angle: 'Right', ref: rightInputRef, index: 1 },
     { label: 'Left profile', angle: 'Left', ref: leftInputRef, index: 2 },
   ];
-  const locationOptions = useMemo(() => locations.map((location) => ({ value: location, label: location })), [locations]);
-  const departmentOptions = useMemo(
-    () => departments.map((department) => ({ value: department._id, label: department.departmentName })),
-    [departments]
-  );
   const uploadedCount = imageFiles.filter(Boolean).length;
-
-  useEffect(() => {
-    let active = true;
-
-    const loadRegisterMeta = async () => {
-      try {
-        const [departmentRes, locationRes] = await Promise.all([
-          fetchDepartments(0, 100, ''),
-          getEmployeeLocations(),
-        ]);
-
-        if (!active) return;
-
-        if (departmentRes?.data?.body?.status === 'success') {
-          setDepartments(departmentRes.data.body.data.data || []);
-        }
-
-        const locs = locationRes?.data?.body?.data?.locations || [];
-        setLocations(locs.map((location) => location.locationName).filter(Boolean));
-      } catch (error) {
-        console.error('Failed to load face registration metadata', error);
-        toast.error('Failed to load locations or departments', COMPACT_TOAST);
-      }
-    };
-
-    loadRegisterMeta();
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const setField = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -1128,8 +1082,6 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
     else if (!/^[^\s@]+@[^\s@]+\.(com|net|org|in|co|io|edu|gov)$/.test(form.email.trim())) {
       nextErrors.email = 'Invalid email format';
     }
-    if (!form.designation.trim()) nextErrors.designation = 'Designation is required';
-    if (!form.departmentId) nextErrors.departmentId = 'Department is required';
     if (uploadedCount < 3) nextErrors.photos = 'Please upload 3 face images';
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -1155,9 +1107,6 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
       payload.append('lastName', form.lastName.trim());
       payload.append('email', form.email.trim());
       payload.append('vehicleNumber', form.vehicleNumber.trim());
-      payload.append('designation', form.designation.trim());
-      payload.append('departmentId', form.departmentId);
-      if (form.location) payload.append('location', form.location);
       payload.append('liveDemo', 'true');
       imageFiles.forEach((file) => {
         if (file instanceof File) payload.append('file', file);
@@ -1205,29 +1154,6 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
           <div>
             <TextInput label="Email" placeholder="name@org.com" value={form.email} onChange={(event) => setField('email', event.target.value)} type="email" required />
             {errors.email && <div className="mt-1 text-[11px] text-[var(--crit)]">{errors.email}</div>}
-          </div>
-          <div>
-            <TextInput label="Designation" placeholder="e.g. Security Supervisor" value={form.designation} onChange={(event) => setField('designation', event.target.value)} required />
-            {errors.designation && <div className="mt-1 text-[11px] text-[var(--crit)]">{errors.designation}</div>}
-          </div>
-          <div>
-            <FieldLabel>Location</FieldLabel>
-            <SelectField
-              value={form.location}
-              options={locationOptions}
-              onChange={(value) => setField('location', value)}
-              placeholder="Select location"
-            />
-          </div>
-          <div>
-            <FieldLabel required>Department</FieldLabel>
-            <SelectField
-              value={form.departmentId}
-              options={departmentOptions}
-              onChange={(value) => setField('departmentId', value)}
-              placeholder="Select department"
-            />
-            {errors.departmentId && <div className="mt-1 text-[11px] text-[var(--crit)]">{errors.departmentId}</div>}
           </div>
           <TextInput label="Vehicle Number" placeholder="e.g. KA01AB1234" value={form.vehicleNumber} onChange={(event) => setField('vehicleNumber', event.target.value)} />
         </div>
