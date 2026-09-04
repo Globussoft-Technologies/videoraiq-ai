@@ -289,3 +289,8 @@
 [id^='react-joyride-step'] {
   font-family: var(--ui);
 }
+
+/* Ensure the tour spotlight cutout outline never intercepts mouse events */
+.react-joyride__spotlight path[fill="none"] {
+  pointer-events: none !important;
+}

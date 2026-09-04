@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 // v3 dropped the default export — Joyride is a named export now.
 import { Joyride, ACTIONS, EVENTS } from 'react-joyride';
 import { useTour } from '@/context/TourContext';
+import { useTheme } from '@/theme/ThemeContext';
 import TourTooltip from './TourTooltip';
 
 /**
@@ -22,6 +23,8 @@ import TourTooltip from './TourTooltip';
  */
 export default function AppTour() {
   const { run, steps, stepIndex, goToStep, finish } = useTour();
+  const { theme } = useTheme();
+  const isDark = theme !== 'light';
 
   const handleEvent = useCallback(
     (data) => {
@@ -64,12 +67,24 @@ export default function AppTour() {
       continuous
       tooltipComponent={TourTooltip}
       onEvent={handleEvent}
+      styles={{
+        spotlight: {
+          stroke: isDark ? 'var(--blue)' : 'rgba(59, 130, 246, 0.75)',
+          strokeWidth: isDark ? 2 : 1.5,
+          style: {
+            pointerEvents: 'none',
+            filter: isDark
+              ? 'drop-shadow(0 0 10px rgba(59, 130, 246, 0.55))'
+              : 'drop-shadow(0 0 6px rgba(59, 130, 246, 0.35))',
+          },
+        },
+      }}
       options={{
         // Above the header (60), the sidebar, and the mobile drawer backdrop
         // (75) — all of which the tour has to spotlight through.
         zIndex: 10000,
         arrowColor: 'var(--bg1solid)',
-        overlayColor: 'rgba(2,6,23,.62)',
+        overlayColor: isDark ? 'rgba(2, 6, 23, 0.78)' : 'rgba(2, 6, 23, 0.55)',
         primaryColor: 'var(--blue)',
         spotlightPadding: 6,
         spotlightRadius: 10,
