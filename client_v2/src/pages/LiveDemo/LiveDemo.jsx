@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 import { DETECTION_CATEGORIES } from '@/page/user/Configure/Detections/detectionsData';
 import { ZONE_EXTRA_FIELDS } from '@/page/user/Configure/DetectionZoneMarking/constants';
 import { createAuthorizedUser, isEmailExist } from '../RegisterUser/Api';
+import { mediaUrl } from '@/lib/format';
 import { COMPACT_TOAST } from '../RegisterUser/toastOptions';
 import FaceCaptureWizard from '../RegisterUser/FaceCaptureWizard';
 import { getVideoRecordVideos, getVideoRecords } from './api/get';
@@ -174,17 +175,19 @@ function valueForPayload(value) {
   return trimmed;
 }
 
-function defaultZoneSetting(index) {
+function defaultZoneSetting(index, noun = 'Zone') {
   return {
-    name: `Zone ${index + 1}`,
+    name: `${noun} ${index + 1}`,
     capacity: '',
     threshold: '',
+    // Line Crossing only; harmless on zone types, which never read it.
+    countMode: 'entry',
   };
 }
 
-function syncZoneSettings(settings = [], count = 0) {
+function syncZoneSettings(settings = [], count = 0, noun = 'Zone') {
   return Array.from({ length: count }, (_, index) => ({
-    ...defaultZoneSetting(index),
+    ...defaultZoneSetting(index, noun),
     ...(settings[index] || {}),
   }));
 }
@@ -236,6 +239,7 @@ function DemoDrawingToolbar({
   pointCount,
   maxPoints,
   disabled,
+  isLineCrossing,
   onDraw,
   onMaxArea,
   onMinArea,
@@ -248,27 +252,33 @@ function DemoDrawingToolbar({
   const buttonBase = 'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] px-2.5 text-[11px] font-bold text-[var(--tx2)] transition-colors hover:border-[var(--blue)] hover:text-[var(--blue)] disabled:cursor-not-allowed disabled:opacity-50';
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <button type="button" onClick={onMaxArea} disabled={disabled} className={buttonBase}>
-        <Maximize2 className="h-3.5 w-3.5" />
-        Max Area
-      </button>
-      <button type="button" onClick={onMinArea} disabled={disabled} className={buttonBase}>
-        <Minimize2 className="h-3.5 w-3.5" />
-        Min Area
-      </button>
+      {!isLineCrossing && (
+        <>
+          <button type="button" onClick={onMaxArea} disabled={disabled} className={buttonBase}>
+            <Maximize2 className="h-3.5 w-3.5" />
+            Max Area
+          </button>
+          <button type="button" onClick={onMinArea} disabled={disabled} className={buttonBase}>
+            <Minimize2 className="h-3.5 w-3.5" />
+            Min Area
+          </button>
+        </>
+      )}
       <button type="button" onClick={onDraw} disabled={disabled} className={`${buttonBase} ${drawing ? 'border-[var(--blue)] text-[var(--blue)]' : ''}`}>
         <Pencil className="h-3.5 w-3.5" />
-        {drawing ? 'Stop Drawing' : 'Start Drawing'}
+        {drawing ? 'Stop Drawing' : isLineCrossing ? 'Draw Line' : 'Start Drawing'}
       </button>
-      <div className="inline-flex h-8 items-center overflow-hidden rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)]">
-        <button type="button" onClick={onDecrease} disabled={disabled || maxPoints <= 3} className="grid h-8 w-8 cursor-pointer place-items-center text-[var(--tx2)] disabled:cursor-not-allowed disabled:opacity-40">
-          <Minus className="h-3.5 w-3.5" />
-        </button>
-        <span className="min-w-8 border-x border-[var(--bd)] px-2 text-center text-[11px] font-bold text-[var(--tx)]">{maxPoints}</span>
-        <button type="button" onClick={onIncrease} disabled={disabled} className="grid h-8 w-8 cursor-pointer place-items-center text-[var(--tx2)] disabled:cursor-not-allowed disabled:opacity-40">
-          <Plus className="h-3.5 w-3.5" />
-        </button>
-      </div>
+      {!isLineCrossing && (
+        <div className="inline-flex h-8 items-center overflow-hidden rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)]">
+          <button type="button" onClick={onDecrease} disabled={disabled || maxPoints <= 3} className="grid h-8 w-8 cursor-pointer place-items-center text-[var(--tx2)] disabled:cursor-not-allowed disabled:opacity-40">
+            <Minus className="h-3.5 w-3.5" />
+          </button>
+          <span className="min-w-8 border-x border-[var(--bd)] px-2 text-center text-[11px] font-bold text-[var(--tx)]">{maxPoints}</span>
+          <button type="button" onClick={onIncrease} disabled={disabled} className="grid h-8 w-8 cursor-pointer place-items-center text-[var(--tx2)] disabled:cursor-not-allowed disabled:opacity-40">
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
       <button type="button" onClick={onUndo} disabled={disabled || pointCount === 0} className={buttonBase}>
         <Undo2 className="h-3.5 w-3.5" />
         Undo
@@ -279,7 +289,7 @@ function DemoDrawingToolbar({
       </button>
       <button type="button" onClick={onSave} disabled={disabled || pointCount < 3} className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] px-3 text-[11px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
         <Save className="h-3.5 w-3.5" />
-        Save Area
+        {isLineCrossing ? 'Save Line' : 'Save Area'}
       </button>
     </div>
   );
@@ -289,6 +299,7 @@ function FullscreenDrawingMenu({
   drawing,
   pointCount,
   disabled,
+  isLineCrossing,
   onDraw,
   onMaxArea,
   onMinArea,
@@ -296,9 +307,13 @@ function FullscreenDrawingMenu({
   onClear,
 }) {
   const actions = [
-    { label: 'Max Area', icon: Maximize2, onClick: onMaxArea },
-    { label: 'Min Area', icon: Minimize2, onClick: onMinArea },
-    { label: drawing ? 'Stop Drawing' : 'Start Drawing', icon: Pencil, onClick: onDraw },
+    ...(isLineCrossing
+      ? []
+      : [
+          { label: 'Max Area', icon: Maximize2, onClick: onMaxArea },
+          { label: 'Min Area', icon: Minimize2, onClick: onMinArea },
+        ]),
+    { label: drawing ? 'Stop Drawing' : isLineCrossing ? 'Draw Line' : 'Start Drawing', icon: Pencil, onClick: onDraw },
     { label: 'Undo', icon: Undo2, onClick: onUndo, disabled: pointCount === 0 },
     { label: 'Clear All', icon: Trash2, onClick: onClear, disabled: pointCount === 0 },
   ];
@@ -349,18 +364,22 @@ function SaveDemoAreaModal({
   const [zoneDrafts, setZoneDrafts] = useState([]);
   const [collapsed, setCollapsed] = useState({});
   const extraFields = ZONE_EXTRA_FIELDS[settingType] || [];
+  const isLineCrossing = settingType === 'lineCrossingSettings';
+  const noun = isLineCrossing ? 'Line' : 'Zone';
 
   useEffect(() => {
     if (!open) return;
     setName(detectionName || '');
     setZoneDrafts(Array.from({ length: Math.max(1, zoneCount) }, (_, index) => ({
-      name: `Zone ${zoneOffset + index + 1}`,
+      name: `${isLineCrossing ? 'Line' : 'Zone'} ${zoneOffset + index + 1}`,
       capacity: '',
       threshold: '',
+      // Line Crossing's only extra field: which direction of travel is counted.
+      countMode: 'entry',
       ...(initialZoneSettings?.[index] || {}),
     })));
     setCollapsed({});
-  }, [open, detectionName, settingType, zoneCount, zoneOffset, initialZoneSettings]);
+  }, [open, detectionName, settingType, zoneCount, zoneOffset, initialZoneSettings, isLineCrossing]);
 
   const toggleCollapsed = (index) => {
     setCollapsed((current) => ({ ...current, [index]: !current[index] }));
@@ -375,7 +394,7 @@ function SaveDemoAreaModal({
     <div className="fixed inset-0 z-[1000] grid place-items-center bg-black/45 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-2xl">
         <div className="flex items-center justify-between border-b border-[var(--bd)] px-5 py-4">
-          <h3 className="text-base font-bold text-[var(--tx)]">Save Detection Area</h3>
+          <h3 className="text-base font-bold text-[var(--tx)]">{isLineCrossing ? 'Save Detection Line' : 'Save Detection Area'}</h3>
           <button
             type="button"
             onClick={onClose}
@@ -400,7 +419,7 @@ function SaveDemoAreaModal({
 
           <div className="rounded-xl border border-[var(--bd)] bg-[var(--bg2)] p-3">
             <div className="mb-3 text-xs font-bold text-[var(--tx)]">
-              {zoneCount > 1 ? `${zoneCount} New Zones` : 'New Zone'}
+              {zoneCount > 1 ? `${zoneCount} New ${noun}s` : `New ${noun}`}
             </div>
             <div className="max-h-[196px] space-y-3 overflow-y-auto pr-1">
               {zoneDrafts.map((zone, index) => {
@@ -415,13 +434,13 @@ function SaveDemoAreaModal({
                     >
                       <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--tx)]">
                         {isCollapsed ? <ChevronDown className="h-3.5 w-3.5 text-[var(--tx3)]" /> : <ChevronUp className="h-3.5 w-3.5 text-[var(--tx3)]" />}
-                        {zone.name || `Zone ${index + 1}`}
+                        {zone.name || `${noun} ${index + 1}`}
                       </span>
                     </button>
                     {!isCollapsed && (
                       <div className="space-y-3 border-t border-[var(--bd)] p-3">
                         <div>
-                          <label className={labelClass}>Zone Name *</label>
+                          <label className={labelClass}>{noun} Name *</label>
                           <input
                             value={zone.name}
                             onChange={(event) => {
@@ -430,9 +449,27 @@ function SaveDemoAreaModal({
                               setZoneDrafts(next);
                             }}
                             className={inputClass}
-                            placeholder="Enter zone name"
+                            placeholder={`Enter ${noun.toLowerCase()} name`}
                           />
                         </div>
+                        {isLineCrossing && (
+                          <div>
+                            <label className={labelClass}>Mode</label>
+                            <select
+                              value={zone.countMode || 'entry'}
+                              onChange={(event) => {
+                                const next = [...zoneDrafts];
+                                next[index] = { ...next[index], countMode: event.target.value };
+                                setZoneDrafts(next);
+                              }}
+                              className={inputClass}
+                            >
+                              <option value="entry">Entry</option>
+                              <option value="exit">Exit</option>
+                              <option value="both">Both</option>
+                            </select>
+                          </div>
+                        )}
                         {extraFields.includes('capacity') && (
                           <div>
                             <label className={labelClass}>Capacity *</label>
@@ -525,10 +562,10 @@ const detectionConfigs = {
     fields: [{ label: 'Alert After Dwell Of (Sec)', value: '3', unit: 'sec' }],
   },
   'Line Crossing Detection': {
-    description: 'Click 2 points on the video to place the tripwire. Every crossing is logged with its direction.',
+    description: 'Click "Draw Line", then click the two line endpoints and one inside reference point.',
     geometry: {
-      text: 'Click 2 points on your video to place the tripwire. Every crossing in the clip is counted with its direction.',
-      badge: '0 / 2 Points Placed',
+      text: 'Click two points to place the tripwire, then a third point on the side that counts as inside. Every crossing is counted with its direction.',
+      badge: '0 / 3 Points Placed',
     },
     fields: [{ label: 'Debounce Between Events (Sec)', value: '5', unit: 'sec' }],
   },
@@ -733,6 +770,7 @@ function DemoZoneSettingsPanel({
   if (!zones.length) return null;
 
   const extraFields = ZONE_EXTRA_FIELDS[settingType] || [];
+  const isLineCrossing = settingType === 'lineCrossingSettings';
   const inputClass = 'h-10 w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 text-xs font-semibold text-[var(--tx)] outline-none focus:border-[var(--blue)]';
   const labelClass = 'mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--tx3)]';
 
@@ -744,9 +782,11 @@ function DemoZoneSettingsPanel({
     <div className="mt-4 rounded-xl border border-[var(--bd)] bg-[var(--bg2)] p-3">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <div className="text-sm font-bold text-[var(--tx)]">Zone Settings</div>
+          <div className="text-sm font-bold text-[var(--tx)]">{isLineCrossing ? 'Line Settings' : 'Zone Settings'}</div>
           <div className="mt-1 text-[11px] text-[var(--tx3)]">
-            {zones.length} zone{zones.length === 1 ? '' : 's'} drawn for this detection type.
+            {isLineCrossing
+              ? `${zones.length} line${zones.length === 1 ? '' : 's'} drawn for this detection type.`
+              : `${zones.length} zone${zones.length === 1 ? '' : 's'} drawn for this detection type.`}
           </div>
         </div>
         <button
@@ -799,14 +839,28 @@ function DemoZoneSettingsPanel({
               {!isCollapsed && (
                 <div className="space-y-3 p-3">
                   <div>
-                    <label className={labelClass}>Zone Name *</label>
+                    <label className={labelClass}>{isLineCrossing ? 'Line' : 'Zone'} Name *</label>
                     <input
                       value={zone.name}
                       onChange={(event) => onChange(index, 'name', event.target.value)}
                       className={inputClass}
-                      placeholder="Enter zone name"
+                      placeholder={isLineCrossing ? 'Enter line name' : 'Enter zone name'}
                     />
                   </div>
+                  {isLineCrossing && (
+                    <div>
+                      <label className={labelClass}>Mode</label>
+                      <select
+                        value={zone.countMode || 'entry'}
+                        onChange={(event) => onChange(index, 'countMode', event.target.value)}
+                        className={inputClass}
+                      >
+                        <option value="entry">Entry</option>
+                        <option value="exit">Exit</option>
+                        <option value="both">Both</option>
+                      </select>
+                    </div>
+                  )}
                   {extraFields.includes('capacity') && (
                     <div>
                       <label className={labelClass}>Capacity *</label>
@@ -988,6 +1042,123 @@ function MatchedAlertsPanel({ alerts }) {
               </div>
             );
           })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// Event log for every non-face detection. Rows come from the same
+// /incidents feed the real Incidents page uses (scoped to liveDemoData), so the
+// field names here mirror IncidentLogsPage's mapping rather than inventing new
+// ones. Face Recognition keeps its own Attendance Log instead.
+const SEVERITY_STYLES = {
+  high: 'border-red-400/40 bg-red-500/10 text-red-500',
+  moderate: 'border-amber-400/40 bg-amber-500/10 text-amber-500',
+  medium: 'border-amber-400/40 bg-amber-500/10 text-amber-500',
+  low: 'border-emerald-400/40 bg-emerald-500/10 text-emerald-500',
+};
+
+function incidentStatus(item) {
+  if (item?.resolved) return { label: 'Resolved', className: 'border-emerald-400/40 bg-emerald-500/10 text-emerald-500' };
+  if (item?.report?.status) return { label: 'Reported', className: 'border-red-400/40 bg-red-500/10 text-red-500' };
+  return { label: 'New', className: 'border-[var(--blue)]/40 bg-[var(--blue)]/10 text-[var(--blue)]' };
+}
+
+// ConfidenceScoreInPercentage is already 0-100; the legacy fallbacks are 0-1
+// ratios, so only those get scaled.
+function incidentConfidence(item) {
+  const pct = item?.ConfidenceScoreInPercentage ?? item?.confidenceScoreInPercentage;
+  if (Number.isFinite(Number(pct))) return `${Math.round(Number(pct))}%`;
+  const raw = item?.confidence ?? item?.accuracy ?? item?.score;
+  if (Number.isFinite(Number(raw))) return `${Math.round(Number(raw) * 100)}%`;
+  return '--';
+}
+
+function incidentTime(item) {
+  const value = item?.timeOfIncident || item?.createdAt;
+  if (!value) return '--';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? '--'
+    : parsed.toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function DemoEventLogPanel({ incidents, detectionName, loading }) {
+  const items = Array.isArray(incidents?.items) ? incidents.items : [];
+  const total = incidents?.totalCount ?? items.length;
+
+  return (
+    <section data-tour="demo-config" className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-[15px] font-bold text-[var(--tx)]">Event Log</h2>
+          <span className="rounded-md border border-[var(--bd)] bg-[var(--bg2)] px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--tx3)]">
+            {detectionName}
+          </span>
+        </div>
+        <span className="text-[11px] text-[var(--tx3)]">{total} {total === 1 ? 'event' : 'events'}</span>
+      </div>
+
+      {loading ? (
+        <div className="rounded-lg border border-dashed border-[var(--bd2)] bg-[var(--bg2)] p-6 text-center text-xs text-[var(--tx3)]">
+          Loading events...
+        </div>
+      ) : items.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-[var(--bd2)] bg-[var(--bg2)] p-6 text-center text-xs text-[var(--tx3)]">
+          No events detected in this clip.
+        </div>
+      ) : (
+        <div className="max-h-[360px] overflow-auto rounded-lg border border-[var(--bd)]">
+          <table className="w-full min-w-[720px] text-left text-xs">
+            <thead className="sticky top-0 z-10 bg-[var(--bg2)] text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--tx3)]">
+              <tr>
+                <th className="px-3 py-2">Snap</th>
+                <th className="px-3 py-2">Event</th>
+                <th className="px-3 py-2">Time</th>
+                <th className="px-3 py-2">Camera</th>
+                <th className="px-3 py-2">Severity</th>
+                <th className="px-3 py-2">Confidence</th>
+                <th className="px-3 py-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, index) => {
+                const severity = String(item?.severity || '').toLowerCase();
+                const status = incidentStatus(item);
+                return (
+                  <tr key={item?._id || item?.id || index} className="border-t border-[var(--bd)] align-middle">
+                    <td className="px-3 py-2">
+                      <ExpandableSnap src={mediaUrl(item?.Image)} alt={item?.incidentName || 'Event snapshot'} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="font-bold text-[var(--tx)]">{item?.incidentName || detectionName}</div>
+                      {item?.zone && <div className="mt-0.5 text-[11px] text-[var(--tx3)]">{item.zone}</div>}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-[var(--tx2)]">{incidentTime(item)}</td>
+                    <td className="px-3 py-2 text-[var(--tx2)]">
+                      {item?.channelData?.name || item?.channelName || '--'}
+                    </td>
+                    <td className="px-3 py-2">
+                      {severity ? (
+                        <span className={`rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] ${SEVERITY_STYLES[severity] || 'border-[var(--bd)] text-[var(--tx3)]'}`}>
+                          {severity}
+                        </span>
+                      ) : (
+                        <span className="text-[var(--tx3)]">--</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-[var(--tx2)]">{incidentConfidence(item)}</td>
+                    <td className="px-3 py-2">
+                      <span className={`rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] ${status.className}`}>
+                        {status.label}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </section>
@@ -1692,7 +1863,7 @@ function DemoHistoryPanel({ history, loading, activeRecordId, onSelect }) {
         </div>
       ) : history.length === 0 ? (
         <div className="rounded-lg border border-dashed border-[var(--bd2)] bg-[var(--bg2)] p-4 text-center text-xs text-[var(--tx3)]">
-          No demos run yet.
+          No processed demos yet.
         </div>
       ) : (
         <div className="max-h-[240px] space-y-2 overflow-y-auto pr-1">
@@ -1749,6 +1920,7 @@ export default function LiveDemo({ active = true }) {
   const [processJob, setProcessJob] = useState(null);
   const [secondsRemaining, setSecondsRemaining] = useState(null);
   const [demoIncidents, setDemoIncidents] = useState({ items: [], totalCount: 0 });
+  const [demoIncidentsLoading, setDemoIncidentsLoading] = useState(false);
   const [demoAttendanceLogs, setDemoAttendanceLogs] = useState(null);
   const [clipStatus, setClipStatus] = useState('idle');
   const [clipProgress, setClipProgress] = useState(0);
@@ -1793,6 +1965,13 @@ export default function LiveDemo({ active = true }) {
 
   const selected = detections.find((item) => item.name === selectedDetection) || detections[0];
   const selectedConfig = detectionConfigs[selectedDetection];
+  // Line Crossing draws a single straight tripwire, not a closed area: clicks 1
+  // and 2 are the line endpoints and click 3 is the inside reference point that
+  // tells DS which side counts as "in". Mirrors DetectionZoneMarking.jsx's
+  // isLineCrossing branch so both editors save the same shape.
+  const isLineCrossing = selected?.settingType === 'lineCrossingSettings';
+  const zoneNoun = isLineCrossing ? 'Line' : 'Zone';
+  const effectiveMaxPoints = isLineCrossing ? 3 : maxPoints;
   const configurationAvailable = selectedDetection === 'Face Recognition' || selectedConfig;
   const isClipBusy = clipStatus === 'uploading' || clipStatus === 'processing' || clipStatus === 'awaiting-ds';
   const currentVideoId = firstVideoOf(videoRecord)?._id || firstVideoOf(videoRecord)?.id || '';
@@ -1906,9 +2085,10 @@ export default function LiveDemo({ active = true }) {
       : [];
     const restoredConfigs = Array.isArray(video?.zone_configs)
       ? video.zone_configs.map((config, index) => ({
-          name: config.name || `Zone ${index + 1}`,
+          name: config.name || `${isLineCrossing ? 'Line' : 'Zone'} ${index + 1}`,
           capacity: config.capacity ?? '',
           threshold: config.threshold_sec ?? '',
+          countMode: config.count_mode === 'all' ? 'both' : config.count_mode || 'entry',
         }))
       : [];
     const settingType = Object.entries(record?.detections || {}).find(([, enabled]) => enabled)?.[0];
@@ -1920,8 +2100,8 @@ export default function LiveDemo({ active = true }) {
     setClipProgress(ready || nextStatus === 'uploaded' ? 100 : 75);
     savedZonesRef.current = restoredZones;
     setSavedZones(restoredZones);
-    setZoneSettings(syncZoneSettings(restoredConfigs, restoredZones.length));
-    setConfirmedZoneNames(restoredConfigs.map((config, index) => config.name || `Zone ${index + 1}`));
+    setZoneSettings(syncZoneSettings(restoredConfigs, restoredZones.length, isLineCrossing ? 'Line' : 'Zone'));
+    setConfirmedZoneNames(restoredConfigs.map((config, index) => config.name || `${isLineCrossing ? 'Line' : 'Zone'} ${index + 1}`));
     if (settingType) processingSettingTypeRef.current = settingType;
     updateLiveDemoSession({
       adminId: user?.adminId,
@@ -1945,7 +2125,7 @@ export default function LiveDemo({ active = true }) {
         detectionTypes: settingType ? [analyticsSettingType(settingType)] : undefined,
       }).catch(() => null),
       videoId
-        ? getDemoIncidents({ limit: 10, videoId, ...(settingType ? { incidentTypeFilter: [settingType] } : {}) }).catch(() => null)
+        ? getDemoIncidents({ limit: 50, videoId, ...(settingType ? { incidentTypeFilter: [settingType] } : {}) }).catch(() => null)
         : Promise.resolve(null),
       isFaceRecognition && videoId
         ? getDemoAttendanceLogs({ limit: 10, isExport: false, removeUnknown: true, videoId }).catch(() => null)
@@ -1958,7 +2138,14 @@ export default function LiveDemo({ active = true }) {
     if (isFaceRecognition && !(attendanceScoped?.usersLogs?.length)) {
       attendanceData = await getDemoAttendanceLogs({ limit: 10, isExport: false, removeUnknown: true }).catch(() => attendanceScoped);
     }
-    setDemoIncidents(incidentsData || { items: [], totalCount: 0 });
+    let resolvedIncidents = incidentsData;
+    if (!isFaceRecognition && !(resolvedIncidents?.items?.length)) {
+      resolvedIncidents = await getDemoIncidents({
+        limit: 50,
+        ...(settingType ? { incidentTypeFilter: [settingType] } : {}),
+      }).catch(() => resolvedIncidents);
+    }
+    setDemoIncidents(resolvedIncidents || { items: [], totalCount: 0 });
     setDemoAttendanceLogs(attendanceData);
     // Matched Alerts is a live socket feed (accessLogs_${adminId}), not a
     // fetch — for a re-opened past run it seeds from the attendance sessions so
@@ -2026,7 +2213,13 @@ export default function LiveDemo({ active = true }) {
     setDemoHistoryLoading(true);
     try {
       const { records } = await getVideoRecords({ limit: 20 });
-      setDemoHistory(Array.isArray(records) ? records : []);
+      // Only completed runs belong here — a record whose videos all have a null
+      // dsVideoUrl hasn't come back from DS yet, so there's nothing to load if
+      // it were clicked. Same dsVideoUrl test the "Processed" badge uses.
+      const processed = (Array.isArray(records) ? records : []).filter((record) =>
+        (record?.videos || []).some((video) => video?.dsVideoUrl)
+      );
+      setDemoHistory(processed);
     } catch (error) {
       console.error('Failed to load live demo history', error);
     } finally {
@@ -2113,6 +2306,7 @@ export default function LiveDemo({ active = true }) {
 
       setClipProgress(100);
       setClipStatus('ready');
+      if (processingSettingTypeRef.current !== 'faceAuthenticationSettings') setDemoIncidentsLoading(true);
       setSecondsRemaining(null);
       processingDeadlineRef.current = null;
       updateLiveDemoSession({
@@ -2127,14 +2321,40 @@ export default function LiveDemo({ active = true }) {
       // attendance log only applies to Face Recognition's detector.
       try {
         const isFaceRecognition = processingSettingTypeRef.current === 'faceAuthenticationSettings';
-        const [analyticsData, attendanceData] = await Promise.all([
-          getLiveDemoAnalytics({ detectionTypes: [analyticsSettingType(processingSettingTypeRef.current)] }),
+        // Incidents are also fetched when processing is kicked off, but DS
+        // hasn't emitted any events by then -- this is the refetch that
+        // actually fills the Event Log.
+        const settingType = processingSettingTypeRef.current;
+        const [analyticsData, attendanceData, incidentsData] = await Promise.all([
+          getLiveDemoAnalytics({ detectionTypes: [analyticsSettingType(settingType)] }),
           isFaceRecognition ? getDemoAttendanceLogs({ limit: 10, isExport: false, removeUnknown: true }) : Promise.resolve(null),
+          isFaceRecognition
+            ? Promise.resolve(null)
+            : getDemoIncidents({
+                limit: 50,
+                ...(currentVideoId ? { videoId: currentVideoId } : {}),
+                ...(settingType ? { incidentTypeFilter: [settingType] } : {}),
+              }).catch(() => null),
         ]);
         setSessionAnalytics(analyticsData || null);
         if (isFaceRecognition) setDemoAttendanceLogs(attendanceData);
+        if (!isFaceRecognition) {
+          // DS doesn't always stamp events with our videoId, so a scoped query
+          // can come back empty for a clip that did produce events. Fall back to
+          // the admin-wide demo feed rather than showing an empty log.
+          let resolved = incidentsData;
+          if (!resolved?.items?.length) {
+            resolved = await getDemoIncidents({
+              limit: 50,
+              ...(settingType ? { incidentTypeFilter: [settingType] } : {}),
+            }).catch(() => resolved);
+          }
+          setDemoIncidents(resolved || { items: [], totalCount: 0 });
+          setDemoIncidentsLoading(false);
+        }
       } catch (error) {
         console.error('Failed to refresh live demo results after processing', error);
+        setDemoIncidentsLoading(false);
       }
     };
 
@@ -2348,15 +2568,24 @@ export default function LiveDemo({ active = true }) {
     // effects — React 18 StrictMode double-invokes updater functions in dev,
     // which was pushing a completed zone into draftZonesRef twice per click.
     const current = pointsRef.current;
-    if (current.length >= maxPoints) return;
+    if (current.length >= effectiveMaxPoints) return;
     const updated = [...current, nextPoint];
 
-    if (updated.length >= maxPoints) {
+    // A line stays in `points` until the user saves it — unlike a polygon it
+    // must not auto-commit on the 3rd click, because that 3rd click is the
+    // reference point rather than the close of a shape.
+    if (isLineCrossing) {
+      pointsRef.current = updated;
+      setPoints(updated);
+      return;
+    }
+
+    if (updated.length >= effectiveMaxPoints) {
       const nextDraftZones = [...draftZonesRef.current, updated];
       draftZonesRef.current = nextDraftZones;
       pointsRef.current = [];
       setDraftZones(nextDraftZones);
-      setZoneSettings((prev) => syncZoneSettings(prev, savedZonesRef.current.length + nextDraftZones.length));
+      setZoneSettings((prev) => syncZoneSettings(prev, savedZonesRef.current.length + nextDraftZones.length, zoneNoun));
       setPoints([]);
       return;
     }
@@ -2397,7 +2626,7 @@ export default function LiveDemo({ active = true }) {
     const latestPoints = pointsRef.current;
     const latestDraftZones = draftZonesRef.current;
     const latestSavedZones = savedZonesRef.current;
-    return latestPoints.length >= 3 ? [...latestSavedZones, ...latestDraftZones, latestPoints] : [...latestSavedZones, ...latestDraftZones];
+    return latestPoints.length >= 3 ? [...latestSavedZones, ...latestDraftZones, latestPoints] : [...latestSavedZones, ...latestDraftZones];  // 3 pts = polygon, or line + ref point
   };
 
   // Zones drawn since the last save — draft zones plus the in-progress one,
@@ -2405,18 +2634,31 @@ export default function LiveDemo({ active = true }) {
   const buildNewZones = () => {
     const latestPoints = pointsRef.current;
     const latestDraftZones = draftZonesRef.current;
-    return latestPoints.length >= 3 ? [...latestDraftZones, latestPoints] : [...latestDraftZones];
+    const built = latestPoints.length >= 3 ? [...latestDraftZones, latestPoints] : [...latestDraftZones];
+    // Re-saving an already-saved tripwire (to change its Mode or name) leaves
+    // nothing in points/draftZones, so fall back to the saved line rather than
+    // rejecting the save. Line Crossing only ever has one line.
+    if (!built.length && isLineCrossing && savedZonesRef.current.length) {
+      return [savedZonesRef.current[0]];
+    }
+    return built;
   };
 
   const pendingZones = buildPendingZones();
   const newZones = buildNewZones();
-  const visibleZoneSettings = syncZoneSettings(zoneSettings, pendingZones.length);
-  const savedZoneSettings = syncZoneSettings(zoneSettings, savedZones.length);
-  const newZoneSettings = visibleZoneSettings.slice(savedZones.length);
+  const visibleZoneSettings = syncZoneSettings(zoneSettings, pendingZones.length, zoneNoun);
+  const savedZoneSettings = syncZoneSettings(zoneSettings, savedZones.length, zoneNoun);
+  // Re-saving a tripwire edits the existing line, so the modal must open on the
+  // saved line's own name/Mode and number it "Line 1" -- not offset past it.
+  const isLineResaveUI = isLineCrossing && savedZones.length > 0 && newZones.length > 0 && draftZones.length === 0 && points.length === 0;
+  const newZoneSettings = isLineResaveUI
+    ? savedZoneSettings.slice(0, 1)
+    : visibleZoneSettings.slice(savedZones.length);
+  const saveModalZoneOffset = isLineResaveUI ? 0 : savedZones.length;
 
   const handleZoneSettingChange = (index, field, value) => {
     setZoneSettings((current) => {
-      const updated = syncZoneSettings(current, pendingZones.length);
+      const updated = syncZoneSettings(current, pendingZones.length, zoneNoun);
       updated[index] = { ...updated[index], [field]: value };
       return updated;
     });
@@ -2431,11 +2673,29 @@ export default function LiveDemo({ active = true }) {
       ? 'zoneIntrusionSettings'
       : selected.settingType;
     const extraFields = ZONE_EXTRA_FIELDS[selected.settingType] || [];
-    const zonesPayload = zones.map((zone) => zone.map((point) => [point.x, point.y]));
+    // A tripwire is stored as its 2 endpoints; the 3rd drawn point is the
+    // inside reference point, sent alongside as inside_reference_point /
+    // count_mode — the same field names DetectionZoneMarking.jsx persists.
+    const zonesPayload = zones.map((zone) =>
+      (isLineCrossing ? zone.slice(0, 2) : zone).map((point) => [point.x, point.y])
+    );
+    const insideReferencePoint = isLineCrossing && zones[0]?.[2]
+      ? [Number(zones[0][2].x), Number(zones[0][2].y)]
+      : null;
+    const lineExtras = isLineCrossing
+      ? {
+          ...(insideReferencePoint ? { inside_reference_point: insideReferencePoint } : {}),
+          count_mode: (() => {
+            const mode = zoneConfigs?.[0]?.countMode || 'entry';
+            return mode === 'both' ? 'all' : mode;
+          })(),
+          videoResolution: [videoSize.w, videoSize.h],
+        }
+      : {};
     const zoneConfigsPayload = zonesPayload.map((_, index) => {
       const zone = zoneConfigs[index] || {};
       return {
-        name: zone.name || `Zone ${index + 1}`,
+        name: zone.name || `${isLineCrossing ? 'Line' : 'Zone'} ${index + 1}`,
         detection_name: detectionName || selected.name,
         levelOfImportance: zone.severity || severity,
         ...(extraFields.includes('capacity') && String(zone.capacity ?? '').trim() !== ''
@@ -2457,10 +2717,11 @@ export default function LiveDemo({ active = true }) {
         videoId: existingVideoId,
         zones: zonesPayload,
         zone_configs: zoneConfigsPayload,
+        ...lineExtras,
       });
     } else {
       record = await createVideoRecord({
-        videos: [{ videoUrl: uploadedVideoPath, zones: zonesPayload, zone_configs: zoneConfigsPayload }],
+        videos: [{ videoUrl: uploadedVideoPath, zones: zonesPayload, zone_configs: zoneConfigsPayload, ...lineExtras }],
         detections: { [detectionKey]: true },
       });
     }
@@ -2469,8 +2730,15 @@ export default function LiveDemo({ active = true }) {
     const recordId = recordIdOf(record);
     const videosData = recordId ? await getVideoRecordVideos(recordId) : null;
     const savedVideo = firstVideoOf(videosData) || firstVideoOf(record);
+    // The server echoes a tripwire back as its 2 endpoints only, so re-attach
+    // the reference point locally — otherwise it vanishes from the overlay the
+    // moment the line is saved.
     const confirmedZones = Array.isArray(savedVideo?.zones)
-      ? savedVideo.zones.map((zone) => zone.map(([x, y]) => ({ x, y })))
+      ? savedVideo.zones.map((zone, index) => {
+          const echoed = zone.map(([x, y]) => ({ x, y }));
+          const refPoint = isLineCrossing ? zones[index]?.[2] : null;
+          return refPoint ? [...echoed.slice(0, 2), refPoint] : echoed;
+        })
       : zones;
     const confirmedConfigs = Array.isArray(savedVideo?.zone_configs)
       ? savedVideo.zone_configs.map((config, index) => ({
@@ -2486,7 +2754,7 @@ export default function LiveDemo({ active = true }) {
     setSavedZones(confirmedZones);
     setDraftZones([]);
     setPoints([]);
-    setZoneSettings(syncZoneSettings(confirmedConfigs, confirmedZones.length));
+    setZoneSettings(syncZoneSettings(confirmedConfigs, confirmedZones.length, zoneNoun));
     setConfirmedZoneNames(confirmedConfigs.map((config, index) => config.name || `Zone ${index + 1}`));
     setDrawing(false);
   };
@@ -2542,7 +2810,12 @@ export default function LiveDemo({ active = true }) {
   const handleSaveArea = async () => {
     const nextNewZones = buildNewZones();
     if (nextNewZones.length === 0) {
-      toast.error('Place at least 3 points before saving area', COMPACT_TOAST);
+      toast.error(
+        isLineCrossing
+          ? 'Draw the line and place the inside reference point before saving'
+          : 'Place at least 3 points before saving area',
+        COMPACT_TOAST,
+      );
       return;
     }
     if (!uploadedVideoPath) {
@@ -2552,6 +2825,15 @@ export default function LiveDemo({ active = true }) {
     if (!selected.settingType) {
       toast.error(`${selected.name} is not available in the Live Demo API yet`, COMPACT_TOAST);
       return;
+    }
+    // DS can't decide crossing direction without the inside reference point, so
+    // a line that hasn't got all 3 points placed and saved isn't processable.
+    if (isLineCrossing) {
+      const line = savedZonesRef.current[0] || draftZonesRef.current[0] || pointsRef.current;
+      if (!line || line.length < 3) {
+        toast.error('Draw the line and place the inside reference point first', COMPACT_TOAST);
+        return;
+      }
     }
     if (document.fullscreenElement === stageRef.current) {
       setShowDrawingActions(false);
@@ -2563,7 +2845,12 @@ export default function LiveDemo({ active = true }) {
   const handleSubmitSaveArea = async ({ detectionName, severity, zoneDrafts: submittedZones = [] }) => {
     const nextNewZones = buildNewZones();
     if (nextNewZones.length === 0) {
-      toast.error('Place at least 3 points before saving area', COMPACT_TOAST);
+      toast.error(
+        isLineCrossing
+          ? 'Draw the line and place the inside reference point before saving'
+          : 'Place at least 3 points before saving area',
+        COMPACT_TOAST,
+      );
       return;
     }
     if (!uploadedVideoPath) {
@@ -2577,8 +2864,13 @@ export default function LiveDemo({ active = true }) {
 
     // Merge the newly drawn zones (from the modal) with what's already saved,
     // so submitting doesn't wipe out zones saved earlier in this session.
-    const allZones = [...savedZonesRef.current, ...nextNewZones];
-    const allZoneConfigs = [...savedZoneSettings, ...submittedZones.map((zone) => ({ ...zone, severity }))];
+    // A re-saved tripwire is the SAME line, not an extra one -- merging it in
+    // would duplicate it, so it replaces the saved line instead.
+    const isLineResave = isLineCrossing && savedZonesRef.current.length > 0;
+    const allZones = isLineResave ? nextNewZones : [...savedZonesRef.current, ...nextNewZones];
+    const allZoneConfigs = isLineResave
+      ? submittedZones.map((zone) => ({ ...zone, severity }))
+      : [...savedZoneSettings, ...submittedZones.map((zone) => ({ ...zone, severity }))];
 
     setSavingArea(true);
     try {
@@ -2643,6 +2935,7 @@ export default function LiveDemo({ active = true }) {
     drawing,
     pointCount: points.length + draftZones.reduce((sum, zone) => sum + zone.length, 0) + savedZones.reduce((sum, zone) => sum + zone.length, 0),
     maxPoints,
+    isLineCrossing,
     disabled: !playerVideoUrl || isClipBusy || savingArea,
     onDraw: () => setDrawing((value) => !value),
     onMaxArea: handleMaxArea,
@@ -3093,39 +3386,82 @@ export default function LiveDemo({ active = true }) {
                     >
                       {savedZones.map((zone, index) => (
                         <g key={`zone-${index}`}>
-                          <polygon
-                            points={pointsToAttr(zone)}
-                            fill="rgba(245,166,35,.18)"
-                            stroke="rgba(245,166,35,.95)"
-                            strokeWidth="3"
-                          />
-                          {zone.map((point, pointIndex) => (
-                            <circle key={`zone-${index}-point-${pointIndex}`} cx={point.x} cy={point.y} r="6" fill="#fff" stroke="rgba(245,166,35,.95)" strokeWidth="3" />
-                          ))}
+                          {isLineCrossing ? (
+                            <polyline
+                              points={pointsToAttr(zone.slice(0, 2))}
+                              fill="none"
+                              stroke="rgba(245,166,35,.95)"
+                              strokeWidth="4"
+                            />
+                          ) : (
+                            <polygon
+                              points={pointsToAttr(zone)}
+                              fill="rgba(245,166,35,.18)"
+                              stroke="rgba(245,166,35,.95)"
+                              strokeWidth="3"
+                            />
+                          )}
+                          {zone.map((point, pointIndex) => {
+                            const isRefPoint = isLineCrossing && pointIndex === 2;
+                            return (
+                              <g key={`zone-${index}-point-${pointIndex}`}>
+                                <circle
+                                  cx={point.x}
+                                  cy={point.y}
+                                  r={isRefPoint ? 7 : 6}
+                                  fill={isRefPoint ? '#22c55e' : '#fff'}
+                                  stroke={isRefPoint ? '#fff' : 'rgba(245,166,35,.95)'}
+                                  strokeWidth="3"
+                                />
+                                {isRefPoint && (
+                                  <text
+                                    x={point.x + 14}
+                                    y={point.y + 5}
+                                    fill="#22c55e"
+                                    fontSize="16"
+                                    fontWeight="bold"
+                                  >
+                                    Inside Reference Point
+                                  </text>
+                                )}
+                              </g>
+                            );
+                          })}
                         </g>
                       ))}
                       {draftZones.map((zone, index) => (
                         <g key={`draft-zone-${index}`}>
-                          <polygon
-                            points={pointsToAttr(zone)}
-                            fill="rgba(59,130,246,.14)"
-                            stroke="rgba(59,130,246,.95)"
-                            strokeWidth="3"
-                          />
+                          {isLineCrossing ? (
+                            <polyline
+                              points={pointsToAttr(zone.slice(0, 2))}
+                              fill="none"
+                              stroke="rgba(59,130,246,.95)"
+                              strokeWidth="4"
+                            />
+                          ) : (
+                            <polygon
+                              points={pointsToAttr(zone)}
+                              fill="rgba(59,130,246,.14)"
+                              stroke="rgba(59,130,246,.95)"
+                              strokeWidth="3"
+                            />
+                          )}
                           {zone.map((point, pointIndex) => (
                             <circle key={`draft-zone-${index}-point-${pointIndex}`} cx={point.x} cy={point.y} r="6" fill="#fff" stroke="rgba(59,130,246,.95)" strokeWidth="3" />
                           ))}
                         </g>
                       ))}
+                      {/* A tripwire is only ever the first 2 points; the 3rd is
+                          the inside reference point and must not join the line. */}
                       {points.length >= 2 && (
                         <polyline
-                          points={pointsToAttr(points)}
+                          points={pointsToAttr(isLineCrossing ? points.slice(0, 2) : points)}
                           fill="none"
                           stroke="rgba(59,130,246,.95)"
-                          strokeWidth="3"
+                          strokeWidth={isLineCrossing ? 4 : 3}
                         />
                       )}
-                      {points.length >= 3 && (
+                      {!isLineCrossing && points.length >= 3 && (
                         <polygon
                           points={pointsToAttr(points)}
                           fill="rgba(59,130,246,.14)"
@@ -3133,19 +3469,35 @@ export default function LiveDemo({ active = true }) {
                           strokeWidth="3"
                         />
                       )}
-                      {points.map((point, index) => (
-                        <circle
-                          key={`point-${index}`}
-                          cx={point.x}
-                          cy={point.y}
-                          r={drawing ? 7 : 10}
-                          fill="#fff"
-                          stroke="rgba(59,130,246,.95)"
-                          strokeWidth="3"
-                          style={{ pointerEvents: drawing ? 'none' : 'auto', cursor: drawing ? 'default' : 'grab', touchAction: 'none' }}
-                          onPointerDown={handlePointDragStart(index)}
-                        />
-                      ))}
+                      {points.map((point, index) => {
+                        const isRefPoint = isLineCrossing && index === 2;
+                        return (
+                          <g key={`point-${index}`}>
+                            <circle
+                              cx={point.x}
+                              cy={point.y}
+                              r={drawing ? 7 : 10}
+                              fill={isRefPoint ? '#22c55e' : '#fff'}
+                              stroke={isRefPoint ? '#fff' : 'rgba(59,130,246,.95)'}
+                              strokeWidth="3"
+                              style={{ pointerEvents: drawing ? 'none' : 'auto', cursor: drawing ? 'default' : 'grab', touchAction: 'none' }}
+                              onPointerDown={handlePointDragStart(index)}
+                            />
+                            {isRefPoint && (
+                              <text
+                                x={point.x + 14}
+                                y={point.y + 5}
+                                fill="#22c55e"
+                                fontSize="16"
+                                fontWeight="bold"
+                                style={{ pointerEvents: 'none' }}
+                              >
+                                Inside Reference Point
+                              </text>
+                            )}
+                          </g>
+                        );
+                      })}
                     </svg>
                     <div
                       className="pointer-events-none absolute z-[3]"
@@ -3155,7 +3507,7 @@ export default function LiveDemo({ active = true }) {
                         const w = videoSize.w || 1000;
                         const h = videoSize.h || 562;
                         const topPoint = zone.reduce((top, point) => (point.y < top.y ? point : top), zone[0]);
-                        const label = confirmedZoneNames[index] || `Zone ${index + 1}`;
+                        const label = confirmedZoneNames[index] || `${isLineCrossing ? 'Line' : 'Zone'} ${index + 1}`;
                         return (
                           <div
                             key={`zone-label-${index}`}
@@ -3336,7 +3688,14 @@ export default function LiveDemo({ active = true }) {
         ) : (
           selectedDetection === 'Face Recognition' && <FaceRecognitionConfig confidence={confidence} setConfidence={setConfidence} />
         )}
-        {selectedDetection !== 'Face Recognition' && selectedConfig && (
+        {selectedDetection !== 'Face Recognition' && clipStatus === 'ready' && (
+          <DemoEventLogPanel
+            incidents={demoIncidents}
+            detectionName={selectedDetection}
+            loading={demoIncidentsLoading}
+          />
+        )}
+        {selectedDetection !== 'Face Recognition' && clipStatus !== 'ready' && selectedConfig && (
           <DetectionConfigPanel
             detectionName={selectedDetection}
             config={selectedConfig}
@@ -3380,7 +3739,7 @@ export default function LiveDemo({ active = true }) {
         detectionName={selectedDetection}
         settingType={selected.settingType}
         zoneCount={newZones.length}
-        zoneOffset={savedZones.length}
+        zoneOffset={saveModalZoneOffset}
         initialZoneSettings={newZoneSettings}
         saving={savingArea}
         onClose={() => !savingArea && setShowSaveAreaModal(false)}
