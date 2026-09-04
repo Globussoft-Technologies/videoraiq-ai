@@ -51,7 +51,8 @@ import {
   TableOccupancyDetectionIncident,
   FoodServicePPEDetectionIncident,
   MobilePhoneDetectionIncident,
-  CarModelDetectionIncident
+  CarModelDetectionIncident,
+  VehicleCheckInOutIncident
 } from "./incidents.model.js";
 const modelMap = {
   countPersons: CountPersonIncident,
@@ -80,7 +81,8 @@ const modelMap = {
   tableOccupancyDetection: TableOccupancyDetectionIncident,
   foodServicePPEDetection: FoodServicePPEDetectionIncident,
   mobilePhoneDetection: MobilePhoneDetectionIncident,
-  carModelDetection: CarModelDetectionIncident
+  carModelDetection: CarModelDetectionIncident,
+  vehicleCheckInOut: VehicleCheckInOutIncident
 };
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
@@ -198,6 +200,24 @@ const normalizeHondaModel = (value) =>
 // Attribute values arrive from the DS under several spellings and sometimes
 // as explicit placeholders. Take the first usable one and treat placeholder
 // text as absent, so the logs UI shows a real value or "--", never "unknown".
+/**
+ * Normalise however DS spells the crossing direction into the boolean the
+ * schema stores. Returns undefined for anything unrecognised so a malformed
+ * payload fails validation rather than defaulting to "arrived".
+ */
+const toCheckInFlag = (value) => {
+  if (typeof value === "boolean") return value;
+
+  const text = String(value ?? "").trim().toLowerCase();
+  if (["checkin", "check_in", "check-in", "in", "entry", "true"].includes(text)) {
+    return true;
+  }
+  if (["checkout", "check_out", "check-out", "out", "exit", "false"].includes(text)) {
+    return false;
+  }
+  return undefined;
+};
+
 const firstFilled = (...values) => {
   for (const value of values) {
     if (value === undefined || value === null) continue;
@@ -614,6 +634,31 @@ class IncidentsService {
         // spelling we have seen: the schema keeps one canonical field each,
         // and an unrecognised key would otherwise be stored as null and render
         // as "--" in Car Logs even though the DS did send a value.
+        newIncident.color = firstFilled(req?.body?.color, req?.body?.colour);
+        newIncident.company = firstFilled(
+          req?.body?.company,
+          req?.body?.make,
+          req?.body?.brand,
+          req?.body?.manufacturer,
+        );
+        newIncident.year = toModelYear(
+          req?.body?.year ?? req?.body?.model_year ?? req?.body?.manufacture_year,
+        );
+      } else if (incidentType === "vehicleCheckInOut") {
+        newIncident.timeOfIncident = req?.body?.timeOfIncident;
+        newIncident.Image = req?.body?.Image;
+        newIncident.vehicleNumber = req?.body?.vehicleNumber;
+        // Direction is the required field, and DS has no settled spelling for
+        // it: accept the boolean, the "checkin"/"checkout" string, and the
+        // in/out shorthand. Anything unrecognised stays undefined so the
+        // schema rejects the incident instead of silently recording an
+        // arrival as a departure.
+        newIncident.checkin = toCheckInFlag(
+          req?.body?.checkin ?? req?.body?.direction ?? req?.body?.event_type,
+        );
+        // Same multi-spelling tolerance the car-model branch needs, since the
+        // same DS pipeline supplies these when it reads the vehicle.
+        newIncident.model_name = req?.body?.model_name;
         newIncident.color = firstFilled(req?.body?.color, req?.body?.colour);
         newIncident.company = firstFilled(
           req?.body?.company,

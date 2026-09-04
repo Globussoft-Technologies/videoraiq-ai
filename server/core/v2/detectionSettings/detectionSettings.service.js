@@ -66,6 +66,7 @@ import {
   FoodServicePPEDetectionSetting,
   MobilePhoneDetectionSetting,
   carModelDetectionSchemaSetting,
+  vehicleCheckInOutDetectionSetting,
   attendanceDetectionSetting
 } from "./detectionSettings.model.js";
 import Channel from "../channels/channels.model.js";
@@ -113,6 +114,7 @@ const modelMap = {
   mobilePhoneDetectionSettings: MobilePhoneDetectionSetting,
   foodServicePPEDetectionSettings: FoodServicePPEDetectionSetting,
   carModelDetectionSettings: carModelDetectionSchemaSetting,
+  vehicleCheckInOutSettings: vehicleCheckInOutDetectionSetting,
   faceAuthenticationSettings: attendanceDetectionSetting,
 };
 

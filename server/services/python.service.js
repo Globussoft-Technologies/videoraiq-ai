@@ -70,6 +70,27 @@ const pickLineCrossingSettings = (settings = {}) => {
   return payload;
 };
 
+const pickVehicleCheckInOutSettings = (settings = {}) => {
+  const payload = {};
+
+  // The crossing line and which side of it counts as inside. Both are optional
+  // on the way through: DS rejects a check-in/out detector that has neither,
+  // and a clearer error comes back from DS than from a half-built payload here.
+  if (Array.isArray(settings.line_coordinates)) {
+    payload.line_coordinates = settings.line_coordinates;
+  }
+
+  if (Array.isArray(settings.inside_reference_point)) {
+    payload.inside_reference_point = settings.inside_reference_point;
+  }
+
+  if (settings.zone_name) {
+    payload.zone_name = settings.zone_name;
+  }
+
+  return payload;
+};
+
 class PythonService {
   async toggleCamerasBulk(admin_id, camera_ids = [], enable = true) {
     try {
@@ -230,6 +251,7 @@ class PythonService {
     severity,
     confidence_thresholds = {},
     line_crossing_settings = {},
+    vehicle_check_in_out_settings = {},
   ) {
     if (enable) {
       // ! old
@@ -287,6 +309,7 @@ class PythonService {
         severity,
         confidence_thresholds,
         line_crossing_settings,
+        vehicle_check_in_out_settings,
       };
       return await this.startNewDetection(payload);
     } else {
@@ -319,6 +342,7 @@ class PythonService {
         severity,
         confidence_thresholds = {},
         line_crossing_settings = {},
+        vehicle_check_in_out_settings = {},
       } = payload;
 
       // 🔹 Convert detection_modes → detectors
@@ -349,6 +373,16 @@ class PythonService {
           line_coordinates: zones || [],
           severity,
           ...pickLineCrossingSettings(line_crossing_settings),
+        });
+      }
+
+      if (detection_modes?.includes("vehicleCheckInOut")) {
+        detectors.push({
+          name: "vehicleCheckInOutSettings",
+          zone_configs,
+          zones: zones || [],
+          severity,
+          ...pickVehicleCheckInOutSettings(vehicle_check_in_out_settings),
         });
       }
 
@@ -537,6 +571,9 @@ class PythonService {
         ...(detector.name === "lineCrossingSettings"
           ? pickLineCrossingSettings(line_crossing_settings)
           : {}),
+        ...(detector.name === "vehicleCheckInOutSettings"
+          ? pickVehicleCheckInOutSettings(vehicle_check_in_out_settings)
+          : {}),
       }));
 
       const newPayload = {
@@ -588,6 +625,7 @@ class PythonService {
         zone_name,
         confidence_thresholds = {},
         line_crossing_settings = {},
+        vehicle_check_in_out_settings = {},
       } = payload;
 
       // 🔹 Convert detection_modes → detectors
@@ -618,6 +656,16 @@ class PythonService {
           line_coordinates: zones || [],
           severity,
           ...pickLineCrossingSettings(line_crossing_settings),
+        });
+      }
+
+      if (detection_modes?.includes("vehicleCheckInOut")) {
+        detectors.push({
+          name: "vehicleCheckInOutSettings",
+          zone_configs,
+          zones: zones || [],
+          severity,
+          ...pickVehicleCheckInOutSettings(vehicle_check_in_out_settings),
         });
       }
 
@@ -762,6 +810,9 @@ class PythonService {
         ...(detector.name === "lineCrossingSettings"
           ? pickLineCrossingSettings(line_crossing_settings)
           : {}),
+        ...(detector.name === "vehicleCheckInOutSettings"
+          ? pickVehicleCheckInOutSettings(vehicle_check_in_out_settings)
+          : {}),
       }));
 
       const newPayload = {
@@ -837,6 +888,7 @@ class PythonService {
     zoneName,
     confidence_thresholds = {},
     line_crossing_settings = {},
+    vehicle_check_in_out_settings = {},
   ) {
     const nvr = await NVR.findById(channel?.nvrId?._id);
     if (!nvr) throw new Error("NVR not found");
@@ -864,6 +916,7 @@ class PythonService {
       zoneName,
       confidence_thresholds,
       line_crossing_settings,
+      vehicle_check_in_out_settings,
     };
     return await this.updateNewDetection(payload);
   }

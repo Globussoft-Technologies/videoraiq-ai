@@ -3591,6 +3591,153 @@ export const carModelDetectionTemplate = (
 };
 
 
+export const vehicleCheckInOutTemplate = (
+  incidentData,
+  nvrData,
+  channelData,
+  timezone,
+) => {
+  const {
+    incidentName,
+    timeOfIncident,
+    zone,
+    severity,
+    description,
+    Image,
+    vehicleNumber,
+    checkin,
+    model_name,
+    company,
+  } = incidentData;
+
+  const getSeverityStyles = (level = "low") => {
+    switch (level) {
+      case "high":
+        return { bg: "#FDECEA", text: "#B42318", label: "High" };
+      case "moderate":
+        return { bg: "#FFF4E5", text: "#B54708", label: "Moderate" };
+      case "low":
+      default:
+        return { bg: "#E8F1FF", text: "#1D4ED8", label: "Low" };
+    }
+  };
+
+  // Direction is what the reader scans for first, so it gets a colour of its
+  // own rather than sharing the severity pill's palette.
+  const getDirectionStyles = (isCheckIn) =>
+    isCheckIn
+      ? { bg: "#DCFCE7", text: "#15803D", label: "Checked In" }
+      : { bg: "#FEF3C7", text: "#92400E", label: "Checked Out" };
+
+  const severityStyle = getSeverityStyles(severity);
+  const directionStyle = getDirectionStyles(checkin);
+  const formattedTime = formatEmailTime(timeOfIncident, timezone);
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Vehicle Check-In / Check-Out Incident Report</title>
+</head>
+
+<body style="margin:0;padding:0;background-color:#F4F6F8;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center" style="padding:24px;">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;">
+          <tr>
+            <td align="center" style="padding:20px 0;">
+              <img
+                src="https://videoraiq.com/wp-content/uploads/2025/06/videoraIQ-dark-blue.webp"
+                alt="VideoraIQ"
+                style="max-width:200px;display:block;"
+              >
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 24px;background:#0F172A;color:#ffffff;">
+              <h2 style="margin:0;font-size:20px;">Vehicle ${directionStyle.label} Alert</h2>
+              <p style="margin:4px 0 0;font-size:13px;opacity:0.9;">
+                Automated Incident Notification
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 24px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding:8px 0;"><strong>Incident Name:</strong></td>
+                  <td style="padding:8px 0;">${incidentName || "Vehicle Check-In / Check-Out"}</td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 0;"><strong>Direction:</strong></td>
+                  <td style="padding:8px 0;">
+                    <span style="display:inline-block;padding:4px 10px;border-radius:999px;background:${directionStyle.bg};color:${directionStyle.text};font-size:12px;font-weight:700;">
+                      ${directionStyle.label}
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 0;"><strong>Time:</strong></td>
+                  <td style="padding:8px 0;">${formattedTime}</td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 0;"><strong>Zone:</strong></td>
+                  <td style="padding:8px 0;">${zone || "N/A"}</td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 0;"><strong>Severity:</strong></td>
+                  <td style="padding:8px 0;">
+                    <span style="display:inline-block;padding:4px 10px;border-radius:999px;background:${severityStyle.bg};color:${severityStyle.text};font-size:12px;font-weight:700;">
+                      ${severityStyle.label}
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 0;"><strong>Vehicle Number:</strong></td>
+                  <td style="padding:8px 0;">${vehicleNumber || "N/A"}</td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 0;"><strong>Model:</strong></td>
+                  <td style="padding:8px 0;">${[company, model_name].filter(Boolean).join(" ") || "N/A"}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 24px 24px;">
+              <strong>Captured Image:</strong>
+              <div style="margin-top:10px;">
+                ${
+                  Image
+                    ? `<img src="${config.get("ImageView") + Image}" alt="Incident Image" width="100%" style="max-width:552px;border-radius:8px;border:1px solid #E2E8F0;display:block;" />`
+                    : `<div style="padding:20px;text-align:center;font-size:14px;color:#64748B;border:1px dashed #CBD5E1;border-radius:6px;">No incident image available</div>`
+                }
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 24px 24px;">
+              <strong>Description:</strong>
+              <p style="margin:6px 0 0;font-size:14px;color:#334155;">
+                ${description || "No additional description provided."}
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 24px;background:#F8FAFC;font-size:12px;color:#64748B;">
+              This is an automated system-generated alert.
+              Please do not reply to this email.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+};
+
 export const deskAbsenceTemplate = (
   incidentData,
   nvrData,

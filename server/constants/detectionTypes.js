@@ -7,7 +7,7 @@
 */
 
 export const DETECTION_TYPES = {
-  faceAuthenticationSettings:"Attendance Settings",
+  faceAuthenticationSettings: "Attendance Settings",
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
   vehicleDetectionSettings: "ANPR Detection",
   unauthorizedAccessSettings: "Intrusion Detection",
@@ -42,7 +42,8 @@ export const DETECTION_TYPES = {
   tableOccupancyDetectionSettings: "Table Occupancy Detection",
   foodServicePPEDetectionSettings: "Food Service PPE Detection",
   mobilePhoneDetectionSettings: "Mobile Phone Detection",
-  carModelDetectionSettings: "Car Model Detection"
+  carModelDetectionSettings: "Car Model Detection",
+  vehicleCheckInOutSettings: "Vehicle Check-In / Check-Out Detection",
 }
 
 /**
@@ -86,6 +87,7 @@ export const TYPE_MAP = {
   foodServicePPEDetectionSettings: "foodServicePPEDetection",
   mobilePhoneDetectionSettings: "mobilePhoneDetection",
   carModelDetectionSettings: "carModelDetection",
+  vehicleCheckInOutSettings: "vehicleCheckInOut",
   faceAuthenticationSettings: "attendanceSettings",
 };
 
@@ -113,6 +115,7 @@ export const DETECTION_MODES_MAP = {
   countPersonsSettings: ["countPersons"],
   mobilePhoneDetectionSettings: ["mobilePhoneDetection"],
   carModelDetectionSettings: ["carModelDetection"],
+  vehicleCheckInOutSettings: ["vehicleCheckInOut"],
   faceAuthenticationSettings: ["attendanceSettings"]
 };
 
@@ -157,6 +160,7 @@ export const DS_DETECTOR_BY_MODE = {
   foodServicePPEDetection: "foodServicePPEDetection",
   mobilePhoneDetection: "mobilePhoneDetectionSettings",
   carModelDetection: "carModelDetectionSettings",
+  vehicleCheckInOut: "vehicleCheckInOutSettings",
   door: "doorDetectionSettings",
   light: "lightDetectionSettings",
   guard_absence: "guardAbsenceSettings",
@@ -224,6 +228,7 @@ export const DS_LOGIC_BY_MODE = {
   mobilePhoneDetection: "mobilePhoneDetectionSettings",
   foodServicePPEDetection: "foodServicePPEDetection",
   carModelDetection: "carModelDetectionSettings",
+  vehicleCheckInOut: "vehicleCheckInOutSettings",
   faceAuthenticationSettings: "attendanceSettings"
 };
 
@@ -266,6 +271,7 @@ export const toPopulateDetections = [
   { path: "detections.foodServicePPEDetectionSettings.id" },
   { path: "detections.mobilePhoneDetectionSettings.id" },
   { path: "detections.carModelDetectionSettings.id" },
+  { path: "detections.vehicleCheckInOutSettings.id" },
   { path: "detections.faceAuthenticationSettings.id" }
 ];
 
@@ -1229,6 +1235,45 @@ export const carModelDetectionSettings = {
     },
     metricType: "gauge",
     zone_name: "Cashier Counter",
+  },
+};
+
+export const vehicleCheckInOutSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "vehicleCheckInOutSettings",
+  name: "Vehicle Check-In / Check-Out - Main Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    zone_configs: [
+      { "name": "Gate-In", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Gate-Out", "capacity": 2, "threshold_sec": 20 }
+    ],
+    camType: ["checkin", "checkout"],
+    revisitCooldownMinutes: 5,
+    line_coordinates: [
+      [320, 640],
+      [1600, 640],
+    ],
+    inside_reference_point: [960, 900],
+    imageRequired: true,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    videoResolution: [1280, 720],
+    detectionTimeGap: 30,
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
   },
 };
 

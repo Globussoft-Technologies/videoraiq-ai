@@ -22,6 +22,7 @@ import {
     motionDetectionAuthTemplate,
     vehicleDetectionTemplate,
     carModelDetectionTemplate,
+    vehicleCheckInOutTemplate,
     entryLogTemplate,
     conveyorDetectionTemplate,
     crusherDetectionTemplate,
@@ -465,6 +466,24 @@ class MailHelper {
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected â€“ ${data?.incidentType} | Severity: ${data?.severity}`,
             html: this._renderIncidentTemplate(carModelDetectionTemplate, timezone, data, nvrData, channelData),
+        };
+        let sendStatus = await this._sendAndTrack(email, arguments);
+
+        return sendStatus;
+    }
+
+    async vehicleCheckInOut(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
+        sendGridMail.setApiKey(config.get('sendgrid.key'));
+        const email = {
+            from: {
+                name: config.get('sendgrid.name'),
+                email: config.get('sendgrid.email'),
+            },
+            to: emailAddresses,
+            // Direction leads the subject: for a gate feed, whether the vehicle
+            // arrived or left is what gets read at a glance in an inbox.
+            subject: `[Incident Alert] Vehicle ${data?.checkin ? "Checked In" : "Checked Out"}${data?.vehicleNumber ? ` – ${data.vehicleNumber}` : ""} | Severity: ${data?.severity}`,
+            html: this._renderIncidentTemplate(vehicleCheckInOutTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
 

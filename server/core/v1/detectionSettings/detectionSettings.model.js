@@ -1150,6 +1150,63 @@ const carModelDetectionSchemaSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: carModelDetectionSchema }),
 );
 
+const vehicleCheckInOutSchema = new mongoose.Schema({
+  ...zoneConfigsField,
+  // Which side of the gate this camera watches. A single camera can cover both
+  // directions, hence an array rather than one value — the same shape the
+  // attendance check-in/check-out cameras use.
+  camType: {
+    type: [String],
+    enum: ["checkin", "checkout"],
+    default: ["checkin"],
+  },
+  // Minutes before the same vehicle may be recorded again in the same
+  // direction, so a car idling under the camera is one event, not fifty.
+  revisitCooldownMinutes: { type: Number, default: 5 },
+  // The line a vehicle crosses to count as arriving or leaving, as [x, y]
+  // pairs — the same point shape referencePoints uses elsewhere in this file.
+  line_coordinates: {
+    type: [[Number]],
+    default: undefined,
+  },
+  // Which side of that line is "inside". Without it a crossing is directionless
+  // and check-in cannot be told from check-out. Same shape as line crossing's.
+  inside_reference_point: {
+    type: [Number],
+    default: undefined,
+  },
+  imageRequired: {
+    type: Boolean,
+    default: true,
+  },
+  videoLinkRequirement: {
+    type: Boolean,
+    default: false,
+  },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "moderate",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  videoResolution: [Number],
+  referencePoints: Object,
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+  zone_name: { type: String, default: "default" },
+});
+
+const vehicleCheckInOutDetectionSetting = DetectionSetting.discriminator(
+  "vehicleCheckInOutSettings",
+  new mongoose.Schema({ settings: vehicleCheckInOutSchema }),
+);
+
 const attendanceDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
   imageRequired: {
@@ -1215,5 +1272,6 @@ export {
   FoodServicePPEDetectionSetting,
   MobilePhoneDetectionSetting,
   carModelDetectionSchemaSetting,
+  vehicleCheckInOutDetectionSetting,
   attendanceDetectionSetting,
 };

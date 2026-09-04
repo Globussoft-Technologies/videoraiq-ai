@@ -556,6 +556,25 @@ const carModelDetectionSchema = new Schema({
 });
 const CarModelDetectionIncident = Incident.discriminator('carModelDetection', carModelDetectionSchema);
 
+// Vehicle Check-In / Check-Out
+const vehicleCheckInOutSchema = new Schema({
+  count: { type: Number, default: 0 },
+  vehicleNumber: { type: String, default: null },
+  // Which way the vehicle crossed the configured line: true is an arrival,
+  // false a departure. This is the whole point of the detection, so it is
+  // required rather than defaulted -- a crossing whose direction the engine
+  // could not resolve is not a check-in/out event at all.
+  checkin: { type: Boolean, required: true },
+  // Attributes carried over when the plate/model engines also read the vehicle.
+  // All optional; a payload that omits them keeps the null defaults.
+  model_name: { type: String, default: null },
+  color: { type: String, default: null },
+  company: { type: String, default: null },
+  year: { type: Number, default: null },
+  triggerNotification: { type: Boolean, default: true },
+});
+const VehicleCheckInOutIncident = Incident.discriminator('vehicleCheckInOut', vehicleCheckInOutSchema);
+
 
 export  {
   Incident,
@@ -585,5 +604,6 @@ export  {
   TableOccupancyDetectionIncident,
   FoodServicePPEDetectionIncident,
   MobilePhoneDetectionIncident,
-  CarModelDetectionIncident
+  CarModelDetectionIncident,
+  VehicleCheckInOutIncident
 };
