@@ -83,7 +83,7 @@ export default function StartTourMenu() {
         .then((modules) => {
           setEntries(modules);
           // Only an unsearched response describes the full entitlement.
-          if (!query.trim()) setAllowedCount(modules.length);
+          if (!query.trim()) setAllowedCount(modules.length +1);
           setFailed(false);
         })
         .catch((err) => {
