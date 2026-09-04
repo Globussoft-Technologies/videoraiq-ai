@@ -4,6 +4,8 @@ import config from "config";
 import { redis } from "./utils/database.js"
 import logger from "./utils/logger.js";
 import { checkActivePlanSocket } from "./middlewares/checkActivePlan.js";
+import { markSessionOnline, markSessionOffline } from "./core/v2/sessions/sessionPresence.js";
+import sessionModel from "./core/v2/sessions/sessions.model.js";
 import adminModel from "./core/v1/admin/admin.model.js";
 import Channel from "./core/v1/channels/channels.model.js";
 import {
@@ -228,10 +230,31 @@ export const initSocket = (server) => {
 
     const userId = socket?.user?.user_id || "";
     const adminId = socket?.user?.adminId;
+    // client_v2 / client pass their session id on the handshake so we can track
+    // per-session (per-tab/device) presence, not just one socket per user.
+    const sessionId = String(socket?.handshake?.auth?.sessionId || "").trim();
 
     if (userId) {
       // Store in Redis
       let ack = await redis.set(`socket:${userId}`, socket.id);
+    }
+
+    if (sessionId) {
+      // Mark this session's tab as online now, and keep the session's
+      // lastActiveAt fresh so the admin session list's "Last Active" agrees
+      // with the new "Online" column.
+      await markSessionOnline(sessionId);
+      sessionModel
+        .updateOne({ sessionId }, { $set: { lastActiveAt: new Date() } })
+        .catch((e) => logger.error(`[SESSION_PRESENCE] connect lastActiveAt bump failed: ${e?.message || e}`));
+
+      // The tab emits this every ~20s while open; refreshes the presence TTL.
+      socket.on("session-heartbeat", async () => {
+        await markSessionOnline(sessionId);
+        sessionModel
+          .updateOne({ sessionId }, { $set: { lastActiveAt: new Date() } })
+          .catch((e) => logger.error(`[SESSION_PRESENCE] heartbeat lastActiveAt bump failed: ${e?.message || e}`));
+      });
     }
 
     // Emit the current camera-limit snapshot immediately on (re)connect so the
@@ -264,6 +287,11 @@ export const initSocket = (server) => {
       if (userId) {
         // Delete from Redis
         await redis.del(`socket:${userId}`);
+      }
+      if (sessionId) {
+        // Tab closed / navigated away / network dropped — session is offline
+        // immediately (the TTL is only the fallback for when this never fires).
+        await markSessionOffline(sessionId);
       }
     });
   });
