@@ -13,6 +13,7 @@ import {
   Trash2,
   Unlock,
   Users,
+  Wifi,
 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Topbar from '../../layout/Topbar'
@@ -32,15 +33,21 @@ import {
 
 const DEFAULT_PAGE_SIZE = 10
 
+// The session list has no socket of its own; the "Online" column is driven by
+// the server's live presence flag, so re-fetch on a short interval to keep it
+// current (a tab that closed goes offline within ~50s server-side).
+const AUTO_REFRESH_MS = 20000
+
 const STATUS_OPTIONS = [
   { value: '', label: 'All' },
   { value: 'active', label: 'Active' },
+  { value: 'online', label: 'Online' },
   { value: 'blocked', label: 'Blocked' },
   { value: 'logged_out', label: 'Logged Out' },
 ]
 
 const statusClass = {
-  active: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20',
+  active: 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-500/20',
   blocked: 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/20',
   logged_out: 'bg-gray-100 text-gray-600 ring-gray-200 dark:bg-white/8 dark:text-gray-300 dark:ring-white/10',
   expired: 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20',
@@ -85,16 +92,18 @@ const DeviceIcon = ({ device, size = 18, className = '' }) => {
   return <Laptop size={size} strokeWidth={2.2} className={className} />
 }
 
+// The summary endpoint only knows stored statuses; "online" is a live-presence
+// filter that only applies to the sessions table, so drop it for the summary.
+const summaryStatus = (status) => (status === 'online' ? '' : status)
+
 const readListData = (res) => res?.body?.data ?? res?.data ?? []
 const readPageData = (res) => res?.body?.data ?? res?.data ?? {}
-
-const ownerKey = (session) =>
-  `${session.userType || 'admin'}:${String(session.memberId || session.adminId || '')}`
 
 const StatCard = ({ label, value, Icon, tone = 'purple', onClick, active = false }) => {
   const tones = {
     purple: 'bg-purple-50 text-purple-700 dark:bg-purple-500/10 dark:text-purple-300',
     green: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
+    blue: 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300',
     red: 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300',
     gray: 'bg-gray-100 text-gray-700 dark:bg-white/8 dark:text-gray-300',
   }
@@ -102,6 +111,7 @@ const StatCard = ({ label, value, Icon, tone = 'purple', onClick, active = false
   const ringTones = {
     purple: 'border-purple-300 ring-2 ring-purple-400/30 dark:border-purple-500/40',
     green: 'border-emerald-300 ring-2 ring-emerald-400/30 dark:border-emerald-500/40',
+    blue: 'border-blue-300 ring-2 ring-blue-400/30 dark:border-blue-500/40',
     red: 'border-red-300 ring-2 ring-red-400/30 dark:border-red-500/40',
     gray: 'border-gray-300 ring-2 ring-gray-400/30 dark:border-gray-500/40',
   }
@@ -140,6 +150,33 @@ const EmptyState = ({ label }) => (
     <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-white">{label}</p>
   </div>
 )
+
+const OnlineBadge = ({ online, status }) => {
+  // Only an active session can be online. For blocked/logged-out/expired rows the
+  // question doesn't apply — show a neutral dash instead of a red "Offline".
+  if (status !== 'active') {
+    return <span className="text-xs text-gray-400 dark:text-gray-600">--</span>
+  }
+
+  if (online) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+        </span>
+        Online
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-500 ring-1 ring-gray-200 dark:bg-white/8 dark:text-gray-400 dark:ring-white/10">
+      <span className="h-2 w-2 rounded-full bg-gray-400 dark:bg-gray-500" />
+      Offline
+    </span>
+  )
+}
 
 const StatusBadge = ({ status }) => (
   <span
@@ -204,9 +241,18 @@ const SessionSummary = ({ rows = [], loading = false, selectedOwner = '', onSele
                 <span className="rounded-full bg-purple-50 px-2.5 py-1 text-purple-700 dark:bg-purple-500/10 dark:text-purple-300">
                   {row.sessionCount} total
                 </span>
-                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
                   {row.activeCount} active
                 </span>
+                {row.onlineCount > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                    </span>
+                    {row.onlineCount} online
+                  </span>
+                )}
                 <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-700 dark:bg-red-500/10 dark:text-red-300">
                   {row.blockedCount} blocked
                 </span>
@@ -243,8 +289,17 @@ const ProfileSessionHeader = ({ profile, loading = false }) => {
           <span className="rounded-full bg-purple-50 px-3 py-1.5 text-purple-700 dark:bg-purple-500/10 dark:text-purple-300">
             {profile.sessionCount} total
           </span>
-          <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+          <span className="rounded-full bg-blue-50 px-3 py-1.5 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
             {profile.activeCount} active
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+            {profile.onlineCount > 0 && (
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+            )}
+            {profile.onlineCount || 0} online
           </span>
           <span className="rounded-full bg-red-50 px-3 py-1.5 text-red-700 dark:bg-red-500/10 dark:text-red-300">
             {profile.blockedCount} blocked
@@ -314,6 +369,7 @@ const DetailsModal = ({ session, onClose }) => {
     ['Browser', session.browser],
     ['Operating System', session.operatingSystem],
     ['IP Address', session.ipAddress],
+    ['Online', session.status === 'active' ? (session.online ? 'Online' : 'Offline') : '--'],
     ['Login Time', formatDate(session.loginTime)],
     ['Last Active', formatDate(session.lastActiveAt)],
     ['Logout Time', formatDate(session.logoutTime)],
@@ -388,17 +444,27 @@ const SessionManagement = () => {
     return { active, blocked }
   }, [sessions])
 
+  // Live online count across every owner — the summary rows carry an authoritative
+  // per-owner onlineCount from server-side Redis presence, so sum those rather
+  // than the page-limited `sessions` list.
+  const onlineTotal = useMemo(
+    () => summary.reduce((sum, row) => sum + (row.onlineCount || 0), 0),
+    [summary]
+  )
+
   const visibleSummary = useMemo(() => {
     const query = summarySearch.trim().toLowerCase()
     return summary.filter((row) => {
       if (detailMode && String(row.ownerId) !== ownerId) return false
       if (!detailMode && selectedOwner && String(row.ownerId) !== selectedOwner) return false
+      // "Online" is a live-presence filter — keep only owners with a tab open now.
+      if (!detailMode && status === 'online' && !(row.onlineCount > 0)) return false
       if (!query) return true
       return [row.ownerName, row.ownerEmail, row.userType, row.ownerId]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query))
     })
-  }, [detailMode, ownerId, summary, selectedOwner, summarySearch])
+  }, [detailMode, ownerId, summary, selectedOwner, summarySearch, status])
 
   const ownerOptions = useMemo(
     () =>
@@ -408,14 +474,6 @@ const SessionManagement = () => {
       })),
     [summary]
   )
-
-  const ownerBySession = useMemo(() => {
-    const owners = new Map()
-    summary.forEach((row) => {
-      owners.set(`${row.userType}:${String(row.ownerId)}`, row)
-    })
-    return owners
-  }, [summary])
 
   const selectedOwnerFilter = detailMode
     ? ownerId
@@ -455,7 +513,7 @@ const SessionManagement = () => {
   const loadSummary = async () => {
     setSummaryLoading(true)
     try {
-      const res = await getSessionSummary({ status, userType, deviceId: '' })
+      const res = await getSessionSummary({ status: summaryStatus(status), userType, deviceId: '' })
       const data = readListData(res)
       setSummary(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -463,6 +521,28 @@ const SessionManagement = () => {
       setSummary([])
     } finally {
       setSummaryLoading(false)
+    }
+  }
+
+  // Re-fetch the sessions list without touching the loading spinner or the
+  // current selection — used by the auto-refresh interval that keeps the
+  // "Online" column live. Skipped while a row action modal is open so the
+  // table doesn't shift under the user mid-confirm.
+  const silentRefreshSessions = async () => {
+    try {
+      const res = await getAdminSessions({
+        skip: page * pageSize,
+        limit: pageSize,
+        status,
+        userType: userTypeFilter,
+        userId: selectedOwnerFilter,
+        deviceId: '',
+      })
+      const data = readPageData(res)
+      setSessions(Array.isArray(data.data) ? data.data : [])
+      setTotal(data.totalCount ?? 0)
+    } catch {
+      // A failed background refresh is silent — the last good list stays.
     }
   }
 
@@ -501,13 +581,23 @@ const SessionManagement = () => {
     }
   }, [page, pageSize, status, userTypeFilter, selectedOwnerFilter])
 
+  // Keep the "Online" column current — the list has no socket, so poll the
+  // server's live presence flag. Only runs on the table (detail mode) and
+  // pauses while an action modal is open.
+  useEffect(() => {
+    if (!detailMode || action) return undefined
+    const timer = setInterval(silentRefreshSessions, AUTO_REFRESH_MS)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailMode, action, page, pageSize, status, userTypeFilter, selectedOwnerFilter])
+
   useEffect(() => {
     let cancelled = false
 
     const load = async () => {
       setSummaryLoading(true)
       try {
-        const res = await getSessionSummary({ status, userType, deviceId: '' })
+        const res = await getSessionSummary({ status: summaryStatus(status), userType, deviceId: '' })
         if (cancelled) return
         const data = readListData(res)
         setSummary(Array.isArray(data) ? data : [])
@@ -754,7 +844,7 @@ const SessionManagement = () => {
         )}
 
         {!detailMode && (
-          <div className="mb-5 grid gap-4 md:grid-cols-3">
+          <div className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <StatCard
               label="All Users"
               value={summary.length}
@@ -770,10 +860,21 @@ const SessionManagement = () => {
               label="Active Sessions"
               value={stats.active}
               Icon={Laptop}
-              tone="green"
+              tone="blue"
               active={status === 'active'}
               onClick={() => {
                 setStatus((current) => (current === 'active' ? '' : 'active'))
+                setPage(0)
+              }}
+            />
+            <StatCard
+              label="Online Now"
+              value={onlineTotal}
+              Icon={Wifi}
+              tone="green"
+              active={status === 'online'}
+              onClick={() => {
+                setStatus((current) => (current === 'online' ? '' : 'online'))
                 setPage(0)
               }}
             />
@@ -972,7 +1073,7 @@ const SessionManagement = () => {
                     </button>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="min-w-[1240px] w-full text-left">
+                    <table className="min-w-[1040px] w-full text-left">
                       <thead className="border-b border-gray-200 dark:border-white/8">
                         <tr className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-400 dark:text-gray-600">
                           <th className="w-12 px-5 py-3">
@@ -988,18 +1089,16 @@ const SessionManagement = () => {
                             />
                           </th>
                           <th className="px-5 py-3">Device</th>
-                          <th className="px-5 py-3">Owner</th>
-                          <th className="px-5 py-3">User Type</th>
                           <th className="px-5 py-3">IP Address</th>
                           <th className="px-5 py-3">Login Time</th>
                           <th className="px-5 py-3">Last Active</th>
                           <th className="px-5 py-3">Status</th>
+                          <th className="px-5 py-3">Online</th>
                           <th className="px-5 py-3 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-white/6">
                         {sessions.map((session) => {
-                          const owner = ownerBySession.get(ownerKey(session))
                           const selected = selectedSessionIds.includes(session.sessionId)
                           return (
                             <tr
@@ -1028,20 +1127,14 @@ const SessionManagement = () => {
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-5 py-4">
-                                <p className="font-semibold text-gray-900 dark:text-white">
-                                  {owner?.ownerName || shortId(session.memberId || session.adminId)}
-                                </p>
-                                <p className="mt-0.5 truncate text-xs text-gray-400 dark:text-gray-500">
-                                  {owner?.ownerEmail || shortId(session.memberId || session.adminId)}
-                                </p>
-                              </td>
-                              <td className="px-5 py-4 capitalize">{session.userType || '--'}</td>
                               <td className="px-5 py-4 font-mono text-xs">{session.ipAddress || '--'}</td>
                               <td className="px-5 py-4">{formatDate(session.loginTime)}</td>
                               <td className="px-5 py-4">{formatDate(session.lastActiveAt)}</td>
                               <td className="px-5 py-4">
                                 <StatusBadge status={session.status} />
+                              </td>
+                              <td className="px-5 py-4">
+                                <OnlineBadge online={session.online} status={session.status} />
                               </td>
                               <td className="px-5 py-4">
                                 <div className="flex justify-end gap-1.5">
