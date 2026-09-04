@@ -1854,6 +1854,10 @@ export default function LiveDemo({ active = true }) {
   // the socket handler instead of the live `selected` detection, since the
   // user could switch detections while a job is still processing.
   const processingSettingTypeRef = useRef('');
+  // Absolute timestamp (ms) after which an in-flight processing job is treated
+  // as timed out — estimated_completion_seconds + 20%. Set once the /process
+  // call returns (never during upload); cleared on finish, error, or reset.
+  const processingDeadlineRef = useRef(null);
 
   const { socket } = useSocket();
   const { user } = useAuth();
@@ -1957,8 +1961,20 @@ export default function LiveDemo({ active = true }) {
           ? latestSaved.videos
           : serverVideos;
     const ready = videos.some((video) => video?.dsVideoUrl);
-    const nextStatus = ready ? 'ready' : fallbackStatus === 'uploaded' ? 'uploaded' : 'awaiting-ds';
     const video = firstVideoOf(videos);
+    // A not-yet-processed ("pending") record must never show the processing
+    // loader on load. Only keep waiting when the caller is restoring an
+    // in-flight session from this same tab (fallbackStatus === 'awaiting-ds').
+    // Otherwise fall back to the user's original clip if we have its URL, else
+    // the upload state.
+    const hasOriginalVideo = Boolean(video?.videoUrl || latestSaved?.uploadedVideoPath);
+    const nextStatus = ready
+      ? 'ready'
+      : fallbackStatus === 'awaiting-ds'
+        ? 'awaiting-ds'
+        : hasOriginalVideo
+          ? 'uploaded'
+          : 'idle';
     const restoredZones = Array.isArray(video?.zones)
       ? video.zones.map((zone) => zone.map(([x, y]) => ({ x, y })))
       : [];
@@ -2049,9 +2065,16 @@ export default function LiveDemo({ active = true }) {
     const restoredDetection = detections.find((item) => item.settingType === saved.settingType)?.name
       || saved.selectedDetection
       || 'Face Recognition';
-    const restoredStatus = saved.status === 'ready' || saved.status === 'uploaded'
-      ? saved.status
-      : 'awaiting-ds';
+    // Landing on the page never resumes the processing loader for a pending
+    // demo — show the original uploaded clip if we have it, otherwise the
+    // upload state. loadDemoRecord flips to 'ready' if DS has since finished,
+    // and the videoRecord_updated socket event covers a job that finishes
+    // while the page is open.
+    const restoredStatus = saved.status === 'ready'
+      ? 'ready'
+      : saved.uploadedVideoPath
+        ? 'uploaded'
+        : 'idle';
 
     setSelectedDetection(restoredDetection);
     processingSettingTypeRef.current = saved.settingType || '';
@@ -2062,7 +2085,7 @@ export default function LiveDemo({ active = true }) {
     setRecordVideos(saved.videos || saved.videoRecord?.videos || []);
     setMatchedAlerts(Array.isArray(saved.matchedAlerts) ? saved.matchedAlerts : []);
     setClipStatus(restoredStatus);
-    setClipProgress(restoredStatus === 'ready' || restoredStatus === 'uploaded' ? 100 : 75);
+    setClipProgress(restoredStatus === 'ready' || restoredStatus === 'uploaded' ? 100 : 0);
 
     loadDemoRecord(recordId, { fallbackRecord: saved.videoRecord, fallbackStatus: restoredStatus, fallbackVideos: saved.videos })
       .catch((error) => { if (!cancelled) console.error('Failed to restore active live demo', error); });
@@ -2165,6 +2188,7 @@ export default function LiveDemo({ active = true }) {
       setClipProgress(100);
       setClipStatus('ready');
       setSecondsRemaining(null);
+      processingDeadlineRef.current = null;
       updateLiveDemoSession({
         videoRecord: { ...videoRecord, videos },
         videos,
@@ -2220,6 +2244,29 @@ export default function LiveDemo({ active = true }) {
     if (clipStatus !== 'awaiting-ds' || secondsRemaining == null) return;
     if (secondsRemaining <= 0) return;
     const timer = setTimeout(() => setSecondsRemaining((value) => (value != null ? value - 1 : value)), 1000);
+    return () => clearTimeout(timer);
+  }, [clipStatus, secondsRemaining]);
+
+  // Safety net: once processing has been submitted, if it runs past
+  // estimated_completion_seconds + 20% with no completion socket event, stop
+  // waiting and surface a timeout. Only active after /process returns
+  // (processing / awaiting-ds) — never during upload.
+  useEffect(() => {
+    const waiting = clipStatus === 'processing' || clipStatus === 'awaiting-ds';
+    if (!waiting || processingDeadlineRef.current == null) return;
+    const stopProcessing = () => {
+      processingDeadlineRef.current = null;
+      setSecondsRemaining(null);
+      setClipStatus('error');
+      updateLiveDemoSession({ status: 'error' });
+      toast.error('Video processing timed out — please try again', COMPACT_TOAST);
+    };
+    const msLeft = processingDeadlineRef.current - Date.now();
+    if (msLeft <= 0) {
+      stopProcessing();
+      return;
+    }
+    const timer = setTimeout(stopProcessing, msLeft);
     return () => clearTimeout(timer);
   }, [clipStatus, secondsRemaining]);
 
@@ -2280,6 +2327,7 @@ export default function LiveDemo({ active = true }) {
     setSessionAnalytics(null);
     setProcessJob(null);
     setSecondsRemaining(null);
+    processingDeadlineRef.current = null;
     setDemoIncidents({ items: [], totalCount: 0 });
     setDemoAttendanceLogs(null);
     setMatchedAlerts([]);
@@ -2811,6 +2859,7 @@ export default function LiveDemo({ active = true }) {
     setClipProgress(10);
     setProcessJob(null);
     setSecondsRemaining(null);
+    processingDeadlineRef.current = null;
     setRecordVideos([]);
     setSessionAnalytics(null);
     setDemoIncidents({ items: [], totalCount: 0 });
@@ -2870,7 +2919,11 @@ export default function LiveDemo({ active = true }) {
       });
       setProcessJob(job?.job || job);
       const estimate = Number(job?.job?.estimated_completion_seconds);
-      setSecondsRemaining(Number.isFinite(estimate) && estimate > 0 ? Math.round(estimate) : null);
+      // Budget = estimated_completion_seconds + 20%. The loader counts down from
+      // this same value and the job is aborted once it elapses.
+      const budgetSeconds = Number.isFinite(estimate) && estimate > 0 ? Math.round(estimate * 1.2) : null;
+      setSecondsRemaining(budgetSeconds);
+      processingDeadlineRef.current = budgetSeconds != null ? Date.now() + budgetSeconds * 1000 : null;
       setClipProgress(60);
 
       const [analyticsData, incidentsData, attendanceData] = await Promise.all([
@@ -2904,6 +2957,7 @@ export default function LiveDemo({ active = true }) {
         'Failed to process demo clip';
       setClipStatus(videoPath ? 'uploaded' : 'error');
       setSecondsRemaining(null);
+      processingDeadlineRef.current = null;
       updateLiveDemoSession({ status: videoPath ? 'uploaded' : 'error' });
       toast.error(message, COMPACT_TOAST);
     }
