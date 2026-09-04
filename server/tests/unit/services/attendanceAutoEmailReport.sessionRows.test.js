@@ -35,25 +35,25 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
       rules
     );
     // Day line carries session 1 (10:00 → 10:30, 30 min).
-    expect(row.duration).toBe("00:30:00");
+    expect(row.duration).toBe("00:30");
     // Only session 2 is left to expand.
     expect(row.sessions).toHaveLength(1);
-    expect(row.sessions[0].duration).toBe("01:15:00");
+    expect(row.sessions[0].duration).toBe("01:15");
     // Total Working Hrs (Day) = sum of every session's worked time (30 + 75).
-    expect(row.workingHoursDay).toBe("01:45:00");
+    expect(row.workingHoursDay).toBe("01:45");
   });
 
-  it("keeps a trailing check-in with no check-out as an open (00:00:00) session", () => {
+  it("keeps a trailing check-in with no check-out as an open (00:00) session", () => {
     const row = rowFromAttendance(
       attendance([ev("checkin", "09:00"), ev("checkout", "09:45"), ev("checkin", "10:00")]),
       "Asia/Kolkata",
       rules
     );
     // Session 1 (09:00 → 09:45) on the day line; the open session is the sub-row.
-    expect(row.duration).toBe("00:45:00");
+    expect(row.duration).toBe("00:45");
     expect(row.sessions).toHaveLength(1);
     expect(row.sessions[0].checkOut).toBe("-");
-    expect(row.sessions[0].duration).toBe("00:00:00");
+    expect(row.sessions[0].duration).toBe("00:00");
   });
 
   it("expands one employee-day into: day line + N session lines + total", () => {
@@ -62,7 +62,7 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
       "Asia/Kolkata",
       rules
     );
-    row.workingHoursPeriod = "01:45:00";
+    row.workingHoursPeriod = "01:45";
     row.workingMinutesDay = 105;
     row.breakMinutesDay = 30;
     row.workingMinutesPeriod = 105;
@@ -78,19 +78,19 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
     const day = out[0].cells;
     expect(at(day, "ID")).toBe("1");
     expect(at(day, "Name")).toBe("Nagul Lingiri");
-    expect(at(day, "Duration")).toBe("00:30:00"); // session 1 duration
+    expect(at(day, "Duration")).toBe("00:30"); // session 1 duration
     expect(at(day, "Total Working Hours for the Day")).toBe(""); // lives on the total line
     expect(at(day, "Total Working Hours for the period selected")).toBe("");
 
     // Session line: session 2 only, no identity, own duration.
     expect(at(out[1].cells, "Name")).toBe("");
-    expect(at(out[1].cells, "Duration")).toBe("01:15:00");
+    expect(at(out[1].cells, "Duration")).toBe("01:15");
 
     // Total line: Σ session working + break + the period total.
     const total = out[2].cells;
-    expect(at(total, "Total Working Hours for the Day")).toBe("01:45:00");
-    expect(at(total, "Total Break Hours for the Day")).toBe("00:30:00");
-    expect(at(total, "Total Working Hours for the period selected")).toBe("01:45:00");
+    expect(at(total, "Total Working Hours for the Day")).toBe("01:45");
+    expect(at(total, "Total Break Hours for the Day")).toBe("00:30");
+    expect(at(total, "Total Working Hours for the period selected")).toBe("01:45");
   });
 
   it("emits just a day + total block when the day has a single session", () => {
@@ -106,8 +106,8 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
       "Asia/Kolkata",
       rules
     );
-    expect(row.workingHoursDay).toBe("02:30:00"); // 30 + 120, NOT 30 + 120 + 90
-    expect(row.breakHoursDay).toBe("01:30:00");
+    expect(row.workingHoursDay).toBe("02:30"); // 30 + 120, NOT 30 + 120 + 90
+    expect(row.breakHoursDay).toBe("01:30");
   });
 
   it("keeps each employee-day's own total line (no report-wide grand line)", () => {
@@ -132,7 +132,7 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
     expect(csv).toContain("=HYPERLINK(");
   });
 
-  it("formats a session/day duration over 24h as a d/h/m breakdown, not HH:MM:SS", () => {
+  it("lets hours accumulate past 24 rather than rolling into days", () => {
     // check-in Fri 10:00, check-out Sun 13:40 → 51h 40m
     const row = rowFromAttendance(
       {
@@ -146,14 +146,16 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
       "Asia/Kolkata",
       rules
     );
-    expect(row.duration).toBe("2d 3h 40m");
-    expect(row.workingHoursDay).toBe("2d 3h 40m");
+    // 51h 40m reads as "51:40", not "2d 3h 40m" — a duration column has to
+    // stay comparable and summable against the rows around it.
+    expect(row.duration).toBe("51:40");
+    expect(row.workingHoursDay).toBe("51:40");
   });
 
-  it("keeps sub-24h durations as HH:MM:SS", () => {
+  it("reports sub-24h durations in the same HH:MM form", () => {
     const row = rowFromAttendance(attendance([ev("checkin", "09:00"), ev("checkout", "17:30")]), "Asia/Kolkata", rules);
-    expect(row.duration).toBe("08:30:00");
-    expect(row.workingHoursDay).toBe("08:30:00");
+    expect(row.duration).toBe("08:30");
+    expect(row.workingHoursDay).toBe("08:30");
   });
 
   it("buildPdf produces a valid PDF buffer over the expanded rows", async () => {

@@ -58,50 +58,24 @@ async function savedAdminTimezone(adminId) {
   return validTimezone(admin?.timezone) || null;
 }
 
-function minutesToHms(minutes) {
-  if (!Number.isFinite(minutes) || minutes < 0) return "00:00:00";
-  const total = Math.round(minutes * 60); // whole seconds
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
-// Human-readable duration used for every duration column in the report
-// (session duration, Total Working / Break Hrs for the day, and the period
-// total). Under 24h it stays HH:MM:SS; at or above 24h it breaks into the
-// largest non-zero units — years / months / days / hours / minutes — so a
-// long span like 223h reads "9d 7h 40m" instead of "223:51:29".
-// A "month" here is a flat 30 days and a "year" 365 days, purely for a compact
-// label; the exact value is always still recoverable from the per-day rows.
+/**
+ * Every duration in the report, as hours and minutes ("36:06").
+ *
+ * Hours accumulate rather than rolling into days: a 36-hour span reads "36:06",
+ * not "1d 12h 6m". A duration column is read to compare and to add up, and a
+ * mixed day/hour/minute label does neither — 36:06 sorts and sums against the
+ * rows around it, which "1d 12h 6m" cannot.
+ *
+ * Seconds are dropped deliberately: attendance is reported to the minute
+ * everywhere else (shift windows, break totals, the monthly-status sheet), so
+ * carrying seconds here only invited rounding mismatches between columns.
+ */
 function formatPeriodDuration(minutes) {
-  if (!Number.isFinite(minutes) || minutes <= 0) return "00:00:00";
-  if (minutes < 24 * 60) return minutesToHms(minutes);
-
-  const totalMinutes = Math.round(minutes);
-  const MIN_PER_HOUR = 60;
-  const MIN_PER_DAY = 24 * MIN_PER_HOUR;
-  const MIN_PER_MONTH = 30 * MIN_PER_DAY;
-  const MIN_PER_YEAR = 365 * MIN_PER_DAY;
-
-  const years = Math.floor(totalMinutes / MIN_PER_YEAR);
-  let rest = totalMinutes - years * MIN_PER_YEAR;
-  const months = Math.floor(rest / MIN_PER_MONTH);
-  rest -= months * MIN_PER_MONTH;
-  const days = Math.floor(rest / MIN_PER_DAY);
-  rest -= days * MIN_PER_DAY;
-  const hours = Math.floor(rest / MIN_PER_HOUR);
-  const mins = rest - hours * MIN_PER_HOUR;
-
-  const parts = [];
-  if (years) parts.push(`${years}y`);
-  if (months) parts.push(`${months}mo`);
-  if (days) parts.push(`${days}d`);
-  if (hours) parts.push(`${hours}h`);
-  if (mins) parts.push(`${mins}m`);
-  // Show the three largest non-zero units — enough precision for a period
-  // total without turning into a long string.
-  return parts.slice(0, 3).join(" ") || "00:00:00";
+  if (!Number.isFinite(minutes) || minutes <= 0) return "00:00";
+  const total = Math.round(minutes);
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 }
 
 function eventCamera(event) {
@@ -273,7 +247,19 @@ export function rowFromAttendance(item, timezone, rules) {
   //   - Total Break Hrs (Day)    = Σ (checkin − checkout) gaps  (pairBreaks +
   //     breakMinutesFromPairs), per-pair rounding. Shown alongside only — never
   //     added into any working figure.
-  const breakMinutes = breakMinutesFromPairs(pairBreaks(events));
+  const breakPairs = pairBreaks(events);
+  const breakMinutes = breakMinutesFromPairs(breakPairs);
+
+  // Each break gap keyed by the check-in that ENDED it, so a session can look
+  // up how long the employee was away immediately before it started. Keying by
+  // the timestamp (rather than by position) keeps the two pairings — which
+  // walk the same events but pair them differently — from drifting apart.
+  const breakBeforeCheckin = new Map(
+    breakPairs.map((pair) => {
+      const ms = new Date(pair.checkin.timestamp) - new Date(pair.checkout.timestamp);
+      return [String(pair.checkin.timestamp), ms > 0 ? Math.round(ms / 60000) : 0];
+    }),
+  );
 
   // Every check-in/check-out pairing for the day, each with its own worked
   // duration and snapshot links.
@@ -281,12 +267,18 @@ export function rowFromAttendance(item, timezone, rules) {
   const sessionCells = workSessions.map((session) => ({
     checkIn: session.checkin ? formatClock(session.checkin.timestamp, timezone) : "-",
     checkOut: session.checkout ? formatClock(session.checkout.timestamp, timezone) : "-",
-    // HH:MM:SS under 24h, else a compact "1d 2h 30m" breakdown.
+    // Hours and minutes ("02:30"), hours accumulating past 24.
     duration: formatPeriodDuration(sessionMinutes(session)),
     checkInCamera: eventCamera(session.checkin),
     checkOutCamera: eventCamera(session.checkout),
     checkInImage: session.checkin ? checkInImageUrl(session.checkin) : "-",
     checkOutImage: session.checkout ? checkInImageUrl(session.checkout) : "-",
+    // How long the employee was away just before this session began. The very
+    // first session of the day has nothing before it, so it reads "-" rather
+    // than a misleading 00:00:00.
+    breakBefore: breakBeforeCheckin.has(String(session.checkin?.timestamp))
+      ? formatPeriodDuration(breakBeforeCheckin.get(String(session.checkin.timestamp)))
+      : "-",
   }));
 
   // The first session's clock times / worked duration go on the day line
@@ -319,8 +311,10 @@ export function rowFromAttendance(item, timezone, rules) {
     checkIn: firstSessionCells ? firstSessionCells.checkIn : (firstCheckIn ? formatClock(firstCheckIn.timestamp, timezone) : "-"),
     checkOut: firstSessionCells ? firstSessionCells.checkOut : (lastCheckOut ? formatClock(lastCheckOut.timestamp, timezone) : "-"),
     duration: firstSessionCells ? firstSessionCells.duration : "-",
-    // HH:MM:SS under 24h, else "9d 7h 40m" style (formatPeriodDuration).
+    // Hours and minutes ("36:06") — see formatPeriodDuration.
     workingHoursDay: formatPeriodDuration(workingMinutesDay),
+    // The day line shows the first work session, and nothing precedes it.
+    breakBefore: firstSessionCells ? firstSessionCells.breakBefore : "-",
     breakHoursDay: formatPeriodDuration(breakMinutes),
     // Filled in by applyPeriodTotals once every day for this employee has been read.
     workingHoursPeriod: "00:00:00",
@@ -435,7 +429,8 @@ export function applyPeriodTotals(rows) {
   for (const row of rows) {
     const periodMinutes = totals.get(row.employeeKey) || 0;
     row.workingMinutesPeriod = periodMinutes;
-    // HH:MM:SS under 24h, else a compact "9d 7h 40m" style breakdown.
+    // Hours and minutes ("223:51"), hours accumulating rather than rolling
+    // into days, so the column stays comparable and summable.
     row.workingHoursPeriod = formatPeriodDuration(periodMinutes);
   }
   return rows;
@@ -524,6 +519,14 @@ const REPORT_COLUMNS = [
   {
     header: "Total Working Hours for the Day",
     total: (ctx) => ctx.row.workingHoursDay,
+  },
+  {
+    // Per-session break: the gap between the previous check-out and this
+    // session's check-in. Blank on the total line, where the day's summed
+    // break is reported by the column beside it instead.
+    header: "Break Time",
+    day: (ctx) => ctx.row.breakBefore,
+    session: (ctx) => ctx.session.breakBefore,
   },
   {
     header: "Total Break Hours for the Day",
@@ -652,20 +655,21 @@ export async function buildPdf({ report, rows, label, timezone }) {
     const columns = [
       { head: "ID", width: 24 },
       { head: "Emp. Code", width: 58 },
-      { head: "Name", width: 88, wrap: true },
-      { head: "Department", width: 84, wrap: true },
-      { head: "Shift", width: 68, wrap: true },
+      { head: "Name", width: 82, wrap: true },
+      { head: "Department", width: 78, wrap: true },
+      { head: "Shift", width: 62, wrap: true },
       { head: "Shift Timings", width: 72 },
       { head: "Date", width: 60 },
-      { head: "Location", width: 62, wrap: true },
+      { head: "Location", width: 56, wrap: true },
       { head: "Check in", width: 66 },
       { head: "Check out", width: 66 },
       { head: "Duration", width: 50 },
-      { head: "Total Working Hrs (Day)", width: 66 },
-      { head: "Total Break Hrs (Day)", width: 64 },
-      { head: "Total Working Hrs (Period)", width: 74 },
-      { head: "Checkin Camera", width: 84, wrap: true },
-      { head: "Checkout Camera", width: 84, wrap: true },
+      { head: "Total Working Hrs (Day)", width: 62 },
+      { head: "Break Time", width: 58 },
+      { head: "Total Break Hrs (Day)", width: 60 },
+      { head: "Total Working Hrs (Period)", width: 68 },
+      { head: "Checkin Camera", width: 76, wrap: true },
+      { head: "Checkout Camera", width: 76, wrap: true },
       { head: "View Image", width: 52 },
     ];
     const drawHeader = () => {
