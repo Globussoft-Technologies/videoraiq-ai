@@ -314,7 +314,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
 
       <div style={{ flex: 1, minWidth: 8 }} />
 
-      {/* Live Demo disabled for now.
+    
       {!isNarrow && (
         <button
           type="button"
@@ -349,7 +349,7 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
           Live Demo
         </button>
       )}
-      */}
+     
 
       {/* Server network status — this server's own internet uplink (see
           Sidebar's footer widget, which shows the same reading). Hidden on

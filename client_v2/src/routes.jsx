@@ -66,7 +66,7 @@ export const v2Routes = (
     <Route index element={<HomeRedirect />} />
     <Route path="dashboard" element={guard('dashboard', undefined, <CommandCenter />)} />
     {/* V2Layout owns this page so it stays mounted while other routes render. */}
-    {/* <Route path="live-demo" element={null} /> */}
+    <Route path="live-demo" element={null} />
     <Route path="live" element={guard('LIVE', undefined, <LiveWall />)} />
     <Route path="playback" element={guard('playbacks', undefined, <CameraView />)} />
     <Route path="alerts" element={guard('alerts', undefined, <AlertsView />)} />

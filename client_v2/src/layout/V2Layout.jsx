@@ -302,13 +302,12 @@ function Shell() {
           style={{ flex: 1, minHeight: 0, overflowY: fixedViewportPage ? 'hidden' : 'auto', overflowX: 'hidden' }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: fixedViewportPage ? 0 : '100%', height: fixedViewportPage ? '100%' : undefined }}>
-            {/* Live Demo disabled for now.
+           
             {(hasVisitedLiveDemo || isLiveDemo) && (
               <div style={{ display: isLiveDemo ? 'contents' : 'none' }}>
                 <LiveDemo active={isLiveDemo} />
               </div>
             )}
-            */}
             <div style={{ display: isLiveDemo ? 'none' : 'contents' }}>
               <Outlet context={outletCtx} />
             </div>
