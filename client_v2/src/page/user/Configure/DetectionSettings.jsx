@@ -325,7 +325,7 @@ const TIP_MIN_ROOM = 76;
  * chip: the table card is overflow:hidden, which clipped the tooltip on the top
  * row (it could only grow upward into the header). Same reason the popovers on
  * this page portal — see AppliedTypesPopover below. */
-function EngineChip({ label, status = 'idle' }) {
+function EngineChip({ label, status = 'idle', onSelect }) {
   const [tip, setTip] = useState(null);
   const chipRef = useRef(null);
   const palette = ZONE_STATUS_STYLE[status] || ZONE_STATUS_STYLE.idle;
@@ -374,7 +374,13 @@ function EngineChip({ label, status = 'idle' }) {
       onMouseLeave={() => setTip(null)}
       style={{ display: 'inline-flex' }}
     >
-      <span
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelect?.();
+        }}
+        title={`Open ${label}`}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -389,10 +395,11 @@ function EngineChip({ label, status = 'idle' }) {
           fontWeight: 600,
           whiteSpace: 'nowrap',
           justifyContent: 'center',
+          cursor: 'pointer',
         }}
       >
         {detectionInitials(label)}
-      </span>
+      </button>
       {tip &&
         createPortal(
           <span
@@ -883,7 +890,12 @@ function CameraRow({ camera, typeLabels, onOpen, onPreview, onToggleDetectionReq
         {zoneTypes.length ? (
           <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {zoneTypes.map(type => (
-              <EngineChip key={type.key} label={type.label} status={zoneStatusOf(type)} />
+              <EngineChip
+                key={type.key}
+                label={type.label}
+                status={zoneStatusOf(type)}
+                onSelect={() => onOpen?.(type.key)}
+              />
             ))}
           </span>
         ) : (
@@ -1254,7 +1266,10 @@ const handleToggleDetection = async (camera, detectionType, enable) => {
               key={camera._id}
               camera={camera}
               typeLabels={typeLabels}
-              onOpen={() => onOpenCamera?.(camera)}
+              onOpen={(targetSettingType) => onOpenCamera?.(
+                camera,
+                typeof targetSettingType === 'string' ? targetSettingType : undefined,
+              )}
               onPreview={setPreviewCamera}
               onToggleDetectionRequest={handleDetectionToggleRequest}
               onResetThresholdsRequest={handleResetThresholdsRequest}

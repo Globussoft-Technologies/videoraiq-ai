@@ -55,6 +55,7 @@ export const DETECTION_THRESHOLDS = {
   tableOccupancySettings: ['person_threshold'],
   loiteringDetectionSettings: ['person_threshold'],
   countVehiclesSettings: ['vehicle_threshold'],
+  vehicleCheckInOutSettings: ['vehicle_threshold'],
   vehicleObstructionSettings: ['vehicle_threshold'],
   vehicleTypeDetectionSettings: ['vehicle_threshold', 'forklift_threshold'],
   vehicleDetectionSettings: ['plate_confidence', 'ocr_min_confidence'],

@@ -582,6 +582,10 @@ export default function Detections() {
   const incidentRequestIdRef = useRef(0);
   const autoSelectFirstCameraRef = useRef(false);
   const suppressCameraParamExitRef = useRef(false);
+  // Set when the camera list is opened via an Engines-column chip: the detection
+  // that chip represents, applied to `selectedId` once `models` has loaded so
+  // the detail view opens filtered to it instead of the first detection.
+  const pendingDetectionRef = useRef('');
 
   const typesApi = useApi(() => getDetectionTypes(), [], { initialData: {} });
   // Licensing headroom, so the limits are visible before one is hit rather than
@@ -681,6 +685,24 @@ export default function Detections() {
     if (models.length === 0) {
       if (selectedId) setSelectedId('');
       return;
+    }
+    // A chip in the Engines column asked for a specific detection: honour it once
+    // the catalogue is available, then clear the request so later loads don't
+    // keep overriding a manual selection.
+    if (pendingDetectionRef.current) {
+      const target = models.find(
+        (m) => m.id === pendingDetectionRef.current || m.settingType === pendingDetectionRef.current,
+      );
+      pendingDetectionRef.current = '';
+      if (target) {
+        if (target.id !== selectedId) setSelectedId(target.id);
+        // Isolate the chip's detection: drop it into the search bar so only that
+        // card shows, and reset the other filters that could hide it.
+        setSearch(target.name || '');
+        setStateTab('all');
+        setCategory('all');
+        return;
+      }
     }
     if (!models.some((m) => m.id === selectedId)) setSelectedId(models[0].id);
   }, [models, selectedId]);
@@ -1162,8 +1184,28 @@ export default function Detections() {
   // immediately closes the detail view, forcing users to click twice.
   }, [detailCameraId]);
 
-  const enterDetections = (camera) => {
+  const enterDetections = (camera, targetSettingType = '') => {
     const nextCameraId = String(camera?._id || '');
+    // Opened from an Engines-column chip: remember the detection it stands for so
+    // the detail view lands on it. If the catalogue is already loaded, apply it
+    // now; otherwise the models effect picks it up once it arrives.
+    if (targetSettingType) {
+      const match = models.find((m) => m.id === targetSettingType || m.settingType === targetSettingType);
+      if (match) {
+        setSelectedId(match.id);
+        setSearch(match.name || '');
+        setStateTab('all');
+        setCategory('all');
+        pendingDetectionRef.current = '';
+      } else {
+        pendingDetectionRef.current = String(targetSettingType);
+      }
+    } else {
+      // Plain row open (anywhere outside a chip): no detection isolation, and
+      // clear any stale request left by an earlier chip click.
+      pendingDetectionRef.current = '';
+      setSearch('');
+    }
     const nextNvrId = nvrIdOf(camera?.nvrId);
     setSearchParams((previous) => {
       const next = new URLSearchParams(previous);
@@ -1393,7 +1435,11 @@ export default function Detections() {
   }
 
   if (!enteredDetections) {
-    return <DetectionSettingsCameraList onOpenCamera={enterDetections} />;
+    return (
+      <DetectionSettingsCameraList
+        onOpenCamera={(camera, targetSettingType) => enterDetections(camera, targetSettingType)}
+      />
+    );
   }
 
   return (

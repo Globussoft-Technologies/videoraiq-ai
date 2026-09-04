@@ -3,6 +3,10 @@ import { Maximize, Minimize, Pencil, Save, Trash2, Undo2 } from 'lucide-react';
 export default function ZoneToolbar({
   activeType,
   isLineCrossing,
+  isCheckInOut = false,
+  lineDrawing = false,
+  onDrawLine,
+  hasLineContent = false,
   drawing,
   setDrawing,
   videoSize,
@@ -18,9 +22,24 @@ export default function ZoneToolbar({
   onSave,
 }) {
   const hasVideo = !!videoSize.w;
-  const hasDrawableContent = points.length > 0 || draftZones.length > 0 || zones.length > 0;
-  const canClearAll = drawing && hasDrawableContent;
+  const hasDrawableContent = points.length > 0 || draftZones.length > 0 || zones.length > 0 || hasLineContent;
+  const canClearAll = (drawing || lineDrawing) && hasDrawableContent;
   const canSave = !!activeType && !saving && (zones.length > 0 || draftZones.length > 0 || points.length >= minPointsToSave);
+
+  const drawLineButton = (
+    <button
+      onClick={onDrawLine}
+      disabled={!activeType}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
+        fontSize: 12, cursor: activeType ? 'pointer' : 'not-allowed', border: '1px solid var(--bd)',
+        background: lineDrawing ? 'linear-gradient(135deg,var(--blue),var(--violet))' : 'var(--bg2)',
+        color: lineDrawing ? '#fff' : 'var(--tx2)', opacity: activeType ? 1 : 0.5,
+      }}
+    >
+      <Pencil size={14} /> {lineDrawing ? 'Stop Line' : 'Draw Line'}
+    </button>
+  );
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 13 }}>
@@ -39,6 +58,7 @@ export default function ZoneToolbar({
         </button>
       ) : (
         <>
+          {isCheckInOut && drawLineButton}
           <button
             onClick={onMaxArea}
             disabled={!activeType || !hasVideo}
@@ -75,18 +95,23 @@ export default function ZoneToolbar({
           </button>
         </>
       )}
-      <button
-        onClick={onUndo}
-        disabled={!drawing || (points.length === 0 && draftZones.length === 0)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
-          background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
-          cursor: (drawing && (points.length || draftZones.length)) ? 'pointer' : 'not-allowed',
-          opacity: (drawing && (points.length || draftZones.length)) ? 1 : 0.5,
-        }}
-      >
-        <Undo2 size={14} /> Undo
-      </button>
+      {(() => {
+        const canUndo = (drawing && (points.length > 0 || draftZones.length > 0)) || (lineDrawing && hasLineContent);
+        return (
+          <button
+            onClick={onUndo}
+            disabled={!canUndo}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 8,
+              background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx2)',
+              cursor: canUndo ? 'pointer' : 'not-allowed',
+              opacity: canUndo ? 1 : 0.5,
+            }}
+          >
+            <Undo2 size={14} /> Undo
+          </button>
+        );
+      })()}
       <button
         onClick={onClearAll}
         disabled={!canClearAll}

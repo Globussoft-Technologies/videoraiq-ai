@@ -46,6 +46,7 @@ const DETECTION_ICONS = {
   foodServicePPEDetection: UtensilsCrossed,
   foodServicePPEDetectionSettings: UtensilsCrossed,
   countVehiclesSettings: CarFront,
+  vehicleCheckInOutSettings: CarFront,
   vehicleDetectionSettings: Car,
   vehicleTypeDetectionSettings: CarFront,
   vehicleObstructionSettings: CircleOff,

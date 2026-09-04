@@ -27,6 +27,7 @@ export const ENGINE_LABEL_MAP = {
   loiteringWithAuthSettings:         'Loitering (Auth)',
   unauthorizedAccessSettings:        'Unauthorized Access',
   lineCrossingSettings:              'Line Crossing',
+  vehicleCheckInOutSettings:         'Vehicle Check-In / Check-Out',
   fireSmokeDetectionSettings:        'Fire & Smoke',
   weaponDetectionSettings:           'Weapon Detection',
   unattendedBaggageDetectionSettings:'Unattended Baggage',

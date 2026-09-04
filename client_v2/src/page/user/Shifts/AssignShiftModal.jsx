@@ -12,8 +12,10 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import MultiSelect from '@/components/MultiSelect';
+import SingleDatePicker from '@/components/SingleDatePicker';
 import {
   assignShift,
+  bulkAssignSchedule,
   fetchDepartments,
   fetchEmployeeLocations,
   fetchShiftList,
@@ -72,6 +74,12 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
   const [employeeOptions, setEmployeeOptions] = useState([]);
   const [employeeQuery, setEmployeeQuery] = useState('');
 
+  // Optional effective range for "Specific employees". When `from` is set the
+  // assignment is written as dated ShiftSchedule overrides rather than changing
+  // the standing shift; `to` blank means a single day (to === from).
+  const [effectiveFrom, setEffectiveFrom] = useState('');
+  const [effectiveTo, setEffectiveTo] = useState('');
+
   const [locations, setLocations] = useState([]);
   const [departmentIds, setDepartmentIds] = useState([]);
   const [allEmployees, setAllEmployees] = useState(false);
@@ -86,10 +94,15 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
   const hasFilter = individual
     ? employeeIds.length > 0
     : locations.length > 0 || departmentIds.length > 0;
+  const dated = individual && Boolean(effectiveFrom);
+  const dateRangeInvalid = dated && effectiveTo && effectiveTo < effectiveFrom;
   // An empty filter set means "everyone", so the server refuses it unless
   // `allEmployees` is set explicitly. Mirror that here rather than letting the
   // admin hit a 400.
-  const canSubmit = Boolean(selectedShiftId) && (hasFilter || (!individual && allEmployees));
+  const canSubmit =
+    Boolean(selectedShiftId) &&
+    !dateRangeInvalid &&
+    (hasFilter || (!individual && allEmployees));
 
   const filters = useMemo(
     () =>
@@ -226,6 +239,8 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
     setEmployeeIds([]);
     setEmployeeOptions([]);
     setEmployeeQuery('');
+    setEffectiveFrom('');
+    setEffectiveTo('');
     setLocations([]);
     setDepartmentIds([]);
     setAllEmployees(false);
@@ -244,6 +259,21 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
+      if (dated) {
+        // "To" is optional — a blank end means a single day.
+        const res = await bulkAssignSchedule({
+          employeeIds,
+          shiftId: selectedShiftId,
+          from: effectiveFrom,
+          to: effectiveTo || effectiveFrom,
+        });
+        const data = res?.data?.body?.data;
+        toast.success(res?.data?.body?.message || 'Shift scheduled');
+        onAssigned?.(data);
+        setOpen(false);
+        reset();
+        return;
+      }
       const res = await assignShift(selectedShiftId, filters);
       const data = res?.data?.body?.data;
       toast.success(res?.data?.body?.message || `${data?.modified ?? 0} employees assigned`);
@@ -268,6 +298,13 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
       <DialogContent
         className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[18px] p-4 sm:p-5 shadow-xl w-[94vw] max-w-[640px] max-h-[92vh] overflow-y-auto overflow-x-hidden top-1/2 left-1/2 translate-x-[-50%] translate-y-[-50%] hide-scrollbar scrollbar-hide"
         closeBtn="text-[var(--tx2)] hover:text-[var(--tx)] transition-colors top-5 right-5"
+        onInteractOutside={(event) => {
+          // The date pickers portal their calendar to <body>, so a click inside
+          // one reads as "outside" the dialog — don't let it close the modal.
+          if (event.target instanceof Element && event.target.closest('.vq-datepicker-pop')) {
+            event.preventDefault();
+          }
+        }}
       >
         <DialogHeader className="flex-row items-center gap-3 text-left space-y-0">
           <span
@@ -355,6 +392,41 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
               />
               <p className="text-[11px] text-[var(--tx3)] mt-1.5 ml-1">
                 Type to search the full roster — the list shows the first 50 matches.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                <div>
+                  <label className={labelClass}>From</label>
+                  <SingleDatePicker
+                    value={effectiveFrom}
+                    maxDate={effectiveTo || undefined}
+                    placeholder="Select start date"
+                    clearable
+                    onChange={(date) => {
+                      setEffectiveFrom(date);
+                      // From gates the dated mode — clearing it (or moving it
+                      // past the end) drops a now-invalid end date too.
+                      if (!date || (effectiveTo && date && effectiveTo < date)) setEffectiveTo('');
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>To (optional)</label>
+                  <SingleDatePicker
+                    value={effectiveTo}
+                    minDate={effectiveFrom || undefined}
+                    placeholder={effectiveFrom ? 'Select end date' : 'Pick a start date first'}
+                    clearable
+                    onChange={(date) => effectiveFrom && setEffectiveTo(date)}
+                  />
+                </div>
+              </div>
+              <p className="text-[11px] text-[var(--tx3)] mt-1.5 ml-1">
+                {dateRangeInvalid
+                  ? 'The end date is before the start date.'
+                  : dated
+                  ? 'Scheduled for the selected day(s) only — the standing shift is unchanged.'
+                  : 'Leave the dates blank to set this as the standing shift.'}
               </p>
             </div>
           ) : (
@@ -490,7 +562,11 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
             disabled={!canSubmit || submitting || preview?.matched === 0}
             className="bg-[var(--blue)] hover:opacity-95 active:scale-95 text-white rounded-[10px] transition-all cursor-pointer shadow-sm shadow-[var(--blue)]/20 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {submitting ? 'Assigning…' : `Assign${activeShiftName ? ` to ${activeShiftName}` : ''}`}
+            {submitting
+              ? 'Assigning…'
+              : dated
+              ? 'Schedule shift'
+              : `Assign${activeShiftName ? ` to ${activeShiftName}` : ''}`}
           </Button>
         </DialogFooter>
       </DialogContent>

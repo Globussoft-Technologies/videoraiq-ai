@@ -9,8 +9,22 @@ export const DETECTION_FIELD_KEYS = [
   'conveyorDetectionSettings', 'crusherDetectionSettings', 'waterSpillageDetectionSettings',
   'vehicleTypeDetectionSettings', 'loiteringDetectionSettings', 'vehicleObstructionSettings',
   'tableOccupancyDetectionSettings', 'foodServicePPEDetectionSettings', 'mobilePhoneDetectionSettings',
-  'carModelDetectionSettings', 'faceAuthenticationSettings',
+  'carModelDetectionSettings', 'faceAuthenticationSettings', 'vehicleCheckInOutSettings',
 ];
+
+// Vehicle Check-In / Check-Out draws polygon zones (each with just a name +
+// entry/exit mode, like Line Crossing) plus one crossing line + inside
+// reference point. It persists line_coordinates / inside_reference_point /
+// camType alongside the usual referencePoints + zone_configs.
+export const VEHICLE_CHECK_IN_OUT_SETTING_TYPE = 'vehicleCheckInOutSettings';
+
+export function isVehicleCheckInOutType(value) {
+  const normalized = String(value || '')
+    .replace(/settings$/i, '')
+    .replace(/[^a-z0-9]/gi, '')
+    .toLowerCase();
+  return normalized === 'vehiclecheckinout' || normalized === 'checkinout';
+}
 
 export const ATTENDANCE_DETECTION_NAME = 'Attendance-detection';
 export const ATTENDANCE_DETECTION_SETTING_TYPE = 'faceAuthenticationSettings';

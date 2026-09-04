@@ -56,6 +56,18 @@ export const searchAssignableEmployees = async (search = '', limit = 50) =>
 export const assignShift = async (shiftId, filters) =>
   axios.post(`${Api_url}/shifts/${shiftId}/assign`, filters, { headers: headers() });
 
+/**
+ * Assign a shift to specific employees across a date range, written as
+ * ShiftSchedule day overrides rather than changing the standing `shiftId`.
+ * `from`/`to` are "YYYY-MM-DD"; pass `to === from` for a single day.
+ */
+export const bulkAssignSchedule = async ({ employeeIds, shiftId, from, to }) =>
+  axios.put(
+    `${Api_url}/shifts/schedule/bulk`,
+    { employeeIds, shiftId, from, to },
+    { headers: headers() },
+  );
+
 export const unassignShift = async (employeeIds) =>
   axios.patch(
     `${Api_url}/shifts/assignments/unassign`,

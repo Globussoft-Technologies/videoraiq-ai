@@ -40,6 +40,7 @@ import { buildAttendanceRows, buildSessionRows, handleLiveDemoExport, handleLive
 import { clearLiveDemoSession, readLiveDemoSession, updateLiveDemoSession } from './liveDemoSession';
 import SessionAnalyticsPanel from './SessionAnalyticsPanel';
 import VideoProcessingLoader from './VideoProcessingLoader';
+import PresetDateRangePicker from '@/components/PresetDateRangePicker';
 
 const categories = [{ key: 'all', label: 'All', color: null }, ...DETECTION_CATEGORIES];
 
@@ -1004,6 +1005,84 @@ function ExpandableSnap({ src, alt, size = 'h-10 w-10' }) {
   );
 }
 
+// Video counterpart to ExpandableSnap: a small muted preview thumbnail that
+// opens a playable video in the same centred modal popup on click. Used by
+// the Recent Demos list so clicking a clip's thumbnail previews the footage
+// without triggering the row's onSelect (loads that demo into the page).
+function ExpandableVideoSnap({ src, alt, size = 'h-11 w-16' }) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
+  if (!src) {
+    return (
+      <span className={`grid ${size} shrink-0 place-items-center rounded-md border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx3)]`}>
+        <FileVideo className="h-4 w-4" />
+      </span>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(event) => { event.stopPropagation(); setOpen(true); }}
+        className={`block shrink-0 cursor-pointer overflow-hidden rounded-md border border-[var(--bd)] bg-black transition-colors hover:border-[var(--blue)] ${size}`}
+        aria-label="Preview clip"
+        title="Click to preview"
+      >
+        <video src={src} className="h-full w-full object-cover" preload="metadata" muted playsInline />
+      </button>
+      {open && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm"
+          onClick={(event) => { event.stopPropagation(); setOpen(false); }}
+        >
+          <div
+            className="relative rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-3 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={(event) => { event.stopPropagation(); setOpen(false); }}
+              className="absolute -right-3 -top-3 z-20 grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-[var(--bd)] bg-[var(--bg1solid)] text-[var(--tx)] shadow-lg transition-colors hover:bg-[var(--bg2)]"
+              aria-label="Close"
+              title="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <video
+              src={src}
+              controls
+              autoPlay
+              className="h-[80vh] max-h-[900px] w-auto min-w-[320px] max-w-[92vw] rounded-xl bg-black object-contain"
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Pull a display string out of a value that may be a string, or a populated
+ * ref object — checking `keys` in order. Anything else yields ''. */
+function alertText(value, keys = []) {
+  if (typeof value === 'string') return value.trim();
+  if (value && typeof value === 'object') {
+    for (const key of keys) {
+      if (typeof value[key] === 'string' && value[key].trim()) return value[key].trim();
+    }
+  }
+  return '';
+}
+
 function MatchedAlertsPanel({ alerts }) {
   return (
     <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
@@ -1023,17 +1102,21 @@ function MatchedAlertsPanel({ alerts }) {
           No matches yet — process a clip to see face matches here.
         </div>
       ) : (
-        <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+        <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1 [&::-webkit-scrollbar-thumb]:cursor-pointer [&::-webkit-scrollbar]:cursor-pointer">
           {alerts.map((alert) => {
             const photo = alert.images?.face || alert.profilePics?.[0];
             const time = alert.timestamp ? new Date(alert.timestamp).toLocaleTimeString([], { hour12: false }) : '--';
+            // camera / department may arrive as a string or as a populated
+            // object ({ name } / { departmentName }); render only real strings.
+            const cameraName = alertText(alert.cameraName, ['name', 'cameraName']);
+            const department = alertText(alert.department, ['departmentName', 'name']);
             return (
               <div key={alert.key} className="flex items-center gap-3 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-2.5">
                 <ExpandableSnap src={photo ? dsVideoSrc(photo) : ''} alt={alert.personName} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-bold text-[var(--tx)]">Face match — {alert.personName}</div>
                   <div className="mt-0.5 truncate text-[11px] text-[var(--tx3)]">
-                    {time}{alert.cameraName ? ` · ${alert.cameraName}` : ''}{alert.department ? ` · ${alert.department}` : ''}
+                    {time}{cameraName ? ` · ${cameraName}` : ''}{department ? ` · ${department}` : ''}
                   </div>
                 </div>
                 <span className="shrink-0 rounded-md border border-[var(--blue)]/40 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--blue)]">
@@ -1568,7 +1651,7 @@ function AttendanceLogPanel({ usersLogs, onDelete }) {
           No attendance events yet — process a clip to populate this log.
         </div>
       ) : (
-        <div className="max-h-[360px] overflow-auto rounded-lg border border-[var(--bd)]">
+        <div className="max-h-[360px] overflow-auto rounded-lg border border-[var(--bd)] [&::-webkit-scrollbar-thumb]:cursor-pointer [&::-webkit-scrollbar]:cursor-pointer">
           <table className="w-full min-w-[600px] text-left text-xs">
             <thead className="sticky top-0 z-10 bg-[var(--bg2)] text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--tx3)]">
               <tr>
@@ -1583,9 +1666,9 @@ function AttendanceLogPanel({ usersLogs, onDelete }) {
                 </th>
                 <th className="px-3 py-2">Snap</th>
                 <th className="px-3 py-2">Person</th>
+                <th className="px-3 py-2">Email</th>
                 <th className="px-3 py-2">Check-in</th>
                 <th className="px-3 py-2">Check-out</th>
-                <th className="px-3 py-2">Timestamp</th>
                 <th className="w-12 px-3 py-2 text-right">Del</th>
               </tr>
             </thead>
@@ -1614,9 +1697,9 @@ function AttendanceLogPanel({ usersLogs, onDelete }) {
                       />
                     </td>
                     <td className="px-3 py-2 font-semibold text-[var(--tx)]">{row.name}</td>
+                    <td className="px-3 py-2 text-[var(--tx2)]">{row.email}</td>
                     <td className="px-3 py-2 text-[var(--tx2)]">{row.checkIn}</td>
                     <td className="px-3 py-2 text-[var(--tx2)]">{row.checkOut}</td>
-                    <td className="whitespace-nowrap px-3 py-2 font-semibold text-[var(--tx)]">{row.timestamp}</td>
                     <td className="px-3 py-2 text-right">
                       <button
                         type="button"
@@ -1642,7 +1725,7 @@ function AttendanceLogPanel({ usersLogs, onDelete }) {
 // accumulates every run's sessions into per-person documents, so a run's own
 // events can't be fetched in isolation — instead we pull the full log once and
 // slice its sessions into each run's time window [record.createdAt, nextRun).
-function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipName }) {
+function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipName, currentClipUrl }) {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -1677,6 +1760,7 @@ function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipN
                   title: 'Face Recognition — Attendance Log',
                   detectionName: 'Face Recognition',
                   clipName: currentClipName || 'Demo clip',
+                  clipUrl: currentClipUrl || '',
                   minConfidence,
                   generatedAt: null,
                   rows,
@@ -1719,6 +1803,7 @@ function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipN
           title: 'Face Recognition — Attendance Log',
           detectionName: 'Face Recognition',
           clipName: video?.videoUrl?.split('/').pop() || currentClipName || 'Demo clip',
+          clipUrl: video?.dsVideoUrl ? dsVideoSrc(video.dsVideoUrl) : '',
           minConfidence,
           generatedAt: record.createdAt,
           rows,
@@ -1735,17 +1820,18 @@ function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipN
 
     run();
     return () => { cancelled = true; };
-  }, [faceRecords, currentUsersLogs, minConfidence, currentClipName]);
+  }, [faceRecords, currentUsersLogs, minConfidence, currentClipName, currentClipUrl]);
 
   return { reports, loading };
 }
 
-function DemoReportsPanel({ usersLogs, clipName, minConfidence, history }) {
+function DemoReportsPanel({ usersLogs, clipName, clipUrl, minConfidence, history, analytics }) {
   const { reports, loading } = useDemoReports({
     history,
     currentUsersLogs: usersLogs,
     minConfidence,
     currentClipName: clipName,
+    currentClipUrl: clipUrl,
   });
   const hasData = reports.some((report) => report.rows.length > 0);
 
@@ -1768,7 +1854,7 @@ function DemoReportsPanel({ usersLogs, clipName, minConfidence, history }) {
           <button
             type="button"
             disabled={!hasData}
-            onClick={() => handleLiveDemoExportAll('excel', reports)}
+            onClick={() => handleLiveDemoExportAll('excel', reports, analytics)}
             title="Export every demo report into one Excel file"
             className="inline-flex h-[34px] cursor-pointer items-center gap-[7px] rounded-[9px] bg-gradient-to-br from-[#14b8a6] to-[#22c55e] px-[15px] text-xs font-semibold text-white shadow-[0_6px_16px_rgba(34,197,94,0.28)] transition-shadow hover:shadow-[0_8px_22px_rgba(34,197,94,0.45)] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
           >
@@ -1778,7 +1864,7 @@ function DemoReportsPanel({ usersLogs, clipName, minConfidence, history }) {
           <button
             type="button"
             disabled={!hasData}
-            onClick={() => handleLiveDemoExportAll('pdf', reports)}
+            onClick={() => handleLiveDemoExportAll('pdf', reports, analytics)}
             title="Export every demo report into one PDF file"
             className="inline-flex h-[34px] cursor-pointer items-center gap-[7px] rounded-[9px] bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] px-[15px] text-xs font-semibold text-white shadow-[0_6px_16px_rgba(99,102,241,0.3)] transition-shadow hover:shadow-[0_8px_22px_rgba(124,92,255,0.45)] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
           >
@@ -1793,7 +1879,7 @@ function DemoReportsPanel({ usersLogs, clipName, minConfidence, history }) {
           {loading ? 'Loading reports…' : 'No reports yet — process a clip to generate one.'}
         </div>
       ) : (
-        <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+        <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1 [&::-webkit-scrollbar-thumb]:cursor-pointer [&::-webkit-scrollbar]:cursor-pointer">
           {reports.map((report) => {
             const events = report.rows.length;
             const meta = [
@@ -1822,7 +1908,7 @@ function DemoReportsPanel({ usersLogs, clipName, minConfidence, history }) {
                 <button
                   type="button"
                   disabled={events === 0}
-                  onClick={() => handleLiveDemoExport('excel', report)}
+                  onClick={() => handleLiveDemoExport('excel', report, analytics)}
                   title="Export this report as Excel"
                   className="inline-flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(34,197,94,0.45)] px-3 text-[11.5px] font-semibold text-[var(--ok)] transition-colors hover:bg-[rgba(34,197,94,0.1)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -1832,7 +1918,7 @@ function DemoReportsPanel({ usersLogs, clipName, minConfidence, history }) {
                 <button
                   type="button"
                   disabled={events === 0}
-                  onClick={() => handleLiveDemoExport('pdf', report)}
+                  onClick={() => handleLiveDemoExport('pdf', report, analytics)}
                   title="Export this report as PDF"
                   className="inline-flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(59,130,246,0.4)] px-3 text-[11.5px] font-semibold text-[var(--blue)] transition-colors hover:bg-[rgba(59,130,246,0.1)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -1850,55 +1936,94 @@ function DemoReportsPanel({ usersLogs, clipName, minConfidence, history }) {
 }
 
 function DemoHistoryPanel({ history, loading, activeRecordId, onSelect }) {
+  // Date-range filter over the run's createdAt. Both bounds inclusive; the end
+  // bound covers the whole day. Held as Date objects for PresetDateRangePicker.
+  const [range, setRange] = useState({ start: null, end: null });
+  const hasFilter = Boolean(range.start || range.end);
+
+  const inRange = (createdAt) => {
+    if (!hasFilter) return true;
+    const ts = createdAt ? new Date(createdAt).getTime() : 0;
+    if (!ts) return false;
+    if (range.start) {
+      const lo = new Date(range.start);
+      lo.setHours(0, 0, 0, 0);
+      if (ts < lo.getTime()) return false;
+    }
+    if (range.end) {
+      const hi = new Date(range.end);
+      hi.setHours(23, 59, 59, 999);
+      if (ts > hi.getTime()) return false;
+    }
+    return true;
+  };
+
   return (
-    <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
+    <section className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm self-start">
       <div className="mb-3">
         <div className="text-sm font-bold text-[var(--tx)]">Recent Demos</div>
         <div className="mt-1 text-[11px] text-[var(--tx3)]">Demos you've run before, most recent first. Click one to load it.</div>
       </div>
 
-      {loading ? (
-        <div className="grid h-20 place-items-center text-[var(--tx3)]">
-          <Loader className="h-4 w-4 animate-spin" />
-        </div>
-      ) : history.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-[var(--bd2)] bg-[var(--bg2)] p-4 text-center text-xs text-[var(--tx3)]">
-          No processed demos yet.
-        </div>
-      ) : (
-        <div className="max-h-[240px] space-y-2 overflow-y-auto pr-1">
-          {history.map((record) => {
-            const id = recordIdOf(record);
-            const settingType = Object.entries(record?.detections || {}).find(([, enabled]) => enabled)?.[0];
-            const name = detections.find((item) => item.settingType === settingType)?.name || 'Live Demo';
-            const ranAt = record?.createdAt ? new Date(record.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
-            const ready = (record?.videos || []).some((video) => video?.dsVideoUrl);
-            const isActive = id === activeRecordId;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => onSelect(record)}
-                className={`flex w-full cursor-pointer items-center justify-between gap-3 rounded-lg border p-2.5 text-left transition-colors ${
-                  isActive ? 'border-[var(--blue)] bg-[var(--bg2)]' : 'border-[var(--bd)] hover:border-[var(--bd2)] hover:bg-[var(--bg2)]'
-                }`}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-xs font-bold text-[var(--tx)]">{name}</div>
-                  <div className="mt-0.5 truncate text-[11px] text-[var(--tx3)]">{ranAt}</div>
-                </div>
-                <span
-                  className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] ${
-                    ready ? 'border border-emerald-400 text-emerald-500' : 'border border-orange-300 text-orange-500'
+      <div className="mb-3">
+        <PresetDateRangePicker
+          startDate={range.start}
+          endDate={range.end}
+          maxDate={new Date()}
+          onRangeChange={({ start, end }) => setRange({ start, end })}
+        />
+      </div>
+
+      {(() => {
+        const processedHistory = history
+          .filter((record) => (record?.videos || []).some((video) => video?.dsVideoUrl))
+          .filter((record) => inRange(record?.createdAt));
+        if (loading) {
+          return (
+            <div className="grid h-20 place-items-center text-[var(--tx3)]">
+              <Loader className="h-4 w-4 animate-spin" />
+            </div>
+          );
+        }
+        if (processedHistory.length === 0) {
+          return (
+            <div className="rounded-lg border border-dashed border-[var(--bd2)] bg-[var(--bg2)] p-4 text-center text-xs text-[var(--tx3)]">
+              {hasFilter ? 'No demos in this date range.' : 'No demos run yet.'}
+            </div>
+          );
+        }
+        return (
+          <div className="h-[480px] space-y-2 overflow-y-auto pr-1">
+            {processedHistory.map((record) => {
+              const id = recordIdOf(record);
+              const settingType = Object.entries(record?.detections || {}).find(([, enabled]) => enabled)?.[0];
+              const name = detections.find((item) => item.settingType === settingType)?.name || 'Live Demo';
+              const ranAt = record?.createdAt ? new Date(record.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+              const isActive = id === activeRecordId;
+              const thumbSrc = firstVideoOf(record)?.dsVideoUrl ? dsVideoSrc(firstVideoOf(record).dsVideoUrl) : '';
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => onSelect(record)}
+                  className={`flex w-full cursor-pointer items-center gap-3 rounded-lg border p-2.5 text-left transition-colors ${
+                    isActive ? 'border-[var(--blue)] bg-[var(--bg2)]' : 'border-[var(--bd)] hover:border-[var(--bd2)] hover:bg-[var(--bg2)]'
                   }`}
                 >
-                  {ready ? 'Processed' : 'Pending'}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+                  <ExpandableVideoSnap src={thumbSrc} alt={name} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-xs font-bold text-[var(--tx)]">{name}</div>
+                    <div className="mt-0.5 truncate text-[11px] text-[var(--tx3)]">{ranAt}</div>
+                  </div>
+                  <span className="shrink-0 rounded-md border border-emerald-400 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-emerald-500">
+                    Processed
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
     </section>
   );
 }
@@ -2168,7 +2293,12 @@ export default function LiveDemo({ active = true }) {
     }
 
     const recordId = saved.recordId || recordIdOf(saved.videoRecord);
-    if (!recordId || !saved.uploadedVideoPath) {
+    // Only an actively in-flight processing job is worth resuming on landing —
+    // an already-uploaded-but-unsubmitted clip or an already-finished ('ready')
+    // run should not block the empty upload state; finished runs live in
+    // Recent Demos instead.
+    const isActiveJob = saved.status === 'processing' || saved.status === 'awaiting-ds';
+    if (!recordId || !saved.uploadedVideoPath || !isActiveJob) {
       clearLiveDemoSession();
       return;
     }
@@ -2178,16 +2308,6 @@ export default function LiveDemo({ active = true }) {
     const restoredDetection = detections.find((item) => item.settingType === saved.settingType)?.name
       || saved.selectedDetection
       || 'Face Recognition';
-    // Landing on the page never resumes the processing loader for a pending
-    // demo — show the original uploaded clip if we have it, otherwise the
-    // upload state. loadDemoRecord flips to 'ready' if DS has since finished,
-    // and the videoRecord_updated socket event covers a job that finishes
-    // while the page is open.
-    const restoredStatus = saved.status === 'ready'
-      ? 'ready'
-      : saved.uploadedVideoPath
-        ? 'uploaded'
-        : 'idle';
 
     setSelectedDetection(restoredDetection);
     processingSettingTypeRef.current = saved.settingType || '';
@@ -2197,10 +2317,10 @@ export default function LiveDemo({ active = true }) {
     setVideoRecord(saved.videoRecord || null);
     setRecordVideos(saved.videos || saved.videoRecord?.videos || []);
     setMatchedAlerts(Array.isArray(saved.matchedAlerts) ? saved.matchedAlerts : []);
-    setClipStatus(restoredStatus);
-    setClipProgress(restoredStatus === 'ready' || restoredStatus === 'uploaded' ? 100 : 0);
+    setClipStatus(saved.status);
+    setClipProgress(75);
 
-    loadDemoRecord(recordId, { fallbackRecord: saved.videoRecord, fallbackStatus: restoredStatus, fallbackVideos: saved.videos })
+    loadDemoRecord(recordId, { fallbackRecord: saved.videoRecord, fallbackStatus: saved.status, fallbackVideos: saved.videos })
       .catch((error) => { if (!cancelled) console.error('Failed to restore active live demo', error); });
 
     return () => { cancelled = true; };
@@ -2212,14 +2332,8 @@ export default function LiveDemo({ active = true }) {
   const loadDemoHistory = async () => {
     setDemoHistoryLoading(true);
     try {
-      const { records } = await getVideoRecords({ limit: 20 });
-      // Only completed runs belong here — a record whose videos all have a null
-      // dsVideoUrl hasn't come back from DS yet, so there's nothing to load if
-      // it were clicked. Same dsVideoUrl test the "Processed" badge uses.
-      const processed = (Array.isArray(records) ? records : []).filter((record) =>
-        (record?.videos || []).some((video) => video?.dsVideoUrl)
-      );
-      setDemoHistory(processed);
+      const { records } = await getVideoRecords({ limit: 100 });
+      setDemoHistory(Array.isArray(records) ? records : []);
     } catch (error) {
       console.error('Failed to load live demo history', error);
     } finally {
@@ -2231,19 +2345,6 @@ export default function LiveDemo({ active = true }) {
     if (!user?.adminId) return;
     loadDemoHistory();
   }, [user?.adminId]);
-
-  // First paint, no in-progress session to restore: if the default detection
-  // (Face Recognition) already has a past run, open it instead of the empty
-  // upload state — same "click a tile with history" behavior as
-  // handleSelectDetection, just for the tile that's selected before any click.
-  useEffect(() => {
-    if (demoHistoryLoading || recordIdOf(videoRecord) || readLiveDemoSession()) return;
-    const item = detections.find((d) => d.name === selectedDetection);
-    const pastRecord = demoHistory.find((record) => record?.detections?.[item?.settingType]);
-    if (pastRecord) openDemoRecord(pastRecord).catch((error) => console.error('Failed to open last demo on load', error));
-    // Only run once history first finishes loading, not on every re-render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demoHistoryLoading]);
 
   // Loads a past record's clip/zones/results into the player and panels
   // without touching selectedDetection — callers that already know (or are
@@ -2270,25 +2371,17 @@ export default function LiveDemo({ active = true }) {
     }
   };
 
-  // Picking a detection tile: if this admin already ran that detection before,
-  // load its most recent demo (video, zones, incidents, attendance) instead of
-  // showing the empty upload state. Newest-first, same order as demoHistory.
+  // Picking a detection tile: always start from the empty upload state. A
+  // past run for this detection (processed or not) stays reachable from
+  // Recent Demos — it's no longer auto-opened just from selecting the tile.
   const handleSelectDetection = async (item) => {
-    setSelectedDetection(item.name);
     if (item.name === selectedDetection) return;
-
-    const pastRecord = demoHistory.find((record) => record?.detections?.[item.settingType]);
     try {
-      if (pastRecord) {
-        await openDemoRecord(pastRecord);
-      } else {
-        await resetClipState();
-        setSelectedDetection(item.name);
-      }
+      await resetClipState();
     } catch (error) {
-      console.error('Failed to load last demo for detection', error);
-      toast.error('Failed to load the last demo for this detection', COMPACT_TOAST);
+      console.error('Failed to reset clip state for detection change', error);
     }
+    setSelectedDetection(item.name);
   };
 
   // The DS/video-process pipeline runs after the /process call returns and
@@ -3315,7 +3408,8 @@ export default function LiveDemo({ active = true }) {
         </section>
       </div>
 
-      <div className={`mt-4 grid gap-4 ${configurationAvailable ? 'xl:grid-cols-[minmax(0,1fr)_minmax(360px,580px)]' : ''}`}>
+      <div className={`mt-4 grid items-start gap-4 ${configurationAvailable ? 'xl:grid-cols-[minmax(0,1fr)_minmax(360px,580px)]' : ''}`}>
+        <div className="min-w-0 space-y-4">
         <section data-tour="demo-upload" className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="text-[15px] font-bold text-[var(--tx)]">2. Upload a test clip</h2>
@@ -3676,13 +3770,6 @@ export default function LiveDemo({ active = true }) {
           )}
         </section>
 
-        <DemoHistoryPanel
-          history={demoHistory}
-          loading={demoHistoryLoading}
-          activeRecordId={recordIdOf(videoRecord)}
-          onSelect={handleSelectDemoHistory}
-        />
-
         {selectedDetection === 'Face Recognition' && clipStatus === 'ready' ? (
           <MatchedAlertsPanel alerts={matchedAlerts} />
         ) : (
@@ -3710,6 +3797,14 @@ export default function LiveDemo({ active = true }) {
             onZoneSettingsSave={handleZoneSettingsPanelSave}
           />
         )}
+        </div>
+
+        <DemoHistoryPanel
+          history={demoHistory}
+          loading={demoHistoryLoading}
+          activeRecordId={recordIdOf(videoRecord)}
+          onSelect={handleSelectDemoHistory}
+        />
       </div>
 
       <div className="mt-4 space-y-4">
@@ -3728,8 +3823,10 @@ export default function LiveDemo({ active = true }) {
           <DemoReportsPanel
             usersLogs={demoAttendanceLogs?.usersLogs || []}
             clipName={clipFile?.name}
+            clipUrl={processedVideo ? dsVideoSrc(processedVideo) : ''}
             minConfidence={confidence}
             history={demoHistory}
+            analytics={sessionAnalytics}
           />
         )}
       </div>

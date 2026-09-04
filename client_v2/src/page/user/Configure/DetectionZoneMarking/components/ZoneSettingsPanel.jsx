@@ -21,6 +21,14 @@ export default function ZoneSettingsPanel({
   zones,
   extraFields,
   isLineCrossing = false,
+  isCheckInOut = false,
+  laneName = '',
+  onLaneNameChange,
+  laneNameError = '',
+  detectionMode = 'entry',
+  onDetectionModeChange,
+  onSaveHeader,
+  detectionModeSaving = false,
   activeIndex,
   onSetActive,
   onUpdateField,
@@ -35,6 +43,10 @@ export default function ZoneSettingsPanel({
   const areaLabel = isLineCrossing ? 'line' : 'zone';
   const areaTitle = isLineCrossing ? 'Line Settings' : 'Zone Settings';
   const nameLabel = isLineCrossing ? 'Line Name' : 'Zone Name';
+  // Line Crossing keeps its per-line mode; Check-In / Check-Out has a single
+  // detection-wide mode rendered once in the panel header.
+  const showPerZoneMode = isLineCrossing;
+  const showZoneExtras = !isCheckInOut;
   const channelOptions = normalizeTelegramChannels(telegramChannels).map((channel) => ({
     value: channel.chatId,
     label: channel.label,
@@ -48,9 +60,59 @@ export default function ZoneSettingsPanel({
       <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 12 }}>
         {zones.length} {areaLabel}{zones.length === 1 ? '' : 's'} drawn on this camera for this detection type.
       </div>
-      <div style={{ marginBottom: 12 }}>
-        <TimezoneField />
-      </div>
+      {showZoneExtras && (
+        <div style={{ marginBottom: 12 }}>
+          <TimezoneField />
+        </div>
+      )}
+      {isCheckInOut && (
+        <div style={{ marginBottom: 12, border: '1px solid var(--bd)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Line Name *</label>
+            <input
+              value={laneName}
+              onChange={e => onLaneNameChange?.(e.target.value)}
+              maxLength={50}
+              placeholder="Enter line name"
+              style={{
+                width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
+                background: 'var(--bg2)', border: `1px solid ${laneNameError ? '#ef4444' : 'var(--bd)'}`, fontSize: 12, color: 'var(--tx)', outline: 'none',
+              }}
+            />
+            {laneNameError && (
+              <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{laneNameError}</div>
+            )}
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Mode</label>
+            <select
+              value={detectionMode}
+              disabled={detectionModeSaving}
+              onChange={e => onDetectionModeChange?.(e.target.value)}
+              style={{
+                width: '100%', height: 34, padding: '0 10px', borderRadius: 8, boxSizing: 'border-box',
+                background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 12, color: 'var(--tx)',
+                outline: 'none', cursor: detectionModeSaving ? 'wait' : 'pointer', opacity: detectionModeSaving ? 0.7 : 1,
+              }}
+            >
+              <option value="entry">Entry</option>
+              <option value="exit">Exit</option>
+              <option value="both">Both</option>
+            </select>
+          </div>
+          <button
+            onClick={() => onSaveHeader?.()}
+            disabled={detectionModeSaving}
+            style={{
+              alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: 5, height: 30, padding: '0 12px',
+              borderRadius: 7, background: 'var(--blue)', border: 'none', fontSize: 11.5, fontWeight: 600, color: '#fff',
+              cursor: detectionModeSaving ? 'not-allowed' : 'pointer', opacity: detectionModeSaving ? 0.6 : 1,
+            }}
+          >
+            <Save size={12} /> {detectionModeSaving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {zones.map((z, i) => {
           const isOpen = expanded === i;
@@ -97,6 +159,7 @@ export default function ZoneSettingsPanel({
                       <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{errors[`zone-${i}-name`]}</div>
                     )}
                   </div>
+                  {showZoneExtras && (
                   <div>
                     <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>
                       Telegram Channels
@@ -116,7 +179,8 @@ export default function ZoneSettingsPanel({
                       <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{errors[`zone-${i}-telegramChatId`]}</div>
                     )}
                   </div>
-                  {isLineCrossing && (
+                  )}
+                  {showPerZoneMode && (
                     <div>
                       <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Mode</label>
                       <select
@@ -192,18 +256,22 @@ export default function ZoneSettingsPanel({
                       )}
                     </div>
                   )}
-                  <ZoneScheduleFields
-                    value={z.schedule}
-                    onChange={schedule => onUpdateField(i, 'schedule', schedule)}
-                    disabled={!(Array.isArray(z.telegramChatIds)
-                      ? z.telegramChatIds.length
-                      : String(z.telegramChatId || '').trim())}
-                    disabledMessage="Please select at least one Telegram channel before setting a schedule."
-                  />
-                  {errors[`zone-${i}-schedule`] && (
-                    <div style={{ marginTop: -4, fontSize: 10.5, color: '#ef4444' }}>
-                      {errors[`zone-${i}-schedule`]}
-                    </div>
+                  {showZoneExtras && (
+                    <>
+                      <ZoneScheduleFields
+                        value={z.schedule}
+                        onChange={schedule => onUpdateField(i, 'schedule', schedule)}
+                        disabled={!(Array.isArray(z.telegramChatIds)
+                          ? z.telegramChatIds.length
+                          : String(z.telegramChatId || '').trim())}
+                        disabledMessage="Please select at least one Telegram channel before setting a schedule."
+                      />
+                      {errors[`zone-${i}-schedule`] && (
+                        <div style={{ marginTop: -4, fontSize: 10.5, color: '#ef4444' }}>
+                          {errors[`zone-${i}-schedule`]}
+                        </div>
+                      )}
+                    </>
                   )}
                   <button
                     onClick={() => onSave(i)}

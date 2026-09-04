@@ -12,7 +12,14 @@ const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
  * Optional minDate / maxDate ('YYYY-MM-DD') cap selectable days.
  * Optional placeholder overrides the empty-state label.
  */
-const SingleDatePicker = ({ value, minDate, maxDate, placeholder = 'Select Date', onChange }) => {
+const SingleDatePicker = ({
+  value,
+  minDate,
+  maxDate,
+  placeholder = 'Select Date',
+  clearable = false,
+  onChange,
+}) => {
   const [open, setOpen] = useState(false);
   const [viewMonth, setViewMonth] = useState(() =>
     moment(value || undefined).startOf('month')
@@ -192,6 +199,19 @@ const SingleDatePicker = ({ value, minDate, maxDate, placeholder = 'Select Date'
         <span className="text-[11px] font-medium text-[var(--tx2)] truncate">
           {selected ? selected.format('DD MMM YYYY') : 'No date selected'}
         </span>
+        <div className="flex items-center gap-2 shrink-0">
+        {clearable && selected && (
+          <button
+            type="button"
+            onClick={() => {
+              onChange?.('');
+              setOpen(false);
+            }}
+            className="text-xs font-semibold text-[var(--tx2)] hover:text-[var(--crit)] px-3 py-1.5 rounded-lg border border-[var(--bd)] hover:border-[var(--crit)] transition-colors cursor-pointer"
+          >
+            Clear
+          </button>
+        )}
         <button
           type="button"
           onClick={() => {
@@ -205,6 +225,7 @@ const SingleDatePicker = ({ value, minDate, maxDate, placeholder = 'Select Date'
         >
           Today
         </button>
+        </div>
       </div>
     </>
   );
@@ -232,10 +253,13 @@ const SingleDatePicker = ({ value, minDate, maxDate, placeholder = 'Select Date'
       {open &&
         createPortal(
           isMobile ? (
-            <div className="fixed inset-0 z-[10030] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div
+              className="vq-datepicker-pop fixed inset-0 z-[10030] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+              style={{ pointerEvents: 'auto' }}
+            >
               <div
                 ref={panelRef}
-                className="w-[328px] max-w-full max-h-[90vh] overflow-y-auto rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-2xl p-4"
+                className="vq-datepicker-pop w-[328px] max-w-full max-h-[90vh] overflow-y-auto rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-2xl p-4"
               >
                 {calendarBody}
               </div>
@@ -243,8 +267,10 @@ const SingleDatePicker = ({ value, minDate, maxDate, placeholder = 'Select Date'
           ) : (
             <div
               ref={panelRef}
-              style={pos || { position: 'fixed', top: -9999, left: -9999 }}
-              className="z-[10030] w-[320px] max-w-[calc(100vw-1.5rem)] rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-2xl p-4"
+              // pointerEvents:auto so the picker keeps working when portalled
+              // out of a modal dialog that sets `pointer-events:none` on <body>.
+              style={{ ...(pos || { position: 'fixed', top: -9999, left: -9999 }), pointerEvents: 'auto' }}
+              className="vq-datepicker-pop z-[10030] w-[320px] max-w-[calc(100vw-1.5rem)] rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-2xl p-4"
             >
               {calendarBody}
             </div>

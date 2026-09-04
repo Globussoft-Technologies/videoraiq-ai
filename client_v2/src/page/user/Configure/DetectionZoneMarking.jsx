@@ -14,8 +14,9 @@ import {
   DEFAULT_MAX_POINTS,
   MIN_POINTS_TO_CLOSE,
   isAttendanceDetectionType,
+  isVehicleCheckInOutType,
 } from './DetectionZoneMarking/constants';
-import { allTypesFor, extraFieldsFor, polygonPointsAttr, zonesFor } from './DetectionZoneMarking/utils';
+import { allTypesFor, extraFieldsFor, lineFor, polygonPointsAttr, zonesFor } from './DetectionZoneMarking/utils';
 import DetectionTypeDropdown from './DetectionZoneMarking/components/DetectionTypeDropdown';
 import ZoneToolbar from './DetectionZoneMarking/components/ZoneToolbar';
 import ZoneSettingsPanel from './DetectionZoneMarking/components/ZoneSettingsPanel';
@@ -89,8 +90,12 @@ export default function DetectionZoneMarking({
   // AreaMarkingControls.jsx's isLineCrossing), unlike every other type here
   // which draws a filled polygon zone.
   const isLineCrossing = activeType?.settingType === 'lineCrossingSettings';
-  // A line only needs its 2 endpoints to be savable; every other type still
-  // needs MIN_POINTS_TO_CLOSE (3) to form a closed polygon.
+  // Vehicle Check-In / Check-Out draws polygon zones like every other area
+  // type, PLUS one crossing line (+ inside reference point) via a dedicated
+  // line sub-tool. So it keeps the full polygon toolbar and adds "Draw Line".
+  const isCheckInOut = isVehicleCheckInOutType(activeType?.settingType);
+  // A line only needs its 2 endpoints (+ inside reference point) to be savable;
+  // every other type still needs MIN_POINTS_TO_CLOSE (3) to form a closed polygon.
   const minPointsToSave = isLineCrossing ? 3 : MIN_POINTS_TO_CLOSE;
 
   // Saved/committed zones for this camera+type â€” each { name, points }. Points
@@ -109,14 +114,33 @@ export default function DetectionZoneMarking({
   const increaseMaxPoints = () => setMaxPoints(p => p + 1);
   const [activeZoneIndex, setActiveZoneIndex] = useState(null); // which saved zone is highlighted/being renamed
 
+  // Check-In / Check-Out's single crossing line, kept apart from the polygon
+  // `zones`. `points` holds its 2 endpoints + 1 inside reference point while
+  // being drawn; `lineZone` is the committed line.
+  const [lineZone, setLineZone] = useState({ points: [], insideReferencePoint: null });
+  const [lineDrawing, setLineDrawing] = useState(false);
+  const [linePoints, setLinePoints] = useState([]);
+  // Check-In / Check-Out's Line Name, tracked here (not just read from the saved
+  // setting) so Clear All can blank it out for a fresh line instead of the Save
+  // modal reopening pre-filled with whatever was saved last time.
+  const [laneNameDraft, setLaneNameDraft] = useState('');
+
   // Load this type's saved zones whenever the selected detection type changes.
   useEffect(() => {
-    setZones(zonesFor(activeType?.setting, camera._id));
+    setZones(zonesFor(activeType?.setting, camera._id, activeType?.settingType));
     setDraftZones([]);
     setPoints([]);
     presetAreaRef.current = false;
     setDrawing(false);
     setActiveZoneIndex(null);
+    setLineDrawing(false);
+    setLinePoints([]);
+    setLineZone(
+      isVehicleCheckInOutType(activeType?.settingType)
+        ? lineFor(activeType?.setting)
+        : { points: [], insideReferencePoint: null },
+    );
+    setLaneNameDraft(activeType?.setting?.settings?.zone_name || '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedType, activeType?.setting, camera._id]);
 
@@ -282,17 +306,53 @@ export default function DetectionZoneMarking({
     company: '',
     telegramChatIds: [],
     telegramChatId: '',
-    countMode: isLineCrossing ? 'entry' : '',
+    countMode: (isLineCrossing || isCheckInOut) ? 'entry' : '',
     schedule: emptySchedule(),
     insideReferencePoint: isLineCrossing && zonePoints[2] ? zonePoints[2] : null,
     points: isLineCrossing ? zonePoints.slice(0, 2) : zonePoints,
   });
 
+  // â”€â”€ Check-In / Check-Out crossing line â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Two clicks place the endpoints, a third places the inside reference point,
+  // then the line commits and drawing stops.
+  const handleLineClick = ({ x, y }) => {
+    setLinePoints(prev => {
+      if (prev.length >= 3) return prev;
+      const next = [...prev, { x, y }];
+      if (next.length === 3) {
+        setLineZone({ points: next.slice(0, 2), insideReferencePoint: next[2] });
+        setLineDrawing(false);
+        return [];
+      }
+      return next;
+    });
+  };
+  const handleLineUndo = () => {
+    if (linePoints.length > 0) {
+      setLinePoints(prev => prev.slice(0, -1));
+      return;
+    }
+    setLineZone({ points: [], insideReferencePoint: null });
+  };
+  const startLineDrawing = () => {
+    setDrawing(false);
+    presetAreaRef.current = false;
+    setLinePoints([]);
+    setLineDrawing(d => !d);
+  };
+
   const handleStageClick = (e) => {
     if (justDraggedRef.current) { justDraggedRef.current = false; return; }
-    if (!drawing || !videoSize.w) return;
+    if (!videoSize.w) return;
 
     const { x, y } = stageEventToVideoXY(e);
+
+    if (lineDrawing) {
+      handleLineClick({ x, y });
+      return;
+    }
+    if (!drawing) return;
+
     if (presetAreaRef.current) {
       presetAreaRef.current = false;
       setPoints([{ x, y }]);
@@ -313,6 +373,7 @@ export default function DetectionZoneMarking({
   };
 
   const handleUndo = () => {
+    if (lineDrawing) { handleLineUndo(); return; }
     if (!drawing) return;
     presetAreaRef.current = false;
     if (points.length > 0) {
@@ -334,8 +395,10 @@ export default function DetectionZoneMarking({
   // Clear All only resets the editor canvas; Reset Setting deletes saved config.
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
+  const hasLineContent = linePoints.length > 0 || lineZone.points.length > 0;
+
   const handleClearAllClick = () => {
-    if (points.length === 0 && draftZones.length === 0 && zones.length === 0) return;
+    if (points.length === 0 && draftZones.length === 0 && zones.length === 0 && !hasLineContent) return;
     setShowClearConfirm(true);
   };
 
@@ -346,6 +409,10 @@ export default function DetectionZoneMarking({
     setActiveZoneIndex(null);
     presetAreaRef.current = false;
     setDrawing(false);
+    setLineDrawing(false);
+    setLinePoints([]);
+    setLineZone({ points: [], insideReferencePoint: null });
+    setLaneNameDraft('');
     setShowClearConfirm(false);
     toast.success('Drawing cleared.');
   };
@@ -358,18 +425,20 @@ export default function DetectionZoneMarking({
     presetAreaRef.current = true;
     setPoints([{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }]);
     setDrawing(false);
+    setLineDrawing(false);
   };
   const handleMinArea = () => {
     if (!videoSize.w) return;
     presetAreaRef.current = true;
     setPoints([{ x: 100, y: 100 }, { x: 300, y: 100 }, { x: 300, y: 300 }, { x: 100, y: 300 }]);
     setDrawing(false);
+    setLineDrawing(false);
   };
 
-  const hasDrawableContent = points.length > 0 || draftZones.length > 0 || zones.length > 0;
+  const hasDrawableContent = points.length > 0 || draftZones.length > 0 || zones.length > 0 || hasLineContent;
   const canUseAreaPreset = !!activeType && !!videoSize.w && !isLineCrossing;
   const canUseDrawing = !!activeType;
-  const canUseUndo = drawing && (points.length > 0 || draftZones.length > 0);
+  const canUseUndo = (drawing && (points.length > 0 || draftZones.length > 0)) || (lineDrawing && hasLineContent);
   const canUseClearAll = hasDrawableContent;
 
   const runFullscreenAction = (event, action) => {
@@ -413,23 +482,39 @@ export default function DetectionZoneMarking({
     if (fields.includes('capacity') && String(zone?.capacity ?? '').trim() === '') nextErrors[`zone-${index}-capacity`] = 'Capacity is required.';
     if (fields.includes('threshold') && String(zone?.threshold ?? '').trim() === '') nextErrors[`zone-${index}-threshold`] = 'Threshold is required.';
     if (fields.includes('company') && String(zone?.company ?? '').trim() === '') nextErrors[`zone-${index}-company`] = 'Company is required.';
-    if (hasSchedule && !hasTelegramChannel) {
+    if (!isCheckInOut && hasSchedule && !hasTelegramChannel) {
       nextErrors[`zone-${index}-telegramChatId`] = 'Please select at least one Telegram channel when a schedule is configured.';
     }
-    if (hasTelegramChannel && !hasSchedule) {
+    if (!isCheckInOut && hasTelegramChannel && !hasSchedule) {
       nextErrors[`zone-${index}-schedule`] = 'Please select a schedule when a Telegram channel is selected.';
     }
     return nextErrors;
   };
 
-  const persistZones = async ({ detectionName, priority, nextZones }) => {
+  const persistZones = async ({ detectionName, priority, nextZones, lineOverride, laneName }) => {
     const polygons = nextZones.map(z => z.points.map(p => [p.x, p.y]));
     const fields = extraFieldsFor(activeType.settingType);
+    const usesLineMode = activeType.settingType === 'lineCrossingSettings' || isCheckInOut;
+    const toApiMode = (mode) => ((mode || 'entry') === 'both' ? 'all' : (mode || 'entry'));
     const lineInsideReferencePoint = activeType.settingType === 'lineCrossingSettings' && nextZones[0]?.insideReferencePoint
       ? [Number(nextZones[0].insideReferencePoint.x), Number(nextZones[0].insideReferencePoint.y)]
       : null;
-    const lineCountMode = activeType.settingType === 'lineCrossingSettings'
-      ? ((nextZones[0]?.countMode || 'entry') === 'both' ? 'all' : (nextZones[0]?.countMode || 'entry'))
+    const lineCountMode = usesLineMode ? toApiMode(nextZones[0]?.countMode) : null;
+    // Check-In / Check-Out: the polygon zones above are saved as usual; a single
+    // crossing line + inside reference point ride alongside in their own keys.
+    const line = lineOverride || lineZone;
+    const checkInOutExtras = isCheckInOut
+      ? {
+          line_coordinates: (line.points || []).slice(0, 2).map(p => [p.x, p.y]),
+          ...(line.insideReferencePoint
+            ? { inside_reference_point: [
+                Number(line.insideReferencePoint.x),
+                Number(line.insideReferencePoint.y),
+              ] }
+            : {}),
+          camType: ['checkin', 'checkout'],
+          zone_name: laneName || activeType.setting?.settings?.zone_name || detectionName || undefined,
+        }
       : null;
     const zoneConfigs = nextZones.map(z => ({
       telegramChatIds: Array.isArray(z.telegramChatIds)
@@ -437,6 +522,7 @@ export default function DetectionZoneMarking({
         : (String(z.telegramChatId || '').trim() ? [String(z.telegramChatId).trim()] : []),
       name: z.name,
       telegramChatId: z.telegramChatId || undefined,
+      ...(usesLineMode ? { count_mode: toApiMode(z.countMode) } : {}),
       ...(fields.includes('capacity') ? { capacity: z.capacity === '' ? undefined : Number(z.capacity) } : {}),
       ...(fields.includes('threshold') ? { threshold_sec: z.threshold === '' ? undefined : Number(z.threshold) } : {}),
       ...(fields.includes('company') && String(z.company ?? '').trim() !== '' ? { company: z.company } : {}),
@@ -477,6 +563,7 @@ export default function DetectionZoneMarking({
           telegramChatId: fallbackTelegramChatId,
           ...(lineInsideReferencePoint ? { inside_reference_point: lineInsideReferencePoint } : {}),
           ...(lineCountMode ? { count_mode: lineCountMode } : {}),
+          ...(checkInOutExtras || {}),
           videoResolution: [videoSize.w, videoSize.h],
         },
       });
@@ -509,6 +596,7 @@ export default function DetectionZoneMarking({
           telegramChatId: fallbackTelegramChatId,
           ...(lineInsideReferencePoint ? { inside_reference_point: lineInsideReferencePoint } : {}),
           ...(lineCountMode ? { count_mode: lineCountMode } : {}),
+          ...(checkInOutExtras || {}),
           videoResolution: [videoSize.w, videoSize.h],
         },
         alerts: [],
@@ -525,11 +613,20 @@ export default function DetectionZoneMarking({
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [pendingZones, setPendingZones] = useState([]);
 
+  const effectiveLine = linePoints.length >= 3
+    ? { points: linePoints.slice(0, 2), insideReferencePoint: linePoints[2] }
+    : lineZone;
+  const hasLine = effectiveLine.points.length >= 2 && !!effectiveLine.insideReferencePoint;
+
   const handleOpenSaveModal = () => {
     if (!activeType) return;
     // The in-progress polygon on the canvas is folded straight into the save,
     // so drawing once and hitting Save works without a separate commit step.
     if (zones.length === 0 && draftZones.length === 0 && points.length < minPointsToSave) return;
+    if (isCheckInOut && !hasLine) {
+      toast.error('Draw the crossing line and its inside reference point before saving.');
+      return;
+    }
     const nextZones = points.length >= minPointsToSave
       ? [...zones, ...draftZones, makeZoneFromPoints(points, zones.length + draftZones.length)]
       : [...zones, ...draftZones];
@@ -537,13 +634,19 @@ export default function DetectionZoneMarking({
     setShowSaveModal(true);
   };
 
-  const handleSubmitSave = async ({ detectionName, priority, zones: editedZones }) => {
+  const handleSubmitSave = async ({ detectionName, priority, zones: editedZones, laneName }) => {
     setSaving(true);
     try {
-      await persistZones({ detectionName, priority, nextZones: editedZones });
+      await persistZones({ detectionName, priority, nextZones: editedZones, lineOverride: effectiveLine, laneName });
       setZones(editedZones);
       setDraftZones([]);
       setPoints([]);
+      if (isCheckInOut) setLaneNameDraft(laneName || '');
+      if (linePoints.length >= 3) {
+        setLineZone(effectiveLine);
+        setLinePoints([]);
+      }
+      setLineDrawing(false);
       presetAreaRef.current = false;
       setDrawing(false);
       setShowSaveModal(false);
@@ -573,13 +676,50 @@ export default function DetectionZoneMarking({
     if (err) { toast.error(err); return; }
     setSavingZoneIndex(index);
     try {
-      await persistZones({ nextZones: zones });
+      await persistZones({ nextZones: zones, lineOverride: effectiveLine });
       toast.success('Zone updated.');
       onSaved?.();
     } catch (err) {
       toast.error(err?.response?.data?.body?.message || 'Failed to update zone.');
     } finally {
       setSavingZoneIndex(null);
+    }
+  };
+
+  // Check-In / Check-Out's Line Name + Mode are edited together in the Zone
+  // Settings panel behind one Save button — typing/selecting only updates
+  // local drafts; nothing persists until Save is clicked.
+  const [savingMode, setSavingMode] = useState(false);
+  const [modeDraft, setModeDraft] = useState('entry');
+  const [laneNameError, setLaneNameError] = useState('');
+
+  useEffect(() => {
+    setModeDraft(zones[0]?.countMode || 'entry');
+  }, [zones]);
+
+  const handleLaneNameDraftChange = (value) => {
+    setLaneNameDraft(value);
+    if (value.trim()) setLaneNameError('');
+  };
+
+  const handleSaveCheckInOutHeader = async () => {
+    const trimmed = laneNameDraft.trim();
+    if (!trimmed) {
+      setLaneNameError('Line Name is required.');
+      return;
+    }
+    const nextZones = zones.map(z => ({ ...z, countMode: modeDraft }));
+    setZones(nextZones);
+    if (!activeType?.settingId) return;
+    setSavingMode(true);
+    try {
+      await persistZones({ nextZones, lineOverride: effectiveLine, laneName: trimmed });
+      toast.success('Line settings updated.');
+      onSaved?.();
+    } catch (err) {
+      toast.error(err?.response?.data?.body?.message || 'Failed to update line settings.');
+    } finally {
+      setSavingMode(false);
     }
   };
 
@@ -601,14 +741,29 @@ export default function DetectionZoneMarking({
     const nextZones = zones.filter((_, i) => i !== index);
     if (!activeType?.settingId) {
       setZones(nextZones); // never saved â€” just drop it locally
+      if (isCheckInOut && nextZones.length === 0) {
+        setLineZone({ points: [], insideReferencePoint: null });
+        setLaneNameDraft('');
+      }
       setZoneDeleteIndex(null);
       return;
     }
     setSavingZoneIndex(index);
     try {
-      await persistZones({ nextZones });
-      setZones(nextZones);
-      toast.success('Zone deleted.');
+      // Check-In / Check-Out needs at least one zone to mean anything â€” deleting
+      // the last one removes the whole detection setting (line included)
+      // instead of leaving an orphaned line with zero zones behind it.
+      if (isCheckInOut && nextZones.length === 0) {
+        await deleteZoneDetectionSetting(activeType.settingId);
+        setZones([]);
+        setLineZone({ points: [], insideReferencePoint: null });
+        setLaneNameDraft('');
+        toast.success('Detection settings reset successfully.');
+      } else {
+        await persistZones({ nextZones, lineOverride: effectiveLine });
+        setZones(nextZones);
+        toast.success('Zone deleted.');
+      }
       onSaved?.();
     } catch (err) {
       toast.error(err?.response?.data?.body?.message || 'Failed to delete zone.');
@@ -789,7 +944,7 @@ export default function DetectionZoneMarking({
               position: 'relative', borderRadius: isFullscreen ? 0 : 12, overflow: 'hidden', aspectRatio: isFullscreen ? 'auto' : '16/9',
               width: isFullscreen ? '100vw' : undefined, height: isFullscreen ? '100vh' : undefined,
               background: '#0a0e15',
-              cursor: drawing ? 'crosshair' : points.length > 0 ? 'grab' : 'default',
+              cursor: (drawing || lineDrawing) ? 'crosshair' : points.length > 0 ? 'grab' : 'default',
               border: '1px solid var(--bd)',
             }}
           >
@@ -1005,6 +1160,41 @@ export default function DetectionZoneMarking({
                   )}
                 </g>
               ))}
+
+              {/* Check-In / Check-Out crossing line + inside reference point */}
+              {isCheckInOut && videoSize.w > 0 && (() => {
+                const committed = lineZone.points.length >= 2;
+                const linePts = committed ? lineZone.points : linePoints.slice(0, 2);
+                const refPt = committed
+                  ? lineZone.insideReferencePoint
+                  : (linePoints.length >= 3 ? linePoints[2] : null);
+                const stroke = committed ? '#f59e0b' : 'var(--blue)';
+                return (
+                  <g>
+                    {linePts.length > 1 && (
+                      <polyline
+                        points={polygonPointsAttr(linePts, videoSize.w, videoSize.h, 1000, 1000)}
+                        fill="none"
+                        stroke={stroke}
+                        strokeWidth="4.5"
+                        strokeLinecap="round"
+                      />
+                    )}
+                    {linePts.map((p, i) => (
+                      <circle key={`ln-${i}`} cx={(p.x / videoSize.w) * 1000} cy={(p.y / videoSize.h) * 1000} r="11" fill={stroke} stroke="#fff" strokeWidth="3" />
+                    ))}
+                    {refPt && (
+                      <>
+                        <circle cx={(refPt.x / videoSize.w) * 1000} cy={(refPt.y / videoSize.h) * 1000} r="10" fill="#22c55e" stroke="#fff" strokeWidth="2.5" />
+                        <text x={(refPt.x / videoSize.w) * 1000 + 12} y={(refPt.y / videoSize.h) * 1000 - 12} fill="#22c55e" fontSize="24" fontWeight="700">
+                          Inside Reference Point
+                        </text>
+                      </>
+                    )}
+                  </g>
+                );
+              })()}
+
               {draftZones.map((z, zi) => (
                 <g key={`draft-${zi}`} opacity={1}>
                   {z.points.length > 1 && (
@@ -1083,14 +1273,33 @@ export default function DetectionZoneMarking({
               </span>
             ))}
 
-            {zones.length === 0 && draftZones.length === 0 && points.length === 0 && videoState !== 'loading' && (
+            {/* Line name pill — sits over the crossing line's first point, same
+                treatment as the zone-name pills above. */}
+            {isCheckInOut && videoSize.w > 0 && lineZone.points[0] && laneNameDraft && (
+              <span
+                style={{
+                  position: 'absolute',
+                  left: `${(lineZone.points[0].x / videoSize.w) * 100}%`,
+                  top: `${(lineZone.points[0].y / videoSize.h) * 100}%`,
+                  transform: 'translate(-4px, -130%)',
+                  background: '#f59e0b', color: '#111', fontSize: 10.5, fontWeight: 700,
+                  padding: '3px 8px', borderRadius: 5, whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 3,
+                }}
+              >
+                {laneNameDraft}
+              </span>
+            )}
+
+            {zones.length === 0 && draftZones.length === 0 && points.length === 0 && !hasLineContent && videoState !== 'loading' && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                 <span style={{
                   fontFamily: 'var(--mono)', fontSize: 11, color: 'rgba(220,232,255,.85)',
                   background: 'rgba(8,11,17,.6)', border: '1px solid rgba(255,255,255,.15)',
                   borderRadius: 20, padding: '6px 14px',
                 }}>
-                  {isLineCrossing
+                  {isCheckInOut
+                    ? 'click "Draw Line" for the crossing line + inside reference point, then "Start Drawing" for the gate zones'
+                    : isLineCrossing
                     ? 'click "Draw Line", then click two line endpoints and one inside reference point'
                     : 'click "Start Drawing", then click to place zone points'}
                 </span>
@@ -1101,12 +1310,19 @@ export default function DetectionZoneMarking({
           <ZoneToolbar
             activeType={activeType}
             isLineCrossing={isLineCrossing}
+            isCheckInOut={isCheckInOut}
+            lineDrawing={lineDrawing}
+            onDrawLine={startLineDrawing}
             drawing={drawing}
-            setDrawing={setDrawing}
+            setDrawing={(updater) => {
+              setLineDrawing(false);
+              setDrawing(updater);
+            }}
             videoSize={videoSize}
             points={points}
             draftZones={draftZones}
             zones={zones}
+            hasLineContent={hasLineContent}
             minPointsToSave={minPointsToSave}
             saving={saving}
             onMaxArea={handleMaxArea}
@@ -1153,6 +1369,14 @@ export default function DetectionZoneMarking({
                 canDelete={canDeleteDetection}
                 errors={zoneFieldErrors}
                 isLineCrossing={isLineCrossing}
+                isCheckInOut={isCheckInOut}
+                laneName={laneNameDraft}
+                onLaneNameChange={handleLaneNameDraftChange}
+                laneNameError={laneNameError}
+                detectionMode={modeDraft}
+                onDetectionModeChange={setModeDraft}
+                onSaveHeader={handleSaveCheckInOutHeader}
+                detectionModeSaving={savingMode}
                 telegramChannels={telegramChannels}
               />
             )}
@@ -1274,6 +1498,14 @@ export default function DetectionZoneMarking({
                 canDelete={canDeleteDetection}
                 errors={zoneFieldErrors}
                 isLineCrossing={isLineCrossing}
+                isCheckInOut={isCheckInOut}
+                laneName={laneNameDraft}
+                onLaneNameChange={handleLaneNameDraftChange}
+                laneNameError={laneNameError}
+                detectionMode={modeDraft}
+                onDetectionModeChange={setModeDraft}
+                onSaveHeader={handleSaveCheckInOutHeader}
+                detectionModeSaving={savingMode}
                 telegramChannels={telegramChannels}
               />
             ) : (
@@ -1290,9 +1522,11 @@ export default function DetectionZoneMarking({
         <SaveDetectionAreaModal
           initialName={isAttendanceDetection ? ATTENDANCE_DETECTION_NAME : (activeType.setting?.name || `${activeType.label} for ${camera.customName || camera.name}`)}
           initialPriority={activeType.setting?.settings?.levelOfImportance || 'moderate'}
+          initialLaneName={laneNameDraft}
           zones={pendingZones}
           extraFields={extraFieldsFor(activeType.settingType)}
           isLineCrossing={isLineCrossing}
+          isCheckInOut={isCheckInOut}
           saving={saving}
       onCancel={() => setShowSaveModal(false)}
       onSubmit={handleSubmitSave}

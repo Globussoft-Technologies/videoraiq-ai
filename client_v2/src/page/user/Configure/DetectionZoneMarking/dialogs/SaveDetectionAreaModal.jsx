@@ -22,9 +22,11 @@ function normalizeTelegramChannels(channels = []) {
 export default function SaveDetectionAreaModal({
   initialName,
   initialPriority,
+  initialLaneName,
   zones,
   extraFields,
   isLineCrossing = false,
+  isCheckInOut = false,
   saving,
   onCancel,
   onSubmit,
@@ -34,7 +36,17 @@ export default function SaveDetectionAreaModal({
   const [priority, setPriority] = useState(initialPriority || 'moderate');
   const [zoneDrafts, setZoneDrafts] = useState(zones);
   const [errors, setErrors] = useState({});
+  // Check-In / Check-Out: one detection-wide entry/exit mode, seeded from the
+  // first zone (they're all kept in sync).
+  const [checkInOutMode, setCheckInOutMode] = useState(zones[0]?.countMode || 'entry');
+  // One line name for the whole detection (settings.zone_name) — separate from
+  // each drawn zone's own name below.
+  const [laneName, setLaneName] = useState(initialLaneName || '');
   const areaLabel = isLineCrossing ? 'Line' : 'Zone';
+  // Line Crossing keeps its per-line mode; Check-In / Check-Out zones carry only
+  // a name (mode is the single field above) and no Telegram/schedule/etc.
+  const showPerZoneMode = isLineCrossing;
+  const showZoneExtras = !isCheckInOut;
   const channelOptions = normalizeTelegramChannels(telegramChannels).map((channel) => ({
     value: channel.chatId,
     label: channel.label,
@@ -65,6 +77,7 @@ export default function SaveDetectionAreaModal({
   const handleSubmit = () => {
     const nextErrors = {};
     if (!detectionName.trim()) nextErrors.detectionName = true;
+    if (isCheckInOut && !laneName.trim()) nextErrors.laneName = true;
     zoneDrafts.forEach((z, i) => {
       const selectedTelegramChatIds = Array.isArray(z?.telegramChatIds)
         ? z.telegramChatIds.map((chatId) => String(chatId || '').trim()).filter(Boolean)
@@ -82,10 +95,10 @@ export default function SaveDetectionAreaModal({
       if (extraFields.includes('company') && !String(z.company ?? '').trim()) {
         nextErrors[`zone-${i}-company`] = true;
       }
-      if (hasSchedule && !hasTelegramChannel) {
+      if (showZoneExtras && hasSchedule && !hasTelegramChannel) {
         nextErrors[`zone-${i}-telegramChatId`] = true;
       }
-      if (hasTelegramChannel && !hasSchedule) {
+      if (showZoneExtras && hasTelegramChannel && !hasSchedule) {
         nextErrors[`zone-${i}-schedule`] = 'Please select a schedule when a Telegram channel is selected.';
       }
     });
@@ -93,11 +106,21 @@ export default function SaveDetectionAreaModal({
       setErrors(nextErrors);
       return;
     }
-    for (let i = 0; i < zoneDrafts.length; i++) {
-      const err = scheduleError(zoneDrafts[i].schedule);
-      if (err) { toast.error(`${areaLabel} ${i + 1}: ${err}`); return; }
+    if (showZoneExtras) {
+      for (let i = 0; i < zoneDrafts.length; i++) {
+        const err = scheduleError(zoneDrafts[i].schedule);
+        if (err) { toast.error(`${areaLabel} ${i + 1}: ${err}`); return; }
+      }
     }
-    onSubmit({ detectionName: detectionName.trim(), priority, zones: zoneDrafts });
+    const outZones = isCheckInOut
+      ? zoneDrafts.map(z => ({ ...z, countMode: checkInOutMode }))
+      : zoneDrafts;
+    onSubmit({
+      detectionName: detectionName.trim(),
+      priority,
+      zones: outZones,
+      ...(isCheckInOut ? { laneName: laneName.trim() } : {}),
+    });
   };
 
   return createPortal(
@@ -106,12 +129,15 @@ export default function SaveDetectionAreaModal({
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
       <div style={{
-        width: '100%', maxWidth: 440, maxHeight: '85vh', overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
+        width: '100%', maxWidth: (isLineCrossing || isCheckInOut) ? 520 : 440, maxHeight: '88vh', overflowY: 'auto', background: 'var(--bg1solid)', border: '1px solid var(--bd2)',
         borderRadius: 16, padding: 22, boxShadow: '0 24px 64px rgba(0,0,0,.45)',
       }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
           <div style={{ display: 'grid', gap: 10, minWidth: 0, flex: 1 }}>
-            <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15.5 }}>{isLineCrossing ? 'Save Detection Line' : 'Save Detection Area'}</span>
+            <span style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 15.5 }}>
+              {isCheckInOut ? 'Save Check-In / Check-Out' : isLineCrossing ? 'Save Detection Line' : 'Save Detection Area'}
+            </span>
+            {showZoneExtras && (
             <div
               style={{
                 display: 'flex',
@@ -131,6 +157,7 @@ export default function SaveDetectionAreaModal({
                 Please select the Telegram channel, Time Zone and Time Range for Telegram alerts.
               </div>
             </div>
+            )}
           </div>
           <span onClick={onCancel} style={{ cursor: 'pointer', color: 'var(--tx3)', display: 'flex' }}>
             <X size={17} />
@@ -158,29 +185,73 @@ export default function SaveDetectionAreaModal({
               )}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Severity</label>
-                <select
-                  value={priority}
-                  onChange={e => setPriority(e.target.value)}
-                  style={{
-                    width: '100%', height: 40, padding: '0 12px', borderRadius: 9, boxSizing: 'border-box',
-                    background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13, color: 'var(--tx)',
-                    outline: 'none', cursor: 'pointer',
-                  }}
-                >
-                  {PRIORITY_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                </select>
-              </div>
+            {!isCheckInOut && (
+              <div style={{ display: 'grid', gridTemplateColumns: showZoneExtras ? '1fr 1fr' : '1fr', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Severity</label>
+                  <select
+                    value={priority}
+                    onChange={e => setPriority(e.target.value)}
+                    style={{
+                      width: '100%', height: 40, padding: '0 12px', borderRadius: 9, boxSizing: 'border-box',
+                      background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13, color: 'var(--tx)',
+                      outline: 'none', cursor: 'pointer',
+                    }}
+                  >
+                    {PRIORITY_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
+                </div>
 
-              <div>
-               
-                <div style={{ padding: 0 }}>
-                  <TimezoneField controlHeight={40} />
+                {showZoneExtras && (
+                  <div>
+                    <div style={{ padding: 0 }}>
+                      <TimezoneField controlHeight={40} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Check-In / Check-Out: Line Name + Mode share one card, Line
+                Name on top since it names the whole detection. */}
+            {isCheckInOut && (
+              <div style={{ border: '1px solid var(--bd)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Line Name *</label>
+                  <input
+                    value={laneName}
+                    onChange={e => { setLaneName(e.target.value); setErrors(er => ({ ...er, laneName: false })); }}
+                    maxLength={50}
+                    placeholder="Enter line name"
+                    style={{
+                      width: '100%', height: 40, padding: '0 12px', borderRadius: 9, boxSizing: 'border-box',
+                      background: 'var(--bg2)', border: `1px solid ${errors.laneName ? 'var(--danger, #ef4444)' : 'var(--bd)'}`,
+                      fontSize: 13, color: 'var(--tx)', outline: 'none',
+                    }}
+                  />
+                  {errors.laneName && (
+                    <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>Line Name is required.</div>
+                  )}
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Mode</label>
+                  <select
+                    value={checkInOutMode}
+                    onChange={e => setCheckInOutMode(e.target.value)}
+                    style={{
+                      width: '100%', height: 40, padding: '0 12px', borderRadius: 9, boxSizing: 'border-box',
+                      background: 'var(--bg2)', border: '1px solid var(--bd)', fontSize: 13, color: 'var(--tx)',
+                      outline: 'none', cursor: 'pointer',
+                    }}
+                  >
+                    <option value="entry">Entry</option>
+                    <option value="exit">Exit</option>
+                    <option value="both">Both</option>
+                  </select>
                 </div>
               </div>
-            </div>
+            )}
+
           </div>
 
           {zoneDrafts.map((z, i) => (
@@ -203,6 +274,7 @@ export default function SaveDetectionAreaModal({
                   <div style={{ marginTop: 5, fontSize: 10.5, color: '#ef4444' }}>{areaLabel} Name is required.</div>
                 )}
               </div>
+              {showZoneExtras && (
               <div>
                 <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>
                   Telegram Channels
@@ -224,7 +296,8 @@ export default function SaveDetectionAreaModal({
                   </div>
                 )}
               </div>
-              {isLineCrossing && (
+              )}
+              {showPerZoneMode && (
                 <div>
                   <label style={{ display: 'block', fontSize: 10.5, fontWeight: 600, color: 'var(--tx3)', marginBottom: 5 }}>Mode</label>
                   <select
@@ -300,18 +373,22 @@ export default function SaveDetectionAreaModal({
                   )}
                 </div>
               )}
-              <ZoneScheduleFields
-                value={z.schedule}
-                onChange={schedule => updateZoneField(i, 'schedule', schedule)}
-                disabled={!(Array.isArray(z.telegramChatIds)
-                  ? z.telegramChatIds.length
-                  : String(z.telegramChatId || '').trim())}
-                disabledMessage="Please select at least one Telegram channel before setting a schedule."
-              />
-              {errors[`zone-${i}-schedule`] && (
-                <div style={{ marginTop: -4, fontSize: 10.5, color: '#ef4444' }}>
-                  {errors[`zone-${i}-schedule`]}
-                </div>
+              {showZoneExtras && (
+                <>
+                  <ZoneScheduleFields
+                    value={z.schedule}
+                    onChange={schedule => updateZoneField(i, 'schedule', schedule)}
+                    disabled={!(Array.isArray(z.telegramChatIds)
+                      ? z.telegramChatIds.length
+                      : String(z.telegramChatId || '').trim())}
+                    disabledMessage="Please select at least one Telegram channel before setting a schedule."
+                  />
+                  {errors[`zone-${i}-schedule`] && (
+                    <div style={{ marginTop: -4, fontSize: 10.5, color: '#ef4444' }}>
+                      {errors[`zone-${i}-schedule`]}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ))}

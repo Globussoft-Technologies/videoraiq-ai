@@ -10,7 +10,23 @@ export function extraFieldsFor(settingType) {
   return ZONE_EXTRA_FIELDS[settingType] || [];
 }
 
-export function zonesFor(setting, cameraId) {
+// Vehicle Check-In / Check-Out keeps a single crossing line (`line_coordinates`)
+// plus an `inside_reference_point` alongside its polygon zones. This pulls just
+// that line back out of a saved setting for the editor's line sub-tool.
+export function lineFor(setting) {
+  const settings = setting?.settings || {};
+  const raw = Array.isArray(settings.line_coordinates) ? settings.line_coordinates : [];
+  const points = raw
+    .filter(p => Array.isArray(p) && p.length >= 2)
+    .slice(0, 2)
+    .map(p => ({ x: p[0], y: p[1] }));
+  const insideReferencePoint = Array.isArray(settings.inside_reference_point)
+    ? { x: settings.inside_reference_point[0], y: settings.inside_reference_point[1] }
+    : null;
+  return { points, insideReferencePoint };
+}
+
+export function zonesFor(setting, cameraId, settingType) {
   const raw = setting?.settings?.referencePoints?.[cameraId];
   const configs = setting?.settings?.zone_configs || [];
   const telegramChatId = setting?.settings?.telegramChatId || '';
@@ -26,7 +42,10 @@ export function zonesFor(setting, cameraId) {
     capacity: configs[i]?.capacity ?? '',
     threshold: configs[i]?.threshold_sec ?? '',
     company: configs[i]?.company ?? '',
-    countMode: setting?.settings?.count_mode === 'all' ? 'both' : (setting?.settings?.count_mode || 'entry'),
+    countMode: (() => {
+      const raw = configs[i]?.count_mode ?? setting?.settings?.count_mode;
+      return raw === 'all' ? 'both' : (raw || 'entry');
+    })(),
     schedule: scheduleFromConfig(configs[i]),
     telegramChatIds: Array.isArray(configs[i]?.telegramChatIds)
       ? configs[i].telegramChatIds.map(id => String(id || '').trim()).filter(Boolean)
@@ -69,7 +88,7 @@ export function allTypesFor(camera, typeLabels) {
       const entry = detections[key];
       const setting = entry?.id && typeof entry.id === 'object' ? entry.id : null;
       const settingId = setting?._id || (entry?.id && typeof entry.id !== 'object' ? entry.id : null);
-      const hasZones = zonesFor(setting, camera?._id).length > 0;
+      const hasZones = zonesFor(setting, camera?._id, key).length > 0;
       return {
         settingType: key,
         label: labelFor(key),
