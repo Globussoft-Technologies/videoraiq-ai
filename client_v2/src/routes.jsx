@@ -19,6 +19,7 @@ import AutoEmailReports from './page/user/Administer/AutoEmailReports';
 import Placeholder from './page/user/Administer/Placeholder';
 import Departments from './page/user/Departments/Departments';
 import Shifts from './page/user/Shifts/Shifts';
+import ShiftSchedule from './page/user/ShiftSchedule/ShiftSchedule';
 import Locations from './page/user/Locations/Locations';
 import RolesPermission from './page/user/RolesPermission/RolesPermission';
 import AddProfile from './pages/RegisterUser/AddProfile';
@@ -82,6 +83,7 @@ export const v2Routes = (
     <Route path="locations" element={guard('locations', undefined, <Locations />)} />
     <Route path="departments" element={guard('departments', undefined, <Departments />)} />
     <Route path="shifts" element={guard('shifts', undefined, <Shifts />)} />
+    <Route path="shift-schedule" element={guard('shifts', undefined, <ShiftSchedule />)} />
     <Route path="register-users" element={guard('Users', undefined, <AddProfile />)} />
     <Route path="profile" element={<MyProfile />} />
     <Route path="admin-profile" element={<AdminProfile />} />
