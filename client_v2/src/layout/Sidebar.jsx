@@ -13,6 +13,7 @@ import { useTheme } from '@/theme/ThemeContext';
 import { ENGINE_PALETTE } from '@/lib/engineMeta';
 import videoraiqLogoColor from '@/assets/videoraiq-logo-color.png';
 import videoraiqLogoWhite from '@/assets/videoraiq-logo-white.png';
+import { useTour } from '@/context/TourContext';
 
 const navItemStyle = (active, collapsed) => ({
   display: 'flex',
@@ -54,6 +55,7 @@ const LOGS_COLLAPSE_KEY = 'vq-sidebar-logs-collapsed';
 
 export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = false, onMobileClose, camHealth = null }) {
   const { user } = useAuth();
+  const { active: tourActive } = useTour();
   const { permissions } = usePermissions();
   const { logs: logsConfig } = useLogsConfig();
   const { theme } = useTheme();
@@ -98,9 +100,9 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
   // stay within logs/* pages.
   const onLogsRoute = location.pathname.includes('/logs/');
   useEffect(() => {
-    if (onLogsRoute) setLogsCollapsed(false);
+    if (onLogsRoute || tourActive) setLogsCollapsed(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onLogsRoute]);
+  }, [onLogsRoute, tourActive]);
   const logsExpanded = !logsCollapsed;
   const toggleLogsCollapsed = () => {
     setLogsCollapsed((c) => {
@@ -336,7 +338,7 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
             ) : (
               <div style={{ ...groupLabelStyle(), paddingTop: gi === 0 ? 2 : 14 }}>{group.label}</div>
             )}
-            {(group.label !== LOGS_GROUP_LABEL || logsExpanded || collapsed) && group.items.map((item) => {
+            {(group.label !== LOGS_GROUP_LABEL || logsExpanded || collapsed || tourActive) && group.items.map((item) => {
               const Icon = item.icon;
               const badge = item.badgeKey ? badges[item.badgeKey] : null;
               // Reordering (Settings ▸ Log Order toggle) only applies to the

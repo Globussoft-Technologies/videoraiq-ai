@@ -25,11 +25,19 @@ export default function AppTour() {
 
   const handleEvent = useCallback(
     (data) => {
+      if (!run) return;
       const { action, index, type } = data;
 
-      // A step's anchor can vanish mid-module (a table empties, a panel
-      // closes). Treat it like a completed step rather than stalling.
-      if (type === EVENTS.STEP_AFTER || type === EVENTS.TARGET_NOT_FOUND) {
+      // If an anchor vanishes mid-module, advance to the next step if available,
+      // but never call finish() on missing targets to prevent runaway auto-skipping.
+      if (type === EVENTS.TARGET_NOT_FOUND) {
+        if (index + 1 < steps.length) {
+          goToStep(index + 1);
+        }
+        return;
+      }
+
+      if (type === EVENTS.STEP_AFTER) {
         if (action === ACTIONS.PREV) {
           goToStep(Math.max(0, index - 1));
           return;
@@ -43,7 +51,7 @@ export default function AppTour() {
         goToStep(index + 1);
       }
     },
-    [steps.length, goToStep, finish]
+    [run, steps.length, goToStep, finish]
   );
 
   if (!steps.length) return null;

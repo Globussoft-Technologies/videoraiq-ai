@@ -72,6 +72,8 @@ export function TourProvider({ children }) {
   const autoStarted = useRef(false);
   // Lets an in-flight module preparation be abandoned when the user skips.
   const prepRef = useRef({ cancelled: true });
+  // Prevents concurrent advance() runs from overlapping or cascading.
+  const advancingRef = useRef(false);
 
   const modules = useMemo(
     () => visibleNavItems(permissions, logsConfig),
@@ -121,6 +123,7 @@ export function TourProvider({ children }) {
   /* ------------------------------------------------------------------ */
 
   const stop = useCallback(() => {
+    advancingRef.current = false;
     prepRef.current.cancelled = true;
     setRun(false);
     setMode(null);
@@ -163,8 +166,14 @@ export function TourProvider({ children }) {
         if (signal.cancelled) return { ok: false };
       }
 
-      const usable = resolveSteps(module.steps);
-      if (!usable.length) return { ok: false };
+      let usable = resolveSteps(module.steps);
+      if (!usable.length) {
+        if (first && document.querySelector(first.target)) {
+          usable = [first];
+        } else {
+          return { ok: false };
+        }
+      }
 
       setSteps(usable);
       setStepIndex(0);
@@ -180,18 +189,24 @@ export function TourProvider({ children }) {
    */
   const advance = useCallback(
     async (fromIndex) => {
-      const list = queue;
-      for (let i = fromIndex + 1; i < list.length; i += 1) {
-        // eslint-disable-next-line no-await-in-loop
-        const result = await enterModule(list, i);
-        if (result.ok) return;
-        if (prepRef.current.cancelled) return;
-      }
+      if (advancingRef.current) return;
+      advancingRef.current = true;
+      try {
+        const list = queue;
+        for (let i = fromIndex + 1; i < list.length; i += 1) {
+          // eslint-disable-next-line no-await-in-loop
+          const result = await enterModule(list, i);
+          if (result.ok) return;
+          if (prepRef.current.cancelled) return;
+        }
 
-      // Ran off the end of the queue.
-      const wasGlobal = mode === MODE_GLOBAL;
-      stop();
-      if (wasGlobal) persistOnboarded();
+        // Ran off the end of the queue.
+        const wasGlobal = mode === MODE_GLOBAL;
+        stop();
+        if (wasGlobal) persistOnboarded();
+      } finally {
+        advancingRef.current = false;
+      }
     },
     [queue, enterModule, mode, stop, persistOnboarded]
   );
@@ -278,6 +293,8 @@ export function TourProvider({ children }) {
       stop();
       return;
     }
+    advancingRef.current = false;
+    prepRef.current.cancelled = true;
     setRun(false);
     advance(queueIndex);
   }, [mode, queueIndex, advance, stop]);
