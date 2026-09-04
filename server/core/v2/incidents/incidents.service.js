@@ -141,6 +141,30 @@ const normalizeVehicleObstructionPayload = (body = {}) => {
 // carModelDetection ships a manufacture year that may arrive as a number or a
 // string. Parse it, and drop unusable values ("unknown", "N/A") to null rather
 // than letting a NaN cast fail the whole incident save.
+/** NVR + camera joins shared by the two vehicle check-in/out views. */
+const VEHICLE_LOG_LOOKUP_STAGES = [
+  {
+    $lookup: {
+      from: "nvrs",
+      localField: "nvrId",
+      foreignField: "_id",
+      pipeline: [{ $project: { _id: 1, nvrName: 1 } }],
+      as: "nvrData",
+    },
+  },
+  { $unwind: { path: "$nvrData", preserveNullAndEmptyArrays: true } },
+  {
+    $lookup: {
+      from: "channels",
+      localField: "channelId",
+      foreignField: "_id",
+      pipeline: [{ $project: { _id: 1, name: 1, customName: 1 } }],
+      as: "channelData",
+    },
+  },
+  { $unwind: { path: "$channelData", preserveNullAndEmptyArrays: true } },
+];
+
 const toModelYear = (value) => {
   if (value === undefined || value === null || String(value).trim() === "") return null;
   const year = Number.parseInt(String(value).trim(), 10);
@@ -3281,6 +3305,311 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch car model detection logs", 500));
+    }
+  }
+
+  /**
+   * Shared filter for both check-in/out views.
+   *
+   * Deliberately not routed through _fetchIncidentLogs: that helper returns one
+   * row per incident, and this page returns one row per vehicle. Only the match
+   * is shared, and the channel-authorisation part of it is security-relevant,
+   * so it is built once here rather than twice at the two call sites.
+   */
+  _vehicleCheckInOutMatch(req) {
+    const data = req?.verified?.userData;
+    const { startDate, endDate, nvrId, nvrIds, channelId, channelIds, severity } =
+      req.query || {};
+
+    const toArray = (v) =>
+      v ? String(v).split(",").map((x) => x.trim()).filter(Boolean) : [];
+
+    const match = {
+      userId: data.user_id.toString(),
+      incidentType: "vehicleCheckInOut",
+    };
+
+    if (startDate && endDate) {
+      match.timeOfIncident = {
+        $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
+        $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+      };
+    }
+
+    const nvrFilter = nvrId ? [nvrId] : toArray(nvrIds);
+    if (nvrFilter.length) {
+      match.nvrId = { $in: nvrFilter.map((id) => new mongoose.Types.ObjectId(id)) };
+    }
+
+    // Same channel-authorisation rule the other log pages apply: an explicit
+    // filter is intersected with what the member may see, and with no filter
+    // the member is still limited to their own channels.
+    const channelFilter = channelId ? [channelId] : toArray(channelIds);
+    const authorizedChannels = req?.verified?.authorizedChannel?.channels;
+    let effectiveChannelIds = null;
+    if (channelFilter.length && Array.isArray(authorizedChannels)) {
+      const authSet = new Set(authorizedChannels.map((c) => c.toString()));
+      effectiveChannelIds = channelFilter.filter((c) => authSet.has(c));
+    } else if (channelFilter.length) {
+      effectiveChannelIds = channelFilter;
+    } else if (Array.isArray(authorizedChannels)) {
+      effectiveChannelIds = authorizedChannels.map((c) => c.toString());
+    }
+    if (Array.isArray(effectiveChannelIds)) {
+      match.channelId = {
+        $in: effectiveChannelIds.map((id) => new mongoose.Types.ObjectId(id)),
+      };
+    }
+
+    if (severity) match.severity = severity;
+
+    return match;
+  }
+
+  /**
+   * The grouping key for "the same car".
+   *
+   * A readable plate groups every crossing of that vehicle together. An
+   * unreadable one cannot be correlated at all -- two cars the OCR failed on
+   * are not the same car -- so those rows fall back to their own incident id
+   * and each stands alone rather than being merged into one phantom vehicle.
+   */
+  static get VEHICLE_GROUP_KEY() {
+    return {
+      $let: {
+        vars: { plate: { $trim: { input: { $ifNull: ["$vehicleNumber", ""] } } } },
+        in: {
+          $cond: [
+            { $in: ["$$plate", ["", "--", "N/A", "n/a"]] },
+            { $concat: ["__unknown__:", { $toString: "$_id" }] },
+            { $toUpper: "$$plate" },
+          ],
+        },
+      },
+    };
+  }
+
+  /**
+   * One row per vehicle: its first check-in, plus whether it is still here.
+   *
+   * `custody` = checked in and not since checked out. The screen calls that
+   * "in custody" because the car has been handed over and not yet returned.
+   */
+  async getVehicleCheckInOutLogs(req, res, next) {
+    try {
+      const data = req?.verified?.userData;
+      if (!data?.user_id) {
+        return res.send(
+          Response.userFailResp("User authentication failed.", "Unauthorized"),
+        );
+      }
+
+      const { skip = 0, limit = 10, custody, search, sortOrder } = req.query || {};
+      // Export path: return each vehicle's crossings alongside the row.
+      const includeHistory = String(req.query?.includeHistory) === "true";
+      const match = this._vehicleCheckInOutMatch(req);
+
+      const basePipeline = [
+        { $match: match },
+        // See the note on includeHistory: the joins have to precede the $group
+        // when the crossings are being returned, so each one keeps its own
+        // camera. Everywhere else they run after, over far fewer documents.
+        ...(includeHistory ? VEHICLE_LOG_LOOKUP_STAGES : []),
+        { $sort: { timeOfIncident: 1 } },
+        {
+          $group: {
+            _id: IncidentsService.VEHICLE_GROUP_KEY,
+            // The row the grid shows is the car's first check-in. Falling back
+            // to the first event of any kind keeps a car whose check-in was
+            // missed from disappearing from the page entirely.
+            firstCheckIn: {
+              $first: { $cond: ["$checkin", "$$ROOT", "$$REMOVE"] },
+            },
+            firstEvent: { $first: "$$ROOT" },
+            lastEvent: { $last: "$$ROOT" },
+            lastCheckInAt: {
+              $max: { $cond: ["$checkin", "$timeOfIncident", null] },
+            },
+            lastCheckOutAt: {
+              $max: { $cond: ["$checkin", null, "$timeOfIncident"] },
+            },
+            checkInCount: { $sum: { $cond: ["$checkin", 1, 0] } },
+            checkOutCount: { $sum: { $cond: ["$checkin", 0, 1] } },
+            totalEvents: { $sum: 1 },
+            ...(includeHistory
+              ? {
+                  crossings: {
+                    $push: {
+                      _id: "$_id",
+                      checkin: "$checkin",
+                      timeOfIncident: "$timeOfIncident",
+                      zone: "$zone",
+                      severity: "$severity",
+                      Image: "$Image",
+                      nvrData: "$nvrData",
+                      channelData: "$channelData",
+                    },
+                  },
+                }
+              : {}),
+          },
+        },
+        {
+          $addFields: {
+            row: { $ifNull: ["$firstCheckIn", "$firstEvent"] },
+            // Still here if it has checked in and either never checked out, or
+            // its latest check-in is more recent than its latest check-out --
+            // which is what a return visit looks like.
+            custody: {
+              $and: [
+                { $gt: ["$checkInCount", 0] },
+                {
+                  $or: [
+                    { $eq: [{ $ifNull: ["$lastCheckOutAt", null] }, null] },
+                    { $gt: ["$lastCheckInAt", "$lastCheckOutAt"] },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        {
+          $replaceRoot: {
+            newRoot: {
+              $mergeObjects: [
+                "$row",
+                {
+                  vehicleKey: "$_id",
+                  custody: "$custody",
+                  checkInCount: "$checkInCount",
+                  checkOutCount: "$checkOutCount",
+                  totalEvents: "$totalEvents",
+                  lastCheckInAt: "$lastCheckInAt",
+                  lastCheckOutAt: "$lastCheckOutAt",
+                  lastEventAt: "$lastEvent.timeOfIncident",
+                  ...(includeHistory ? { crossings: "$crossings" } : {}),
+                },
+              ],
+            },
+          },
+        },
+        ...(includeHistory ? [] : VEHICLE_LOG_LOOKUP_STAGES),
+      ];
+
+      // Custody is derived, so it can only be filtered after the $group.
+      if (custody === "true" || custody === "false") {
+        basePipeline.push({ $match: { custody: custody === "true" } });
+      }
+
+      if (search && String(search).trim()) {
+        const rx = {
+          $regex: String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          $options: "i",
+        };
+        basePipeline.push({
+          $match: {
+            $or: [
+              { vehicleNumber: rx },
+              { model_name: rx },
+              { company: rx },
+              { color: rx },
+              { incidentName: rx },
+              { zone: rx },
+              { "nvrData.nvrName": rx },
+              { "channelData.name": rx },
+              { "channelData.customName": rx },
+            ],
+          },
+        });
+      }
+
+      // Newest arrival first by default, matching every other log page.
+      basePipeline.push({
+        $sort: { timeOfIncident: sortOrder === "asc" ? 1 : -1, _id: -1 },
+      });
+
+      const [countResult, logs] = await Promise.all([
+        Incident.aggregate([...basePipeline, { $count: "totalCount" }]),
+        Incident.aggregate([
+          ...basePipeline,
+          { $skip: parseInt(skip) },
+          { $limit: parseInt(limit) },
+        ]),
+      ]);
+
+      return res.status(200).json(
+        Response.userSuccessResp("vehicleCheckInOut logs fetched successfully", {
+          totalCount: countResult[0]?.totalCount || 0,
+          data: logs,
+        }),
+      );
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch vehicle check-in/out logs", 500));
+    }
+  }
+
+  /**
+   * Every crossing for one vehicle -- the sub-rows behind an expanded row.
+   *
+   * Takes the same `vehicleKey` the list returns rather than a raw plate, so an
+   * unreadable-plate row expands to exactly its own single event instead of
+   * matching every other unreadable plate on the page.
+   */
+  async getVehicleCheckInOutHistory(req, res, next) {
+    try {
+      const data = req?.verified?.userData;
+      if (!data?.user_id) {
+        return res.send(
+          Response.userFailResp("User authentication failed.", "Unauthorized"),
+        );
+      }
+
+      const vehicleKey = String(req.query?.vehicleKey ?? req.body?.vehicleKey ?? "").trim();
+      if (!vehicleKey) {
+        return res
+          .status(400)
+          .json(Response.validationFailResp("vehicleKey is required", "Validation failed"));
+      }
+
+      const match = this._vehicleCheckInOutMatch(req);
+
+      // An unknown-plate key addresses one incident directly; a real plate
+      // addresses every crossing that read the same plate.
+      if (vehicleKey.startsWith("__unknown__:")) {
+        const id = vehicleKey.slice("__unknown__:".length);
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+          return res
+            .status(400)
+            .json(Response.validationFailResp("Invalid vehicleKey", "Validation failed"));
+        }
+        match._id = new mongoose.Types.ObjectId(id);
+      } else {
+        const escaped = vehicleKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        match.vehicleNumber = { $regex: `^${escaped}$`, $options: "i" };
+      }
+
+      const pipeline = [
+        { $match: match },
+        ...VEHICLE_LOG_LOOKUP_STAGES,
+        { $sort: { timeOfIncident: -1, _id: -1 } },
+      ];
+
+      const [countResult, logs] = await Promise.all([
+        Incident.aggregate([...pipeline, { $count: "totalCount" }]),
+        Incident.aggregate(pipeline),
+      ]);
+
+      return res.status(200).json(
+        Response.userSuccessResp("vehicleCheckInOut history fetched successfully", {
+          totalCount: countResult[0]?.totalCount || 0,
+          vehicleKey,
+          data: logs,
+        }),
+      );
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch vehicle check-in/out history", 500));
     }
   }
 

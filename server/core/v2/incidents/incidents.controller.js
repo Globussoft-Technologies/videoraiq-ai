@@ -432,6 +432,37 @@ class IncidentsController {
     return await incidentsService.getVehicleDetectionLogs(req, res, next);
   }
 
+  async getVehicleCheckInOutLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Vehicle Check-In / Check-Out logs, one row per vehicle rather than per event. Each row is that vehicle first check-in, with custody (checked in and not since checked out), the check-in/check-out counts and the latest event time. Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, custody, search. Paginated via skip/limit.'
+    #swagger.parameters['skip'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['endDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['nvrIds'] = { in: 'query', type: 'string' }
+    #swagger.parameters['channelIds'] = { in: 'query', type: 'string' }
+    #swagger.parameters['severity'] = { in: 'query', type: 'string', enum: ['low','moderate','high'] }
+    #swagger.parameters['custody'] = { in: 'query', type: 'string', enum: ['true','false'], description: 'true = still on site (checked in, not checked back out). Omit for both.' }
+    #swagger.parameters['search'] = { in: 'query', type: 'string' }
+    #swagger.responses[200] = { description: 'vehicleCheckInOut logs fetched successfully' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.getVehicleCheckInOutLogs(req, res, next);
+  }
+
+  async getVehicleCheckInOutHistory(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Every crossing for one vehicle - the sub-rows behind an expanded row in the Vehicle Check-In / Check-Out log. Takes the vehicleKey returned by the list endpoint, so an unreadable-plate row expands to its own single event rather than to every other unreadable plate.'
+    #swagger.parameters['vehicleKey'] = { in: 'query', required: true, type: 'string', description: 'From the list response. A plate, or "__unknown__:<incidentId>".' }
+    #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['endDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.responses[200] = { description: 'vehicleCheckInOut history fetched successfully' }
+    #swagger.responses[400] = { description: 'vehicleKey missing or malformed' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.getVehicleCheckInOutHistory(req, res, next);
+  }
+
   async getCarModelDetectionLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get Car Model Detection (carModelDetection) logs (tabular). Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, model_name, vehicleNumber, search. Paginated via skip/limit.'

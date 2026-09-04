@@ -122,6 +122,17 @@ router.post(
   viewAccessCheck,
   incidentsController.getCarModelDetectionLogs,
 );
+router.post(
+  "/logs/vehicle-check-in-out",
+  viewAccessCheck,
+  incidentsController.getVehicleCheckInOutLogs,
+);
+// The sub-rows behind one expanded vehicle.
+router.post(
+  "/logs/vehicle-check-in-out/history",
+  viewAccessCheck,
+  incidentsController.getVehicleCheckInOutHistory,
+);
 router.patch(
   "/logs/car-model-detection/:id",
   editAccessCheck,
