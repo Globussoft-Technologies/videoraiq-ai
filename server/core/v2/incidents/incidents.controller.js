@@ -453,7 +453,7 @@ class IncidentsController {
   async getVehicleCheckInOutHistory(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Every crossing for one vehicle - the sub-rows behind an expanded row in the Vehicle Check-In / Check-Out log. Takes the vehicleKey returned by the list endpoint, so an unreadable-plate row expands to its own single event rather than to every other unreadable plate.'
-    #swagger.parameters['vehicleKey'] = { in: 'query', required: true, type: 'string', description: 'From the list response. A plate, or "__unknown__:<incidentId>".' }
+    #swagger.parameters['vehicleKey'] = { in: 'query', required: true, type: 'string', description: 'From the list response. Either a plate, or the literal __unknown__ joined to the incident id by a colon.' }
     #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
     #swagger.parameters['endDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
     #swagger.responses[200] = { description: 'vehicleCheckInOut history fetched successfully' }
