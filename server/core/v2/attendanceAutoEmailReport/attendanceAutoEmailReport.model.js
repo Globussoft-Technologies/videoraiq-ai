@@ -39,7 +39,7 @@ const deliveryHistorySchema = new mongoose.Schema(
     recipients: [{ type: String }],
     files: [
       {
-        format: { type: String, enum: ["pdf", "csv", "xlsx"] },
+        format: { type: String, enum: ["pdf", "csv", "xlsx", "breakPdf", "breakXlsx"] },
         // Relative storage path (as returned by putMedia) — resolved to a
         // full public URL with config.ImageView at read/link-build time, same
         // as every other stored media path in this codebase.
@@ -61,7 +61,7 @@ const attendanceAutoEmailReportSchema = new mongoose.Schema(
     timezone: { type: String, required: true },
     schedule: { type: scheduleSchema, required: true },
     target: { type: targetSchema, default: () => ({}) },
-    formats: [{ type: String, enum: ["pdf", "csv", "xlsx"] }],
+    formats: [{ type: String, enum: ["pdf", "csv", "xlsx", "breakPdf", "breakXlsx"] }],
     enabled: { type: Boolean, default: true },
     lastRunKey: { type: String, default: null },
     lastSentAt: { type: Date, default: null },

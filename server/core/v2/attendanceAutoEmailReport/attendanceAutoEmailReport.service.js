@@ -17,6 +17,7 @@ import Report from "./attendanceAutoEmailReport.model.js";
 import { createReportSchema, updateReportSchema } from "./attendanceAutoEmailReport.validation.js";
 import { trackFailedEmail, trackOutboundEmail } from "../emailMonitoring/emailTracker.js";
 import { buildMonthlyStatusWorkbook } from "./monthlyStatusSheet.js";
+import { buildBreakPdf, buildBreakWorkbook } from "./breakLogReport.js";
 
 const LOGO_URL = "https://stagingv2.videoraiq.com/src/assets/videoraiq-logo-color.png";
 const DEFAULT_TIMEZONE = "Asia/Kolkata";
@@ -221,7 +222,7 @@ function cleanField(value, { minDigits = 0 } = {}) {
   return text;
 }
 
-function csvCell(value) {
+export function csvCell(value) {
   const string = String(value ?? "");
   return /[",\r\n]/.test(string) ? `"${string.replaceAll('"', '""')}"` : string;
 }
@@ -330,6 +331,22 @@ export function rowFromAttendance(item, timezone, rules) {
     checkOutCamera: firstSessionCells ? firstSessionCells.checkOutCamera : eventCamera(lastCheckOut),
     viewImage: firstSessionCells ? firstSessionCells.checkInImage : (firstCheckIn ? checkInImageUrl(firstCheckIn) : "-"),
     sessions,
+    // One entry per break the employee took that day, in order. The break log
+    // report renders one row from each; the attendance report only ever needs
+    // their sum, which `breakMinutesDay` above already carries.
+    breaks: breakPairs.map((pair, index) => {
+      const minutes = breakBeforeCheckin.get(String(pair.checkin.timestamp)) ?? 0;
+      return {
+        index: index + 1,
+        outAt: formatClock(pair.checkout.timestamp, timezone),
+        inAt: formatClock(pair.checkin.timestamp, timezone),
+        duration: formatPeriodDuration(minutes),
+        minutes,
+        outCamera: eventCamera(pair.checkout),
+        inCamera: eventCamera(pair.checkin),
+        image: checkInImageUrl(pair.checkout),
+      };
+    }),
     status: "",
     // Raw values the monthly-status sheet needs. The display columns above are
     // already formatted for the PDF/CSV grid; the sheet needs the underlying
@@ -456,7 +473,7 @@ async function reportRows(report, reference) {
   };
 }
 
-function imageCell(url, text = "View Image") {
+export function imageCell(url, text = "View Image") {
   return url && url !== "-" ? { text, link: url } : "-";
 }
 
@@ -469,7 +486,7 @@ function imageCell(url, text = "View Image") {
 //   total   — one per employee-day: Σ session working hrs, the break total and
 //             the period total.
 /** A shift's display name, or "-" when the employee holds no shift. */
-function shiftNameFor(shift) {
+export function shiftNameFor(shift) {
   return shift?.name || "-";
 }
 
@@ -477,7 +494,7 @@ function shiftNameFor(shift) {
  * A shift's window as "09:00 - 18:00". Night shifts are flagged, since the
  * end time being earlier than the start would otherwise read as a typo.
  */
-function shiftTimingsFor(shift) {
+export function shiftTimingsFor(shift) {
   if (!shift?.startTime || !shift?.endTime) return "-";
   const window = `${shift.startTime} - ${shift.endTime}`;
   return shift.isNightShift ? `${window} (night)` : window;
@@ -596,7 +613,7 @@ export function reportTableRows(rows) {
 // doubled) \u2014 spreadsheets un-double and evaluate it on import. Because the
 // quoting is done here, this field is returned already-escaped and buildCsv
 // must NOT pass it through csvCell() a second time.
-function csvField(value) {
+export function csvField(value) {
   if (value && typeof value === "object") {
     if (value.link) {
       // Strip characters that would break out of the formula string.
@@ -623,7 +640,7 @@ export function buildCsv({ report, rows, label, timezone }) {
   return Buffer.from(`\uFEFF${[...meta, ...body].join("\r\n")}`, "utf8");
 }
 
-export async function buildPdf({ report, rows, label, timezone }) {
+export async function buildPdf({ report, rows, label, timezone, columns: columnSpec, lines: lineSpec, title, emptyText }) {
   const logo = await logoBuffer();
   return new Promise((resolve, reject) => {
     const document = new PDFDocument({ size: "A3", layout: "landscape", margin: 32 });
@@ -652,7 +669,7 @@ export async function buildPdf({ report, rows, label, timezone }) {
     // name rather than an ellipsis. The rest are fixed-format:
     //   - time columns fit "09:45:40 AM"
     //   - Date fits "01 Jun 2026"
-    const columns = [
+    const columns = columnSpec || [
       { head: "ID", width: 24 },
       { head: "Emp. Code", width: 58 },
       { head: "Name", width: 82, wrap: true },
@@ -672,13 +689,15 @@ export async function buildPdf({ report, rows, label, timezone }) {
       { head: "Checkout Camera", width: 76, wrap: true },
       { head: "View Image", width: 52 },
     ];
+    const tableLines = lineSpec || reportTableRows(rows);
+    const heading = title || "Attendance Report";
     const drawHeader = () => {
       const titleBlockWidth = 300;
       const purpleX = document.page.width - titleBlockWidth;
       document.rect(0, 0, document.page.width, 102).fill(V2_BLUE);
       document.rect(purpleX, 0, titleBlockWidth, 102).fill(V2_PURPLE);
       if (logoImage) document.image(logoImage, 36, 25, { fit: [145, 48] });
-      document.fillColor("#ffffff").font("Helvetica-Bold").fontSize(20).text("Attendance Report", purpleX, 29, { width: titleBlockWidth - 32, align: "right" });
+      document.fillColor("#ffffff").font("Helvetica-Bold").fontSize(20).text(heading, purpleX, 29, { width: titleBlockWidth - 32, align: "right" });
       document.font("Helvetica").fontSize(9).text(REPORT_DISPLAY_TITLE, purpleX, 57, { width: titleBlockWidth - 32, align: "right" });
       document.fillColor("#273657").font("Helvetica-Bold").fontSize(13).text(label, 32, 122);
       document.font("Helvetica").fontSize(9).fillColor("#61708f").text(`Timezone: ${timezone}  •  ${rows.length} attendance record${rows.length === 1 ? "" : "s"}`, 32, 142);
@@ -740,7 +759,7 @@ export async function buildPdf({ report, rows, label, timezone }) {
 
     drawHeader();
     let y = drawTableHeader(165);
-    reportTableRows(rows).forEach(({ kind, cells }) => {
+    tableLines.forEach(({ kind, cells }) => {
       const pageBottom = document.page.height - 40;
       if (y + lineHeight(cells) > pageBottom) {
         document.addPage({ size: "A3", layout: "landscape", margin: 32 });
@@ -749,7 +768,7 @@ export async function buildPdf({ report, rows, label, timezone }) {
       }
       drawLine(cells, kind);
     });
-    if (!rows.length) document.font("Helvetica").fontSize(12).fillColor("#61708f").text("No attendance records were found for this period.", 32, y + 24);
+    if (!tableLines.length) document.font("Helvetica").fontSize(12).fillColor("#61708f").text(emptyText || "No attendance records were found for this period.", 32, y + 24);
     document.end();
   });
 }
@@ -769,6 +788,8 @@ const MAIL = {
   greenDark: "#17864f",
   teal: "#0f766e",       // monthly-status workbook (XLSX) button
   tealDark: "#0c5d56",
+  plum: "#7c3aed",       // break logs button
+  plumDark: "#6425d0",
   paper: "#eef2f9",      // page ground
   card: "#ffffff",
   panel: "#f4f6fb",      // stat card fill
@@ -827,14 +848,20 @@ function downloadButton(file) {
   const format = String(file.format).toLowerCase();
   // The workbook is a different report, not another rendering of the same
   // table, so it says so rather than just naming its file extension.
-  const label = format === "xlsx" ? "Download Monthly Status" : `Download ${file.format.toUpperCase()}`;
+  const LABELS = {
+    xlsx: "Download Monthly Status",
+    breakPdf: "Break Logs (PDF)",
+    breakXlsx: "Break Logs (Excel)",
+  };
+  const label = LABELS[format] || `Download ${file.format.toUpperCase()}`;
   const url = escapeHtml(file.url);
-  const palette = format === "pdf"
-    ? [MAIL.navy, MAIL.navyDark]
-    : format === "xlsx"
-    ? [MAIL.teal, MAIL.tealDark]
-    : [MAIL.green, MAIL.greenDark];
-  const [fill, stroke] = palette;
+  const PALETTES = {
+    pdf: [MAIL.navy, MAIL.navyDark],
+    xlsx: [MAIL.teal, MAIL.tealDark],
+    breakPdf: [MAIL.plum, MAIL.plumDark],
+    breakXlsx: [MAIL.plum, MAIL.plumDark],
+  };
+  const [fill, stroke] = PALETTES[format] || [MAIL.green, MAIL.greenDark];
   return `
     <td align="center" style="padding:0 8px;">
       <!--[if mso]>
@@ -1026,7 +1053,7 @@ export function publicUrlFor(mediaPath) {
  * One file per format, no size limit to juggle: the email links to the file
  * instead of attaching it, so SendGrid's ~30MB message cap never applies.
  */
-export async function uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer) {
+export async function uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer) {
   const safeName = safeReportName();
   const files = [];
   if (pdfBuffer) {
@@ -1040,6 +1067,14 @@ export async function uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer
   if (xlsxBuffer) {
     const path = await putMedia({ buffer: xlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.xlsx` });
     files.push({ format: "xlsx", path, url: publicUrlFor(path) });
+  }
+  if (breakPdfBuffer) {
+    const path = await putMedia({ buffer: breakPdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `break-logs.pdf` });
+    files.push({ format: "breakPdf", path, url: publicUrlFor(path) });
+  }
+  if (breakXlsxBuffer) {
+    const path = await putMedia({ buffer: breakXlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `break-logs.xlsx` });
+    files.push({ format: "breakXlsx", path, url: publicUrlFor(path) });
   }
   return files;
 }
@@ -1074,6 +1109,8 @@ async function deliver(report, options = {}) {
   const wantsPdf = report.formats.includes("pdf");
   const wantsCsv = report.formats.includes("csv");
   const wantsXlsx = report.formats.includes("xlsx");
+  const wantsBreakPdf = report.formats.includes("breakPdf");
+  const wantsBreakXlsx = report.formats.includes("breakXlsx");
 
   const csvT0 = Date.now();
   const csvBuffer = wantsCsv ? buildCsv({ report, rows, label: summary.label, timezone: summary.timezone }) : null;
@@ -1090,8 +1127,19 @@ async function deliver(report, options = {}) {
     : null;
   const xlsxMs = Date.now() - xlsxT0;
 
+  // Break logs: one row per break rather than per work session — see
+  // breakLogReport.js.
+  const breakT0 = Date.now();
+  const breakPdfBuffer = wantsBreakPdf
+    ? await buildBreakPdf({ report, rows, label: summary.label, timezone: summary.timezone })
+    : null;
+  const breakXlsxBuffer = wantsBreakXlsx
+    ? await buildBreakWorkbook({ rows, label: summary.label, timezone: summary.timezone })
+    : null;
+  const breakMs = Date.now() - breakT0;
+
   const uploadT0 = Date.now();
-  const files = await uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer);
+  const files = await uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer, breakPdfBuffer, breakXlsxBuffer);
   const uploadMs = Date.now() - uploadT0;
 
   // Diagnostics: pins down exactly what a run looked like (row count,
@@ -1102,6 +1150,8 @@ async function deliver(report, options = {}) {
     `csvRawKB=${csvBuffer ? (csvBuffer.length / 1024).toFixed(1) : "n/a"} csvBuildMs=${csvMs} ` +
     `pdfRawKB=${pdfBuffer ? (pdfBuffer.length / 1024).toFixed(1) : "n/a"} pdfBuildMs=${pdfMs} ` +
     `xlsxRawKB=${xlsxBuffer ? (xlsxBuffer.length / 1024).toFixed(1) : "n/a"} xlsxBuildMs=${xlsxMs} ` +
+    `breakPdfKB=${breakPdfBuffer ? (breakPdfBuffer.length / 1024).toFixed(1) : "n/a"} ` +
+    `breakXlsxKB=${breakXlsxBuffer ? (breakXlsxBuffer.length / 1024).toFixed(1) : "n/a"} breakBuildMs=${breakMs} ` +
     `uploadMs=${uploadMs} files=${files.length}`
   );
 

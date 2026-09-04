@@ -64,6 +64,8 @@ const emptyForm = () => ({
   pdf: true,
   csv: false,
   xlsx: false,
+  breakPdf: false,
+  breakXlsx: false,
   enabled: true,
   sendTestMail: false,
 });
@@ -149,6 +151,8 @@ function formFromReport(report = {}) {
     pdf: formats.includes('pdf'),
     csv: formats.includes('csv'),
     xlsx: formats.includes('xlsx'),
+    breakPdf: formats.includes('breakPdf'),
+    breakXlsx: formats.includes('breakXlsx'),
     enabled: report.enabled !== false,
     sendTestMail: false,
   };
@@ -175,7 +179,7 @@ function buildPayload(form) {
     recipients: form.recipients,
     schedule,
     target,
-    formats: [form.pdf && 'pdf', form.csv && 'csv', form.xlsx && 'xlsx'].filter(Boolean),
+    formats: [form.pdf && 'pdf', form.csv && 'csv', form.xlsx && 'xlsx', form.breakPdf && 'breakPdf', form.breakXlsx && 'breakXlsx'].filter(Boolean),
     enabled: form.enabled,
     sendTestMail: Boolean(form.sendTestMail),
   };
@@ -264,7 +268,7 @@ function ReportFormModal({
     && form.title.trim().length >= 2
     && form.title.trim().length <= 120
     && form.recipients.length
-    && (form.pdf || form.csv || form.xlsx)
+    && (form.pdf || form.csv || form.xlsx || form.breakPdf || form.breakXlsx)
     && (!needsTarget || targetCount > 0)
     && (!needsCustomRange || (form.startDate && form.endDate));
 
@@ -368,7 +372,7 @@ function ReportFormModal({
 
           <Section title="Report format" icon={FileText}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
-              {[['pdf', 'PDF'], ['csv', 'CSV'], ['xlsx', 'Monthly Status (Excel)']].map(([key, label]) => (
+              {[['pdf', 'PDF'], ['csv', 'CSV'], ['xlsx', 'Monthly Status (Excel)'], ['breakPdf', 'Break Logs (PDF)'], ['breakXlsx', 'Break Logs (Excel)']].map(([key, label]) => (
                 <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 38, padding: '0 11px', border: `1px solid ${form[key] ? 'rgba(59,130,246,.5)' : 'var(--bd)'}`, borderRadius: 8, background: form[key] ? 'rgba(59,130,246,.1)' : 'var(--bg2)', color: 'var(--tx2)', cursor: 'pointer', fontSize: 12.5 }}>
                   <input type="checkbox" checked={form[key]} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.checked }))} />
                   {label}

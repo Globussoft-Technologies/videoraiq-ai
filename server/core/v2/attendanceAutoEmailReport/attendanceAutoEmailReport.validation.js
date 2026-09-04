@@ -41,7 +41,7 @@ const report = Joi.object({
   recipients: Joi.array().items(Joi.string().email()).min(1).required(),
   schedule: schedule.required(),
   target: target.default(),
-  formats: Joi.array().items(Joi.string().valid("pdf", "csv", "xlsx")).min(1).unique().required(),
+  formats: Joi.array().items(Joi.string().valid("pdf", "csv", "xlsx", "breakPdf", "breakXlsx")).min(1).unique().required(),
   enabled: Joi.boolean().default(true),
   sendTestMail: Joi.boolean().default(false),
 });
@@ -52,7 +52,7 @@ export const updateReportSchema = Joi.object({
   recipients: Joi.array().items(Joi.string().email()).min(1),
   schedule,
   target,
-  formats: Joi.array().items(Joi.string().valid("pdf", "csv", "xlsx")).min(1).unique(),
+  formats: Joi.array().items(Joi.string().valid("pdf", "csv", "xlsx", "breakPdf", "breakXlsx")).min(1).unique(),
   enabled: Joi.boolean(),
   sendTestMail: Joi.boolean(),
 }).min(1);
