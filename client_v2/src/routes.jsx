@@ -34,6 +34,7 @@ import DeskAbsenceLogs from './pages/DeskAbsenceLogs/DeskAbsenceLogs';
 import ANPRLogs from './pages/ANPRLogs/ANPRLogs';
 import VehicleCountLogs from './pages/VehicleCountLogs/VehicleCountLogs';
 import CarLogs from './pages/CarLogs/CarLogs';
+import VehicleCheckInOutLogs from './pages/VehicleCheckInOutLogs/VehicleCheckInOutLogs';
 import ConveyorLogs from './pages/ConveyorLogs/ConveyorLogs';
 import VehicleObstructionLogs from './pages/VehicleObstructionLogs/VehicleObstructionLogs';
 import CrusherLogs from './pages/CrusherLogs/CrusherLogs';
@@ -107,6 +108,7 @@ export const v2Routes = (
     <Route path="logs/vehicle-obstruction" element={guard('logs', 'vehicleObstructionLogs', <VehicleObstructionLogs />)} />
     <Route path="logs/vehicle-count" element={guard('logs', 'vehicleCountLogs', <VehicleCountLogs />)} />
     <Route path="logs/car" element={guard('logs', 'carLogs', <CarLogs />)} />
+    <Route path="logs/vehicle-check-in-out" element={guard('logs', 'carLogs', <VehicleCheckInOutLogs />)} />
     <Route path="logs/crusher" element={guard('logs', 'crusherLogs', <CrusherLogs />)} />
     <Route path="logs/line-crossing" element={guard('logs', 'lineCrossingLogs', <LineCrossingLogs />)} />
     <Route path="logs/water-spill" element={guard('logs', 'waterSpillLogs', <WaterSpillLogs />)} />
