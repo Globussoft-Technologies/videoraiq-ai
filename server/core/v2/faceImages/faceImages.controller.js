@@ -187,7 +187,15 @@ class FaceImagesController {
   async quickCreateUser(req, res, next) {
     /*
     #swagger.tags = ['FaceImages']
-    #swagger.description = 'Create an Authorized User and immediately tag the given dsId folder with it. Accepts the full authorizedUsers schema (minus password). Only firstName, lastName and dsId are required; every other field (email, departmentId, designation, branch, shiftId, numberPlate, orgId, emp_id, empRoleId, permission, location, locationId, phoneNumber, address1, timezone, profilePics) is optional. If email is omitted it remains blank. verified is set to false since no face data exists yet. Notifies the DS onfly_registration API.'
+    #swagger.description = 'Create an Authorized User and immediately tag the given dsId folder with it. Accepts multipart/form-data with up to 3 face photos under the `file` field - the same upload process as POST /authorizedUsers/create - or plain JSON with no photos. Only firstName, lastName and dsId are required; every other authorizedUsers field (email, departmentId, designation, branch, shiftId, numberPlate, vehicleNumber, orgId, emp_id, empRoleId, permission, location, locationId, phoneNumber, address1, timezone, profilePics, liveDemoData) is optional. liveDemoData is only true when explicitly sent as true, otherwise false. DS registration is blocking and happens BEFORE anything is written to our DB: uploaded photos are enrolled via DS /register and the dsId folder is linked via DS /onfly_registration. If DS rejects either call, no user is created, uploaded media is removed, and the DS-side registration is rolled back. verified is true only when photos were actually enrolled.'
+    #swagger.consumes = ['multipart/form-data', 'application/json']
+    #swagger.parameters['file'] = {
+      in: 'formData',
+      type: 'file',
+      required: false,
+      collectionFormat: 'multi',
+      description: 'Up to 3 face photos. Optional - omit to rely solely on the dsId folder\'s already-captured faces.'
+    }
     #swagger.parameters['data'] = {
       in: 'body',
       description: 'firstName, lastName and dsId are required; every other authorizedUsers field is optional',
@@ -231,6 +239,28 @@ class FaceImagesController {
       schema: {
         statusCode: 404,
         body: { status: 'failed', message: 'No images found for this dsId' }
+      }
+    }
+    #swagger.responses[409] = {
+      description: 'Email already in use, or DS reports this face is already registered. No user is created.',
+      schema: {
+        statusCode: 409,
+        body: {
+          status: 'failed',
+          message: 'This person already has a face registered in the system. Search for the existing user instead of creating a new one.',
+          error: 'Authorized user was not created.'
+        }
+      }
+    }
+    #swagger.responses[502] = {
+      description: 'DS rejected the registration or was unreachable. Nothing is stored and uploaded media is cleaned up.',
+      schema: {
+        statusCode: 502,
+        body: {
+          status: 'failed',
+          message: 'We couldn\'t find a clear face in the photo you uploaded. Please use a well-lit, front-facing photo where the face isn\'t covered, then try again.',
+          error: 'Authorized user was not created.'
+        }
       }
     }
     #swagger.responses[500] = {

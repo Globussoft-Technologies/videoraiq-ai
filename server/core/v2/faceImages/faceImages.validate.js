@@ -103,7 +103,19 @@ class FaceImagesValidator {
       phoneNumber: Joi.string().trim().allow(null, ''),
       address1: Joi.string().trim().allow(null, ''),
       timezone: Joi.string().trim().allow(null, ''),
-      profilePics: Joi.array().items(Joi.string().trim()).allow(null),
+      // Accepted from JSON callers as already-stored media paths. Multipart
+      // callers send real files instead (req.files); a single repeated field
+      // arrives as a bare string, so allow both shapes.
+      profilePics: Joi.alternatives()
+        .try(Joi.array().items(Joi.string().trim()), Joi.string().trim())
+        .allow(null),
+      // Multipart bodies are all strings, so "true" must coerce. Deliberately
+      // lenient rather than Joi.boolean(): only an affirmative true counts,
+      // anything else (missing, "false", "", junk) falls back to false so a
+      // stray value can never fail an otherwise-valid registration.
+      liveDemoData: Joi.any()
+        .custom((val) => val === true || String(val).toLowerCase() === "true")
+        .default(false),
     });
 
     return schema.validate(body, { abortEarly: false });

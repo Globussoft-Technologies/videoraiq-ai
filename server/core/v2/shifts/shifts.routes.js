@@ -1,5 +1,6 @@
 import Router from "express";
 import shiftController from "./shifts.controller.js";
+import shiftScheduleController from "./shiftSchedule.controller.js";
 import {
   viewAccessCheck,
   createAccessCheck,
@@ -17,6 +18,22 @@ router
 // Literal segments have to be declared before `/:id`, or Express hands
 // "list" and "assignments" to the id route.
 router.get("/list", viewAccessCheck, shiftController.getShiftList);
+
+// Monthly schedule grid. Declared before `/:id` like the other literal
+// segments, and POST rather than GET so the filter arrays don't have to be
+// squeezed into a query string.
+router
+  .route("/schedule")
+  .get(viewAccessCheck, shiftScheduleController.getSchedule)
+  .post(viewAccessCheck, shiftScheduleController.getSchedule);
+router.get(
+  "/schedule/designations",
+  viewAccessCheck,
+  shiftScheduleController.getDesignations,
+);
+router.put("/schedule/day", editAccessCheck, shiftScheduleController.assignDay);
+router.put("/schedule/bulk", editAccessCheck, shiftScheduleController.bulkAssign);
+router.patch("/schedule/clear", editAccessCheck, shiftScheduleController.clearDays);
 
 // Read-only: what a filter set would hit. Drives the live count in Bulk Assign.
 router.post(

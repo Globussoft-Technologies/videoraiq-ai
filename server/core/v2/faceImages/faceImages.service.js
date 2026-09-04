@@ -7,8 +7,8 @@ import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
 import departmentsModel from "../departments/departments.model.js";
 import shiftModel from "../shifts/shifts.model.js";
 import FaceImagesValidator from "./faceImages.validate.js";
-import { deleteMedia, mediaExists, toRelativeMediaPaths } from "../../../utils/mediaStorage.js";
-import dsUserSyncService from "../../../services/dsUserSync.service.js";
+import { deleteMedia, mediaExists, putMedia, toRelativeMediaPaths } from "../../../utils/mediaStorage.js";
+import dsUserSyncService, { friendlyDSMessage } from "../../../services/dsUserSync.service.js";
 import OptimizedAccessLogs from "../accesslogs/newAccessLogs.model.js";
 
 function escapeRegex(input = "") {
@@ -18,7 +18,7 @@ function escapeRegex(input = "") {
 class FaceImagesService {
   // Links every FaceImages doc for a dsId to an authorizedUser and notifies DS.
   // Shared by tagFolder and quickCreateUser, which both perform the same link.
-  async _tagFaceImages(dsId, authorizedUser, adminId) {
+  async _tagFaceImages(dsId, authorizedUser, adminId, { notifyDS = true } = {}) {
     const tagTimestamp = new Date();
     const result = await faceImagesModel.updateMany(
       { dsId },
@@ -36,7 +36,11 @@ class FaceImagesService {
     );
 
     // Fire-and-forget: notify DS of the tag without blocking or failing the caller's response.
-    dsUserSyncService.syncUser(authorizedUser, dsId);
+    // quickCreateUser opts out — it already awaited the same call and must fail
+    // the request (rather than silently log) when DS rejects the registration.
+    if (notifyDS) {
+      dsUserSyncService.syncUser(authorizedUser, dsId);
+    }
 
     return result;
   }
@@ -192,14 +196,43 @@ class FaceImagesService {
     }
   }
 
+  // Undo the side effects of a registration that ultimately failed, so a
+  // retry doesn't orphan media on the NAS/bucket or leave DS holding a uid our
+  // DB never stored. Best-effort: never throws over the original failure.
+  async _rollbackFailedRegistration({ uploadedFiles = [], adminId, dsUid, userId } = {}) {
+    await Promise.all(uploadedFiles.map((f) => deleteMedia(f).catch(() => {})));
+    if (dsUid) {
+      await dsUserSyncService.deleteUser(adminId, dsUid);
+    }
+    if (userId) {
+      // Only reached when a step after create() blew up; leaving the row would
+      // mean a user whose media and DS registration we just tore down.
+      await authorizedUsersModel.findByIdAndDelete(userId).catch(() => {});
+    }
+  }
+
   async quickCreateUser(req, res, _next) {
+    // Tracked outside the try so the catch can undo whatever already landed.
+    let uploadedFiles = [];
+    let dsRegisteredUid = null;
+    let createdUserId = null;
+    let adminId = null;
+
     try {
-      const adminId = req?.verified?.userData?.adminId;
+      adminId = req?.verified?.userData?.adminId;
       if (!adminId) {
         return res.status(400).json(Response.userFailResp("Missing adminId in user data", "Validation Failed!"));
       }
 
-      const { error } = FaceImagesValidator.quickCreateUser(req.body);
+      // Multipart sends every field as a string, and an untouched optional input
+      // arrives as "", which Joi.number() rejects. Drop those so the numeric
+      // fields stay genuinely optional for FormData callers.
+      const body = { ...req.body };
+      for (const key of ["orgId", "emp_id", "empRoleId", "locationId"]) {
+        if (body[key] === "") delete body[key];
+      }
+
+      const { error, value } = FaceImagesValidator.quickCreateUser(body);
       if (error) {
         return res.send(Response.validationFailResp(error.message, "Validation Failed!"));
       }
@@ -207,10 +240,10 @@ class FaceImagesService {
       const {
         dsId, email: rawEmail, departmentId, designation, branch, shiftId, numberPlate, vehicleNumber,
         orgId, emp_id, empRoleId, permission, location, locationId,
-        phoneNumber, address1, timezone, profilePics,
-      } = req.body;
-      const firstName = req.body.firstName.trim();
-      const lastName = req.body.lastName.trim();
+        phoneNumber, address1, timezone, liveDemoData,
+      } = value;
+      const firstName = value.firstName.trim();
+      const lastName = value.lastName.trim();
 
       const existingCount = await faceImagesModel.countDocuments({ dsId });
       if (!existingCount) {
@@ -228,13 +261,13 @@ class FaceImagesService {
 
       let department = null;
       if (departmentId) {
-        department = await departmentsModel.findById(departmentId).select("_id");
+        department = await departmentsModel.findById(departmentId).select("_id departmentName");
         if (!department) {
           return res.send(Response.validationFailResp("Invalid DepartmentId, please provide valid departmentId", "Validation Failed!"));
         }
       }
 
-      // Placeholder email required to satisfy the {adminId, email} unique index —
+      // Placeholder email required to satisfy the {adminId, email} unique index --
       // multiple quick-created users under the same admin can't all have email:null.
       const email = typeof rawEmail === "string" && rawEmail.trim() ? rawEmail.trim() : undefined;
       const placeholderEmail = email ?? `quickcreate+${new mongoose.Types.ObjectId().toHexString()}@placeholder.local`;
@@ -246,13 +279,73 @@ class FaceImagesService {
         }
       }
 
+      // Same upload process as Register User: multipart buffers go straight to
+      // putMedia (Oracle or SFTP, per config). Photos stay optional here --
+      // without them the dsId's already-captured faces are the only face data.
+      if (req.files?.length) {
+        uploadedFiles = await Promise.all(
+          req.files.map((file) =>
+            putMedia({
+              buffer: file.buffer,
+              mediaType: "image",
+              folderName: `${firstName}${lastName}`,
+              originalName: file.originalname,
+            })
+          )
+        );
+      }
+
+      // JSON callers may still pass already-stored media paths instead of files.
+      const rawBodyPics = Array.isArray(value.profilePics)
+        ? value.profilePics
+        : (value.profilePics ? [value.profilePics] : []);
+      const profilePics = [...uploadedFiles, ...(toRelativeMediaPaths(rawBodyPics) || [])];
+
+      // DS is the gate: mint the _id up front so DS gets a uid to register
+      // against, but write nothing to our DB until DS has accepted. A rejected
+      // registration therefore leaves no half-created user behind.
+      const newUserId = new mongoose.Types.ObjectId();
+      const dsUser = {
+        _id: newUserId,
+        adminId,
+        firstName,
+        lastName,
+        email: placeholderEmail,
+        departmentId: department,
+        branch: branch || "",
+        designation: designation || "",
+      };
+
+      try {
+        if (profilePics.length) {
+          await dsUserSyncService.registerFaces(dsUser, profilePics);
+          dsRegisteredUid = newUserId.toString();
+        }
+        // Always link the dsId folder, with or without uploaded photos.
+        await dsUserSyncService.registerOnFly(dsUser, dsId);
+      } catch (dsError) {
+        logger.error(dsError);
+        await this._rollbackFailedRegistration({ uploadedFiles, adminId, dsUid: dsRegisteredUid });
+
+        const raw = dsError?.response?.data?.message || "";
+        // A duplicate face is the caller's problem to resolve (409); anything
+        // else is the face service being unhappy or unreachable (502).
+        const status = /already registered/i.test(raw) ? 409 : 502;
+        return res.status(status).json(
+          Response.errorResp(friendlyDSMessage(dsError), "Authorized user was not created.")
+        );
+      }
+
       const newUser = await authorizedUsersModel.create({
+        _id: newUserId,
         adminId,
         firstName,
         lastName,
         userName: `${firstName} ${lastName}`,
         email: placeholderEmail,
-        verified: false,
+        // Only claim verified once DS actually enrolled a photo we sent; the
+        // photo-less path still has nothing but on-the-fly camera captures.
+        verified: profilePics.length > 0,
         departmentId: department?._id || null,
         shiftId: isShiftExist?._id || null,
         designation: designation || null,
@@ -268,10 +361,15 @@ class FaceImagesService {
         phoneNumber: phoneNumber || null,
         address1: address1 || null,
         timezone: timezone || null,
-        profilePics: toRelativeMediaPaths(profilePics) || [],
+        profilePics,
+        liveDemoData,
       });
 
-      await this._tagFaceImages(dsId, newUser, adminId);
+      createdUserId = newUser._id;
+
+      // DS was already told about this dsId above, and blockingly so -- don't
+      // let _tagFaceImages fire the same call again.
+      await this._tagFaceImages(dsId, newUser, adminId, { notifyDS: false });
 
       return res.status(201).json(Response.userSuccessResp("Authorized user created successfully", {
         ...newUser.toObject(),
@@ -279,6 +377,12 @@ class FaceImagesService {
       }));
     } catch (error) {
       logger.error(error);
+      await this._rollbackFailedRegistration({
+        uploadedFiles,
+        adminId,
+        dsUid: dsRegisteredUid,
+        userId: createdUserId,
+      });
       return res.status(500).json(Response.errorResp("Failed to create authorized user.", error.message));
     }
   }

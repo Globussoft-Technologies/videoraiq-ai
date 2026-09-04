@@ -977,6 +977,28 @@ const doc = {
 
       note: "Night shift for security and operations team",
     },
+    shiftScheduleAssign: {
+      employeeId: "6512f1c0a1b2c3d4e5f60718",
+      date: "2026-09-04",
+      // Null assigns "no shift" for the day. To restore inheritance from the
+      // employee's standing shift, use PATCH /shifts/schedule/clear instead.
+      shiftId: "6512f1c0a1b2c3d4e5f60999",
+      isOff: false,
+      dayType: "full",
+      note: "",
+    },
+    shiftScheduleBulkAssign: {
+      employeeIds: ["6512f1c0a1b2c3d4e5f60718"],
+      shiftId: "6512f1c0a1b2c3d4e5f60999",
+      isOff: false,
+      dayType: "full",
+      // Either a from/to range...
+      from: "2026-09-01",
+      to: "2026-09-30",
+      // ...optionally narrowed to weekdays (0=Sunday .. 6=Saturday), or an
+      // explicit `dates: ["2026-09-04"]` list instead of from/to.
+      weekdays: [1, 2, 3, 4, 5],
+    },
     shiftAssignmentFilters: {
       // Individual assignment. Combine with, or use instead of, the group
       // filters below - they are ANDed.
