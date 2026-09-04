@@ -11,7 +11,7 @@ import { describe, it, expect, vi } from "vitest";
 
 vi.mock("../../../utils/mediaStorage.js", () => ({ putMedia: vi.fn() }));
 
-const { reportTableRows, rowFromAttendance, buildCsv, buildPdf } = await import(
+const { reportTableRows, rowFromAttendance, buildCsv, buildPdf, REPORT_HEADERS } = await import(
   "../../../core/v2/attendanceAutoEmailReport/attendanceAutoEmailReport.service.js"
 );
 
@@ -70,23 +70,27 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
     const out = reportTableRows([row]);
     expect(out.map((r) => r.kind)).toEqual(["day", "session", "total"]);
 
+    // Columns are located by header rather than by a fixed index, so adding or
+    // reordering a report column doesn't silently break these assertions.
+    const at = (cells, header) => cells[REPORT_HEADERS.indexOf(header)];
+
     // Day line: id + name + first session's check-in / check-out / duration.
     const day = out[0].cells;
-    expect(day[0]).toBe("1");
-    expect(day[1]).toBe("Nagul Lingiri");
-    expect(day[7]).toBe("00:30:00"); // session 1 duration
-    expect(day[8]).toBe("");         // working total lives on the total line
-    expect(day[10]).toBe("");        // period total lives on the total line
+    expect(at(day, "ID")).toBe("1");
+    expect(at(day, "Name")).toBe("Nagul Lingiri");
+    expect(at(day, "Duration")).toBe("00:30:00"); // session 1 duration
+    expect(at(day, "Total Working Hours for the Day")).toBe(""); // lives on the total line
+    expect(at(day, "Total Working Hours for the period selected")).toBe("");
 
     // Session line: session 2 only, no identity, own duration.
-    expect(out[1].cells[1]).toBe("");
-    expect(out[1].cells[7]).toBe("01:15:00");
+    expect(at(out[1].cells, "Name")).toBe("");
+    expect(at(out[1].cells, "Duration")).toBe("01:15:00");
 
     // Total line: Σ session working + break + the period total.
     const total = out[2].cells;
-    expect(total[8]).toBe("01:45:00");
-    expect(total[9]).toBe("00:30:00");
-    expect(total[10]).toBe("01:45:00");
+    expect(at(total, "Total Working Hours for the Day")).toBe("01:45:00");
+    expect(at(total, "Total Break Hours for the Day")).toBe("00:30:00");
+    expect(at(total, "Total Working Hours for the period selected")).toBe("01:45:00");
   });
 
   it("emits just a day + total block when the day has a single session", () => {

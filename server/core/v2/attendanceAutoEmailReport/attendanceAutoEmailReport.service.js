@@ -473,15 +473,37 @@ function imageCell(url, text = "View Image") {
 //             pair's clock times, its own worked duration, cameras, snapshot.
 //   total   — one per employee-day: Σ session working hrs, the break total and
 //             the period total.
+/** A shift's display name, or "-" when the employee holds no shift. */
+function shiftNameFor(shift) {
+  return shift?.name || "-";
+}
+
+/**
+ * A shift's window as "09:00 - 18:00". Night shifts are flagged, since the
+ * end time being earlier than the start would otherwise read as a typo.
+ */
+function shiftTimingsFor(shift) {
+  if (!shift?.startTime || !shift?.endTime) return "-";
+  const window = `${shift.startTime} - ${shift.endTime}`;
+  return shift.isNightShift ? `${window} (night)` : window;
+}
+
 // A column with no function for a kind renders blank there automatically — no
 // hand-placed "" padding, and adding/reordering a column can't misalign rows.
 const REPORT_COLUMNS = [
   { header: "ID", day: (ctx) => String(ctx.index + 1) },
+  { header: "Emp. Code", day: (ctx) => ctx.row.employeeId },
   {
     header: "Name",
     day: (ctx) => ctx.row.employee,
   },
   { header: "Department", day: (ctx) => ctx.row.department },
+  // The shift an employee holds is what their check-in/check-out is judged
+  // against, so the report shows it beside the times rather than leaving the
+  // reader to look it up. Unassigned employees render "-", never a default
+  // shift they were never actually on.
+  { header: "Shift", day: (ctx) => shiftNameFor(ctx.row.shift) },
+  { header: "Shift Timings", day: (ctx) => shiftTimingsFor(ctx.row.shift) },
   { header: "Date", day: (ctx) => ctx.row.date },
   { header: "Location", day: (ctx) => ctx.row.location },
   {
@@ -528,7 +550,9 @@ const REPORT_COLUMNS = [
   },
 ];
 
-const REPORT_HEADERS = REPORT_COLUMNS.map((column) => column.header);
+// Exported so tests can locate a column by name rather than by a hard-coded
+// index — adding or reordering a column then can't silently break them.
+export const REPORT_HEADERS = REPORT_COLUMNS.map((column) => column.header);
 
 // Build one line's cells straight from the column schema for the given kind and
 // context. Columns that don't define the kind produce "".
@@ -627,18 +651,21 @@ export async function buildPdf({ report, rows, label, timezone }) {
     //   - Date fits "01 Jun 2026"
     const columns = [
       { head: "ID", width: 24 },
-      { head: "Name", width: 104, wrap: true },
-      { head: "Department", width: 118, wrap: true },
+      { head: "Emp. Code", width: 58 },
+      { head: "Name", width: 88, wrap: true },
+      { head: "Department", width: 84, wrap: true },
+      { head: "Shift", width: 68, wrap: true },
+      { head: "Shift Timings", width: 72 },
       { head: "Date", width: 60 },
-      { head: "Location", width: 78, wrap: true },
+      { head: "Location", width: 62, wrap: true },
       { head: "Check in", width: 66 },
       { head: "Check out", width: 66 },
       { head: "Duration", width: 50 },
-      { head: "Total Working Hrs (Day)", width: 70 },
-      { head: "Total Break Hrs (Day)", width: 68 },
-      { head: "Total Working Hrs (Period)", width: 84 },
-      { head: "Checkin Camera", width: 128, wrap: true },
-      { head: "Checkout Camera", width: 128, wrap: true },
+      { head: "Total Working Hrs (Day)", width: 66 },
+      { head: "Total Break Hrs (Day)", width: 64 },
+      { head: "Total Working Hrs (Period)", width: 74 },
+      { head: "Checkin Camera", width: 84, wrap: true },
+      { head: "Checkout Camera", width: 84, wrap: true },
       { head: "View Image", width: 52 },
     ];
     const drawHeader = () => {
