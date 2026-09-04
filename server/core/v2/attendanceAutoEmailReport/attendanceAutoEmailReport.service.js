@@ -16,6 +16,7 @@ import Admin from "../admin/admin.model.js";
 import Report from "./attendanceAutoEmailReport.model.js";
 import { createReportSchema, updateReportSchema } from "./attendanceAutoEmailReport.validation.js";
 import { trackFailedEmail, trackOutboundEmail } from "../emailMonitoring/emailTracker.js";
+import { buildMonthlyStatusWorkbook } from "./monthlyStatusSheet.js";
 
 const LOGO_URL = "https://stagingv2.videoraiq.com/src/assets/videoraiq-logo-color.png";
 const DEFAULT_TIMEZONE = "Asia/Kolkata";
@@ -336,6 +337,13 @@ export function rowFromAttendance(item, timezone, rules) {
     viewImage: firstSessionCells ? firstSessionCells.checkInImage : (firstCheckIn ? checkInImageUrl(firstCheckIn) : "-"),
     sessions,
     status: "",
+    // Raw values the monthly-status sheet needs. The display columns above are
+    // already formatted for the PDF/CSV grid; the sheet needs the underlying
+    // date, clock times and shift to place each day in its own column.
+    dateKey: moment(item.createdAt).tz(timezone).format("YYYY-MM-DD"),
+    inTime: firstCheckIn ? moment(firstCheckIn.timestamp).tz(timezone).format("HH:mm") : "",
+    outTime: lastCheckOut ? moment(lastCheckOut.timestamp).tz(timezone).format("HH:mm") : "",
+    shift: employee.shiftId || null,
   };
   row.status = statusForRow({ firstCheckIn: firstCheckIn?.timestamp, lastCheckOut: lastCheckOut?.timestamp }, rules);
   return row;
@@ -383,7 +391,16 @@ async function streamReportRows(report, reference, onRow) {
   const rules = { fullDayHours: settings?.fullDayHours || 8, halfDayHours: settings?.halfDayHours || 4 };
 
   const cursor = Attendance.find(query)
-    .populate({ path: "employee", populate: { path: "departmentId", select: "departmentName" } })
+    .populate({
+      path: "employee",
+      populate: [
+        { path: "departmentId", select: "departmentName" },
+        // The monthly-status sheet grades every day of the month, including
+        // the ones with no attendance record at all, against the employee's
+        // shift — see monthlyStatusSheet.js.
+        { path: "shiftId" },
+      ],
+    })
     .populate({ path: "events.channel", select: "name customName" })
     .sort({ createdAt: 1 })
     .batchSize(CURSOR_BATCH_SIZE)
@@ -719,6 +736,8 @@ const MAIL = {
   navyDark: "#0f2f73",   // header gradient end / accent bar
   green: "#1e9e63",      // secondary (CSV) button
   greenDark: "#17864f",
+  teal: "#0f766e",       // monthly-status workbook (XLSX) button
+  tealDark: "#0c5d56",
   paper: "#eef2f9",      // page ground
   card: "#ffffff",
   panel: "#f4f6fb",      // stat card fill
@@ -774,11 +793,17 @@ const ICON = {
 
 // A pill download button — solid fill, file glyph, bulletproof for Outlook.
 function downloadButton(file) {
-  const isPdf = String(file.format).toLowerCase() === "pdf";
-  const label = `Download ${file.format.toUpperCase()}`;
+  const format = String(file.format).toLowerCase();
+  // The workbook is a different report, not another rendering of the same
+  // table, so it says so rather than just naming its file extension.
+  const label = format === "xlsx" ? "Download Monthly Status" : `Download ${file.format.toUpperCase()}`;
   const url = escapeHtml(file.url);
-  const fill = isPdf ? MAIL.navy : MAIL.green;
-  const stroke = isPdf ? MAIL.navyDark : MAIL.greenDark;
+  const palette = format === "pdf"
+    ? [MAIL.navy, MAIL.navyDark]
+    : format === "xlsx"
+    ? [MAIL.teal, MAIL.tealDark]
+    : [MAIL.green, MAIL.greenDark];
+  const [fill, stroke] = palette;
   return `
     <td align="center" style="padding:0 8px;">
       <!--[if mso]>
@@ -970,7 +995,7 @@ export function publicUrlFor(mediaPath) {
  * One file per format, no size limit to juggle: the email links to the file
  * instead of attaching it, so SendGrid's ~30MB message cap never applies.
  */
-export async function uploadReportFiles(report, csvBuffer, pdfBuffer) {
+export async function uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer) {
   const safeName = safeReportName();
   const files = [];
   if (pdfBuffer) {
@@ -980,6 +1005,10 @@ export async function uploadReportFiles(report, csvBuffer, pdfBuffer) {
   if (csvBuffer) {
     const path = await putMedia({ buffer: csvBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.csv` });
     files.push({ format: "csv", path, url: publicUrlFor(path) });
+  }
+  if (xlsxBuffer) {
+    const path = await putMedia({ buffer: xlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.xlsx` });
+    files.push({ format: "xlsx", path, url: publicUrlFor(path) });
   }
   return files;
 }
@@ -1013,6 +1042,7 @@ async function deliver(report, options = {}) {
   applyPeriodTotals(rows);
   const wantsPdf = report.formats.includes("pdf");
   const wantsCsv = report.formats.includes("csv");
+  const wantsXlsx = report.formats.includes("xlsx");
 
   const csvT0 = Date.now();
   const csvBuffer = wantsCsv ? buildCsv({ report, rows, label: summary.label, timezone: summary.timezone }) : null;
@@ -1021,8 +1051,16 @@ async function deliver(report, options = {}) {
   const pdfBuffer = wantsPdf ? await buildPdf({ report, rows, label: summary.label, timezone: summary.timezone }) : null;
   const pdfMs = Date.now() - pdfT0;
 
+  // The monthly-status workbook is a matrix (days as columns, one sheet per
+  // employee) built from the same rows — see monthlyStatusSheet.js.
+  const xlsxT0 = Date.now();
+  const xlsxBuffer = wantsXlsx
+    ? await buildMonthlyStatusWorkbook({ rows, label: summary.label, timezone: summary.timezone, start: summary.start, end: summary.end })
+    : null;
+  const xlsxMs = Date.now() - xlsxT0;
+
   const uploadT0 = Date.now();
-  const files = await uploadReportFiles(report, csvBuffer, pdfBuffer);
+  const files = await uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer);
   const uploadMs = Date.now() - uploadT0;
 
   // Diagnostics: pins down exactly what a run looked like (row count,
@@ -1032,6 +1070,7 @@ async function deliver(report, options = {}) {
     `[ATTENDANCE_AUTO_EMAIL_REPORT] deliver diagnostics: report=${report._id} rows=${summary.rowCount} ` +
     `csvRawKB=${csvBuffer ? (csvBuffer.length / 1024).toFixed(1) : "n/a"} csvBuildMs=${csvMs} ` +
     `pdfRawKB=${pdfBuffer ? (pdfBuffer.length / 1024).toFixed(1) : "n/a"} pdfBuildMs=${pdfMs} ` +
+    `xlsxRawKB=${xlsxBuffer ? (xlsxBuffer.length / 1024).toFixed(1) : "n/a"} xlsxBuildMs=${xlsxMs} ` +
     `uploadMs=${uploadMs} files=${files.length}`
   );
 
