@@ -201,7 +201,7 @@ function alertSwitchValue(payload, key) {
   return false;
 }
 
-function Panel({ children, style }) {
+function Panel({ children, style, ...rest }) {
   return (
     <section
       style={{
@@ -212,6 +212,7 @@ function Panel({ children, style }) {
         minWidth: 0,
         ...style,
       }}
+      {...rest}
     >
       {children}
     </section>
@@ -1000,7 +1001,7 @@ export default function SystemSettings() {
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
-        <Panel>
+        <Panel data-tour="settings-general">
           <PanelHeader
             icon={ShieldCheck}
             title="General"

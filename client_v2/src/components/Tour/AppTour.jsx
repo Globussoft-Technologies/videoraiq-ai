@@ -67,6 +67,9 @@ export default function AppTour() {
       continuous
       tooltipComponent={TourTooltip}
       onEvent={handleEvent}
+      floatingOptions={{
+        shiftOptions: { padding: 24 },
+      }}
       styles={{
         spotlight: {
           stroke: isDark ? 'var(--blue)' : 'rgba(59, 130, 246, 0.75)',

@@ -315,7 +315,7 @@ function Shell() {
               <footer
               style={{
                 marginTop: 'auto',
-                padding: '16px 24px 18px',
+                padding: '24px 24px 28px',
                 textAlign: 'center',
                 fontSize: 11.5,
                 color: 'var(--tx3)',

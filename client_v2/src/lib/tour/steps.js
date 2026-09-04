@@ -472,11 +472,12 @@ const MODULE_CONTENT = {
       'Settings holds the system-wide preferences: timezone, how long recordings and logs are kept, alert behaviour, and the sidebar log ordering.',
     steps: [
       {
-        target: '[data-tour="settings-sections"]',
+        target: '[data-tour="settings-general"]',
+        spotlightTarget: '[data-tour="settings-sections"]',
         title: 'System preferences',
         content:
           'Timezone affects every timestamp in the app. Retention decides how long footage and logs are kept before they are swept — both worth setting deliberately rather than leaving at the default.',
-        placement: 'top',
+        placement: 'bottom',
       },
     ],
   },
