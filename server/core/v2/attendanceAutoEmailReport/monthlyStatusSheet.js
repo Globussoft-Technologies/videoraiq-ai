@@ -190,7 +190,7 @@ function addEmployeeSheet(workbook, { employee, rows, days, label, timezone, shi
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_FILL } };
   });
 
-  // ---- Status / InTime / OutTime / Total ---------------------------------
+  // ---- Status / InTime / OutTime / Total Break / Total -------------------
   const lines = [
     {
       title: "Status",
@@ -200,6 +200,10 @@ function addEmployeeSheet(workbook, { employee, rows, days, label, timezone, shi
     },
     { title: "InTime", value: (day, row) => (row ? row.inTime : "") },
     { title: "OutTime", value: (day, row) => (row ? row.outTime : "") },
+    // Time between a check-out and the next check-in on the same day. Shown
+    // alongside the worked total, never subtracted from it — the two are
+    // measured separately (see pairBreaks/pairWorkSessions in the service).
+    { title: "Total Break", value: (day, row) => minutesToHm(row ? row.breakMinutesDay : 0) },
     { title: "Total", value: (day, row) => minutesToHm(row ? row.workingMinutesDay : 0) },
   ];
 
@@ -232,7 +236,7 @@ function addEmployeeSheet(workbook, { employee, rows, days, label, timezone, shi
     : null;
   const actualMinutes = rows.reduce((sum, row) => sum + (row.workingMinutesDay || 0), 0);
 
-  const summaryRow = headerRow + 7;
+  const summaryRow = headerRow + lines.length + 3;
   summaryBox(sheet, summaryRow, 1, "Total working Days", totalWorkingDays ?? "-");
   summaryBox(sheet, summaryRow, 2, "Actual working days", actualWorkingDays);
   summaryBox(sheet, summaryRow + 3, 1, "Standard Login Time", shift?.startTime || "-");

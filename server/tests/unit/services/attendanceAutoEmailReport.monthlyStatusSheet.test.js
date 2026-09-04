@@ -2,8 +2,8 @@
  * Unit tests for the Monthly Status workbook (monthlyStatusSheet.js).
  *
  * This is the matrix-shaped report: every day of the period is a column, each
- * employee gets their own worksheet, and four rows (Status / InTime / OutTime /
- * Total) sit above a summary block.
+ * employee gets their own worksheet, and five rows (Status / InTime / OutTime /
+ * Total Break / Total) sit above a summary block.
  *
  * The behaviour worth pinning down is how a day gets its Status mark, because
  * two different sources feed it:
@@ -43,7 +43,7 @@ const SHIFT = {
 const START = moment.tz("2026-06-01", "YYYY-MM-DD", TZ).startOf("day");
 const END = moment.tz("2026-06-30", "YYYY-MM-DD", TZ).endOf("day");
 
-const row = (dateKey, status, inTime, outTime, workingMinutesDay, shift = SHIFT) => ({
+const row = (dateKey, status, inTime, outTime, workingMinutesDay, shift = SHIFT, breakMinutesDay = 0) => ({
   employeeKey: "e1",
   employee: "KATARU SAI CHAITHANYA",
   employeeId: "1460206",
@@ -53,6 +53,7 @@ const row = (dateKey, status, inTime, outTime, workingMinutesDay, shift = SHIFT)
   inTime,
   outTime,
   workingMinutesDay,
+  breakMinutesDay,
   shift,
 });
 
@@ -79,7 +80,13 @@ function columnFor(dateKey, shift = SHIFT) {
 const STATUS_ROW = 11;
 const IN_ROW = 12;
 const OUT_ROW = 13;
-const TOTAL_ROW = 14;
+const BREAK_ROW = 14;
+const TOTAL_ROW = 15;
+
+// Summary boxes: a yellow caption row with its value on the row beneath.
+const WORKING_DAYS_VALUE_ROW = 19;
+const STANDARD_TIME_VALUE_ROW = 22;
+const MONTHLY_HOURS_VALUE_ROW = 25;
 
 describe("monthlyStatusSheet — day grid", () => {
   it("gives each employee their own worksheet, named for them", async () => {
@@ -136,6 +143,26 @@ describe("monthlyStatusSheet — day grid", () => {
     expect(sheet.getCell(TOTAL_ROW, columnFor("2026-06-03")).value).toBe("00:00");
   });
 
+  it("shows the day's break total on its own row, below OutTime", async () => {
+    const workbook = await build([
+      row("2026-06-01", "Present", "09:00", "18:00", 480, SHIFT, 45),
+    ]);
+    const sheet = workbook.worksheets[0];
+    expect(sheet.getCell(BREAK_ROW, 2).value).toBe("Total Break");
+    expect(sheet.getCell(BREAK_ROW, columnFor("2026-06-01")).value).toBe("0:45");
+    // Break time is reported beside the worked total, never taken out of it.
+    expect(sheet.getCell(TOTAL_ROW, columnFor("2026-06-01")).value).toBe("8:00");
+    // A day with no record has no break to report.
+    expect(sheet.getCell(BREAK_ROW, columnFor("2026-06-03")).value).toBe("00:00");
+  });
+
+  it("keeps the grid rows in order: Status, InTime, OutTime, Total Break, Total", async () => {
+    const workbook = await build([row("2026-06-01", "Present", "09:00", "18:00", 480)]);
+    const sheet = workbook.worksheets[0];
+    expect([STATUS_ROW, IN_ROW, OUT_ROW, BREAK_ROW, TOTAL_ROW].map((r) => sheet.getCell(r, 2).value))
+      .toEqual(["Status", "InTime", "OutTime", "Total Break", "Total"]);
+  });
+
   it("marks no week offs for an employee with no shift rather than assuming a Mon-Fri week", () => {
     const days = __test__.daysInRange(START, END, TZ, null);
     expect(days.some((day) => day.isOff)).toBe(false);
@@ -150,18 +177,18 @@ describe("monthlyStatusSheet — summary block", () => {
     ]);
     const sheet = workbook.worksheets[0];
     // June 2026 has 22 Mon-Fri days; 22 x 8h = 176:00 expected.
-    expect(sheet.getCell(18, 1).value).toBe(22);
-    expect(sheet.getCell(24, 1).value).toBe("176:00");
+    expect(sheet.getCell(WORKING_DAYS_VALUE_ROW, 1).value).toBe(22);
+    expect(sheet.getCell(MONTHLY_HOURS_VALUE_ROW, 1).value).toBe("176:00");
     // Only the two days that have records count as actually worked.
-    expect(sheet.getCell(18, 2).value).toBe(2);
-    expect(sheet.getCell(24, 2).value).toBe("18:06");
+    expect(sheet.getCell(WORKING_DAYS_VALUE_ROW, 2).value).toBe(2);
+    expect(sheet.getCell(MONTHLY_HOURS_VALUE_ROW, 2).value).toBe("18:06");
   });
 
   it("shows the shift's start and end as the standard login/logout times", async () => {
     const workbook = await build([row("2026-06-01", "Present", "21:55", "06:30", 515)]);
     const sheet = workbook.worksheets[0];
-    expect(sheet.getCell(21, 1).value).toBe("09:00");
-    expect(sheet.getCell(21, 2).value).toBe("18:00");
+    expect(sheet.getCell(STANDARD_TIME_VALUE_ROW, 1).value).toBe("09:00");
+    expect(sheet.getCell(STANDARD_TIME_VALUE_ROW, 2).value).toBe("18:00");
   });
 
   it("shows '-' instead of inventing figures when the employee has no shift", async () => {
@@ -169,9 +196,9 @@ describe("monthlyStatusSheet — summary block", () => {
       row("2026-06-01", "Present", "21:55", "06:30", 515, null),
     ]);
     const sheet = workbook.worksheets[0];
-    expect(sheet.getCell(18, 1).value).toBe("-"); // total working days
-    expect(sheet.getCell(21, 1).value).toBe("-"); // standard login
-    expect(sheet.getCell(24, 1).value).toBe("-"); // expected hours
+    expect(sheet.getCell(WORKING_DAYS_VALUE_ROW, 1).value).toBe("-"); // total working days
+    expect(sheet.getCell(STANDARD_TIME_VALUE_ROW, 1).value).toBe("-"); // standard login
+    expect(sheet.getCell(MONTHLY_HOURS_VALUE_ROW, 1).value).toBe("-"); // expected hours
   });
 
   it("counts only present and half days as actually worked", () => {
