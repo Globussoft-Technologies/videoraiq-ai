@@ -264,7 +264,7 @@ const MODULE_CONTENT = {
         title: 'Step 3 — configure it',
         content:
           'Set the confidence threshold, and for zone-based detections draw the area to watch directly on the video. Face Recognition asks you to register the people to look for, then matches every frame against them.',
-        placement: 'left',
+        placement: 'top',
       },
       {
         target: '[data-tour="demo-upload"]',
