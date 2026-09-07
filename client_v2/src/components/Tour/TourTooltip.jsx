@@ -21,6 +21,18 @@ export default function TourTooltip({
   tooltipProps,
 }) {
   const { isGlobal, moduleLabel, modulePosition, skipModule, skipAll } = useTour();
+  const isLastModule = Boolean(
+    isGlobal &&
+      modulePosition &&
+      modulePosition.index >= modulePosition.total
+  );
+  const primaryLabel = isLastStep
+    ? isGlobal
+      ? isLastModule
+        ? 'Done'
+        : 'Next module'
+      : 'Done'
+    : 'Next';
 
   const linkBtn = {
     background: 'none',
@@ -186,6 +198,8 @@ export default function TourTooltip({
         )}
         <button
           {...primaryProps}
+          title={primaryLabel}
+          aria-label={primaryLabel}
           style={{
             height: 32,
             padding: '0 15px',
@@ -199,7 +213,7 @@ export default function TourTooltip({
             cursor: 'pointer',
           }}
         >
-          {isLastStep ? (isGlobal ? 'Next module' : 'Done') : 'Next'}
+          {primaryLabel}
         </button>
       </div>
 
