@@ -154,7 +154,7 @@ export const assignmentPreviewValidator = Joi.object({
   // already on this shift are returned before the rest of the roster.
   prioritizeShiftId: objectId("Prioritized shift id"),
   skip: Joi.number().integer().min(0).default(0),
-  limit: Joi.number().integer().min(1).max(200).default(10),
+  limit: Joi.number().integer().min(1).max(5000).default(10),
 });
 
 export const unassignValidator = Joi.object({
