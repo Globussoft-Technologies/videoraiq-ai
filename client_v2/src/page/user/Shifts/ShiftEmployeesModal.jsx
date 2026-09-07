@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Search, Users, UserMinus, Loader2 } from 'lucide-react';
+import moment from 'moment';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -11,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import Pagination from '@/components/Pagination';
-import { fetchShiftEmployees, unassignShift } from './Api';
+import { clearSchedule, fetchShiftEmployees, unassignShift } from './Api';
 
 const PAGE_SIZE = 8;
 
@@ -19,6 +20,15 @@ const employeeName = (employee) =>
   `${employee?.firstName || ''} ${employee?.lastName || ''}`.trim() ||
   employee?.email ||
   'Unnamed employee';
+
+const temporaryRangeLabel = (employee) => {
+  if (!employee.temporaryFrom) return 'Temporary';
+  const from = moment(employee.temporaryFrom, 'YYYY-MM-DD').format('DD MMM');
+  const to = moment(employee.temporaryTo || employee.temporaryFrom, 'YYYY-MM-DD').format('DD MMM');
+  return employee.temporaryFrom === employee.temporaryTo
+    ? `Temporary (${from})`
+    : `Temporary (${from} – ${to})`;
+};
 
 const AVATAR_PALETTE = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6'];
 const avatarColor = (key) => {
@@ -29,7 +39,7 @@ const avatarColor = (key) => {
 };
 
 /**
- * Who is on this shift.
+ * Who is on this shift permanently or through today's temporary schedule.
  *
  * Opened from the Assigned count in the shift table — that number was the only
  * place the roster was visible, with no way to see the names behind it.
@@ -75,7 +85,16 @@ const ShiftEmployeesModal = ({ trigger, shift, onChanged }) => {
   const handleRemove = async (employee) => {
     setRemovingId(employee._id);
     try {
-      await unassignShift([employee._id]);
+      if (employee.temporaryAssignment && employee.temporaryFrom) {
+        await clearSchedule({
+          employeeIds: [employee._id],
+          shiftId: shift._id,
+          from: employee.temporaryFrom,
+          to: employee.temporaryTo || employee.temporaryFrom,
+        });
+      } else {
+        await unassignShift([employee._id]);
+      }
       toast.success(`${employeeName(employee)} removed from ${shift.name}`);
       // Step back a page when the last row on it just went away.
       if (employees.length === 1 && page > 1) setPage((p) => p - 1);
@@ -169,6 +188,11 @@ const ShiftEmployeesModal = ({ trigger, shift, onChanged }) => {
                     {employee.status === 'suspended' && (
                       <span className="ml-2 text-[10px] text-[var(--warn)]">Suspended</span>
                     )}
+                    {employee.temporaryAssignment && (
+                      <span className="ml-2 text-[10px] text-[var(--blue)]">
+                        {temporaryRangeLabel(employee)}
+                      </span>
+                    )}
                   </div>
                   <div className="text-[11px] text-[var(--tx3)] truncate">
                     {[
@@ -180,18 +204,20 @@ const ShiftEmployeesModal = ({ trigger, shift, onChanged }) => {
                       .join(' · ') || employee.email}
                   </div>
                 </div>
-                <button
-                  onClick={() => handleRemove(employee)}
-                  disabled={removingId === employee._id}
-                  title="Remove from this shift"
-                  className="text-[var(--crit)] hover:opacity-80 cursor-pointer p-1.5 rounded hover:bg-[var(--bg3)] transition-colors disabled:opacity-40"
-                >
-                  {removingId === employee._id ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <UserMinus strokeWidth={1.5} className="w-4 h-4" />
-                  )}
-                </button>
+                {(employee.permanentAssignment || employee.temporaryAssignment) && (
+                  <button
+                    onClick={() => handleRemove(employee)}
+                    disabled={removingId === employee._id}
+                    title={employee.temporaryAssignment ? 'Remove temporary assignment from this shift' : 'Remove permanent assignment from this shift'}
+                    className="text-[var(--crit)] hover:opacity-80 cursor-pointer p-1.5 rounded hover:bg-[var(--bg3)] transition-colors disabled:opacity-40"
+                  >
+                    {removingId === employee._id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <UserMinus strokeWidth={1.5} className="w-4 h-4" />
+                    )}
+                  </button>
+                )}
               </div>
             ))}
         </div>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, memo } from 'react';
-import { Search, CirclePlus, Trash, Users, Moon, Sun } from 'lucide-react';
+import { Search, CirclePlus, Trash, Users, Moon, Sun, Info } from 'lucide-react';
 import { FiEdit3 } from 'react-icons/fi';
 import { toast } from 'sonner';
 import DeleteConfirmation from '@/components/DeleteConfirmation';
@@ -178,12 +178,35 @@ const Shifts = () => {
       },
       {
         accessorKey: 'grace',
-        header: 'Grace (L/E)',
-        cell: ({ row }) => (
-          <span className={styles.muted}>
-            {row.original.graceLateMinutes ?? 0}m / {row.original.graceEarlyMinutes ?? 0}m
+        header: () => (
+          <span className="inline-flex items-center gap-1">
+            <span>Grace (L/E)</span>
+            <span className="relative inline-flex items-center group">
+              <Info
+                className="w-3.5 h-3.5 text-[var(--tx3)] cursor-pointer"
+                aria-label="Grace time information"
+              />
+              <span
+                role="tooltip"
+                className="pointer-events-none absolute z-50 left-1/2 top-full mt-2 -translate-x-1/2 w-64 rounded-md bg-[var(--tx)] px-3 py-2 text-left text-xs font-normal leading-4 text-white shadow-lg opacity-0 invisible transition-opacity group-hover:opacity-100 group-hover:visible"
+              >
+                L = Late Login Grace. E = Early Checkout Grace.
+              </span>
+            </span>
           </span>
         ),
+        cell: ({ row }) => {
+          const late = row.original.graceLateMinutes ?? 0;
+          const early = row.original.graceEarlyMinutes ?? 0;
+          return (
+            <span
+              className={styles.muted}
+              title={`Late Login Grace (L): ${late} minutes; Early Checkout Grace (E): ${early} minutes`}
+            >
+              {late}m / {early}m
+            </span>
+          );
+        },
       },
       {
         accessorKey: 'assignedEmployees',

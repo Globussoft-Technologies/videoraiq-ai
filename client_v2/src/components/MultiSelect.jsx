@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Check, X, Search } from 'lucide-react';
+import { ChevronDown, Check, X, Search, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -35,6 +35,8 @@ import { cn } from '@/lib/utils';
  *   whose option list comes from the server. Local filtering still runs on
  *   whatever `options` currently holds, so a caller that ignores this prop
  *   behaves exactly as before.
+ * - onLoadMore(): called when the options list is scrolled near its end.
+ * - hasMore/loadingMore: control the infinite-scroll loading state.
  */
 const MultiSelect = ({
   options = [],
@@ -49,6 +51,9 @@ const MultiSelect = ({
   openUp = false,
   tint = null,
   onSearchChange = null,
+  onLoadMore = null,
+  hasMore = false,
+  loadingMore = false,
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -266,7 +271,14 @@ const MultiSelect = ({
             </div>
           )}
 
-          <div className={cn('overflow-y-auto customscrollbar py-1', maxHeight)}>
+          <div
+            className={cn('overflow-y-auto customscrollbar py-1', maxHeight)}
+            onScroll={(event) => {
+              if (!onLoadMore || !hasMore || loadingMore) return;
+              const list = event.currentTarget;
+              if (list.scrollHeight - list.scrollTop - list.clientHeight < 80) onLoadMore();
+            }}
+          >
             {filtered.length === 0 ? (
               <div className="px-3 py-2 text-xs text-[var(--tx3)]">{msg}</div>
             ) : (
@@ -300,6 +312,12 @@ const MultiSelect = ({
                   </button>
                 );
               })
+            )}
+            {loadingMore && (
+              <div className="flex items-center justify-center gap-2 px-3 py-2 text-xs text-[var(--tx3)]">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Loading more…
+              </div>
             )}
           </div>
         </div>

@@ -42,10 +42,15 @@ export const previewAssignment = async (filters) =>
  * per-member location scoping the assign call will — a separate employee
  * lookup could offer someone the assign call would then silently skip.
  */
-export const searchAssignableEmployees = async (search = '', limit = 50) =>
+export const searchAssignableEmployees = async ({
+  search = '',
+  skip = 0,
+  limit = 50,
+  prioritizeShiftId = '',
+} = {}) =>
   axios.post(
     `${Api_url}/shifts/assignments/preview`,
-    { search, limit, includeSuspended: true },
+    { search, skip, limit, includeSuspended: true, prioritizeShiftId: prioritizeShiftId || undefined },
     { headers: headers() },
   );
 
@@ -64,6 +69,13 @@ export const assignShift = async (shiftId, filters) =>
 export const bulkAssignSchedule = async ({ employeeIds, shiftId, from, to }) =>
   axios.put(
     `${Api_url}/shifts/schedule/bulk`,
+    { employeeIds, shiftId, from, to },
+    { headers: headers() },
+  );
+
+export const clearSchedule = async ({ employeeIds, shiftId, from, to }) =>
+  axios.patch(
+    `${Api_url}/shifts/schedule/clear`,
     { employeeIds, shiftId, from, to },
     { headers: headers() },
   );

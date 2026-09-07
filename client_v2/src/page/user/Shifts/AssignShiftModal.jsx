@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Users, MapPin, Building2, UserRound, Loader2, AlertTriangle } from 'lucide-react';
+import moment from 'moment';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -11,6 +12,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import ConfirmationModal from '@/components/DeleteConfirmation';
 import MultiSelect from '@/components/MultiSelect';
 import SingleDatePicker from '@/components/SingleDatePicker';
 import {
@@ -24,6 +26,7 @@ import {
 } from './Api';
 
 const labelClass = 'text-xs text-[var(--tx2)] mb-1 ml-1 block';
+const EMPLOYEE_PAGE_SIZE = 50;
 
 /** Small labelled switch — the modal needs three and there is no shared one. */
 const Toggle = ({ checked, onChange, label, hint }) => (
@@ -73,6 +76,11 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
   const [employeeIds, setEmployeeIds] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
   const [employeeQuery, setEmployeeQuery] = useState('');
+  const [employeeLoadedCount, setEmployeeLoadedCount] = useState(0);
+  const [employeeTotalCount, setEmployeeTotalCount] = useState(0);
+  const [loadingMoreEmployees, setLoadingMoreEmployees] = useState(false);
+  const employeeFetchRef = useRef({ generation: 0, loadingMore: false });
+  const autoSelectedEmployeeIdsRef = useRef(new Set());
 
   // Optional effective range for "Specific employees". When `from` is set the
   // assignment is written as dated ShiftSchedule overrides rather than changing
@@ -88,19 +96,25 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
 
   const [preview, setPreview] = useState(null);
   const [previewing, setPreviewing] = useState(false);
+  const [checkingConflicts, setCheckingConflicts] = useState(false);
+  const [conflictingEmployees, setConflictingEmployees] = useState([]);
+  const [showAllConflicts, setShowAllConflicts] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const individual = mode === 'individual';
+  const todayDate = moment().format('YYYY-MM-DD');
   const hasFilter = individual
     ? employeeIds.length > 0
     : locations.length > 0 || departmentIds.length > 0;
   const dated = individual && Boolean(effectiveFrom);
+  const startDateInvalid = dated && effectiveFrom !== todayDate;
   const dateRangeInvalid = dated && effectiveTo && effectiveTo < effectiveFrom;
   // An empty filter set means "everyone", so the server refuses it unless
   // `allEmployees` is set explicitly. Mirror that here rather than letting the
   // admin hit a 400.
   const canSubmit =
     Boolean(selectedShiftId) &&
+    !startDateInvalid &&
     !dateRangeInvalid &&
     (hasFilter || (!individual && allEmployees));
 
@@ -173,16 +187,55 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
     };
   }, [open, shift]);
 
-  // Debounced server-side search: the picker has to work on a roster too large
-  // to ship to the browser in one go.
+  // A different shift has a different existing roster. Clear both the visible
+  // selection and the memory used to respect a user's manual deselection.
+  useEffect(() => {
+    setEmployeeIds([]);
+    autoSelectedEmployeeIdsRef.current.clear();
+  }, [selectedShiftId]);
+
+  const selectNewlyLoadedAssignedEmployees = useCallback((employees) => {
+    if (!selectedShiftId) return;
+    const newlyAssignedIds = employees
+      .filter((employee) => {
+        const employeeShiftId = employee.shiftId?._id || employee.shiftId;
+        return String(employeeShiftId || '') === String(selectedShiftId);
+      })
+      .map((employee) => String(employee._id))
+      .filter((id) => !autoSelectedEmployeeIdsRef.current.has(id));
+
+    employees.forEach((employee) => {
+      const employeeShiftId = employee.shiftId?._id || employee.shiftId;
+      if (String(employeeShiftId || '') === String(selectedShiftId)) {
+        autoSelectedEmployeeIdsRef.current.add(String(employee._id));
+      }
+    });
+    if (newlyAssignedIds.length) {
+      setEmployeeIds((current) => [...new Set([...current, ...newlyAssignedIds])]);
+    }
+  }, [selectedShiftId]);
+
+  // Debounced first page + server-side search. Further pages are appended when
+  // the options panel is scrolled near the bottom.
   useEffect(() => {
     if (!open || !individual) return undefined;
     let cancelled = false;
+    const generation = employeeFetchRef.current.generation + 1;
+    employeeFetchRef.current = { generation, loadingMore: false };
+    setLoadingMoreEmployees(false);
+    setEmployeeLoadedCount(0);
+    setEmployeeTotalCount(0);
     const timer = setTimeout(async () => {
       try {
-        const res = await searchAssignableEmployees(employeeQuery, 50);
-        if (cancelled) return;
+        const res = await searchAssignableEmployees({
+          search: employeeQuery,
+          skip: 0,
+          limit: EMPLOYEE_PAGE_SIZE,
+          prioritizeShiftId: selectedShiftId,
+        });
+        if (cancelled || employeeFetchRef.current.generation !== generation) return;
         const found = res?.data?.body?.data?.employees || [];
+        selectNewlyLoadedAssignedEmployees(found);
         setEmployeeOptions((previous) => {
           // Keep already-selected staff in the list, otherwise narrowing the
           // search would drop them from the trigger's summary.
@@ -201,6 +254,8 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
           });
           return [...merged.values()];
         });
+        setEmployeeLoadedCount(found.length);
+        setEmployeeTotalCount(res?.data?.body?.data?.matched ?? found.length);
       } catch {
         /* the picker just stays as it was */
       }
@@ -209,10 +264,62 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
       cancelled = true;
       clearTimeout(timer);
     };
-    // `employeeIds` is read only to preserve selections, so it is intentionally
+    // `employeeIds` is read only inside the state updater, so it is intentionally
     // not a trigger — re-running on every tick would fight the user's typing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, individual, employeeQuery]);
+  }, [open, individual, employeeQuery, selectedShiftId, selectNewlyLoadedAssignedEmployees]);
+
+  const loadMoreEmployees = useCallback(async () => {
+    if (
+      employeeFetchRef.current.loadingMore ||
+      employeeLoadedCount >= employeeTotalCount
+    ) return;
+
+    const generation = employeeFetchRef.current.generation;
+    employeeFetchRef.current.loadingMore = true;
+    setLoadingMoreEmployees(true);
+    try {
+      const res = await searchAssignableEmployees({
+        search: employeeQuery,
+        skip: employeeLoadedCount,
+        limit: EMPLOYEE_PAGE_SIZE,
+        prioritizeShiftId: selectedShiftId,
+      });
+      if (employeeFetchRef.current.generation !== generation) return;
+      const found = res?.data?.body?.data?.employees || [];
+      selectNewlyLoadedAssignedEmployees(found);
+      setEmployeeOptions((previous) => {
+        const merged = new Map(previous.map((option) => [option.id, option]));
+        found.forEach((employee) => {
+          merged.set(employee._id, {
+            id: employee._id,
+            label: [
+              employeeName(employee),
+              employee.departmentId?.departmentName || employee.location,
+            ]
+              .filter(Boolean)
+              .join(' · '),
+          });
+        });
+        return [...merged.values()];
+      });
+      setEmployeeLoadedCount((count) => count + found.length);
+      setEmployeeTotalCount(res?.data?.body?.data?.matched ?? 0);
+    } catch {
+      toast.error('Failed to load more employees');
+    } finally {
+      if (employeeFetchRef.current.generation === generation) {
+        employeeFetchRef.current.loadingMore = false;
+        setLoadingMoreEmployees(false);
+      }
+    }
+  }, [
+    employeeLoadedCount,
+    employeeTotalCount,
+    employeeQuery,
+    selectedShiftId,
+    selectNewlyLoadedAssignedEmployees,
+  ]);
 
   const runPreview = useCallback(async () => {
     setPreviewing(true);
@@ -239,6 +346,14 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
     setEmployeeIds([]);
     setEmployeeOptions([]);
     setEmployeeQuery('');
+    setEmployeeLoadedCount(0);
+    setEmployeeTotalCount(0);
+    setLoadingMoreEmployees(false);
+    employeeFetchRef.current = {
+      generation: employeeFetchRef.current.generation + 1,
+      loadingMore: false,
+    };
+    autoSelectedEmployeeIdsRef.current.clear();
     setEffectiveFrom('');
     setEffectiveTo('');
     setLocations([]);
@@ -247,16 +362,22 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
     setOverwriteExisting(true);
     setIncludeSuspended(false);
     setPreview(null);
+    setCheckingConflicts(false);
+    setConflictingEmployees([]);
+    setShowAllConflicts(false);
     setSelectedShiftId(shift?._id || '');
   };
 
   const handleOpenChange = (next) => {
+    // The conflict confirmation is portalled outside the Radix dialog. Treat
+    // interactions with it as belonging to the flow instead of letting Radix
+    // close and reset the assignment modal underneath it.
+    if (!next && conflictingEmployees.length > 0) return;
     setOpen(next);
     if (!next) reset();
   };
 
-  const handleAssign = async () => {
-    if (!canSubmit) return;
+  const commitAssignment = async () => {
     setSubmitting(true);
     try {
       if (dated) {
@@ -289,16 +410,75 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
     }
   };
 
+  const findConflictingEmployees = async () => {
+    const employees = [];
+    let skip = 0;
+    let total = employeeIds.length;
+
+    while (skip < total) {
+      const res = await previewAssignment({
+        employeeIds,
+        includeSuspended: true,
+        skip,
+        limit: 200,
+      });
+      const data = res?.data?.body?.data || {};
+      const page = data.employees || [];
+      total = data.matched ?? total;
+      employees.push(...page);
+      if (!page.length) break;
+      skip += page.length;
+    }
+
+    return employees.filter((employee) => {
+      const currentShiftId = employee.shiftId?._id || employee.shiftId;
+      return currentShiftId && String(currentShiftId) !== String(selectedShiftId);
+    });
+  };
+
+  const handleAssign = async () => {
+    if (!canSubmit || checkingConflicts || submitting) return;
+
+    // Date-range assignments are temporary overrides and do not replace the
+    // employee's standing shift, so only the standing individual flow warns.
+    if (individual && !dated) {
+      setCheckingConflicts(true);
+      try {
+        const conflicts = await findConflictingEmployees();
+        if (conflicts.length) {
+          setConflictingEmployees(conflicts);
+          setShowAllConflicts(false);
+          return;
+        }
+      } catch {
+        toast.error('Could not check existing shift assignments');
+        return;
+      } finally {
+        setCheckingConflicts(false);
+      }
+    }
+
+    await commitAssignment();
+  };
+
   const activeShiftName =
     shift?.name || shiftOptions.find((option) => option._id === selectedShiftId)?.name || '';
 
+  const firstConflict = conflictingEmployees[0] || null;
+  const otherConflictCount = Math.max(0, conflictingEmployees.length - 1);
+
   return (
+    <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent
         className="bg-[var(--bg1solid)] border border-[var(--bd)] rounded-[18px] p-4 sm:p-5 shadow-xl w-[94vw] max-w-[640px] max-h-[92vh] overflow-y-auto overflow-x-hidden top-1/2 left-1/2 translate-x-[-50%] translate-y-[-50%] hide-scrollbar scrollbar-hide"
         closeBtn="text-[var(--tx2)] hover:text-[var(--tx)] transition-colors top-5 right-5"
         onInteractOutside={(event) => {
+          if (conflictingEmployees.length > 0) {
+            event.preventDefault();
+            return;
+          }
           // The date pickers portal their calendar to <body>, so a click inside
           // one reads as "outside" the dialog — don't let it close the modal.
           if (event.target instanceof Element && event.target.closest('.vq-datepicker-pop')) {
@@ -385,13 +565,16 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
                 value={employeeIds}
                 onChange={setEmployeeIds}
                 onSearchChange={setEmployeeQuery}
+                onLoadMore={loadMoreEmployees}
+                hasMore={employeeLoadedCount < employeeTotalCount}
+                loadingMore={loadingMoreEmployees}
                 placeholder="Select employees…"
                 searchPlaceholder="Search by name or email…"
                 msg="No employees found"
                 tint="#22c55e"
               />
               <p className="text-[11px] text-[var(--tx3)] mt-1.5 ml-1">
-                Type to search the full roster — the list shows the first 50 matches.
+                Scroll to load the full roster, or type to search by name or email.
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
@@ -399,14 +582,19 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
                   <label className={labelClass}>From</label>
                   <SingleDatePicker
                     value={effectiveFrom}
-                    maxDate={effectiveTo || undefined}
+                    minDate={todayDate}
+                    maxDate={todayDate}
                     placeholder="Select start date"
                     clearable
                     onChange={(date) => {
-                      setEffectiveFrom(date);
+                      const allowedDate = !date || date === todayDate ? date : '';
+                      setEffectiveFrom(allowedDate);
                       // From gates the dated mode — clearing it (or moving it
                       // past the end) drops a now-invalid end date too.
-                      if (!date || (effectiveTo && date && effectiveTo < date)) setEffectiveTo('');
+                      if (
+                        !allowedDate ||
+                        (effectiveTo && allowedDate && effectiveTo < allowedDate)
+                      ) setEffectiveTo('');
                     }}
                   />
                 </div>
@@ -422,7 +610,9 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
                 </div>
               </div>
               <p className="text-[11px] text-[var(--tx3)] mt-1.5 ml-1">
-                {dateRangeInvalid
+                {startDateInvalid
+                  ? 'The start date must be today.'
+                  : dateRangeInvalid
                   ? 'The end date is before the start date.'
                   : dated
                   ? 'Scheduled for the selected day(s) only — the standing shift is unchanged.'
@@ -559,10 +749,12 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
           <Button
             type="button"
             onClick={handleAssign}
-            disabled={!canSubmit || submitting || preview?.matched === 0}
+            disabled={!canSubmit || checkingConflicts || submitting || preview?.matched === 0}
             className="bg-[var(--blue)] hover:opacity-95 active:scale-95 text-white rounded-[10px] transition-all cursor-pointer shadow-sm shadow-[var(--blue)]/20 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {submitting
+            {checkingConflicts
+              ? 'Checking…'
+              : submitting
               ? 'Assigning…'
               : dated
               ? 'Schedule shift'
@@ -571,6 +763,67 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <ConfirmationModal
+      open={conflictingEmployees.length > 0}
+      title="Replace existing shifts?"
+      icon={<AlertTriangle className="w-5 h-5 text-[var(--warn)]" />}
+      confirmLabel="Replace and assign"
+      confirmClass="bg-[var(--warn)] text-white hover:opacity-90 shadow-sm shadow-[var(--warn)]/20"
+      loading={submitting}
+      onClose={() => {
+        if (submitting) return;
+        setConflictingEmployees([]);
+        setShowAllConflicts(false);
+      }}
+      onConfirm={async () => {
+        setConflictingEmployees([]);
+        setShowAllConflicts(false);
+        await commitAssignment();
+      }}
+      message={firstConflict ? (
+        <div className="text-left">
+          <p className="text-center">
+            <strong className="text-[var(--tx)]">{employeeName(firstConflict)}</strong>{' '}
+            <span className="text-[11px] text-[var(--tx3)]">
+              ({firstConflict.shiftId?.name || 'Current shift'})
+            </span>
+            {otherConflictCount > 0 && (
+              <>
+                {' '}and{' '}
+                <button
+                  type="button"
+                  onClick={() => setShowAllConflicts((shown) => !shown)}
+                  className="font-semibold text-[var(--brand)] underline underline-offset-2 cursor-pointer"
+                >
+                  {otherConflictCount} other{otherConflictCount === 1 ? '' : 's'}
+                </button>
+              </>
+            )}{' '}
+            {conflictingEmployees.length === 1 ? 'is' : 'are'} already assigned to another shift.
+          </p>
+
+          {showAllConflicts && (
+            <div className="mt-3 max-h-44 overflow-y-auto customscrollbar rounded-lg border border-[var(--bd)] bg-[var(--bg2)] divide-y divide-[var(--bd)]">
+              {conflictingEmployees.map((employee) => (
+                <div key={employee._id} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <span className="min-w-0 truncate text-xs text-[var(--tx)]">
+                    {employeeName(employee)}
+                  </span>
+                  <span className="shrink-0 text-[10px] text-[var(--tx3)]">
+                    ({employee.shiftId?.name || 'Current shift'})
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="mt-3 text-center text-xs text-[var(--tx3)]">
+            Continuing will replace their existing shift with {activeShiftName || 'the selected shift'}.
+          </p>
+        </div>
+      ) : null}
+    />
+    </>
   );
 };
 
