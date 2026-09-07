@@ -1759,9 +1759,20 @@ async bulkImportAuthUser(req, res, next) {
         return res.status(404).json(Response.userFailResp("Admin not found!", "Validation Failed!"));
       }
 
+      // Status changes must not rebuild or clear the employee's standing
+      // shift. Keep the existing reference explicitly so reactivation cannot
+      // make the UI fall back to a different/default shift.
+      const currentUser = await authorizedUsersModel
+        .findOne({ _id: userId, adminId: isAdminExist._id })
+        .select("shiftId")
+        .lean();
+      if (!currentUser) {
+        return res.status(404).json(Response.userFailResp("Authorized user not found", "Validation Failed!"));
+      }
+
       const updatedUser = await authorizedUsersModel.findOneAndUpdate(
         { _id: userId, adminId: isAdminExist._id },
-        { status },
+        { $set: { status, shiftId: currentUser.shiftId ?? null } },
         { new: true },
       );
       if (!updatedUser) {

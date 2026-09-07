@@ -231,6 +231,16 @@ describe("GET/POST /api/v2/shifts/schedule", () => {
       expect(data.employees[0].firstName).toBe("Nadia");
     });
 
+    it("searches a full name stored across first and last name fields", async () => {
+      const forward = inner(await getSchedule({ search: "Nadia Mehta" })).data;
+      const reverse = inner(await getSchedule({ search: "mehta nadia" })).data;
+
+      expect(forward.total).toBe(1);
+      expect(forward.employees[0].firstName).toBe("Nadia");
+      expect(reverse.total).toBe(1);
+      expect(reverse.employees[0].firstName).toBe("Nadia");
+    });
+
     it("searches by employee code", async () => {
       const data = inner(await getSchedule({ search: "435" })).data;
       expect(data.total).toBe(1);

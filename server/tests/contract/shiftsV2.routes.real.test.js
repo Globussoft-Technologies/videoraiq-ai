@@ -62,6 +62,9 @@ const { default: shiftsRoutes } = await import(
 );
 const { default: Admin } = await import("../../core/v1/admin/admin.model.js");
 const { default: Shift } = await import("../../core/v2/shifts/shifts.model.js");
+const { default: ShiftSchedule } = await import(
+  "../../core/v2/shifts/shiftSchedule.model.js"
+);
 const { default: AuthorizedUser } = await import(
   "../../core/v2/authorizedUsers/authorizedUsers.model.js"
 );
@@ -124,6 +127,19 @@ const makeEmployee = (over = {}) =>
     location: "Pune",
     ...over,
   });
+
+const todayInKolkata = () => {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = Object.fromEntries(
+    formatter.formatToParts(new Date()).map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
 
 describe("POST /api/v2/shifts", () => {
   it("creates a shift from the Create Shift form payload (201)", async () => {
@@ -215,14 +231,35 @@ describe("GET /api/v2/shifts", () => {
     expect(inner(res).data.shifts[0].name).toBe("Mine");
   });
 
-  it("reports how many employees hold each shift", async () => {
+  it("counts unique permanent and currently scheduled employees", async () => {
     const shift = await Shift.create({ adminId: admin._id, name: "Morning" });
-    await makeEmployee({ email: "a@t.com", shiftId: shift._id });
+    const permanentAndScheduled = await makeEmployee({ email: "a@t.com", shiftId: shift._id });
     await makeEmployee({ email: "b@t.com", shiftId: shift._id });
-    await makeEmployee({ email: "c@t.com" });
+    const scheduledOnly = await makeEmployee({ email: "c@t.com" });
+    const expired = await makeEmployee({ email: "expired@t.com" });
+    await ShiftSchedule.create([
+      {
+        adminId: admin._id,
+        employee: permanentAndScheduled._id,
+        shiftId: shift._id,
+        date: todayInKolkata(),
+      },
+      {
+        adminId: admin._id,
+        employee: scheduledOnly._id,
+        shiftId: shift._id,
+        date: todayInKolkata(),
+      },
+      {
+        adminId: admin._id,
+        employee: expired._id,
+        shiftId: shift._id,
+        date: "2000-01-01",
+      },
+    ]);
 
     const res = await request(app).get("/api/v2/shifts");
-    expect(inner(res).data.shifts[0].assignedEmployees).toBe(2);
+    expect(inner(res).data.shifts[0].assignedEmployees).toBe(3);
   });
 
   it("filters by case-insensitive name", async () => {
@@ -329,6 +366,52 @@ describe("POST /api/v2/shifts/:id/assign", () => {
 
     expect(res.status).toBe(200);
     expect(inner(res).data.modified).toBe(1);
+    expect(String((await AuthorizedUser.findById(employee._id)).shiftId)).toBe(
+      String(shift._id),
+    );
+  });
+
+  it("clears provisional day overrides when assigning a first standing shift", async () => {
+    const employee = await AuthorizedUser.findOne({ email: "p-eng@t.com" });
+    const temporaryShift = await Shift.create({ adminId: admin._id, name: "Temporary" });
+    await ShiftSchedule.create({
+      adminId: admin._id,
+      employee: employee._id,
+      shiftId: temporaryShift._id,
+      date: "2026-09-02",
+    });
+
+    const res = await request(app)
+      .post(`/api/v2/shifts/${shift._id}/assign`)
+      .send({ employeeIds: [employee._id.toString()] });
+
+    expect(res.status).toBe(200);
+    expect(inner(res).data.clearedTemporaryOverrides).toBe(1);
+    expect(await ShiftSchedule.countDocuments({ employee: employee._id })).toBe(0);
+    expect(String((await AuthorizedUser.findById(employee._id)).shiftId)).toBe(
+      String(shift._id),
+    );
+  });
+
+  it("preserves deliberate day overrides when changing an existing standing shift", async () => {
+    const employee = await AuthorizedUser.findOne({ email: "p-eng@t.com" });
+    const oldStanding = await Shift.create({ adminId: admin._id, name: "Old standing" });
+    const dayOverride = await Shift.create({ adminId: admin._id, name: "Day override" });
+    await AuthorizedUser.findByIdAndUpdate(employee._id, { shiftId: oldStanding._id });
+    await ShiftSchedule.create({
+      adminId: admin._id,
+      employee: employee._id,
+      shiftId: dayOverride._id,
+      date: "2026-09-02",
+    });
+
+    const res = await request(app)
+      .post(`/api/v2/shifts/${shift._id}/assign`)
+      .send({ employeeIds: [employee._id.toString()] });
+
+    expect(res.status).toBe(200);
+    expect(inner(res).data.clearedTemporaryOverrides).toBe(0);
+    expect(await ShiftSchedule.countDocuments({ employee: employee._id })).toBe(1);
     expect(String((await AuthorizedUser.findById(employee._id)).shiftId)).toBe(
       String(shift._id),
     );
@@ -487,6 +570,54 @@ describe("POST /api/v2/shifts/assignments/preview", () => {
     expect(inner(res).data.unassigned).toBe(1);
   });
 
+  it("shows only assignable employees when overwriteExisting is false", async () => {
+    const shift = await Shift.create({ adminId: admin._id, name: "Evening" });
+    await AuthorizedUser.findOneAndUpdate({ email: "p1@t.com" }, { shiftId: shift._id });
+
+    const withoutReplacement = await request(app)
+      .post("/api/v2/shifts/assignments/preview")
+      .send({ overwriteExisting: false, limit: 10 });
+    const withReplacement = await request(app)
+      .post("/api/v2/shifts/assignments/preview")
+      .send({ overwriteExisting: true, limit: 10 });
+
+    expect(inner(withoutReplacement).data.matched).toBe(2);
+    expect(inner(withoutReplacement).data.unassigned).toBe(2);
+    expect(inner(withoutReplacement).data.alreadyAssigned).toBe(1);
+    expect(
+      inner(withoutReplacement).data.employees.every((employee) => !employee.shiftId),
+    ).toBe(true);
+    expect(inner(withReplacement).data.matched).toBe(3);
+    expect(inner(withReplacement).data.employees).toHaveLength(3);
+  });
+
+  it("puts employees on a prioritized shift first without breaking pagination", async () => {
+    const shift = await Shift.create({ adminId: admin._id, name: "Morning" });
+    await AuthorizedUser.updateMany(
+      { email: { $in: ["p2@t.com", "m1@t.com"] } },
+      { shiftId: shift._id },
+    );
+
+    const firstPage = await request(app)
+      .post("/api/v2/shifts/assignments/preview")
+      .send({ prioritizeShiftId: shift._id.toString(), skip: 0, limit: 2 });
+    const secondPage = await request(app)
+      .post("/api/v2/shifts/assignments/preview")
+      .send({ prioritizeShiftId: shift._id.toString(), skip: 2, limit: 2 });
+
+    expect(firstPage.status).toBe(200);
+    expect(inner(firstPage).data.employees).toHaveLength(2);
+    expect(
+      inner(firstPage).data.employees.every(
+        (employee) => String(employee.shiftId._id) === String(shift._id),
+      ),
+    ).toBe(true);
+    expect(inner(secondPage).data.employees).toHaveLength(1);
+    expect(inner(secondPage).data.employees[0].shiftId).toBeNull();
+    expect(inner(firstPage).data.matched).toBe(3);
+    expect(inner(secondPage).data.matched).toBe(3);
+  });
+
   // Read-only, so an empty filter set previews the whole org rather than
   // erroring — that is what drives the running count in the Bulk Assign modal.
   it("previews the whole org for an empty filter set", async () => {
@@ -557,15 +688,44 @@ describe("GET /api/v2/shifts/:id/employees", () => {
   it("returns the roster for one shift", async () => {
     const shift = await Shift.create({ adminId: admin._id, name: "Morning" });
     const other = await Shift.create({ adminId: admin._id, name: "Evening" });
-    await makeEmployee({ email: "a@t.com", shiftId: shift._id });
+    const permanent = await makeEmployee({ email: "a@t.com", shiftId: shift._id });
     await makeEmployee({ email: "b@t.com", shiftId: shift._id });
-    await makeEmployee({ email: "c@t.com", shiftId: other._id });
+    const temporary = await makeEmployee({ email: "c@t.com", shiftId: other._id });
+    const today = todayInKolkata();
+    const tomorrowDate = new Date(`${today}T00:00:00Z`);
+    tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1);
+    const tomorrow = tomorrowDate.toISOString().slice(0, 10);
+    await ShiftSchedule.create([
+      {
+        adminId: admin._id,
+        employee: temporary._id,
+        shiftId: shift._id,
+        date: today,
+      },
+      {
+        adminId: admin._id,
+        employee: temporary._id,
+        shiftId: shift._id,
+        date: tomorrow,
+      },
+    ]);
 
     const res = await request(app).get(`/api/v2/shifts/${shift._id}/employees`);
 
     expect(res.status).toBe(200);
-    expect(inner(res).data.total).toBe(2);
+    expect(inner(res).data.total).toBe(3);
     expect(inner(res).data.shiftName).toBe("Morning");
+    expect(
+      inner(res).data.employees.find((employee) => employee._id === String(permanent._id))
+        .permanentAssignment,
+    ).toBe(true);
+    const temporaryRow = inner(res).data.employees.find(
+      (employee) => employee._id === String(temporary._id),
+    );
+    expect(temporaryRow.temporaryAssignment).toBe(true);
+    expect(temporaryRow.permanentAssignment).toBe(false);
+    expect(temporaryRow.temporaryFrom).toBe(today);
+    expect(temporaryRow.temporaryTo).toBe(tomorrow);
   });
 });
 

@@ -39,7 +39,7 @@ export const scheduleAssignValidator = Joi.object({
   // override — clearing restores the standing shift, this suppresses it.
   shiftId: objectId("Shift id").allow(null).default(null),
   isOff: Joi.boolean().default(false),
-  dayType: Joi.string().valid("full", "half").default("full"),
+  dayType: Joi.string().valid("full", "half").allow(null).default(null),
   note: Joi.string().trim().allow("", null).max(200),
 });
 
@@ -48,7 +48,7 @@ export const scheduleBulkAssignValidator = Joi.object({
   employeeIds: Joi.array().items(objectId("Employee id")).single().min(1).required(),
   shiftId: objectId("Shift id").allow(null).default(null),
   isOff: Joi.boolean().default(false),
-  dayType: Joi.string().valid("full", "half").default("full"),
+  dayType: Joi.string().valid("full", "half").allow(null).default(null),
   // Either an explicit list of dates, or a from/to range.
   dates: Joi.array().items(dateKey("date")).single(),
   from: dateKey("from"),
@@ -78,6 +78,7 @@ export const scheduleBulkAssignValidator = Joi.object({
 /** Remove overrides so the days inherit the standing shift again. */
 export const scheduleClearValidator = Joi.object({
   employeeIds: Joi.array().items(objectId("Employee id")).single().min(1).required(),
+  shiftId: objectId("Shift id").allow(null),
   dates: Joi.array().items(dateKey("date")).single(),
   from: dateKey("from"),
   to: dateKey("to"),

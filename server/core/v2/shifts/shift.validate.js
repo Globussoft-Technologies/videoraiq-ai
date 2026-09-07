@@ -150,6 +150,9 @@ export const assignmentFilterValidator = Joi.object(assignmentFilters).custom(
 export const assignmentPreviewValidator = Joi.object({
   ...assignmentFilters,
   search: Joi.string().trim().allow("").max(120).default(""),
+  // Ordering hint for employee pickers. It does not filter the result; staff
+  // already on this shift are returned before the rest of the roster.
+  prioritizeShiftId: objectId("Prioritized shift id"),
   skip: Joi.number().integer().min(0).default(0),
   limit: Joi.number().integer().min(1).max(200).default(10),
 });

@@ -6,6 +6,7 @@ import {
   monthRange,
   resolveScheduledDay,
 } from "../../v1/shifts/shiftSchedule.resolve.js";
+import { resolveShiftDay } from "../../v1/shifts/shifts.model.js";
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
 import logger from "../../../utils/logger.js";
 import Response from "../../../utils/response.js";
@@ -60,12 +61,18 @@ function buildEmployeeQuery(adminId, filters = {}) {
 
   const search = String(filters.search || "").trim();
   if (search) {
-    const regex = new RegExp(escapeRegex(search), "i");
-    const or = [{ firstName: regex }, { lastName: regex }, { email: regex }];
-    // emp_id is numeric, so only match it when the search actually is a number
-    // — a $or against a Number path with a regex would throw a CastError.
-    if (/^\d+$/.test(search)) or.push({ emp_id: Number(search) });
-    query.$or = or;
+    // Names are stored in separate fields, so the complete text "Aarav Mehta"
+    // cannot match either field by itself. Require every whitespace-delimited
+    // term to match one identity field, which supports full names in either
+    // order while preserving partial-name and email searches.
+    query.$and = search.split(/\s+/).map((term) => {
+      const regex = new RegExp(escapeRegex(term), "i");
+      const or = [{ firstName: regex }, { lastName: regex }, { email: regex }];
+      // emp_id is numeric, so only match numeric terms against it — a regex on
+      // a Number path would throw a CastError.
+      if (/^\d+$/.test(term)) or.push({ emp_id: Number(term) });
+      return { $or: or };
+    });
   }
 
   const locationMatch = buildLocationMatch(toArray(filters.locations));
@@ -269,13 +276,18 @@ class ShiftScheduleService {
         return res.status(404).json(Response.notFoundResp("Shift not found", {}));
       }
 
+      const weekday = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][
+        new Date(`${value.date}T00:00:00Z`).getUTCDay()
+      ];
+      const configuredDayType = shift ? resolveShiftDay(shift, weekday)?.type : null;
+
       const saved = await ShiftSchedule.findOneAndUpdate(
         { adminId: asObjectId(adminId), employee: employee._id, date: value.date },
         {
           $set: {
             shiftId: shift?._id || null,
             isOff: Boolean(value.isOff),
-            dayType: value.isOff ? "off" : value.dayType || "full",
+            dayType: value.isOff ? "off" : value.dayType || configuredDayType || "full",
             note: value.note || null,
             assignedBy: adminId,
           },
@@ -337,7 +349,7 @@ class ShiftScheduleService {
             _id: { $in: value.employeeIds.map(asObjectId) },
             adminId: asObjectId(adminId),
           },
-          { _id: 1 },
+          { _id: 1, shiftId: 1 },
         )
         .setOptions({ memberId })
         .lean();
@@ -359,9 +371,34 @@ class ShiftScheduleService {
           );
       }
 
+      // A range assignment creates explicit day overrides, so it must not
+      // turn an employee's configured weekly offs into working days. Keep only
+      // dates whose standing shift treats that weekday as a workday. Employees
+      // without a standing shift retain the existing behavior and receive the
+      // selected range as explicit overrides.
+      const standingShiftIds = [...new Set(
+        employees.map((employee) => employee.shiftId).filter(Boolean).map(String),
+      )];
+      const standingShifts = standingShiftIds.length
+        ? await Shift.find({ _id: { $in: standingShiftIds.map(asObjectId) }, adminId: asObjectId(adminId) }).lean()
+        : [];
+      const shiftsById = new Map(standingShifts.map((standingShift) => [String(standingShift._id), standingShift]));
+      const datesByEmployee = employees.map((employee) => {
+        const standingShift = employee.shiftId ? shiftsById.get(String(employee.shiftId)) : null;
+        return {
+          employee,
+          dates: dates.filter((date) => {
+            if (!standingShift) return true;
+            const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+            const day = resolveShiftDay(standingShift, ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][weekday]);
+            return day?.type !== "off";
+          }),
+        };
+      });
+
       const operations = [];
-      for (const employee of employees) {
-        for (const date of dates) {
+      for (const { employee, dates: employeeDates } of datesByEmployee) {
+        for (const date of employeeDates) {
           operations.push({
             updateOne: {
               filter: { adminId: asObjectId(adminId), employee: employee._id, date },
@@ -369,7 +406,11 @@ class ShiftScheduleService {
                 $set: {
                   shiftId: shift?._id || null,
                   isOff: Boolean(value.isOff),
-                  dayType: value.isOff ? "off" : value.dayType || "full",
+                  dayType: value.isOff
+                    ? "off"
+                    : value.dayType || (shift
+                      ? resolveShiftDay(shift, ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][new Date(`${date}T00:00:00Z`).getUTCDay()])?.type
+                      : null) || "full",
                   assignedBy: adminId,
                 },
               },
@@ -443,6 +484,7 @@ class ShiftScheduleService {
       const result = await ShiftSchedule.deleteMany({
         adminId: asObjectId(adminId),
         employee: { $in: employees.map((employee) => employee._id) },
+        ...(value.shiftId ? { shiftId: asObjectId(value.shiftId) } : {}),
         ...(value.dates?.length
           ? { date: { $in: value.dates } }
           : { date: { $gte: value.from, $lte: value.to } }),

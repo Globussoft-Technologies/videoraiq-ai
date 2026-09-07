@@ -79,6 +79,16 @@ function formatPeriodDuration(minutes) {
   return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 }
 
+function formatUnitDurationFromMs(ms) {
+  const totalSeconds = Math.max(0, Math.round(Number(ms) / 1000));
+  if (!totalSeconds) return "0m";
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours) return `${hours}h${minutes ? ` ${minutes}m` : ""}`;
+  return `${minutes}m${seconds ? ` ${seconds}s` : ""}`;
+}
+
 function eventCamera(event) {
   return event?.channel?.customName || event?.channel?.name || "-";
 }
@@ -250,6 +260,7 @@ export function rowFromAttendance(item, timezone, rules) {
   //     added into any working figure.
   const breakPairs = pairBreaks(events);
   const breakMinutes = breakMinutesFromPairs(breakPairs);
+  const breakDurationMs = breakDurationMsFromPairs(breakPairs);
 
   // Each break gap keyed by the check-in that ENDED it, so a session can look
   // up how long the employee was away immediately before it started. Keying by
@@ -316,7 +327,7 @@ export function rowFromAttendance(item, timezone, rules) {
     workingHoursDay: formatPeriodDuration(workingMinutesDay),
     // The day line shows the first work session, and nothing precedes it.
     breakBefore: firstSessionCells ? firstSessionCells.breakBefore : "-",
-    breakHoursDay: formatPeriodDuration(breakMinutes),
+    breakHoursDay: formatUnitDurationFromMs(breakDurationMs),
     // Filled in by applyPeriodTotals once every day for this employee has been read.
     workingHoursPeriod: "00:00:00",
     // Per-employee period total sums this (the summed session working minutes).
@@ -340,7 +351,9 @@ export function rowFromAttendance(item, timezone, rules) {
         index: index + 1,
         outAt: formatClock(pair.checkout.timestamp, timezone),
         inAt: formatClock(pair.checkin.timestamp, timezone),
-        duration: formatPeriodDuration(minutes),
+        duration: formatUnitDurationFromMs(
+          new Date(pair.checkin.timestamp) - new Date(pair.checkout.timestamp),
+        ),
         minutes,
         outCamera: eventCamera(pair.checkout),
         inCamera: eventCamera(pair.checkin),
@@ -744,7 +757,10 @@ export async function buildPdf({ report, rows, label, timezone, columns: columnS
         const opts = { width: col.width - PAD_X * 2, lineBreak: Boolean(col.wrap) };
         if (!col.wrap) opts.ellipsis = true;
         if (value && typeof value === "object") {
-          document.fillColor(V2_BLUE).text(value.text, x + PAD_X, y + V_PAD, { ...opts, link: value.link, underline: true });
+          document.fillColor(V2_BLUE).text(value.text, x + PAD_X, y + V_PAD, { ...opts, underline: true });
+          if (value.link) {
+            pdfExternalLinkNewWindow(document, x + PAD_X, y + V_PAD, opts.width, height - V_PAD * 2, value.link);
+          }
         } else if (value !== "" && value != null) {
           document.fillColor(emphasise ? "#173b83" : "#2e3b55").text(String(value), x + PAD_X, y + V_PAD, opts);
         }
@@ -849,9 +865,9 @@ function downloadButton(file) {
   // The workbook is a different report, not another rendering of the same
   // table, so it says so rather than just naming its file extension.
   const LABELS = {
-    xlsx: "Download Monthly Status",
-    breakPdf: "Break Logs (PDF)",
-    breakXlsx: "Break Logs (Excel)",
+    xlsx: "Download Excel",
+    breakPdf: "Download Break Log PDF",
+    breakXlsx: "Download Break Log Excel",
   };
   const label = LABELS[format] || `Download ${file.format.toUpperCase()}`;
   const url = escapeHtml(file.url);
@@ -880,6 +896,28 @@ function downloadButton(file) {
       </a>
       <!--<![endif]-->
     </td>`;
+}
+
+// PDF links normally reuse the current viewer tab. Mark report image links as
+// new-window URI actions so the report stays open while the image is viewed.
+function pdfExternalLinkNewWindow(document, x, y, width, height, url) {
+  const action = document.ref({
+    S: "URI",
+    URI: new String(url),
+    NewWindow: true,
+  });
+  action.end();
+  // Keep the flag on the annotation as well as the URI action. PDF viewers
+  // differ on which location they inspect when deciding whether to reuse the
+  // current tab.
+  document.annotate(x, y, width, height, { Subtype: "Link", A: action, NewWindow: true });
+}
+
+function breakDurationMsFromPairs(pairs) {
+  return pairs.reduce((sum, pair) => {
+    const ms = new Date(pair.checkin.timestamp) - new Date(pair.checkout.timestamp);
+    return sum + (ms > 0 ? ms : 0);
+  }, 0);
 }
 
 function emailHtml(report, details) {
@@ -1045,6 +1083,12 @@ export function publicUrlFor(mediaPath) {
   return `${config.get("ImageView")}${mediaPath.startsWith("/") ? "" : "/"}${mediaPath}`;
 }
 
+function reportDownloadUrl(mediaPath, extension) {
+  const url = new URL(publicUrlFor(mediaPath));
+  url.searchParams.set("download", `attendance-report.${extension}`);
+  return url.toString();
+}
+
 /**
  * Uploads the report's generated files (PDF/CSV buffers) to whichever media
  * backend this deployment runs (NAS over SFTP, or Oracle Object Storage —
@@ -1058,23 +1102,23 @@ export async function uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer
   const files = [];
   if (pdfBuffer) {
     const path = await putMedia({ buffer: pdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.pdf` });
-    files.push({ format: "pdf", path, url: publicUrlFor(path) });
+    files.push({ format: "pdf", path, url: reportDownloadUrl(path, "pdf") });
   }
   if (csvBuffer) {
     const path = await putMedia({ buffer: csvBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.csv` });
-    files.push({ format: "csv", path, url: publicUrlFor(path) });
+    files.push({ format: "csv", path, url: reportDownloadUrl(path, "csv") });
   }
   if (xlsxBuffer) {
     const path = await putMedia({ buffer: xlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.xlsx` });
-    files.push({ format: "xlsx", path, url: publicUrlFor(path) });
+    files.push({ format: "xlsx", path, url: reportDownloadUrl(path, "xlsx") });
   }
   if (breakPdfBuffer) {
     const path = await putMedia({ buffer: breakPdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `break-logs.pdf` });
-    files.push({ format: "breakPdf", path, url: publicUrlFor(path) });
+    files.push({ format: "breakPdf", path, url: reportDownloadUrl(path, "pdf") });
   }
   if (breakXlsxBuffer) {
     const path = await putMedia({ buffer: breakXlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `break-logs.xlsx` });
-    files.push({ format: "breakXlsx", path, url: publicUrlFor(path) });
+    files.push({ format: "breakXlsx", path, url: reportDownloadUrl(path, "xlsx") });
   }
   return files;
 }
@@ -1107,7 +1151,9 @@ async function deliver(report, options = {}) {
   const summary = await streamReportRows(report, options.reference, (row) => rows.push(row));
   applyPeriodTotals(rows);
   const wantsPdf = report.formats.includes("pdf");
-  const wantsCsv = report.formats.includes("csv");
+  // CSV is no longer offered in the report email; keep the legacy format
+  // accepted by validation so existing schedules can still be edited safely.
+  const wantsCsv = false;
   const wantsXlsx = report.formats.includes("xlsx");
   const wantsBreakPdf = report.formats.includes("breakPdf");
   const wantsBreakXlsx = report.formats.includes("breakXlsx");

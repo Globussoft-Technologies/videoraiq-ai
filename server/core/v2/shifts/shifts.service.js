@@ -5,6 +5,8 @@ import Shift, {
   resolveShiftDay,
   weekOffDays,
 } from "./shifts.model.js";
+import ShiftSchedule from "./shiftSchedule.model.js";
+import Admin from "../../v1/admin/admin.model.js";
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
 import logger from "../../../utils/logger.js";
 import Response from "../../../utils/response.js";
@@ -44,6 +46,45 @@ function asObjectId(value) {
   return value instanceof mongoose.Types.ObjectId
     ? value
     : new mongoose.Types.ObjectId(String(value));
+}
+
+function dateKeyInTimezone(timeZone = "Asia/Kolkata") {
+  let formatter;
+  try {
+    formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  } catch {
+    formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  }
+  const parts = Object.fromEntries(
+    formatter.formatToParts(new Date()).map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function moveDateKey(date, days) {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function activeTemporaryRange(dates, today) {
+  const available = new Set(dates);
+  if (!available.has(today)) return null;
+  let from = today;
+  let to = today;
+  while (available.has(moveDateKey(from, -1))) from = moveDateKey(from, -1);
+  while (available.has(moveDateKey(to, 1))) to = moveDateKey(to, 1);
+  return { from, to };
 }
 
 function toArray(value) {
@@ -136,19 +177,47 @@ class ShiftService {
    * Employees per shift in one aggregation rather than a count per row, so the
    * listing stays a fixed two queries however many shifts a tenant has.
    */
-  async #assignedCounts(adminId, shiftIds = []) {
+  async #assignedCounts(adminId, shiftIds = [], date) {
     if (!shiftIds.length) return new Map();
-    const rows = await authorizedUsersModel.aggregate([
-      {
-        $match: {
-          adminId: asObjectId(adminId),
-          shiftId: { $in: shiftIds.map(asObjectId) },
-          liveDemoData: { $ne: true },
+    if (!date) {
+      const admin = await Admin.findById(adminId).select("timezone").lean();
+      date = dateKeyInTimezone(admin?.timezone || "Asia/Kolkata");
+    }
+    const objectIds = shiftIds.map(asObjectId);
+    const [permanentRows, temporaryRows] = await Promise.all([
+      authorizedUsersModel.aggregate([
+        {
+          $match: {
+            adminId: asObjectId(adminId),
+            shiftId: { $in: objectIds },
+            liveDemoData: { $ne: true },
+          },
         },
-      },
-      { $group: { _id: "$shiftId", count: { $sum: 1 } } },
+        { $group: { _id: "$shiftId", employees: { $addToSet: "$_id" } } },
+      ]),
+      ShiftSchedule.aggregate([
+        {
+          $match: {
+            adminId: asObjectId(adminId),
+            shiftId: { $in: objectIds },
+            date,
+            isOff: { $ne: true },
+          },
+        },
+        { $group: { _id: "$shiftId", employees: { $addToSet: "$employee" } } },
+      ]),
     ]);
-    return new Map(rows.map((row) => [String(row._id), row.count]));
+
+    const employeesByShift = new Map();
+    [...permanentRows, ...temporaryRows].forEach((row) => {
+      const key = String(row._id);
+      const employees = employeesByShift.get(key) || new Set();
+      row.employees.forEach((employeeId) => employees.add(String(employeeId)));
+      employeesByShift.set(key, employees);
+    });
+    return new Map(
+      [...employeesByShift].map(([shiftId, employees]) => [shiftId, employees.size]),
+    );
   }
 
   /** At most one default shift per admin. */
@@ -193,7 +262,7 @@ class ShiftService {
       query.shiftId = { $in: [null] };
     }
     return authorizedUsersModel
-      .find(query, { _id: 1 })
+      .find(query, { _id: 1, shiftId: 1 })
       .setOptions({ memberId })
       .lean();
   }
@@ -285,17 +354,19 @@ class ShiftService {
         query.isActive = isActive === "true";
       }
 
-      const [shifts, total] = await Promise.all([
+      const [shifts, total, admin] = await Promise.all([
         Shift.find(query)
           .sort({ isDefault: -1, createdAt: -1 })
           .skip(Number(skip) || 0)
           .limit(Number(limit) || 10),
         Shift.countDocuments(query),
+        Admin.findById(adminId).select("timezone").lean(),
       ]);
 
       const counts = await this.#assignedCounts(
         adminId,
         shifts.map((shift) => shift._id),
+        dateKeyInTimezone(admin?.timezone || "Asia/Kolkata"),
       );
 
       return res.status(200).json(
@@ -498,18 +569,23 @@ class ShiftService {
 
       const adminId = req.verified.userData.adminId;
       const memberId = req.verified.userData.memberId;
-      const query = buildEmployeeQuery(adminId, value);
+      const scopedQuery = buildEmployeeQuery(adminId, value);
 
       // Layered on here rather than inside buildEmployeeQuery so the search
       // can never reach the assign path — see assignmentPreviewValidator.
       if (value.search) {
         const regex = new RegExp(escapeRegex(value.search), "i");
-        query.$or = [{ firstName: regex }, { lastName: regex }, { email: regex }];
+        scopedQuery.$or = [{ firstName: regex }, { lastName: regex }, { email: regex }];
       }
 
-      const [employees, matched] = await Promise.all([
-        authorizedUsersModel
-          .find(query, {
+      // Match the write path: with replacement disabled, the displayed page
+      // contains only employees the assignment can actually update. Keep the
+      // broader scoped query for the skipped/already-assigned count below.
+      const query = value.overwriteExisting === false
+        ? { ...scopedQuery, shiftId: { $in: [null] } }
+        : scopedQuery;
+
+      const projection = {
             firstName: 1,
             lastName: 1,
             email: 1,
@@ -517,27 +593,69 @@ class ShiftService {
             departmentId: 1,
             shiftId: 1,
             status: 1,
-          })
+      };
+      const findEmployees = (extraQuery, skip, limit) =>
+        authorizedUsersModel
+          .find({ ...query, ...extraQuery }, projection)
           .setOptions({ memberId })
           .populate("departmentId", "departmentName")
           .populate("shiftId", "name color startTime endTime")
           .sort({ firstName: 1, _id: 1 })
-          .skip(value.skip)
-          .limit(value.limit)
-          .lean(),
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      const prioritizedShiftId = value.prioritizeShiftId && value.overwriteExisting !== false
+        ? asObjectId(value.prioritizeShiftId)
+        : null;
+      const [matched, alreadyAssigned, prioritizedCount] = await Promise.all([
         authorizedUsersModel.countDocuments(query, { memberId }),
+        authorizedUsersModel.countDocuments(
+          { ...scopedQuery, shiftId: { $ne: null } },
+          { memberId },
+        ),
+        prioritizedShiftId
+          ? authorizedUsersModel.countDocuments(
+              { ...query, shiftId: prioritizedShiftId },
+              { memberId },
+            )
+          : Promise.resolve(0),
       ]);
 
-      const alreadyAssigned = await authorizedUsersModel.countDocuments(
-        { ...query, shiftId: { $ne: null } },
-        { memberId },
-      );
+      let employees;
+      if (!prioritizedShiftId) {
+        employees = await findEmployees({}, value.skip, value.limit);
+      } else {
+        employees = [];
+
+        // Treat the preferred and remaining employees as one virtual list so
+        // skip/limit pagination stays stable across the boundary between them.
+        if (value.skip < prioritizedCount) {
+          employees = await findEmployees(
+            { shiftId: prioritizedShiftId },
+            value.skip,
+            Math.min(value.limit, prioritizedCount - value.skip),
+          );
+        }
+
+        const remainingLimit = value.limit - employees.length;
+        if (remainingLimit > 0) {
+          const remainingSkip = Math.max(0, value.skip - prioritizedCount);
+          const remaining = await findEmployees(
+            { shiftId: { $ne: prioritizedShiftId } },
+            remainingSkip,
+            remainingLimit,
+          );
+          employees.push(...remaining);
+        }
+      }
 
       return res.status(200).json(
         Response.userSuccessResp("Assignment preview generated", {
           matched,
           alreadyAssigned,
-          unassigned: matched - alreadyAssigned,
+          unassigned:
+            value.overwriteExisting === false ? matched : matched - alreadyAssigned,
           employees,
         }),
       );
@@ -596,7 +714,20 @@ class ShiftService {
         excludeShiftId: shift._id,
       });
       const employeeIds = targets.map((employee) => employee._id);
+      // A dated assignment created while an employee had no standing shift is
+      // provisional. Their first standing assignment becomes the new baseline
+      // for every day, so remove those old overrides. Overrides belonging to
+      // employees who already had a standing shift remain deliberate day edits.
+      const firstStandingAssignmentIds = targets
+        .filter((employee) => !employee.shiftId)
+        .map((employee) => employee._id);
       const modified = await this.#applyShift(employeeIds, shift._id);
+      const clearedTemporaryOverrides = firstStandingAssignmentIds.length
+        ? await ShiftSchedule.deleteMany({
+            adminId: asObjectId(adminId),
+            employee: { $in: firstStandingAssignmentIds },
+          })
+        : { deletedCount: 0 };
 
       return res.status(200).json(
         Response.userSuccessResp(
@@ -608,6 +739,7 @@ class ShiftService {
             shiftName: shift.name,
             matched: employeeIds.length,
             modified,
+            clearedTemporaryOverrides: clearedTemporaryOverrides?.deletedCount ?? 0,
           },
         ),
       );
@@ -674,24 +806,44 @@ class ShiftService {
       const memberId = req.verified.userData.memberId;
       const { skip = 0, limit = 10, search = "" } = req.query;
 
-      const shift = await Shift.findOne({
-        _id: req.params.id,
-        adminId: asObjectId(adminId),
-      }).select("_id name");
+      const [shift, admin] = await Promise.all([
+        Shift.findOne({
+          _id: req.params.id,
+          adminId: asObjectId(adminId),
+        }).select("_id name"),
+        Admin.findById(adminId).select("timezone").lean(),
+      ]);
 
       if (!shift) {
         return res.status(404).json(Response.notFoundResp("Shift not found", {}));
       }
 
-      const query = {
+      const today = dateKeyInTimezone(admin?.timezone || "Asia/Kolkata");
+      const temporaryEmployeeIds = await ShiftSchedule.distinct("employee", {
         adminId: asObjectId(adminId),
         shiftId: shift._id,
+        date: today,
+        isOff: { $ne: true },
+      });
+      const temporarySet = new Set(temporaryEmployeeIds.map(String));
+      const query = {
+        adminId: asObjectId(adminId),
         liveDemoData: { $ne: true },
+        $and: [
+          {
+            $or: [
+              { shiftId: shift._id },
+              { _id: { $in: temporaryEmployeeIds } },
+            ],
+          },
+        ],
       };
 
       if (search.trim()) {
         const regex = new RegExp(escapeRegex(search.trim()), "i");
-        query.$or = [{ firstName: regex }, { lastName: regex }, { email: regex }];
+        query.$and.push({
+          $or: [{ firstName: regex }, { lastName: regex }, { email: regex }],
+        });
       }
 
       const [employees, total] = await Promise.all([
@@ -704,6 +856,7 @@ class ShiftService {
             departmentId: 1,
             designation: 1,
             status: 1,
+            shiftId: 1,
           })
           .setOptions({ memberId })
           .populate("departmentId", "departmentName")
@@ -714,12 +867,51 @@ class ShiftService {
         authorizedUsersModel.countDocuments(query, { memberId }),
       ]);
 
+      const pageTemporaryIds = employees
+        .filter((employee) => temporarySet.has(String(employee._id)))
+        .map((employee) => employee._id);
+      const scheduleRows = pageTemporaryIds.length
+        ? await ShiftSchedule.find(
+            {
+              adminId: asObjectId(adminId),
+              employee: { $in: pageTemporaryIds },
+              shiftId: shift._id,
+              isOff: { $ne: true },
+            },
+            { employee: 1, date: 1 },
+          )
+            .sort({ employee: 1, date: 1 })
+            .lean()
+        : [];
+      const datesByEmployee = new Map();
+      scheduleRows.forEach((row) => {
+        const key = String(row.employee);
+        const dates = datesByEmployee.get(key) || [];
+        dates.push(row.date);
+        datesByEmployee.set(key, dates);
+      });
+
+      const presentedEmployees = employees.map((employee) => {
+        const temporaryRange = activeTemporaryRange(
+          datesByEmployee.get(String(employee._id)) || [],
+          today,
+        );
+        return {
+          ...employee,
+          permanentAssignment: String(employee.shiftId || "") === String(shift._id),
+          temporaryAssignment: Boolean(temporaryRange),
+          temporaryFrom: temporaryRange?.from || null,
+          temporaryTo: temporaryRange?.to || null,
+        };
+      });
+
       return res.status(200).json(
         Response.userSuccessResp("Shift employees retrieved successfully", {
           shiftId: shift._id,
           shiftName: shift.name,
-          employees,
+          employees: presentedEmployees,
           total,
+          date: today,
         }),
       );
     } catch (error) {

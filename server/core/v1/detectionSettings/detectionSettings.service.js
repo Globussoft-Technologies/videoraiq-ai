@@ -228,24 +228,32 @@ const emitDetectionScheduleState = async (
     return;
   }
 
-  await sendPayloadToUser(userId, `detectionSchedule_${adminId}`, {
-    source,
-    ...buildSchedulePayload(channel, settingType),
-    channelId: channel._id.toString(),
-    channelName: channel.customName || channel.name,
-    detectionSettingId: detectionSetting._id.toString(),
-    settingType,
-    detectionName: DETECTION_TYPES[settingType] || settingType,
-    enabled: link.enabled === true,
-    at: new Date().toISOString(),
-    // DS call trace
-    operation: ds.operation ?? null,
-    status: ds.status ?? "success",
-    scheduleSource: ds.scheduleSource ?? null,
-    dsEndpoint: ds.endpoint ?? null,
-    dsResponse: ds.response ?? null,
-    dsError: ds.error ?? null,
-  });
+  try {
+    await sendPayloadToUser(userId, `detectionSchedule_${adminId}`, {
+      source,
+      ...buildSchedulePayload(channel, settingType),
+      channelId: channel._id.toString(),
+      channelName: channel.customName || channel.name,
+      detectionSettingId: detectionSetting._id.toString(),
+      settingType,
+      detectionName: DETECTION_TYPES[settingType] || settingType,
+      enabled: link.enabled === true,
+      at: new Date().toISOString(),
+      // DS call trace
+      operation: ds.operation ?? null,
+      status: ds.status ?? "success",
+      scheduleSource: ds.scheduleSource ?? null,
+      dsEndpoint: ds.endpoint ?? null,
+      dsResponse: ds.response ?? null,
+      dsError: ds.error ?? null,
+    });
+  } catch (error) {
+    // Schedule application must never crash the process because the optional
+    // socket notification is unauthorized/stale (for example after logout).
+    logger.warn(
+      `[DETECTION_SCHEDULE] state notification skipped for channel=${channel._id}: ${error?.message || error}`,
+    );
+  }
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -1698,9 +1706,13 @@ class DetectionSettingService {
   startDetectionScheduleRunner() {
     if (scheduleRunnerTimer) return scheduleRunnerTimer;
 
-    this.applyAllDetectionSchedules();
+    this.applyAllDetectionSchedules().catch((error) => {
+      logger.error("Detection schedule runner tick failed:", error);
+    });
     scheduleRunnerTimer = setInterval(
-      () => this.applyAllDetectionSchedules(),
+      () => this.applyAllDetectionSchedules().catch((error) => {
+        logger.error("Detection schedule runner tick failed:", error);
+      }),
       SCHEDULE_RUNNER_INTERVAL_MS,
     );
     scheduleRunnerTimer.unref?.();
