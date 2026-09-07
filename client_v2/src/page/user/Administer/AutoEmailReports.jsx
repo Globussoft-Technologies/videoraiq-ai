@@ -702,7 +702,7 @@ export default function AutoEmailReports() {
     <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
       <div className="vq-auto-report-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {canCreateReports && (
-          <button type="button" onClick={openCreate} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 36, padding: '0 15px', border: 0, borderRadius: 9, background: 'linear-gradient(135deg,var(--blue),var(--violet))', color: '#fff', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, boxShadow: '0 8px 18px rgba(59,130,246,.22)' }}>
+          <button type="button" data-tour="reports-create" onClick={openCreate} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 36, padding: '0 15px', border: 0, borderRadius: 9, background: 'linear-gradient(135deg,var(--blue),var(--violet))', color: '#fff', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, boxShadow: '0 8px 18px rgba(59,130,246,.22)' }}>
             <Plus size={15} /> Create New Report
           </button>
         )}
@@ -731,16 +731,16 @@ export default function AutoEmailReports() {
                 <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--tx2)' }} title={Array.isArray(report.recipients) ? report.recipients.join(', ') : ''}>{report.recipientsLabel}</span>
                 <span style={{ color: 'var(--tx2)' }}>{report.attendanceLabel}</span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  <IconButton title="Preview" busy={busyActionId === `preview:${report._id}`} onClick={() => previewReport(report)}><Eye size={14} /></IconButton>
+                  <IconButton data-tour="reports-preview" title="Preview" busy={busyActionId === `preview:${report._id}`} onClick={() => previewReport(report)}><Eye size={14} /></IconButton>
                   {canEditReports && (
                     <>
-                      <IconButton title="Send test mail" busy={busyActionId === `send:${report._id}`} onClick={() => sendNow(report)}><Send size={14} /></IconButton>
-                      <IconButton title={report.enabled ? 'Pause report' : 'Enable report'} busy={busyActionId === `toggle:${report._id}`} onClick={() => toggleReport(report)}>{report.enabled ? <PauseCircle size={14} /> : <PlayCircle size={14} />}</IconButton>
-                      <IconButton title="Edit report" busy={busyActionId === `edit:${report._id}`} onClick={() => openEdit(report)}><Edit3 size={14} /></IconButton>
+                      <IconButton data-tour="reports-send" title="Send test mail" busy={busyActionId === `send:${report._id}`} onClick={() => sendNow(report)}><Send size={14} /></IconButton>
+                      <IconButton data-tour="reports-toggle" title={report.enabled ? 'Pause report' : 'Enable report'} busy={busyActionId === `toggle:${report._id}`} onClick={() => toggleReport(report)}>{report.enabled ? <PauseCircle size={14} /> : <PlayCircle size={14} />}</IconButton>
+                      <IconButton data-tour="reports-edit" title="Edit report" busy={busyActionId === `edit:${report._id}`} onClick={() => openEdit(report)}><Edit3 size={14} /></IconButton>
                     </>
                   )}
                   {canDeleteReports && (
-                    <button type="button" onClick={() => setDeleteTarget(report)} title="Delete report" aria-label={`Delete ${report.title}`} style={{ ...iconButtonStyle, border: '1px solid rgba(255,77,77,.25)', background: 'rgba(255,77,77,.08)', color: 'var(--crit)', cursor: 'pointer' }}><Trash2 size={14} /></button>
+                    <button type="button" data-tour="reports-delete" onClick={() => setDeleteTarget(report)} title="Delete report" aria-label={`Delete ${report.title}`} style={{ ...iconButtonStyle, border: '1px solid rgba(255,77,77,.25)', background: 'rgba(255,77,77,.08)', color: 'var(--crit)', cursor: 'pointer' }}><Trash2 size={14} /></button>
                   )}
                 </span>
               </div>
@@ -787,9 +787,9 @@ export default function AutoEmailReports() {
   );
 }
 
-function IconButton({ children, title, onClick, busy }) {
+function IconButton({ children, title, onClick, busy, ...props }) {
   return (
-    <button type="button" disabled={busy} onClick={onClick} title={title} aria-label={title} style={{ ...iconButtonStyle, opacity: busy ? .55 : 1, cursor: busy ? 'wait' : 'pointer' }}>
+    <button type="button" {...props} disabled={busy} onClick={onClick} title={title} aria-label={title} style={{ ...iconButtonStyle, opacity: busy ? .55 : 1, cursor: busy ? 'wait' : 'pointer' }}>
       {children}
     </button>
   );

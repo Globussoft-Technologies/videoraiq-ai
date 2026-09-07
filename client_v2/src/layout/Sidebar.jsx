@@ -291,10 +291,14 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
           <div key={group.label} style={{ display: 'contents' }}>
             {collapsed ? (
               gi !== 0 && (
-                <div style={{ height: 1, background: 'var(--bd)', margin: '10px 6px 4px' }} />
+                <div
+                  data-tour={group.label === LOGS_GROUP_LABEL ? 'nav-logs-records' : undefined}
+                  style={{ height: 1, background: 'var(--bd)', margin: '10px 6px 4px' }}
+                />
               )
             ) : group.label === LOGS_GROUP_LABEL ? (
               <div
+                data-tour="nav-logs-records"
                 onClick={toggleLogsCollapsed}
                 title={logsExpanded ? 'Collapse' : 'Expand'}
                 onMouseEnter={() => setLogsHeaderHover(true)}

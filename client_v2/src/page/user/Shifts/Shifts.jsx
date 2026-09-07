@@ -250,6 +250,7 @@ const Shifts = () => {
                 onAssigned={loadShifts}
                 trigger={
                   <button
+                    data-tour="shifts-assign-row"
                     className={`text-[var(--violet)] ${iconButton}`}
                     title={`Assign staff to ${row.original.name}`}
                   >
@@ -264,7 +265,7 @@ const Shifts = () => {
                 initialValues={row.original}
                 onSave={loadShifts}
                 trigger={
-                  <button className={`text-[var(--blue)] ${iconButton}`} title="Edit shift">
+                  <button data-tour="shifts-edit" className={`text-[var(--blue)] ${iconButton}`} title="Edit shift">
                     <FiEdit3 strokeWidth={1.5} className="w-4 h-4 2xl:w-5 2xl:h-5" />
                   </button>
                 }
@@ -272,6 +273,7 @@ const Shifts = () => {
             )}
             {canDelete && (
               <button
+                data-tour="shifts-delete"
                 onClick={() => {
                   setDeleteTarget(row.original);
                   setShowDeleteModal(true);
@@ -297,7 +299,7 @@ const Shifts = () => {
       <div className="w-full flex-1 flex flex-col justify-between p-3 sm:p-6 bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] space-y-4">
         <div className="space-y-4 flex-1">
           <div className="flex flex-wrap items-center gap-3 justify-between">
-            <div className="relative w-full md:w-[30%]">
+            <div data-tour="shifts-search" className="relative w-full md:w-[30%]">
               <Input
                 type="text"
                 placeholder="Search shift..."
@@ -313,7 +315,7 @@ const Shifts = () => {
                 <AssignShiftModal
                   onAssigned={loadShifts}
                   trigger={
-                    <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx)] hover:bg-[var(--bg3)] active:scale-95 transition-all cursor-pointer">
+                    <button data-tour="shifts-bulk-assign" className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx)] hover:bg-[var(--bg3)] active:scale-95 transition-all cursor-pointer">
                       <Users className="w-4 h-4 text-[var(--violet)]" />
                       <span>Bulk Assign</span>
                     </button>
@@ -326,6 +328,7 @@ const Shifts = () => {
                   onSave={loadShifts}
                   trigger={
                     <button
+                      data-tour="shifts-create"
                       className="flex items-center gap-2 px-4 py-2 hover:opacity-95 active:scale-95 text-white rounded-lg text-sm font-medium transition-all cursor-pointer"
                       style={{
                         background: 'linear-gradient(135deg,var(--blue),var(--violet))',
@@ -365,7 +368,7 @@ const Shifts = () => {
             </span>
           </div>
 
-          <div className="w-full overflow-x-auto pt-2">
+          <div data-tour="shifts-table" className="w-full overflow-x-auto pt-2">
             <PermissionTable data={shifts} columns={columns} loading={onLoading} />
           </div>
         </div>

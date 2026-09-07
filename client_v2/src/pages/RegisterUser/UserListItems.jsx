@@ -143,6 +143,7 @@ export const UserCard = ({ user, handleEdit, handleDelete, onRequestStatusChange
           )}
           {canEdit && (
             <button
+              data-tour="reg-edit"
               title="Edit User"
               onClick={(e) => {
                 e.stopPropagation();
@@ -155,6 +156,7 @@ export const UserCard = ({ user, handleEdit, handleDelete, onRequestStatusChange
           )}
           {canDelete && (
             <button
+              data-tour="reg-delete"
               title="Delete User"
               onClick={(e) => {
                 e.stopPropagation();
@@ -335,6 +337,7 @@ export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, hand
         <div className="flex items-center justify-center gap-2">
           {canEdit && (
             <button
+              data-tour="reg-edit"
               title="Edit User"
               onClick={(e) => {
                 e.stopPropagation();
@@ -347,6 +350,7 @@ export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, hand
           )}
           {canDelete && (
             <button
+              data-tour="reg-delete"
               title="Delete User"
               onClick={(e) => {
                 e.stopPropagation();

@@ -52,6 +52,7 @@ const ScheduleCell = memo(function ScheduleCell({ cell, onOpen, disabled }) {
     return (
       <button
         type="button"
+        data-tour="schedule-cell"
         onClick={handle}
         disabled={disabled}
         title={disabled ? 'No permission to edit' : 'Assign a shift'}
@@ -66,6 +67,7 @@ const ScheduleCell = memo(function ScheduleCell({ cell, onOpen, disabled }) {
     return (
       <button
         type="button"
+        data-tour="schedule-cell"
         onClick={handle}
         disabled={disabled}
         title={cell.source === 'override' ? 'Day off (set for this day)' : 'Week off'}
@@ -80,6 +82,7 @@ const ScheduleCell = memo(function ScheduleCell({ cell, onOpen, disabled }) {
   return (
     <button
       type="button"
+      data-tour="schedule-cell"
       onClick={handle}
       disabled={disabled}
       title={`${cell.shift?.name} (${cell.shift?.startTime}-${cell.shift?.endTime})${
@@ -292,7 +295,7 @@ const ShiftSchedule = () => {
     <div className="p-3 sm:p-4 lg:p-[22px] flex flex-col gap-[18px] min-h-full">
       <div className="w-full flex-1 flex flex-col p-3 sm:p-5 bg-[var(--bg1)] border border-[var(--bd)] rounded-[16px] gap-4">
         {/* Month navigation */}
-        <div className="flex items-center justify-between gap-3">
+        <div data-tour="schedule-month" className="flex items-center justify-between gap-3">
           <button
             onClick={() => setMonth((m) => shiftMonth(m, -1))}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] hover:text-[var(--tx)] hover:bg-[var(--bg3)] text-sm transition-colors cursor-pointer"
@@ -345,7 +348,7 @@ const ShiftSchedule = () => {
         </div>
 
         {/* Search + filters */}
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_180px_180px_180px] gap-3">
+        <div data-tour="schedule-filters" className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_180px_180px_180px] gap-3">
           <div className="relative">
             <Input
               type="text"
@@ -413,6 +416,7 @@ const ShiftSchedule = () => {
             long roster. */}
         <div
           ref={scrollRef}
+          data-tour="schedule-grid"
           className="relative overflow-auto customscrollbar border border-[var(--bd)] rounded-[12px] max-h-[calc(100vh-420px)] min-h-[320px]"
         >
           {loading && (

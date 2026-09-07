@@ -20,6 +20,7 @@ export const TOUR_MODULES = [
   { "key": "alerts", "label": "Alerts", "path": "alerts", "group": "MONITOR", "permissionKey": "alerts" },
   { "key": "incidents", "label": "Incident Center", "path": "incidents", "group": "MONITOR", "permissionKey": "incidents" },
   { "key": "analytics", "label": "Analytics", "path": "analytics", "group": "INTELLIGENCE", "permissionKey": "analytics" },
+  { "key": "logs-records", "label": "Logs & Records", "path": "dashboard", "group": "LOGS & RECORDS", "tourOnly": true, "requiresAnyLog": true },
   { "key": "attendance", "label": "Attendance Logs", "path": "logs/attendance", "group": "LOGS & RECORDS", "permissionKey": "logs", "permissionSubKey": "attendanceLogs", "logsConfigKey": "attendanceLogs" },
   { "key": "access", "label": "Access Logs", "path": "logs/access", "group": "LOGS & RECORDS", "permissionKey": "logs", "permissionSubKey": "accessLogs", "logsConfigKey": "accessLogs" },
   { "key": "tagged-users", "label": "Tagged Users", "path": "logs/tagged-users", "group": "LOGS & RECORDS", "permissionKey": "logs", "permissionSubKey": "taggedUsersLogs", "logsConfigKey": "taggedUsers" },
@@ -43,6 +44,8 @@ export const TOUR_MODULES = [
   { "key": "roles", "label": "Roles & Permission", "path": "roles", "group": "ADMINISTER", "permissionKey": "roles" },
   { "key": "locations", "label": "Locations", "path": "locations", "group": "ADMINISTER", "permissionKey": "locations" },
   { "key": "departments", "label": "Departments", "path": "departments", "group": "ADMINISTER", "permissionKey": "departments" },
+  { "key": "shifts", "label": "Shift Management", "path": "shifts", "group": "ADMINISTER", "permissionKey": "shifts" },
+  { "key": "shift-schedule", "label": "Shift Schedule", "path": "shift-schedule", "group": "ADMINISTER", "permissionKey": "shifts" },
   { "key": "register", "label": "Register your User", "path": "register-users", "group": "ADMINISTER", "permissionKey": "Users" },
   { "key": "recipients", "label": "Alert Recipients", "path": "recipients", "group": "SETTINGS", "permissionKey": "recipients" },
   { "key": "auto-email-reports", "label": "Auto Email Reports", "path": "auto-email-reports", "group": "SETTINGS", "permissionKey": "autoEmailReports" }
@@ -95,6 +98,16 @@ export function isModuleLogEnabled(module, logs) {
   if (!module.logsConfigKey) return true;
   if (!logs) return true;
   return logs[module.logsConfigKey] !== false;
+}
+
+export function compactTourModules(modules) {
+  const hasVisibleLog = modules.some(
+    (module) => module.group === "LOGS & RECORDS" && module.key !== "logs-records",
+  );
+  return modules.filter((module) => {
+    if (module.key === "logs-records") return hasVisibleLog;
+    return module.group !== "LOGS & RECORDS";
+  });
 }
 
 /** Case-insensitive match on the module name or its sidebar group. */

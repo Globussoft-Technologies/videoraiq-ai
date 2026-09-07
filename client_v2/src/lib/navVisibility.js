@@ -1,5 +1,7 @@
 import { NAV_GROUPS, LOGS_GROUP_LABEL } from '@/layout/nav.config';
 
+export const LOGS_TOUR_KEY = 'logs-records';
+
 /**
  * The rules that decide whether a sidebar nav item is shown at all.
  *
@@ -55,11 +57,22 @@ export function isItemLogEnabled(item, logsConfig) {
  * before the logs that feed it.
  */
 export function visibleNavItems(permissions, logsConfig) {
-  return NAV_GROUPS.filter((group) => !group.hidden).flatMap((group) =>
-    group.items
+  return NAV_GROUPS.filter((group) => !group.hidden).flatMap((group) => {
+    const items = group.items
       .filter((item) => isItemVisible(item, permissions) && isItemLogEnabled(item, logsConfig))
-      .map((item) => ({ ...item, group: group.label }))
-  );
+      .map((item) => ({ ...item, group: group.label }));
+
+    if (group.label !== LOGS_GROUP_LABEL) return items;
+    if (!items.length) return [];
+    return [
+      {
+        key: LOGS_TOUR_KEY,
+        label: 'Logs & Records',
+        path: 'dashboard',
+        group: LOGS_GROUP_LABEL,
+      },
+    ];
+  });
 }
 
 export { LOGS_GROUP_LABEL };

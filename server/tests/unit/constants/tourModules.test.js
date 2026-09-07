@@ -6,6 +6,7 @@ import {
   TOUR_MODULES,
   isModuleVisible,
   isModuleLogEnabled,
+  compactTourModules,
   matchesSearch,
   normalizePermissionConfig,
 } from "../../../constants/tourModules.js";
@@ -57,7 +58,9 @@ describe("tour module catalogue", () => {
     }
 
     // Anything the server lists must still exist in the client's nav config.
-    const stale = TOUR_MODULES.filter((m) => !clientKeys.has(m.key)).map((m) => m.key);
+    const stale = TOUR_MODULES
+      .filter((m) => !m.tourOnly && !clientKeys.has(m.key))
+      .map((m) => m.key);
     expect(
       stale,
       `tourModules.js lists modules nav.config.js no longer has: ${stale.join(", ")}`,
@@ -119,6 +122,12 @@ describe("tour module filtering", () => {
     // group match: "logs" should find the whole LOGS & RECORDS section
     expect(matchesSearch(attendance, "records")).toBe(true);
     expect(matchesSearch(attendance, "zzzz")).toBe(false);
+  });
+
+  it("compacts visible log pages into one Logs & Records tour entry", () => {
+    const visible = compactTourModules(TOUR_MODULES);
+    expect(visible.some((m) => m.key === "logs-records")).toBe(true);
+    expect(visible.some((m) => m.key === "attendance")).toBe(false);
   });
 
   it("fills in settings for roles stored before that module existed", () => {

@@ -484,7 +484,7 @@ const AddProfile = () => {
             </div>
 
             {!decodedtoken?.memberId && (
-              <button onClick={() => setShowImportModal(true)} className={actionBtn}>
+              <button data-tour="reg-import" onClick={() => setShowImportModal(true)} className={actionBtn}>
                 <CirclePlus className="w-4 h-4" />
                 <span>Import Emp Users</span>
               </button>
@@ -492,20 +492,20 @@ const AddProfile = () => {
 
             <VerifyUserDialog
               trigger={
-                <button className={actionBtn}>
+                <button data-tour="reg-verify" className={actionBtn}>
                   <User className="w-4 h-4" />
                   <span>Verify User</span>
                 </button>
               }
             />
 
-            <button onClick={() => setShowBulkModal(true)} className={actionBtn}>
+            <button data-tour="reg-bulk" onClick={() => setShowBulkModal(true)} className={actionBtn}>
               <FilePlus className="w-4 h-4" />
               <span>Register Bulk Employee</span>
             </button>
 
             {canCreateUsers && (
-              <button onClick={() => setShowRegLinkModal(true)} className={actionBtn}>
+              <button data-tour="reg-link" onClick={() => setShowRegLinkModal(true)} className={actionBtn}>
                 <LinkIcon className="w-4 h-4" />
                 <span>Generate Registration Link</span>
               </button>

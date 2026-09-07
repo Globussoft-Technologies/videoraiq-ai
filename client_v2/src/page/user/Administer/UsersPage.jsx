@@ -243,6 +243,7 @@ function UserRow({ u, checked, onToggle, onEdit, onDelete, isSelf, canEdit, canD
           <>
             {canEdit && (
               <button
+                data-tour="users-edit"
                 onClick={() => onEdit(u)}
                 title="Edit"
                 style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'var(--bg2)', border: '1px solid var(--bd)', color: 'var(--tx2)', cursor: 'pointer' }}
@@ -252,6 +253,7 @@ function UserRow({ u, checked, onToggle, onEdit, onDelete, isSelf, canEdit, canD
             )}
             {canDelete && (
               <button
+                data-tour="users-delete"
                 onClick={() => onDelete(u)}
                 title="Delete"
                 style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'var(--bg2)', border: '1px solid rgba(255,77,77,.3)', color: 'var(--crit)', cursor: 'pointer' }}
@@ -1147,6 +1149,7 @@ export default function UsersPage() {
           <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--tx3)' }}>{total} users</span>
           {canCreate && (
             <button
+              data-tour="users-add"
               onClick={() => setShowAddModal(true)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 7,

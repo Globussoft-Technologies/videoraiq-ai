@@ -414,6 +414,7 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
       {SHOW_NVR_ACTIONS && (
         <>
           <button
+            data-tour="nvr-edit"
             onClick={() => onEdit(nvr)}
             title="Edit NVR"
             style={{
@@ -426,6 +427,7 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
             <Pencil size={12} />
           </button>
           <button
+            data-tour="nvr-delete"
             onClick={() => onDelete(nvr)}
             title="Delete NVR"
             style={{
@@ -1851,6 +1853,7 @@ export default function NVRCameras() {
         {SHOW_NVR_ACTIONS && (
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7 }}>
             <button
+              data-tour="nvr-add"
               onClick={() => setNvrModal(true)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 7,

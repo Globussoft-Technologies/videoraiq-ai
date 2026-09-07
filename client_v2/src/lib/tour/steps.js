@@ -1,4 +1,4 @@
-import { LOGS_GROUP_LABEL } from '@/lib/navVisibility';
+import { LOGS_GROUP_LABEL, LOGS_TOUR_KEY } from '@/lib/navVisibility';
 
 /**
  * Step registry for the guided tour.
@@ -143,7 +143,7 @@ const SHELL_TOUR = {
       target: '[data-tour="hdr-sites"]',
       title: 'Site filter',
       content:
-        'Scope the whole app to one site. It persists as you move between modules, so you can work through a single location without re-filtering on every page.',
+        'Select a location from the dropdown to view and work with data for that site',
       placement: 'bottom',
     },
     {
@@ -205,9 +205,9 @@ const MODULE_CONTENT = {
       },
       {
         target: '[data-tour="cc-live"]',
-        title: 'Live cameras and attendance',
+        title: 'Live cameras',
         content:
-          'A live view of the fleet with the latest detection overlaid on each camera, plus the attendance feed as people are recognised.',
+          'View all live cameras from here. Clicking a camera takes you to its live feed.',
         placement: 'right',
       },
       {
@@ -270,7 +270,7 @@ const MODULE_CONTENT = {
         target: '[data-tour="demo-upload"]',
         title: 'Step 4 — process and review',
         content:
-          'Once your clip is uploaded, hit Process clip. VideoraIQ analyses the footage, annotates it with everything the engine finds, and brings the results back on this page as the run progresses — events detected, average confidence, and the incident log the run produced. For Face Recognition you also get an attendance log with check-in and check-out times.',
+          'Once your clip is uploaded, hit Process clip. VideoraIQ analyses the footage, annotates it with everything the engine finds, and brings the results back on this page as the run progresses — events detected, average confidence, and the incident log the run produced. ',
         placement: 'top',
       },
     ],
@@ -291,7 +291,7 @@ const MODULE_CONTENT = {
         target: '[data-tour="wall-search"]',
         title: 'Find a camera',
         content:
-          'Search by name when the fleet is large enough that scanning the list is slower than typing.',
+          'Search by the camera name here',
         placement: 'bottom',
       },
       {
@@ -302,11 +302,12 @@ const MODULE_CONTENT = {
         placement: 'bottom',
       },
       {
-        target: '[data-tour="wall-grid"]',
+        target: '[data-tour="wall-toolbar"]',
+        spotlightTarget: '[data-tour="wall-grid"]',
         title: 'The wall',
         content:
           'Each tile is a live stream, and any tile can go fullscreen. A tile that will not load usually means the camera is offline — Cameras & NVRs will say which.',
-        placement: 'top',
+        placement: 'bottom',
       },
     ],
   },
@@ -324,14 +325,14 @@ const MODULE_CONTENT = {
         target: '[data-tour="alerts-filters"]',
         title: 'Narrow the feed',
         content:
-          'Filter by severity and by status. The counts on each tab update with the feed, so you can see how much is waiting before you open it.',
+          'Filter by severity and by status.',
         placement: 'bottom',
       },
       {
         target: '[data-tour="alerts-list"]',
         title: 'Feed and detail',
         content:
-          'The list on the left, the selected alert in full on the right — including the frame the camera captured. Selecting a row updates the panel without losing your place.',
+          'See the alert list on the left and the selected alert details on the right, including the captured camera frame. Click an alert to view its details without leaving the page.',
         placement: 'top',
       },
     ],
@@ -386,19 +387,70 @@ const MODULE_CONTENT = {
     ],
   },
 
+  [LOGS_TOUR_KEY]: {
+    intro:
+      'Logs & Records keeps the evidence trail for your detections in one place. Open this section when you need to review events, filter records, or export what happened.',
+  },
+
   cameras: {
     intro:
-      'Cameras & NVRs is where your fleet is registered — recorders, their channels, and whether each one is currently reachable. Every other module draws from this list, so a new site starts here.',
+      'Cameras & NVRs is where you add and manage your cameras and recorders. You can see their channels and check if they are online. All other modules use this list.',
+    steps: [
+      {
+        target: '[data-tour="nvr-add"]',
+        title: 'Add NVR',
+        content:
+          'Use Add NVR to connect a recorder, enter its network details, discover cameras, and add the camera channels you want to monitor.',
+        placement: 'bottom',
+      },
+      {
+        target: '[data-tour="nvr-edit"]',
+        title: 'Edit NVR',
+        content:
+          'Edit updates the recorder details when its name, site, credentials, IP address, or ports change.',
+        placement: 'left',
+      },
+      {
+        target: '[data-tour="nvr-delete"]',
+        title: 'Delete NVR',
+        content:
+          'Delete removes the recorder and asks you to confirm before deleting its linked cameras and records.',
+        placement: 'left',
+      },
+    ],
   },
 
   'detection-settings': {
     intro:
-      'Detections is the catalogue of AI engines — intrusion, person counting, ANPR and the rest. Turn an engine on for a camera here and its log page starts filling. Engines your licence does not cover appear locked rather than hidden.',
+      'Detections is where you manage AI features like intrusion, person counting, and ANPR. Enable a detection for a camera to start recording its results. Features not included in your licence will not be shown here.',
   },
 
   users: {
     intro:
       'User Role Detail lists everyone with access, the role each one holds, and the cameras and locations they are limited to.',
+    steps: [
+      {
+        target: '[data-tour="users-add"]',
+        title: 'Add new user',
+        content:
+          'Create a new user and assign their role.',
+        placement: 'bottom',
+      },
+      {
+        target: '[data-tour="users-edit"]',
+        title: 'Edit user',
+        content:
+          'Update this user details and access.',
+        placement: 'left',
+      },
+      {
+        target: '[data-tour="users-delete"]',
+        title: 'Delete user',
+        content:
+          'Remove this user from the system.',
+        placement: 'left',
+      },
+    ],
   },
 
   register: {
@@ -427,6 +479,30 @@ const MODULE_CONTENT = {
         placement: 'bottom',
       },
       {
+        target: '[data-tour="reg-import"]',
+        title: 'Import users',
+        content: 'Import users from EMP.',
+        placement: 'bottom',
+      },
+      {
+        target: '[data-tour="reg-verify"]',
+        title: 'Verify user',
+        content: 'Verify a registered user.',
+        placement: 'bottom',
+      },
+      {
+        target: '[data-tour="reg-bulk"]',
+        title: 'Bulk register',
+        content: 'Register many employees from a file.',
+        placement: 'bottom',
+      },
+      {
+        target: '[data-tour="reg-link"]',
+        title: 'Registration link',
+        content: 'Generate a link for self registration.',
+        placement: 'bottom',
+      },
+      {
         target: '[data-tour="reg-search"]',
         title: 'Who is enrolled',
         content:
@@ -440,12 +516,24 @@ const MODULE_CONTENT = {
           'Each card opens their full profile, where you can retake photos, correct details, or remove them. Once someone is enrolled here they start appearing by name in Attendance Logs, Access Logs and Detected Users.',
         placement: 'top',
       },
+      {
+        target: '[data-tour="reg-edit"]',
+        title: 'Edit user',
+        content: 'Update this registered user.',
+        placement: 'left',
+      },
+      {
+        target: '[data-tour="reg-delete"]',
+        title: 'Delete user',
+        content: 'Delete this registered user.',
+        placement: 'left',
+      },
     ],
   },
 
   roles: {
     intro:
-      'Roles & Permission is where access is actually decided: per module, per action, view through delete. Changing a role takes effect for its holders without a re-login.',
+      'Roles & Permissions lets you control what users can view or do in each module.',
     steps: [
       {
         target: '[data-tour="roles-toolbar"]',
@@ -465,6 +553,86 @@ const MODULE_CONTENT = {
   departments: {
     intro:
       'Departments group people for attendance and access reporting — useful when you want figures per team rather than per camera.',
+  },
+
+  shifts: {
+    intro:
+      'Shift Management is where you create shifts and assign staff to them.',
+    steps: [
+      {
+        target: '[data-tour="shifts-search"]',
+        title: 'Search shifts',
+        content: 'Find a shift by name.',
+        placement: 'bottom',
+      },
+      {
+        target: '[data-tour="shifts-create"]',
+        title: 'Create shift',
+        content: 'Create a new shift.',
+        placement: 'bottom',
+      },
+      {
+        target: '[data-tour="shifts-bulk-assign"]',
+        title: 'Bulk assign',
+        content: 'Assign staff to shifts in bulk.',
+        placement: 'bottom',
+      },
+      {
+        target: '[data-tour="shifts-table"]',
+        title: 'Shift list',
+        content: 'View shift timings, days, and assigned staff.',
+        placement: 'top',
+      },
+      {
+        target: '[data-tour="shifts-assign-row"]',
+        title: 'Assign staff',
+        content: 'Assign staff to this shift.',
+        placement: 'left',
+      },
+      {
+        target: '[data-tour="shifts-edit"]',
+        title: 'Edit shift',
+        content: 'Update this shift.',
+        placement: 'left',
+      },
+      {
+        target: '[data-tour="shifts-delete"]',
+        title: 'Delete shift',
+        content: 'Delete this shift.',
+        placement: 'left',
+      },
+    ],
+  },
+
+  'shift-schedule': {
+    intro:
+      'Shift Schedule is where you assign shifts to employees by date.',
+    steps: [
+      {
+        target: '[data-tour="schedule-month"]',
+        title: 'Choose month',
+        content: 'Move between months.',
+        placement: 'bottom',
+      },
+      {
+        target: '[data-tour="schedule-filters"]',
+        title: 'Filter employees',
+        content: 'Filter the schedule by employee, department, location, or role.',
+        placement: 'bottom',
+      },
+      {
+        target: '[data-tour="schedule-grid"]',
+        title: 'Schedule grid',
+        content: 'Review employee shifts by date.',
+        placement: 'top',
+      },
+      {
+        target: '[data-tour="schedule-cell"]',
+        title: 'Assign day',
+        content: 'Click a cell to assign or change a shift.',
+        placement: 'top',
+      },
+    ],
   },
 
   settings: {
@@ -489,7 +657,45 @@ const MODULE_CONTENT = {
 
   'auto-email-reports': {
     intro:
-      'Auto Email Reports schedules recurring summaries — daily attendance, weekly incidents — so the people who need the numbers get them without opening the app.',
+      'Auto Email Reports lets you schedule daily attendance summaries and send them automatically to the right people.',
+    steps: [
+      {
+        target: '[data-tour="reports-create"]',
+        title: 'Create report',
+        content: 'Create a new scheduled email report.',
+        placement: 'bottom',
+      },
+      {
+        target: '[data-tour="reports-preview"]',
+        title: 'Preview report',
+        content: 'Preview what this report will send.',
+        placement: 'left',
+      },
+      {
+        target: '[data-tour="reports-send"]',
+        title: 'Send test mail',
+        content: 'Send this report now as a test.',
+        placement: 'left',
+      },
+      {
+        target: '[data-tour="reports-toggle"]',
+        title: 'Pause or enable',
+        content: 'Pause or enable this report.',
+        placement: 'left',
+      },
+      {
+        target: '[data-tour="reports-edit"]',
+        title: 'Edit report',
+        content: 'Change this report settings.',
+        placement: 'left',
+      },
+      {
+        target: '[data-tour="reports-delete"]',
+        title: 'Delete report',
+        content: 'Delete this scheduled report.',
+        placement: 'left',
+      },
+    ],
   },
 };
 
@@ -504,6 +710,15 @@ function genericIntro(item) {
  */
 export function tourForItem(item) {
   const content = MODULE_CONTENT[item.key];
+  if (item.key === LOGS_TOUR_KEY) {
+    return {
+      key: item.key,
+      label: item.label,
+      path: `/${String(item.path || 'dashboard').replace(/^\/+/, '')}`,
+      steps: [navIntro(item, content?.intro ?? genericIntro(item))],
+    };
+  }
+
   const isLogPage = item.group === LOGS_GROUP_LABEL || String(item.path).startsWith('logs/');
 
   const pageSteps = content?.steps ?? (isLogPage ? LOG_PAGE_STEPS : []);

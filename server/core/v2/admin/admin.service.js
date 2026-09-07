@@ -23,6 +23,7 @@ import {
   normalizePermissionConfig,
   isModuleVisible,
   isModuleLogEnabled,
+  compactTourModules,
   matchesSearch,
 } from "../../../constants/tourModules.js";
 
@@ -894,12 +895,12 @@ class AdminService {
         logger.error("[TOUR_MODULES] logs config resolve failed:", err?.message);
       }
 
-      const modules = TOUR_MODULES.filter(
+      const modules = compactTourModules(TOUR_MODULES.filter(
         (module) =>
           isModuleVisible(module, permissions) &&
-          isModuleLogEnabled(module, logs) &&
-          matchesSearch(module, search)
-      ).map(({ key, label, group, path }) => ({ key, label, group, path }));
+          isModuleLogEnabled(module, logs)
+      )).filter((module) => matchesSearch(module, search))
+        .map(({ key, label, group, path }) => ({ key, label, group, path }));
 
       // Never cache this. The whole point of resolving it server-side is that a
       // permission revoked a minute ago is reflected immediately — a browser or
