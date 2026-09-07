@@ -216,8 +216,29 @@ class AUTHService {
         streamHost: `${(admin.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
       };
       this.usedImpersonationNonces.set(payload.nonce, payload.exp);
+
+      // Unlike verifyUser (by-login-pass/by-amember-sso-token), this endpoint never
+      // went through Session Management at all — no device-block check, no session
+      // row created, so an admin who logs in via an impersonation link could never
+      // appear in the admin session list, could never show "Online" (no sessionId
+      // to hand the socket), and a superadmin's block/logout on that admin could
+      // never reach their browser (IsAuth.jsx's 15s recheck has no sessionId to
+      // send, so enforceRequestSession never runs for them).
+      const sessionAccess = await sessionsService.ensureDeviceCanLogin(req, tokenPayload);
+      if (!sessionAccess.allowed) {
+        return res.status(sessionAccess.statusCode).json({ ok: false, ...sessionAccess.body });
+      }
+
       const dashboardToken = generateToken(tokenPayload, this.secretKey, this.tokenExpiryTime);
-      return res.status(200).json({ ok: true, msg: "User impersonation verified", token: dashboardToken, user: tokenPayload });
+      const session = sessionsService.toClient(await sessionsService.createForLogin(req, tokenPayload));
+      return res.status(200).json({
+        ok: true,
+        msg: "User impersonation verified",
+        token: dashboardToken,
+        user: tokenPayload,
+        sessionId: session?.sessionId || null,
+        session,
+      });
     } catch (error) {
       logger.warn("Impersonation SSO rejected:", error.message);
       const configurationError = error.message === "Impersonation SSO is not configured";
@@ -1461,7 +1482,12 @@ return bypassUsers.find(
         .json({
           success: true,
           type: "user-token",
-          data: { ...decoded, user_id: decoded.user_id ? parseInt(decoded.user_id) : decoded.user_id }
+          data: { ...decoded, user_id: decoded.user_id ? parseInt(decoded.user_id) : decoded.user_id },
+          // Echo back whatever session id this tab already sent (validated above by
+          // enforceRequestSession) so IsAuth.jsx can re-persist the vq_session_id
+          // cookie on every reload — without this, a long-lived tab's cookie could
+          // silently expire and the socket/presence tracking would lose the session.
+          sessionId: req.headers["x-session-id"] || null,
         });
     } catch (error) {
       return res.status(401).json({
