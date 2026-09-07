@@ -63,6 +63,37 @@ const schema = Yup.object().shape({
   graceLateMinutes: minutesField('Grace late'),
   graceEarlyMinutes: minutesField('Grace early'),
   maxOvertimeMinutes: minutesField('Max overtime'),
+  isNightShift: Yup.boolean().test(
+    'is-valid-shift-window',
+    'Shift timing does not match the selected shift type',
+    function (value) {
+      const { startTime, endTime } = this.parent;
+
+      // Skip validation if time values are not completely entered yet
+      if (!startTime || !endTime) return true;
+
+      // Parse time strings directly into comparable numerical integers (e.g., "09:00" -> 900)
+      const startNum = parseInt(startTime.replace(':', ''), 10);
+      const endNum = parseInt(endTime.replace(':', ''), 10);
+
+      if (value === true) {
+        // Validation: Night shift must cross midnight
+        if (endNum > startNum) {
+          return this.createError({ 
+            message: "Night shifts must cross midnight. Please ensure the end time is earlier than the start time." 
+          });
+        }
+      } else {
+        // Validation: Day shift must remain inside the same day
+        if (endNum <= startNum) {
+          return this.createError({ 
+            message: "Day shifts must finish on the same day. Please ensure the end time is later than the start time."
+          });
+        }
+      }
+      return true;
+    }
+  ),
   workingDays: Yup.object().test(
     'has-a-working-day',
     'Select at least one working day',
@@ -304,13 +335,20 @@ const ShiftForm = ({ trigger, initialValues = null, mode = 'create', onSave }) =
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <CheckPill
-              checked={formik.values.isNightShift}
-              onChange={(next) => formik.setFieldValue('isNightShift', next)}
-              icon={<Moon className="w-4 h-4" />}
-              label="Night Shift"
-              tint="var(--violet)"
-            />
+            <div>
+              <CheckPill
+                checked={formik.values.isNightShift}
+                onChange={(next) => formik.setFieldValue('isNightShift', next)}
+                icon={<Moon className="w-4 h-4" />}
+                label="Night Shift"
+                tint="var(--violet)"
+              />
+              {formik.errors.isNightShift && (
+                <div className="text-xs text-red-500 mt-1 font-medium">
+                  {formik.errors.isNightShift}
+                </div>
+              )}
+            </div>
             <CheckPill
               checked={formik.values.isDefault}
               onChange={(next) => formik.setFieldValue('isDefault', next)}
