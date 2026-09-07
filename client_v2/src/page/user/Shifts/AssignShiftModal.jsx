@@ -26,7 +26,7 @@ import {
 } from './Api';
 
 const labelClass = 'text-xs text-[var(--tx2)] mb-1 ml-1 block';
-const EMPLOYEE_PAGE_SIZE = 50;
+const EMPLOYEE_PAGE_SIZE = 5000;
 
 /** Small labelled switch — the modal needs three and there is no shared one. */
 const Toggle = ({ checked, onChange, label, hint }) => (
@@ -100,6 +100,11 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
   const [conflictingEmployees, setConflictingEmployees] = useState([]);
   const [showAllConflicts, setShowAllConflicts] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showMatchingEmployees, setShowMatchingEmployees] = useState(false);
+  const [matchingEmployeeView, setMatchingEmployeeView] = useState('all');
+  const [matchingEmployeeQuery, setMatchingEmployeeQuery] = useState('');
+  const [matchingEmployees, setMatchingEmployees] = useState([]);
+  const [matchingEmployeesLoading, setMatchingEmployeesLoading] = useState(false);
 
   const individual = mode === 'individual';
   const todayDate = moment().format('YYYY-MM-DD');
@@ -333,6 +338,27 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
     }
   }, [filters]);
 
+  useEffect(() => {
+    if (!open || individual || !showMatchingEmployees) return undefined;
+    const timer = setTimeout(async () => {
+      setMatchingEmployeesLoading(true);
+      try {
+        const res = await previewAssignment({
+          ...filters,
+          ...(matchingEmployeeView === 'unassigned' ? { overwriteExisting: false } : {}),
+          search: matchingEmployeeQuery,
+          limit: 5000,
+        });
+        setMatchingEmployees(res?.data?.body?.data?.employees || []);
+      } catch {
+        setMatchingEmployees([]);
+      } finally {
+        setMatchingEmployeesLoading(false);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [open, individual, showMatchingEmployees, matchingEmployeeView, matchingEmployeeQuery, filters]);
+
   // Debounced so dragging through a long location list doesn't fire a request
   // per checkbox.
   useEffect(() => {
@@ -365,6 +391,10 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
     setCheckingConflicts(false);
     setConflictingEmployees([]);
     setShowAllConflicts(false);
+    setShowMatchingEmployees(false);
+    setMatchingEmployeeView('all');
+    setMatchingEmployeeQuery('');
+    setMatchingEmployees([]);
     setSelectedShiftId(shift?._id || '');
   };
 
@@ -572,6 +602,7 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
                 searchPlaceholder="Search by name or email…"
                 msg="No employees found"
                 tint="#22c55e"
+                maxHeight="max-h-[320px]"
               />
               <p className="text-[11px] text-[var(--tx3)] mt-1.5 ml-1">
                 Scroll to load the full roster, or type to search by name or email.
@@ -690,16 +721,26 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
               {previewing ? (
                 <Loader2 className="w-4 h-4 animate-spin text-[var(--tx3)]" />
               ) : (
-                <span className="text-lg font-semibold text-[var(--tx)]">
+                <button
+                  type="button"
+                  onClick={() => setShowMatchingEmployees((visible) => !visible)}
+                  className="text-lg font-semibold text-[var(--blue)] underline underline-offset-2 decoration-dotted cursor-pointer"
+                  title="View matching employees"
+                >
                   {preview?.matched ?? 0}
-                </span>
+                </button>
               )}
             </div>
 
             {preview?.matched > 0 && (
               <>
                 <div className="text-[11px] text-[var(--tx3)] mt-1">
+                  <button type="button" onClick={() => { setMatchingEmployeeView('all'); setShowMatchingEmployees(true); }} className="text-[var(--blue)] underline underline-offset-2 decoration-dotted cursor-pointer">{preview.alreadyAssigned} already on a shift</button>
+                  {' · '}
+                  <button type="button" onClick={() => { setMatchingEmployeeView('unassigned'); setShowMatchingEmployees(true); }} className="text-[var(--blue)] underline underline-offset-2 decoration-dotted cursor-pointer">{preview.unassigned} unassigned</button>
+                  <span className="hidden">
                   {preview.alreadyAssigned} already on a shift · {preview.unassigned} unassigned
+                  </span>
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-3">
                   {(preview.employees || []).map((employee) => (
@@ -719,6 +760,36 @@ const AssignShiftModal = ({ trigger, shift = null, onAssigned }) => {
                     </span>
                   )}
                 </div>
+                {showMatchingEmployees && (
+                  <div className="mt-3 rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)] overflow-hidden">
+                    <div className="flex items-center gap-1 p-2 border-b border-[var(--bd)]">
+                      <button type="button" onClick={() => setMatchingEmployeeView('all')} className={`px-2 py-1 rounded text-[11px] ${matchingEmployeeView === 'all' ? 'bg-[var(--blue)] text-white' : 'text-[var(--tx2)]'}`}>All</button>
+                      <button type="button" onClick={() => setMatchingEmployeeView('unassigned')} className={`px-2 py-1 rounded text-[11px] ${matchingEmployeeView === 'unassigned' ? 'bg-[var(--blue)] text-white' : 'text-[var(--tx2)]'}`}>Unassigned</button>
+                      <input
+                        value={matchingEmployeeQuery}
+                        onChange={(event) => setMatchingEmployeeQuery(event.target.value)}
+                        placeholder="Search matching employees..."
+                        className="flex-1 min-w-0 h-8 px-2.5 rounded-md border border-[var(--bd)] bg-[var(--bg2)] text-xs text-[var(--tx)] outline-none focus:border-[var(--blue)]"
+                      />
+                    </div>
+                    <div className="max-h-48 overflow-y-auto customscrollbar divide-y divide-[var(--bd)]">
+                      {matchingEmployeesLoading ? (
+                        <div className="flex justify-center py-5"><Loader2 className="w-4 h-4 animate-spin text-[var(--tx3)]" /></div>
+                      ) : matchingEmployees.length ? (
+                        matchingEmployees.map((employee) => (
+                          <div key={employee._id} className="px-2.5 py-2 text-xs text-[var(--tx)]">
+                            {employeeName(employee)}
+                            {(employee.departmentId?.departmentName || employee.location) && (
+                              <span className="ml-1 text-[var(--tx3)]">· {employee.departmentId?.departmentName || employee.location}</span>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-3 py-5 text-center text-xs text-[var(--tx3)]">No matching employees found.</div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </>
             )}
 

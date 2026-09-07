@@ -272,7 +272,8 @@ const MultiSelect = ({
           )}
 
           <div
-            className={cn('overflow-y-auto customscrollbar py-1', maxHeight)}
+            className={cn('overflow-y-auto overscroll-contain customscrollbar py-1', maxHeight)}
+            onWheel={(event) => event.stopPropagation()}
             onScroll={(event) => {
               if (!onLoadMore || !hasMore || loadingMore) return;
               const list = event.currentTarget;

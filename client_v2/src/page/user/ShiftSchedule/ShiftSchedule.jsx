@@ -254,6 +254,12 @@ const ShiftSchedule = () => {
 
   const handlePick = ({ shiftId, isOff }) => {
     const { employeeId, date, cell } = editing;
+    if (shiftId && !isOff && cell?.type === 'off' && cell?.source === 'standing') {
+      const confirmed = window.confirm(
+        'This date is configured as a weekly off. Do you want to assign this shift anyway?'
+      );
+      if (!confirmed) return;
+    }
     writeCell(
       employeeId,
       date,

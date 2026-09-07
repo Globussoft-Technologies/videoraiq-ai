@@ -45,7 +45,7 @@ export const previewAssignment = async (filters) =>
 export const searchAssignableEmployees = async ({
   search = '',
   skip = 0,
-  limit = 50,
+  limit = 5000,
   prioritizeShiftId = '',
 } = {}) =>
   axios.post(
