@@ -587,6 +587,9 @@ class AuthUsersService {
             );
             console.log("✅ Face Auth Registered in AI service:", response.data);
           } catch (err) {
+            // Any DS failure rolls back the local employee and uploaded media.
+            await authorizedUsersModel.findByIdAndDelete(newUser._id);
+            await Promise.all(uploadedFiles.map(f => deleteMedia(f).catch(() => {})));
             
             console.error("❌ Failed to register user in Face Auth service:", err.response?.data?.message);
             if(err.response?.data?.message==="User already registered"||err.response?.data?.message==="No valid face detected"){
