@@ -33,6 +33,8 @@ export function buildAttendanceRows(usersLogs = []) {
     return {
       // Stable-ish identity for row selection / deletion in the demo UI.
       id: log.logId || log._id || log.userId || `row-${index}`,
+      // Raw check-in epoch ms, for the on-page date-range filter.
+      _atMs: checkIn ? new Date(checkIn).getTime() : 0,
       photo: sessionSnap(sessions[0]) || log.userInfo?.profilePics?.[0] || '',
       name: log.userInfo?.userName || 'Unknown',
       email: log.userInfo?.email || '--',

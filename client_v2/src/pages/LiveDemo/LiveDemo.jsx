@@ -1587,8 +1587,61 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
   );
 }
 
+// True when `ms` (epoch) falls within an inclusive PresetDateRangePicker range;
+// a null/empty range matches everything. End bound covers the whole day.
+function withinRange(ms, range) {
+  if (!range?.start && !range?.end) return true;
+  if (!ms) return false;
+  if (range.start) {
+    const lo = new Date(range.start);
+    lo.setHours(0, 0, 0, 0);
+    if (ms < lo.getTime()) return false;
+  }
+  if (range.end) {
+    const hi = new Date(range.end);
+    hi.setHours(23, 59, 59, 999);
+    if (ms > hi.getTime()) return false;
+  }
+  return true;
+}
+
 function AttendanceLogPanel({ usersLogs, onDelete }) {
-  const rows = useMemo(() => buildAttendanceRows(usersLogs), [usersLogs]);
+  const [range, setRange] = useState({ start: null, end: null });
+  // When a date range is picked, fetch the demo attendance log for that window
+  // from the backend (POST /accessLogs/get with startDate/endDate); otherwise
+  // fall through to the current-session log the parent already loaded.
+  const [rangeLogs, setRangeLogs] = useState(null);
+  const [rangeLoading, setRangeLoading] = useState(false);
+  const hasRange = Boolean(range.start && range.end);
+
+  useEffect(() => {
+    if (!hasRange) {
+      setRangeLogs(null);
+      return undefined;
+    }
+    let cancelled = false;
+    setRangeLoading(true);
+    getDemoAttendanceLogs({
+      limit: 500,
+      isExport: false,
+      removeUnknown: true,
+      startDate: ymd(range.start),
+      endDate: ymd(range.end),
+    })
+      .then((data) => { if (!cancelled) setRangeLogs(data?.usersLogs || []); })
+      .catch(() => { if (!cancelled) setRangeLogs([]); })
+      .finally(() => { if (!cancelled) setRangeLoading(false); });
+    return () => { cancelled = true; };
+  }, [hasRange, range.start, range.end]);
+
+  const sourceLogs = hasRange ? (rangeLogs || []) : usersLogs;
+  const allRows = useMemo(() => buildAttendanceRows(sourceLogs), [sourceLogs]);
+  // The backend already windowed a ranged fetch; only client-filter the
+  // current-session fallback (which is unranged).
+  const rows = useMemo(
+    () => (hasRange ? allRows : allRows.filter((row) => withinRange(row._atMs, range))),
+    [allRows, range, hasRange],
+  );
   const [selected, setSelected] = useState(() => new Set());
 
   // Drop selections that no longer exist after an external refresh.
@@ -1626,10 +1679,19 @@ function AttendanceLogPanel({ usersLogs, onDelete }) {
         <div className="flex items-center gap-2">
           <h2 className="text-[15px] font-bold text-[var(--tx)]">Attendance Log</h2>
           <span className="rounded-md border border-[var(--bd)] bg-[var(--bg2)] px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--tx3)]">
-            Generated from your clip
+            {hasRange ? 'Filtered by date' : 'Generated from your clip'}
           </span>
+          {rangeLoading && <Loader className="h-3.5 w-3.5 animate-spin text-[var(--blue)]" />}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="w-[240px] max-w-full [&>div]:!w-full">
+            <PresetDateRangePicker
+              startDate={range.start}
+              endDate={range.end}
+              maxDate={new Date()}
+              onRangeChange={({ start, end }) => setRange({ start, end })}
+            />
+          </div>
           {selected.size > 0 && (
             <button
               type="button"
@@ -1648,7 +1710,11 @@ function AttendanceLogPanel({ usersLogs, onDelete }) {
 
       {rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-[var(--bd2)] bg-[var(--bg2)] p-6 text-center text-xs text-[var(--tx3)]">
-          No attendance events yet — process a clip to populate this log.
+          {rangeLoading
+            ? 'Loading attendance events…'
+            : hasRange
+              ? 'No attendance events in this date range.'
+              : 'No attendance events yet — process a clip to populate this log.'}
         </div>
       ) : (
         <div className="max-h-[360px] overflow-auto rounded-lg border border-[var(--bd)] [&::-webkit-scrollbar-thumb]:cursor-pointer [&::-webkit-scrollbar]:cursor-pointer">
@@ -1725,12 +1791,17 @@ function AttendanceLogPanel({ usersLogs, onDelete }) {
 // accumulates every run's sessions into per-person documents, so a run's own
 // events can't be fetched in isolation — instead we pull the full log once and
 // slice its sessions into each run's time window [record.createdAt, nextRun).
-function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipName, currentClipUrl }) {
+function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipName, currentClipUrl, range }) {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const rangeStartMs = range?.start ? new Date(range.start).setHours(0, 0, 0, 0) : null;
+  const rangeEndMs = range?.end ? new Date(range.end).setHours(23, 59, 59, 999) : null;
+
   // Processed Face Recognition records, oldest -> newest so windows are easy to
-  // bound; the list is reversed to newest-first before returning.
+  // bound; the list is reversed to newest-first before returning. When a date
+  // range is picked, only the runs inside it are considered — this also narrows
+  // the backend /accessLogs/get window below to that same span.
   const faceRecords = useMemo(
     () =>
       (Array.isArray(history) ? history : [])
@@ -1738,19 +1809,33 @@ function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipN
           (record) =>
             record?.detections?.faceAuthenticationSettings &&
             (record?.videos || []).some((video) => video?.dsVideoUrl) &&
-            record?.createdAt,
+            record?.createdAt &&
+            (rangeStartMs == null || new Date(record.createdAt).getTime() >= rangeStartMs) &&
+            (rangeEndMs == null || new Date(record.createdAt).getTime() <= rangeEndMs),
         )
         .slice()
         .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)),
-    [history],
+    [history, rangeStartMs, rangeEndMs],
   );
+
+  // The effect below only reads currentUsersLogs in the no-history branch, and
+  // the parent passes a fresh `[]`/array on every render — depending on its
+  // identity re-fires the effect (and its /accessLogs/get fetch) in a loop.
+  // Key the effect on a stable signature instead.
+  const usersLogsKey = useMemo(
+    () => JSON.stringify((currentUsersLogs || []).map((log) => log?.userId || log?.personName || '')),
+    [currentUsersLogs],
+  );
+
+  const hasRange = rangeStartMs != null && rangeEndMs != null;
 
   useEffect(() => {
     let cancelled = false;
 
     const run = async () => {
-      if (!faceRecords.length) {
-        // No processed history — show the current session's log as one report.
+      // No date range and no processed history — show the current session's
+      // log as one report; nothing to fetch.
+      if (!hasRange && !faceRecords.length) {
         const rows = buildAttendanceRows(currentUsersLogs);
         if (!cancelled) {
           setReports(
@@ -1772,18 +1857,47 @@ function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipN
       }
 
       setLoading(true);
-      // Span the earliest run's day to the latest run's day.
-      const first = new Date(faceRecords[0].createdAt);
-      const last = new Date(faceRecords[faceRecords.length - 1].createdAt);
+      // Backend window: the picked date range when there is one, otherwise the
+      // span from the earliest run's day to the latest run's day. Either way
+      // every range change re-fires this fetch (POST /accessLogs/get).
+      const startDate = hasRange
+        ? ymd(range.start)
+        : new Date(faceRecords[0].createdAt).toISOString().slice(0, 10);
+      const endDate = hasRange
+        ? ymd(range.end)
+        : new Date(faceRecords[faceRecords.length - 1].createdAt).toISOString().slice(0, 10);
       const data = await getDemoAttendanceLogs({
         limit: 500,
         isExport: false,
         removeUnknown: true,
-        startDate: first.toISOString().slice(0, 10),
-        endDate: last.toISOString().slice(0, 10),
+        startDate,
+        endDate,
       }).catch(() => null);
 
       const allSessions = buildSessionRows(data?.usersLogs || []);
+
+      // A date range with no processed Face Recognition runs in demoHistory:
+      // still surface what the backend returned as one report for the window.
+      if (hasRange && !faceRecords.length) {
+        if (!cancelled) {
+          setReports(
+            allSessions.length
+              ? [{
+                  id: `range-${startDate}-${endDate}`,
+                  title: 'Face Recognition — Attendance Log',
+                  detectionName: 'Face Recognition',
+                  clipName: 'Demo clips',
+                  clipUrl: '',
+                  minConfidence,
+                  generatedAt: allSessions[0]?._at ? new Date(allSessions[0]._at).toISOString() : null,
+                  rows: allSessions,
+                }]
+              : [],
+          );
+          setLoading(false);
+        }
+        return;
+      }
 
       const built = faceRecords.map((record, index) => {
         const startMs = new Date(record.createdAt).getTime();
@@ -1820,19 +1934,28 @@ function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipN
 
     run();
     return () => { cancelled = true; };
-  }, [faceRecords, currentUsersLogs, minConfidence, currentClipName, currentClipUrl]);
+    // currentUsersLogs is intentionally keyed via usersLogsKey (stable signature)
+    // rather than by array identity — see the note above. rangeStartMs/rangeEndMs
+    // cover the picked date range, so changing the filter re-runs the fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [faceRecords, usersLogsKey, minConfidence, currentClipName, currentClipUrl, rangeStartMs, rangeEndMs]);
 
   return { reports, loading };
 }
 
 function DemoReportsPanel({ usersLogs, clipName, clipUrl, minConfidence, history, analytics }) {
-  const { reports, loading } = useDemoReports({
+  const [range, setRange] = useState({ start: null, end: null });
+  // The hook narrows both the runs it builds and the backend /accessLogs/get
+  // window to this range, so no extra client-side filter is needed here.
+  const { reports: allReports, loading } = useDemoReports({
     history,
     currentUsersLogs: usersLogs,
     minConfidence,
     currentClipName: clipName,
     currentClipUrl: clipUrl,
+    range,
   });
+  const reports = allReports;
   const hasData = reports.some((report) => report.rows.length > 0);
 
   return (
@@ -1850,7 +1973,15 @@ function DemoReportsPanel({ usersLogs, clipName, clipUrl, minConfidence, history
           </span>
           {loading && <Loader className="h-3.5 w-3.5 animate-spin text-[var(--blue)]" />}
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="w-[240px] max-w-full [&>div]:!w-full">
+            <PresetDateRangePicker
+              startDate={range.start}
+              endDate={range.end}
+              maxDate={new Date()}
+              onRangeChange={({ start, end }) => setRange({ start, end })}
+            />
+          </div>
           <button
             type="button"
             disabled={!hasData}
@@ -1876,7 +2007,11 @@ function DemoReportsPanel({ usersLogs, clipName, clipUrl, minConfidence, history
 
       {reports.length === 0 ? (
         <div className="rounded-lg border border-dashed border-[var(--bd2)] bg-[var(--bg2)] p-6 text-center text-xs text-[var(--tx3)]">
-          {loading ? 'Loading reports…' : 'No reports yet — process a clip to generate one.'}
+          {loading
+            ? 'Loading reports…'
+            : range.start && range.end
+              ? 'No attendance events in this date range.'
+              : 'No reports yet — process a clip to generate one.'}
         </div>
       ) : (
         <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1 [&::-webkit-scrollbar-thumb]:cursor-pointer [&::-webkit-scrollbar]:cursor-pointer">
@@ -1935,27 +2070,147 @@ function DemoReportsPanel({ usersLogs, clipName, clipUrl, minConfidence, history
   );
 }
 
-function DemoHistoryPanel({ history, loading, activeRecordId, onSelect }) {
-  // Date-range filter over the run's createdAt. Both bounds inclusive; the end
-  // bound covers the whole day. Held as Date objects for PresetDateRangePicker.
-  const [range, setRange] = useState({ start: null, end: null });
-  const hasFilter = Boolean(range.start || range.end);
+// Local YYYY-MM-DD (not toISOString, which would shift by the tz offset) — the
+// backend bounds this in the admin's own timezone.
+function ymd(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
-  const inRange = (createdAt) => {
-    if (!hasFilter) return true;
-    const ts = createdAt ? new Date(createdAt).getTime() : 0;
-    if (!ts) return false;
-    if (range.start) {
-      const lo = new Date(range.start);
-      lo.setHours(0, 0, 0, 0);
-      if (ts < lo.getTime()) return false;
-    }
-    if (range.end) {
-      const hi = new Date(range.end);
-      hi.setHours(23, 59, 59, 999);
-      if (ts > hi.getTime()) return false;
-    }
-    return true;
+// Searchable single-select for the Recent Demos detection-type filter. Theme
+// aware, scrollable list, type-to-filter, and a clear affordance on the trigger.
+function DetectionTypeFilter({ options, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const wrapRef = useRef(null);
+  const selected = options.find((item) => item.settingType === value);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDocClick = (event) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target)) setOpen(false);
+    };
+    const onKey = (event) => event.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) setQuery('');
+  }, [open]);
+
+  const needle = query.trim().toLowerCase();
+  const filtered = needle
+    ? options.filter((item) => item.name.toLowerCase().includes(needle) || (item.subtitle || '').toLowerCase().includes(needle))
+    : options;
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className={`flex h-10 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border bg-[var(--bg2)] px-3 text-xs font-medium outline-none transition-colors 2xl:text-sm ${
+          open ? 'border-[var(--violet)]' : 'border-[var(--bd)] hover:border-[var(--violet)]'
+        } ${selected ? 'text-[var(--tx)]' : 'text-[var(--tx2)]'}`}
+      >
+        <span className="truncate">{selected ? selected.name : 'All detection types'}</span>
+        <span className="flex shrink-0 items-center gap-1">
+          {selected && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(event) => { event.stopPropagation(); onChange(''); setOpen(false); }}
+              onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); onChange(''); setOpen(false); } }}
+              className="grid h-5 w-5 cursor-pointer place-items-center rounded text-[var(--tx3)] transition-colors hover:bg-[var(--bg3)] hover:text-[var(--tx)]"
+              aria-label="Clear detection type filter"
+            >
+              <X className="h-3.5 w-3.5" />
+            </span>
+          )}
+          <ChevronDown className={`h-3.5 w-3.5 text-[var(--tx2)] transition-transform ${open ? 'rotate-180' : ''}`} />
+        </span>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-11 z-[90] overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg1solid)] shadow-2xl">
+          <div className="border-b border-[var(--bd)] p-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--tx3)]" />
+              <input
+                autoFocus
+                type="text"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search detection..."
+                className="h-8 w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] pl-8 pr-3 text-xs text-[var(--tx)] placeholder:text-[var(--tx3)] outline-none focus:border-[var(--violet)]"
+              />
+            </div>
+          </div>
+          <div className="max-h-[240px] overflow-y-auto py-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--bd2)] hover:[&::-webkit-scrollbar-thumb]:bg-[var(--tx3)] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:w-1.5">
+            <button
+              type="button"
+              onClick={() => { onChange(''); setOpen(false); }}
+              className={`flex w-full cursor-pointer items-center justify-between border-l-2 px-3 py-2 text-left text-xs transition-colors hover:bg-[var(--bg2)] ${
+                !value
+                  ? 'border-[var(--violet)] bg-[var(--violet)]/10 font-bold text-[var(--tx)]'
+                  : 'border-transparent text-[var(--tx)]'
+              }`}
+            >
+              All detection types
+              {!value && <Check className="h-3.5 w-3.5 text-[var(--violet)]" />}
+            </button>
+            {filtered.length === 0 ? (
+              <div className="px-3 py-3 text-xs text-[var(--tx3)]">No detection found</div>
+            ) : (
+              filtered.map((item) => {
+                const active = item.settingType === value;
+                return (
+                  <button
+                    key={item.settingType}
+                    type="button"
+                    onClick={() => { onChange(item.settingType); setOpen(false); }}
+                    className={`flex w-full cursor-pointer items-center justify-between gap-2 border-l-2 px-3 py-2 text-left transition-colors hover:bg-[var(--bg2)] ${
+                      active ? 'border-[var(--violet)] bg-[var(--violet)]/10' : 'border-transparent'
+                    }`}
+                  >
+                    <span className="min-w-0">
+                      <span className={`block truncate text-xs font-semibold ${active ? 'text-[var(--violet)]' : 'text-[var(--tx)]'}`}>{item.name}</span>
+                      {item.subtitle && <span className="block truncate text-[10px] text-[var(--tx3)]">{item.subtitle}</span>}
+                    </span>
+                    {active && <Check className="h-3.5 w-3.5 shrink-0 text-[var(--violet)]" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DemoHistoryPanel({ history, loading, activeRecordId, filters, onFiltersChange, onSelect }) {
+  // Both filters are server-side: changing either hands new query params up to
+  // loadDemoHistory, which refetches. Nothing is filtered on the client here.
+  const [range, setRange] = useState({ start: null, end: null });
+  const hasFilter = Boolean(filters.detectionType || filters.startDate);
+
+  // Detection types that can appear in Recent Demos, from the same catalogue
+  // the rest of the page uses. Only those with a settingType are selectable.
+  const detectionOptions = detections.filter((item) => item.settingType);
+
+  const handleRangeChange = ({ start, end }) => {
+    setRange({ start, end });
+    onFiltersChange({
+      ...filters,
+      startDate: start && end ? ymd(start) : '',
+      endDate: start && end ? ymd(end) : '',
+    });
   };
 
   return (
@@ -1965,19 +2220,25 @@ function DemoHistoryPanel({ history, loading, activeRecordId, onSelect }) {
         <div className="mt-1 text-[11px] text-[var(--tx3)]">Demos you've run before, most recent first. Click one to load it.</div>
       </div>
 
-      <div className="mb-3">
-        <PresetDateRangePicker
-          startDate={range.start}
-          endDate={range.end}
-          maxDate={new Date()}
-          onRangeChange={({ start, end }) => setRange({ start, end })}
+      <div className="mb-3 flex flex-wrap items-start gap-2 [&>*]:min-w-[170px] [&>*]:flex-1">
+        <DetectionTypeFilter
+          options={detectionOptions}
+          value={filters.detectionType}
+          onChange={(next) => onFiltersChange({ ...filters, detectionType: next })}
         />
+        <div className="[&>div]:!w-full">
+          <PresetDateRangePicker
+            startDate={range.start}
+            endDate={range.end}
+            maxDate={new Date()}
+            onRangeChange={handleRangeChange}
+          />
+        </div>
       </div>
 
       {(() => {
         const processedHistory = history
-          .filter((record) => (record?.videos || []).some((video) => video?.dsVideoUrl))
-          .filter((record) => inRange(record?.createdAt));
+          .filter((record) => (record?.videos || []).some((video) => video?.dsVideoUrl));
         if (loading) {
           return (
             <div className="grid h-20 place-items-center text-[var(--tx3)]">
@@ -1988,12 +2249,12 @@ function DemoHistoryPanel({ history, loading, activeRecordId, onSelect }) {
         if (processedHistory.length === 0) {
           return (
             <div className="rounded-lg border border-dashed border-[var(--bd2)] bg-[var(--bg2)] p-4 text-center text-xs text-[var(--tx3)]">
-              {hasFilter ? 'No demos in this date range.' : 'No demos run yet.'}
+              {hasFilter ? 'No demos match these filters.' : 'No demos run yet.'}
             </div>
           );
         }
         return (
-          <div className="h-[480px] space-y-2 overflow-y-auto pr-1">
+          <div className="h-[480px] space-y-2 overflow-y-auto pr-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--bd2)] hover:[&::-webkit-scrollbar-thumb]:bg-[var(--tx3)] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:w-1.5">
             {processedHistory.map((record) => {
               const id = recordIdOf(record);
               const settingType = Object.entries(record?.detections || {}).find(([, enabled]) => enabled)?.[0];
@@ -2087,6 +2348,9 @@ export default function LiveDemo({ active = true }) {
   const [matchedAlerts, setMatchedAlerts] = useState([]);
   const [demoHistory, setDemoHistory] = useState([]);
   const [demoHistoryLoading, setDemoHistoryLoading] = useState(false);
+  // Recent Demos server-side filters — detectionType (settingType key) and a
+  // YYYY-MM-DD date window. A new object identity re-runs loadDemoHistory.
+  const [demoHistoryFilters, setDemoHistoryFilters] = useState({ detectionType: '', startDate: '', endDate: '' });
 
   const selected = detections.find((item) => item.name === selectedDetection) || detections[0];
   const selectedConfig = detectionConfigs[selectedDetection];
@@ -2329,10 +2593,10 @@ export default function LiveDemo({ active = true }) {
   // Recent Demos history list — every record this admin has run, newest
   // first. GET /video-records already sorts { createdAt: -1 } and scopes to
   // the session admin, so this is a straight list call with no client sort.
-  const loadDemoHistory = async () => {
+  const loadDemoHistory = async (filters = demoHistoryFilters) => {
     setDemoHistoryLoading(true);
     try {
-      const { records } = await getVideoRecords({ limit: 100 });
+      const { records } = await getVideoRecords({ limit: 100, ...filters });
       setDemoHistory(Array.isArray(records) ? records : []);
     } catch (error) {
       console.error('Failed to load live demo history', error);
@@ -2343,8 +2607,8 @@ export default function LiveDemo({ active = true }) {
 
   useEffect(() => {
     if (!user?.adminId) return;
-    loadDemoHistory();
-  }, [user?.adminId]);
+    loadDemoHistory(demoHistoryFilters);
+  }, [user?.adminId, demoHistoryFilters]);
 
   // Loads a past record's clip/zones/results into the player and panels
   // without touching selectedDetection — callers that already know (or are
@@ -2364,6 +2628,9 @@ export default function LiveDemo({ active = true }) {
       const restoredDetection = Object.entries(record?.detections || {}).find(([, enabled]) => enabled)?.[0];
       const detectionName = detections.find((item) => item.settingType === restoredDetection)?.name || 'Face Recognition';
       setSelectedDetection(detectionName);
+      if (restoredDetection) {
+        setDemoHistoryFilters((current) => ({ ...current, detectionType: restoredDetection }));
+      }
       await openDemoRecord(record);
     } catch (error) {
       console.error('Failed to load selected live demo', error);
@@ -2382,6 +2649,24 @@ export default function LiveDemo({ active = true }) {
       console.error('Failed to reset clip state for detection change', error);
     }
     setSelectedDetection(item.name);
+    // Mirror the pick into the Recent Demos filter so the history list narrows
+    // to this detection. Types without a settingType (e.g. Bag Detection) can't
+    // be filtered server-side — clear the filter back to "all" for those.
+    setDemoHistoryFilters((current) => ({ ...current, detectionType: item.settingType || '' }));
+  };
+
+  // Recent Demos filter changed. Keep the "1. Detection" selection in sync with
+  // the detection-type filter: picking a type there selects its tile (and resets
+  // the clip like clicking the tile would); clearing it leaves the tile alone.
+  const handleDemoFiltersChange = (next) => {
+    setDemoHistoryFilters(next);
+    if (next.detectionType && next.detectionType !== demoHistoryFilters.detectionType) {
+      const match = detections.find((item) => item.settingType === next.detectionType);
+      if (match && match.name !== selectedDetection) {
+        resetClipState().catch((error) => console.error('Failed to reset clip state for detection change', error));
+        setSelectedDetection(match.name);
+      }
+    }
   };
 
   // The DS/video-process pipeline runs after the /process call returns and
@@ -3803,6 +4088,8 @@ export default function LiveDemo({ active = true }) {
           history={demoHistory}
           loading={demoHistoryLoading}
           activeRecordId={recordIdOf(videoRecord)}
+          filters={demoHistoryFilters}
+          onFiltersChange={handleDemoFiltersChange}
           onSelect={handleSelectDemoHistory}
         />
       </div>

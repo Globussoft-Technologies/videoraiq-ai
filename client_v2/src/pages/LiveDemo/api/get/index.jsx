@@ -14,12 +14,24 @@ const unwrap = (res) => {
   return body;
 };
 
-export const getVideoRecords = async ({ id = '', skip = 0, limit = 20 } = {}) => {
+export const getVideoRecords = async ({
+  id = '',
+  skip = 0,
+  limit = 20,
+  detectionType = '',
+  startDate = '',
+  endDate = '',
+} = {}) => {
   const params = new URLSearchParams({
     skip: String(skip),
     limit: String(limit),
   });
   if (id) params.set('id', id);
+  if (detectionType) params.set('detectionType', detectionType);
+  if (startDate && endDate) {
+    params.set('startDate', startDate);
+    params.set('endDate', endDate);
+  }
 
   const res = await axios.get(`${HOST}/video-records?${params.toString()}`, {
     headers: authHeaders(),

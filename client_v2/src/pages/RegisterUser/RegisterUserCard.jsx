@@ -187,7 +187,9 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     const errs = {};
     if (!firstName.trim()) errs.firstName = 'First name is required';
     else if (firstName.trim().length < 2) errs.firstName = 'First name must be at least 2 characters';
+    else if (firstName.trim().length > 30) errs.firstName = 'First name must be at most 30 characters';
     if (!lastName.trim()) errs.lastName = 'Last name is required';
+    else if (lastName.trim().length > 30) errs.lastName = 'Last name must be at most 30 characters';
     if (!email.trim()) errs.email = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.(com|net|org|in|co|io|edu|gov)$/.test(email.trim()))
       errs.email = 'Invalid email format';
@@ -290,8 +292,9 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
               <input
                 className={fieldInput}
                 placeholder="Enter First Name"
+                maxLength={30}
                 value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
+                onChange={(e) => setFirstName(e.target.value.slice(0, 30))}
               />
               {errors.firstName && <p className="text-xs text-[var(--crit)] mt-1">{errors.firstName}</p>}
             </div>
@@ -300,8 +303,9 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
               <input
                 className={fieldInput}
                 placeholder="Enter Last Name"
+                maxLength={30}
                 value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
+                onChange={(e) => setLastName(e.target.value.slice(0, 30))}
               />
               {errors.lastName && <p className="text-xs text-[var(--crit)] mt-1">{errors.lastName}</p>}
             </div>

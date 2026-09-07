@@ -1061,6 +1061,17 @@ export default function DetectionZoneMarking({
                     }}
                   >
                     {[
+                      // Check-In/Check-Out keeps the polygon tools for its gate
+                      // zones and adds the crossing-line sub-tool, same as the
+                      // docked toolbar (ZoneToolbar's drawLineButton).
+                      ...(isCheckInOut
+                        ? [{
+                            label: lineDrawing ? 'Stop Line' : 'Draw Line',
+                            icon: Pencil,
+                            disabled: !canUseDrawing,
+                            onClick: startLineDrawing,
+                          }]
+                        : []),
                       { label: 'Max Area', icon: Maximize2, disabled: !canUseAreaPreset, onClick: handleMaxArea },
                       { label: 'Min Area', icon: Minimize2, disabled: !canUseAreaPreset, onClick: handleMinArea },
                       {

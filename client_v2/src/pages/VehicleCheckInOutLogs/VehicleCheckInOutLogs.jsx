@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
-import DateRangePicker from '@/pages/AttendanceLogs/components/DateRangePicker';
+import PresetDateRangePicker from '@/components/PresetDateRangePicker';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
 import ExportButton from '@/pages/AttendanceLogs/components/ExportButton';
@@ -223,12 +223,13 @@ const VehicleCheckInOutLogs = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            <DateRangePicker
+            <PresetDateRangePicker
               startDate={startDate}
               endDate={endDate}
+              maxDate={moment().format('YYYY-MM-DD')}
               onRangeChange={({ start, end }) => {
-                setStartDate(start);
-                setEndDate(end);
+                setStartDate(start ? moment(start).format('YYYY-MM-DD') : '');
+                setEndDate(end ? moment(end).format('YYYY-MM-DD') : '');
                 setPage(1);
               }}
             />
@@ -290,7 +291,6 @@ const VehicleCheckInOutLogs = () => {
               <tr className="border-b border-[var(--bd)]">
                 <th className={`${th} w-10`} />
                 <th className={th}>Image</th>
-                <th className={th}>Model Name</th>
                 <th className={th}>Vehicle Number</th>
                 <th className={th}>Custody</th>
                 <th className={th}>In / Out</th>
@@ -338,7 +338,6 @@ const VehicleCheckInOutLogs = () => {
                           </span>
                         )}
                       </td>
-                      <td className={td}>{dash(row.model_name)}</td>
                       <td className={`${td} font-medium`}>{dash(row.vehicleNumber)}</td>
                       <td className={td}>
                         <CustodyChip inCustody={row.custody} />
@@ -358,7 +357,7 @@ const VehicleCheckInOutLogs = () => {
 
                     {open && (
                       <tr className="border-b border-[var(--bd)]">
-                        <td colSpan={12} className="p-0">
+                        <td colSpan={11} className="p-0">
                           <div className="bg-[var(--bg2)] px-6 py-4">
                             <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--tx2)] mb-2">
                               All crossings for {dash(row.vehicleNumber)}
@@ -411,7 +410,7 @@ const VehicleCheckInOutLogs = () => {
 
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="px-4 py-16 text-center">
+                  <td colSpan={11} className="px-4 py-16 text-center">
                     <SearchX className="w-7 h-7 mx-auto text-[var(--tx3)] mb-2" />
                     <p className="text-sm text-[var(--tx2)]">
                       No vehicle check-in/out logs for this range.
