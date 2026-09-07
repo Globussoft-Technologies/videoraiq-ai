@@ -33,11 +33,12 @@ export function buildAttendanceRows(usersLogs = []) {
     return {
       // Stable-ish identity for row selection / deletion in the demo UI.
       id: log.logId || log._id || log.userId || `row-${index}`,
-      // Raw check-in epoch ms, for the on-page date-range filter.
-      _atMs: checkIn ? new Date(checkIn).getTime() : 0,
       photo: sessionSnap(sessions[0]) || log.userInfo?.profilePics?.[0] || '',
       name: log.userInfo?.userName || 'Unknown',
       email: log.userInfo?.email || '--',
+      // Event date in IST (Asia/Kolkata), the demo's reporting zone. Shown as
+      // its own column now that the demo log spans every run, not just today.
+      date: checkIn ? moment.tz(checkIn, 'Asia/Kolkata').format('DD MMM YYYY') : '--',
       checkIn: checkIn ? moment(checkIn).format('HH:mm:ss') : '--',
       checkOut: checkOut ? moment(checkOut).format('HH:mm:ss') : '--',
       duration: durationLabel(checkIn ? new Date(checkIn).getTime() : 0, checkOut ? new Date(checkOut).getTime() : 0),
@@ -67,6 +68,7 @@ export function buildSessionRows(usersLogs = []) {
         photo: sessionSnap(session) || photo,
         name,
         email,
+        date: at ? moment.tz(at, 'Asia/Kolkata').format('DD MMM YYYY') : '--',
         checkIn: session?.checkIn && session.checkIn !== session?.timestamp
           ? moment(session.checkIn).format('HH:mm:ss')
           : at ? moment(at).format('HH:mm:ss') : '--',
@@ -340,8 +342,8 @@ const drawAttendanceSection = (doc, report, startY, avgConfidence) => {
   y = doc.lastAutoTable.finalY + 4;
 
   autoTable(doc, {
-    head: [['Person', 'Email', 'Check-in', 'Check-out']],
-    body: report.rows.map((row) => [row.name, row.email || '--', row.checkIn, row.checkOut]),
+    head: [['Person', 'Email', 'Date', 'Check-in', 'Check-out']],
+    body: report.rows.map((row) => [row.name, row.email || '--', row.date || '--', row.checkIn, row.checkOut]),
     startY: y,
     margin: { left: 14, right: 14 },
     styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
@@ -412,6 +414,7 @@ function reportSheet(report) {
       '#': i + 1,
       Person: row.name,
       Email: row.email || '--',
+      Date: row.date || '--',
       'Check-in': row.checkIn,
       'Check-out': row.checkOut,
     })),

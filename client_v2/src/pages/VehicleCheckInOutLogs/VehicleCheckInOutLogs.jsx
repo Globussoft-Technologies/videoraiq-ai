@@ -25,7 +25,7 @@ import {
 } from './Api';
 import { handleVehicleCheckInOutExport } from './vehicleCheckInOutExport';
 
-const PAGE_SIZES = [10, 25, 50];
+const PAGE_SIZES = [10, 25, 50, 100];
 
 /** Same resolver Car Logs uses — DS sends a path, not a URL. */
 const getImageUrl = (item) => {
@@ -98,7 +98,7 @@ const VehicleCheckInOutLogs = () => {
 
   // vehicleKey -> { loading, data } for the expanded sub-rows.
   const [expanded, setExpanded] = useState({});
-  const [previewImage, setPreviewImage] = useState(null);
+  const [previewIndex, setPreviewIndex] = useState(-1);
   const [exporting, setExporting] = useState(null);
 
   const { permissions, loading: permissionsLoading } = usePermissions();
@@ -203,6 +203,28 @@ const VehicleCheckInOutLogs = () => {
     [rows],
   );
 
+  // Every image currently on screen, in visual order: each vehicle's own image
+  // followed by any images from its expanded crossings. The preview modal steps
+  // through this list with the prev/next arrows.
+  const previewImages = useMemo(() => {
+    const list = [];
+    rows.forEach((row) => {
+      const img = getImageUrl(row);
+      if (img) list.push(img);
+      (expanded[row.vehicleKey]?.data || []).forEach((sub) => {
+        const subImg = getImageUrl(sub);
+        if (subImg) list.push(subImg);
+      });
+    });
+    return list;
+  }, [rows, expanded]);
+
+  const openPreview = (image) => {
+    const index = previewImages.indexOf(image);
+    setPreviewIndex(index >= 0 ? index : -1);
+  };
+  const previewImage = previewIndex >= 0 ? previewImages[previewIndex] : null;
+
   if (permissionsLoading) return <PageLoader />;
   if (!canView) return <AccessDenied />;
 
@@ -294,9 +316,6 @@ const VehicleCheckInOutLogs = () => {
                 <th className={th}>Vehicle Number</th>
                 <th className={th}>Custody</th>
                 <th className={th}>In / Out</th>
-                <th className={th}>Company</th>
-                <th className={th}>Colour</th>
-                <th className={th}>Year</th>
                 <th className={th}>NVR Name</th>
                 <th className={th}>Camera Name</th>
                 <th className={th}>First Check-In</th>
@@ -329,7 +348,7 @@ const VehicleCheckInOutLogs = () => {
                             imgClassName="w-full h-full object-cover"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setPreviewImage(image);
+                              openPreview(image);
                             }}
                           />
                         ) : (
@@ -345,9 +364,6 @@ const VehicleCheckInOutLogs = () => {
                       <td className={`${td} text-[var(--tx2)] whitespace-nowrap`}>
                         {row.checkInCount} / {row.checkOutCount}
                       </td>
-                      <td className={td}>{dash(row.company)}</td>
-                      <td className={td}>{dash(row.color)}</td>
-                      <td className={td}>{dash(row.year)}</td>
                       <td className={td}>{dash(row?.nvrData?.nvrName)}</td>
                       <td className={td}>{cameraName(row)}</td>
                       <td className={`${td} whitespace-nowrap`}>
@@ -357,7 +373,7 @@ const VehicleCheckInOutLogs = () => {
 
                     {open && (
                       <tr className="border-b border-[var(--bd)]">
-                        <td colSpan={11} className="p-0">
+                        <td colSpan={8} className="p-0">
                           <div className="bg-[var(--bg2)] px-6 py-4">
                             <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--tx2)] mb-2">
                               All crossings for {dash(row.vehicleNumber)}
@@ -390,7 +406,7 @@ const VehicleCheckInOutLogs = () => {
                                     {getImageUrl(sub) && (
                                       <button
                                         type="button"
-                                        onClick={() => setPreviewImage(getImageUrl(sub))}
+                                        onClick={() => openPreview(getImageUrl(sub))}
                                         className="ml-auto text-[11px] text-[var(--blue)] hover:underline cursor-pointer"
                                       >
                                         View image
@@ -410,7 +426,7 @@ const VehicleCheckInOutLogs = () => {
 
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-16 text-center">
+                  <td colSpan={8} className="px-4 py-16 text-center">
                     <SearchX className="w-7 h-7 mx-auto text-[var(--tx3)] mb-2" />
                     <p className="text-sm text-[var(--tx2)]">
                       No vehicle check-in/out logs for this range.
@@ -468,7 +484,11 @@ const VehicleCheckInOutLogs = () => {
       {previewImage && (
         <ImagePreviewModal
           previewImage={previewImage}
-          onClose={() => setPreviewImage(null)}
+          hasPrevious={previewIndex > 0}
+          hasNext={previewIndex < previewImages.length - 1}
+          onPrevious={() => setPreviewIndex((i) => Math.max(0, i - 1))}
+          onNext={() => setPreviewIndex((i) => Math.min(previewImages.length - 1, i + 1))}
+          onClose={() => setPreviewIndex(-1)}
         />
       )}
     </div>

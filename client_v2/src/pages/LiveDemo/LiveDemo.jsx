@@ -1587,61 +1587,40 @@ function FaceRecognitionConfig({ confidence, setConfidence }) {
   );
 }
 
-// True when `ms` (epoch) falls within an inclusive PresetDateRangePicker range;
-// a null/empty range matches everything. End bound covers the whole day.
-function withinRange(ms, range) {
-  if (!range?.start && !range?.end) return true;
-  if (!ms) return false;
-  if (range.start) {
-    const lo = new Date(range.start);
-    lo.setHours(0, 0, 0, 0);
-    if (ms < lo.getTime()) return false;
-  }
-  if (range.end) {
-    const hi = new Date(range.end);
-    hi.setHours(23, 59, 59, 999);
-    if (ms > hi.getTime()) return false;
-  }
-  return true;
-}
+// Backend attendance/session queries always window on createdAt; with no dates
+// they default to "today" server-side. To show all demo history when the user
+// hasn't picked a range, pass an explicitly wide window instead.
+const ALL_TIME_START = '2020-01-01';
+const allTimeEnd = () => ymd(new Date());
 
 function AttendanceLogPanel({ usersLogs, onDelete }) {
   const [range, setRange] = useState({ start: null, end: null });
-  // When a date range is picked, fetch the demo attendance log for that window
-  // from the backend (POST /accessLogs/get with startDate/endDate); otherwise
-  // fall through to the current-session log the parent already loaded.
-  const [rangeLogs, setRangeLogs] = useState(null);
-  const [rangeLoading, setRangeLoading] = useState(false);
   const hasRange = Boolean(range.start && range.end);
+  // This panel always reads from the backend (POST /accessLogs/get). No range
+  // picked -> the full demo history; a range picked -> just that window.
+  // `usersLogs` (the current session's log) is only a first-paint fallback.
+  const [fetchedLogs, setFetchedLogs] = useState(null);
+  const [fetchLoading, setFetchLoading] = useState(false);
 
   useEffect(() => {
-    if (!hasRange) {
-      setRangeLogs(null);
-      return undefined;
-    }
     let cancelled = false;
-    setRangeLoading(true);
+    setFetchLoading(true);
     getDemoAttendanceLogs({
       limit: 500,
       isExport: false,
       removeUnknown: true,
-      startDate: ymd(range.start),
-      endDate: ymd(range.end),
+      startDate: hasRange ? ymd(range.start) : ALL_TIME_START,
+      endDate: hasRange ? ymd(range.end) : allTimeEnd(),
     })
-      .then((data) => { if (!cancelled) setRangeLogs(data?.usersLogs || []); })
-      .catch(() => { if (!cancelled) setRangeLogs([]); })
-      .finally(() => { if (!cancelled) setRangeLoading(false); });
+      .then((data) => { if (!cancelled) setFetchedLogs(data?.usersLogs || []); })
+      .catch(() => { if (!cancelled) setFetchedLogs([]); })
+      .finally(() => { if (!cancelled) setFetchLoading(false); });
     return () => { cancelled = true; };
   }, [hasRange, range.start, range.end]);
 
-  const sourceLogs = hasRange ? (rangeLogs || []) : usersLogs;
-  const allRows = useMemo(() => buildAttendanceRows(sourceLogs), [sourceLogs]);
-  // The backend already windowed a ranged fetch; only client-filter the
-  // current-session fallback (which is unranged).
-  const rows = useMemo(
-    () => (hasRange ? allRows : allRows.filter((row) => withinRange(row._atMs, range))),
-    [allRows, range, hasRange],
-  );
+  const rangeLoading = fetchLoading;
+  const sourceLogs = fetchedLogs ?? usersLogs;
+  const rows = useMemo(() => buildAttendanceRows(sourceLogs), [sourceLogs]);
   const [selected, setSelected] = useState(() => new Set());
 
   // Drop selections that no longer exist after an external refresh.
@@ -1679,7 +1658,7 @@ function AttendanceLogPanel({ usersLogs, onDelete }) {
         <div className="flex items-center gap-2">
           <h2 className="text-[15px] font-bold text-[var(--tx)]">Attendance Log</h2>
           <span className="rounded-md border border-[var(--bd)] bg-[var(--bg2)] px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--tx3)]">
-            {hasRange ? 'Filtered by date' : 'Generated from your clip'}
+            {hasRange ? 'Filtered by date' : 'All demo runs'}
           </span>
           {rangeLoading && <Loader className="h-3.5 w-3.5 animate-spin text-[var(--blue)]" />}
         </div>
@@ -1714,11 +1693,11 @@ function AttendanceLogPanel({ usersLogs, onDelete }) {
             ? 'Loading attendance events…'
             : hasRange
               ? 'No attendance events in this date range.'
-              : 'No attendance events yet — process a clip to populate this log.'}
+              : 'No attendance events yet — process a Face Recognition clip to populate this log.'}
         </div>
       ) : (
         <div className="max-h-[360px] overflow-auto rounded-lg border border-[var(--bd)] [&::-webkit-scrollbar-thumb]:cursor-pointer [&::-webkit-scrollbar]:cursor-pointer">
-          <table className="w-full min-w-[600px] text-left text-xs">
+          <table className="w-full min-w-[680px] text-left text-xs">
             <thead className="sticky top-0 z-10 bg-[var(--bg2)] text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--tx3)]">
               <tr>
                 <th className="w-10 px-3 py-2">
@@ -1733,6 +1712,7 @@ function AttendanceLogPanel({ usersLogs, onDelete }) {
                 <th className="px-3 py-2">Snap</th>
                 <th className="px-3 py-2">Person</th>
                 <th className="px-3 py-2">Email</th>
+                <th className="px-3 py-2">Date</th>
                 <th className="px-3 py-2">Check-in</th>
                 <th className="px-3 py-2">Check-out</th>
                 <th className="w-12 px-3 py-2 text-right">Del</th>
@@ -1764,6 +1744,7 @@ function AttendanceLogPanel({ usersLogs, onDelete }) {
                     </td>
                     <td className="px-3 py-2 font-semibold text-[var(--tx)]">{row.name}</td>
                     <td className="px-3 py-2 text-[var(--tx2)]">{row.email}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-[var(--tx2)]">{row.date}</td>
                     <td className="px-3 py-2 text-[var(--tx2)]">{row.checkIn}</td>
                     <td className="px-3 py-2 text-[var(--tx2)]">{row.checkOut}</td>
                     <td className="px-3 py-2 text-right">
@@ -1791,7 +1772,7 @@ function AttendanceLogPanel({ usersLogs, onDelete }) {
 // accumulates every run's sessions into per-person documents, so a run's own
 // events can't be fetched in isolation — instead we pull the full log once and
 // slice its sessions into each run's time window [record.createdAt, nextRun).
-function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipName, currentClipUrl, range }) {
+function useDemoReports({ history, minConfidence, currentClipName, range }) {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -1818,54 +1799,18 @@ function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipN
     [history, rangeStartMs, rangeEndMs],
   );
 
-  // The effect below only reads currentUsersLogs in the no-history branch, and
-  // the parent passes a fresh `[]`/array on every render — depending on its
-  // identity re-fires the effect (and its /accessLogs/get fetch) in a loop.
-  // Key the effect on a stable signature instead.
-  const usersLogsKey = useMemo(
-    () => JSON.stringify((currentUsersLogs || []).map((log) => log?.userId || log?.personName || '')),
-    [currentUsersLogs],
-  );
-
   const hasRange = rangeStartMs != null && rangeEndMs != null;
 
   useEffect(() => {
     let cancelled = false;
 
     const run = async () => {
-      // No date range and no processed history — show the current session's
-      // log as one report; nothing to fetch.
-      if (!hasRange && !faceRecords.length) {
-        const rows = buildAttendanceRows(currentUsersLogs);
-        if (!cancelled) {
-          setReports(
-            rows.length
-              ? [{
-                  id: 'current-session',
-                  title: 'Face Recognition — Attendance Log',
-                  detectionName: 'Face Recognition',
-                  clipName: currentClipName || 'Demo clip',
-                  clipUrl: currentClipUrl || '',
-                  minConfidence,
-                  generatedAt: null,
-                  rows,
-                }]
-              : [],
-          );
-        }
-        return;
-      }
-
       setLoading(true);
-      // Backend window: the picked date range when there is one, otherwise the
-      // span from the earliest run's day to the latest run's day. Either way
-      // every range change re-fires this fetch (POST /accessLogs/get).
-      const startDate = hasRange
-        ? ymd(range.start)
-        : new Date(faceRecords[0].createdAt).toISOString().slice(0, 10);
-      const endDate = hasRange
-        ? ymd(range.end)
-        : new Date(faceRecords[faceRecords.length - 1].createdAt).toISOString().slice(0, 10);
+      // Always read from the backend (POST /accessLogs/get). No range picked ->
+      // the full demo history; a range picked -> just that window. Every range
+      // change re-fires this fetch.
+      const startDate = hasRange ? ymd(range.start) : ALL_TIME_START;
+      const endDate = hasRange ? ymd(range.end) : allTimeEnd();
       const data = await getDemoAttendanceLogs({
         limit: 500,
         isExport: false,
@@ -1876,9 +1821,9 @@ function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipN
 
       const allSessions = buildSessionRows(data?.usersLogs || []);
 
-      // A date range with no processed Face Recognition runs in demoHistory:
-      // still surface what the backend returned as one report for the window.
-      if (hasRange && !faceRecords.length) {
+      // No processed Face Recognition runs in demoHistory for this window:
+      // surface whatever the backend returned as one combined report.
+      if (!faceRecords.length) {
         if (!cancelled) {
           setReports(
             allSessions.length
@@ -1934,28 +1879,24 @@ function useDemoReports({ history, currentUsersLogs, minConfidence, currentClipN
 
     run();
     return () => { cancelled = true; };
-    // currentUsersLogs is intentionally keyed via usersLogsKey (stable signature)
-    // rather than by array identity — see the note above. rangeStartMs/rangeEndMs
-    // cover the picked date range, so changing the filter re-runs the fetch.
+    // rangeStartMs/rangeEndMs cover the picked date range, so changing the
+    // filter re-runs the fetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [faceRecords, usersLogsKey, minConfidence, currentClipName, currentClipUrl, rangeStartMs, rangeEndMs]);
+  }, [faceRecords, minConfidence, currentClipName, rangeStartMs, rangeEndMs]);
 
   return { reports, loading };
 }
 
-function DemoReportsPanel({ usersLogs, clipName, clipUrl, minConfidence, history, analytics }) {
+function DemoReportsPanel({ clipName, minConfidence, history, analytics }) {
   const [range, setRange] = useState({ start: null, end: null });
-  // The hook narrows both the runs it builds and the backend /accessLogs/get
-  // window to this range, so no extra client-side filter is needed here.
-  const { reports: allReports, loading } = useDemoReports({
+  // The hook fetches from the backend for the picked range, or all demo history
+  // when no range is picked.
+  const { reports, loading } = useDemoReports({
     history,
-    currentUsersLogs: usersLogs,
     minConfidence,
     currentClipName: clipName,
-    currentClipUrl: clipUrl,
     range,
   });
-  const reports = allReports;
   const hasData = reports.some((report) => report.rows.length > 0);
 
   return (
@@ -2010,8 +1951,8 @@ function DemoReportsPanel({ usersLogs, clipName, clipUrl, minConfidence, history
           {loading
             ? 'Loading reports…'
             : range.start && range.end
-              ? 'No attendance events in this date range.'
-              : 'No reports yet — process a clip to generate one.'}
+              ? 'No Face Recognition demos in this date range.'
+              : 'No reports yet — process a Face Recognition clip to generate one.'}
         </div>
       ) : (
         <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1 [&::-webkit-scrollbar-thumb]:cursor-pointer [&::-webkit-scrollbar]:cursor-pointer">
@@ -4108,9 +4049,7 @@ export default function LiveDemo({ active = true }) {
         />
         {selectedDetection === 'Face Recognition' && (
           <DemoReportsPanel
-            usersLogs={demoAttendanceLogs?.usersLogs || []}
             clipName={clipFile?.name}
-            clipUrl={processedVideo ? dsVideoSrc(processedVideo) : ''}
             minConfidence={confidence}
             history={demoHistory}
             analytics={sessionAnalytics}

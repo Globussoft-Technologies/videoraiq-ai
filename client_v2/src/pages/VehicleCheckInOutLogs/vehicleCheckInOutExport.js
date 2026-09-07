@@ -78,9 +78,6 @@ const PARENT_HEADERS = [
   'Vehicle Number',
   'Custody',
   'In / Out',
-  'Company',
-  'Colour',
-  'Year',
   'NVR Name',
   'Camera Name',
   'First Check-In',
@@ -92,9 +89,6 @@ const parentRow = (row, serial) => [
   dash(row.vehicleNumber),
   custodyLabel(row),
   `${row.checkInCount ?? 0} / ${row.checkOutCount ?? 0}`,
-  dash(row.company),
-  dash(row.color),
-  dash(row.year),
   dash(row?.nvrData?.nvrName),
   cameraOf(row),
   fmt(row.timeOfIncident),
@@ -108,9 +102,6 @@ const childRow = (c) => [
   `- ${c.checkin ? 'Check-In' : 'Check-Out'}`, // Vehicle Number column
   '', // Custody
   '', // In / Out
-  '', // Company
-  '', // Colour
-  '', // Year
   dash(c?.nvrData?.nvrName), // NVR Name
   c?.channelData?.customName || c?.channelData?.name || '--', // Camera Name
   fmt(c.timeOfIncident), // First Check-In column
