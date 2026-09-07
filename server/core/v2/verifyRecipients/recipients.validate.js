@@ -24,6 +24,7 @@ class recipientValidation {
 
   updateRecipient(body) {
     const schema = Joi.object({
+      fullName: Joi.string().trim().min(1).optional(),
       incidentTypes: Joi.array().items(Joi.string()).optional()
     });
 

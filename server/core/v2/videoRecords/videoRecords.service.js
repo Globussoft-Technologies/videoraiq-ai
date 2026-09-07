@@ -131,7 +131,17 @@ const toAbsoluteMediaUrl = (p) =>
 class VideoRecordsService {
   async getVideoRecords(req, res, _next) {
     try {
-      const { id, skip = 0, limit = 20 } = req.query;
+      const {
+        id,
+        skip = 0,
+        limit = 20,
+        // Optional Recent Demos filters. detectionType is a settingType key
+        // ("crowdDetectionSettings"); a renamed key is accepted and resolved
+        // forward. startDate/endDate are YYYY-MM-DD, bounded in the admin's tz.
+        detectionType,
+        startDate,
+        endDate,
+      } = req.query;
       const { adminId } = req?.verified?.userData || {};
       if (!adminId) {
         return res.status(400).json(Response.userFailResp("Missing adminId in session"));
@@ -143,6 +153,34 @@ class VideoRecordsService {
       // Scoped to the session admin — same ownership rule as updateVideoRecord.
       const filter = { adminId };
       if (id) filter._id = id;
+
+      if (detectionType) {
+        const resolved = LEGACY_SETTING_ALIASES[detectionType] || detectionType;
+        if (!DETECTION_KEYS.includes(resolved)) {
+          return res
+            .status(400)
+            .json(Response.userFailResp(`Unknown detection type: ${detectionType}`));
+        }
+        filter[`detections.${resolved}`] = true;
+      }
+
+      if (startDate || endDate) {
+        if (!startDate || !endDate) {
+          return res
+            .status(400)
+            .json(Response.userFailResp("startDate and endDate must be sent together"));
+        }
+        const admin = await adminModel.findById(adminId).select("timezone").lean();
+        const tz = admin?.timezone || DEFAULT_REPORT_TZ;
+        const from = momentTz.tz(startDate, "YYYY-MM-DD", tz).startOf("day").toDate();
+        const to = momentTz.tz(endDate, "YYYY-MM-DD", tz).endOf("day").toDate();
+        if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+          return res
+            .status(400)
+            .json(Response.userFailResp("startDate and endDate must be YYYY-MM-DD"));
+        }
+        filter.createdAt = { $gte: from, $lte: to };
+      }
 
       const [records, total] = await Promise.all([
         videoRecordModel

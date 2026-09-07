@@ -433,7 +433,12 @@ class AlertService {
           }
 
           const updateFields = {};
+          if (value.fullName !== undefined) updateFields.fullName = value.fullName;
           if (value.incidentTypes !== undefined) updateFields.incidentTypes = value.incidentTypes;
+
+          if (Object.keys(updateFields).length === 0) {
+            return res.send(Response.userFailResp("Nothing to update.", "Validation Failed!"));
+          }
 
           const updated = await RecipientModel.findByIdAndUpdate(id, { $set: updateFields }, { new: true });
 

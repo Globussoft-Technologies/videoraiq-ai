@@ -8,6 +8,9 @@ class VideoRecordsController {
     #swagger.parameters['id'] = { in: 'query', required: false, description: 'Fetch one record by id' }
     #swagger.parameters['skip'] = { in: 'query', required: false, description: 'Pagination offset (default 0)' }
     #swagger.parameters['limit'] = { in: 'query', required: false, description: 'Page size (default 20)' }
+    #swagger.parameters['detectionType'] = { in: 'query', required: false, description: 'Filter to records with this detection enabled (settingType key, e.g. crowdDetectionSettings)' }
+    #swagger.parameters['startDate'] = { in: 'query', required: false, description: 'Filter by createdAt from this date (YYYY-MM-DD, admin timezone); send with endDate' }
+    #swagger.parameters['endDate'] = { in: 'query', required: false, description: 'Filter by createdAt up to this date (YYYY-MM-DD, admin timezone); send with startDate' }
     #swagger.responses[200] = { description: 'Video records fetched successfully' }
     #swagger.responses[400] = { description: 'Invalid id, or missing adminId in session' }
     #swagger.responses[500] = { description: 'Internal server error' }
