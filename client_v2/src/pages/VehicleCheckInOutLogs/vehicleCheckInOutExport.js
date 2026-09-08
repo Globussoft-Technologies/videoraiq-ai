@@ -23,6 +23,7 @@ import { fetchVehicleCheckInOutLogs } from './Api';
 const EXPORT_LIMIT = 10000;
 
 const fmt = (value) => (value ? moment(value).format('DD/MM/YYYY hh:mm A') : '--');
+const firstCheckInTime = (row) => (Number(row?.checkInCount || 0) > 0 ? fmt(row.timeOfIncident) : '--');
 const dash = (value) => (value === null || value === undefined || value === '' ? '--' : value);
 const cameraOf = (row) => row?.channelData?.customName || row?.channelData?.name || '--';
 const custodyLabel = (row) => (row.custody ? 'In custody' : 'Returned');
@@ -91,7 +92,7 @@ const parentRow = (row, serial) => [
   `${row.checkInCount ?? 0} / ${row.checkOutCount ?? 0}`,
   dash(row?.nvrData?.nvrName),
   cameraOf(row),
-  fmt(row.timeOfIncident),
+  firstCheckInTime(row),
   imageUrlOf(row) ? 'View Image' : '--',
 ];
 

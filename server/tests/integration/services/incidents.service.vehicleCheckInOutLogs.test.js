@@ -109,6 +109,17 @@ describe("vehicle check-in/out logs — grouping", () => {
     expect(data[0].checkin).toBe(true);
   });
 
+  it("uses the first check-in even when an earlier check-out exists", async () => {
+    await crossing("CH01AG1429", false, 12);
+    await crossing("CH01AG1429", true, 14);
+
+    const { data } = await list();
+    expect(new Date(data[0].timeOfIncident).getUTCHours()).toBe(14);
+    expect(data[0].checkin).toBe(true);
+    expect(data[0].checkInCount).toBe(1);
+    expect(data[0].checkOutCount).toBe(1);
+  });
+
   it("counts check-ins and check-outs separately", async () => {
     await crossing("MH12AB1234", true, 9);
     await crossing("MH12AB1234", false, 12);

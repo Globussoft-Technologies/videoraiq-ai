@@ -32,6 +32,13 @@ import {
   updateZoneDetectionSetting,
 } from './DetectionZoneMarking/api/detectionZoneApi';
 
+const normalizeUiCountMode = (mode) => {
+  const normalized = String(mode || '').trim().toLowerCase();
+  if (normalized === 'all') return 'both';
+  if (normalized === 'exit' || normalized === 'both') return normalized;
+  return 'entry';
+};
+
 export default function DetectionZoneMarking({
   camera,
   onBack,
@@ -101,6 +108,9 @@ export default function DetectionZoneMarking({
   // Saved/committed zones for this camera+type â€” each { name, points }. Points
   // are native video pixel coordinates, matching V1's saved shape.
   const [zones, setZones] = useState([]);
+  const savedDetectionMode = normalizeUiCountMode(
+    activeType?.setting?.settings?.count_mode ?? zones[0]?.countMode,
+  );
   // The polygon currently being drawn, not yet committed to `zones`.
   const [points, setPoints] = useState([]);
   const [draftZones, setDraftZones] = useState([]);
@@ -306,7 +316,7 @@ export default function DetectionZoneMarking({
     company: '',
     telegramChatIds: [],
     telegramChatId: '',
-    countMode: (isLineCrossing || isCheckInOut) ? 'entry' : '',
+    countMode: (isLineCrossing || isCheckInOut) ? savedDetectionMode : '',
     schedule: emptySchedule(),
     insideReferencePoint: isLineCrossing && zonePoints[2] ? zonePoints[2] : null,
     points: isLineCrossing ? zonePoints.slice(0, 2) : zonePoints,
@@ -630,7 +640,11 @@ export default function DetectionZoneMarking({
     const nextZones = points.length >= minPointsToSave
       ? [...zones, ...draftZones, makeZoneFromPoints(points, zones.length + draftZones.length)]
       : [...zones, ...draftZones];
-    setPendingZones(nextZones);
+    setPendingZones(
+      isCheckInOut
+        ? nextZones.map(zone => ({ ...zone, countMode: savedDetectionMode }))
+        : nextZones,
+    );
     setShowSaveModal(true);
   };
 
@@ -694,8 +708,8 @@ export default function DetectionZoneMarking({
   const [laneNameError, setLaneNameError] = useState('');
 
   useEffect(() => {
-    setModeDraft(zones[0]?.countMode || 'entry');
-  }, [zones]);
+    setModeDraft(savedDetectionMode);
+  }, [savedDetectionMode]);
 
   const handleLaneNameDraftChange = (value) => {
     setLaneNameDraft(value);
@@ -1534,6 +1548,7 @@ export default function DetectionZoneMarking({
           initialName={isAttendanceDetection ? ATTENDANCE_DETECTION_NAME : (activeType.setting?.name || `${activeType.label} for ${camera.customName || camera.name}`)}
           initialPriority={activeType.setting?.settings?.levelOfImportance || 'moderate'}
           initialLaneName={laneNameDraft}
+          initialCheckInOutMode={savedDetectionMode}
           zones={pendingZones}
           extraFields={extraFieldsFor(activeType.settingType)}
           isLineCrossing={isLineCrossing}

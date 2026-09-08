@@ -3485,11 +3485,12 @@ console.log(result,'result');
         {
           $group: {
             _id: IncidentsService.VEHICLE_GROUP_KEY,
-            // The row the grid shows is the car's first check-in. Falling back
-            // to the first event of any kind keeps a car whose check-in was
-            // missed from disappearing from the page entirely.
-            firstCheckIn: {
-              $first: { $cond: ["$checkin", "$$ROOT", "$$REMOVE"] },
+            // Sorted oldest -> newest before grouping. Keep every check-in in
+            // order, then pick index 0 below. `$first` with a condition only
+            // inspects the first event; if that event is a check-out it falls
+            // through to firstEvent even when a later check-in exists.
+            checkIns: {
+              $push: { $cond: ["$checkin", "$$ROOT", "$$REMOVE"] },
             },
             firstEvent: { $first: "$$ROOT" },
             lastEvent: { $last: "$$ROOT" },
@@ -3522,7 +3523,7 @@ console.log(result,'result');
         },
         {
           $addFields: {
-            row: { $ifNull: ["$firstCheckIn", "$firstEvent"] },
+            row: { $ifNull: [{ $arrayElemAt: ["$checkIns", 0] }, "$firstEvent"] },
             // Still here if it has checked in and either never checked out, or
             // its latest check-in is more recent than its latest check-out --
             // which is what a return visit looks like.

@@ -40,6 +40,7 @@ const getImageUrl = (item) => {
 };
 
 const fmtTime = (value) => (value ? moment(value).format('DD/MM/YYYY hh:mm A') : '--');
+const fmtFirstCheckIn = (row) => (Number(row?.checkInCount || 0) > 0 ? fmtTime(row.timeOfIncident) : '--');
 const dash = (value) => (value === null || value === undefined || value === '' ? '--' : value);
 
 const cameraName = (row) => row?.channelData?.customName || row?.channelData?.name || '--';
@@ -396,7 +397,7 @@ const VehicleCheckInOutLogs = () => {
                       <td className={td}>{dash(row?.nvrData?.nvrName)}</td>
                       <td className={td}>{cameraName(row)}</td>
                       <td className={`${td} whitespace-nowrap`}>
-                        {fmtTime(row.timeOfIncident)}
+                        {fmtFirstCheckIn(row)}
                       </td>
                     </tr>
 

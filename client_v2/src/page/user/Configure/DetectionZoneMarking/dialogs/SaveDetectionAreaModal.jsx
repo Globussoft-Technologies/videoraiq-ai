@@ -23,6 +23,7 @@ export default function SaveDetectionAreaModal({
   initialName,
   initialPriority,
   initialLaneName,
+  initialCheckInOutMode,
   zones,
   extraFields,
   isLineCrossing = false,
@@ -38,7 +39,7 @@ export default function SaveDetectionAreaModal({
   const [errors, setErrors] = useState({});
   // Check-In / Check-Out: one detection-wide entry/exit mode, seeded from the
   // first zone (they're all kept in sync).
-  const [checkInOutMode, setCheckInOutMode] = useState(zones[0]?.countMode || 'entry');
+  const [checkInOutMode, setCheckInOutMode] = useState(initialCheckInOutMode || zones[0]?.countMode || 'entry');
   // One line name for the whole detection (settings.zone_name) — separate from
   // each drawn zone's own name below.
   const [laneName, setLaneName] = useState(initialLaneName || '');
