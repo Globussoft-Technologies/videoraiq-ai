@@ -8,6 +8,7 @@ import verifyToken from "../../middlewares/verifyToken.js";
 import nvrRoutes from "../../core/v2/NVR/nvr.routes.js";
 import channelRoutes from "../../core/v2/channels/channels.routes.js";
 import authRoutes from "../../core/v2/Auth/auth.routes.js";
+import raspberryPiRoutes from "../../core/v2/raspberryPi/raspberryPi.routes.js";
 import incidentsRoutes from "../../core/v2/incidents/incidents.routes.js";
 import alertRoutes from "../../core/v2/alerts/alerts.routes.js";
 import recipientsRoutes from "../../core/v2/verifyRecipients/recipients.routes.js";
@@ -62,6 +63,7 @@ router.get("/health", (_req, res) => {
 // v2-specific behaviour.
 // ─────────────────────────────────────────────────────────────────────────────
 router.use("/auth", authRoutes);
+router.use("/auth/raspberry-pi", raspberryPiRoutes);
 router.use("/uploads", uploadRoutes);
 router.use("/admin", adminRoutes);
 router.use("/authorizedUsers", authorizedUsersRoutes);
