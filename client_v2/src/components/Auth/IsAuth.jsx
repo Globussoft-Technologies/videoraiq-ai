@@ -197,7 +197,17 @@ export default function IsAuth({ children }) {
 
     async function checkAccess({ initial = false } = {}) {
       try {
-        if (impersonationToken) {
+        // impersonationToken/amemberSsoToken/amemberLogin+amemberPass are all
+        // one-time exchanges (the SSO/impersonation tokens are server-side
+        // single-use nonces; the aMember cookie handoff is deleted after use).
+        // They must only ever run on the initial page-load check — the
+        // interval below re-invokes checkAccess() with no `initial` flag
+        // purely to recheck this tab's *already-issued* session, and without
+        // this guard it would resubmit the same consumed SSO/impersonation
+        // token every SESSION_CHECK_INTERVAL_MS, which the server correctly
+        // rejects as "already been used" and logs the just-logged-in user
+        // straight back out.
+        if (initial && impersonationToken) {
           const response = await fetch(`${HOST}/auth/by-impersonation-token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -221,7 +231,7 @@ export default function IsAuth({ children }) {
           return true;
         }
 
-        if (amemberSsoToken) {
+        if (initial && amemberSsoToken) {
           const response = await fetch(`${HOST}/auth/by-amember-sso-token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -257,7 +267,7 @@ export default function IsAuth({ children }) {
           return true;
         }
 
-        if (amemberLogin && amemberPass) {
+        if (initial && amemberLogin && amemberPass) {
           const response = await fetch(`${HOST}/auth/by-login-pass`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -312,10 +322,16 @@ export default function IsAuth({ children }) {
           return true;
         }
 
+        // Re-read rather than close over the `token` captured at effect-start:
+        // on the initial call after a fresh SSO/impersonation/login-pass
+        // exchange above, that captured value predates the exchange (it was
+        // read before any cookie existed) and would send a stale/empty token
+        // here instead of the one the exchange just set.
+        const currentToken = getAccessToken();
         const response = await fetch(`${HOST}/auth/by-login-token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...(await sessionHeaders()) },
-          body: JSON.stringify({ token }),
+          body: JSON.stringify({ token: currentToken }),
         });
         const result = await response.json();
         const revokedCode = result?.code || result?.body?.code;
