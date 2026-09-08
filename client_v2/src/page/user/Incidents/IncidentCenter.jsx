@@ -604,10 +604,11 @@ function CarModelDetails({ item }) {
   if (!isCarModelDetection(item)) return null;
 
   const details = [
-    { label: 'Model Name', value: displayValue(item.model_name || item.modelName || item.carModelName || item.carModel), icon: Car, accent: '#38bdf8' },
+    // Model Name and Year hidden for car model detection
+    // { label: 'Model Name', value: displayValue(item.model_name || item.modelName || item.carModelName || item.carModel), icon: Car, accent: '#38bdf8' },
     { label: 'Vehicle No', value: formatPlate(item.vehicleNumber) || '--', icon: Hash, accent: '#facc15', mono: true },
     { label: 'Company', value: displayValue(item.company || item.make || item.carCompany), icon: Building2, accent: '#a78bfa' },
-    { label: 'Year', value: displayValue(item.year), icon: CalendarClock, accent: '#34d399' },
+    // { label: 'Year', value: displayValue(item.year), icon: CalendarClock, accent: '#34d399' },
     { label: 'NVR Name', value: displayValue(item.nvrData?.nvrName), icon: Server, accent: '#60a5fa' },
     { label: 'Camera Name', value: displayValue(item.channelData?.name || item.channelName), icon: Video, accent: '#fb7185' },
     { label: 'Time', value: shortDateTime(item.timeOfIncident || item.createdAt) || '--', icon: CalendarClock, accent: '#f97316', mono: true },

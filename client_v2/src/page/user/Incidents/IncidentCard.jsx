@@ -550,16 +550,18 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
                     {carPlate ? (
                       <>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
+                        {/* Model Name and Year hidden for car model detection cards */}
+                        {/* <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
                           <Cell label="Model Name" value={`${carModelName || '--'} ,`} />
                           <Cell label="Year" value={carYear || '--'} />
-                        </div>
+                        </div> */}
                         <Cell label="Vehicle No" value={carPlate} mono />
                       </>
                     ) : (
                       <>
-                        <Cell label="Model Name" value={carModelName || '--'} />
-                        <Cell label="Year" value={carYear || '--'} />
+                        {/* Model Name and Year hidden for car model detection cards */}
+                        {/* <Cell label="Model Name" value={carModelName || '--'} />
+                        <Cell label="Year" value={carYear || '--'} /> */}
                       </>
                     )}
                   </div>
