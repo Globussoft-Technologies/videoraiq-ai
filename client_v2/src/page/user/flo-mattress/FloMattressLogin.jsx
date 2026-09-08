@@ -13,7 +13,7 @@ export default function FloMattressLogin() {
 
   const submit = useCallback(() => {
     if (pin.length < 4) return;
-    navigate('/flo-mattress/station');
+    navigate('/start-measure');
   }, [navigate, pin.length]);
 
   useEffect(() => {

@@ -7,7 +7,7 @@ export default function StationBottomBar({ onStart }) {
       <div className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--tx3)]">
         <div>System idle</div>
         <div className="mt-2 normal-case tracking-normal">The station is stopped</div>
-        <div className="mt-2">Keys S start/stop - L logs - F full screen</div>
+        <div className="mt-2">Keys S start/stop - F full screen</div>
       </div>
 
       <FloButton icon={Play} shortcut="S" onClick={onStart} className="h-[70px] w-full justify-center text-xl">

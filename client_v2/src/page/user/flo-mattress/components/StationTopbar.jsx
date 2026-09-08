@@ -1,11 +1,12 @@
-import { ClipboardList, Expand, LogOut, Play } from 'lucide-react';
+import { ClipboardList, Expand, LogOut, Pause, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import FloBrand from './FloBrand';
 import FloButton from './FloButton';
 import FloThemeToggle from './FloThemeToggle';
 
-export default function StationTopbar({ accepted = 2, rejected = 0, running, onStartStop }) {
+export default function StationTopbar({ accepted = 2, rejected = 0, running, onStartStop, showSignOut = true }) {
   const navigate = useNavigate();
+  const ActionIcon = running ? Pause : Play;
 
   return (
     <header className="flex min-h-[72px] flex-wrap items-center justify-between gap-3 border-b border-[var(--bd)] bg-[var(--headerglass)] px-4 py-3 backdrop-blur md:px-5">
@@ -24,10 +25,15 @@ export default function StationTopbar({ accepted = 2, rejected = 0, running, onS
           </div>
         </div>
 
-        <FloButton icon={Play} shortcut="S" onClick={onStartStop} className="min-h-10 px-4">
+        <FloButton
+          icon={ActionIcon}
+          shortcut="S"
+          onClick={onStartStop}
+          className={`min-h-10 px-4 ${running ? '!bg-amber-500 hover:!bg-amber-600' : ''}`}
+        >
           {running ? 'Stop' : 'Start'}
         </FloButton>
-        <FloButton icon={ClipboardList} variant="soft" shortcut="L" className="min-h-10">
+        <FloButton icon={ClipboardList} variant="soft" className="min-h-10">
           Logs
         </FloButton>
         <FloButton icon={Expand} variant="soft" shortcut="F" className="min-h-10">
@@ -44,9 +50,11 @@ export default function StationTopbar({ accepted = 2, rejected = 0, running, onS
             <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--tx3)]">ID 1235</span>
           </span>
         </div>
-        <FloButton icon={LogOut} variant="ghost" onClick={() => navigate('/flo-mattress/login')} className="min-h-10">
-          Sign out
-        </FloButton>
+        {showSignOut && (
+          <FloButton icon={LogOut} variant="ghost" onClick={() => navigate('/flo-mattress/login')} className="min-h-10">
+            Sign out
+          </FloButton>
+        )}
       </div>
     </header>
   );
