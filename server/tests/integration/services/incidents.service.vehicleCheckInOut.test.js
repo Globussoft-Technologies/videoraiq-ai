@@ -123,6 +123,49 @@ describe("createIncidents — vehicleCheckInOut", () => {
     expect((await VehicleCheckInOutIncident.findOne({})).checkin).toBe(false);
   });
 
+  it("ignores a repeated check-in without failing the detector request", async () => {
+    await create({ checkin: true, vehicleNumber: "MH12AB1234" });
+    const res = await create({ checkin: true, vehicleNumber: " mh12ab1234 " });
+
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).status).toBe("success");
+    expect(payload(res).data).toMatchObject({
+      accepted: false,
+      ignored: true,
+      expectedDirection: "check-out",
+      receivedDirection: "check-in",
+    });
+    expect(await VehicleCheckInOutIncident.countDocuments()).toBe(1);
+  });
+
+  it("ignores a repeated check-out and accepts the next check-in", async () => {
+    await create({ checkin: false, vehicleNumber: "MH12AB1234" });
+    const ignored = await create({ checkin: false, vehicleNumber: "MH12AB1234" });
+    const accepted = await create({ checkin: true, vehicleNumber: "MH12AB1234" });
+
+    expect(ignored.statusCode).toBe(200);
+    expect(payload(ignored).data.expectedDirection).toBe("check-in");
+    expect(accepted.statusCode).toBe(200);
+    expect(await VehicleCheckInOutIncident.countDocuments()).toBe(2);
+  });
+
+  it("keeps the pair open across multiple days until check-out", async () => {
+    await create({
+      checkin: true,
+      vehicleNumber: "MH12AB1234",
+      timeOfIncident: "2026-09-01T08:00:00.000Z",
+    });
+    const checkout = await create({
+      checkin: false,
+      vehicleNumber: "MH12AB1234",
+      timeOfIncident: "2026-09-04T18:00:00.000Z",
+    });
+
+    expect(checkout.statusCode).toBe(200);
+    const events = await VehicleCheckInOutIncident.find({}).sort({ timeOfIncident: 1 });
+    expect(events.map((event) => event.checkin)).toEqual([true, false]);
+  });
+
   it("carries the vehicle attributes through", async () => {
     await create({
       checkin: true,

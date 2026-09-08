@@ -149,6 +149,34 @@ describe("vehicle check-in/out logs — custody", () => {
     expect(row.custody).toBe(true);
   });
 
+  it("carries an open custody into a later date range", async () => {
+    await crossing("MH12AB1234", true, 9, {
+      timeOfIncident: new Date("2026-09-01T09:00:00.000Z"),
+    });
+
+    const { data, totalCount } = await list({
+      startDate: "2026-09-04",
+      endDate: "2026-09-04",
+    });
+
+    expect(totalCount).toBe(1);
+    expect(data[0].custody).toBe(true);
+    expect(data[0].vehicleNumber).toBe("MH12AB1234");
+  });
+
+  it("does not carry an already completed visit into a later date range", async () => {
+    await crossing("MH12AB1234", true, 9, {
+      timeOfIncident: new Date("2026-09-01T09:00:00.000Z"),
+    });
+    await crossing("MH12AB1234", false, 10, {
+      timeOfIncident: new Date("2026-09-02T10:00:00.000Z"),
+    });
+
+    expect(
+      (await list({ startDate: "2026-09-04", endDate: "2026-09-04" })).totalCount,
+    ).toBe(0);
+  });
+
   it("is not in custody once checked back out", async () => {
     await crossing("MH12AB1234", true, 9);
     await crossing("MH12AB1234", false, 17);

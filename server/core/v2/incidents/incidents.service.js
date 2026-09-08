@@ -242,6 +242,17 @@ const toCheckInFlag = (value) => {
   return undefined;
 };
 
+// A crossing can only be paired when OCR produced a stable vehicle key. Keep
+// this in step with VEHICLE_GROUP_KEY below: placeholder plates deliberately
+// remain independent events because treating all unreadable plates as one car
+// would corrupt custody for unrelated vehicles.
+const normalizedReadablePlate = (value) => {
+  const plate = String(value ?? "").trim();
+  return !plate || ["--", "n/a"].includes(plate.toLowerCase())
+    ? null
+    : plate.toUpperCase();
+};
+
 const firstFilled = (...values) => {
   for (const value of values) {
     if (value === undefined || value === null) continue;
@@ -693,6 +704,42 @@ class IncidentsService {
         newIncident.year = toModelYear(
           req?.body?.year ?? req?.body?.model_year ?? req?.body?.manufacture_year,
         );
+
+        const vehiclePlate = normalizedReadablePlate(newIncident.vehicleNumber);
+        if (vehiclePlate && typeof newIncident.checkin === "boolean") {
+          const platePattern = `^\\s*${escapeRegex(vehiclePlate)}\\s*$`;
+          const previousCrossing = await VehicleCheckInOutIncident.findOne({
+            userId: userId?.toString(),
+            incidentType: "vehicleCheckInOut",
+            vehicleNumber: { $regex: platePattern, $options: "i" },
+          })
+            // Creation order is intentional. The rule describes the order in
+            // which detector events are accepted, even if a payload contains
+            // a stale timeOfIncident value.
+            .sort({ createdAt: -1, _id: -1 })
+            .select({ checkin: 1 })
+            .lean();
+
+          if (
+            previousCrossing &&
+            previousCrossing.checkin === newIncident.checkin
+          ) {
+            const receivedDirection = newIncident.checkin ? "check-in" : "check-out";
+            const expectedDirection = newIncident.checkin ? "check-out" : "check-in";
+            const reason = `Ignored repeated ${receivedDirection}; expected ${expectedDirection} for ${vehiclePlate}`;
+
+            logger.warn(reason);
+            return res.status(200).json(
+              Response.userSuccessResp(reason, {
+                accepted: false,
+                ignored: true,
+                vehicleNumber: vehiclePlate,
+                receivedDirection,
+                expectedDirection,
+              }),
+            );
+          }
+        }
       }
 
 
@@ -3408,6 +3455,25 @@ console.log(result,'result');
       // Export path: return each vehicle's crossings alongside the row.
       const includeHistory = String(req.query?.includeHistory) === "true";
       const match = this._vehicleCheckInOutMatch(req);
+      let activeWindow = null;
+
+      if (req.query?.startDate && req.query?.endDate) {
+        const windowStart = momentTZ
+          .tz(req.query.startDate, "Asia/Kolkata")
+          .startOf("day")
+          .toDate();
+        const windowEnd = momentTZ
+          .tz(req.query.endDate, "Asia/Kolkata")
+          .endOf("day")
+          .toDate();
+
+        // Custody is a continuous state, not a same-day count. Read the
+        // vehicle's accepted history up to the selected end date so a car
+        // checked in on day 1 remains visible/in custody on day 4. Once the
+        // grouping has derived state, old completed visits are removed below.
+        match.timeOfIncident = { $lte: windowEnd };
+        activeWindow = { windowStart, windowEnd };
+      }
 
       const basePipeline = [
         { $match: match },
@@ -3495,6 +3561,22 @@ console.log(result,'result');
         },
         ...(includeHistory ? [] : VEHICLE_LOG_LOOKUP_STAGES),
       ];
+
+      if (activeWindow) {
+        basePipeline.push({
+          $match: {
+            $or: [
+              { custody: true },
+              {
+                lastEventAt: {
+                  $gte: activeWindow.windowStart,
+                  $lte: activeWindow.windowEnd,
+                },
+              },
+            ],
+          },
+        });
+      }
 
       // Custody is derived, so it can only be filtered after the $group.
       if (custody === "true" || custody === "false") {

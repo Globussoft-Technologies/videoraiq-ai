@@ -280,14 +280,21 @@ class ShiftScheduleService {
         new Date(`${value.date}T00:00:00Z`).getUTCDay()
       ];
       const configuredDayType = shift ? resolveShiftDay(shift, weekday)?.type : null;
+      // An explicit shift assignment must override a standing weekly off.
+      // Only preserve half-day configuration; a configured "off" day becomes
+      // a full-day override when the user deliberately selects a shift.
+      const assignmentDayType = configuredDayType === "half" ? "half" : "full";
 
       const saved = await ShiftSchedule.findOneAndUpdate(
         { adminId: asObjectId(adminId), employee: employee._id, date: value.date },
         {
           $set: {
             shiftId: shift?._id || null,
-            isOff: Boolean(value.isOff),
-            dayType: value.isOff ? "off" : value.dayType || configuredDayType || "full",
+            // A selected shift and a day-off override are mutually exclusive.
+            // Treat the shift selection as authoritative so stale/ambiguous
+            // `isOff` values cannot make the UI render the cell as Off.
+            isOff: !shift && Boolean(value.isOff),
+            dayType: !shift ? "off" : value.dayType || assignmentDayType,
             note: value.note || null,
             assignedBy: adminId,
           },
@@ -399,18 +406,21 @@ class ShiftScheduleService {
       const operations = [];
       for (const { employee, dates: employeeDates } of datesByEmployee) {
         for (const date of employeeDates) {
+          const weekday = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][
+            new Date(`${date}T00:00:00Z`).getUTCDay()
+          ];
+          const configuredDayType = shift ? resolveShiftDay(shift, weekday)?.type : null;
+          const assignmentDayType = configuredDayType === "half" ? "half" : "full";
           operations.push({
             updateOne: {
               filter: { adminId: asObjectId(adminId), employee: employee._id, date },
               update: {
                 $set: {
                   shiftId: shift?._id || null,
-                  isOff: Boolean(value.isOff),
-                  dayType: value.isOff
+                  isOff: !shift && Boolean(value.isOff),
+                  dayType: !shift
                     ? "off"
-                    : value.dayType || (shift
-                      ? resolveShiftDay(shift, ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][new Date(`${date}T00:00:00Z`).getUTCDay()])?.type
-                      : null) || "full",
+                    : value.dayType || assignmentDayType,
                   assignedBy: adminId,
                 },
               },
