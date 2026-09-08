@@ -16,6 +16,7 @@ import PresetDateRangePicker from '@/components/PresetDateRangePicker';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
 import ExportButton from '@/pages/AttendanceLogs/components/ExportButton';
+import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
 import AccessDenied from '@/components/AccessDenied';
 import PageLoader from '@/components/PageLoader';
 import { usePermissions } from '@/context/PermissionContext';
@@ -26,6 +27,9 @@ import {
 import { handleVehicleCheckInOutExport } from './vehicleCheckInOutExport';
 
 const PAGE_SIZES = [10, 25, 50, 100];
+
+const REFRESH_KEY = 'vehicleCheckInOut:autoRefresh';
+const INTERVAL_KEY = 'vehicleCheckInOut:refreshInterval';
 
 /** Same resolver Car Logs uses — DS sends a path, not a URL. */
 const getImageUrl = (item) => {
@@ -96,6 +100,15 @@ const VehicleCheckInOutLogs = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  const [autoRefresh, setAutoRefresh] = useState(() => {
+    const saved = localStorage.getItem(REFRESH_KEY);
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [refreshInterval, setRefreshInterval] = useState(() => {
+    const parsed = parseInt(localStorage.getItem(INTERVAL_KEY), 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
+  });
+
   // vehicleKey -> { loading, data } for the expanded sub-rows.
   const [expanded, setExpanded] = useState({});
   const [previewIndex, setPreviewIndex] = useState(-1);
@@ -141,6 +154,15 @@ const VehicleCheckInOutLogs = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => localStorage.setItem(REFRESH_KEY, autoRefresh), [autoRefresh]);
+  useEffect(() => localStorage.setItem(INTERVAL_KEY, refreshInterval), [refreshInterval]);
+
+  useEffect(() => {
+    if (!autoRefresh || refreshInterval <= 0) return undefined;
+    const id = setInterval(load, refreshInterval * 1000);
+    return () => clearInterval(id);
+  }, [autoRefresh, refreshInterval, load]);
 
   /** Sub-rows are fetched on first expand and kept until the page reloads. */
   const toggleRow = async (row) => {
@@ -269,6 +291,13 @@ const VehicleCheckInOutLogs = () => {
             >
               {exporting === 'pdf' ? 'Exporting…' : 'PDF'}
             </ExportButton>
+            <AutoRefreshComponent
+              isActive={autoRefresh}
+              onActiveChange={setAutoRefresh}
+              refreshInterval={refreshInterval}
+              onIntervalChange={setRefreshInterval}
+              onManualRefresh={load}
+            />
           </div>
         </div>
 
