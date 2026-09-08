@@ -118,9 +118,23 @@ describe("createIncidents — vehicleCheckInOut", () => {
     expect(saved.vehicleNumber).toBe("MH12AB1234");
   });
 
-  it("records a check-out", async () => {
+  it("records a check-out only after a check-in", async () => {
+    await create({ checkin: true, vehicleNumber: "MH12AB1234" });
     await create({ checkin: false, vehicleNumber: "MH12AB1234" });
-    expect((await VehicleCheckInOutIncident.findOne({})).checkin).toBe(false);
+    expect((await VehicleCheckInOutIncident.findOne({ checkin: false })).checkin).toBe(false);
+  });
+
+  it("ignores an initial check-out without creating an orphan event", async () => {
+    const res = await create({ checkin: false, vehicleNumber: "MH12AB1234" });
+
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data).toMatchObject({
+      accepted: false,
+      ignored: true,
+      expectedDirection: "check-in",
+      receivedDirection: "check-out",
+    });
+    expect(await VehicleCheckInOutIncident.countDocuments()).toBe(0);
   });
 
   it("ignores a repeated check-in without failing the detector request", async () => {
@@ -139,6 +153,7 @@ describe("createIncidents — vehicleCheckInOut", () => {
   });
 
   it("ignores a repeated check-out and accepts the next check-in", async () => {
+    await create({ checkin: true, vehicleNumber: "MH12AB1234" });
     await create({ checkin: false, vehicleNumber: "MH12AB1234" });
     const ignored = await create({ checkin: false, vehicleNumber: "MH12AB1234" });
     const accepted = await create({ checkin: true, vehicleNumber: "MH12AB1234" });
@@ -146,7 +161,7 @@ describe("createIncidents — vehicleCheckInOut", () => {
     expect(ignored.statusCode).toBe(200);
     expect(payload(ignored).data.expectedDirection).toBe("check-in");
     expect(accepted.statusCode).toBe(200);
-    expect(await VehicleCheckInOutIncident.countDocuments()).toBe(2);
+    expect(await VehicleCheckInOutIncident.countDocuments()).toBe(3);
   });
 
   it("keeps the pair open across multiple days until check-out", async () => {
@@ -196,8 +211,11 @@ describe("createIncidents — vehicleCheckInOut", () => {
     ["entry wording", { event_type: "entry" }, true],
     ["exit wording", { event_type: "exit" }, false],
   ])("accepts %s", async (_label, body, expected) => {
+    if (expected === false) {
+      await create({ vehicleNumber: "MH12AB1234", checkin: true });
+    }
     await create({ vehicleNumber: "MH12AB1234", ...body });
-    expect((await VehicleCheckInOutIncident.findOne({})).checkin).toBe(expected);
+    expect((await VehicleCheckInOutIncident.findOne({ checkin: expected })).checkin).toBe(expected);
   });
 
   it("accepts the DS aliases for colour and manufacturer", async () => {

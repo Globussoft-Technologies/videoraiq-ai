@@ -720,6 +720,23 @@ class IncidentsService {
             .select({ checkin: 1 })
             .lean();
 
+          // A vehicle visit must always start with check-in. Never persist an
+          // orphan checkout, since it cannot close a valid open visit.
+          if (!previousCrossing && newIncident.checkin === false) {
+            const reason = `Ignored check-out without a preceding check-in for ${vehiclePlate}`;
+
+            logger.warn(reason);
+            return res.status(200).json(
+              Response.userSuccessResp(reason, {
+                accepted: false,
+                ignored: true,
+                vehicleNumber: vehiclePlate,
+                receivedDirection: "check-out",
+                expectedDirection: "check-in",
+              }),
+            );
+          }
+
           if (
             previousCrossing &&
             previousCrossing.checkin === newIncident.checkin
