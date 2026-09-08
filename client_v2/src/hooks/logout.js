@@ -79,13 +79,33 @@ export async function logout({ clearSession = true, syncServer = true } = {}) {
     }
   });
 
+  // A parent-domain access-token cookie (e.g. set for .videoraiq.com so it's
+  // readable across subdomains like stagingv2./dev-v2.) is NOT removed by a
+  // host-only Cookies.remove/document.cookie write — domain+path must match
+  // exactly for a browser to treat it as the same cookie to delete. Without
+  // clearing the parent-domain variant too, a superadmin-issued block/logout
+  // leaves that cookie in place, and the very next IsAuth.jsx mount (after
+  // toLogin() redirects, e.g. through VITE_AMEMBER_LOGIN_URL on the same
+  // parent domain) reads it back as still-valid and silently re-authenticates
+  // the "logged out" browser instead of landing on the login page.
+  const parentDomain = (() => {
+    const parts = window.location.hostname.split('.');
+    return parts.length > 1 ? `.${parts.slice(-2).join('.')}` : null;
+  })();
+
   Cookies.remove(name, { path: '/' });
   document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;`;
+  if (parentDomain) {
+    document.cookie = `${name}=; domain=${parentDomain}; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;`;
+  }
 
   document.cookie.split(';').forEach((cookie) => {
     const key = cookie.split('=')[0].trim();
     if (key && !PRESERVED_COOKIES.includes(key)) {
       document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;`;
+      if (parentDomain) {
+        document.cookie = `${key}=; domain=${parentDomain}; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;`;
+      }
     }
   });
 

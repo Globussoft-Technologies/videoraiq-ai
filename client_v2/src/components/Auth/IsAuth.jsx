@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import Cookies from 'js-cookie';
 import getAccessToken from '@/utils/getAccessToken';
 import { useAuth } from '@/context/AuthContext';
+import { useSocket } from '@/context/SocketContext';
 import { logout } from '@/hooks/logout';
 import { setSessionId, sessionHeaders } from '@/utils/sessionIdentity';
 
@@ -100,23 +101,19 @@ const authFailure = (result, response) => {
 // the next API call.
 const SESSION_REVOKED_CODES = new Set([
   'SESSION_BLOCKED',
-  'SESSION_LOGGED_OUT', 
+  'SESSION_LOGGED_OUT',
   'SESSION_INVALID',
   'DEVICE_BLOCKED',
 ]);
-// Must stay comfortably below the session-list's own auto-refresh cadence
-// (SessionManagement.jsx's AUTO_REFRESH_MS) so a block issued there reaches
-// the blocked browser quickly rather than after a long-lived page sits idle.
-const SESSION_CHECK_INTERVAL_MS = 15000;
 
 /**
  * Route guard for the V2 app. It validates the access token against the backend
- * (or exchanges a short-lived aMember credential handoff for one), persists the
- * sessionId every login/reload path hands back (so Session Management's "Online"
- * presence and Last Active work for admins the same way they already do for
- * users), and polls the session's live status so a block/logout issued from
- * Session Management reaches this browser within SESSION_CHECK_INTERVAL_MS
- * instead of only on the next full page load.
+ * (or exchanges a short-lived aMember credential handoff for one) and persists
+ * the sessionId every login/reload path hands back (so Session Management's
+ * "Online" presence and Last Active work for admins the same way they already
+ * do for users). A block/logout issued from Session Management while this tab
+ * is already open reaches it instantly via a 'session-revoked' socket push
+ * (see the effect near the bottom of this component) rather than polling.
  */
 export default function IsAuth({ children }) {
   const navigate = useNavigate();
@@ -136,6 +133,21 @@ export default function IsAuth({ children }) {
       return;
     }
     window.location.replace(target);
+  };
+
+  // A block/logout pushed from Session Management only needs to clear this
+  // browser locally — the server row was already updated by whoever did the
+  // blocking, so re-notifying it (syncServer) would be redundant. The device
+  // fingerprint (vq_client_id) still needs to survive so re-login recognizes
+  // the same browser, hence keepSessionId isn't about that — it's just naming
+  // symmetry with logout()'s own options; sessionId itself is always cleared
+  // since a revoked session must never be reused as-is. Component-scoped
+  // (not inside the auth effect below) so both that effect's by-login-token
+  // check AND the socket 'session-revoked' listener effect can call it.
+  const endLocalSession = () => {
+    logout({ clearSession: true, syncServer: false });
+    setIsLoading(false);
+    toLogin();
   };
 
   useEffect(() => {
@@ -160,13 +172,12 @@ export default function IsAuth({ children }) {
     if (exchangeStarted.current) return;
     exchangeStarted.current = true;
 
-    const amemberLogin = Cookies.get('amember_login')  
-    const amemberPass = Cookies.get('amember_pass') 
+    const amemberLogin = Cookies.get('amember_login');
+    const amemberPass = Cookies.get('amember_pass') ;
     const token = getAccessToken();
     const searchParams = new URLSearchParams(window.location.search);
     const impersonationToken = searchParams.get('amember_impersonation') || '';
     const amemberSsoToken = searchParams.get('amember_sso') || '';
-    let sessionCheckTimer;
     const isCancelled = () => cancelledRef.current;
 
     if (impersonationToken || amemberSsoToken) {
@@ -175,19 +186,6 @@ export default function IsAuth({ children }) {
       const cleanQuery = searchParams.toString();
       window.history.replaceState({}, document.title, `${window.location.pathname}${cleanQuery ? `?${cleanQuery}` : ''}${window.location.hash}`);
     }
-
-    // A block/logout pushed from Session Management only needs to clear this
-    // browser locally — the server row was already updated by whoever did the
-    // blocking, so re-notifying it (syncServer) would be redundant. The device
-    // fingerprint (vq_client_id) still needs to survive so re-login recognizes
-    // the same browser, hence keepSessionId isn't about that — it's just naming
-    // symmetry with logout()'s own options; sessionId itself is always cleared
-    // since a revoked session must never be reused as-is.
-    const endLocalSession = () => {
-      logout({ clearSession: true, syncServer: false });
-      setIsLoading(false);
-      toLogin();
-    };
 
     if (!token && !(amemberLogin && amemberPass) && !impersonationToken && !amemberSsoToken) {
       setIsLoading(false);
@@ -199,14 +197,11 @@ export default function IsAuth({ children }) {
       try {
         // impersonationToken/amemberSsoToken/amemberLogin+amemberPass are all
         // one-time exchanges (the SSO/impersonation tokens are server-side
-        // single-use nonces; the aMember cookie handoff is deleted after use).
-        // They must only ever run on the initial page-load check — the
-        // interval below re-invokes checkAccess() with no `initial` flag
-        // purely to recheck this tab's *already-issued* session, and without
-        // this guard it would resubmit the same consumed SSO/impersonation
-        // token every SESSION_CHECK_INTERVAL_MS, which the server correctly
-        // rejects as "already been used" and logs the just-logged-in user
-        // straight back out.
+        // single-use nonces; the aMember cookie handoff is deleted after use)
+        // and must only ever run on the initial call — checkAccess() is only
+        // ever invoked once now (see below), but the `initial` guard stays as
+        // a safeguard against a future call-site resubmitting an
+        // already-consumed token and getting rejected as "already been used".
         if (initial && impersonationToken) {
           const response = await fetch(`${HOST}/auth/by-impersonation-token`, {
             method: 'POST',
@@ -376,18 +371,15 @@ export default function IsAuth({ children }) {
       }
     }
 
-    checkAccess({ initial: true }).then((allowed) => {
-      if (!isCancelled() && allowed) {
-        // Re-check only the token-restore path on an interval — the aMember
-        // handoff branches above run once per page load (they consume a
-        // one-time code/cookie), so re-running them here would be wrong; this
-        // interval exists specifically to catch a block/logout that happens
-        // while the tab is already open and authenticated.
-        sessionCheckTimer = window.setInterval(() => {
-          checkAccess();
-        }, SESSION_CHECK_INTERVAL_MS);
-      }
-    });
+    // Session block/logout detection while the tab is already open is handled
+    // by a push over the socket (see the 'session-revoked' listener effect
+    // below) instead of polling by-login-token on an interval — that used to
+    // re-run every SESSION_CHECK_INTERVAL_MS regardless of whether anything
+    // had changed, and its setUser() call retriggered every user-keyed
+    // hook/effect in the app (permissions, sockets, per-page data fetches) on
+    // every tick. checkAccess() now only ever runs this once, for the
+    // initial page-load/token-restore check.
+    checkAccess({ initial: true });
 
     return () => {
       // React 18 StrictMode (dev only) invokes this effect twice: mount,
@@ -407,10 +399,26 @@ export default function IsAuth({ children }) {
       cancelTimerRef.current = setTimeout(() => {
         cancelledRef.current = true;
       }, 0);
-      if (sessionCheckTimer) window.clearInterval(sessionCheckTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Instant push instead of polling: the server emits 'session-revoked' on
+  // this session's own socket (see sendSessionRevoked in server/socket.js)
+  // the moment an admin/superadmin blocks or logs out this session from
+  // Session Management, or blocks the device — no interval, no wasted
+  // requests for the (overwhelmingly common) case where nothing happened.
+  // Runs as its own effect because SocketContext only connects once `user`
+  // is set by the auth effect above, so this has to react to `socket`
+  // becoming available rather than running once on mount.
+  const { socket } = useSocket() || {};
+  useEffect(() => {
+    if (!socket) return undefined;
+    const onRevoked = () => endLocalSession();
+    socket.on('session-revoked', onRevoked);
+    return () => socket.off('session-revoked', onRevoked);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket]);
 
   if (isLoading) return <div />;
   if (failure) {
