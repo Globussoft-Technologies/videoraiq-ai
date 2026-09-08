@@ -240,6 +240,12 @@ export const initSocket = (server) => {
     }
 
     if (sessionId) {
+      // Lets sendSessionRevoked() below find exactly this tab's socket (not
+      // just "some socket for this user") so a block/logout issued from
+      // Session Management can push straight to the affected browser instead
+      // of the client having to poll for it.
+      await redis.set(`socket:session:${sessionId}`, socket.id);
+
       // Mark this session's tab as online now, and keep the session's
       // lastActiveAt fresh so the admin session list's "Last Active" agrees
       // with the new "Online" column.
@@ -289,6 +295,12 @@ export const initSocket = (server) => {
         await redis.del(`socket:${userId}`);
       }
       if (sessionId) {
+        // Only clear the registry entry if it still points at THIS socket —
+        // a reconnect can already have overwritten it with the new socket.id
+        // before this stale disconnect handler runs, and blindly deleting
+        // here would erase that newer, still-valid mapping.
+        const current = await redis.get(`socket:session:${sessionId}`);
+        if (current === socket.id) await redis.del(`socket:session:${sessionId}`);
         // Tab closed / navigated away / network dropped — session is offline
         // immediately (the TTL is only the fallback for when this never fires).
         await markSessionOffline(sessionId);
@@ -343,5 +355,32 @@ export const sendPayloadToUser = async (userId, channel, payload) => {
     logger.info(`Payload sent to user ${userId} via socket ${socketId} on channel '${channel}'`);
   } catch (error) {
     logger.error(`Error sending payload to user ${userId} on channel '${channel}': ${error.message}`);
+  }
+};
+
+/**
+ * Push an instant "your session was blocked/logged-out" notice to exactly the
+ * browser tab holding `sessionId`, so IsAuth.jsx can sign it out immediately
+ * instead of relying on the SESSION_CHECK_INTERVAL_MS poll (which meant every
+ * open tab re-validated its full token every 15s regardless of whether
+ * anything had changed — a lot of needless traffic for something that, in the
+ * overwhelming majority of ticks, never happens). Call this from
+ * sessions.service.js wherever a session's status flips to blocked/logged_out
+ * (updateSessionStatus, blockDevice). Silent no-op if the tab isn't currently
+ * connected — it will simply see the new status on its next page load/request.
+ */
+export const sendSessionRevoked = async (sessionId, { code, message } = {}) => {
+  try {
+    if (!sessionId) return;
+    const io = getIO();
+    const socketId = await redis.get(`socket:session:${sessionId}`);
+    if (!socketId) return;
+
+    const socket = io.sockets.sockets.get(socketId);
+    if (!socket) return;
+
+    socket.emit("session-revoked", { code, message });
+  } catch (error) {
+    logger.error(`Error sending session-revoked for session ${sessionId}: ${error.message}`);
   }
 };

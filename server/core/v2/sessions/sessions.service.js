@@ -7,6 +7,7 @@ import blockedDeviceModel from "./blockedDevice.model.js";
 import { getOnlineSessionIds } from "./sessionPresence.js";
 import usersModel from "../users/users.model.js";
 import adminModel from "../admin/admin.model.js";
+import { sendSessionRevoked } from "../../../socket.js";
 
 function requestIp(req) {
   const forwarded = req.headers["x-forwarded-for"];
@@ -684,6 +685,16 @@ class SessionsService {
       );
       if (!session) return res.status(404).send(Response.notFoundResp("Session not found"));
 
+      // Push the revocation to the affected browser immediately instead of
+      // leaving it to discover this on its own next poll — see
+      // sendSessionRevoked's doc comment in socket.js for why.
+      if (status === "blocked" || status === "logged_out") {
+        sendSessionRevoked(session.sessionId, {
+          code: status === "blocked" ? "SESSION_BLOCKED" : "SESSION_LOGGED_OUT",
+          message: status === "blocked" ? "This session is blocked" : "This session has been logged out",
+        });
+      }
+
       return res.status(200).send(Response.userSuccessResp(message, session));
     } catch (error) {
       logger.error(error);
@@ -714,10 +725,20 @@ class SessionsService {
         { new: true, upsert: true }
       );
 
+      const activeSessionsScope = { adminId: session.adminId, memberId: session.memberId || null, userType: session.userType, deviceId: session.deviceId, status: "active" };
+      // Fetched before the update below (updateMany doesn't return the docs it
+      // touched) so we know exactly which sessionIds just got blocked and can
+      // push session-revoked to each of their sockets.
+      const affectedSessionIds = await sessionModel.find(activeSessionsScope).distinct("sessionId");
+
       await sessionModel.updateMany(
-        { adminId: session.adminId, memberId: session.memberId || null, userType: session.userType, deviceId: session.deviceId, status: "active" },
+        activeSessionsScope,
         { $set: { status: "blocked", blockedAt: now, blockedBy: userData.adminId, blockReason: reason }, $push: { events: { type: "blocked", at: now, reason } } }
       );
+
+      affectedSessionIds.forEach((sid) => {
+        sendSessionRevoked(sid, { code: "DEVICE_BLOCKED", message: "This device is blocked" });
+      });
 
       return res.status(200).send(Response.userSuccessResp("Device blocked successfully.", device));
     } catch (error) {
