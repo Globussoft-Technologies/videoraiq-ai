@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import MultiSelect from '@/components/MultiSelect';
 import Pagination from '@/components/Pagination';
 import AccessDenied from '@/components/AccessDenied';
+import ConfirmationModal from '@/components/DeleteConfirmation';
 import PageLoader from '@/components/PageLoader';
 import { Input } from '@/components/ui/input';
 import { usePermissions } from '@/context/PermissionContext';
@@ -126,6 +127,7 @@ const ShiftSchedule = () => {
   const [designationOptions, setDesignationOptions] = useState([]);
 
   const [editing, setEditing] = useState(null); // { anchor, employeeId, date, cell }
+  const [offDayConfirmation, setOffDayConfirmation] = useState(null);
   const [savingCell, setSavingCell] = useState(null);
   const scrollRef = useRef(null);
 
@@ -226,6 +228,10 @@ const ShiftSchedule = () => {
     setEditing(null);
     try {
       const cell = await apply();
+      if (!cell) {
+        await load();
+        return;
+      }
       setEmployees((rows) =>
         rows.map((row) =>
           String(row._id) === String(employeeId)
@@ -254,12 +260,15 @@ const ShiftSchedule = () => {
 
   const handlePick = ({ shiftId, isOff }) => {
     const { employeeId, date, cell } = editing;
-    if (shiftId && !isOff && cell?.type === 'off' && cell?.source === 'standing') {
-      const confirmed = window.confirm(
-        'This date is configured as a weekly off. Do you want to assign this shift anyway?'
-      );
-      if (!confirmed) return;
+    if (shiftId && !isOff && cell?.type === 'off') {
+      setOffDayConfirmation({ employeeId, date, shiftId, cell });
+      setEditing(null);
+      return;
     }
+    savePickedShift({ employeeId, date, shiftId, isOff, cell });
+  };
+
+  const savePickedShift = ({ employeeId, date, shiftId, isOff, cell }) => {
     writeCell(
       employeeId,
       date,
@@ -545,6 +554,21 @@ const ShiftSchedule = () => {
           onClose={() => setEditing(null)}
         />
       )}
+      <ConfirmationModal
+        open={Boolean(offDayConfirmation)}
+        title="Assign on weekly off?"
+        message="This date is configured as a weekly off. Do you want to assign this shift anyway?"
+        confirmLabel="Assign shift"
+        cancelLabel="Keep week off"
+        confirmClass="bg-[var(--blue)] text-white hover:opacity-90 shadow-sm"
+        onClose={() => setOffDayConfirmation(null)}
+        onConfirm={() => {
+          if (offDayConfirmation) {
+            savePickedShift({ ...offDayConfirmation, isOff: false });
+          }
+          setOffDayConfirmation(null);
+        }}
+      />
     </div>
   );
 };
