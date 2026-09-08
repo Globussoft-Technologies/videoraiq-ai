@@ -1,22 +1,14 @@
 /**
- * Media storage abstraction for the Uploads APIs.
+ * Global media storage for NAS/SFTP, AWS S3, Google Cloud Storage, and
+ * Oracle Object Storage.
  *
- * Lets the deployment store media on either the NAS (over SFTP, the existing
- * behaviour) or Oracle Cloud Infrastructure (OCI) Object Storage, switchable
- * via a single global config flag `MediaStorage.provider` ("nas" | "oracle")
- * — or the MEDIA_STORAGE_PROVIDER env var.
+ * `MediaStorage.provider` (or MEDIA_STORAGE_PROVIDER) selects where new media
+ * is written. Cloud paths include a provider prefix so reads and deletes keep
+ * using the original backend after the active provider changes.
  *
- * Oracle is accessed through its S3-compatible API using the already-present
- * @aws-sdk/client-s3 and an OCI "Customer Secret Key" (Access Key + Secret
- * Key). The S3-compat endpoint is `https://<namespace>.compat.objectstorage.
- * <region>.oraclecloud.com` and path-style addressing is required.
- *
- * Reads are routed deterministically by a marker: every Oracle object key is
- * stored with a leading `oracle/` segment. Anything else is treated as a NAS
- * path, so all pre-existing NAS media keeps working unchanged after a switch.
- *
- * The S3 client is created lazily and cached, and only when the Oracle backend
- * is actually used, so NAS-only deployments need no Oracle config.
+ * AWS uses the native S3 API. GCP uses Cloud Storage's S3-compatible XML API
+ * with HMAC credentials. Oracle uses OCI's S3-compatible API. All three reuse
+ * the already-installed @aws-sdk/client-s3 package and are initialized lazily.
  */
 import path from "path";
 import stream from "stream";
@@ -34,136 +26,255 @@ import {
 import logger from "./logger.js";
 import { withSFTPConnection } from "./newSFTPConnectionCheck.js";
 
-// Objects written to Oracle are keyed under this prefix; it doubles as the
-// routing marker for reads/deletes.
+export const AWS_PREFIX = "aws/";
+export const GCP_PREFIX = "gcp/";
 export const ORACLE_PREFIX = "oracle/";
+
+const OBJECT_PROVIDERS = new Set(["aws", "gcp", "oracle"]);
+const PROVIDER_ALIASES = {
+  nas: "nas",
+  sftp: "nas",
+  aws: "aws",
+  s3: "aws",
+  gcp: "gcp",
+  gcs: "gcp",
+  oracle: "oracle",
+  oci: "oracle",
+};
 
 function getMediaConfig() {
   try {
     if (config.has("MediaStorage")) return config.get("MediaStorage") || {};
   } catch {
-    /* config key absent — fall through to defaults */
+    // Missing optional config falls back to NAS.
   }
   return {};
 }
 
-/** Active backend for new uploads: "oracle" or "nas" (default). */
+/** Active backend for new uploads. Common aliases (s3/gcs/oci/sftp) work too. */
 export function getActiveProvider() {
-  const fromEnv = process.env.MEDIA_STORAGE_PROVIDER;
-  const fromCfg = getMediaConfig().provider;
-  const provider = String(fromEnv || fromCfg || "nas").toLowerCase();
-  return provider === "oracle" ? "oracle" : "nas";
+  const requested = String(
+    process.env.MEDIA_STORAGE_PROVIDER || getMediaConfig().provider || "nas"
+  ).trim().toLowerCase();
+  const provider = PROVIDER_ALIASES[requested];
+  if (!provider) {
+    throw new Error(
+      `Unsupported MediaStorage provider "${requested}". Use nas, aws, gcp, or oracle.`
+    );
+  }
+  return provider;
 }
 
-/** Strip leading slashes and collapse consecutive slashes so paths compare cleanly. */
 function normalizeKey(mediaPath) {
-  return String(mediaPath)
-    .replace(/^\/+/, "") // Remove leading slashes
-    .replace(/\/+/g, "/"); // Collapse consecutive slashes to single slash
+  return String(mediaPath).replace(/^\/+/, "").replace(/\/+/g, "/");
 }
 
-/** True when a stored path points at Oracle Object Storage. */
 export function isOraclePath(mediaPath) {
   return normalizeKey(mediaPath).startsWith(ORACLE_PREFIX);
+}
+
+function providerFromPath(mediaPath) {
+  const provider = normalizeKey(mediaPath).split("/", 1)[0];
+  return OBJECT_PROVIDERS.has(provider) ? provider : null;
 }
 
 function contentTypeFor(name) {
   return mime.lookup(name) || "application/octet-stream";
 }
 
-/** Collapse path separators / traversal out of a single path segment. */
-function sanitizeSegment(seg) {
-  const cleaned = String(seg ?? "")
+function sanitizeSegment(segment) {
+  const cleaned = String(segment ?? "")
     .replace(/[/\\]/g, "_")
     .replace(/\.\.+/g, "_")
     .trim();
   return cleaned || "default";
 }
 
-// Canonical shape produced by putMedia — used to constrain reads/deletes so a
-// caller can't address arbitrary keys in the bucket via the mediaPath param.
-// Matches both oracle/ prefixed and non-prefixed paths for backward compatibility
-const ORACLE_KEY_RE = /^(?:oracle\/)?uploads\/(?:image|video)s\/[^/]+\/[^/]+$/;
+// Cloud operations are restricted to keys created by putMedia. Unprefixed
+// keys remain valid for media written by the original Oracle implementation.
+const OBJECT_KEY_RE = /^(?:(?:aws|gcp|oracle)\/)?uploads\/(?:image|video|report)s\/[^/]+\/[^/]+$/;
 
-/** Validate + normalize an Oracle object key, rejecting out-of-namespace keys. */
-function oracleKeyFor(mediaPath) {
+function objectKeyFor(mediaPath) {
   const key = normalizeKey(mediaPath);
-  if (!ORACLE_KEY_RE.test(key)) {
-    const err = new Error("Invalid media path.");
-    err.statusCode = 400;
-    throw err;
+  if (!OBJECT_KEY_RE.test(key)) {
+    const error = new Error("Invalid media path.");
+    error.statusCode = 400;
+    throw error;
   }
   return key;
 }
 
-// ---- Oracle (OCI Object Storage, S3-compatible API) lazy client -----------
+const objectStores = new Map();
 
-let _oracle = null;
+function assertConfigured(label, values) {
+  const missing = Object.entries(values)
+    .filter(([, value]) => value === undefined || value === null || value === "")
+    .map(([key]) => key);
+  if (missing.length) {
+    throw new Error(`${label} is not fully configured. Missing: ${missing.join(", ")}.`);
+  }
+}
 
-/** Resolve Oracle settings from config (`MediaStorage.oracle`) or OCI_* env. */
-function resolveOracleConfig() {
-  const cfg = getMediaConfig().oracle || {};
+function credentialsFor(
+  label,
+  accessKeyId,
+  secretAccessKey,
+  sessionToken,
+  optional = false
+) {
+  if (optional && !accessKeyId && !secretAccessKey && !sessionToken) return undefined;
+  assertConfigured(label, { accessKeyId, secretAccessKey });
+  return {
+    accessKeyId,
+    secretAccessKey,
+    ...(sessionToken ? { sessionToken } : {}),
+  };
+}
+
+function booleanValue(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  return value === true || String(value).toLowerCase() === "true";
+}
+
+function resolveObjectStore(provider) {
+  const media = getMediaConfig();
+
+  if (provider === "aws") {
+    const cfg = media.aws || media.s3 || {};
+    const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || cfg.region;
+    const bucket = process.env.AWS_S3_BUCKET || cfg.bucket;
+    const accessKeyId = process.env.AWS_ACCESS_KEY_ID || cfg.accessKeyId;
+    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || cfg.secretAccessKey;
+    const sessionToken = process.env.AWS_SESSION_TOKEN || cfg.sessionToken;
+    const endpoint = process.env.AWS_S3_ENDPOINT || cfg.endpoint;
+    const forcePathStyle = booleanValue(
+      process.env.AWS_S3_FORCE_PATH_STYLE ?? cfg.forcePathStyle
+    );
+    const credentials = credentialsFor(
+      "AWS S3 credentials",
+      accessKeyId,
+      secretAccessKey,
+      sessionToken,
+      true
+    );
+
+    assertConfigured("AWS S3", { region, bucket });
+    return {
+      bucket,
+      clientOptions: {
+        region,
+        forcePathStyle,
+        ...(endpoint ? { endpoint } : {}),
+        ...(credentials ? { credentials } : {}),
+      },
+    };
+  }
+
+  if (provider === "gcp") {
+    const cfg = media.gcp || media.gcs || {};
+    const region = process.env.GCP_STORAGE_REGION || cfg.region || "auto";
+    const bucket = process.env.GCP_STORAGE_BUCKET || cfg.bucket;
+    const accessKeyId = process.env.GCP_HMAC_ACCESS_KEY_ID || cfg.accessKeyId;
+    const secretAccessKey =
+      process.env.GCP_HMAC_SECRET_ACCESS_KEY || cfg.secretAccessKey;
+    const endpoint =
+      process.env.GCP_STORAGE_ENDPOINT ||
+      cfg.endpoint ||
+      "https://storage.googleapis.com";
+
+    assertConfigured("Google Cloud Storage", {
+      bucket,
+      accessKeyId,
+      secretAccessKey,
+      endpoint,
+    });
+    return {
+      bucket,
+      clientOptions: {
+        region,
+        endpoint,
+        forcePathStyle: true,
+        credentials: { accessKeyId, secretAccessKey },
+      },
+    };
+  }
+
+  const cfg = media.oracle || {};
   const region = process.env.OCI_REGION || cfg.region;
   const namespace = process.env.OCI_NAMESPACE || cfg.namespace;
   const bucket = process.env.OCI_BUCKET || cfg.bucket;
   const accessKeyId = process.env.OCI_ACCESS_KEY_ID || cfg.accessKeyId;
   const secretAccessKey = process.env.OCI_SECRET_ACCESS_KEY || cfg.secretAccessKey;
-  // S3-compat endpoint can be given explicitly or derived from namespace+region.
   const endpoint =
     process.env.OCI_ENDPOINT ||
     cfg.endpoint ||
     (namespace && region
       ? `https://${namespace}.compat.objectstorage.${region}.oraclecloud.com`
       : undefined);
-  return { region, namespace, bucket, accessKeyId, secretAccessKey, endpoint };
-}
 
-function getOracle() {
-  if (_oracle) return _oracle;
-
-  const { region, bucket, accessKeyId, secretAccessKey, endpoint } =
-    resolveOracleConfig();
-
-  const missing = Object.entries({
-    region, bucket, accessKeyId, secretAccessKey, endpoint,
-  })
-    .filter(([, v]) => !v)
-    .map(([k]) => k);
-  if (missing.length) {
-    throw new Error(
-      `Oracle Object Storage is not fully configured. Missing: ${missing.join(", ")}.`
-    );
-  }
-
-  const client = new S3Client({
+  assertConfigured("Oracle Object Storage", {
     region,
+    bucket,
+    accessKeyId,
+    secretAccessKey,
     endpoint,
-    forcePathStyle: true, // required for the OCI S3-compatible endpoint
-    credentials: { accessKeyId, secretAccessKey },
   });
-
-  _oracle = { client, bucket };
-  return _oracle;
+  return {
+    bucket,
+    clientOptions: {
+      region,
+      endpoint,
+      forcePathStyle: true,
+      credentials: { accessKeyId, secretAccessKey },
+    },
+  };
 }
 
-// ---- Public operations -----------------------------------------------------
+function getObjectStore(provider) {
+  if (!objectStores.has(provider)) {
+    const { bucket, clientOptions } = resolveObjectStore(provider);
+    objectStores.set(provider, {
+      bucket,
+      client: new S3Client(clientOptions),
+    });
+  }
+  return objectStores.get(provider);
+}
 
-/**
- * Upload a media buffer to the active backend.
- * @returns {Promise<string>} the stored path (NAS remote path, or an
- *   `oracle/...` object key) to persist and use for later fetch/delete.
- */
+function isNotFound(error) {
+  const status = error?.$metadata?.httpStatusCode;
+  return error?.name === "NotFound" || error?.name === "NoSuchKey" || status === 404;
+}
+
+async function objectExists(provider, mediaPath) {
+  const { client, bucket } = getObjectStore(provider);
+  try {
+    await client.send(
+      new HeadObjectCommand({ Bucket: bucket, Key: objectKeyFor(mediaPath) })
+    );
+    return true;
+  } catch (error) {
+    if (isNotFound(error)) return false;
+    throw error;
+  }
+}
+
+/** Upload media to the globally selected backend and return its stored path. */
 export async function putMedia({ buffer, mediaType, folderName, originalName }) {
-  // Sanitize caller-supplied path segments so they can't inject extra path
-  // components / traversal into the object key or NAS path. A UUID keeps keys
-  // collision-proof under same-millisecond concurrent uploads.
+  if (!["image", "video", "report"].includes(mediaType)) {
+    const error = new Error("Invalid media type.");
+    error.statusCode = 400;
+    throw error;
+  }
   const folder = sanitizeSegment(folderName);
-  const leaf = `${Date.now()}-${randomUUID()}-${sanitizeSegment(path.basename(String(originalName ?? "")))}`;
+  const leaf = `${Date.now()}-${randomUUID()}-${sanitizeSegment(
+    path.basename(String(originalName ?? ""))
+  )}`;
+  const provider = getActiveProvider();
 
-  if (getActiveProvider() === "oracle") {
-    const { client, bucket } = getOracle();
-    // Store without oracle/ prefix to match existing images
-    const objectName = `uploads/${mediaType}s/${folder}/${leaf}`;
+  if (OBJECT_PROVIDERS.has(provider)) {
+    const { client, bucket } = getObjectStore(provider);
+    const objectName = `${provider}/uploads/${mediaType}s/${folder}/${leaf}`;
     await client.send(
       new PutObjectCommand({
         Bucket: bucket,
@@ -173,11 +284,9 @@ export async function putMedia({ buffer, mediaType, folderName, originalName }) 
         ContentType: contentTypeFor(leaf),
       })
     );
-    // Return path without leading slash for consistency with existing images
     return `/${objectName}`;
   }
 
-  // NAS over SFTP (existing behaviour).
   const mainPath = config.get("SFTP.Path");
   const remoteDir = `${mainPath}/uploads/${mediaType}s/${folder}`;
   const remotePath = `${remoteDir}/${leaf}`;
@@ -190,36 +299,19 @@ export async function putMedia({ buffer, mediaType, folderName, originalName }) 
   return remotePath;
 }
 
-/**
- * Stream a stored media file to an Express response. Headers are expected to be
- * set by the caller; this only pipes the bytes. Routes by the stored path.
- */
+/** Stream media from its marked provider, or the active provider for legacy paths. */
 export async function streamMedia(mediaPath, res) {
-  if (isOraclePath(mediaPath)) {
-    const { client, bucket } = getOracle();
-    const data = await client.send(
-      new GetObjectCommand({ Bucket: bucket, Key: oracleKeyFor(mediaPath) })
-    );
-    // Forward the stored content metadata so the response is accurate.
-    if (!res.headersSent && typeof res.setHeader === "function") {
-      if (data.ContentType) res.setHeader("Content-Type", data.ContentType);
-      if (data.ContentLength != null) {
-        res.setHeader("Content-Length", String(data.ContentLength));
-      }
-    }
-    await pipeline(data.Body, res);
-    return;
-  }
+  const explicitProvider = providerFromPath(mediaPath);
+  const activeProvider = getActiveProvider();
+  const objectProvider =
+    explicitProvider || (OBJECT_PROVIDERS.has(activeProvider) ? activeProvider : null);
 
-  // If provider is Oracle, try fetching from Oracle even without oracle/ prefix
-  if (getActiveProvider() === "oracle") {
+  if (objectProvider) {
     try {
-      const { client, bucket } = getOracle();
-      const normalizedPath = normalizeKey(mediaPath);
+      const { client, bucket } = getObjectStore(objectProvider);
       const data = await client.send(
-        new GetObjectCommand({ Bucket: bucket, Key: normalizedPath })
+        new GetObjectCommand({ Bucket: bucket, Key: objectKeyFor(mediaPath) })
       );
-      // Forward the stored content metadata so the response is accurate.
       if (!res.headersSent && typeof res.setHeader === "function") {
         if (data.ContentType) res.setHeader("Content-Type", data.ContentType);
         if (data.ContentLength != null) {
@@ -228,81 +320,79 @@ export async function streamMedia(mediaPath, res) {
       }
       await pipeline(data.Body, res);
       return;
-    } catch (err) {
-      // If not found in Oracle with this path, fall back to NAS
-      const code = err?.$metadata?.httpStatusCode;
-      if (!(err?.name === "NotFound" || err?.name === "NoSuchKey" || code === 404)) {
-        throw err;
-      }
+    } catch (error) {
+      // Only unmarked legacy paths may predate cloud storage and fall back to NAS.
+      if (explicitProvider || !isNotFound(error)) throw error;
     }
   }
 
   await withSFTPConnection(async (sftp) => {
+    if (!(await sftp.exists(mediaPath))) {
+      const error = new Error("File not found in storage.");
+      error.statusCode = 404;
+      throw error;
+    }
     const sftpStream = await sftp.createReadStream(mediaPath);
-    sftpStream.on("error", (err) => {
-      logger.error("SFTP stream error:", err);
+    sftpStream.on("error", (error) => {
+      logger.error("SFTP stream error:", error);
       if (!res.headersSent) {
-        res.status(500).json({ status: "failed", message: "Error streaming file from SFTP." });
+        res.status(500).json({
+          status: "failed",
+          message: "Error streaming file from SFTP.",
+        });
       }
     });
     await pipeline(sftpStream, res);
   });
 }
 
-/** Whether a stored media file exists on its backend. */
+/** Whether a stored media file exists on its original backend. */
 export async function mediaExists(mediaPath) {
-  if (isOraclePath(mediaPath)) {
-    const { client, bucket } = getOracle();
-    try {
-      await client.send(
-        new HeadObjectCommand({ Bucket: bucket, Key: oracleKeyFor(mediaPath) })
-      );
-      return true;
-    } catch (err) {
-      // Only a genuine "not found" means the object is absent; surface auth /
-      // network / config failures instead of masking them as a 404.
-      const code = err?.$metadata?.httpStatusCode;
-      if (err?.name === "NotFound" || err?.name === "NoSuchKey" || code === 404) {
-        return false;
-      }
-      throw err;
-    }
+  const explicitProvider = providerFromPath(mediaPath);
+  const activeProvider = getActiveProvider();
+  const objectProvider =
+    explicitProvider || (OBJECT_PROVIDERS.has(activeProvider) ? activeProvider : null);
+
+  if (objectProvider) {
+    const exists = await objectExists(objectProvider, mediaPath);
+    if (exists || explicitProvider) return exists;
   }
   return await withSFTPConnection((sftp) => sftp.exists(mediaPath));
 }
 
-/** Delete a stored media file from its backend (routed by the stored path). */
+/** Delete a stored media file from its original backend. */
 export async function deleteMedia(mediaPath) {
-  if (isOraclePath(mediaPath)) {
-    const { client, bucket } = getOracle();
+  const explicitProvider = providerFromPath(mediaPath);
+  const activeProvider = getActiveProvider();
+  const objectProvider =
+    explicitProvider || (OBJECT_PROVIDERS.has(activeProvider) ? activeProvider : null);
+
+  if (
+    objectProvider &&
+    (explicitProvider || (await objectExists(objectProvider, mediaPath)))
+  ) {
+    const { client, bucket } = getObjectStore(objectProvider);
     await client.send(
-      new DeleteObjectCommand({ Bucket: bucket, Key: oracleKeyFor(mediaPath) })
+      new DeleteObjectCommand({ Bucket: bucket, Key: objectKeyFor(mediaPath) })
     );
     return;
   }
   await withSFTPConnection((sftp) => sftp.delete(mediaPath));
 }
 
-/**
- * Stored media paths (e.g. authorizedUsers.profilePics) must always be
- * relative — the ImageView base is only ever prepended by a client at
- * display time. Some older records were saved with an already-absolute
- * ImageView URL (a display URL passed straight through as if it were a
- * storage path), which then gets double-prefixed by the client. Strip it
- * back to relative here so every API response is safe regardless of how a
- * given record was originally written.
- */
+/** Strip an accidentally persisted ImageView base URL back to a storage path. */
 export function toRelativeMediaPath(value) {
   if (typeof value !== "string") return value;
   try {
     const imageBaseUrl = config.get("ImageView");
-    return imageBaseUrl && value.startsWith(imageBaseUrl) ? value.slice(imageBaseUrl.length) : value;
+    return imageBaseUrl && value.startsWith(imageBaseUrl)
+      ? value.slice(imageBaseUrl.length)
+      : value;
   } catch {
     return value;
   }
 }
 
-/** Apply toRelativeMediaPath() across an array (e.g. profilePics), tolerating null/undefined. */
 export function toRelativeMediaPaths(values) {
   return Array.isArray(values) ? values.map(toRelativeMediaPath) : values;
 }
