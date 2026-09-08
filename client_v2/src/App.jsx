@@ -8,6 +8,7 @@ import EmployeeRegister from '@/page/user/Portal/EmployeeRegister';
 import IsAuth from '@/components/Auth/IsAuth';
 import Logout from '@/components/Auth/Logout';
 import VerifyRecipient from '@/page/user/Administer/VerifyRecipient';
+import { floMattressRoutes } from '@/page/user/flo-mattress/FloMattressRoutes';
 
 function LoginRoute() {
   return <LoginForm />;
@@ -39,6 +40,7 @@ export const router = createBrowserRouter(
           </IsAuth>
         }
       >
+        {floMattressRoutes}
         {v2Routes}
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
