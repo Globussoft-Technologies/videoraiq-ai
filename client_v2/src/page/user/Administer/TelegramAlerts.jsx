@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Copy, Check, Loader2, Send, CheckCircle2, RefreshCw, BellRing } from 'lucide-react';
 import { getTelegramLinkCode, unlinkTelegram } from '../../../helpers/telegram';
+import { telegramBotUsername } from '../../../helpers/telegramBot';
 import DeleteConfirmation from '../../../components/DeleteConfirmation';
 
-const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT || '@VideoraIQDEVAlertsbot';
+const BOT_USERNAME = telegramBotUsername();
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 60000;
 

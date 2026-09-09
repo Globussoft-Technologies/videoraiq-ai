@@ -2,10 +2,11 @@ import { createPortal } from 'react-dom';
 import { ChevronDown, Search, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { telegramBotUsername } from '@/helpers/telegramBot';
 
 /* Same source as the Telegram settings tab (TelegramAlerts.jsx), so the handle
    quoted in the hint can never drift from the one users are told to add. */
-const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT || '@VideoraIQDEVAlertsbot';
+const BOT_USERNAME = telegramBotUsername();
 
 export default function TelegramChannelMultiSelect({
   value = [],
@@ -122,7 +123,7 @@ export default function TelegramChannelMultiSelect({
       id: 'telegram-no-channel',
       duration: 9000,
       description:
-        'Open Alert Recipients and switch to the Telegram tab and connect your Telegram channel'
+        `Open Alert Recipients, switch to the Telegram tab, add ${BOT_USERNAME}, and connect your Telegram channel`
     });
   };
 
