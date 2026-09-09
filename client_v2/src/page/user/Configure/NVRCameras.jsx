@@ -282,6 +282,7 @@ function ModalInput({ label, required, invalid, error, ...props }) {
 const NVR_BRANDS = [
   { value: 'hikvision', label: 'Hikvision' },
   { value: 'cpplus', label: 'CP Plus' },
+  { value: 'dahua', label: 'Dahua' },
 ];
 
 // ── Shimmering placeholder block for loading states ────────────────────────
