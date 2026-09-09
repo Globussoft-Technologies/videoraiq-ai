@@ -80,8 +80,11 @@ app.use(
       "x-browser",
       "x-operating-system",
       "x-device-name",
+      "Cache-Control",
+      "Pragma",
+      "Expires",
     ],
-  })
+  }),
 );
 app.options("*", cors());
 app.use(bodyParser.text({ type: "application/xml" }));
