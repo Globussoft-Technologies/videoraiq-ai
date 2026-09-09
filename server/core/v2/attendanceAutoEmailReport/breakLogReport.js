@@ -22,11 +22,11 @@ import { buildPdf, csvField, csvCell, imageCell, shiftNameFor, shiftTimingsFor }
  * character-width hint.
  */
 const BREAK_COLUMNS = [
-  { header: "ID", width: 26, break: (ctx) => String(ctx.index + 1) },
-  { header: "Emp. Code", width: 58, break: (ctx) => ctx.row.employeeId },
-  { header: "Name", width: 92, wrap: true, break: (ctx) => ctx.row.employee },
+  { header: "I'd", width: 26, break: (ctx) => String(ctx.index + 1) },
+  { header: "Employee I'd", width: 58, break: (ctx) => ctx.row.employeeId },
+  { header: "Employee Name", width: 92, wrap: true, break: (ctx) => ctx.row.employee },
   { header: "Department", width: 86, wrap: true, break: (ctx) => ctx.row.department },
-  { header: "Shift", width: 74, wrap: true, break: (ctx) => shiftNameFor(ctx.row.shift) },
+  { header: "Shift I'd", width: 74, wrap: true, break: (ctx) => shiftNameFor(ctx.row.shift) },
   { header: "Shift Timings", width: 76, break: (ctx) => shiftTimingsFor(ctx.row.shift) },
   { header: "Date", width: 64, break: (ctx) => ctx.row.date },
   { header: "Location", width: 68, wrap: true, break: (ctx) => ctx.row.location },

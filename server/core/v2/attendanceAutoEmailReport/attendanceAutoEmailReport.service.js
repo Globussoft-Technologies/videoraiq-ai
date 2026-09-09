@@ -516,10 +516,10 @@ export function shiftTimingsFor(shift) {
 // A column with no function for a kind renders blank there automatically — no
 // hand-placed "" padding, and adding/reordering a column can't misalign rows.
 const REPORT_COLUMNS = [
-  { header: "ID", day: (ctx) => String(ctx.index + 1) },
-  { header: "Emp. Code", day: (ctx) => ctx.row.employeeId },
+  { header: "I'd", day: (ctx) => String(ctx.index + 1) },
+  { header: "Employee I'd", day: (ctx) => ctx.row.employeeId },
   {
-    header: "Name",
+    header: "Employee Name",
     day: (ctx) => ctx.row.employee,
   },
   { header: "Department", day: (ctx) => ctx.row.department },
@@ -527,7 +527,7 @@ const REPORT_COLUMNS = [
   // against, so the report shows it beside the times rather than leaving the
   // reader to look it up. Unassigned employees render "-", never a default
   // shift they were never actually on.
-  { header: "Shift", day: (ctx) => shiftNameFor(ctx.row.shift) },
+  { header: "Shift I'd", day: (ctx) => shiftNameFor(ctx.row.shift) },
   { header: "Shift Timings", day: (ctx) => shiftTimingsFor(ctx.row.shift) },
   { header: "Date", day: (ctx) => ctx.row.date },
   { header: "Location", day: (ctx) => ctx.row.location },
@@ -683,11 +683,11 @@ export async function buildPdf({ report, rows, label, timezone, columns: columnS
     //   - time columns fit "09:45:40 AM"
     //   - Date fits "01 Jun 2026"
     const columns = columnSpec || [
-      { head: "ID", width: 24 },
-      { head: "Emp. Code", width: 58 },
-      { head: "Name", width: 82, wrap: true },
+      { head: "I'd", width: 24 },
+      { head: "Employee I'd", width: 58 },
+      { head: "Employee Name", width: 82, wrap: true },
       { head: "Department", width: 78, wrap: true },
-      { head: "Shift", width: 62, wrap: true },
+      { head: "Shift I'd", width: 62, wrap: true },
       { head: "Shift Timings", width: 72 },
       { head: "Date", width: 60 },
       { head: "Location", width: 56, wrap: true },

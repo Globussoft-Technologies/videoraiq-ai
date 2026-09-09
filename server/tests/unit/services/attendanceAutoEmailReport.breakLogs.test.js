@@ -76,7 +76,7 @@ const toMinutes = (text) => {
 describe("breakLogReport — columns", () => {
   it("carries every requested column, in order", () => {
     expect(BREAK_HEADERS).toEqual([
-      "ID", "Emp. Code", "Name", "Department", "Shift", "Shift Timings", "Date", "Location",
+      "I'd", "Employee I'd", "Employee Name", "Department", "Shift I'd", "Shift Timings", "Date", "Location",
       "Break #", "Break Out", "Break In", "Break Time", "Total Break Time",
       "Break Out Camera", "Break In Camera", "View Image",
     ]);
@@ -84,10 +84,10 @@ describe("breakLogReport — columns", () => {
 
   it("fills the identity columns from the employee and their shift", () => {
     const line = breakTableRows([row(TWO_BREAKS)])[0].cells;
-    expect(at(line, "Emp. Code")).toBe("103198");
-    expect(at(line, "Name")).toBe("Chethan S");
+    expect(at(line, "Employee I'd")).toBe("103198");
+    expect(at(line, "Employee Name")).toBe("Chethan S");
     expect(at(line, "Department")).toBe("software development");
-    expect(at(line, "Shift")).toBe("morning shift");
+    expect(at(line, "Shift I'd")).toBe("morning shift");
     expect(at(line, "Shift Timings")).toBe("10:00 - 19:00");
     expect(at(line, "Date")).toBe("07 Aug 2026");
     expect(at(line, "Location")).toBe("bangalore");
@@ -156,7 +156,7 @@ describe("breakLogReport — days with no break", () => {
     // One line, and no subtotal — there is nothing to total.
     expect(out.map((line) => line.kind)).toEqual(["break"]);
     // The identity is still there, so the reader can see the day was covered.
-    expect(at(out[0].cells, "Name")).toBe("Chethan S");
+    expect(at(out[0].cells, "Employee Name")).toBe("Chethan S");
     for (const header of ["Break #", "Break Out", "Break In", "Break Time"]) {
       expect(at(out[0].cells, header)).toBe("-");
     }
@@ -192,7 +192,7 @@ describe("breakLogReport — output formats", () => {
 
   it("writes the columns into the CSV header", () => {
     const csv = buildBreakCsv({ rows: [row(TWO_BREAKS)], label: "Aug 2026", timezone: TZ }).toString("utf8");
-    const header = csv.split("\r\n").find((line) => line.startsWith("ID,"));
+    const header = csv.split("\r\n").find((line) => line.startsWith("I'd,"));
     expect(header).toContain("Break Out,Break In,Break Time,Total Break Time");
   });
 
