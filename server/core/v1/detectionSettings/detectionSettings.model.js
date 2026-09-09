@@ -581,6 +581,7 @@ const PersonalProtectiveEquipmentSchema = new mongoose.Schema({
   },
 });
 
+
 const PersonalProtectiveEquipmentSetting = DetectionSetting.discriminator(
   "personalProtectiveEquipmentSettings",
   new mongoose.Schema({ settings: PersonalProtectiveEquipmentSchema }),
@@ -1174,6 +1175,14 @@ const vehicleCheckInOutSchema = new mongoose.Schema({
   inside_reference_point: {
     type: [Number],
     default: undefined,
+  },
+  // Direction(s) this detection counts, same values line crossing uses. Without
+  // this field Mongoose strips settings.count_mode on save, so the UI always
+  // reloaded as "entry" regardless of the mode picked.
+  count_mode: {
+    type: String,
+    enum: ["entry", "exit", "all"],
+    default: "entry",
   },
   imageRequired: {
     type: Boolean,
