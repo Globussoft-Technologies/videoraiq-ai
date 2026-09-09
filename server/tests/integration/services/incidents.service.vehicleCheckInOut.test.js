@@ -21,7 +21,7 @@ import { serviceCtx, payload } from "../../helpers/service.js";
 
 vi.mock("../../../socket.js", () => ({ sendPayloadToUser: vi.fn() }));
 vi.mock("../../../core/v2/alerts/alert.events.js", () => ({
-  triggerAlertOnIncident: vi.fn(),
+  triggerAlertOnIncident: vi.fn().mockResolvedValue(undefined),
 }));
 
 const { default: IncidentsService } = await import(
@@ -122,6 +122,12 @@ describe("createIncidents — vehicleCheckInOut", () => {
     await create({ checkin: true, vehicleNumber: "MH12AB1234" });
     await create({ checkin: false, vehicleNumber: "MH12AB1234" });
     expect((await VehicleCheckInOutIncident.findOne({ checkin: false })).checkin).toBe(false);
+  });
+
+  it.each(["zone", "zoneName", "zone_name"])("preserves %s for Telegram zone routing", async (field) => {
+    const res = await create({ checkin: true, vehicleNumber: "MH12AB1234", [field]: "Entry zone" });
+    expect(res.statusCode).toBe(200);
+    expect((await VehicleCheckInOutIncident.findOne({})).zone).toBe("Entry zone");
   });
 
   it("ignores an initial check-out without creating an orphan event", async () => {

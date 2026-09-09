@@ -12,6 +12,7 @@ import {
   resolveTelegramZoneConfig,
   isIncidentWithinZoneWindow,
   resolvePreferredTelegramChatIds,
+  resolveVehicleCheckInOutTelegramChatIds,
 } from '../../../utils/telegramAlertRouting.js';
 
 const buildAdminQuery = (adminId) => {
@@ -235,7 +236,15 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
         timeOfIncidentUTC: telegramIncident?.timeOfIncident,
         adminTimezone: adminTz,
       });
-      const preferredChatIds = resolvePreferredTelegramChatIds({
+      const vehicleChatIds = detectionType === "vehicleCheckInOut"
+        ? resolveVehicleCheckInOutTelegramChatIds({
+            incidentZone: telegramIncident?.zone || telegramIncident?.zoneName,
+            detectionSettings,
+            timeOfIncidentUTC: telegramIncident?.timeOfIncident,
+            adminTimezone: adminTz,
+          })
+        : null;
+      const preferredChatIds = vehicleChatIds ?? resolvePreferredTelegramChatIds({
         matchingZoneConfig,
         detectionSettings,
       });
@@ -244,7 +253,7 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
         Boolean(matchingZoneConfig?.endTime) &&
         Boolean(telegramIncident?.timeOfIncident) &&
         Boolean(adminTz);
-      const windowOpen = hasEvaluableWindow
+      const windowOpen = vehicleChatIds !== null ? vehicleChatIds.length > 0 : hasEvaluableWindow
         ? isIncidentWithinZoneWindow(
           matchingZoneConfig,
           telegramIncident?.timeOfIncident,

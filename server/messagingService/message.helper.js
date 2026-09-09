@@ -174,6 +174,9 @@ export const buildIncidentTelegramMessage = (incident = {}, nvrData = {}, channe
     // up() escapes the decimal point — MarkdownV2 requires it.
     ConfidenceScoreInPercentage != null ? `*Confidence:* ${up(`${ConfidenceScoreInPercentage}%`)}` : null,
     vehicleNumber ? `*Vehicle Number:* ${up(vehicleNumber)}` : null,
+    incidentType === "vehicleCheckInOut" && typeof incident.checkin === "boolean"
+      ? `*Direction:* ${up(incident.checkin ? "Check-In" : "Check-Out")}`
+      : null,
     vehicleType ? `*Vehicle Type:* ${up(vehicleType)}` : null,
     `*Camera:* ${up(cameraName)}`,
     `*NVR:* ${up(nvrName)}`,

@@ -138,3 +138,30 @@ export const resolvePreferredTelegramChatIds = ({
     ),
   ];
 };
+
+export const resolveVehicleCheckInOutTelegramChatIds = ({
+  incidentZone,
+  detectionSettings = {},
+  timeOfIncidentUTC,
+  adminTimezone,
+}) => {
+  const selectedIds = (settings) => {
+    const ids = settings?.telegramChatIds;
+    return (Array.isArray(ids) && ids.length ? ids : [settings?.telegramChatId])
+      .map((id) => String(id || "").trim()).filter(Boolean);
+  };
+  const zoneConfigs = Array.isArray(detectionSettings.zone_configs) ? detectionSettings.zone_configs : [];
+  if (!zoneConfigs.length) return [...new Set(selectedIds(detectionSettings))];
+
+  const matched = findMatchingZoneConfig(incidentZone, zoneConfigs);
+  // This detector can report its detection-wide line name instead of a polygon
+  // name. In that case notify the selected channels of every eligible zone.
+  const zones = matched ? [matched] : zoneConfigs;
+  const chatIds = zones.flatMap((zone) => {
+    const hasWindow = Boolean(zone.startTime || zone.endTime);
+    if (hasWindow && !isIncidentWithinZoneWindow(zone, timeOfIncidentUTC, adminTimezone)) return [];
+    // An empty zone selection must not inherit another zone's/default channel.
+    return selectedIds(zone);
+  });
+  return [...new Set(chatIds)];
+};

@@ -46,7 +46,7 @@ export default function ZoneSettingsPanel({
   // Line Crossing keeps its per-line mode; Check-In / Check-Out has a single
   // detection-wide mode rendered once in the panel header.
   const showPerZoneMode = isLineCrossing;
-  const showZoneExtras = !isCheckInOut;
+  const showZoneExtras = true;
   const channelOptions = normalizeTelegramChannels(telegramChannels).map((channel) => ({
     value: channel.chatId,
     label: channel.label,

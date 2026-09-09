@@ -44,10 +44,10 @@ export default function SaveDetectionAreaModal({
   // each drawn zone's own name below.
   const [laneName, setLaneName] = useState(initialLaneName || '');
   const areaLabel = isLineCrossing ? 'Line' : 'Zone';
-  // Line Crossing keeps its per-line mode; Check-In / Check-Out zones carry only
-  // a name (mode is the single field above) and no Telegram/schedule/etc.
+  // Check-In / Check-Out keeps its detection-wide mode and shares the same
+  // per-zone Telegram channels and alert schedule as the other area types.
   const showPerZoneMode = isLineCrossing;
-  const showZoneExtras = !isCheckInOut;
+  const showZoneExtras = true;
   const channelOptions = normalizeTelegramChannels(telegramChannels).map((channel) => ({
     value: channel.chatId,
     label: channel.label,
@@ -186,7 +186,6 @@ export default function SaveDetectionAreaModal({
               )}
             </div>
 
-            {!isCheckInOut && (
               <div style={{ display: 'grid', gridTemplateColumns: showZoneExtras ? '1fr 1fr' : '1fr', gap: 12 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--tx2)', marginBottom: 6 }}>Severity</label>
@@ -211,7 +210,6 @@ export default function SaveDetectionAreaModal({
                   </div>
                 )}
               </div>
-            )}
 
             {/* Check-In / Check-Out: Line Name + Mode share one card, Line
                 Name on top since it names the whole detection. */}

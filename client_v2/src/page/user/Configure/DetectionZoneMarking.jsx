@@ -492,10 +492,10 @@ export default function DetectionZoneMarking({
     if (fields.includes('capacity') && String(zone?.capacity ?? '').trim() === '') nextErrors[`zone-${index}-capacity`] = 'Capacity is required.';
     if (fields.includes('threshold') && String(zone?.threshold ?? '').trim() === '') nextErrors[`zone-${index}-threshold`] = 'Threshold is required.';
     if (fields.includes('company') && String(zone?.company ?? '').trim() === '') nextErrors[`zone-${index}-company`] = 'Company is required.';
-    if (!isCheckInOut && hasSchedule && !hasTelegramChannel) {
+    if (hasSchedule && !hasTelegramChannel) {
       nextErrors[`zone-${index}-telegramChatId`] = 'Please select at least one Telegram channel when a schedule is configured.';
     }
-    if (!isCheckInOut && hasTelegramChannel && !hasSchedule) {
+    if (hasTelegramChannel && !hasSchedule) {
       nextErrors[`zone-${index}-schedule`] = 'Please select a schedule when a Telegram channel is selected.';
     }
     return nextErrors;
@@ -531,7 +531,9 @@ export default function DetectionZoneMarking({
         ? z.telegramChatIds.map(chatId => String(chatId || '').trim()).filter(Boolean)
         : (String(z.telegramChatId || '').trim() ? [String(z.telegramChatId).trim()] : []),
       name: z.name,
-      telegramChatId: z.telegramChatId || undefined,
+      telegramChatId: isCheckInOut
+        ? (Array.isArray(z.telegramChatIds) ? z.telegramChatIds[0] || null : z.telegramChatId || null)
+        : z.telegramChatId || undefined,
       ...(usesLineMode ? { count_mode: toApiMode(z.countMode) } : {}),
       ...(fields.includes('capacity') ? { capacity: z.capacity === '' ? undefined : Number(z.capacity) } : {}),
       ...(fields.includes('threshold') ? { threshold_sec: z.threshold === '' ? undefined : Number(z.threshold) } : {}),
@@ -570,7 +572,7 @@ export default function DetectionZoneMarking({
           referencePoints: { ...setting.settings?.referencePoints, [camera._id]: polygons },
           zone_configs: zoneConfigs,
           telegramChatIds: fallbackTelegramChatIds,
-          telegramChatId: fallbackTelegramChatId,
+          telegramChatId: isCheckInOut ? fallbackTelegramChatIds[0] || null : fallbackTelegramChatId,
           ...(lineInsideReferencePoint ? { inside_reference_point: lineInsideReferencePoint } : {}),
           ...(lineCountMode ? { count_mode: lineCountMode } : {}),
           ...(checkInOutExtras || {}),
@@ -603,7 +605,7 @@ export default function DetectionZoneMarking({
           referencePoints: { [camera._id]: polygons },
           zone_configs: zoneConfigs,
           telegramChatIds: fallbackTelegramChatIds,
-          telegramChatId: fallbackTelegramChatId,
+          telegramChatId: isCheckInOut ? fallbackTelegramChatIds[0] || null : fallbackTelegramChatId,
           ...(lineInsideReferencePoint ? { inside_reference_point: lineInsideReferencePoint } : {}),
           ...(lineCountMode ? { count_mode: lineCountMode } : {}),
           ...(checkInOutExtras || {}),
@@ -723,6 +725,15 @@ export default function DetectionZoneMarking({
       return;
     }
     const nextZones = zones.map(z => ({ ...z, countMode: modeDraft }));
+    const requiredErrors = Object.assign({}, ...nextZones.map(validateZoneRequiredFields));
+    if (Object.keys(requiredErrors).length) {
+      setZoneFieldErrors(prev => ({ ...prev, ...requiredErrors }));
+      return;
+    }
+    for (const zone of nextZones) {
+      const err = scheduleError(zone.schedule);
+      if (err) { toast.error(err); return; }
+    }
     setZones(nextZones);
     if (!activeType?.settingId) return;
     setSavingMode(true);

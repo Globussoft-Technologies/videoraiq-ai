@@ -681,6 +681,7 @@ class IncidentsService {
         );
       } else if (incidentType === "vehicleCheckInOut") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
+        newIncident.zone = firstFilled(req.body.zone, req.body.zoneName, req.body.zone_name);
         newIncident.Image = req?.body?.Image;
         newIncident.vehicleNumber = req?.body?.vehicleNumber;
         // Direction is the required field, and DS has no settled spelling for
