@@ -4,7 +4,7 @@ import config from "config";
 import { redis } from "./utils/database.js"
 import logger from "./utils/logger.js";
 import { checkActivePlanSocket } from "./middlewares/checkActivePlan.js";
-import { markSessionOnline, markSessionOffline } from "./core/v2/sessions/sessionPresence.js";
+import { markSessionOnline, markSessionOffline, registerSessionSocket } from "./core/v2/sessions/sessionPresence.js";
 import sessionModel from "./core/v2/sessions/sessions.model.js";
 import adminModel from "./core/v1/admin/admin.model.js";
 import Channel from "./core/v1/channels/channels.model.js";
@@ -250,6 +250,11 @@ export const initSocket = (server) => {
       // lastActiveAt fresh so the admin session list's "Last Active" agrees
       // with the new "Online" column.
       await markSessionOnline(sessionId);
+      // Track this as one more open tab for this sessionId — the same login
+      // can have multiple live sockets (e.g. opened in a second tab), and
+      // markSessionOffline() on disconnect only clears presence once every
+      // registered socket for this sessionId has disconnected.
+      await registerSessionSocket(sessionId);
       sessionModel
         .updateOne({ sessionId }, { $set: { lastActiveAt: new Date() } })
         .catch((e) => logger.error(`[SESSION_PRESENCE] connect lastActiveAt bump failed: ${e?.message || e}`));
