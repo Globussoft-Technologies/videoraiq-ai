@@ -4,6 +4,7 @@ import { useTheme } from '../theme/ThemeContext';
 import BufferingIndicator from './BufferingIndicator';
 import FullscreenZoomSurface from './FullscreenZoomSurface';
 import PlaybackTimelineBar, { TIMELINE_ZOOM_LEVELS } from './Playback/PlaybackTimelineBar';
+import { createPlaybackTransport } from './Playback/playbackTransport';
 import { fetchIncidents } from '../helpers/incidents';
 import {
   getPlaybackUrl,
@@ -65,22 +66,40 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
 
   const [cursorMs, setCursorMs] = useState(0); // ms since midnight
   const [playing, setPlaying] = useState(false);
+  const [buffering, setBuffering] = useState(false);
 
   const [events, setEvents] = useState([]);
   const [segments, setSegments] = useState([]);
   const [loadingMeta, setLoadingMeta] = useState(false);
 
   const [videoUrl, setVideoUrl] = useState('');
+  const [sourceRevision, setSourceRevision] = useState(0);
   const [videoState, setVideoState] = useState('idle'); // idle | loading | ready | error | no-recording
   const videoRef = useRef(null);
+  const transportRef = useRef(null);
   const scrubTimerRef = useRef(null);
   const seekTokenRef = useRef(0);
   const streamStartMsRef = useRef(0);
+
+  useEffect(() => {
+    const transport = createPlaybackTransport(videoRef.current, {
+      onPlaying: setPlaying,
+      onBuffering: setBuffering,
+      onReady: () => setVideoState('ready'),
+      onError: () => setVideoState('error'),
+    });
+    transportRef.current = transport;
+    return () => {
+      transport.destroy();
+      transportRef.current = null;
+    };
+  }, []);
 
   // Reset per channel/date
   useEffect(() => {
     setCursorMs(0);
     streamStartMsRef.current = 0;
+    transportRef.current?.pause();
     setPlaying(false);
     setVideoUrl('');
     setVideoState('idle');
@@ -140,6 +159,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     if (!channelId) return;
     if (scrubTimerRef.current) clearTimeout(scrubTimerRef.current);
     const token = ++seekTokenRef.current;
+    transportRef.current?.prepare({ autoplay: true });
     streamStartMsRef.current = ms;
     setVideoState('loading');
     scrubTimerRef.current = setTimeout(async () => {
@@ -154,10 +174,13 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
           sessionId: getPlaybackSessionId(),
         });
         if (token !== seekTokenRef.current) return;
-        if (!url) { setVideoState('no-recording'); setVideoUrl(''); return; }
+        if (!url) { transportRef.current?.pause(); setVideoState('no-recording'); setVideoUrl(''); return; }
         setVideoUrl(url);
+        // A retry/seek may return the same playlist URL with a new source behind it.
+        setSourceRevision((revision) => revision + 1);
       } catch {
         if (token !== seekTokenRef.current) return;
+        transportRef.current?.pause();
         setVideoState('no-recording');
         setVideoUrl('');
       }
@@ -167,6 +190,10 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
   // Auto-load start of day on channel/date change
   useEffect(() => {
     if (channelId) loadAt(0);
+    return () => {
+      if (scrubTimerRef.current) clearTimeout(scrubTimerRef.current);
+      seekTokenRef.current += 1;
+    };
   }, [channelId, +day, loadAt]);
 
   // HLS attach
@@ -174,6 +201,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     const video = videoRef.current;
     if (!video || !videoUrl) return;
     if (/^rtsp:\/\//i.test(videoUrl)) {
+      transportRef.current?.pause();
       setVideoState('no-recording');
       return;
     }
@@ -181,29 +209,46 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     let cancelled = false;
     let retryTimer = null;
     let attempts = 0;
+    let resumePosition = null;
+    let failed = false;
+    const seekToken = seekTokenRef.current;
+    const isCurrent = () => !cancelled && !failed && seekToken === seekTokenRef.current;
+    const failPlayback = (error) => {
+      if (!isCurrent()) return;
+      failed = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      transportRef.current?.fail(error);
+      if (hls) { try { hls.destroy(); } catch { /* noop */ } }
+    };
 
     import('hls.js').then(({ default: Hls }) => {
-      if (cancelled) return;
+      if (!isCurrent()) return;
 
       if (!Hls.isSupported()) {
         if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          transportRef.current?.attach();
           video.src = videoUrl;
         } else {
+          transportRef.current?.pause();
           setVideoState('no-recording');
         }
         return;
       }
 
       const attach = () => {
-        if (cancelled) return;
-        if (hls) { try { hls.destroy(); } catch { /* noop */ } }
-        hls = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60 });
+        if (!isCurrent()) return;
+        if (hls) {
+          if (video.readyState > 0 && video.currentTime > 0 && Number.isFinite(video.currentTime)) resumePosition = video.currentTime;
+          transportRef.current?.prepare();
+          try { hls.destroy(); } catch { /* noop */ }
+        }
+        transportRef.current?.attach();
+        hls = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60, startPosition: resumePosition ?? -1 });
         hls.attachMedia(video);
         hls.loadSource(videoUrl);
 
-        let fragLoaded = false;
         hls.on(Hls.Events.FRAG_LOADED, (_, data) => {
-          if (cancelled) return;
+          if (!isCurrent()) return;
           if (data?.frag?.programDateTime) {
             const fragDate = new Date(data.frag.programDateTime);
             const fragDayMs = (fragDate.getHours() * 3600 + fragDate.getMinutes() * 60 + fragDate.getSeconds()) * 1000 + fragDate.getMilliseconds();
@@ -211,14 +256,9 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
               streamStartMsRef.current = Math.max(0, fragDayMs - Math.round((data.frag.start || 0) * 1000));
             }
           }
-          if (!fragLoaded) {
-            fragLoaded = true;
-            setVideoState('ready');
-            setPlaying(true);
-          }
         });
         hls.on(Hls.Events.FRAG_CHANGED, (_, data) => {
-          if (cancelled || !data?.frag?.programDateTime) return;
+          if (!isCurrent() || !data?.frag?.programDateTime) return;
           const fragDate = new Date(data.frag.programDateTime);
           const fragDayMs = (fragDate.getHours() * 3600 + fragDate.getMinutes() * 60 + fragDate.getSeconds()) * 1000 + fragDate.getMilliseconds();
           if (fragDayMs >= 0 && fragDayMs < DAY_MS) {
@@ -226,33 +266,37 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
           }
         });
         hls.on(Hls.Events.ERROR, (_, data) => {
-          if (!data?.fatal || cancelled) return;
+          if (!data?.fatal || !isCurrent()) return;
           const status = data?.response?.status || data?.networkDetails?.status;
           if (status === 404 && attempts < MANIFEST_RETRY_LIMIT) {
             attempts += 1;
+            setBuffering(true);
+            setPlaying(false);
+            if (retryTimer) clearTimeout(retryTimer);
             retryTimer = setTimeout(attach, MANIFEST_RETRY_MS);
             return;
           }
-          setVideoState('no-recording');
+          failPlayback();
         });
       };
       attach();
+    }).catch((error) => {
+      failPlayback(error);
     });
 
     return () => {
       cancelled = true;
       if (retryTimer) clearTimeout(retryTimer);
       if (hls) { try { hls.destroy(); } catch { /* noop */ } }
+      else { video.removeAttribute('src'); video.load(); }
     };
-  }, [videoUrl, day]);
+  }, [videoUrl, day, sourceRevision]);
 
-  // Play/pause drives the video element
+  // Fullscreen must preserve the current source and the user's play/pause intent.
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (playing) video.play().catch(() => setPlaying(false));
-    else video.pause();
-  }, [playing, videoUrl]);
+    const frame = requestAnimationFrame(() => transportRef.current?.resume());
+    return () => cancelAnimationFrame(frame);
+  }, [isExpanded]);
 
   // Playback rate & 16x fast-forward jump simulation
   const fastForwardRef = useRef(null);
@@ -261,7 +305,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     if (!video) return;
     const target = SPEED_LEVELS[speedIdx];
     const nativeRate = Math.min(target, MAX_NATIVE_RATE);
-    video.playbackRate = nativeRate;
+    transportRef.current?.setRate(nativeRate);
 
     if (fastForwardRef.current) { clearInterval(fastForwardRef.current); fastForwardRef.current = null; }
     if (target > MAX_NATIVE_RATE) {
@@ -414,21 +458,21 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
 
       {/* Video surface */}
       <div className="vq-pbtl-video" style={{ position: 'relative', flex: '1 1 auto', minHeight: isExpanded ? 0 : 300, background: '#000', borderRadius: 10, overflow: 'hidden' }}>
-        {isExpanded ? (
-          <FullscreenZoomSurface enabled={isExpanded} resetKey={`${channelId || 'camera'}-${+day}`}>
-            <video
-              ref={videoRef}
-              muted
-              playsInline
-              style={{ width: '100%', height: '100%', objectFit: 'contain', display: videoState === 'ready' ? 'block' : 'none' }}
-            />
-          </FullscreenZoomSurface>
-        ) : (
-          <video ref={videoRef} muted playsInline style={{ width: '100%', height: '100%', objectFit: 'contain', display: videoState === 'ready' ? 'block' : 'none' }} />
-        )}
-        {videoState !== 'ready' && (
+        {/* Keep the video mounted so fullscreen preserves HLS and playback state. */}
+        <FullscreenZoomSurface enabled={isExpanded} resetKey={`${channelId || 'camera'}-${+day}`}>
+          <video
+            ref={videoRef}
+            muted
+            playsInline
+            style={{ width: '100%', height: '100%', objectFit: 'contain', display: videoState === 'ready' ? 'block' : 'none' }}
+          />
+        </FullscreenZoomSurface>
+        {(videoState !== 'ready' || buffering) && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#2563EB', fontSize: 13, padding: 12, textAlign: 'center' }}>
-            {videoState === 'loading' && <BufferingIndicator />}
+            {(videoState === 'loading' || buffering) && <BufferingIndicator />}
+            {videoState === 'error' && (
+              <span>Couldn't play this recording. Press play to retry.</span>
+            )}
             {videoState === 'no-recording' && (
               <span style={{ color: 'rgba(255,255,255,.55)', fontFamily: 'var(--mono)', fontSize: 12 }}>No recording available for this time</span>
             )}
@@ -524,14 +568,15 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
           </button>
           <button
             onClick={() => {
-              if (videoState === 'no-recording' || videoState === 'idle') { loadAt(cursorMs); return; }
-              setPlaying((p) => !p);
+              if (videoState === 'error' || videoState === 'no-recording' || videoState === 'idle') { loadAt(cursorMs); return; }
+              if (playing || buffering) transportRef.current?.pause();
+              else transportRef.current?.play();
             }}
             disabled={videoState === 'loading'}
-            title={videoState === 'no-recording' ? 'Retry loading this time' : playing ? 'Pause' : 'Play'}
+            title={videoState === 'error' || videoState === 'no-recording' ? 'Retry loading this time' : playing || buffering ? 'Pause' : 'Play'}
             style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--violet)', border: 0, color: '#fff', cursor: videoState === 'loading' ? 'default' : 'pointer', opacity: videoState === 'loading' ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}
           >
-            {playing && videoState === 'ready' ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+            {(playing || buffering) && videoState === 'ready' ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
           </button>
           <button
             onClick={() => skipBy(SKIP_MS)}
