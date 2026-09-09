@@ -434,7 +434,7 @@ class IncidentsController {
 
   async getVehicleCheckInOutLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
-    #swagger.description = 'Vehicle Check-In / Check-Out logs, one row per vehicle rather than per event. Each row is that vehicle first check-in, with custody (checked in and not since checked out), the check-in/check-out counts and the latest event time. Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, custody, search. Paginated via skip/limit.'
+    #swagger.description = 'Vehicle Check-In / Check-Out logs, one row per vehicle rather than per event. Each row is that vehicle first check-in in range, with custody (checked in and not since checked out), the check-in/check-out counts and the latest event time. When startDate/endDate are given, only vehicles with a crossing inside that range are returned. Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, custody, search. Paginated via skip/limit.'
     #swagger.parameters['skip'] = { in: 'query', type: 'integer' }
     #swagger.parameters['limit'] = { in: 'query', type: 'integer' }
     #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
@@ -461,6 +461,20 @@ class IncidentsController {
     #swagger.security = [{ "EncryptedAuthToken": [] }]
     */
     return await incidentsService.getVehicleCheckInOutHistory(req, res, next);
+  }
+
+  async getVehicleCheckInOutNumbers(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Distinct vehicle numbers seen in Vehicle Check-In / Check-Out (vehicleCheckInOut) incidents - the option list behind the plate filter on that page. Separate from the Car Model Detection numbers endpoint. Honours the same nvrIds / channelIds / startDate / endDate filters as the log list. Optional search narrows the list server-side.'
+    #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['endDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['nvrIds'] = { in: 'query', type: 'string' }
+    #swagger.parameters['channelIds'] = { in: 'query', type: 'string' }
+    #swagger.parameters['search'] = { in: 'query', type: 'string' }
+    #swagger.responses[200] = { description: 'vehicleCheckInOut vehicle numbers fetched successfully' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.getVehicleCheckInOutNumbers(req, res, next);
   }
 
   async getCarModelDetectionLogs(req, res, next) {

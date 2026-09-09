@@ -133,6 +133,13 @@ router.post(
   viewAccessCheck,
   incidentsController.getVehicleCheckInOutHistory,
 );
+// Distinct plates for the check-in/out plate filter -- driven by
+// vehicleCheckInOut incidents, not car-model detection.
+router.get(
+  "/logs/vehicle-check-in-out/numbers",
+  viewAccessCheck,
+  incidentsController.getVehicleCheckInOutNumbers,
+);
 router.patch(
   "/logs/car-model-detection/:id",
   editAccessCheck,

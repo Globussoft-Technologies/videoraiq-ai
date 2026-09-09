@@ -3484,11 +3484,11 @@ console.log(result,'result');
           .endOf("day")
           .toDate();
 
-        // Custody is a continuous state, not a same-day count. Read the
-        // vehicle's accepted history up to the selected end date so a car
-        // checked in on day 1 remains visible/in custody on day 4. Once the
-        // grouping has derived state, old completed visits are removed below.
-        match.timeOfIncident = { $lte: windowEnd };
+        // Only crossings inside the selected range. Custody is still derived,
+        // but from just those events, and the post-group filter below keeps
+        // only vehicles that actually have an event in range -- a car that
+        // checked in before the range and never checked out is not shown here.
+        match.timeOfIncident = { $gte: windowStart, $lte: windowEnd };
         activeWindow = { windowStart, windowEnd };
       }
 
@@ -3581,17 +3581,15 @@ console.log(result,'result');
       ];
 
       if (activeWindow) {
+        // Every remaining event is already inside the window (matched above),
+        // so the vehicle is in range by construction. Still guard on
+        // lastEventAt so nothing outside the range can leak through.
         basePipeline.push({
           $match: {
-            $or: [
-              { custody: true },
-              {
-                lastEventAt: {
-                  $gte: activeWindow.windowStart,
-                  $lte: activeWindow.windowEnd,
-                },
-              },
-            ],
+            lastEventAt: {
+              $gte: activeWindow.windowStart,
+              $lte: activeWindow.windowEnd,
+            },
           },
         });
       }
@@ -3710,6 +3708,112 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch vehicle check-in/out history", 500));
+    }
+  }
+
+  /**
+   * The distinct set of vehicle numbers seen in the Vehicle Check-In / Check-Out
+   * incidents -- the option list behind the plate filter on that page.
+   *
+   * Deliberately separate from the Car Model Detection numbers endpoint: this
+   * page is driven by `vehicleCheckInOut` incidents, so a plate that only ever
+   * appeared in a car-model detection must not show here, and vice versa.
+   *
+   * Scoped to the user's own incidents (same as the other numbers endpoints),
+   * with optional date / NVR / channel narrowing from the query. Unreadable
+   * plates ("", "--", "N/A") are dropped -- not a vehicle number anyone can pick.
+   */
+  async getVehicleCheckInOutNumbers(req, res, next) {
+    try {
+      const data = req?.verified?.userData;
+      if (!data?.user_id) {
+        return res.send(
+          Response.userFailResp("User authentication failed.", "Unauthorized"),
+        );
+      }
+
+      const { search, startDate, endDate, nvrId, nvrIds, channelId, channelIds } =
+        req.query || {};
+
+      const toObjectIds = (value) =>
+        (value ? String(value).split(",") : [])
+          .map((x) => x.trim())
+          .filter((x) => mongoose.Types.ObjectId.isValid(x))
+          .map((x) => new mongoose.Types.ObjectId(x));
+
+      const match = {
+        userId: data.user_id.toString(),
+        incidentType: "vehicleCheckInOut",
+        vehicleNumber: { $nin: [null, "", "--", "N/A"] },
+      };
+
+      if (startDate && endDate) {
+        match.timeOfIncident = {
+          $gte: momentTZ.tz(startDate, "Asia/Kolkata").startOf("day").toDate(),
+          $lte: momentTZ.tz(endDate, "Asia/Kolkata").endOf("day").toDate(),
+        };
+      }
+
+      const nvrFilter = toObjectIds(nvrId || nvrIds);
+      if (nvrFilter.length) match.nvrId = { $in: nvrFilter };
+
+      const channelFilter = toObjectIds(channelId || channelIds);
+      if (channelFilter.length) match.channelId = { $in: channelFilter };
+
+      const pipeline = [
+        { $match: match },
+        {
+          $group: {
+            _id: {
+              $toUpper: { $trim: { input: { $ifNull: ["$vehicleNumber", ""] } } },
+            },
+            count: { $sum: 1 },
+          },
+        },
+        // _id is already upper-cased by the $group above.
+        { $match: { _id: { $nin: ["", "--", "N/A"] } } },
+      ];
+
+      if (search && String(search).trim()) {
+        pipeline.push({
+          $match: {
+            _id: {
+              $regex: String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+              $options: "i",
+            },
+          },
+        });
+      }
+
+      pipeline.push({ $sort: { _id: 1 } });
+
+      const rows = await Incident.aggregate(pipeline);
+
+      const vehicleNumbers = rows.map((r) => r._id);
+      const vehicleNumberCounts = {};
+      rows.forEach((r) => {
+        vehicleNumberCounts[r._id] = r.count;
+      });
+
+      return res.status(200).json(
+        Response.userSuccessResp(
+          "vehicleCheckInOut vehicle numbers fetched successfully",
+          {
+            totalCount: vehicleNumbers.length,
+            vehicleNumbers,
+            vehicleNumberCounts,
+            vehicleNumbersWithCounts: rows.map((r) => ({
+              vehicleNumber: r._id,
+              count: r.count,
+            })),
+          },
+        ),
+      );
+    } catch (error) {
+      logger.error(error);
+      next(
+        new AppError("Failed to fetch vehicle check-in/out vehicle numbers", 500),
+      );
     }
   }
 
