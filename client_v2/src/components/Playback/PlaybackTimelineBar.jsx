@@ -314,6 +314,15 @@ export default function PlaybackTimelineBar({
   }, [bufferedStartMs, bufferedEndMs, tickStepMs, labelStepSec, currentZoomConfig.showSeconds]);
 
   const cursorPct = (cursorMs / DAY_MS) * 100;
+  const cursorPx = (cursorMs / DAY_MS) * trackWidthPx;
+  const timeLabelWidth = 76;
+  const labelInset = timeLabelWidth / 2 + 4;
+  const clampLabelCenter = (x) => Math.max(
+    scrollLeft + labelInset,
+    Math.min(scrollLeft + containerWidth - labelInset, x)
+  );
+  const cursorVisible = cursorPx >= scrollLeft && cursorPx <= scrollLeft + containerWidth;
+  const cursorLabelOffset = clampLabelCenter(cursorPx) - cursorPx;
 
   return (
     <div 
@@ -350,7 +359,7 @@ export default function PlaybackTimelineBar({
 
       <div ref={scrollRef} onScroll={handleScroll} className="relative w-full overflow-x-auto overflow-y-hidden rounded-lg pb-6 pt-7 focus:outline-none" style={{ scrollbarWidth: widthMultiplier > 1 ? 'thin' : 'none', scrollbarColor: isDark ? 'var(--bd) transparent' : 'rgba(0,0,0,0.2) transparent' }}>
         {isHovering && hoverMs !== null && (
-          <div className="absolute top-[2px] transform -translate-x-1/2 px-2 py-0.5 rounded bg-slate-900/95 border border-white/20 text-white font-mono text-[10px] font-semibold shadow-md pointer-events-none z-30" style={{ left: `${hoverX}px` }}>{formatClock(hoverMs, true)}</div>
+          <div className="absolute top-[2px] transform -translate-x-1/2 px-2 py-0.5 rounded bg-slate-900/95 border border-white/20 text-white font-mono text-[10px] font-semibold shadow-md pointer-events-none z-30 whitespace-nowrap text-center" style={{ left: `${clampLabelCenter(hoverX)}px`, width: timeLabelWidth }}>{formatClock(hoverMs, true)}</div>
         )}
         <div ref={trackRef} onClick={handleTrackClick} onPointerDown={handlePointerDown} onMouseEnter={() => setIsHovering(true)} onMouseLeave={() => { setIsHovering(false); setHoverMs(null); }} onPointerMove={handlePointerMove} className="relative h-14 sm:h-16 bg-[#0c1017] rounded-lg border cursor-pointer shadow-inner" style={{ width: `${widthMultiplier * 100}%`, minWidth: '100%', borderColor: isDark ? 'var(--bd)' : 'rgba(0,0,0,0.2)' }}>
           <div className="absolute inset-0 overflow-hidden rounded-lg pointer-events-none">
@@ -378,7 +387,9 @@ export default function PlaybackTimelineBar({
           })}
           {isHovering && hoverX > 0 && <div className="absolute top-0 bottom-0 w-[1px] bg-white/50 pointer-events-none z-25" style={{ left: `${hoverX}px` }} />}
           <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 pointer-events-none shadow-[0_0_10px_rgba(239,68,68,1)]" style={{ left: `${cursorPct}%` }}>
-            <div className="absolute -top-7 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-red-600 text-white font-mono text-[10px] font-bold shadow-lg whitespace-nowrap border border-red-400/50">{formatClock(cursorMs, true)}</div>
+            {cursorVisible && (
+              <div className="absolute -top-7 -translate-x-1/2 px-1.5 py-0.5 rounded bg-red-600 text-white font-mono text-[10px] font-bold shadow-lg whitespace-nowrap border border-red-400/50 text-center" style={{ left: cursorLabelOffset, width: timeLabelWidth }}>{formatClock(cursorMs, true)}</div>
+            )}
             <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-red-500" />
           </div>
         </div>

@@ -5,6 +5,7 @@ import BufferingIndicator from './BufferingIndicator';
 import FullscreenZoomSurface from './FullscreenZoomSurface';
 import PlaybackTimelineBar, { TIMELINE_ZOOM_LEVELS } from './Playback/PlaybackTimelineBar';
 import { createPlaybackTransport } from './Playback/playbackTransport';
+import { bufferedForwardTarget, createPlaylistClock, frameRecordingTime, observePlaybackClock, rememberFragmentClock } from './Playback/playbackClock';
 import { fetchIncidents } from '../helpers/incidents';
 import {
   getPlaybackUrl,
@@ -80,11 +81,21 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
   const scrubTimerRef = useRef(null);
   const seekTokenRef = useRef(0);
   const streamStartMsRef = useRef(0);
+  const clockAnchoredRef = useRef(false);
+  const fragmentAnchorsRef = useRef([]);
+  const playlistClockRef = useRef(null);
+  const playbackProgressRef = useRef({ playing: false, buffering: false });
 
   useEffect(() => {
     const transport = createPlaybackTransport(videoRef.current, {
-      onPlaying: setPlaying,
-      onBuffering: setBuffering,
+      onPlaying: (value) => {
+        playbackProgressRef.current.playing = value;
+        setPlaying(value);
+      },
+      onBuffering: (value) => {
+        playbackProgressRef.current.buffering = value;
+        setBuffering(value);
+      },
       onReady: () => setVideoState('ready'),
       onError: () => setVideoState('error'),
     });
@@ -159,11 +170,16 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     if (!channelId) return;
     if (scrubTimerRef.current) clearTimeout(scrubTimerRef.current);
     const token = ++seekTokenRef.current;
+    // The playback API encodes startTime to whole seconds.
+    const requestedMs = Math.floor(ms / 1000) * 1000;
     transportRef.current?.prepare({ autoplay: true });
-    streamStartMsRef.current = ms;
+    streamStartMsRef.current = requestedMs;
+    clockAnchoredRef.current = false;
+    fragmentAnchorsRef.current = [];
+    playlistClockRef.current = createPlaylistClock(requestedMs);
     setVideoState('loading');
     scrubTimerRef.current = setTimeout(async () => {
-      const startTime = new Date(day.getTime() + ms);
+      const startTime = new Date(day.getTime() + requestedMs);
       const endTime = new Date(day.getTime() + DAY_MS - 1000);
       try {
         const url = await getPlaybackUrl({
@@ -226,6 +242,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
 
       if (!Hls.isSupported()) {
         if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          clockAnchoredRef.current = true;
           transportRef.current?.attach();
           video.src = videoUrl;
         } else {
@@ -247,29 +264,28 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
         hls.attachMedia(video);
         hls.loadSource(videoUrl);
 
-        hls.on(Hls.Events.FRAG_LOADED, (_, data) => {
+        hls.on(Hls.Events.LEVEL_UPDATED, (_, data) => {
           if (!isCurrent()) return;
-          if (data?.frag?.programDateTime) {
-            const fragDate = new Date(data.frag.programDateTime);
-            const fragDayMs = (fragDate.getHours() * 3600 + fragDate.getMinutes() * 60 + fragDate.getSeconds()) * 1000 + fragDate.getMilliseconds();
-            if (fragDayMs >= 0 && fragDayMs < DAY_MS) {
-              streamStartMsRef.current = Math.max(0, fragDayMs - Math.round((data.frag.start || 0) * 1000));
-            }
-          }
+          playlistClockRef.current?.remember(data?.details);
         });
-        hls.on(Hls.Events.FRAG_CHANGED, (_, data) => {
-          if (!isCurrent() || !data?.frag?.programDateTime) return;
-          const fragDate = new Date(data.frag.programDateTime);
-          const fragDayMs = (fragDate.getHours() * 3600 + fragDate.getMinutes() * 60 + fragDate.getSeconds()) * 1000 + fragDate.getMilliseconds();
-          if (fragDayMs >= 0 && fragDayMs < DAY_MS) {
-            streamStartMsRef.current = Math.max(0, fragDayMs - Math.round((data.frag.start || 0) * 1000));
+        const rememberClock = (_, data) => {
+          if (!isCurrent()) return;
+          const offset = playlistClockRef.current?.offset(data?.frag) ?? null;
+          if (offset !== null) {
+            clockAnchoredRef.current = true;
+            fragmentAnchorsRef.current = rememberFragmentClock(fragmentAnchorsRef.current, data?.frag, offset);
           }
-        });
+        };
+        // Index decoded segments ahead of presentation; only displayed frames
+        // publish clock updates, so buffering cannot advance the timeline.
+        hls.on(Hls.Events.FRAG_BUFFERED, rememberClock);
+        hls.on(Hls.Events.FRAG_CHANGED, rememberClock);
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (!data?.fatal || !isCurrent()) return;
           const status = data?.response?.status || data?.networkDetails?.status;
           if (status === 404 && attempts < MANIFEST_RETRY_LIMIT) {
             attempts += 1;
+            playbackProgressRef.current = { playing: false, buffering: true };
             setBuffering(true);
             setPlaying(false);
             if (retryTimer) clearTimeout(retryTimer);
@@ -311,8 +327,10 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     if (target > MAX_NATIVE_RATE) {
       const extraPerTick = ((target - nativeRate) * FAST_FORWARD_TICK_MS) / 1000;
       fastForwardRef.current = setInterval(() => {
-        if (video.paused) return;
-        video.currentTime = Math.min(video.currentTime + extraPerTick, video.duration || Infinity);
+        const progress = playbackProgressRef.current;
+        if (!progress.playing || progress.buffering) return;
+        const targetTime = bufferedForwardTarget(video, extraPerTick);
+        if (targetTime > video.currentTime) video.currentTime = targetTime;
       }, FAST_FORWARD_TICK_MS);
     }
     return () => {
@@ -320,22 +338,28 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     };
   }, [speedIdx, videoUrl]);
 
-  // Advance on-screen cursor accurately with video playback time
+  // All clock labels and the timeline follow displayed frames, not download time.
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
-
-    const handleTimeUpdate = () => {
-      if (!video || video.paused) return;
-      const next = streamStartMsRef.current + (video.currentTime * 1000);
-      setCursorMs(Math.min(DAY_MS - 1, Math.max(0, Math.round(next))));
-    };
-
-    video.addEventListener('timeupdate', handleTimeUpdate);
-    return () => {
-      video.removeEventListener('timeupdate', handleTimeUpdate);
-    };
-  }, []);
+    if (!video || !videoUrl) return;
+    return observePlaybackClock(video, {
+      canAdvance: () => clockAnchoredRef.current && transportRef.current?.wantsPlayback,
+      onTime: (mediaTime) => {
+        // A displayed frame proves playback resumed even if a prior buffering
+        // event left the UI flags stale. Explicit Pause is guarded above.
+        if (!playbackProgressRef.current.playing || playbackProgressRef.current.buffering) {
+          playbackProgressRef.current = { playing: true, buffering: false };
+          setPlaying(true);
+          setBuffering(false);
+        }
+        const recordingTime = frameRecordingTime(mediaTime, fragmentAnchorsRef.current, streamStartMsRef.current);
+        if (recordingTime === null) return;
+        const next = Math.min(DAY_MS - 1, Math.max(0, Math.floor(recordingTime)));
+        // The UI displays seconds; avoid re-rendering the whole timeline per frame.
+        setCursorMs((previous) => Math.floor(previous / 1000) === Math.floor(next / 1000) ? previous : next);
+      },
+    });
+  }, [videoUrl, sourceRevision]);
 
   const currentZoomConfig = TIMELINE_ZOOM_LEVELS[timelineZoomLevel] || TIMELINE_ZOOM_LEVELS[0];
   const currentThumbStepMs = Math.max(15 * 1000, currentZoomConfig.durationMs / 10);
