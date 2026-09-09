@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ArrowLeft,
   Eye,
@@ -14,10 +15,12 @@ import {
   Unlock,
   Users,
   Wifi,
+  X,
 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Topbar from '../../layout/Topbar'
 import LoadingState from '../../components/UI/LoadingState'
+import CustomSelect from '../../components/UI/CustomSelect'
 import Pagination from '../clients/components/Pagination'
 import { notifyApiError, notifyApiSuccess } from '../../utils/apiError'
 import {
@@ -38,7 +41,18 @@ const DEFAULT_PAGE_SIZE = 10
 // current (a tab that closed goes offline within ~50s server-side).
 const AUTO_REFRESH_MS = 20000
 
-const STATUS_OPTIONS = [
+// The owner-summary dashboard filters by counting each owner's sessions in a
+// given state (see visibleSummary) — Logged Out isn't offered there since
+// "narrow to owners who logged out at some point" isn't a useful summary view
+// (almost every owner has old logged-out sessions). Once a specific owner is
+// opened, the dropdown filters that owner's actual session rows instead, where
+// both Active and Logged Out are meaningful.
+const SUMMARY_STATUS_OPTIONS = [
+  { value: '', label: 'All' },
+  { value: 'online', label: 'Online' },
+  { value: 'blocked', label: 'Blocked' },
+]
+const DETAIL_STATUS_OPTIONS = [
   { value: '', label: 'All' },
   { value: 'active', label: 'Active' },
   { value: 'online', label: 'Online' },
@@ -71,6 +85,69 @@ const shortId = (value = '') => {
   return text.length > 10 ? `${text.slice(0, 6)}...${text.slice(-4)}` : text || '--'
 }
 
+// JS-driven, not CSS group-hover: some Chromium builds were inconsistent about
+// firing :hover on the wrapper (or a browser extension's own accessible-tooltip
+// feature painted its own native tooltip from aria-label instead), so the
+// custom styled tooltip either never showed or fought with a native one. State
+// makes exactly one tooltip render, deterministically, everywhere.
+//
+// Rendered via a portal into document.body rather than as a normal absolutely-
+// positioned child: the actions column sits inside a table card with
+// `overflow-hidden` (for its rounded corners), so a tooltip positioned relative
+// to its trigger was silently clipped whenever the trigger was near the top or
+// bottom edge of that card — on the very last row, "below the button" landed
+// past the card's bottom edge and disappeared. A portal escapes that ancestor
+// entirely; position is computed from the trigger's live viewport rect, and
+// flips to open upward when there isn't room below.
+const ActionTooltip = ({ label, children }) => {
+  const [hovered, setHovered] = useState(false)
+  const [coords, setCoords] = useState(null)
+  const triggerRef = useRef(null)
+
+  const show = () => {
+    const rect = triggerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const TOOLTIP_HEIGHT_ESTIMATE = 30
+    const openUpward = window.innerHeight - rect.bottom < TOOLTIP_HEIGHT_ESTIMATE + 12
+    setCoords({
+      left: rect.left + rect.width / 2,
+      top: openUpward ? rect.top - 8 : rect.bottom + 8,
+      openUpward,
+    })
+    setHovered(true)
+  }
+  const hide = () => setHovered(false)
+
+  return (
+    <>
+      <span
+        ref={triggerRef}
+        className="relative inline-flex"
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+      >
+        {children}
+      </span>
+      {hovered && coords &&
+        createPortal(
+          <span
+            className="pointer-events-none fixed z-50 -translate-x-1/2 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-gray-900 shadow-lg dark:border-white/10 dark:bg-[#12151d] dark:text-white"
+            style={{
+              left: coords.left,
+              top: coords.top,
+              transform: coords.openUpward ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
+            }}
+          >
+            {label}
+          </span>,
+          document.body
+        )}
+    </>
+  )
+}
+
 const deviceType = (device = {}) => {
   const value = [
     device.deviceType,
@@ -92,14 +169,10 @@ const DeviceIcon = ({ device, size = 18, className = '' }) => {
   return <Laptop size={size} strokeWidth={2.2} className={className} />
 }
 
-// The summary endpoint only knows stored statuses; "online" is a live-presence
-// filter that only applies to the sessions table, so drop it for the summary.
-const summaryStatus = (status) => (status === 'online' ? '' : status)
-
 const readListData = (res) => res?.body?.data ?? res?.data ?? []
 const readPageData = (res) => res?.body?.data ?? res?.data ?? {}
 
-const StatCard = ({ label, value, Icon, tone = 'purple', onClick, active = false }) => {
+const StatCard = ({ label, value, unit, Icon, tone = 'purple', onClick, active = false }) => {
   const tones = {
     purple: 'bg-purple-50 text-purple-700 dark:bg-purple-500/10 dark:text-purple-300',
     green: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
@@ -134,7 +207,10 @@ const StatCard = ({ label, value, Icon, tone = 'purple', onClick, active = false
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-600">
             {label}
           </p>
-          <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+          <p className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold text-gray-900 dark:text-white">{value}</span>
+            {unit && <span className="text-xs font-medium text-gray-400 dark:text-gray-500">{unit}</span>}
+          </p>
         </div>
         <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${tones[tone]}`}>
           <Icon size={19} strokeWidth={2.2} />
@@ -188,7 +264,7 @@ const StatusBadge = ({ status }) => (
   </span>
 )
 
-const SessionSummary = ({ rows = [], loading = false, selectedOwner = '', onSelectOwner, onClearOwner }) => {
+const SessionSummary = ({ rows = [], loading = false, selectedOwner = '', onSelectOwner }) => {
   if (loading) return <LoadingState message="Loading session summary..." />
   if (rows.length === 0) return <EmptyState label="No session summary found" />
 
@@ -199,15 +275,6 @@ const SessionSummary = ({ rows = [], loading = false, selectedOwner = '', onSele
           <Users size={18} strokeWidth={2.2} className="text-purple-600 dark:text-purple-300" />
           <h2 className="text-sm font-bold text-gray-900 dark:text-white">Logged Sessions by Admin/User</h2>
         </div>
-        {selectedOwner && (
-          <button
-            type="button"
-            onClick={onClearOwner}
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900 dark:border-white/10 dark:text-gray-400 dark:hover:bg-white/6 dark:hover:text-white"
-          >
-            Clear profile
-          </button>
-        )}
       </div>
       <div className="divide-y divide-gray-100 dark:divide-white/6">
         {rows.map((row) => {
@@ -312,6 +379,19 @@ const ProfileSessionHeader = ({ profile, loading = false }) => {
 
 const ActionModal = ({ action, onClose, onConfirm, busy }) => {
   const [reason, setReason] = useState('')
+  // ActionModal stays mounted the whole time (it only toggles visibility via
+  // the early return below), so `reason` previously carried over from
+  // whichever session's block dialog was last opened into the next one —
+  // typing a reason for one session, cancelling, then blocking a different
+  // session showed the first session's leftover text. Reset it here, during
+  // render, the moment a different action object shows up — the standard
+  // React pattern for "some state needs to reset when a prop changes",
+  // without the extra render an effect-based reset would cause.
+  const [prevAction, setPrevAction] = useState(action)
+  if (action !== prevAction) {
+    setPrevAction(action)
+    if (reason !== '') setReason('')
+  }
   if (!action) return null
 
   return (
@@ -364,11 +444,9 @@ const DetailsModal = ({ session, onClose }) => {
   if (!session) return null
   const rows = [
     ['Session ID', session.sessionId],
-    ['Device ID', session.deviceId],
     ['Device', session.deviceName],
     ['Browser', session.browser],
     ['Operating System', session.operatingSystem],
-    ['IP Address', session.ipAddress],
     ['Online', session.status === 'active' ? (session.online ? 'Online' : 'Offline') : '--'],
     ['Login Time', formatDate(session.loginTime)],
     ['Last Active', formatDate(session.lastActiveAt)],
@@ -423,6 +501,14 @@ const SessionManagement = () => {
   // the table, never this).
   const [profileSummary, setProfileSummary] = useState(null)
   const [profileSummaryLoading, setProfileSummaryLoading] = useState(true)
+  // Unfiltered, platform-wide summary for the top stat cards on the list view.
+  // `summary` (below) is fetched WITH the current status filter applied (it
+  // also feeds the table), so switching to e.g. the Blocked Sessions tab
+  // re-fetched `summary` scoped to only blocked rows — the "All Users" card
+  // then read as "users with a blocked session" instead of the real total.
+  // This mirrors profileSummary's fix for the per-owner detail page, applied
+  // to the list view's cards instead.
+  const [overviewSummary, setOverviewSummary] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
@@ -438,18 +524,28 @@ const SessionManagement = () => {
   const [details, setDetails] = useState(null)
   const [selectedSessionIds, setSelectedSessionIds] = useState([])
 
-  const stats = useMemo(() => {
-    const active = sessions.filter((session) => session.status === 'active').length
-    const blocked = sessions.filter((session) => session.status === 'blocked').length
-    return { active, blocked }
-  }, [sessions])
-
-  // Live online count across every owner — the summary rows carry an authoritative
-  // per-owner onlineCount from server-side Redis presence, so sum those rather
-  // than the page-limited `sessions` list.
-  const onlineTotal = useMemo(
-    () => summary.reduce((sum, row) => sum + (row.onlineCount || 0), 0),
-    [summary]
+  // Platform-wide totals for the top stat cards, from the always-unfiltered
+  // overviewSummary — never from `summary`/`sessions`, which are scoped to
+  // whichever status tab/filter is currently selected (that filter used to
+  // feed these cards too, so switching to e.g. the Blocked Sessions tab made
+  // "All Users" read as "users with a blocked session" instead of the total).
+  const overviewStats = useMemo(
+    () =>
+      overviewSummary.reduce(
+        (acc, row) => ({
+          active: acc.active + (row.activeCount || 0),
+          // Users with at least one blocked session, not the count of blocked
+          // sessions itself — one user blocked on 2 devices is still 1 blocked
+          // user, matching the "users" unit shown on the card and how many
+          // rows the Blocked Sessions filter actually narrows the list to.
+          blocked: acc.blocked + (row.blockedCount > 0 ? 1 : 0),
+          // Same reasoning for online — a user with 6 open tabs is still 1
+          // online user, not 6.
+          online: acc.online + (row.onlineCount > 0 ? 1 : 0),
+        }),
+        { active: 0, blocked: 0, online: 0 }
+      ),
+    [overviewSummary]
   )
 
   const visibleSummary = useMemo(() => {
@@ -457,8 +553,15 @@ const SessionManagement = () => {
     return summary.filter((row) => {
       if (detailMode && String(row.ownerId) !== ownerId) return false
       if (!detailMode && selectedOwner && String(row.ownerId) !== selectedOwner) return false
-      // "Online" is a live-presence filter — keep only owners with a tab open now.
+      // Narrow which owners appear by their own counts, client-side — the
+      // summary endpoint aggregates each owner's total/active/blocked count
+      // FROM only the session documents matching the requested status, so
+      // passing status straight through made e.g. every owner's total collapse
+      // to match their blocked count under the Blocked filter, instead of
+      // narrowing the owner list while keeping their real totals visible.
       if (!detailMode && status === 'online' && !(row.onlineCount > 0)) return false
+      if (!detailMode && status === 'blocked' && !(row.blockedCount > 0)) return false
+      if (!detailMode && status === 'logged_out' && !(row.loggedOutCount > 0)) return false
       if (!query) return true
       return [row.ownerName, row.ownerEmail, row.userType, row.ownerId]
         .filter(Boolean)
@@ -513,7 +616,10 @@ const SessionManagement = () => {
   const loadSummary = async () => {
     setSummaryLoading(true)
     try {
-      const res = await getSessionSummary({ status: summaryStatus(status), userType, deviceId: '' })
+      // Always unfiltered — visibleSummary narrows which owners are shown
+      // client-side (see there for why), so each owner's counts stay accurate
+      // regardless of which status filter is selected.
+      const res = await getSessionSummary({ status: '', userType, deviceId: '' })
       const data = readListData(res)
       setSummary(Array.isArray(data) ? data : [])
     } catch (err) {
@@ -597,7 +703,8 @@ const SessionManagement = () => {
     const load = async () => {
       setSummaryLoading(true)
       try {
-        const res = await getSessionSummary({ status: summaryStatus(status), userType, deviceId: '' })
+        // Always unfiltered — see loadSummary() above.
+        const res = await getSessionSummary({ status: '', userType, deviceId: '' })
         if (cancelled) return
         const data = readListData(res)
         setSummary(Array.isArray(data) ? data : [])
@@ -615,6 +722,40 @@ const SessionManagement = () => {
       cancelled = true
     }
   }, [status, userType])
+
+  // Always unfiltered — feeds only the top stat cards, never the table.
+  const loadOverviewSummary = async () => {
+    if (detailMode) return
+    try {
+      const res = await getSessionSummary({ status: '', userType: '', deviceId: '' })
+      const data = readListData(res)
+      setOverviewSummary(Array.isArray(data) ? data : [])
+    } catch (err) {
+      notifyApiError(err, 'Failed to load session overview')
+    }
+  }
+
+  useEffect(() => {
+    if (detailMode) return undefined
+    let cancelled = false
+
+    const load = async () => {
+      try {
+        const res = await getSessionSummary({ status: '', userType: '', deviceId: '' })
+        if (cancelled) return
+        const data = readListData(res)
+        setOverviewSummary(Array.isArray(data) ? data : [])
+      } catch (err) {
+        if (cancelled) return
+        notifyApiError(err, 'Failed to load session overview')
+      }
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [detailMode])
 
   const loadProfileSummary = async () => {
     if (!detailMode) return
@@ -660,7 +801,7 @@ const SessionManagement = () => {
   }, [detailMode, ownerId])
 
   const refreshAll = async () => {
-    await Promise.all([loadSessions(), loadSummary(), loadProfileSummary()])
+    await Promise.all([loadSessions(), loadSummary(), loadProfileSummary(), loadOverviewSummary()])
   }
 
   const selectOwnerProfile = (row) => {
@@ -668,10 +809,23 @@ const SessionManagement = () => {
     setPage(0)
   }
 
+  const hasActiveFilters = Boolean(status || userType || selectedOwner || summarySearch.trim())
+  const clearAllFilters = () => {
+    setStatus('')
+    setUserType('')
+    setSelectedOwner('')
+    setSummarySearch('')
+    setPage(0)
+  }
+
   const clearOwnerProfile = () => {
     setSelectedOwner('')
     navigate('/session-management')
     setPage(0)
+    // The list view's status dropdown doesn't offer Active/Logged Out (see
+    // SUMMARY_STATUS_OPTIONS) — clear those out on the way back so it isn't
+    // left showing a value with no matching option.
+    setStatus((current) => (current === 'active' || current === 'logged_out' ? '' : current))
   }
 
   const openDetails = async (sessionId) => {
@@ -740,7 +894,7 @@ const SessionManagement = () => {
     setAction({
       Icon: ShieldOff,
       title: `Block this ${deviceLabel} session?`,
-      description: `This blocks only this session. Other sessions on ${deviceLabel} (past or future logins) are not affected.`,
+      description: "The user will be logged out immediately, and won't be able to log back in until you unblock this device.",
       confirmLabel: 'Block Session',
       needsReason: true,
       success: 'Session blocked successfully',
@@ -755,7 +909,7 @@ const SessionManagement = () => {
     setAction({
       Icon: Unlock,
       title: `Unblock this ${deviceLabel} session?`,
-      description: 'This removes the block on this session so its browser can be used again.',
+      description: 'The user will be able to log back in right away.',
       confirmLabel: 'Unblock Session',
       success: 'Session unblocked successfully',
       failure: 'Failed to unblock session',
@@ -799,7 +953,7 @@ const SessionManagement = () => {
         setAction({
           Icon: LogOut,
           title: 'Logout session?',
-          description: 'This will end this browser session for the selected user.',
+          description: 'The user will be logged out immediately. They will still be able to log back in.',
           confirmLabel: 'Logout',
           success: 'Session logged out successfully',
           failure: 'Failed to logout session',
@@ -816,7 +970,7 @@ const SessionManagement = () => {
         setAction({
           Icon: Trash2,
           title: 'Delete session?',
-          description: 'This permanently removes this session row. If the session is still active, that browser will be logged out on its next session check.',
+          description: 'This permanently removes this session record. If it’s still active, that browser will be signed out immediately.',
           confirmLabel: 'Delete',
           success: 'Session deleted successfully',
           failure: 'Failed to delete session',
@@ -844,10 +998,11 @@ const SessionManagement = () => {
         )}
 
         {!detailMode && (
-          <div className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mb-5 grid gap-4 md:grid-cols-3">
             <StatCard
               label="All Users"
-              value={summary.length}
+              value={overviewSummary.length}
+              unit="accounts"
               Icon={Users}
               tone="gray"
               active={status === ''}
@@ -856,20 +1011,13 @@ const SessionManagement = () => {
                 setPage(0)
               }}
             />
-            <StatCard
-              label="Active Sessions"
-              value={stats.active}
-              Icon={Laptop}
-              tone="blue"
-              active={status === 'active'}
-              onClick={() => {
-                setStatus((current) => (current === 'active' ? '' : 'active'))
-                setPage(0)
-              }}
-            />
+            {/* summary is fetched unfiltered and visibleSummary narrows which
+                owners appear client-side (see there), so each owner's counts
+                stay accurate no matter which of these is selected. */}
             <StatCard
               label="Online Now"
-              value={onlineTotal}
+              value={overviewStats.online}
+              unit="accounts"
               Icon={Wifi}
               tone="green"
               active={status === 'online'}
@@ -880,7 +1028,8 @@ const SessionManagement = () => {
             />
             <StatCard
               label="Blocked Sessions"
-              value={stats.blocked}
+              value={overviewStats.blocked}
+              unit="accounts"
               Icon={LockKeyhole}
               tone="red"
               active={status === 'blocked'}
@@ -893,10 +1042,15 @@ const SessionManagement = () => {
         )}
 
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          {!detailMode ? (
+          {detailMode ? (
+            <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-600">
+              Profile Sessions
+            </div>
+          ) : (
             <div className="inline-flex rounded-xl border border-gray-200 bg-white p-1 dark:border-white/8 dark:bg-[#0b0d13]">
               {[
                 ['', 'Sessions'],
+                ['online', 'Online'],
                 ['blocked', 'Blocked Sessions'],
               ].map(([value, label]) => (
                 <button
@@ -916,10 +1070,6 @@ const SessionManagement = () => {
                 </button>
               ))}
             </div>
-          ) : (
-            <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 dark:text-gray-600">
-              Profile Sessions
-            </div>
           )}
 
           <div className="flex flex-wrap items-center gap-2">
@@ -938,35 +1088,33 @@ const SessionManagement = () => {
                     className="h-10 w-56 rounded-xl border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 dark:border-white/8 dark:bg-[#0b0d13] dark:text-gray-200 dark:placeholder:text-gray-500"
                   />
                 </div>
-                  <select
-                    value={userType}
-                    onChange={(e) => {
-                      setUserType(e.target.value)
-                      setSelectedOwner('')
-                      setPage(0)
-                    }}
-                    className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 dark:border-white/8 dark:bg-[#0b0d13] dark:text-gray-200"
-                  >
-                    <option value="">All Accounts</option>
-                    <option value="admin">Admins</option>
-                    <option value="user">Users</option>
-                  </select>
+                <CustomSelect
+                  value={userType}
+                  onChange={(next) => {
+                    setUserType(next)
+                    setSelectedOwner('')
+                    setPage(0)
+                  }}
+                  className="w-36"
+                  options={[
+                    { value: '', label: 'All Accounts' },
+                    { value: 'admin', label: 'Admins' },
+                    { value: 'user', label: 'Users' },
+                  ]}
+                />
                 {ownerOptions.length > 0 ? (
-                  <select
+                  <CustomSelect
                     value={selectedOwner}
-                    onChange={(e) => {
-                      setSelectedOwner(e.target.value)
+                    onChange={(next) => {
+                      setSelectedOwner(next)
                       setPage(0)
                     }}
-                    className="h-10 max-w-56 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 dark:border-white/8 dark:bg-[#0b0d13] dark:text-gray-200"
-                  >
-                    <option value="">All Admins/Users</option>
-                    {ownerOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                    className="w-56"
+                    options={[
+                      { value: '', label: 'All Admins/Users' },
+                      ...ownerOptions.map((option) => ({ value: option.id, label: option.label })),
+                    ]}
+                  />
                 ) : (
                   <button
                     type="button"
@@ -976,21 +1124,26 @@ const SessionManagement = () => {
                     No admins/users
                   </button>
                 )}
-                <select
+                <CustomSelect
                   value={status}
-                  onChange={(e) => {
-                    setStatus(e.target.value)
+                  onChange={(next) => {
+                    setStatus(next)
                     setPage(0)
                   }}
-                  className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 dark:border-white/8 dark:bg-[#0b0d13] dark:text-gray-200"
-                >
-                  {STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  className="w-32"
+                  options={SUMMARY_STATUS_OPTIONS}
+                />
               </>
+            )}
+            {!detailMode && hasActiveFilters && (
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 dark:border-white/8 dark:bg-[#0b0d13] dark:text-gray-300 dark:hover:bg-white/6"
+              >
+                <X size={16} strokeWidth={2.2} />
+                Clear filters
+              </button>
             )}
             {!detailMode && (
               <button
@@ -1013,20 +1166,15 @@ const SessionManagement = () => {
                   loading={profileSummaryLoading}
                 />
                 <div className="mb-5 flex flex-wrap items-center justify-end gap-2">
-                  <select
+                  <CustomSelect
                     value={status}
-                    onChange={(e) => {
-                      setStatus(e.target.value)
+                    onChange={(next) => {
+                      setStatus(next)
                       setPage(0)
                     }}
-                    className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 dark:border-white/8 dark:bg-[#0b0d13] dark:text-gray-200"
-                  >
-                    {STATUS_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                    className="w-32"
+                    options={DETAIL_STATUS_OPTIONS}
+                  />
                   <button
                     type="button"
                     onClick={refreshAll}
@@ -1043,7 +1191,6 @@ const SessionManagement = () => {
                 loading={summaryLoading}
                 selectedOwner={selectedOwnerFilter}
                 onSelectOwner={selectOwnerProfile}
-                onClearOwner={clearOwnerProfile}
               />
             )}
 
@@ -1089,7 +1236,6 @@ const SessionManagement = () => {
                             />
                           </th>
                           <th className="px-5 py-3">Device</th>
-                          <th className="px-5 py-3">IP Address</th>
                           <th className="px-5 py-3">Login Time</th>
                           <th className="px-5 py-3">Last Active</th>
                           <th className="px-5 py-3">Status</th>
@@ -1119,15 +1265,14 @@ const SessionManagement = () => {
                                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-300">
                                     <DeviceIcon device={session} size={18} />
                                   </span>
-                                  <div className="min-w-0" title={session.deviceId}>
+                                  <div className="min-w-0" title={session.sessionId}>
                                     <p className="font-semibold text-gray-900 dark:text-white">{session.deviceName || 'Unknown Device'}</p>
                                     <p className="mt-0.5 font-mono text-xs text-gray-400 dark:text-gray-500">
-                                      deviceId - {String(session.deviceId || '').slice(-10) || '--'}
+                                      sessionId - {String(session.sessionId || '').slice(-10) || '--'}
                                     </p>
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-5 py-4 font-mono text-xs">{session.ipAddress || '--'}</td>
                               <td className="px-5 py-4">{formatDate(session.loginTime)}</td>
                               <td className="px-5 py-4">{formatDate(session.lastActiveAt)}</td>
                               <td className="px-5 py-4">
@@ -1139,20 +1284,17 @@ const SessionManagement = () => {
                               <td className="px-5 py-4">
                                 <div className="flex justify-end gap-1.5">
                                   {actionsFor(session).map(({ key, label, Icon, onClick, disabled, className }) => (
-                                    <button
-                                      key={key}
-                                      type="button"
-                                      title={label}
-                                      aria-label={label}
-                                      onClick={onClick}
-                                      disabled={disabled}
-                                      className={`group relative inline-flex h-9 w-9 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${className}`}
-                                    >
-                                      <Icon size={16} strokeWidth={2.2} />
-                                      <span className="pointer-events-none absolute -top-8 left-1/2 z-20 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[11px] font-semibold text-white shadow-lg group-hover:block dark:bg-white dark:text-gray-900">
-                                        {label}
-                                      </span>
-                                    </button>
+                                    <ActionTooltip key={key} label={label}>
+                                      <button
+                                        type="button"
+                                        aria-label={label}
+                                        onClick={onClick}
+                                        disabled={disabled}
+                                        className={`inline-flex h-9 w-9 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${className}`}
+                                      >
+                                        <Icon size={16} strokeWidth={2.2} />
+                                      </button>
+                                    </ActionTooltip>
                                   ))}
                                 </div>
                               </td>
