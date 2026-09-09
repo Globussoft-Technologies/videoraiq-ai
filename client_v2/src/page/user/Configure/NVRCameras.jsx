@@ -283,6 +283,8 @@ const NVR_BRANDS = [
   { value: 'hikvision', label: 'Hikvision' },
   { value: 'cpplus', label: 'CP Plus' },
   { value: 'dahua', label: 'Dahua' },
+  {value:'tiandy', label:'Tiandy'},
+  {value:'securus', label:'Securus'},
 ];
 
 // ── Shimmering placeholder block for loading states ────────────────────────
