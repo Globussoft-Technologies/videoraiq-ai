@@ -383,10 +383,7 @@ const VehicleCheckInOutLogs = () => {
                   )}
                 </button>
               </PopoverTrigger>
-              <PopoverContent
-                className="w-[320px] max-h-[75vh] overflow-y-auto customscrollbar rounded-xl p-4"
-                align="end"
-              >
+              <PopoverContent className="w-[380px] max-w-[calc(100vw-24px)] rounded-xl p-4" align="end">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b border-[var(--bd)] pb-2">
                     <h4 className="font-semibold text-base text-[var(--tx)]">Filters</h4>
