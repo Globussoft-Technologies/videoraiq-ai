@@ -78,3 +78,20 @@ export const getNVRs = () =>
 
 export const getChannels = (data) =>
   axios.post(`${HOST}/authorizedChannels/getChannels`, data, { headers: headers() });
+
+/**
+ * Distinct plates from the vehicle check-in/out incidents — the option list
+ * behind the plate filter. This is its own endpoint, not the Car Logs one:
+ * a plate that only ever appeared in a car-model detection must not show here.
+ */
+export const getVehicleNumbers = ({ search, startDate, endDate, nvrIds, channelIds } = {}) =>
+  axios.get(`${HOST}/incidents/logs/vehicle-check-in-out/numbers`, {
+    params: {
+      ...(search && { search }),
+      ...(startDate && { startDate }),
+      ...(endDate && { endDate }),
+      ...(nvrIds?.length && { nvrIds: nvrIds.join(',') }),
+      ...(channelIds?.length && { channelIds: channelIds.join(',') }),
+    },
+    headers: headers(),
+  });

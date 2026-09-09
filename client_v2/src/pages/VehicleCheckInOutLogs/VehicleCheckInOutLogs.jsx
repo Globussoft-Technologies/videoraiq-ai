@@ -3,10 +3,13 @@ import moment from 'moment-timezone';
 import {
   CarFront,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
+  Filter,
   Loader2,
   LogIn,
   LogOut,
+  RotateCcw,
   Search,
   SearchX,
 } from 'lucide-react';
@@ -17,12 +20,17 @@ import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
 import ExportButton from '@/pages/AttendanceLogs/components/ExportButton';
 import AutoRefreshComponent from '@/pages/AttendanceLogs/components/AutoRefreshComponent';
+import MultiSelect from '@/pages/AttendanceLogs/components/MultiSelect';
+import { Popover, PopoverContent, PopoverTrigger } from '@/pages/AttendanceLogs/components/Popover';
+import VehicleNumberSelect from '@/pages/ANPRLogs/components/VehicleNumberSelect';
 import AccessDenied from '@/components/AccessDenied';
 import PageLoader from '@/components/PageLoader';
 import { usePermissions } from '@/context/PermissionContext';
 import {
   fetchVehicleCheckInOutLogs,
-  fetchVehicleCheckInOutHistory,
+  getNVRs,
+  getChannels,
+  getVehicleNumbers,
 } from './Api';
 import { handleVehicleCheckInOutExport } from './vehicleCheckInOutExport';
 
@@ -96,10 +104,19 @@ const VehicleCheckInOutLogs = () => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [custody, setCustody] = useState('');
+  const [nvrIds, setNvrIds] = useState([]);
+  const [channelIds, setChannelIds] = useState([]);
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [vehicleNumberSearch, setVehicleNumberSearch] = useState('');
+
+  const [nvrList, setNvrList] = useState([]);
+  const [cameraList, setCameraList] = useState([]);
+  const [vehicleNumberList, setVehicleNumberList] = useState([]);
   const [startDate, setStartDate] = useState(moment().format('YYYY-MM-DD'));
   const [endDate, setEndDate] = useState(moment().format('YYYY-MM-DD'));
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [gotoPage, setGotoPage] = useState('');
 
   const [autoRefresh, setAutoRefresh] = useState(() => {
     const saved = localStorage.getItem(REFRESH_KEY);
@@ -135,7 +152,13 @@ const VehicleCheckInOutLogs = () => {
         startDate,
         endDate,
         custody,
-        search: debouncedSearch,
+        nvrIds,
+        channelIds,
+        search: debouncedSearch || vehicleNumber,
+        // Bring each vehicle's crossings back with the row so the image
+        // preview can walk every crossing image without an expand or a
+        // second request.
+        includeHistory: true,
       });
       const data = res?.data?.body?.data;
       setRows(data?.data || []);
@@ -150,11 +173,43 @@ const VehicleCheckInOutLogs = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, startDate, endDate, custody, debouncedSearch]);
+  }, [page, pageSize, startDate, endDate, custody, nvrIds, channelIds, vehicleNumber, debouncedSearch]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [nvrIds, channelIds, vehicleNumber, custody]);
+
+  // Filter option sources.
+  useEffect(() => {
+    getNVRs()
+      .then((res) => setNvrList(res?.data?.body?.data || []))
+      .catch((err) => console.error('Failed to fetch NVRs', err));
+  }, []);
+
+  useEffect(() => {
+    getChannels({ nvrIds })
+      .then((res) => setCameraList(res?.data?.body?.data || []))
+      .catch((err) => console.error('Failed to fetch cameras', err));
+  }, [nvrIds]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      getVehicleNumbers({
+        search: vehicleNumberSearch,
+        startDate,
+        endDate,
+        nvrIds,
+        channelIds,
+      })
+        .then((res) => setVehicleNumberList(res?.data?.body?.data?.vehicleNumbers || []))
+        .catch((err) => console.error('Failed to fetch vehicle numbers', err));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [vehicleNumberSearch, startDate, endDate, nvrIds, channelIds]);
 
   useEffect(() => localStorage.setItem(REFRESH_KEY, autoRefresh), [autoRefresh]);
   useEffect(() => localStorage.setItem(INTERVAL_KEY, refreshInterval), [refreshInterval]);
@@ -165,49 +220,64 @@ const VehicleCheckInOutLogs = () => {
     return () => clearInterval(id);
   }, [autoRefresh, refreshInterval, load]);
 
-  /** Sub-rows are fetched on first expand and kept until the page reloads. */
-  const toggleRow = async (row) => {
+  // Crossings arrive with the row (includeHistory), so expanding is just a
+  // visual toggle — no request.
+  const toggleRow = (row) => {
     const key = row.vehicleKey;
-    if (expanded[key]) {
-      setExpanded((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-      return;
-    }
-
-    setExpanded((prev) => ({ ...prev, [key]: { loading: true, data: [] } }));
-    try {
-      const res = await fetchVehicleCheckInOutHistory({
-        vehicleKey: key,
-        startDate,
-        endDate,
-      });
-      setExpanded((prev) => ({
-        ...prev,
-        [key]: { loading: false, data: res?.data?.body?.data?.data || [] },
-      }));
-    } catch (err) {
-      setExpanded((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-      toast.error(
-        err?.response?.data?.body?.message || 'Failed to load this vehicle history',
-      );
-    }
+    setExpanded((prev) => {
+      const next = { ...prev };
+      if (next[key]) delete next[key];
+      else next[key] = true;
+      return next;
+    });
   };
+
+  // Newest crossing first for the expand panel.
+  const crossingsOf = (row) =>
+    [...(row.crossings || [])].sort(
+      (a, b) => new Date(b.timeOfIncident) - new Date(a.timeOfIncident),
+    );
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   // Exactly what the table is currently showing. Paging is deliberately absent:
   // an export covers the whole filtered set, not the page on screen.
   const exportFilters = useMemo(
-    () => ({ startDate, endDate, custody, search: debouncedSearch }),
-    [startDate, endDate, custody, debouncedSearch],
+    () => ({
+      startDate,
+      endDate,
+      custody,
+      nvrIds,
+      channelIds,
+      search: debouncedSearch || vehicleNumber,
+    }),
+    [startDate, endDate, custody, nvrIds, channelIds, vehicleNumber, debouncedSearch],
   );
+
+  const nvrOptions = useMemo(
+    () => nvrList.map((nvr) => ({ label: nvr.nvrName, id: nvr._id || nvr.id })),
+    [nvrList],
+  );
+  const cameraOptions = useMemo(
+    () => cameraList.map((cam) => ({ label: cam.customName || cam.name, id: cam._id || cam.id })),
+    [cameraList],
+  );
+  const filteredVehicleNumbers = useMemo(() => {
+    const query = vehicleNumberSearch.trim().toLowerCase();
+    if (!query) return vehicleNumberList;
+    return vehicleNumberList.filter((n) => String(n).toLowerCase().includes(query));
+  }, [vehicleNumberList, vehicleNumberSearch]);
+
+  const activeFiltersCount = [nvrIds.length > 0, channelIds.length > 0, !!vehicleNumber].filter(
+    Boolean,
+  ).length;
+
+  const resetFilters = () => {
+    setNvrIds([]);
+    setChannelIds([]);
+    setVehicleNumber('');
+    setVehicleNumberSearch('');
+  };
 
   const runExport = async (format) => {
     setExporting(format);
@@ -226,24 +296,30 @@ const VehicleCheckInOutLogs = () => {
     [rows],
   );
 
-  // Every image currently on screen, in visual order: each vehicle's own image
-  // followed by any images from its expanded crossings. The preview modal steps
-  // through this list with the prev/next arrows.
-  const previewImages = useMemo(() => {
-    const list = [];
+  // Every image slot for the vehicles on this page, in row order: each vehicle's
+  // own thumbnail, then every one of its crossings. One slot per clickable
+  // image on screen — nothing is de-duplicated, so a vehicle's thumbnail and
+  // its matching check-in crossing are two separate stops. Crossings ride along
+  // with the rows (includeHistory), so the list is complete whether or not any
+  // row is expanded. Each slot carries a stable `key` so a click opens the
+  // exact slot rather than the first row with the same URL.
+  const previewSlots = useMemo(() => {
+    const slots = [];
     rows.forEach((row) => {
-      const img = getImageUrl(row);
-      if (img) list.push(img);
-      (expanded[row.vehicleKey]?.data || []).forEach((sub) => {
-        const subImg = getImageUrl(sub);
-        if (subImg) list.push(subImg);
+      const rowImg = getImageUrl(row);
+      if (rowImg) slots.push({ key: `${row.vehicleKey}:row`, url: rowImg });
+      (row.crossings || []).forEach((c) => {
+        const url = getImageUrl(c);
+        if (url) slots.push({ key: `${row.vehicleKey}:${c._id}`, url });
       });
     });
-    return list;
-  }, [rows, expanded]);
+    return slots;
+  }, [rows]);
 
-  const openPreview = (image) => {
-    const index = previewImages.indexOf(image);
+  const previewImages = useMemo(() => previewSlots.map((s) => s.url), [previewSlots]);
+
+  const openPreview = (slotKey) => {
+    const index = previewSlots.findIndex((s) => s.key === slotKey);
     setPreviewIndex(index >= 0 ? index : -1);
   };
   const previewImage = previewIndex >= 0 ? previewImages[previewIndex] : null;
@@ -292,6 +368,73 @@ const VehicleCheckInOutLogs = () => {
             >
               {exporting === 'pdf' ? 'Exporting…' : 'PDF'}
             </ExportButton>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="h-10 inline-flex items-center gap-2 px-3 rounded-lg text-sm font-medium cursor-pointer border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx2)] hover:bg-[var(--bg3)] hover:text-[var(--tx)] transition-colors"
+                >
+                  <Filter className="w-4 h-4" />
+                  Filters
+                  {activeFiltersCount > 0 && (
+                    <span className="bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] h-5 flex items-center justify-center">
+                      {activeFiltersCount}
+                    </span>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-[320px] max-h-[75vh] overflow-y-auto customscrollbar rounded-xl p-4"
+                align="end"
+              >
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b border-[var(--bd)] pb-2">
+                    <h4 className="font-semibold text-base text-[var(--tx)]">Filters</h4>
+                    {activeFiltersCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={resetFilters}
+                        className="flex items-center gap-1 cursor-pointer text-xs text-[var(--brand)] hover:underline"
+                      >
+                        <RotateCcw className="w-3 h-3" /> Reset all
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    <MultiSelect
+                      options={nvrOptions}
+                      value={nvrIds}
+                      onChange={(value) => {
+                        setNvrIds(value);
+                        if (value.length === 0) setChannelIds([]);
+                      }}
+                      placeholder="Select NVR"
+                      searchable
+                      className="w-full"
+                      maxHeight="max-h-40"
+                      msg="No NVR Found"
+                    />
+                    <MultiSelect
+                      options={cameraOptions}
+                      value={channelIds}
+                      onChange={setChannelIds}
+                      placeholder="Select Camera"
+                      searchable
+                      className="w-full"
+                      maxHeight="max-h-40"
+                      msg="No Camera Found"
+                    />
+                    <VehicleNumberSelect
+                      vehicleNumber={vehicleNumber}
+                      setVehicleNumber={setVehicleNumber}
+                      vehicleNumberList={filteredVehicleNumbers}
+                      vehicleNumberSearch={vehicleNumberSearch}
+                      setVehicleNumberSearch={setVehicleNumberSearch}
+                    />
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
             <AutoRefreshComponent
               isActive={autoRefresh}
               onActiveChange={setAutoRefresh}
@@ -378,7 +521,7 @@ const VehicleCheckInOutLogs = () => {
                             imgClassName="w-full h-full object-cover"
                             onClick={(e) => {
                               e.stopPropagation();
-                              openPreview(image);
+                              openPreview(`${row.vehicleKey}:row`);
                             }}
                           />
                         ) : (
@@ -409,14 +552,13 @@ const VehicleCheckInOutLogs = () => {
                               All crossings for {dash(row.vehicleNumber)}
                             </div>
 
-                            {expanded[row.vehicleKey].loading ? (
-                              <div className="flex items-center gap-2 text-xs text-[var(--tx3)] py-3">
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                Loading…
+                            {crossingsOf(row).length === 0 ? (
+                              <div className="text-xs text-[var(--tx3)] py-3">
+                                No crossings for this range.
                               </div>
                             ) : (
                               <div className="rounded-[10px] border border-[var(--bd)] bg-[var(--bg1solid)] divide-y divide-[var(--bd)]">
-                                {expanded[row.vehicleKey].data.map((sub) => (
+                                {crossingsOf(row).map((sub) => (
                                   <div
                                     key={sub._id}
                                     className="flex flex-wrap items-center gap-4 px-4 py-2.5"
@@ -436,7 +578,7 @@ const VehicleCheckInOutLogs = () => {
                                     {getImageUrl(sub) && (
                                       <button
                                         type="button"
-                                        onClick={() => openPreview(getImageUrl(sub))}
+                                        onClick={() => openPreview(`${row.vehicleKey}:${sub._id}`)}
                                         className="ml-auto text-[11px] text-[var(--blue)] hover:underline cursor-pointer"
                                       >
                                         View image
@@ -468,47 +610,140 @@ const VehicleCheckInOutLogs = () => {
           </table>
         </div>
 
-        {/* Paging */}
-        <div className="flex flex-wrap items-center gap-3 justify-between">
-          <div className="flex items-center gap-2 text-xs text-[var(--tx2)]">
-            <span>Show</span>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(1);
-              }}
-              className="h-8 px-2 rounded-md border border-[var(--bd)] bg-[var(--bg2)] text-[var(--tx)] text-xs outline-none focus:border-[var(--blue)] cursor-pointer"
-            >
-              {PAGE_SIZES.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
-            <span>entries</span>
-          </div>
+        {/* Footer */}
+        {!loading && rows.length > 0 && (
+          <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 items-center gap-4">
+            <div className="text-sm text-[var(--tx2)] bg-[var(--bg2)] px-3 py-1.5 font-normal rounded-[8px] w-fit inline-flex items-center gap-2">
+              Total logs -{' '}
+              <span className="text-[var(--violet)] font-semibold bg-[var(--violet)]/10 px-2.5 py-1 rounded-md">
+                {totalCount}
+              </span>
+            </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="px-3 py-1.5 rounded-md border border-[var(--bd)] bg-[var(--bg2)] text-xs text-[var(--tx2)] hover:text-[var(--tx)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              Previous
-            </button>
-            <span className="text-xs text-[var(--tx3)]">
-              Page {page} of {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-              className="px-3 py-1.5 rounded-md border border-[var(--bd)] bg-[var(--bg2)] text-xs text-[var(--tx2)] hover:text-[var(--tx)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              Next
-            </button>
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className={`flex items-center justify-center w-8 h-8 rounded ${
+                  page === 1
+                    ? 'text-[var(--tx3)] cursor-not-allowed'
+                    : 'text-[var(--tx2)] hover:bg-[var(--bg2)] cursor-pointer'
+                }`}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {(() => {
+                const pages = [];
+                const maxVisiblePages = 5;
+                if (totalPages <= maxVisiblePages) {
+                  for (let i = 1; i <= totalPages; i += 1) pages.push(i);
+                } else if (page <= 3) {
+                  for (let i = 1; i <= 4; i += 1) pages.push(i);
+                  if (totalPages > 5) pages.push('...');
+                  pages.push(totalPages);
+                } else if (page >= totalPages - 2) {
+                  pages.push(1);
+                  if (totalPages > 5) pages.push('...');
+                  for (let i = totalPages - 3; i <= totalPages; i += 1) pages.push(i);
+                } else {
+                  pages.push(1, '...');
+                  for (let i = page - 1; i <= page + 1; i += 1) pages.push(i);
+                  pages.push('...', totalPages);
+                }
+                return pages.map((p, index) =>
+                  p === '...' ? (
+                    <span
+                      key={`ellipsis-${index}`}
+                      className="flex items-center justify-center w-8 h-8 text-[var(--tx3)]"
+                    >
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p)}
+                      className={`flex items-center justify-center w-8 h-8 rounded text-sm font-medium cursor-pointer ${
+                        page === p
+                          ? 'bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white'
+                          : 'text-[var(--tx2)] hover:bg-[var(--bg2)]'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ),
+                );
+              })()}
+
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className={`flex items-center justify-center w-8 h-8 rounded ${
+                  page === totalPages
+                    ? 'text-[var(--tx3)] cursor-not-allowed'
+                    : 'text-[var(--tx2)] hover:bg-[var(--bg2)] cursor-pointer'
+                }`}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-center lg:justify-end gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-[var(--tx2)] whitespace-nowrap">Go to:</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[1-9][0-9]*"
+                  value={gotoPage}
+                  onChange={(e) => setGotoPage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return;
+                    const n = Number(gotoPage);
+                    if (Number.isFinite(n) && n >= 1) {
+                      setPage(Math.min(totalPages, Math.max(1, Math.trunc(n))));
+                    }
+                    setGotoPage('');
+                  }}
+                  placeholder="Page"
+                  className="h-9 w-16 border border-[var(--bd)] rounded-lg text-xs text-[var(--tx)] bg-[var(--bg2)] px-2 focus:outline-none focus:border-[var(--brand)]"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const n = Number(gotoPage);
+                    if (Number.isFinite(n) && n >= 1) {
+                      setPage(Math.min(totalPages, Math.max(1, Math.trunc(n))));
+                    }
+                    setGotoPage('');
+                  }}
+                  disabled={String(gotoPage).trim() === ''}
+                  className="h-9 px-3 rounded-lg text-xs font-medium cursor-pointer bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-95 transition-opacity"
+                >
+                  Go
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-[var(--tx2)] whitespace-nowrap">Rows:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="h-9 border border-[var(--bd)] rounded-lg text-xs text-[var(--tx)] bg-[var(--bg2)] px-2 cursor-pointer focus:outline-none focus:border-[var(--brand)]"
+                >
+                  {PAGE_SIZES.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {previewImage && (
