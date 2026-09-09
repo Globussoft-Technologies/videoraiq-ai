@@ -378,7 +378,7 @@ export default function CameraGrid() {
           ActiveDetectionsPanel sits alongside it — live detection events for
           this camera, its enabled engines, and a link into zone config. ── */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: 16, display: 'flex', gap: 16, alignItems: 'stretch' }}>
-        <div style={{ flex: '1 1 auto', minWidth: 0, minHeight: 0, display: 'flex' }}>
+        <div style={{ flex: '1 1 auto', minWidth: 0, minHeight: 0, display: 'flex', justifyContent: channels.loading ? 'center' : undefined }}>
           <AsyncBoundary
             loading={channels.loading}
             error={channels.error}
