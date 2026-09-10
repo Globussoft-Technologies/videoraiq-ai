@@ -1,5 +1,5 @@
 import { Ruler } from 'lucide-react';
-import { resolveBackendImageUrl } from '../stationIntegration';
+import { dimensionsFromCustomSize, dimensionsFromSku, resolveBackendImageUrl } from '../stationIntegration';
 
 const firstValue = (object, keys) => keys.map((key) => object?.[key]).find((value) => value != null);
 const shown = (value, fallback = '—') => value == null || value === '' ? fallback : String(value);
@@ -8,6 +8,8 @@ const numeric = (value) => value != null && value !== '' && Number.isFinite(Numb
 function measurementRows(data, qrMetadata) {
   const source = data && typeof data === 'object' ? data : {};
   const dimensions = source.dimensions && typeof source.dimensions === 'object' ? source.dimensions : source;
+  const skuDimensions = dimensionsFromSku(qrMetadata?.sku_variant ?? qrMetadata?.skuVariant ?? qrMetadata?.sku);
+  const customDimensions = dimensionsFromCustomSize(qrMetadata?.size_type ?? qrMetadata?.sizeType);
   return [
     ['Length', 'length', 1],
     ['Width', 'width', 1],
@@ -15,6 +17,8 @@ function measurementRows(data, qrMetadata) {
   ].map(([label, axis, tolerance]) => {
     const item = dimensions[axis] && typeof dimensions[axis] === 'object' ? dimensions[axis] : {};
     const printed = numeric(firstValue(item, ['printed', 'expected', 'declared', 'label']))
+      ?? numeric(customDimensions[axis === 'width' ? 'breadth' : axis])
+      ?? numeric(skuDimensions[axis === 'width' ? 'breadth' : axis])
       ?? numeric(qrMetadata?.[axis === 'width' ? 'breadth' : axis]);
     const measured = numeric(firstValue(item, ['measured', 'actual', 'value']))
       ?? numeric(typeof dimensions[axis] !== 'object' ? dimensions[axis] : null)

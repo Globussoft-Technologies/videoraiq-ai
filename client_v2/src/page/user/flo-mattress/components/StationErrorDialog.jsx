@@ -1,36 +1,22 @@
 import { AlertTriangle, Clipboard, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect } from 'react';
+import { matchesEscapeShortcut } from '../stationIntegration';
 import FloButton from './FloButton';
 
-const MINIMUM_VISIBLE_MS = 5000;
-
 export default function StationErrorDialog({ error, onDismiss }) {
-  const [remaining, setRemaining] = useState(MINIMUM_VISIBLE_MS);
-  const shownAt = useMemo(() => Date.now(), [error?.timestamp]);
-
-  useEffect(() => {
-    if (!error) return undefined;
-    const tick = () => setRemaining(Math.max(0, MINIMUM_VISIBLE_MS - (Date.now() - shownAt)));
-    tick();
-    const timer = window.setInterval(tick, 100);
-    return () => window.clearInterval(timer);
-  }, [error, shownAt]);
-
   useEffect(() => {
     if (!error) return undefined;
     const onKeyDown = (event) => {
-      if (event.key !== 'Escape' || Date.now() - shownAt < MINIMUM_VISIBLE_MS) return;
+      if (!matchesEscapeShortcut(event)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       onDismiss();
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [error, onDismiss, shownAt]);
+  }, [error, onDismiss]);
 
   if (!error) return null;
-  const canDismiss = remaining === 0;
-  const seconds = Math.ceil(remaining / 1000);
   const diagnosticText = JSON.stringify(error, null, 2);
   const isConnectivityError = error.errorType === 'network-or-cors';
   const isUploadError = String(error.stage || '').includes('upload');
@@ -76,8 +62,8 @@ export default function StationErrorDialog({ error, onDismiss }) {
           <FloButton icon={Clipboard} variant="soft" className="!min-h-10" onClick={() => navigator.clipboard?.writeText(diagnosticText)}>
             Copy details
           </FloButton>
-          <FloButton icon={X} className="ml-auto !min-h-10" disabled={!canDismiss} onClick={onDismiss}>
-            {canDismiss ? 'Dismiss (Esc)' : `Read error (${seconds}s)`}
+          <FloButton icon={X} className="ml-auto !min-h-10" onClick={onDismiss}>
+            Dismiss (Esc)
           </FloButton>
         </div>
       </section>

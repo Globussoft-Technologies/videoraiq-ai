@@ -1,5 +1,5 @@
 import { QrCode } from 'lucide-react';
-import { resolveBackendImageUrl } from '../stationIntegration';
+import { dimensionsFromCustomSize, dimensionsFromSku, resolveBackendImageUrl } from '../stationIntegration';
 
 const shown = (value, fallback = '—') => value == null || value === '' ? fallback : String(value);
 const dimension = (value) => value != null && value !== '' && Number.isFinite(Number(value)) ? Number(value).toFixed(2) : shown(value);
@@ -12,6 +12,10 @@ function readTime(value) {
 
 export default function QrExtractedPanel({ metadata, response, readAt, image, backendIp }) {
   const source = metadata && typeof metadata === 'object' ? metadata : {};
+  const fifthValue = source.size_type ?? source.sizeType;
+  const displaySku = source.sku_variant ?? source.skuVariant ?? source.sku;
+  const skuDimensions = dimensionsFromSku(displaySku);
+  const customDimensions = dimensionsFromCustomSize(fifthValue);
   const resolvedImage = resolveBackendImageUrl(image, backendIp);
   const raw = source.raw || source.rawPayload || source.rawScanString || source.qrText || response?.raw || [
     source.ref_no,
@@ -24,11 +28,12 @@ export default function QrExtractedPanel({ metadata, response, readAt, image, ba
     ['Production code', source.ref_no ?? source.refNo, 'Internal production code', 'bg-blue-400'],
     ['Sales order', source.sales_order ?? source.salesOrder, 'Sales order code', 'bg-violet-500'],
     ['Order item', source.order_item ?? source.orderItem, 'Sales order item code', 'bg-cyan-400'],
-    ['SKU code', source.sku, 'Encodes the declared size', 'bg-amber-400'],
-    ['Size type', source.size_type ?? source.sizeType, 'Order size classification', 'bg-emerald-500'],
+    ['SKU code', displaySku, 'Encodes the declared size', 'bg-amber-400'],
+    ['Custom size / type', fifthValue, 'Value supplied by the scanner', 'bg-emerald-500'],
   ];
   const presentCount = rows.filter(([, value]) => value !== '—').length;
-  const declared = `${dimension(source.length)} × ${dimension(source.breadth ?? source.width)} × ${dimension(source.height)} in`;
+  const declared = `${dimension(customDimensions.length ?? skuDimensions.length ?? source.length)} × ${dimension(customDimensions.breadth ?? skuDimensions.breadth ?? source.breadth ?? source.width)} × ${dimension(customDimensions.height ?? skuDimensions.height ?? source.height)} in`;
+  const declaredSource = Object.keys(customDimensions).length ? 'custom size' : 'SKU';
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--bd)] bg-[var(--glass)] shadow-[0_18px_50px_rgba(15,23,42,.08)] backdrop-blur">
@@ -51,7 +56,7 @@ export default function QrExtractedPanel({ metadata, response, readAt, image, ba
             <div className="mt-1 truncate font-mono text-[10px] font-semibold text-blue-500">{raw || 'Waiting for QR payload...'}</div>
           </div>
           <div className="flex-1 rounded-lg border border-blue-400/35 bg-blue-500/10 px-3 py-2">
-            <div className="font-mono text-[8px] uppercase tracking-[.14em] text-[var(--tx3)]">Declared size from QR</div>
+            <div className="font-mono text-[8px] uppercase tracking-[.14em] text-[var(--tx3)]">Declared size from {declaredSource}</div>
             <div className="mt-1 font-mono text-[15px] font-bold text-[var(--tx)]">{declared}</div>
             <div className="mt-1 text-[10px] text-[var(--tx3)]">Measurements printed on the product label</div>
           </div>

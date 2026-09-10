@@ -6,7 +6,7 @@ import MeasurementPanel from './components/MeasurementPanel';
 import QrExtractedPanel from './components/QrExtractedPanel';
 import StationTopbar from './components/StationTopbar';
 import MeasurementLogDrawer from './components/MeasurementLogDrawer';
-import { estimatedMeasurementSeconds, hasMeasuredData, isEditableShortcutTarget, matchesStationShortcut, playStationSound, prepareStationAudio, readDecisionCounts, readStationFromLocation, recordMeasurementDecision, toggleStationFullscreen, transitionDecisionCounts, updateMeasurementIncident } from './stationIntegration';
+import { estimatedMeasurementSeconds, hasMeasuredData, isEditableShortcutTarget, matchesEscapeShortcut, matchesStationShortcut, playStationSound, prepareStationAudio, readDecisionCounts, readStationFromLocation, recordMeasurementDecision, toggleStationFullscreen, transitionDecisionCounts, updateMeasurementIncident } from './stationIntegration';
 import useMeasurementSocket from './useMeasurementSocket';
 
 export default function FloMattressDashboard() {
@@ -105,15 +105,21 @@ export default function FloMattressDashboard() {
 
   useEffect(() => {
     const onKeyDown = (event) => {
+      // Reset always takes precedence on the review screen. The reset guard
+      // prevents duplicate deletion when Escape also exits fullscreen.
+      if (matchesEscapeShortcut(event)) {
+        if (!updating && !event.repeat) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          reset();
+        }
+        return;
+      }
       if (isEditableShortcutTarget(event.target) || event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;
       if (logOpen) {
         if (matchesStationShortcut(event, 'l')) {
           event.preventDefault();
           setLogOpen(false);
-        }
-        if (event.key === 'Escape' && !updating) {
-          event.preventDefault();
-          reset();
         }
         return;
       }
@@ -123,7 +129,6 @@ export default function FloMattressDashboard() {
       if (matchesStationShortcut(event, 'q')) { event.preventDefault(); signOut(); }
       if (matchesStationShortcut(event, 'a') && measurementReady && !updating) { event.preventDefault(); decide('accepted'); }
       if (matchesStationShortcut(event, 'r') && measurementReady && !updating) { event.preventDefault(); decide('rejected'); }
-      if (event.key === 'Escape' && !updating) { event.preventDefault(); reset(); }
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
@@ -141,8 +146,8 @@ export default function FloMattressDashboard() {
           <MeasurementPanel data={incident?.measuredData} image={incident?.measurementImage} backendIp={station?.backend?.ip} qrMetadata={incident?.qrMetadata} status={incident?.status} secondsRemaining={measurementSeconds} />
         </div>
       </section>
-      <DashboardBottomBar onAccept={() => decide('accepted')} onReject={() => decide('rejected')} onReset={reset} disabled={!measurementReady || updating} status={incident?.status} />
-      <MeasurementLogDrawer open={logOpen} onClose={() => setLogOpen(false)} station={station} />
+      <DashboardBottomBar onAccept={() => decide('accepted')} onReject={() => decide('rejected')} onReset={reset} disabled={!measurementReady || updating} resetDisabled={updating} status={incident?.status} />
+      <MeasurementLogDrawer open={logOpen} onClose={() => setLogOpen(false)} station={station} escapeBehavior="reset" />
     </main>
   );
 }

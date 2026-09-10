@@ -2,6 +2,8 @@ import { ClipboardList, RefreshCw, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import {
   clearQrScanDiagnostics,
+  dimensionsFromCustomSize,
+  dimensionsFromSku,
   fetchMeasurementIncidentLog,
   readMeasurementLog,
   readQrScanDiagnostics,
@@ -61,10 +63,12 @@ function signed(value) {
 
 function rowDetails(entry) {
   const metadata = metadataFor(entry);
+  const skuDimensions = dimensionsFromSku(firstValue(metadata, ['sku_variant', 'skuVariant', 'sku']));
+  const customDimensions = dimensionsFromCustomSize(firstValue(metadata, ['size_type', 'sizeType']));
   const printed = {
-    length: printedValue(metadata, 'length'),
-    width: printedValue(metadata, 'width'),
-    height: printedValue(metadata, 'height'),
+    length: numeric(customDimensions.length) ?? numeric(skuDimensions.length) ?? printedValue(metadata, 'length'),
+    width: numeric(customDimensions.breadth) ?? numeric(skuDimensions.breadth) ?? printedValue(metadata, 'width'),
+    height: numeric(customDimensions.height) ?? numeric(skuDimensions.height) ?? printedValue(metadata, 'height'),
   };
   const measured = {
     length: measuredValue(entry.measuredData, 'length'),
@@ -94,7 +98,7 @@ function localEntryToIncident(entry) {
   };
 }
 
-export default function MeasurementLogDrawer({ open, onClose, station }) {
+export default function MeasurementLogDrawer({ open, onClose, station, escapeBehavior = 'close' }) {
   const [entries, setEntries] = useState([]);
   const [scanDiagnostics, setScanDiagnostics] = useState(readQrScanDiagnostics);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -183,7 +187,7 @@ export default function MeasurementLogDrawer({ open, onClose, station }) {
             })}
           </div>
         </div>
-        <footer className="flex min-h-14 shrink-0 items-center border-t border-[var(--bd)] bg-[var(--bg2)] px-5"><span className="font-mono text-[9px] uppercase text-[var(--tx3)]">Press L to close · Esc resets the unit</span><FloButton icon={X} variant="soft" onClick={onClose} className="ml-auto !min-h-9">Close log</FloButton></footer>
+        <footer className="flex min-h-14 shrink-0 items-center border-t border-[var(--bd)] bg-[var(--bg2)] px-5"><span className="font-mono text-[9px] uppercase text-[var(--tx3)]">{escapeBehavior === 'reset' ? 'Press L to close · Esc resets the unit' : 'Press L or Esc to close'}</span><FloButton icon={X} variant="soft" onClick={onClose} className="ml-auto !min-h-9">Close log</FloButton></footer>
       </section>
     </div>
   );

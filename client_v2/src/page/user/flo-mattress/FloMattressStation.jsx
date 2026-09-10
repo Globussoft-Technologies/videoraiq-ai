@@ -12,6 +12,7 @@ import {
   isEditableShortcutTarget,
   logStationError,
   logStationSuccess,
+  matchesEscapeShortcut,
   matchesStationShortcut,
   readDecisionCounts,
   scanCameraForQr,
@@ -136,10 +137,13 @@ export default function FloMattressStation() {
 
   useEffect(() => {
     const onKeyDown = (event) => {
+      // The error dialog owns Escape while it is visible.
+      if (operationError) return;
       if (isEditableShortcutTarget(event.target) || event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;
       if (logOpen) {
-        if (matchesStationShortcut(event, 'l') || event.key === 'Escape') {
+        if (matchesStationShortcut(event, 'l') || matchesEscapeShortcut(event)) {
           event.preventDefault();
+          if (matchesEscapeShortcut(event)) event.stopImmediatePropagation();
           setLogOpen(false);
         }
         return;
@@ -151,7 +155,7 @@ export default function FloMattressStation() {
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [logOpen, signOut, start, toggleLogs]);
+  }, [logOpen, operationError, signOut, start, toggleLogs]);
 
   return (
     <main className="vq-root flex h-screen min-h-0 flex-col overflow-hidden bg-[var(--appbg)] text-[var(--tx)]">
@@ -168,7 +172,7 @@ export default function FloMattressStation() {
         </div>
       </section>
       <StationBottomBar onStart={start} disabled={capturing || processing || Boolean(configurationError) || !selectedCamera} capturing={capturing || processing} />
-      <MeasurementLogDrawer open={logOpen} onClose={() => setLogOpen(false)} station={station} />
+      <MeasurementLogDrawer open={logOpen} onClose={() => setLogOpen(false)} station={station} escapeBehavior="close" />
       {processing && <ProcessingOverlay secondsRemaining={secondsRemaining} />}
       <StationErrorDialog error={operationError} onDismiss={dismissOperationError} />
     </main>

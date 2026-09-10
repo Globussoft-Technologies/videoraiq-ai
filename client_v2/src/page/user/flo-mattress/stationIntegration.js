@@ -282,6 +282,13 @@ export function matchesStationShortcut(event, shortcut) {
   return key === expected || code === `key${expected}`;
 }
 
+export function matchesEscapeShortcut(event) {
+  const key = String(event?.key || '').toLowerCase();
+  const code = String(event?.code || '').toLowerCase();
+  return key === 'escape' || key === 'esc' || code === 'escape'
+    || event?.keyCode === 27 || event?.which === 27;
+}
+
 export function cameraList(payload) {
   const values = Array.isArray(payload) ? payload : payload?.cameras;
   return Array.isArray(values) ? values : [];
@@ -416,10 +423,52 @@ async function responseJson(response, fallbackMessage) {
   return payload;
 }
 
+export function dimensionsFromSku(value) {
+  const sku = clean(value).toUpperCase();
+  const encodedDimensions = /(\d{2})(\d{2})(?:-(\d+(?:\.\d+)?))?$/.exec(sku);
+  if (!encodedDimensions) return {};
+  return {
+    length: Number(encodedDimensions[1]),
+    breadth: Number(encodedDimensions[2]),
+    height: encodedDimensions[3] ? Number(encodedDimensions[3]) : 6,
+  };
+}
+
+export function dimensionsFromCustomSize(value) {
+  const customSize = clean(value);
+  if (!customSize || /^n\/?a$/i.test(customSize)) return {};
+
+  const labeledValue = (label) => {
+    const match = new RegExp(`\\b${label}\\b\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)`, 'i').exec(customSize);
+    return match ? Number(match[1]) : undefined;
+  };
+  const labeled = {
+    length: labeledValue('(?:length|len|l)'),
+    breadth: labeledValue('(?:breadth|width|b|w)'),
+    height: labeledValue('(?:height|h)'),
+  };
+  if (Object.values(labeled).every(Number.isFinite)) return labeled;
+
+  const triple = /(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)/i.exec(customSize);
+  if (!triple) return {};
+  return {
+    length: Number(triple[1]),
+    breadth: Number(triple[2]),
+    height: Number(triple[3]),
+  };
+}
+
 export function parseQrPayload(value) {
   const raw = clean(value);
-  const parts = raw.split('*').map((part) => clean(part));
-  if (parts.length !== 5 || parts.some((part) => !part)) {
+  const segments = raw.split('*');
+  // The first four asterisks delimit the fixed QR fields. The fifth field is
+  // free-form and may itself contain asterisks (for example "73 * 36 * 8"),
+  // so preserve everything after the fourth delimiter as one value.
+  const parts = [
+    ...segments.slice(0, 4),
+    segments.slice(4).join('*'),
+  ].map((part) => clean(part));
+  if (segments.length < 5 || parts.some((part) => !part)) {
     const error = new Error('The QR code must contain five values separated by * characters.');
     error.stage = 'local-qr-parse';
     error.qrRaw = raw;
@@ -435,15 +484,18 @@ export function parseQrPayload(value) {
     size_type: parts[4],
     raw,
   };
-  // Only this known SKU family embeds dimensions in fixed positions. Other
-  // valid SKU families (for example AGS7536-8 and AGK7572) are identifiers,
-  // so guessing dimensions from their digits would display incorrect values.
-  const encodedDimensions = /^G_([A-Z]{2})(\d{2})(\d{2})(?:-(\d+(?:\.\d+)?))?$/.exec(sku);
-  if (encodedDimensions) {
-    metadata.length = Number(encodedDimensions[2]);
-    metadata.breadth = Number(encodedDimensions[3]);
-    metadata.height = encodedDimensions[4] ? Number(encodedDimensions[4]) : 6;
-  }
+
+  // Custom-size QR labels put their requested measurements in the fifth
+  // segment, for example: "Length: 73, Breadth: 36, Height: 8". Preserve that
+  // segment verbatim and keep its dimensions separate from the dimensions
+  // encoded in the SKU.
+  const customDimensions = dimensionsFromCustomSize(parts[4]);
+  if (Object.keys(customDimensions).length) metadata.custom_dimensions = customDimensions;
+
+  // Mattress SKUs end with their base length and breadth as two two-digit
+  // values, with an optional explicit height. A missing height means 6 in.
+  // Examples: G_OS7242-5 => 72x42x5, CUS_AGS7536-8 => 75x36x8.
+  Object.assign(metadata, dimensionsFromSku(sku), customDimensions);
   return metadata;
 }
 
@@ -730,6 +782,17 @@ export async function extractQrWithDs(station, jpegBlob, signal, { automatic = f
       }
     }
     const dsDimensions = result.dimensions || {};
+    const skuVariant = clean(dsDimensions.sku_variant) || clean(dsDimensions.skuVariant)
+      || clean(result.sku_variant) || clean(result.skuVariant) || parsedMetadata.sku;
+    const skuDimensions = dimensionsFromSku(skuVariant);
+    const normalizedSizeType = clean(dsDimensions.size_type) || clean(dsDimensions.sizeType)
+      || clean(result.size_type) || clean(result.sizeType) || parsedMetadata.size_type;
+    const customDimensions = dimensionsFromCustomSize(normalizedSizeType);
+    const numericDimension = (...values) => {
+      const value = values.find((candidate) => candidate != null
+        && candidate !== '' && Number.isFinite(Number(candidate)));
+      return value == null ? undefined : Number(value);
+    };
     const normalizedDimensions = {
       ...parsedMetadata,
       ...dsDimensions,
@@ -739,9 +802,21 @@ export async function extractQrWithDs(station, jpegBlob, signal, { automatic = f
         || clean(result.sales_order) || clean(result.salesOrder) || parsedMetadata.sales_order,
       order_item: clean(dsDimensions.order_item) || clean(dsDimensions.orderItem)
         || clean(result.order_item) || clean(result.orderItem) || parsedMetadata.order_item,
-      sku: clean(dsDimensions.sku).toUpperCase(),
-      size_type: clean(dsDimensions.size_type) || clean(dsDimensions.sizeType)
-        || clean(result.size_type) || clean(result.sizeType) || parsedMetadata.size_type,
+      sku: (clean(dsDimensions.sku) || clean(result.sku) || parsedMetadata.sku).toUpperCase(),
+      ...(skuVariant ? { sku_variant: skuVariant.toUpperCase() } : {}),
+      size_type: normalizedSizeType,
+      ...(Object.keys(customDimensions).length ? { custom_dimensions: customDimensions } : {}),
+      length: numericDimension(customDimensions.length, skuDimensions.length, parsedMetadata.length, dsDimensions.length, result.length),
+      breadth: numericDimension(
+        customDimensions.breadth,
+        skuDimensions.breadth,
+        parsedMetadata.breadth,
+        dsDimensions.breadth,
+        dsDimensions.width,
+        result.breadth,
+        result.width,
+      ),
+      height: numericDimension(customDimensions.height, skuDimensions.height, parsedMetadata.height, dsDimensions.height, result.height),
     };
     if (rawPayload) normalizedDimensions.raw = rawPayload;
     const normalized = {

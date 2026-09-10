@@ -27,7 +27,7 @@ function DecisionButton({ icon: Icon, title, subtitle, shortcut, tone, disabled,
   );
 }
 
-export default function DashboardBottomBar({ onAccept, onReject, onReset, disabled, status = 'pending' }) {
+export default function DashboardBottomBar({ onAccept, onReject, onReset, disabled, resetDisabled = false, status = 'pending' }) {
   return (
     <footer className="grid shrink-0 gap-[11px] border-t border-[var(--bd2)] bg-[var(--headerglass)] px-[18px] py-[10px] shadow-[0_-12px_34px_rgba(15,23,42,.08)] backdrop-blur lg:grid-cols-[172px_1.3fr_1.3fr_1fr] lg:items-center">
       <div className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--tx3)]">
@@ -37,7 +37,7 @@ export default function DashboardBottomBar({ onAccept, onReject, onReset, disabl
       </div>
       <DecisionButton icon={Check} title={status === 'accepted' ? 'Accepted' : 'Accept'} subtitle="Pass to packing" shortcut="A" tone="accept" disabled={disabled} onClick={onAccept} />
       <DecisionButton icon={X} title={status === 'rejected' ? 'Rejected' : 'Reject'} subtitle="Send to rework" shortcut="R" tone="reject" disabled={disabled} onClick={onReject} />
-      <DecisionButton icon={ResetIcon} title="Reset" subtitle="Clear unit" shortcut="esc" onClick={onReset} />
+      <DecisionButton icon={ResetIcon} title="Reset" subtitle="Clear unit" shortcut="esc" disabled={resetDisabled} onClick={onReset} />
     </footer>
   );
 }

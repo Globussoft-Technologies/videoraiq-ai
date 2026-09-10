@@ -4,6 +4,7 @@ import FloBrand from './components/FloBrand';
 import FloThemeToggle from './components/FloThemeToggle';
 import PinPad from './components/PinPad';
 import StatusPill from './components/StatusPill';
+import { matchesEscapeShortcut } from './stationIntegration';
 
 const operatorPins = ['1042', '2087', '3311'];
 
@@ -22,7 +23,7 @@ export default function FloMattressLogin() {
         setPin((current) => (current.length < 4 ? `${current}${event.key}` : current));
       }
       if (event.key === 'Backspace') setPin((current) => current.slice(0, -1));
-      if (event.key === 'Escape') setPin('');
+      if (matchesEscapeShortcut(event)) setPin('');
       if (event.key === 'Enter') submit();
     };
     window.addEventListener('keydown', onKeyDown);

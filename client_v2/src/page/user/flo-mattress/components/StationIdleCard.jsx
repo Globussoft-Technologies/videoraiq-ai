@@ -23,7 +23,6 @@ export default function StationIdleCard({ onStart, disabled = false, capturing =
           <KeyboardHint value="S">start / stop</KeyboardHint>
           <KeyboardHint value="A">accept</KeyboardHint>
           <KeyboardHint value="R">reject</KeyboardHint>
-          <KeyboardHint value="ESC">reset</KeyboardHint>
           <KeyboardHint value="L">open / close log</KeyboardHint>
           <KeyboardHint value="F">full screen</KeyboardHint>
           <KeyboardHint value="Q">sign out</KeyboardHint>
