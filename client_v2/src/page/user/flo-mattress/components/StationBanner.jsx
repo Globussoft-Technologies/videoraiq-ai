@@ -1,11 +1,11 @@
 import { Circle } from 'lucide-react';
 
-export default function StationBanner() {
+export default function StationBanner({ message = 'Station ready - press Start (S) when the line is ready' }) {
   return (
     <div className="flex min-h-[54px] flex-wrap items-center justify-between gap-3 border-b border-[var(--bd)] bg-cyan-400/10 px-4 py-3 md:px-5">
       <div className="flex items-center gap-3 text-[var(--tx)]">
         <span className="h-3 w-3 rounded-full bg-cyan-400 shadow-[0_0_18px_rgba(34,211,238,0.65)]" />
-        <span className="text-sm font-semibold sm:text-base">Signed in - press Start (S) when the line is ready</span>
+        <span className="text-sm font-semibold sm:text-base">{message}</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

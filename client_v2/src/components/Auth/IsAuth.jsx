@@ -173,7 +173,7 @@ export default function IsAuth({ children }) {
     exchangeStarted.current = true;
 
     const amemberLogin = Cookies.get('amember_login');
-    const amemberPass = Cookies.get('amember_pass') ;
+    const amemberPass = Cookies.get('amember_pass');
     const token = getAccessToken();
     const searchParams = new URLSearchParams(window.location.search);
     const impersonationToken = searchParams.get('amember_impersonation') || '';

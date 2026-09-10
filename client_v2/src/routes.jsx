@@ -48,6 +48,7 @@ import GuardLog from './pages/GuardLog/GuardLog';
 import SleepActivityLogs from './pages/SleepActivityLogs/SleepActivityLogs';
 import EmailMonitoringDashboard from './page/user/EmailMonitoring/EmailMonitoringDashboard';
 import AssistantPage from './page/user/Assistant/AssistantPage';
+import RaspberryPiDevices from './page/user/Administer/RaspberryPiDevices';
 
 const STUBS = [
   ['faces', 'faces', '/logs/tagged-users'],
@@ -128,6 +129,7 @@ export const v2Routes = (
     {/* Administer */}
     <Route path="users" element={guard('Users', undefined, <UsersPage />)} />
     <Route path="settings" element={guard('settings', undefined, <SystemSettings />)} />
+    <Route path="raspberry-pi-devices" element={guard('settings', undefined, <RaspberryPiDevices />)} />
     {STUBS.map(([key, path, legacy]) => (
       <Route key={key} path={path} element={<Placeholder viewKey={key} legacyPath={legacy} />} />
     ))}

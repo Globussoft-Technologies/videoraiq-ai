@@ -44,7 +44,7 @@ const MODULE_LABELS = {
   incidents: 'Incident Center', Users: 'Users', permission: 'Permissions', roles: 'Roles', settings: 'Settings',
   departments: 'Departments', detectionSettings: 'Detection Settings', profiles: 'Profiles',
   recipients: 'Alert Recipients', locations: 'Locations', playbacks: 'Playbacks',
-  shifts: 'Shift Management',
+  shifts: 'Shift Management & Schedule',
   global: 'Global', accessLogs: 'Access Logs', attendanceLogs: 'Attendance Logs',
   taggedUsersLogs: 'Tagged Users', detectedUsersLogs: 'Detected Users',
   personCountLogs: 'Person Count Logs', deskLogs: 'Desk Absence Logs',
@@ -58,20 +58,24 @@ const MODULE_LABELS = {
   carLogs: 'Car Logs',
 };
 
-const LEGACY_SETTINGS_BY_ROLE = {
+const LEGACY_MODULES_BY_ROLE = {
   admin: { view: true, create: true, edit: true, delete: true },
   read: { view: true, create: false, edit: false, delete: false },
   write: { view: true, create: true, edit: true, delete: false },
 };
-const SETTINGS_DENIED = { view: false, create: false, edit: false, delete: false };
+const LEGACY_MODULE_DENIED = { view: false, create: false, edit: false, delete: false };
+const LEGACY_MODULE_KEYS = ['settings', 'shifts'];
 
 function permissionConfigForRole(role) {
   const stored = role.permissionDetails?.permissionConfig || {};
-  if (stored.settings) return stored;
   const roleName = String(role.roleName || '').toLowerCase();
+  const fallback = LEGACY_MODULES_BY_ROLE[roleName] || LEGACY_MODULE_DENIED;
+  const missing = LEGACY_MODULE_KEYS.filter((key) => !stored[key]);
+  if (!missing.length) return stored;
+
   return {
     ...stored,
-    settings: { ...(LEGACY_SETTINGS_BY_ROLE[roleName] || SETTINGS_DENIED) },
+    ...Object.fromEntries(missing.map((key) => [key, { ...fallback }])),
   };
 }
 
@@ -832,6 +836,12 @@ export default function RolesPermission() {
   const canDeleteRole = permissions?.roles?.delete;
   const canConfigure = permissions?.permission?.edit;
   const canView = permissions?.permission?.view;
+  // Admin tokens are not role-restricted by the backend permission middleware.
+  // Keep the repair action visible for them even when the very permission
+  // document it is meant to repair is stale or missing roles/permission flags.
+  // Sub-users still need both explicit edit permissions.
+  const isAdmin = !user?.memberId;
+  const canSyncDefaults = isAdmin || !!(canEditRole && canConfigure);
 
   // A role must never be able to edit/delete itself, even if the admin granted
   // roles.edit/delete — otherwise a user could unlock further permissions on
@@ -861,7 +871,7 @@ export default function RolesPermission() {
   const pendingSyncApi = useApi(
     () => syncDefaultRoles({ dryRun: true }),
     [],
-    { enabled: !!(canViewRole && canEditRole && canConfigure) },
+    { enabled: !!(canViewRole && canSyncDefaults) },
   );
   const pendingSync = pendingSyncApi.data?.rolesTouched ?? 0;
 
@@ -1051,7 +1061,7 @@ export default function RolesPermission() {
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* Rewrites the default roles' permission documents, so it needs the
               same right the Configure matrix does, not just roles.edit. */}
-          {canEditRole && canConfigure && (
+          {canSyncDefaults && (
             <button
               onClick={() => setShowSyncModal(true)}
               title="Re-apply the standard permission set to the admin, read and write roles"

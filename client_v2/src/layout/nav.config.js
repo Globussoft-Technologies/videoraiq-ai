@@ -39,6 +39,7 @@ import {
   SlidersHorizontal,
   Settings2,
   CirclePlay,
+  Cpu,
 } from 'lucide-react';
 
 // The sidebar group whose order the user can customise (Settings ▸ Log Order).
@@ -153,6 +154,7 @@ export const NAV_GROUPS = [
     items: [
       { key: 'users', label: 'User Role Detail', path: 'users', icon: Users, permissionKey: 'Users' },
       { key: 'settings', label: 'Settings', path: 'settings', icon: Settings, permissionKey: 'settings' },
+      { key: 'raspberry-pi-devices', label: 'Raspberry Pi Devices', path: 'raspberry-pi-devices', icon: Cpu, permissionKey: 'settings' },
       { key: 'roles', label: 'Roles & Permission', path: 'roles', icon: ShieldCheck, permissionKey: 'roles' },
       { key: 'locations', label: 'Locations', path: 'locations', icon: MapPin, permissionKey: 'locations' },
       { key: 'departments', label: 'Departments', path: 'departments', icon: Building2, permissionKey: 'departments' },
@@ -214,6 +216,7 @@ export const VIEW_META = {
   recipients: { title: 'Alert Recipients', sub: 'Who gets notified for each detection type' },
   'auto-email-reports': { title: 'Auto Email Reports', sub: 'Schedule attendance logs for verified recipients' },
   settings: { title: 'Settings', sub: 'Platform, alerts, privacy and integrations' },
+  'raspberry-pi-devices': { title: 'Raspberry Pi Devices', sub: 'Review and approve station pairing requests' },
   profile: { title: 'My Profile', sub: 'Your account, activity & preferences' },
   'admin-profile': { title: 'Detection Profile', sub: 'Your account and detection configuration' },
   locations: { title: 'Locations', sub: 'Locations' },

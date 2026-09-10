@@ -39,22 +39,27 @@ function formatInterval(secs) {
  *                     persisted to localStorage using `{storageKey}_refresh_enabled`
  *                     and `{storageKey}_refresh_interval` (same as V1's pattern).
  */
-export default function RefreshControl({ onManualRefresh, storageKey }) {
+export default function RefreshControl({
+  onManualRefresh,
+  storageKey,
+  defaultActive = false,
+  defaultInterval = DEFAULT_INTERVAL,
+}) {
   const enabledKey  = storageKey ? `${storageKey}_refresh_enabled`  : null;
   const intervalKey = storageKey ? `${storageKey}_refresh_interval` : null;
 
   const [open, setOpen] = useState(false);
 
   const [isActive, setIsActive] = useState(() => {
-    if (!enabledKey) return false;
+    if (!enabledKey) return defaultActive;
     const saved = localStorage.getItem(enabledKey);
-    return saved !== null ? saved === 'true' : false;
+    return saved !== null ? saved === 'true' : defaultActive;
   });
 
   const [intervalSecs, setIntervalSecs] = useState(() => {
-    if (!intervalKey) return DEFAULT_INTERVAL;
+    if (!intervalKey) return defaultInterval;
     const saved = parseInt(localStorage.getItem(intervalKey), 10);
-    return Number.isFinite(saved) && saved >= MIN_INTERVAL ? saved : DEFAULT_INTERVAL;
+    return Number.isFinite(saved) && saved >= MIN_INTERVAL ? saved : defaultInterval;
   });
 
   const [spinning, setSpinning] = useState(false);

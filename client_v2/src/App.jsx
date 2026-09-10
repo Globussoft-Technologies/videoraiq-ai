@@ -33,6 +33,7 @@ export const router = createBrowserRouter(
       <Route path="/employee-register" element={<EmployeeRegister />} />
       <Route path="/verify" element={<VerifyRecipient />} />
       <Route path="/logout" element={<Logout />} />
+      {floMattressRoutes}
       <Route
         element={
           <IsAuth>
@@ -40,7 +41,6 @@ export const router = createBrowserRouter(
           </IsAuth>
         }
       >
-        {floMattressRoutes}
         {v2Routes}
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

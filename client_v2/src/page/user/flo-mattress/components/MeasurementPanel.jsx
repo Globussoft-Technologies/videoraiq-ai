@@ -1,60 +1,92 @@
 import { Ruler } from 'lucide-react';
+import { resolveBackendImageUrl } from '../stationIntegration';
 
-const rows = [
-  ['Length', '78"', '...', '-', 'WAIT'],
-  ['Width', '78"', '...', '-', 'WAIT'],
-  ['Height', '6"', '...', '-', 'WAIT'],
-];
+const firstValue = (object, keys) => keys.map((key) => object?.[key]).find((value) => value != null);
+const shown = (value, fallback = '—') => value == null || value === '' ? fallback : String(value);
+const numeric = (value) => value != null && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
 
-export default function MeasurementPanel() {
+function measurementRows(data, qrMetadata) {
+  const source = data && typeof data === 'object' ? data : {};
+  const dimensions = source.dimensions && typeof source.dimensions === 'object' ? source.dimensions : source;
+  return [
+    ['Length', 'length', 1],
+    ['Width', 'width', 1],
+    ['Height', 'height', 0.5],
+  ].map(([label, axis, tolerance]) => {
+    const item = dimensions[axis] && typeof dimensions[axis] === 'object' ? dimensions[axis] : {};
+    const printed = numeric(firstValue(item, ['printed', 'expected', 'declared', 'label']))
+      ?? numeric(qrMetadata?.[axis === 'width' ? 'breadth' : axis]);
+    const measured = numeric(firstValue(item, ['measured', 'actual', 'value']))
+      ?? numeric(typeof dimensions[axis] !== 'object' ? dimensions[axis] : null)
+      ?? (axis === 'width' ? numeric(source.breadth) : numeric(source[axis]));
+    const difference = numeric(firstValue(item, ['difference', 'diff', 'delta']))
+      ?? (printed != null && measured != null ? measured - printed : null);
+    const passed = measured != null && difference != null && Math.abs(difference) <= tolerance;
+    return { label, printed, measured, difference, tolerance, passed };
+  });
+}
+
+export default function MeasurementPanel({ data, image, backendIp, qrMetadata, status = 'pending', secondsRemaining = 0 }) {
+  const rows = measurementRows(data, qrMetadata);
+  const complete = rows.every((row) => row.measured != null);
+  const allPassed = complete && rows.every((row) => row.passed);
+  const resolvedImage = resolveBackendImageUrl(image, backendIp);
+  const measuredTriple = rows.map((row) => row.measured == null ? '—' : row.measured.toFixed(2)).join(' × ');
+
   return (
-    <section className="rounded-2xl border border-[var(--bd)] bg-[var(--glass)] shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur">
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--bd)] px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Ruler className="h-5 w-5 text-cyan-500" />
-          <h2 className="text-base font-bold text-[var(--tx)]">Printed Size vs Measured Size</h2>
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--bd)] bg-[var(--glass)] shadow-[0_18px_50px_rgba(15,23,42,.08)] backdrop-blur">
+      <header className="flex min-h-11 shrink-0 items-center gap-3 border-b border-[var(--bd)] px-4 py-2">
+        <Ruler className="h-4 w-4 text-cyan-500" />
+        <div>
+          <h2 className="text-[15px] font-semibold leading-tight text-[var(--tx)]">Printed vs Measured</h2>
+          <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[.08em] text-[var(--tx3)]">TOL ±1 in / ±0.5 in</div>
         </div>
-        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--tx3)]">
-          Tolerance L/W +/-0.5" - H +/-0.25"
-        </span>
+        <div className={`ml-auto flex items-center gap-2.5 rounded-xl border px-3 py-1.5 ${complete ? (allPassed ? 'border-emerald-400/50 bg-emerald-500/10' : 'border-red-400/50 bg-red-500/10') : 'border-[var(--bd)] bg-[var(--bg2)]'}`}>
+          <span className={`h-8 w-8 rounded-lg ${complete ? (allPassed ? 'bg-emerald-500' : 'bg-red-500') : 'animate-pulse bg-[var(--bg3)]'}`} />
+          <span>
+            <strong className="block text-[15px] leading-tight text-[var(--tx)]">{complete ? (allPassed ? 'Sizes match' : 'Size mismatch') : 'Measuring...'}</strong>
+            <span className="block text-[9px] text-[var(--tx3)]">{complete ? (allPassed ? 'All three axes in tolerance' : 'One or more axes are outside tolerance') : (secondsRemaining > 0 ? `Estimated ${secondsRemaining}s remaining` : 'Waiting for values')}</span>
+          </span>
+        </div>
+      </header>
+
+      <div className="grid shrink-0 grid-cols-[94px_104px_minmax(0,1fr)_58px] gap-2 border-b border-[var(--bd)] bg-[var(--bg2)] px-3.5 py-1.5 font-mono text-[8px] uppercase tracking-[.1em] text-[var(--tx3)]">
+        <span>Axis · on label</span><span>Measured</span><span>Diff vs tolerance</span><span className="text-right">Result</span>
+      </div>
+      <div className="shrink-0 divide-y divide-[var(--bd)]">
+        {rows.map((row) => {
+          const fraction = row.difference == null ? 0 : Math.max(-1, Math.min(1, row.difference / (row.tolerance * 2)));
+          const width = Math.max(3, Math.abs(fraction) * 50);
+          const color = row.measured == null ? 'bg-[var(--tx3)]' : row.passed ? 'bg-emerald-500' : 'bg-red-500';
+          return (
+            <div key={row.label} className={`grid h-[46px] grid-cols-[94px_104px_minmax(0,1fr)_58px] items-center gap-2 px-3.5 ${row.measured != null && !row.passed ? 'bg-red-500/5' : ''}`}>
+              <span className="min-w-0">
+                <span className="block text-[11px] font-semibold leading-none text-[var(--tx2)]">{row.label}</span>
+                <span className="mt-1 flex items-baseline gap-1 font-mono text-[15px] font-semibold text-[var(--tx2)]">{row.printed == null ? '—' : row.printed.toFixed(2)} <small className="text-[8px] font-normal text-[var(--tx3)]">in</small></span>
+              </span>
+              <span className="flex items-baseline gap-1 font-mono text-[21px] font-bold text-[var(--tx)]">{row.measured == null ? '· · ·' : row.measured.toFixed(2)} {row.measured != null && <small className="text-[8px] font-normal text-[var(--tx3)]">in</small>}</span>
+              <span className="min-w-0">
+                <span className={`font-mono text-[11px] font-bold ${row.measured == null ? 'text-[var(--tx3)]' : row.passed ? 'text-emerald-500' : 'text-red-500'}`}>{row.difference == null ? '—' : `${row.difference >= 0 ? '+' : ''}${row.difference.toFixed(2)}`}</span>
+                <span className="ml-2 font-mono text-[8px] text-[var(--tx3)]">tol ±{row.tolerance.toFixed(1)}</span>
+                <span className="relative mt-1 block h-1 overflow-hidden rounded bg-[var(--bg3)]">
+                  <span className="absolute inset-y-0 left-1/2 w-px bg-[var(--bd2)]" />
+                  {row.difference != null && <span className={`absolute inset-y-0 rounded ${color}`} style={{ left: fraction >= 0 ? '50%' : `${50 - width}%`, width: `${width}%` }} />}
+                </span>
+              </span>
+              <span className={`justify-self-end rounded-md border px-2.5 py-1 font-mono text-[9px] font-bold ${row.measured == null ? 'border-[var(--bd2)] text-[var(--tx3)]' : row.passed ? 'border-emerald-500 bg-emerald-500/10 text-emerald-500' : 'border-red-500 bg-red-500/10 text-red-500'}`}>{row.measured == null ? 'WAIT' : row.passed ? 'PASS' : 'FAIL'}</span>
+            </div>
+          );
+        })}
       </div>
 
-      <div className="p-4">
-        <div className="grid grid-cols-[84px_1fr_1fr_80px_90px] border-b border-[var(--bd)] pb-3 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--tx3)]">
-          <span>Axis</span>
-          <span>Printed (QR)</span>
-          <span>Measured</span>
-          <span>Diff</span>
-          <span>Result</span>
-        </div>
-        <div className="divide-y divide-[var(--bd)]">
-          {rows.map(([axis, printed, measured, diff, result]) => (
-            <div key={axis} className="grid grid-cols-[84px_1fr_1fr_80px_90px] items-center py-3 text-sm">
-              <span className="font-bold text-[var(--tx)]">{axis}</span>
-              <span className="text-2xl text-[var(--tx2)]">{printed}</span>
-              <span className="font-mono text-2xl tracking-[0.5em] text-[var(--tx3)]">{measured}</span>
-              <span className="font-mono text-lg text-[var(--tx3)]">{diff}</span>
-              <span className="w-fit rounded-md border border-[var(--bd)] bg-[var(--bg1solid)] px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--tx3)]">
-                {result}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          {['Scan 13:48:57', 'Decode 100%', 'Depth lock -', 'Plane RMS -', 'Station L2-QC-01'].map((chip) => (
-            <span key={chip} className="rounded-md border border-[var(--bd)] bg-[var(--bg1solid)] px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--tx)]">
-              {chip}
-            </span>
-          ))}
-        </div>
-
-        <div className="mt-9 flex min-h-[88px] items-center gap-4 rounded-xl border border-[var(--bd)] bg-[var(--bg2)] px-5">
-          <span className="h-12 w-12 rotate-[-35deg] rounded-xl bg-[var(--bg3)]" />
-          <div>
-            <div className="text-2xl font-bold text-[var(--tx)]">Measuring...</div>
-            <div className="mt-1 text-sm text-[var(--tx2)]">Values appear as soon as the measurement lands</div>
-          </div>
+      <div className="relative min-h-[120px] flex-1 overflow-hidden border-t border-[var(--bd)] bg-[var(--bg2)]">
+        {resolvedImage ? <img src={resolvedImage} alt="Depth measurement result" className="h-full w-full object-contain" /> : <div className="grid h-full place-items-center text-sm font-semibold text-[var(--tx3)]">{complete ? 'Measurement image unavailable' : 'Waiting for depth measurement image...'}</div>}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-blue-500/5 to-cyan-400/5" />
+        {resolvedImage && <div className="pointer-events-none absolute inset-x-[13%] inset-y-[20%] rounded border border-cyan-400/80 shadow-[0_0_22px_rgba(34,211,238,.2)]" />}
+        <div className="absolute left-3 top-2 rounded bg-cyan-400 px-2 py-0.5 font-mono text-[8px] font-bold tracking-[.08em] text-slate-950">MATTRESS IMAGE</div>
+        <div className="absolute inset-x-3 bottom-2 flex items-center rounded-lg border border-white/15 bg-slate-950/80 px-3 py-1.5 backdrop-blur">
+          <strong className="font-mono text-[12px] text-white">{complete ? `${measuredTriple} IN` : 'measuring...'}</strong>
+          <span className="ml-auto font-mono text-[8px] uppercase text-slate-400">STATUS <b className="text-slate-100">{shown(status)}</b></span>
         </div>
       </div>
     </section>
