@@ -46,6 +46,7 @@ import TrackLog from './pages/TrackLog/TrackLog';
 import VisibilityLog from './pages/VisibilityLog/VisibilityLog';
 import GuardLog from './pages/GuardLog/GuardLog';
 import SleepActivityLogs from './pages/SleepActivityLogs/SleepActivityLogs';
+import MeasurementLogs from './pages/MeasurementLogs/MeasurementLogs';
 import EmailMonitoringDashboard from './page/user/EmailMonitoring/EmailMonitoringDashboard';
 import AssistantPage from './page/user/Assistant/AssistantPage';
 import RaspberryPiDevices from './page/user/Administer/RaspberryPiDevices';
@@ -102,6 +103,8 @@ export const v2Routes = (
     <Route path="logs/visibility" element={guard('logs', 'visibilityLogs', <VisibilityLog />)} />
     <Route path="logs/guard" element={guard('logs', 'guardLogs', <GuardLog />)} />
     <Route path="logs/sleep-activity" element={guard('logs', 'sleepActivityLogs', <SleepActivityLogs />)} />
+    {/* Dimensional QC — Mattress Measurement Logs (dummy data, ungated for now). */}
+    <Route path="logs/measurement" element={<MeasurementLogs />} />
 
     {/* Stevinrock incident logs — each is a thin component wrapping the shared
         IncidentLogsPage with its config; Vehicle Count is a chart page. */}

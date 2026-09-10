@@ -40,6 +40,7 @@ import {
   Settings2,
   CirclePlay,
   Cpu,
+  Move3d,
 } from 'lucide-react';
 
 // The sidebar group whose order the user can customise (Settings ▸ Log Order).
@@ -107,6 +108,14 @@ export const NAV_GROUPS = [
     label: 'INTELLIGENCE',
     items: [
       { key: 'analytics', label: 'Analytics', path: 'analytics', icon: BarChart3, permissionKey: 'analytics' },
+    ],
+  },
+  {
+    label: 'DIMENSIONAL QC',
+    items: [
+      // Mattress Measurement Logs. Ungated for now (dummy data) until a
+      // `measurementLogs` permission / logs-configuration flag exists.
+      { key: 'measurement', label: 'Measurement Logs', path: 'logs/measurement', icon: Move3d },
     ],
   },
   {
@@ -202,6 +211,7 @@ export const VIEW_META = {
   visibility: { title: 'Visibility Logs', sub: 'Per-channel presence/absence timeline' },
   guard: { title: 'Guard Logs', sub: 'Guard presence/absence timeline & export' },
   'sleep-activity': { title: 'Sleep Activity Logs', sub: 'Sleeping / awake detection events' },
+  measurement: { title: 'Mattress Measurement Logs', sub: 'Declared vs measured L×W×H · deviation, exports & scheduled reports' },
   conveyor: { title: 'Conveyor Logs', sub: 'Conveyor load / running-state detections' },
   'vehicle-obstruction': { title: 'Vehicle Obstruction Logs', sub: 'Blocked-path & obstruction detections' },
   'vehicle-count': { title: 'Vehicle Count Logs', sub: 'Vehicle throughput over time' },

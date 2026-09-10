@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { LogOut, ChevronsLeft, ChevronsRight, X, ChevronDown, GripVertical } from 'lucide-react';
@@ -94,11 +94,21 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
       return false;
     }
   });
-  // Landing directly on a logs route (fresh load, or a link from elsewhere)
-  // should reveal its own active link — but only as a one-time nudge, so it
-  // doesn't fight the user's own collapse click on every re-render while they
-  // stay within logs/* pages.
-  const onLogsRoute = location.pathname.includes('/logs/');
+  // Landing directly on a route that belongs to the LOGS & RECORDS group (fresh
+  // load, or a link from elsewhere) should reveal its own active link — but only
+  // as a one-time nudge, so it doesn't fight the user's own collapse click on
+  // every re-render while they stay within those pages.
+  //
+  // Match the group's own item paths, NOT a bare "/logs/" substring: pages like
+  // Measurement Logs live under "logs/…" too but sit in their own group, and
+  // must not force this one open.
+  const onLogsRoute = useMemo(() => {
+    const logsGroup = NAV_GROUPS.find((g) => g.label === LOGS_GROUP_LABEL);
+    const paths = (logsGroup?.items || []).map((i) => `/${i.path}`);
+    return paths.some(
+      (p) => location.pathname === p || location.pathname.startsWith(`${p}/`),
+    );
+  }, [location.pathname]);
   useEffect(() => {
     if (onLogsRoute || tourActive) setLogsCollapsed(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
