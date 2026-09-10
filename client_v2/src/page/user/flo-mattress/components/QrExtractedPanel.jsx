@@ -25,8 +25,8 @@ export default function QrExtractedPanel({ metadata, response, readAt, image, ba
     source.size_type ?? source.sizeType,
   ].filter((value) => value != null && value !== '').join(' * ');
   const rows = [
-    ['Production code', source.ref_no ?? source.refNo, 'Internal production code', 'bg-blue-400'],
-    ['Sales order', source.sales_order ?? source.salesOrder, 'Sales order code', 'bg-violet-500'],
+    ['refNo', source.ref_no ?? source.refNo, 'Reference number', 'bg-blue-400'],
+    ['ORDER ID', source.sales_order ?? source.salesOrder, 'Order ID', 'bg-violet-500'],
     ['Order item', source.order_item ?? source.orderItem, 'Sales order item code', 'bg-cyan-400'],
     ['SKU code', displaySku, 'Encodes the declared size', 'bg-amber-400'],
     ['Custom size / type', fifthValue, 'Value supplied by the scanner', 'bg-emerald-500'],
@@ -64,20 +64,19 @@ export default function QrExtractedPanel({ metadata, response, readAt, image, ba
       </div>
 
       <div className="mt-2 flex min-h-0 flex-1 flex-col px-4 pb-3">
-        <div className="grid shrink-0 grid-cols-[13px_112px_minmax(0,1fr)] gap-3 border-b border-[var(--bd)] px-0.5 py-2 font-mono text-[8px] uppercase tracking-[.12em] text-[var(--tx3)]">
+        <div className="grid shrink-0 grid-cols-[13px_142px_minmax(0,1fr)_180px] gap-3 border-b border-[var(--bd)] px-0.5 py-2 font-mono text-[9px] font-bold uppercase tracking-[.12em] text-[var(--tx)]">
           <span />
           <span>Part</span>
-          <span>Value &amp; meaning</span>
+          <span>Value</span>
+          <span />
         </div>
         <div className="min-h-0 flex-1 divide-y divide-[var(--bd)]">
           {rows.map(([label, value, note, color]) => (
-            <div key={label} className="grid h-[20%] min-h-11 grid-cols-[13px_112px_minmax(0,1fr)] items-center gap-3 px-0.5">
+            <div key={label} className="grid h-[20%] min-h-11 grid-cols-[13px_142px_minmax(0,1fr)_180px] items-center gap-3 px-0.5">
               <span className={`h-2 w-2 rounded-full ${color} shadow-[0_0_8px_currentColor]`} />
-              <span className="font-mono text-[8px] uppercase tracking-[.08em] text-[var(--tx3)]">{label}</span>
-              <span className="flex min-w-0 items-center gap-3">
-                <strong className="truncate font-mono text-[13px] text-[var(--tx)]">{shown(value)}</strong>
-                <span className="ml-auto truncate text-[10px] text-[var(--tx3)]">{note}</span>
-              </span>
+              <span className="font-mono text-[9px] font-bold uppercase tracking-[.08em] text-[var(--tx)]">{label}</span>
+              <strong className="min-w-0 truncate font-mono text-[14px] font-bold text-[var(--tx)]">{shown(value)}</strong>
+              <span className="min-w-0 truncate text-right text-[11px] font-bold text-[var(--tx)]">{note}</span>
             </div>
           ))}
         </div>

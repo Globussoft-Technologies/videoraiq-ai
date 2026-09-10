@@ -6,7 +6,7 @@ import MeasurementPanel from './components/MeasurementPanel';
 import QrExtractedPanel from './components/QrExtractedPanel';
 import StationTopbar from './components/StationTopbar';
 import MeasurementLogDrawer from './components/MeasurementLogDrawer';
-import { estimatedMeasurementSeconds, hasMeasuredData, isEditableShortcutTarget, matchesEscapeShortcut, matchesStationShortcut, playStationSound, prepareStationAudio, readDecisionCounts, readStationFromLocation, recordMeasurementDecision, toggleStationFullscreen, transitionDecisionCounts, updateMeasurementIncident } from './stationIntegration';
+import { estimatedMeasurementSeconds, hasMeasuredData, isEditableShortcutTarget, matchesEscapeShortcut, matchesStationShortcut, playStationSound, prepareStationAudio, readStationFromLocation, recordMeasurementDecision, toggleStationFullscreen, updateMeasurementIncident } from './stationIntegration';
 import useMeasurementSocket from './useMeasurementSocket';
 
 export default function FloMattressDashboard() {
@@ -16,7 +16,6 @@ export default function FloMattressDashboard() {
   const { incident, setIncident, connected } = useMeasurementSocket(station, location.state?.incident || location.state?.capture?.incident);
   const [actionError, setActionError] = useState('');
   const [updating, setUpdating] = useState(false);
-  const [counts, setCounts] = useState(readDecisionCounts);
   const [logOpen, setLogOpen] = useState(false);
   const resetInFlightRef = useRef(false);
   const intentionalFullscreenExitRef = useRef(false);
@@ -32,7 +31,6 @@ export default function FloMattressDashboard() {
   });
   const [measurementSeconds, setMeasurementSeconds] = useState(estimate);
   const toggleLogs = useCallback(() => setLogOpen((current) => !current), []);
-  const signOut = useCallback(() => navigate('/logout'), [navigate]);
   const stop = useCallback(() => navigate('/start-measure'), [navigate]);
   const decide = useCallback(async (status) => {
     prepareStationAudio();
@@ -40,7 +38,6 @@ export default function FloMattressDashboard() {
     setActionError('');
     try {
       const updated = await updateMeasurementIncident(station, incident?._id, 'PATCH', { status });
-      setCounts(transitionDecisionCounts(incident?.status, status));
       setIncident(updated);
       recordMeasurementDecision(updated);
       playStationSound(status === 'accepted' ? 'accept' : 'reject');
@@ -126,17 +123,16 @@ export default function FloMattressDashboard() {
       if (matchesStationShortcut(event, 's')) { event.preventDefault(); stop(); }
       if (matchesStationShortcut(event, 'l')) { event.preventDefault(); toggleLogs(); }
       if (matchesStationShortcut(event, 'f')) { event.preventDefault(); toggleFullscreen().catch(() => {}); }
-      if (matchesStationShortcut(event, 'q')) { event.preventDefault(); signOut(); }
       if (matchesStationShortcut(event, 'a') && measurementReady && !updating) { event.preventDefault(); decide('accepted'); }
       if (matchesStationShortcut(event, 'r') && measurementReady && !updating) { event.preventDefault(); decide('rejected'); }
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [decide, incident, logOpen, measurementReady, reset, signOut, stop, toggleFullscreen, toggleLogs, updating]);
+  }, [decide, incident, logOpen, measurementReady, reset, stop, toggleFullscreen, toggleLogs, updating]);
 
   return (
     <main className="vq-root flex h-screen min-h-0 flex-col overflow-hidden bg-[var(--appbg)] text-[var(--tx)]">
-      <StationTopbar running onStartStop={stop} onToggleLogs={toggleLogs} onToggleFullscreen={() => toggleFullscreen().catch(() => {})} onSignOut={signOut} showSignOut stationId={station?.pi?.device?.mac} {...counts} />
+      <StationTopbar running onStartStop={stop} onToggleLogs={toggleLogs} onToggleFullscreen={() => toggleFullscreen().catch(() => {})} stationId={station?.pi?.device?.mac} />
       <DashboardBanner incident={incident} connected={connected} />
       {actionError && <div role="alert" className="border-b border-red-300 bg-red-50 px-5 py-2 text-sm font-semibold text-red-700">{actionError}</div>}
       <section className="relative min-h-0 flex-1 overflow-hidden px-4 py-3 md:px-5">

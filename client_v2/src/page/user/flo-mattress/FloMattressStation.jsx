@@ -30,14 +30,13 @@ function qrIdentity(qrResponse) {
 
 export default function FloMattressStation() {
   const navigate = useNavigate();
-  const { station, selectedCamera, configurationError, warning, operationError, dismissOperationError, capturing, startCapture } = useStationIntegration();
+  const { station, selectedCamera, configurationError, operationError, dismissOperationError, capturing, startCapture } = useStationIntegration();
   const counts = readDecisionCounts();
   const [logOpen, setLogOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(15);
   const automaticScanRef = useRef({ blockedRaw: '', lastError: '', lastDsAttemptAt: 0 });
   const toggleLogs = useCallback(() => setLogOpen((current) => !current), []);
-  const signOut = useCallback(() => navigate('/logout'), [navigate]);
   const runCapture = useCallback(async (automaticCapture = null) => {
     if (capturing || processing) return;
     const startedAt = Date.now();
@@ -151,20 +150,14 @@ export default function FloMattressStation() {
       if (matchesStationShortcut(event, 's')) { event.preventDefault(); start(); }
       if (matchesStationShortcut(event, 'l')) { event.preventDefault(); toggleLogs(); }
       if (matchesStationShortcut(event, 'f')) { event.preventDefault(); toggleStationFullscreen().catch(() => {}); }
-      if (matchesStationShortcut(event, 'q')) { event.preventDefault(); signOut(); }
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [logOpen, operationError, signOut, start, toggleLogs]);
+  }, [logOpen, operationError, start, toggleLogs]);
 
   return (
     <main className="vq-root flex h-screen min-h-0 flex-col overflow-hidden bg-[var(--appbg)] text-[var(--tx)]">
-      <StationTopbar running={capturing || processing} onStartStop={start} onToggleLogs={toggleLogs} onToggleFullscreen={() => toggleStationFullscreen().catch(() => {})} onSignOut={signOut} showSignOut stationId={station?.pi?.device?.mac} {...counts} />
-      {(configurationError || warning) && (
-        <div role="alert" className="border-b border-amber-300 bg-amber-50 px-5 py-2 text-sm font-semibold text-amber-800">
-          {configurationError || warning}
-        </div>
-      )}
+      <StationTopbar running={capturing || processing} onStartStop={start} onToggleLogs={toggleLogs} onToggleFullscreen={() => toggleStationFullscreen().catch(() => {})} stationId={station?.pi?.device?.mac} {...counts} />
       <section className="relative flex min-h-0 flex-1 overflow-auto bg-[#eef0f7] p-3 dark:bg-[var(--appbg)] lg:p-4">
         <div className="relative grid min-h-[560px] w-full flex-1 gap-3 lg:min-h-0 lg:grid-cols-2 lg:items-stretch">
           <StationIdleCard onStart={start} disabled={capturing || processing || Boolean(configurationError) || !selectedCamera} capturing={capturing || processing} />

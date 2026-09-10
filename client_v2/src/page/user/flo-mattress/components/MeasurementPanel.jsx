@@ -42,8 +42,8 @@ export default function MeasurementPanel({ data, image, backendIp, qrMetadata, s
       <header className="flex min-h-11 shrink-0 items-center gap-3 border-b border-[var(--bd)] px-4 py-2">
         <Ruler className="h-4 w-4 text-cyan-500" />
         <div>
-          <h2 className="text-[15px] font-semibold leading-tight text-[var(--tx)]">Printed vs Measured</h2>
-          <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[.08em] text-[var(--tx3)]">TOL ±1 in / ±0.5 in</div>
+          <h2 className="text-[16px] font-bold leading-tight text-[var(--tx)]">Printed vs Measured</h2>
+          <div className="mt-0.5 font-mono text-[10px] font-bold uppercase tracking-[.08em] text-[var(--tx)]">TOL ±1 in / ±0.5 in</div>
         </div>
         <div className={`ml-auto flex items-center gap-2.5 rounded-xl border px-3 py-1.5 ${complete ? (allPassed ? 'border-emerald-400/50 bg-emerald-500/10' : 'border-red-400/50 bg-red-500/10') : 'border-[var(--bd)] bg-[var(--bg2)]'}`}>
           <span className={`h-8 w-8 rounded-lg ${complete ? (allPassed ? 'bg-emerald-500' : 'bg-red-500') : 'animate-pulse bg-[var(--bg3)]'}`} />
@@ -54,8 +54,8 @@ export default function MeasurementPanel({ data, image, backendIp, qrMetadata, s
         </div>
       </header>
 
-      <div className="grid shrink-0 grid-cols-[94px_104px_minmax(0,1fr)_58px] gap-2 border-b border-[var(--bd)] bg-[var(--bg2)] px-3.5 py-1.5 font-mono text-[8px] uppercase tracking-[.1em] text-[var(--tx3)]">
-        <span>Axis · on label</span><span>Measured</span><span>Diff vs tolerance</span><span className="text-right">Result</span>
+      <div className="grid shrink-0 grid-cols-[130px_104px_minmax(0,1fr)_58px] gap-2 border-b border-[var(--bd)] bg-[var(--bg2)] px-3.5 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[.1em] text-[var(--tx)]">
+        <span className="whitespace-nowrap">Axis · on label</span><span>Measured</span><span>Diff vs tolerance</span><span className="text-right">Result</span>
       </div>
       <div className="shrink-0 divide-y divide-[var(--bd)]">
         {rows.map((row) => {
@@ -63,15 +63,15 @@ export default function MeasurementPanel({ data, image, backendIp, qrMetadata, s
           const width = Math.max(3, Math.abs(fraction) * 50);
           const color = row.measured == null ? 'bg-[var(--tx3)]' : row.passed ? 'bg-emerald-500' : 'bg-red-500';
           return (
-            <div key={row.label} className={`grid h-[46px] grid-cols-[94px_104px_minmax(0,1fr)_58px] items-center gap-2 px-3.5 ${row.measured != null && !row.passed ? 'bg-red-500/5' : ''}`}>
+            <div key={row.label} className={`grid h-[46px] grid-cols-[130px_104px_minmax(0,1fr)_58px] items-center gap-2 px-3.5 ${row.measured != null && !row.passed ? 'bg-red-500/5' : ''}`}>
               <span className="min-w-0">
-                <span className="block text-[11px] font-semibold leading-none text-[var(--tx2)]">{row.label}</span>
-                <span className="mt-1 flex items-baseline gap-1 font-mono text-[15px] font-semibold text-[var(--tx2)]">{row.printed == null ? '—' : row.printed.toFixed(2)} <small className="text-[8px] font-normal text-[var(--tx3)]">in</small></span>
+                <span className="block text-[13px] font-bold leading-none text-[var(--tx)]">{row.label}</span>
+                <span className="mt-1 flex items-baseline gap-1 font-mono text-[16px] font-bold text-[var(--tx)]">{row.printed == null ? '—' : row.printed.toFixed(2)} <small className="text-[10px] font-bold text-[var(--tx)]">in</small></span>
               </span>
-              <span className="flex items-baseline gap-1 font-mono text-[21px] font-bold text-[var(--tx)]">{row.measured == null ? '· · ·' : row.measured.toFixed(2)} {row.measured != null && <small className="text-[8px] font-normal text-[var(--tx3)]">in</small>}</span>
+              <span className="flex items-baseline gap-1 font-mono text-[21px] font-bold text-[var(--tx)]">{row.measured == null ? '· · ·' : row.measured.toFixed(2)} {row.measured != null && <small className="text-[10px] font-bold text-[var(--tx)]">in</small>}</span>
               <span className="min-w-0">
                 <span className={`font-mono text-[11px] font-bold ${row.measured == null ? 'text-[var(--tx3)]' : row.passed ? 'text-emerald-500' : 'text-red-500'}`}>{row.difference == null ? '—' : `${row.difference >= 0 ? '+' : ''}${row.difference.toFixed(2)}`}</span>
-                <span className="ml-2 font-mono text-[8px] text-[var(--tx3)]">tol ±{row.tolerance.toFixed(1)}</span>
+                <span className="ml-2 font-mono text-[10px] font-bold text-[var(--tx)]">tol ±{row.tolerance.toFixed(1)}</span>
                 <span className="relative mt-1 block h-1 overflow-hidden rounded bg-[var(--bg3)]">
                   <span className="absolute inset-y-0 left-1/2 w-px bg-[var(--bd2)]" />
                   {row.difference != null && <span className={`absolute inset-y-0 rounded ${color}`} style={{ left: fraction >= 0 ? '50%' : `${50 - width}%`, width: `${width}%` }} />}
@@ -87,7 +87,6 @@ export default function MeasurementPanel({ data, image, backendIp, qrMetadata, s
         {resolvedImage ? <img src={resolvedImage} alt="Depth measurement result" className="h-full w-full object-contain" /> : <div className="grid h-full place-items-center text-sm font-semibold text-[var(--tx3)]">{complete ? 'Measurement image unavailable' : 'Waiting for depth measurement image...'}</div>}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-blue-500/5 to-cyan-400/5" />
         {resolvedImage && <div className="pointer-events-none absolute inset-x-[13%] inset-y-[20%] rounded border border-cyan-400/80 shadow-[0_0_22px_rgba(34,211,238,.2)]" />}
-        <div className="absolute left-3 top-2 rounded bg-cyan-400 px-2 py-0.5 font-mono text-[8px] font-bold tracking-[.08em] text-slate-950">MATTRESS IMAGE</div>
         <div className="absolute inset-x-3 bottom-2 flex items-center rounded-lg border border-white/15 bg-slate-950/80 px-3 py-1.5 backdrop-blur">
           <strong className="font-mono text-[12px] text-white">{complete ? `${measuredTriple} IN` : 'measuring...'}</strong>
           <span className="ml-auto font-mono text-[8px] uppercase text-slate-400">STATUS <b className="text-slate-100">{shown(status)}</b></span>

@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ClipboardList, Expand, LogOut, Pause, Play } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { ClipboardList, Expand, Pause, Play } from 'lucide-react';
 import FloBrand from './FloBrand';
 import FloButton from './FloButton';
 import FloThemeToggle from './FloThemeToggle';
 
-export default function StationTopbar({ accepted = 0, rejected = 0, running, onStartStop, onToggleLogs, onToggleFullscreen, onSignOut, showSignOut = false, stationId }) {
-  const navigate = useNavigate();
+export default function StationTopbar({ running, onStartStop, onToggleLogs, onToggleFullscreen, stationId }) {
   const ActionIcon = running ? Pause : Play;
   const [clock, setClock] = useState(() => new Date().toLocaleTimeString([], { hour12: false }));
 
@@ -20,18 +18,6 @@ export default function StationTopbar({ accepted = 0, rejected = 0, running, onS
       <FloBrand compact />
 
       <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
-        <div className="hidden items-center gap-4 sm:flex">
-          <div className="text-center">
-            <div className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-[var(--tx3)]">Accepted</div>
-            <div className="text-base font-bold leading-5 text-emerald-500">{accepted}</div>
-          </div>
-          <div className="h-9 w-px bg-[var(--bd)]" />
-          <div className="text-center">
-            <div className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-[var(--tx3)]">Rejected</div>
-            <div className="text-base font-bold leading-5 text-red-500">{rejected}</div>
-          </div>
-        </div>
-
         <FloButton
           icon={ActionIcon}
           shortcut="S"
@@ -57,11 +43,6 @@ export default function StationTopbar({ accepted = 0, rejected = 0, running, onS
             <span className="block max-w-28 truncate font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--tx3)]">{stationId || 'Connecting'}</span>
           </span>
         </div>
-        {showSignOut && (
-          <FloButton icon={LogOut} variant="ghost" shortcut="Q" onClick={onSignOut || (() => navigate('/logout'))} className="min-h-10">
-            Sign out
-          </FloButton>
-        )}
       </div>
     </header>
   );
