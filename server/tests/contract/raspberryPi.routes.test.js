@@ -38,11 +38,14 @@ beforeEach(() => {
 
 describe("Raspberry Pi routes", () => {
   it("registers a station", async () => {
-    expect((await request(app).post(`${BASE}/register`)).body).toEqual({ route: "register" });
+    const response = await request(app).post(`${BASE}/register`);
+    expect(response.headers["cross-origin-resource-policy"]).toBe("cross-origin");
+    expect(response.body).toEqual({ route: "register" });
   });
 
   it("polls status by registration code", async () => {
     const response = await request(app).get(`${BASE}/status/123456`);
+    expect(response.headers["cross-origin-resource-policy"]).toBe("cross-origin");
     expect(response.body).toEqual({ route: "status", code: "123456" });
   });
 

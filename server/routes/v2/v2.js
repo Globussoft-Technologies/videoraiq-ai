@@ -1,5 +1,6 @@
 import express from "express";
 import verifyToken from "../../middlewares/verifyToken.js";
+import allowCrossOriginResource from "../../middlewares/allowCrossOriginResource.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // All modules are physically copied into core/v2/ — edit them freely without
@@ -52,7 +53,7 @@ import verifyMeasurementAuth from "../../core/v2/measurementIncidents/measuremen
 const router = express.Router();
 
 // Health-check — confirms v2 prefix is alive
-router.get("/health", (_req, res) => {
+router.get("/health", allowCrossOriginResource, (_req, res) => {
   res.status(200).json({
     status: "ok",
     version: "v2",
