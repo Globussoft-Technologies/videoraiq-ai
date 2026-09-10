@@ -36,6 +36,8 @@ import detectionObjectsRoutes from "../../core/v2/detectionObjects/objects.route
 import shiftRoutes from "../../core/v2/shifts/shifts.routes.js";
 import autoEmailReportRoutes from "../../core/v2/autoEmailReport/autoEmailReport.routes.js";
 import attendanceAutoEmailReportRoutes from "../../core/v2/attendanceAutoEmailReport/attendanceAutoEmailReport.routes.js";
+import measurementAutoEmailReportRoutes from "../../core/v2/measurementAutoEmailReport/measurementAutoEmailReport.routes.js";
+import measurementLogRoutes from "../../core/v2/measurementLogs/measurementLog.routes.js";
 import jobsRoutes from "../../core/v2/jobs/jobs.routes.js";
 import entryRoutes from "../../core/v2/entry/entry.routes.js";
 import vehicleRoutes from "../../core/v2/vehicle/vehicle.routes.js";
@@ -92,6 +94,8 @@ router.use("/accessLogs", verifyToken, accessLogsRoutes);
 router.use("/permissions", verifyToken, permissionsRoutes);
 router.use("/auto-email-report", verifyToken, autoEmailReportRoutes);
 router.use("/attendance-auto-email-reports", verifyToken, attendanceAutoEmailReportRoutes);
+router.use("/measurement-auto-email-reports", verifyToken, measurementAutoEmailReportRoutes);
+router.use("/measurement-logs", verifyToken, measurementLogRoutes);
 router.use("/domain", domainRoutes);
 router.use("/detection-objects", verifyToken, detectionObjectsRoutes);
 router.use("/shifts", verifyToken, shiftRoutes);

@@ -31,6 +31,7 @@ import { scheduleRetentionSweep } from "./services/retention.service.js";
 import { scheduleEmpExitSync } from "./services/empExitSync.service.js";
 import DetectionSettingService from "./core/v1/detectionSettings/detectionSettings.service.js";
 import AttendanceAutoEmailReportService from "./core/v2/attendanceAutoEmailReport/attendanceAutoEmailReport.service.js";
+import MeasurementAutoEmailReportService from "./core/v2/measurementAutoEmailReport/measurementAutoEmailReport.service.js";
 
 if (process.env.T === "D") mustRunInsideContainer();
 
@@ -194,6 +195,7 @@ const startServer = async () => {
     scheduleEmpExitSync();
     DetectionSettingService.startDetectionScheduleRunner();
     AttendanceAutoEmailReportService.startRunner();
+    MeasurementAutoEmailReportService.startRunner();
   } catch (error) {
     logger.error(`❗ Failed to start server: ${error.message}`);
     process.exit(1);
