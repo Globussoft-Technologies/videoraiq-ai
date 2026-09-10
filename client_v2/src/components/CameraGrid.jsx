@@ -317,7 +317,7 @@ export default function CameraGrid() {
           onChange={onFilter(setSelDept)}
           placeholder="Select Department"
           searchPlaceholder="Search Departments..."
-          className="w-full sm:w-36 md:w-40"
+          className="w-full sm:w-42 md:w-48"
           maxHeight="max-h-48"
           msg="No Department Found"
         />
@@ -327,7 +327,7 @@ export default function CameraGrid() {
           onChange={onFilter(setSelType)}
           placeholder="Select Camera Type"
           searchPlaceholder="Search Camera Type..."
-          className="w-full sm:w-36 md:w-40"
+          className="w-full sm:w-48 md:w-56"
           maxHeight="max-h-48"
           msg="No Type Found"
         />

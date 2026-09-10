@@ -603,7 +603,7 @@ export default function LiveWallGrid() {
           onChange={onFilter(setSelType)}
           placeholder="Select Camera Type"
           searchPlaceholder="Search Camera Type..."
-          className="w-full sm:w-48 md:w-52"
+          className="w-full sm:w-52 md:w-56"
           maxHeight="max-h-48"
           msg="No Type Found"
         />
