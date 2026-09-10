@@ -46,7 +46,9 @@ const base = {
   formats: Joi.array().items(Joi.string().valid(...FORMATS)).min(1).unique(),
   reportType: Joi.string().valid(...REPORT_TYPES),
   includeSnapshots: Joi.boolean(),
-  mismatchOnly: Joi.boolean(),
+  // Deprecated — the `reportType` preset (mismatch) now covers this. Still
+  // accepted so older clients / stored payloads don't 400; it is ignored.
+  mismatchOnly: Joi.boolean().strip(),
   enabled: Joi.boolean(),
   sendTestMail: Joi.boolean().default(false),
 };

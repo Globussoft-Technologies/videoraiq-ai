@@ -669,13 +669,12 @@ async function recordDelivery(report, { period, rowCount, recipients, files }) {
   );
 }
 
-// Each report type shapes the attached rows. `mismatchOnly` is an extra filter
-// on top (kept for back-compat / the modal toggle).
+// The `reportType` preset is the single content selector:
+//   full → every record · pass / mismatch / qrerror → only that result.
 const REPORT_TYPE_FILTER = {
   pass: (r) => r.result === "Pass",
   mismatch: (r) => r.result === "Mismatch",
   qrerror: (r) => r.result === "QR Error",
-  // full → every record
 };
 
 async function deliver(report, options = {}) {
@@ -683,8 +682,7 @@ async function deliver(report, options = {}) {
   const { rows, label } = await fetchMeasurementRows(report, timezone);
 
   const typeFilter = REPORT_TYPE_FILTER[report.reportType];
-  let effectiveRows = typeFilter ? rows.filter(typeFilter) : rows;
-  if (report.mismatchOnly) effectiveRows = effectiveRows.filter((r) => r.result === "Mismatch");
+  const effectiveRows = typeFilter ? rows.filter(typeFilter) : rows;
 
   const withSnaps = report.includeSnapshots !== false;
   const buffers = {};
