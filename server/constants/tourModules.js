@@ -41,6 +41,7 @@ export const TOUR_MODULES = [
   { "key": "detection-settings", "label": "Detections", "path": "detection-settings", "group": "CONFIGURE", "permissionKey": "detectionSettings" },
   { "key": "users", "label": "User Role Detail", "path": "users", "group": "ADMINISTER", "permissionKey": "Users" },
   { "key": "settings", "label": "Settings", "path": "settings", "group": "ADMINISTER", "permissionKey": "settings" },
+  { "key": "raspberry-pi-devices", "label": "Raspberry Pi Devices", "path": "raspberry-pi-devices", "group": "ADMINISTER", "permissionKey": "settings" },
   { "key": "roles", "label": "Roles & Permission", "path": "roles", "group": "ADMINISTER", "permissionKey": "roles" },
   { "key": "locations", "label": "Locations", "path": "locations", "group": "ADMINISTER", "permissionKey": "locations" },
   { "key": "departments", "label": "Departments", "path": "departments", "group": "ADMINISTER", "permissionKey": "departments" },
@@ -57,21 +58,22 @@ export const TOUR_MODULES = [
  * PermissionContext, so a legacy role sees the same modules in the tour menu
  * as it does in the sidebar.
  */
-const LEGACY_SETTINGS_PERMISSIONS = {
+const LEGACY_MODULE_PERMISSIONS = {
   admin: { view: true, create: true, edit: true, delete: true },
   read: { view: true, create: false, edit: false, delete: false },
   write: { view: true, create: true, edit: true, delete: false },
 };
-const DENY_SETTINGS = { view: false, create: false, edit: false, delete: false };
+const DENY_MODULE = { view: false, create: false, edit: false, delete: false };
+const LEGACY_MODULE_KEYS = ["settings", "shifts"];
 
 export function normalizePermissionConfig(permissionConfig, roleName) {
   if (!permissionConfig) return {};
-  if (permissionConfig.settings) return permissionConfig;
+  const missing = LEGACY_MODULE_KEYS.filter((key) => !permissionConfig[key]);
+  if (!missing.length) return permissionConfig;
+  const fallback = LEGACY_MODULE_PERMISSIONS[String(roleName || "").toLowerCase()] || DENY_MODULE;
   return {
     ...permissionConfig,
-    settings: {
-      ...(LEGACY_SETTINGS_PERMISSIONS[String(roleName || "").toLowerCase()] || DENY_SETTINGS),
-    },
+    ...Object.fromEntries(missing.map((key) => [key, { ...fallback }])),
   };
 }
 

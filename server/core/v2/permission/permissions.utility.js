@@ -10,6 +10,7 @@ import adminModel from '../admin/admin.model.js';
 import config from "config";
 import usersModel from '../users/users.model.js';
 import { completeConfig } from './permissions.config.js';
+import { reconcileDefaultRolesOnLogin } from '../roles/defaultRoles.sync.js';
 
 
 
@@ -567,7 +568,17 @@ class PermissionService {
     async userPermissions(req,res,next){
         const result = req.verified;
         try{
-            let {memberId,adminId} = result.userData;
+            let {memberId,adminId,_id:userId} = result.userData;
+
+            // Keep the three built-in roles aligned with the canonical
+            // permission templates before returning the caller's matrix.
+            // Login-time reconciliation does not cover an already-open
+            // session, so newly added modules (for example `shifts`) could
+            // remain absent and silently disappear from the sidebar until the
+            // next full login. This helper writes only when a default role has
+            // drifted and never blocks permission loading if reconciliation
+            // itself fails.
+            await reconcileDefaultRolesOnLogin({ adminId, userId, logger });
 
             const { roles, error } = await this.resolveRolePermission({ memberId, adminId });
             if (error) return res.send(Response.FailResp(PermissionMessageNew[error]['en']));

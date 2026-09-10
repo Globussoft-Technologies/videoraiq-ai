@@ -26,6 +26,35 @@ class RaspberryPiController {
        #swagger.responses[404] = { description: 'Raspberry Pi is not registered' } */
     return await raspberryPiService.heartbeat(req, res, next);
   }
+
+  async registrationStatus(req, res, next) {
+    /* #swagger.tags = ['Raspberry Pi']
+       #swagger.description = 'Poll a Raspberry Pi registration code for pending/approved state and its station token.'
+       #swagger.responses[200] = { description: 'Registration status returned' }
+       #swagger.responses[404] = { description: 'Registration code not found' } */
+    return await raspberryPiService.registrationStatus(req, res, next);
+  }
+
+  async adminRegistrations(req, res, next) {
+    /* #swagger.tags = ['Raspberry Pi']
+       #swagger.description = 'List this administrator’s paired Raspberry Pis or securely look up one six-digit pairing code.'
+       #swagger.security = [{ "EncryptedAuthToken": [] }] */
+    return await raspberryPiService.adminRegistrations(req, res, next);
+  }
+
+  async updateApproval(req, res, next) {
+    /* #swagger.tags = ['Raspberry Pi']
+       #swagger.description = 'Approve or reject a Raspberry Pi pairing request.'
+       #swagger.security = [{ "EncryptedAuthToken": [] }] */
+    return await raspberryPiService.updateApproval(req, res, next);
+  }
+
+  async deleteRegistration(req, res, next) {
+    /* #swagger.tags = ['Raspberry Pi']
+       #swagger.description = 'Delete a Raspberry Pi connection and invalidate its station token.'
+       #swagger.security = [{ "EncryptedAuthToken": [] }] */
+    return await raspberryPiService.deleteRegistration(req, res, next);
+  }
 }
 
 export default new RaspberryPiController();

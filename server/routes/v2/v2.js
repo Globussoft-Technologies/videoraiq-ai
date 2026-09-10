@@ -45,6 +45,9 @@ import clientConfigRoutes from "../../core/v2/clientConfig/clientConfig.routes.j
 import logsConfigurationRoutes from "../../core/v2/logsConfiguration/logsConfiguration.routes.js";
 import videoRecordsRoutes from "../../core/v2/videoRecords/videoRecords.routes.js";
 import sessionRoutes from "../../core/v2/sessions/sessions.routes.js";
+import measurementIncidentsRoutes from "../../core/v2/measurementIncidents/measurementIncidents.routes.js";
+import measurementsRoutes from "../../core/v2/measurements/measurements.routes.js";
+import verifyMeasurementAuth from "../../core/v2/measurementIncidents/measurementAuth.middleware.js";
 
 const router = express.Router();
 
@@ -109,6 +112,9 @@ router.use("/sessions", verifyToken, sessionRoutes);
 router.use("/email-monitoring", emailMonitoringRoutes);
 router.use("/logs-configuration", verifyToken, logsConfigurationRoutes);
 router.use("/video-records", verifyToken, videoRecordsRoutes);
+// Supports the normal web token and the approved station Bearer token.
+router.use("/measurement-incidents", verifyMeasurementAuth, measurementIncidentsRoutes);
+router.use("/measurements", measurementsRoutes);
 
 export default router;
 

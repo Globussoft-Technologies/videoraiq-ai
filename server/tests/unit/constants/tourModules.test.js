@@ -130,14 +130,23 @@ describe("tour module filtering", () => {
     expect(visible.some((m) => m.key === "attendance")).toBe(false);
   });
 
-  it("fills in settings for roles stored before that module existed", () => {
-    expect(normalizePermissionConfig({ dashboard: {} }, "admin").settings.view).toBe(true);
-    expect(normalizePermissionConfig({ dashboard: {} }, "read").settings.view).toBe(true);
-    expect(normalizePermissionConfig({ dashboard: {} }, "read").settings.delete).toBe(false);
+  it("fills in settings and shifts for roles stored before those modules existed", () => {
+    const admin = normalizePermissionConfig({ dashboard: {} }, "admin");
+    const read = normalizePermissionConfig({ dashboard: {} }, "read");
+    expect(admin.settings.view).toBe(true);
+    expect(admin.shifts.view).toBe(true);
+    expect(read.settings.view).toBe(true);
+    expect(read.shifts.view).toBe(true);
+    expect(read.settings.delete).toBe(false);
+    expect(read.shifts.delete).toBe(false);
     // A custom role gets nothing until an admin grants it explicitly.
-    expect(normalizePermissionConfig({ dashboard: {} }, "floor-manager").settings.view).toBe(false);
-    // An existing settings block is never overwritten.
+    const custom = normalizePermissionConfig({ dashboard: {} }, "floor-manager");
+    expect(custom.settings.view).toBe(false);
+    expect(custom.shifts.view).toBe(false);
+    // Existing module blocks are never overwritten; only the missing module is filled.
     const explicit = { settings: { view: false } };
-    expect(normalizePermissionConfig(explicit, "admin")).toBe(explicit);
+    const normalized = normalizePermissionConfig(explicit, "admin");
+    expect(normalized.settings).toBe(explicit.settings);
+    expect(normalized.shifts.view).toBe(true);
   });
 });

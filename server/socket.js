@@ -13,6 +13,7 @@ import {
   isLicensingEnforced,
 } from "./core/v2/clientConfig/detectionLicense.service.js";
 import { DETECTION_TYPES } from "./constants/detectionTypes.js";
+import { validateStationToken } from "./core/v2/measurements/stationToken.middleware.js";
 
 // Compute an admin's camera-limit snapshot
 // { purchasedCameras, added, remaining, licensed }.
@@ -111,7 +112,7 @@ export const initSocket = (server) => {
   });
 
   // JWT-based authentication middleware
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
 
     if (!token) {
@@ -122,7 +123,11 @@ export const initSocket = (server) => {
       const secret = config.get("jwt.secretKey"); // or process.env.JWT_SECRET
       const decoded = jwt.verify(token, secret);
       socket.user = decoded; // Attach decoded payload (e.g., user ID/email)
-      // next();
+      if (decoded?.tokenType === "raspberry-pi") {
+        const { claims } = await validateStationToken(token);
+        socket.user = claims;
+        return next();
+      }
       checkActivePlanSocket(socket, next)
     } catch (err) {
       return next(new Error("Invalid or expired token"));
@@ -233,6 +238,9 @@ export const initSocket = (server) => {
     // client_v2 / client pass their session id on the handshake so we can track
     // per-session (per-tab/device) presence, not just one socket per user.
     const sessionId = String(socket?.handshake?.auth?.sessionId || "").trim();
+    const stationId = String(socket?.user?.stationId || "").trim().toLowerCase();
+
+    if (stationId) socket.join(`measurement:${stationId}`);
 
     if (userId) {
       // Store in Redis
@@ -319,6 +327,16 @@ export const getIO = () => {
     throw new Error("Socket.io not initialized");
   }
   return io;
+};
+
+export const sendMeasurement = (stationId, payload) => {
+  try {
+    const id = String(stationId || "").trim().toLowerCase();
+    if (!id) return;
+    getIO().to(`measurement:${id}`).emit("measurement", payload);
+  } catch (error) {
+    logger.error(`Error sending measurement for station ${stationId}: ${error.message}`);
+  }
 };
 
 /**

@@ -46,7 +46,9 @@ const swaggerFileV2 = fs.existsSync("./views/swagger-api-v2-view.json")
   : { info: { title: "v2 API — run npm run swagger:v2 to generate" }, paths: {} };
 
 const app = express();
-const PORT = config.get("port");
+// The station/streaming deployment binds this backend to 5055 via PORT,
+// while existing deployments keep their configured default (currently 5000).
+const PORT = Number(process.env.PORT || config.get("port"));
 
 // ------------------------
 // 🔧 MIDDLEWARE SETUP
@@ -74,6 +76,12 @@ app.use(
     // (client on one port, server on another) with no response body at all.
     allowedHeaders: [
       "Content-Type",
+      "Authorization",
+      "x-raspberry-pi-data",
+      "x-camera-id",
+      "x-station-id",
+      "x-capture-trigger",
+      "x-captured-at",
       "x-access-token",
       "x-device-id",
       "x-session-id",
