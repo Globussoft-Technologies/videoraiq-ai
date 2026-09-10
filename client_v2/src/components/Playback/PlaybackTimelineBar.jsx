@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { ZoomIn, ZoomOut, Clock, ShieldAlert } from 'lucide-react';
 import { useTheme } from '../../theme/ThemeContext';
+import { isFutureSeek } from './playbackTimeGuard';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -78,6 +79,7 @@ export default function PlaybackTimelineBar({
   thumbnailCache = new Map(),
   timelineZoomLevel = 0,
   onChangeZoomLevel,
+  onFutureSeekAttempt,
 }) {
   const themeContext = useTheme();
   const isDark = themeContext?.isDark ?? (typeof document !== 'undefined' && (
@@ -102,6 +104,15 @@ export default function PlaybackTimelineBar({
     d.setHours(0, 0, 0, 0);
     return d.getTime();
   }, [date]);
+
+  const lastFutureWarningRef = useRef(0);
+  const notifyFutureSeek = useCallback(() => {
+    const now = Date.now();
+    if (now - lastFutureWarningRef.current > 1000) {
+      lastFutureWarningRef.current = now;
+      onFutureSeekAttempt?.();
+    }
+  }, [onFutureSeekAttempt]);
 
   const currentZoomConfig = TIMELINE_ZOOM_LEVELS[timelineZoomLevel] || TIMELINE_ZOOM_LEVELS[0];
   const windowDurationMs = currentZoomConfig.durationMs;
@@ -214,18 +225,42 @@ export default function PlaybackTimelineBar({
       justDraggedRef.current = false;
       return;
     }
-    onSeek(msFromClientX(e.clientX));
+    const ms = msFromClientX(e.clientX);
+    if (isFutureSeek(dayStart, ms)) {
+      lastFutureWarningRef.current = Date.now();
+      onFutureSeekAttempt?.();
+      return;
+    }
+    onSeek(ms);
   };
 
   const handlePointerDown = (e) => {
     e.preventDefault();
+    const ms = msFromClientX(e.clientX);
+    if (isFutureSeek(dayStart, ms)) {
+      lastFutureWarningRef.current = Date.now();
+      onFutureSeekAttempt?.();
+      return;
+    }
     setDragging(true);
-    onSeek(msFromClientX(e.clientX));
-    const onMove = (ev) => onSeek(msFromClientX(ev.clientX));
+    onSeek(ms);
+    const onMove = (ev) => {
+      const moveMs = msFromClientX(ev.clientX);
+      if (isFutureSeek(dayStart, moveMs)) {
+        notifyFutureSeek();
+        return;
+      }
+      onSeek(moveMs);
+    };
     const onUp = (ev) => {
       setDragging(false);
       justDraggedRef.current = true;
-      onSeek(msFromClientX(ev.clientX));
+      const upMs = msFromClientX(ev.clientX);
+      if (isFutureSeek(dayStart, upMs)) {
+        notifyFutureSeek();
+      } else {
+        onSeek(upMs);
+      }
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };
@@ -361,7 +396,7 @@ export default function PlaybackTimelineBar({
         {isHovering && hoverMs !== null && (
           <div className="absolute top-[2px] transform -translate-x-1/2 px-2 py-0.5 rounded bg-slate-900/95 border border-white/20 text-white font-mono text-[10px] font-semibold shadow-md pointer-events-none z-30 whitespace-nowrap text-center" style={{ left: `${clampLabelCenter(hoverX)}px`, width: timeLabelWidth }}>{formatClock(hoverMs, true)}</div>
         )}
-        <div ref={trackRef} onClick={handleTrackClick} onPointerDown={handlePointerDown} onMouseEnter={() => setIsHovering(true)} onMouseLeave={() => { setIsHovering(false); setHoverMs(null); }} onPointerMove={handlePointerMove} className="relative h-14 sm:h-16 bg-[#0c1017] rounded-lg border cursor-pointer shadow-inner" style={{ width: `${widthMultiplier * 100}%`, minWidth: '100%', borderColor: isDark ? 'var(--bd)' : 'rgba(0,0,0,0.2)' }}>
+        <div ref={trackRef} onClick={handleTrackClick} onPointerDown={handlePointerDown} onMouseEnter={() => setIsHovering(true)} onMouseLeave={() => { setIsHovering(false); setHoverMs(null); }} onPointerMove={handlePointerMove} className="relative h-14 sm:h-16 bg-[#0c1017] rounded-lg border cursor-pointer shadow-inner" style={{ width: `${widthMultiplier * 100}%`, minWidth: '100%', borderColor: isDark ? 'var(--bd)' : 'rgba(0,0,0,0.2)', cursor: isHovering && hoverMs !== null && isFutureSeek(dayStart, hoverMs) ? 'not-allowed' : 'pointer' }}>
           <div className="absolute inset-0 overflow-hidden rounded-lg pointer-events-none">
             <div className="absolute inset-0 opacity-15 pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #374151 0, #374151 2px, transparent 2px, transparent 8px)' }} />
             {segments.map((seg, i) => {

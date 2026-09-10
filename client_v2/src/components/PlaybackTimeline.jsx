@@ -7,11 +7,13 @@ import PlaybackTimelineBar, { TIMELINE_ZOOM_LEVELS } from './Playback/PlaybackTi
 import { createPlaybackTransport } from './Playback/playbackTransport';
 import { bufferedForwardTarget, createPlaylistClock, frameRecordingTime, observePlaybackClock, rememberFragmentClock } from './Playback/playbackClock';
 import { fetchIncidents } from '../helpers/incidents';
+import { toast } from 'sonner';
 import {
   getPlaybackUrl,
   getPlaybackTimeline,
   normalizeRecordingSegments,
   getPlaybackSessionId,
+  isFutureSeek,
 } from '../helpers/playback';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -165,9 +167,21 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
     });
   }, [events, day]);
 
+  const triggerFutureAlert = useCallback(() => {
+    toast.warning('Cannot seek into future time.', {
+      id: 'future-seek-warning',
+      position: 'bottom-right',
+      duration: 3500,
+    });
+  }, []);
+
   // Resolve + load a playable segment for the current cursor (debounced)
   const loadAt = useCallback((ms) => {
     if (!channelId) return;
+    if (isFutureSeek(day.getTime(), ms)) {
+      triggerFutureAlert();
+      return;
+    }
     if (scrubTimerRef.current) clearTimeout(scrubTimerRef.current);
     const token = ++seekTokenRef.current;
     // The playback API encodes startTime to whole seconds.
@@ -201,7 +215,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
         setVideoUrl('');
       }
     }, SCRUB_DEBOUNCE_MS);
-  }, [channelId, day]);
+  }, [channelId, day, triggerFutureAlert]);
 
   // Auto-load start of day on channel/date change
   useEffect(() => {
@@ -444,6 +458,10 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
   const seekTo = useCallback(
     (ms) => {
       const clamped = Math.max(0, Math.min(DAY_MS - 1, ms));
+      if (isFutureSeek(day.getTime(), clamped)) {
+        triggerFutureAlert();
+        return;
+      }
       setCursorMs(clamped);
       streamStartMsRef.current = clamped;
       lastSeekMsRef.current = clamped;
@@ -454,12 +472,19 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
         saveFrameAt(clamped);
       });
     },
-    [loadAt, saveFrameAt]
+    [day, loadAt, saveFrameAt, triggerFutureAlert]
   );
 
   const skipBy = useCallback((deltaMs) => seekTo(cursorMs + deltaMs), [seekTo, cursorMs]);
   const skipToStart = useCallback(() => seekTo(0), [seekTo]);
-  const skipToEnd = useCallback(() => seekTo(DAY_MS - 1), [seekTo]);
+  const skipToEnd = useCallback(() => {
+    const endMs = DAY_MS - 1;
+    if (isFutureSeek(day.getTime(), endMs)) {
+      triggerFutureAlert();
+      return;
+    }
+    seekTo(endMs);
+  }, [day, seekTo, triggerFutureAlert]);
 
   return (
     <div style={{ background: 'var(--bg1)', border: '1px solid var(--bd)', borderRadius: 14, padding: '16px 16px 10px', display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0, minHeight: 0, width: '100%', height: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
@@ -592,6 +617,10 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
           </button>
           <button
             onClick={() => {
+              if (isFutureSeek(day.getTime(), cursorMs)) {
+                triggerFutureAlert();
+                return;
+              }
               if (videoState === 'error' || videoState === 'no-recording' || videoState === 'idle') { loadAt(cursorMs); return; }
               if (playing || buffering) transportRef.current?.pause();
               else transportRef.current?.play();
@@ -657,6 +686,7 @@ export default function PlaybackTimeline({ channel, date = new Date(), onPrev, o
         thumbnailCache={thumbnailCache}
         timelineZoomLevel={timelineZoomLevel}
         onChangeZoomLevel={setTimelineZoomLevel}
+        onFutureSeekAttempt={triggerFutureAlert}
       />
     </div>
   );

@@ -122,3 +122,6 @@ export function getPlaybackSessionId() {
   }
   return sessionId;
 }
+
+export { isFutureSeek } from '../components/Playback/playbackTimeGuard.js';
+
