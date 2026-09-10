@@ -8,7 +8,7 @@ import MultiSelect from '@/components/MultiSelect';
 const EMPTY = {
   name: '', report: 'full', freq: 'daily', time: '07:00', day: 'mon', dom: '1',
   startDate: '', endDate: '',
-  scope: 'all', formats: ['pdf'], mismatchOnly: false, includeSnaps: true,
+  scope: 'all', formats: ['pdf'], includeSnaps: true,
   recipients: [],
 };
 
@@ -360,19 +360,6 @@ const ScheduleModal = ({ initial, recipients = [], stations = [], onClose, onSav
                   </span>
                 </span>
                 <Toggle on={form.includeSnaps} />
-              </div>
-              <div className="h-px bg-[var(--bd)]" />
-              <div
-                onClick={() => toggle('mismatchOnly')}
-                className="flex items-center gap-[11px] cursor-pointer"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[12.5px] font-semibold">Only mismatched units</span>
-                  <span className="block text-[10.5px] text-[var(--tx3)] mt-[2px]">
-                    Skip records where printed and measured size agree
-                  </span>
-                </span>
-                <Toggle on={form.mismatchOnly} />
               </div>
             </div>
           </Section>

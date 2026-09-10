@@ -325,7 +325,7 @@ const ReportsAutomation = ({ rows = [] }) => {
                 </span>
                 <span className="block text-[11px] text-[var(--tx2)] mt-1">
                   {whenLabel(s)} · {(s.formats || []).map((f) => f.toUpperCase()).join(', ')} ·{' '}
-                  {scopeLabelOf(s)} · {s.mismatchOnly ? 'mismatches only' : 'all records'}
+                  {scopeLabelOf(s)}
                 </span>
                 <span className="block font-[var(--mono)] text-[10px] text-[var(--tx3)] mt-[3px] whitespace-nowrap overflow-hidden text-ellipsis">
                   {(s.recipients || []).length} recipient

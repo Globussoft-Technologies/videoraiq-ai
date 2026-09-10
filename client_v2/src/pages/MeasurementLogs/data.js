@@ -14,7 +14,7 @@ export const DOWNLOADS = [
 export const REPORT_OPTS = [
   { v: 'full', l: 'Full Records' },
   { v: 'pass', l: 'Pass Only', d: 'Only units that measured within tolerance' },
-  { v: 'mismatch', l: 'Mismatch Digest', d: 'Only units whose measured size is out of tolerance' },
+  { v: 'mismatch', l: 'Mismatched Units Only', d: 'Only units whose measured size is out of tolerance' },
   { v: 'qrerror', l: 'QR Error Report', d: 'Only records where the QR code could not be read' },
 ];
 

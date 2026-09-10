@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import moment from 'moment';
-import { Search, List, Grid2x2, Download, X, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, List, Grid2x2, Download, X, Loader2, ChevronLeft, ChevronRight, ImageOff } from 'lucide-react';
 import { DOWNLOADS, STATUS_META, devColor } from '../data';
 import { exportMeasurementRecords } from '../export';
 import { getMeasurementRecords } from '../api';
@@ -130,6 +130,63 @@ const MatchCell = ({ r }) => {
       </span>
       {anchor && <MatchLegendPopover anchor={anchor} />}
     </span>
+  );
+};
+
+// SNAP thumbnail with a graceful fallback: a muted "no image" tile when the
+// row has no snapshot URL, or when the URL fails to load (404 / expired).
+const NoImageTile = ({ size = 'sm' }) => (
+  <span
+    className={`${
+      size === 'lg' ? 'w-full h-full' : 'w-[44px] h-[30px]'
+    } shrink-0 rounded-[6px] bg-[var(--bg2)] border border-[var(--bd)] flex flex-col items-center justify-center gap-[2px] text-[var(--tx3)]`}
+    title="No snapshot"
+  >
+    <ImageOff size={size === 'lg' ? 22 : 13} strokeWidth={1.6} />
+    {size === 'lg' && <span className="font-[var(--mono)] text-[9px]">No snapshot</span>}
+  </span>
+);
+
+const SnapThumb = ({ src, onOpen }) => {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return <NoImageTile />;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title="View snapshot"
+      className="w-[44px] h-[30px] shrink-0 rounded-[6px] overflow-hidden bg-[var(--bg2)] block cursor-pointer border-0 p-0 transition-opacity hover:opacity-80"
+    >
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        className="w-full h-full object-cover"
+        onError={() => setFailed(true)}
+      />
+    </button>
+  );
+};
+
+// Large snapshot for the grid card — same fallback, fills its container.
+const SnapImage = ({ src }) => {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) {
+    return (
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-[4px] text-[var(--tx3)]">
+        <ImageOff size={24} strokeWidth={1.5} />
+        <span className="font-[var(--mono)] text-[10px]">No snapshot</span>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      className="absolute inset-0 w-full h-full object-cover"
+      onError={() => setFailed(true)}
+    />
   );
 };
 
@@ -428,18 +485,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
                   className="grid gap-x-[10px] p-[10px_16px] border-b border-[var(--bd)] items-center text-[12.5px] transition-colors hover:bg-[var(--bg2)]"
                   style={{ gridTemplateColumns: GRID_COLS }}
                 >
-                  {r.shot ? (
-                    <button
-                      type="button"
-                      onClick={() => setPreviewIdx(idx)}
-                      title="View snapshot"
-                      className="w-[44px] h-[30px] shrink-0 rounded-[6px] overflow-hidden bg-[var(--bg2)] block cursor-pointer border-0 p-0 transition-opacity hover:opacity-80"
-                    >
-                      <img src={r.shot} alt="" className="w-full h-full object-cover" />
-                    </button>
-                  ) : (
-                    <span className="w-[44px] h-[30px] shrink-0 rounded-[6px] bg-[var(--bg2)] block" />
-                  )}
+                  <SnapThumb src={r.shot} onOpen={() => setPreviewIdx(idx)} />
                   <span className="min-w-0">
                     <span className="block font-[var(--mono)] text-[11.5px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
                       {r.orderId}
@@ -532,17 +578,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
                   }`}
                   title={hasShot ? 'View snapshot' : undefined}
                 >
-                  {hasShot ? (
-                    <img
-                      src={r.shot}
-                      alt=""
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-[10px] font-[var(--mono)] text-[var(--tx3)]">
-                      no snapshot
-                    </div>
-                  )}
+                  <SnapImage src={r.shot} />
                   {hasShot && (
                     <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/55" />
                   )}

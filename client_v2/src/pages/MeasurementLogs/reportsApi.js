@@ -89,7 +89,6 @@ export function formToPayload(form) {
     recipients: form.recipients,
     reportType: form.report,
     includeSnapshots: !!form.includeSnaps,
-    mismatchOnly: !!form.mismatchOnly,
     formats: form.formats,
     schedule,
     target:
@@ -113,7 +112,6 @@ export function reportToForm(r) {
     endDate: isoDate(r.schedule?.endDate),
     scope: r.target?.scope === 'stations' ? r.target.stations?.[0] || 'all' : 'all',
     formats: r.formats?.length ? r.formats : ['pdf'],
-    mismatchOnly: !!r.mismatchOnly,
     includeSnaps: r.includeSnapshots !== false,
     recipients: r.recipients || [],
   };
