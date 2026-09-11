@@ -530,7 +530,7 @@ const REPORT_COLUMNS = [
   { header: "Shift I'd", day: (ctx) => shiftNameFor(ctx.row.shift) },
   { header: "Shift Timings", day: (ctx) => shiftTimingsFor(ctx.row.shift) },
   { header: "Date", day: (ctx) => ctx.row.date },
-  { header: "Location", day: (ctx) => ctx.row.location },
+  { header: "Location/Unit Number", day: (ctx) => ctx.row.location },
   {
     header: "Check in",
     day: (ctx) => ctx.row.checkIn,
@@ -683,14 +683,14 @@ export async function buildPdf({ report, rows, label, timezone, columns: columnS
     //   - time columns fit "09:45:40 AM"
     //   - Date fits "01 Jun 2026"
     const columns = columnSpec || [
-      { head: "S No", width: 24 },
+      { head: "S\u00A0No", width: 24 },
       { head: "Employee I'd", width: 58 },
       { head: "Employee Name", width: 82, wrap: true },
       { head: "Department", width: 78, wrap: true },
       { head: "Shift I'd", width: 62, wrap: true },
       { head: "Shift Timings", width: 72 },
       { head: "Date", width: 60 },
-      { head: "Location", width: 56, wrap: true },
+      { head: "Location/Unit Number", width: 56, wrap: true },
       { head: "Check in", width: 66 },
       { head: "Check out", width: 66 },
       { head: "Duration", width: 50 },
