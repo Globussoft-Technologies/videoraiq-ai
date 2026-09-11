@@ -323,6 +323,10 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
   const carPlate = formatPlate(item.vehicleNumber);
   const carYear = String(item.year ?? '').trim();
 
+  const isGuardSleeping =
+    item.incidentType === 'guardSleepingDetection' ||
+    /guard\s*sleeping|sleep\s*activity/i.test(item.incidentName || item.displayName || '');
+
   function handleCardClick() {
     if (deleteMode) { onToggleDelete?.(); return; }
     if (imgSrc) onOpenLightbox?.(item);
@@ -572,8 +576,16 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
             <>
               {/* Plate + tagged user, for Vehicle Detection and friends. */}
               <VehicleTagStrip item={item} onTagUser={onTagUser} onUntagUser={onUntagUser} onViewUser={onViewUser} />
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-                {item.incidentName || det}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--tx)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+                  {item.incidentName || det}
+                </span>
+                {isGuardSleeping && (
+                  <span style={{ flexShrink: 0, fontSize: 11.5 }}>
+                    <span style={{ color: 'var(--tx3)', fontWeight: 500 }}>Status: </span>
+                    <span style={{ fontWeight: 700, color: '#169656' }}>Sleeping</span>
+                  </span>
+                )}
               </div>
             </>
           )}

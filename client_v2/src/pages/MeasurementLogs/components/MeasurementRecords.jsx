@@ -4,7 +4,7 @@ import { Search, List, Grid2x2, Download, X, Loader2, ChevronLeft, ChevronRight,
 import { DOWNLOADS, STATUS_META, devColor } from '../data';
 import { exportMeasurementRecords } from '../export';
 import { getMeasurementRecords } from '../api';
-import ImagePreviewModal from '@/pages/ANPRLogs/components/ImagePreviewModal';
+import SnapshotPreviewModal from './SnapshotPreviewModal';
 
 // snap | order·ref | sku·model | printed | measured | Δ | conf | match | station | when·result
 // Every column is a fixed width so nothing stretches into a mid-table gap; the
@@ -473,7 +473,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
             style={{ gridTemplateColumns: GRID_COLS }}
           >
             <span>SNAP</span><span>ORDER · REF</span><span>SKU · MODEL</span>
-            <span>PRINTED L×W×H</span><span>MEASURED L×W×H</span><span>Δ L / W / H (in)</span>
+            <span>PRINTED L×W×H (in)</span><span>MEASURED L×W×H (in)</span><span>Δ L / W / H (in)</span>
             <span>CONF</span><span>MATCH</span><span>STATION</span><span>WHEN · RESULT</span>
           </div>
           <div>
@@ -507,7 +507,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
                   <span
                     className="font-[var(--mono)] text-[11px] font-semibold text-[var(--tx)] whitespace-nowrap"
                     title={`DS raw ${r.measuredRaw}${r.measuredUnit ? ` (${r.measuredUnit})` : ''}${
-                      r.implausible ? ' — implausible vs the label, verify against the photo' : ''
+                      r.implausible ? ' — low DS confidence, verify against the photo' : ''
                     }`}
                   >
                     {r.measured}&#8243;
@@ -617,7 +617,14 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
                         {r.declared}&#8243;
                       </div>
                     </div>
-                    <div className="rounded-[6px] bg-[var(--bg1)] border border-[var(--bd)] px-[8px] py-[5px]">
+                    <div
+                      className="rounded-[6px] bg-[var(--bg1)] border border-[var(--bd)] px-[8px] py-[5px]"
+                      title={
+                        r.implausible
+                          ? `DS raw ${r.measuredRaw}${r.measuredUnit ? ` (${r.measuredUnit})` : ''} — low DS confidence, verify against the photo`
+                          : undefined
+                      }
+                    >
                       <div className="text-[8px] uppercase tracking-wide text-[var(--tx3)]">Measured</div>
                       <div className="font-semibold text-[var(--tx)] whitespace-nowrap overflow-hidden text-ellipsis">
                         {r.measured}&#8243;
@@ -772,8 +779,9 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
       )}
 
       {previewIdx >= 0 && pageRows[previewIdx] && (
-        <ImagePreviewModal
-          previewImage={pageRows[previewIdx].shot}
+        <SnapshotPreviewModal
+          qrImage={pageRows[previewIdx].qrImageUrl}
+          measurementImage={pageRows[previewIdx].measurementImageUrl}
           hasPrevious={previewIdx > 0}
           hasNext={previewIdx < pageRows.length - 1}
           onPrevious={() => setPreviewIdx((i) => Math.max(0, i - 1))}

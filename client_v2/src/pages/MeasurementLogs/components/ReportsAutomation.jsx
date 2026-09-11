@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Download, Plus, Mail, Pencil, Trash2, Send, ChevronLeft, ChevronRight, Search, X, Pause, Play } from 'lucide-react';
+import { getApiErrorMessage } from '@/helpers/client';
+import ConfirmationModal from '@/components/DeleteConfirmation';
 import { DOWNLOADS, FREQ_OPTS, REPORT_OPTS } from '../data';
 import { exportMeasurementRecords } from '../export';
 import ScheduleModal from './ScheduleModal';
@@ -32,6 +34,7 @@ const ReportsAutomation = ({ rows = [] }) => {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null); // null | {} (new) | form object (edit)
   const [busyId, setBusyId] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null); // schedule object awaiting delete confirmation
 
   // Server-side filters for the schedule list.
   const [search, setSearch] = useState('');
@@ -79,7 +82,7 @@ const ReportsAutomation = ({ rows = [] }) => {
       setSchedules(reports);
       setOptions(opts);
     } catch (e) {
-      toast.error(e?.message || 'Failed to load schedules');
+      toast.error(getApiErrorMessage(e, 'Failed to load schedules'));
     } finally {
       setLoading(false);
     }
@@ -109,7 +112,7 @@ const ReportsAutomation = ({ rows = [] }) => {
       setModal(null);
       load();
     } catch (e) {
-      toast.error(e?.message || 'Failed to save schedule');
+      toast.error(getApiErrorMessage(e, 'Failed to save schedule'));
     }
   };
 
@@ -120,9 +123,10 @@ const ReportsAutomation = ({ rows = [] }) => {
       setSchedules((s) => s.filter((x) => x._id !== id));
       toast.success('Schedule deleted');
     } catch (e) {
-      toast.error(e?.message || 'Failed to delete schedule');
+      toast.error(getApiErrorMessage(e, 'Failed to delete schedule'));
     } finally {
       setBusyId(null);
+      setPendingDelete(null);
     }
   };
 
@@ -138,7 +142,7 @@ const ReportsAutomation = ({ rows = [] }) => {
           s.map((x) => (x._id === r._id ? { ...x, enabled: !x.enabled } : x)),
         );
     } catch (e) {
-      toast.error(e?.message || 'Failed to update schedule');
+      toast.error(getApiErrorMessage(e, 'Failed to update schedule'));
     } finally {
       setBusyId(null);
     }
@@ -151,7 +155,7 @@ const ReportsAutomation = ({ rows = [] }) => {
       toast.success(`Report sent · ${res?.recordCount ?? 0} records`);
       load();
     } catch (e) {
-      toast.error(e?.message || 'Failed to send report');
+      toast.error(getApiErrorMessage(e, 'Failed to send report'));
     } finally {
       setBusyId(null);
     }
@@ -369,7 +373,7 @@ const ReportsAutomation = ({ rows = [] }) => {
               </button>
               <button
                 type="button"
-                onClick={() => remove(s._id)}
+                onClick={() => setPendingDelete(s)}
                 disabled={busyId === s._id}
                 title="Delete schedule"
                 className="w-[30px] h-[30px] shrink-0 rounded-[8px] flex items-center justify-center cursor-pointer text-[var(--crit)] bg-[rgba(255,77,77,.1)] border border-[rgba(255,77,77,.25)] hover:bg-[rgba(255,77,77,.18)] transition-colors disabled:opacity-50"
@@ -425,6 +429,25 @@ const ReportsAutomation = ({ rows = [] }) => {
         />
       )}
 
+      <ConfirmationModal
+        open={Boolean(pendingDelete)}
+        title="Delete Schedule"
+        icon={<Trash2 className="w-6 h-6 text-[var(--crit)]" />}
+        message={
+          <>
+            Delete the schedule{' '}
+            <span className="font-semibold text-[var(--tx)]">
+              “{pendingDelete?.title}”
+            </span>
+            ? This can’t be undone — future runs will stop and it will no longer
+            appear in this list.
+          </>
+        }
+        confirmLabel="Delete"
+        loading={busyId === pendingDelete?._id}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={() => remove(pendingDelete._id)}
+      />
     </div>
   );
 };

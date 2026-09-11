@@ -1161,7 +1161,9 @@ function IncidentLightbox({ items, index, onIndexChange, onClose, onRefresh, onR
 
         <button
           onClick={onClose}
-          style={{ position: 'absolute', top: 16, right: 16, zIndex: 30, width: 36, height: 36, borderRadius: '50%', background: 'rgba(63,63,63,.5)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', backdropFilter: 'blur(6px)' }}
+          style={{ position: 'absolute', top: imgSrc ? 62 : 16, right: 16, zIndex: 40, width: 36, height: 36, borderRadius: '50%', background: 'rgba(239,68,68,.85)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', backdropFilter: 'blur(6px)' }}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(220,38,38,.95)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,.85)'}
         >
           <X size={15} />
         </button>

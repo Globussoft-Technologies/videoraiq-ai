@@ -43,4 +43,18 @@ export function unwrapWithMessage(res) {
   return { data: body, message: body.message };
 }
 
+/**
+ * Best available human message for a failed request — for toasts / inline
+ * errors. Prefers the backend's own `body.message` (e.g. "Failed to send
+ * report") over axios's generic "Request failed with status code 500";
+ * `body.error` (raw internals like "getConnection: connect ECONNREFUSED …")
+ * is only used when there's no `message` to show instead.
+ */
+export function getApiErrorMessage(err, fallback = 'Something went wrong') {
+  const body = err?.response?.data?.body;
+  const detail = body?.error;
+  const detailText = typeof detail === 'string' ? detail : Array.isArray(detail) ? detail.join(', ') : undefined;
+  return body?.message || detailText || err?.message || fallback;
+}
+
 export default api;

@@ -8,6 +8,12 @@ import { Search, X, LayoutList, Loader2, Info } from 'lucide-react';
 import moment from 'moment';
 import { searchMismatchBySku } from '../api';
 
+// Shared plot/list height for the three analytics cards, so they read as one
+// row. Mismatch Rate by SKU has an extra "View all" button under its list
+// (~46px incl. margin) that Deviation/Throughput don't — CARD_CONTENT_H is
+// bumped by that amount so the three cards still total the same height.
+const SKU_BUTTON_H = 46; // 14px margin-top + 32px button
+const CARD_CONTENT_H = 190;
 // Small "ⓘ" affordance in a card header. On hover / focus it shows a short
 // explanation of what the chart means and how to read it.
 const InfoHint = ({ title, lines = [] }) => {
@@ -240,8 +246,17 @@ const Card = ({ title, sub, info, children }) => (
   </div>
 );
 
+// Same target height as the populated cards (CARD_CONTENT_H + SKU_BUTTON_H)
+// so an empty-data card doesn't collapse and throw the row out of alignment.
+// No margin of its own — callers already sit inside a spacing context (Card's
+// own mt-4 wrapper, or ThroughputChart's matching mt-4 around this).
 const Empty = ({ children }) => (
-  <div className="text-[11px] text-[var(--tx3)] py-6 text-center">{children}</div>
+  <div
+    className="flex items-center justify-center text-[11px] text-[var(--tx3)] text-center"
+    style={{ minHeight: CARD_CONTENT_H + SKU_BUTTON_H }}
+  >
+    {children}
+  </div>
 );
 
 const AXIS_COLOR = { Length: 'var(--violet)', Width: 'var(--violet)', Height: 'var(--cyan)' };
@@ -261,7 +276,14 @@ const DeviationByAxis = ({ rows, loading }) => (
     ) : !rows?.length ? (
       <Empty>No measurements in this window</Empty>
     ) : (
-      <div className="flex flex-col gap-[15px]">
+      // Same target height as Throughput (which also has no bottom button),
+      // with the three rows spread evenly across it — a modest, deliberate
+      // bump rather than a grid-wide stretch, so real content is never
+      // pulled apart by empty space the way it was before.
+      <div
+        className="flex flex-col justify-around"
+        style={{ minHeight: CARD_CONTENT_H + SKU_BUTTON_H }}
+      >
         {rows.map((a) => {
           const color = AXIS_COLOR[a.axis] || 'var(--violet)';
           const pct = a.pct ?? Math.min(100, Math.round((a.avgIn / a.tolIn) * 100));
@@ -284,13 +306,13 @@ const DeviationByAxis = ({ rows, loading }) => (
                 </span>
               </div>
               <div
-                className="h-[7px] rounded-[4px] bg-[var(--track)] overflow-hidden cursor-help"
+                className="h-[6px] rounded-[3px] bg-[var(--track)] overflow-hidden cursor-help"
                 title={`Average deviation uses ${pct}% of the ±${a.tolIn} in tolerance${
                   pct >= 100 ? ' (bar capped at 100%)' : ''
                 }.`}
               >
                 <div
-                  className="h-full rounded-[4px]"
+                  className="h-full rounded-[3px]"
                   style={{ width: `${Math.max(pct, 2)}%`, background: color }}
                 />
               </div>
@@ -378,14 +400,22 @@ const ThroughputChart = ({ rows = [], unit = 'hour', loading }) => {
       </div>
 
       {loading && !rows.length ? (
-        <Empty>Loading...</Empty>
+        // ThroughputChart doesn't use the shared Card wrapper, so (unlike
+        // DeviationByAxis / MismatchBySku) it needs its own mt-4 here to match
+        // the gap Card gives every other card under its header for free.
+        <div className="mt-4"><Empty>Loading...</Empty></div>
       ) : !rows.length ? (
-        <Empty>No measurements in this window</Empty>
+        <div className="mt-4"><Empty>No measurements in this window</Empty></div>
       ) : (
-        <div className="flex-1 min-h-[190px] flex mt-[16px]">
+        // Fixed plot height regardless of data volume — a bar for 5 units and a
+        // bar for 5,000 units both fit this same box; only the fill % changes.
+        // The card's own height therefore never grows with the numbers.
+        // (+SKU_BUTTON_H so this card lines up with Mismatch Rate by SKU,
+        // whose list sits above a "View all" button this card doesn't have.)
+        <div className="flex mt-[16px] shrink-0" style={{ height: CARD_CONTENT_H + SKU_BUTTON_H }}>
           <div className="flex flex-col justify-between pr-[8px] pb-[22px] font-[var(--mono)] text-[9px] text-[var(--tx3)] text-right shrink-0">
             {ticks.map((t, i) => (
-              <span key={`${t}-${i}`} className="leading-none">{t}</span>
+              <span key={`${t}-${i}`} className="leading-none">{t.toLocaleString()}</span>
             ))}
           </div>
 
@@ -423,10 +453,10 @@ const ThroughputChart = ({ rows = [], unit = 'hour', loading }) => {
                     title={`${barLabel(h)}: ${h.pass} pass, ${h.fail} fail`}
                   >
                     <span
-                      className="absolute font-[var(--mono)] text-[9.5px] font-semibold text-[var(--tx2)]"
-                      style={{ bottom: `calc(${okPct + failPct}% + 3px)` }}
+                      className="absolute font-[var(--mono)] text-[9.5px] font-semibold text-[var(--tx2)] whitespace-nowrap"
+                      style={{ bottom: `calc(${Math.min(okPct + failPct, 100)}% + 3px)` }}
                     >
-                      {total || ''}
+                      {total ? total.toLocaleString() : ''}
                     </span>
                     {failPct > 0 && (
                       <span
@@ -486,7 +516,13 @@ const MismatchBySku = ({ rows = [], loading, dateRange }) => {
           <Empty>No measurements in this window</Empty>
         ) : (
           <>
-            <div className="flex flex-col gap-[13px]">
+            {/* Fixed height, scrolls internally — plus the button below it
+                lines this card up with Deviation/Throughput, and it never
+                grows past this no matter how many SKUs are inline. */}
+            <div
+              className="overflow-y-auto pr-[4px] flex flex-col gap-[13px]"
+              style={{ height: CARD_CONTENT_H }}
+            >
               {inline.map((s) => (
                 <SkuRow key={s.sku} s={s} />
               ))}
@@ -494,7 +530,7 @@ const MismatchBySku = ({ rows = [], loading, dateRange }) => {
             <button
               type="button"
               onClick={() => setOpen(true)}
-              className="mt-[14px] w-full flex items-center justify-center gap-[6px] h-[32px] rounded-[8px] border border-[var(--bd)] bg-[var(--bg2)] text-[11.5px] font-semibold text-[var(--tx2)] cursor-pointer transition-colors hover:text-[var(--tx)] hover:border-[var(--blue)]"
+              className="mt-[14px] w-full flex items-center justify-center gap-[6px] h-[32px] rounded-[8px] border border-[var(--bd)] bg-[var(--bg2)] text-[11.5px] font-semibold text-[var(--tx2)] cursor-pointer transition-colors hover:text-[var(--tx)] hover:border-[var(--blue)] shrink-0"
             >
               <LayoutList size={13} />
               {hidden > 0 ? `View all ${rows.length} SKUs` : 'View all'}
@@ -517,7 +553,7 @@ const MeasurementAnalytics = ({
   dateRange,
   loading = false,
 }) => (
-  <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_minmax(0,1fr)] gap-4">
+  <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_minmax(0,1fr)] gap-4 items-start">
     <DeviationByAxis rows={deviationByAxis} loading={loading} />
     <ThroughputChart rows={throughput} unit={throughputUnit} loading={loading} />
     <MismatchBySku rows={mismatchBySku} loading={loading} dateRange={dateRange} />
