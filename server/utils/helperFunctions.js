@@ -218,6 +218,9 @@ export async function syncStevinrockLogPermissions(adminId) {
       "lineCrossingLogs",
       "waterSpillLogs",
       "unauthorizedAccessLogs",
+      "sleepActivityLogs",
+      "measurementLogs",
+      "vehicleCheckInOutLogs",
     ];
 
     // Per-tier value + the role-name matcher, matching syncPermissionLocations'

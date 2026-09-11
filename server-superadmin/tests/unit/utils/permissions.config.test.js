@@ -50,7 +50,10 @@ const LOG_SUBSECTIONS = [
   "trackLogs",
   "deskLogs",
   "guardLogs",
+  "sleepActivityLogs",
+  "measurementLogs",
   "ANPRLogs",
+  "vehicleCheckInOutLogs",
 ];
 
 const CRUD_KEYS = ["view", "create", "edit", "delete"];

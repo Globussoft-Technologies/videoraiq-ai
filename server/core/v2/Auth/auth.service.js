@@ -60,7 +60,10 @@ const LOG_PERMISSION_KEYS = [
   "visibilityLogs",
   "deskLogs",
   "guardLogs",
+  "sleepActivityLogs",
+  "measurementLogs",
   "ANPRLogs",
+  "vehicleCheckInOutLogs",
 ];
 
 class AUTHService {
@@ -1315,11 +1318,15 @@ return bypassUsers.find(
                   ? { view: logsConfig.view, create: logsConfig.create, edit: logsConfig.edit, delete: logsConfig.delete }
                   : (logsConfig.global || logsConfig.accessLogs || { view: false, create: false, edit: false, delete: false });
 
-              // Idempotent: an existing sub-config is kept as-is, only missing
-              // keys get basePerms.
-              perm.permissionConfig.logs = Object.fromEntries(
-                LOG_PERMISSION_KEYS.map((key) => [key, logsConfig[key] || { ...basePerms }])
-              );
+              // Preserve every existing nested log permission, including keys
+              // introduced by client-specific modules, and only backfill the
+              // missing canonical keys. Legacy flat CRUD fields are discarded.
+              perm.permissionConfig.logs = {
+                ...(isFlat ? {} : logsConfig),
+                ...Object.fromEntries(
+                  LOG_PERMISSION_KEYS.map((key) => [key, logsConfig[key] || { ...basePerms }])
+                ),
+              };
 
               perm.markModified('permissionConfig');
               await perm.save();

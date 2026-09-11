@@ -734,7 +734,7 @@ return bypassUsers.find(
             
 
             let isFlat = typeof logsConfig.view === 'boolean';
-            let isMissingFields = typeof logsConfig.trackLogs === 'undefined' || typeof logsConfig.deskLogs === 'undefined' || typeof logsConfig.guardLogs === 'undefined' || typeof logsConfig.global === 'undefined' || typeof logsConfig.ANPRLogs === 'undefined';
+            let isMissingFields = typeof logsConfig.trackLogs === 'undefined' || typeof logsConfig.deskLogs === 'undefined' || typeof logsConfig.guardLogs === 'undefined' || typeof logsConfig.sleepActivityLogs === 'undefined' || typeof logsConfig.measurementLogs === 'undefined' || typeof logsConfig.vehicleCheckInOutLogs === 'undefined' || typeof logsConfig.global === 'undefined' || typeof logsConfig.ANPRLogs === 'undefined';
 
             // Check if it has the old flat structure or is missing the new logs properties
             if (isFlat || isMissingFields) {
@@ -743,13 +743,17 @@ return bypassUsers.find(
                   : (logsConfig.global || logsConfig.accessLogs || { view: false, create: false, edit: false, delete: false });
 
               perm.permissionConfig.logs = {
+                ...(isFlat ? {} : logsConfig),
                 global: logsConfig.global || { ...basePerms },
                 accessLogs: logsConfig.accessLogs || { ...basePerms },
                 attendanceLogs: logsConfig.attendanceLogs || { ...basePerms },
                 trackLogs: logsConfig.trackLogs || { ...basePerms },
                 deskLogs: logsConfig.deskLogs || { ...basePerms },
                 guardLogs: logsConfig.guardLogs || { ...basePerms },
+                sleepActivityLogs: logsConfig.sleepActivityLogs || { ...basePerms },
+                measurementLogs: logsConfig.measurementLogs || { ...basePerms },
                 ANPRLogs: logsConfig.ANPRLogs || { ...basePerms },
+                vehicleCheckInOutLogs: logsConfig.vehicleCheckInOutLogs || { ...basePerms },
               };
 
               perm.markModified('permissionConfig');

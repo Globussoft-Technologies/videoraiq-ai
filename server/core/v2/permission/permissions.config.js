@@ -30,6 +30,8 @@ export let completeConfig = {
         trackLogs: { view: false, create: false, edit: false, delete: false },
         visibilityLogs: { view: false, create: false, edit: false, delete: false },
         guardLogs: { view: false, create: false, edit: false, delete: false },
+        sleepActivityLogs: { view: false, create: false, edit: false, delete: false },
+        measurementLogs: { view: false, create: false, edit: false, delete: false },
         conveyorLogs: { view: false, create: false, edit: false, delete: false },
         vehicleObstructionLogs: { view: false, create: false, edit: false, delete: false },
         vehicleCountLogs: { view: false, create: false, edit: false, delete: false },
@@ -37,7 +39,8 @@ export let completeConfig = {
         lineCrossingLogs: { view: false, create: false, edit: false, delete: false },
         waterSpillLogs: { view: false, create: false, edit: false, delete: false },
         unauthorizedAccessLogs: { view: false, create: false, edit: false, delete: false },
-        carLogs: { view: false, create: false, edit: false, delete: false }
+        carLogs: { view: false, create: false, edit: false, delete: false },
+        vehicleCheckInOutLogs: { view: false, create: false, edit: false, delete: false }
     },
     locations: { view: false, create: false, edit: false, delete: false },
     playbacks: { view: false, create: false, edit: false, delete: false }
@@ -76,6 +79,8 @@ export let adminConfig = {
         trackLogs: { view: true, create: true, edit: true, delete: true },
         visibilityLogs: { view: true, create: true, edit: true, delete: true },
         guardLogs: { view: true, create: true, edit: true, delete: true },
+        sleepActivityLogs: { view: true, create: true, edit: true, delete: true },
+        measurementLogs: { view: true, create: true, edit: true, delete: true },
         conveyorLogs: { view: true, create: true, edit: true, delete: true },
         vehicleObstructionLogs: { view: true, create: true, edit: true, delete: true },
         vehicleCountLogs: { view: true, create: true, edit: true, delete: true },
@@ -83,7 +88,8 @@ export let adminConfig = {
         lineCrossingLogs: { view: true, create: true, edit: true, delete: true },
         waterSpillLogs: { view: true, create: true, edit: true, delete: true },
         unauthorizedAccessLogs: { view: true, create: true, edit: true, delete: true },
-        carLogs: { view: true, create: true, edit: true, delete: true }
+        carLogs: { view: true, create: true, edit: true, delete: true },
+        vehicleCheckInOutLogs: { view: true, create: true, edit: true, delete: true }
     },
     locations: { view: true, create: true, edit: true, delete: true },
     playbacks: { view: true, create: true, edit: true, delete: true },
@@ -122,6 +128,8 @@ export let readConfig = {
         trackLogs: { view: true, create: false, edit: false, delete: false },
         visibilityLogs: { view: true, create: false, edit: false, delete: false },
         guardLogs: { view: true, create: false, edit: false, delete: false },
+        sleepActivityLogs: { view: true, create: false, edit: false, delete: false },
+        measurementLogs: { view: true, create: false, edit: false, delete: false },
         conveyorLogs: { view: true, create: false, edit: false, delete: false },
         vehicleObstructionLogs: { view: true, create: false, edit: false, delete: false },
         vehicleCountLogs: { view: true, create: false, edit: false, delete: false },
@@ -129,7 +137,8 @@ export let readConfig = {
         lineCrossingLogs: { view: true, create: false, edit: false, delete: false },
         waterSpillLogs: { view: true, create: false, edit: false, delete: false },
         unauthorizedAccessLogs: { view: true, create: false, edit: false, delete: false },
-        carLogs: { view: true, create: false, edit: false, delete: false }
+        carLogs: { view: true, create: false, edit: false, delete: false },
+        vehicleCheckInOutLogs: { view: true, create: false, edit: false, delete: false }
     },
     locations: { view: true, create: false, edit: false, delete: false },
     playbacks: { view: true, create: false, edit: false, delete: false }
@@ -168,6 +177,8 @@ export let writeConfig = {
         trackLogs: { view: true, create: true, edit: true, delete: false },
         visibilityLogs: { view: true, create: true, edit: true, delete: false },
         guardLogs: { view: true, create: true, edit: true, delete: false },
+        sleepActivityLogs: { view: true, create: true, edit: true, delete: false },
+        measurementLogs: { view: true, create: true, edit: true, delete: false },
         conveyorLogs: { view: true, create: true, edit: true, delete: false },
         vehicleObstructionLogs: { view: true, create: true, edit: true, delete: false },
         vehicleCountLogs: { view: true, create: true, edit: true, delete: false },
@@ -175,7 +186,8 @@ export let writeConfig = {
         lineCrossingLogs: { view: true, create: true, edit: true, delete: false },
         waterSpillLogs: { view: true, create: true, edit: true, delete: false },
         unauthorizedAccessLogs: { view: true, create: true, edit: true, delete: false },
-        carLogs: { view: true, create: true, edit: true, delete: false }
+        carLogs: { view: true, create: true, edit: true, delete: false },
+        vehicleCheckInOutLogs: { view: true, create: true, edit: true, delete: false }
     },
     locations: { view: true, create: true, edit: true, delete: false },
     playbacks: { view: true, create: true, edit: true, delete: false }

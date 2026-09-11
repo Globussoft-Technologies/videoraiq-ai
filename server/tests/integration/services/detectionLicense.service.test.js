@@ -289,6 +289,8 @@ describe("detection visibility beyond the detection screens", () => {
     expect(logs.personCountLogs).toBe(false);
     expect(logs.waterSpillLogs).toBe(false);
     expect(logs.deskAbsenceLogs).toBe(false);
+    expect(logs.sleepActivityLogs).toBe(false);
+    expect(logs.vehicleCheckInOutLogs).toBe(false);
     // Non-detection logs are never touched by licensing.
     expect(logs.attendanceLogs).toBe(true);
     expect(logs.accessLogs).toBe(true);
@@ -298,6 +300,7 @@ describe("detection visibility beyond the detection screens", () => {
     // licensed: a face-library view and a presence timeline.
     expect(logs.detectedUsers).toBe(true);
     expect(logs.visibilityLogs).toBe(true);
+    expect(logs.measurementLogs).toBe(true);
   });
 
   it("keeps only the licensed detection's log page, plus the ungated ones", async () => {
@@ -322,6 +325,32 @@ describe("detection visibility beyond the detection screens", () => {
     // Not detection-gated, so these survive regardless.
     expect(logs.detectedUsers).toBe(true);
     expect(logs.visibilityLogs).toBe(true);
+  });
+
+  it("keeps Sleep Activity and Vehicle Check-In/Out logs only when their detections are licensed", async () => {
+    const { default: LogsConfigService } = await import(
+      "../../../core/v2/logsConfiguration/logsConfiguration.service.js"
+    );
+
+    const admin = await makeClient({
+      purchasedCameras: 5,
+      allocations: {
+        guardSleepingDetectionSettings: 5,
+        vehicleCheckInOutSettings: 5,
+      },
+    });
+    const { req, res, next } = serviceCtx({
+      user_id: USER_ID,
+      adminId: admin._id.toString(),
+    });
+
+    await LogsConfigService.getLogsConfiguration(req, res, next);
+
+    const logs = payload(res).data;
+    expect(logs.sleepActivityLogs).toBe(true);
+    expect(logs.vehicleCheckInOutLogs).toBe(true);
+    expect(logs.personCountLogs).toBe(false);
+    expect(logs.carLogs).toBe(false);
   });
 });
 

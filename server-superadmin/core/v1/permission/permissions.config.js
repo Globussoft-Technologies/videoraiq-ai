@@ -18,7 +18,10 @@ export let completeConfig = {
         trackLogs: { view: false, create: false, edit: false, delete: false },
         deskLogs: { view: false, create: false, edit: false, delete: false },
         guardLogs: { view: false, create: false, edit: false, delete: false },
-        ANPRLogs: { view: false, create: false, edit: false, delete: false }
+        sleepActivityLogs: { view: false, create: false, edit: false, delete: false },
+        measurementLogs: { view: false, create: false, edit: false, delete: false },
+        ANPRLogs: { view: false, create: false, edit: false, delete: false },
+        vehicleCheckInOutLogs: { view: false, create: false, edit: false, delete: false }
     },
     locations: { view: false, create: false, edit: false, delete: false },
     playbacks:{ view: false, create: false, edit: false, delete: false }
@@ -45,7 +48,10 @@ export let adminConfig = {
         trackLogs: { view: true, create: true, edit: true, delete: true },
         deskLogs: { view: true, create: true, edit: true, delete: true },
         guardLogs: { view: true, create: true, edit: true, delete: true },
-        ANPRLogs: { view: true, create: true, edit: true, delete: true }
+        sleepActivityLogs: { view: true, create: true, edit: true, delete: true },
+        measurementLogs: { view: true, create: true, edit: true, delete: true },
+        ANPRLogs: { view: true, create: true, edit: true, delete: true },
+        vehicleCheckInOutLogs: { view: true, create: true, edit: true, delete: true }
     },
     locations: { view: true, create: true, edit: true, delete: true },
     playbacks:{ view: true, create: true, edit: true, delete: true },
@@ -72,7 +78,10 @@ export let readConfig = {
         trackLogs: { view: true, create: false, edit: false, delete: false },
         deskLogs: { view: true, create: false, edit: false, delete: false },
         guardLogs: { view: true, create: false, edit: false, delete: false },
-        ANPRLogs: { view: true, create: false, edit: false, delete: false }
+        sleepActivityLogs: { view: true, create: false, edit: false, delete: false },
+        measurementLogs: { view: true, create: false, edit: false, delete: false },
+        ANPRLogs: { view: true, create: false, edit: false, delete: false },
+        vehicleCheckInOutLogs: { view: true, create: false, edit: false, delete: false }
     },
     locations: { view: true, create: false, edit: false, delete: false },
     playbacks:{ view: true, create: false, edit: false, delete: false }
@@ -99,7 +108,10 @@ export let writeConfig = {
         trackLogs: { view: true, create: true, edit: true, delete: false },
         deskLogs: { view: true, create: true, edit: true, delete: false },
         guardLogs: { view: true, create: true, edit: true, delete: false },
+        sleepActivityLogs: { view: true, create: true, edit: true, delete: false },
+        measurementLogs: { view: true, create: true, edit: true, delete: false },
         ANPRLogs: { view: true, create: true, edit: true, delete: false },
+        vehicleCheckInOutLogs: { view: true, create: true, edit: true, delete: false },
         
     },
     locations: { view: true, create: true, edit: true, delete: false },
