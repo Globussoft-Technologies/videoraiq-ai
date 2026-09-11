@@ -21,7 +21,7 @@ function buildCaseInsensitiveLocationIn(values = []) {
 
 const authorizedUsersSchema = new mongoose.Schema({
   orgId: { type: Number, default: null },
-  emp_id: { type: Number, default: null },
+  emp_id: { type: String, default: null },
   shiftId: { type: mongoose.Schema.Types.ObjectId, ref: 'Shift', default: null },
   adminId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -131,6 +131,10 @@ const authorizedUsersSchema = new mongoose.Schema({
 authorizedUsersSchema.index(
   { adminId: 1, email: 1 },
   { unique: true, partialFilterExpression: { email: { $exists: true, $gt: '' } } }
+);
+authorizedUsersSchema.index(
+  { adminId: 1, emp_id: 1 },
+  { unique: true, partialFilterExpression: { emp_id: { $exists: true, $gt: '' } } }
 );
 authorizedUsersSchema.index({ adminId: 1, status: 1 });
 // Vehicle-number tagging resolves the owner of every detected plate on each

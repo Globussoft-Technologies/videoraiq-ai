@@ -420,7 +420,7 @@ class AuthUsersService {
     async createAuthUser(req, res, _next) {
       try {
         const data = req?.verified?.userData;
-        const { firstName, lastName, email ,departmentId,designation,branch,shiftId,numberPlate,vehicleNumber,location} = req.body;
+        const { firstName, lastName, email ,emp_id,departmentId,designation,branch,shiftId,numberPlate,vehicleNumber,location} = req.body;
         // Self-registration via an invite link. multipart/form-data delivers
         // every field as a string, so "true" is what actually arrives.
         const userRegistrByLink = String(req.body.userRegistrByLink) === "true";
@@ -477,7 +477,7 @@ class AuthUsersService {
         }
     
         // Check required fields
-        if (!firstName || !lastName || !email ) {
+        if (!firstName || !lastName ) {
           return res.status(400).json(Response.userFailResp("Missing required fields or profilePics is empty"));
         }
 
@@ -509,19 +509,32 @@ class AuthUsersService {
           );
         }
     
-        // Check if any user exists with same firstName, lastName, or email
-        const duplicateUser = await authorizedUsersModel.findOne({
-          $and: [
-            { email },
-            { adminId:data?.adminId },
-          ],
-        });
-        
-        
-        if (duplicateUser) {
+        // emp_id must be unique per admin (only checked when provided)
+        if (emp_id) {
+          const duplicateEmpId = await authorizedUsersModel.findOne({
+            emp_id,
+            adminId: data?.adminId,
+          });
+
+          if (duplicateEmpId) {
             return res.status(409).json(Response.userFailResp(
-            "Authorized user with email already exists"
+              "Authorized user with this Employee ID already exists"
             ));
+          }
+        }
+
+        // Check if any user exists with same email (only when email is provided)
+        if (email) {
+          const duplicateUser = await authorizedUsersModel.findOne({
+            email,
+            adminId: data?.adminId,
+          });
+
+          if (duplicateUser) {
+            return res.status(409).json(Response.userFailResp(
+              "Authorized user with email already exists"
+            ));
+          }
         }
         // Create the authorized user
         const cleanedFirstName = firstName?.trim();
@@ -548,6 +561,7 @@ class AuthUsersService {
           userName: `${cleanedFirstName} ${cleanedLastName}`,
           // roleIds: foundRoleIds,
           departmentId: department,
+          emp_id: emp_id || null,
           email,
           profilePics : uploadedFiles,
           designation,
@@ -715,6 +729,7 @@ async updateAuthUser(req, res, _next) {
       firstName,
       lastName,
       email,
+      emp_id,
       departmentId,
       designation,
       branch,
@@ -776,19 +791,38 @@ async updateAuthUser(req, res, _next) {
         .json(Response.userFailResp("Authorized user not found"));
     }
 
-    // 🔹 Check duplicate email
-    const duplicateUser = await authorizedUsersModel.findOne({
-      adminId: data?.adminId,
-      _id: { $ne: userId },
-      email,
-    });
+    // 🔹 Check duplicate email (only when an email is provided)
+    if (email) {
+      const duplicateUser = await authorizedUsersModel.findOne({
+        adminId: data?.adminId,
+        _id: { $ne: userId },
+        email,
+      });
 
-    if (duplicateUser) {
-      return res.status(409).json(
-        Response.userFailResp(
-          "Another authorized user with email already exists"
-        )
-      );
+      if (duplicateUser) {
+        return res.status(409).json(
+          Response.userFailResp(
+            "Another authorized user with email already exists"
+          )
+        );
+      }
+    }
+
+    // 🔹 Check duplicate Employee ID (only when provided)
+    if (emp_id) {
+      const duplicateEmpId = await authorizedUsersModel.findOne({
+        adminId: data?.adminId,
+        _id: { $ne: userId },
+        emp_id,
+      });
+
+      if (duplicateEmpId) {
+        return res.status(409).json(
+          Response.userFailResp(
+            "Another authorized user with this Employee ID already exists"
+          )
+        );
+      }
     }
 
     // =====================================================
@@ -860,6 +894,7 @@ async updateAuthUser(req, res, _next) {
         firstName,
         lastName,
         email,
+        emp_id: emp_id || null,
         profilePics: newProfilePics,
         adminId: isAdminExist?._id,
         departmentId,

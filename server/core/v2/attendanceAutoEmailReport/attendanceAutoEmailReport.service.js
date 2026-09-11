@@ -516,7 +516,7 @@ export function shiftTimingsFor(shift) {
 // A column with no function for a kind renders blank there automatically — no
 // hand-placed "" padding, and adding/reordering a column can't misalign rows.
 const REPORT_COLUMNS = [
-  { header: "I'd", day: (ctx) => String(ctx.index + 1) },
+  { header: "S No", day: (ctx) => String(ctx.index + 1) },
   { header: "Employee I'd", day: (ctx) => ctx.row.employeeId },
   {
     header: "Employee Name",
@@ -683,7 +683,7 @@ export async function buildPdf({ report, rows, label, timezone, columns: columnS
     //   - time columns fit "09:45:40 AM"
     //   - Date fits "01 Jun 2026"
     const columns = columnSpec || [
-      { head: "I'd", width: 24 },
+      { head: "S No", width: 24 },
       { head: "Employee I'd", width: 58 },
       { head: "Employee Name", width: 82, wrap: true },
       { head: "Department", width: 78, wrap: true },
