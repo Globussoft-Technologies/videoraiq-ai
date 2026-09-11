@@ -213,6 +213,13 @@ export const registerAndFetchCameras = async (data) => {
   });
 };
 
+export const createDirectNvr = async (data) => {
+  const token = getAccessToken();
+  return axios.post(`${Api_url}/nvr/direct`, data, {
+    headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+  });
+};
+
 export const addSelectedCameras = async (data) => {
   const token = getAccessToken();
   return axios.post(`${Api_url}/nvr/add-cameras`, data, {
@@ -223,6 +230,13 @@ export const addSelectedCameras = async (data) => {
 export const updateNvrById = async (id, data) => {
   const token = getAccessToken();
   return axios.patch(`${Api_url}/nvr/${id}`, data, {
+    headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+  });
+};
+
+export const updateDirectNvr = async (id, data) => {
+  const token = getAccessToken();
+  return axios.patch(`${Api_url}/nvr/direct/${id}`, data, {
     headers: { 'Content-Type': 'application/json', 'x-access-token': token },
   });
 };

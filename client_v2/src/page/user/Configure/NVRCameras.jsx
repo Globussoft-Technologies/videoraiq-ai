@@ -10,8 +10,10 @@ import {
   getNvrs,
   getCamerasByNvr,
   registerAndFetchCameras,
+  createDirectNvr,
   addSelectedCameras,
   updateNvrById,
+  updateDirectNvr,
   deleteNvrById,
   getNvrCamerasForEdit,
 } from '../../../helpers/configure';
@@ -22,6 +24,7 @@ import useHlsPlayer from '../../../hooks/useHlsPlayer';
 import { streamUrl } from '../../../lib/stream';
 import HScrollHint from '../../../components/HScrollHint';
 import { usePermissions } from '@/context/PermissionContext';
+import * as XLSX from 'xlsx';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 // Track a narrow (phone) viewport so inline-styled layouts can adapt.
@@ -385,7 +388,7 @@ function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
   const isMobile = useIsMobile();
   const recorderName = nvr.name || nvr.nvrName || nvr.displayName || nvr.deviceName || 'Unknown Recorder';
   const rawAddress = nvr.ip || nvr.ipAddress || nvr.domain || '';
-  const address = decrypt(rawAddress);
+  const address = nvr.connectionMode === 'direct' ? 'Direct RTSP' : decrypt(rawAddress);
   const brand = formatBrand(nvr.brand);
   const location = nvr.location || nvr.locationName || nvr.site || '';
   const connectivity = nvr.isOnline ?? nvr.online ?? nvr.connected ?? nvr.isActive;
@@ -717,10 +720,10 @@ function CameraPreviewModal({ cam, onClose }) {
 
   return (
     <div
-      onClick={onClose}
+      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
       style={{
         position: 'fixed', inset: 0, zIndex: 300,
-        background: 'rgba(4,6,12,.85)', backdropFilter: 'blur(6px)',
+        background: 'rgba(4,6,12,.32)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? 12 : 24,
       }}
     >
@@ -876,7 +879,7 @@ export function ManageCamerasModal({ nvr, onClose, onSaved, zIndex = 200 }) {
 
   return (
     <div
-      onClick={onClose}
+      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
       style={{
         position: 'fixed', inset: 0, zIndex,
         background: 'rgba(6,8,13,.62)', backdropFilter: 'blur(4px)',
@@ -1030,6 +1033,7 @@ function friendlyErrorMessage(body, fallback) {
 function AddNvrModal({ onClose, onSaved, editingNvr }) {
   const isEdit = !!editingNvr;
   const isLocalEdit = IS_LOCAL_SETUP && isEdit;
+  const [directMode, setDirectMode] = useState(editingNvr?.connectionMode === 'direct');
   const isMobile = useIsMobile();
 
   const [step, setStep] = useState(1);
@@ -1061,14 +1065,43 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   const locationDropdownRef = useRef(null);
   const locationInputRef = useRef(null);
   const [brandOpen, setBrandOpen] = useState(false);
+  const importInputRef = useRef(null);
   const brandDropdownRef = useRef(null);
   // Per-field validation, shown under each input rather than a single toast
   // that names only one problem at a time and doesn't say which field it means.
   const [errors, setErrors] = useState({});
+  const [directCameras, setDirectCameras] = useState(
+    editingNvr?.connectionMode === 'direct' ? [] : [{ name: 'Camera 1', rtspUrl: '' }],
+  );
 
   useEffect(() => {
     getLocations(0, 100).then(data => setLocations(Array.isArray(data) ? data : [])).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!isEdit || isLocalEdit) return;
+    let active = true;
+    setConnecting(true);
+    getNvrCamerasForEdit(editingNvr._id)
+      .then((body) => {
+        if (!active || body?.status !== 'success') return;
+        const available = body.data?.availableCameras || [];
+        if (editingNvr.connectionMode === 'direct') {
+          setDirectCameras(available.map((camera) => ({
+            dbId: camera.dbId,
+            name: camera.name,
+            rtspUrl: '',
+            hasRtspUrl: camera.hasRtspUrl,
+          })));
+        } else {
+          applyFetchedCameras(available);
+          setStep(2);
+        }
+      })
+      .catch(() => toast.error('Failed to load cameras for this NVR.'))
+      .finally(() => active && setConnecting(false));
+    return () => { active = false; };
+  }, [editingNvr, isEdit]);
 
   useEffect(() => {
     if (!locationOpen) return undefined;
@@ -1133,6 +1166,52 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
     setErrors(prev => (prev[k] ? { ...prev, [k]: undefined } : prev));
   };
 
+  async function importDirectCameras(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' });
+      const imported = rows.map((row, index) => {
+        const name = String(row.name || row.Name || row.camera || row.Camera || `Camera ${index + 1}`).trim();
+        const rtspUrl = String(row.rtspUrl || row.rtspURL || row.url || row.URL || '').trim();
+        return { name, rtspUrl };
+      }).filter((camera) => /^rtsps?:\/\//i.test(camera.rtspUrl));
+      if (!imported.length) {
+        toast.error('No valid RTSP URLs found. Use columns: name, rtspUrl');
+        return;
+      }
+      setDirectCameras((current) => [
+        ...current.filter((camera) => camera.dbId || camera.rtspUrl.trim()),
+        ...imported,
+      ]);
+      setErrors((current) => ({ ...current, cameras: undefined }));
+      toast.success(`${imported.length} RTSP URL${imported.length === 1 ? '' : 's'} imported`);
+    } catch {
+      toast.error('Could not read the CSV/XLSX file.');
+    }
+  }
+
+  function downloadDirectSample(type) {
+    const rows = [
+      { name: 'Camera 1', rtspUrl: 'rtsp://username:password@192.168.1.10:554/stream1' },
+      { name: 'Camera 2', rtspUrl: 'rtsp://username:password@192.168.1.11:554/stream1' },
+    ];
+    if (type === 'csv') {
+      const csv = XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(rows));
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+      link.download = 'rtsp-urls-sample.csv';
+      link.click();
+      URL.revokeObjectURL(link.href);
+      return;
+    }
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'RTSP URLs');
+    XLSX.writeFile(workbook, 'rtsp-urls-sample.xlsx');
+  }
+
   const applyFetchedCameras = (available) => {
     // registerAndFetchCameras (brand-new NVR) returns raw saved Camera docs
     // (dbId lives at `_id`); editNvrCameras (existing NVR) already normalizes
@@ -1175,6 +1254,61 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   }
 
   async function handleConnect() {
+    if (directMode) {
+      const found = {};
+      if (!form.brand.trim()) found.brand = 'NVR brand is required.';
+      if (!form.name.trim()) found.name = 'NVR name is required.';
+      if (!form.location.trim()) found.location = 'Select or create a location.';
+      const invalidCamera = directCameras.some((camera) => (
+        !camera.name.trim()
+        || (!camera.dbId && !camera.rtspUrl.trim())
+        || (camera.rtspUrl && !/^rtsps?:\/\//i.test(camera.rtspUrl.trim()))
+      ));
+      if (!directCameras.length || invalidCamera) {
+        found.cameras = 'Enter a name and valid RTSP URL for every new camera.';
+      }
+      setErrors(found);
+      if (Object.keys(found).length) return;
+
+      setConnecting(true);
+      try {
+        const payload = {
+          nvrName: form.name.trim(),
+          location: form.location.trim(),
+          brand: form.brand,
+          cameras: directCameras.map((camera) => ({
+            ...(camera.dbId && { _id: String(camera.dbId) }),
+            name: camera.name.trim(),
+            rtspUrl: camera.rtspUrl.trim(),
+          })),
+        };
+        const resp = isEdit
+          ? await updateDirectNvr(editingNvr._id, payload)
+          : await createDirectNvr(payload);
+        const body = resp?.data?.body;
+        if (body?.status !== 'success') {
+          toast.error(friendlyErrorMessage(body, 'Failed to save direct RTSP cameras.'));
+          return;
+        }
+        const nvrId = editingNvr?._id || body.data?.nvr?._id;
+        const camerasBody = await getNvrCamerasForEdit(nvrId);
+        if (camerasBody?.status !== 'success') {
+          toast.error(friendlyErrorMessage(camerasBody, 'Failed to load cameras for selection.'));
+          return;
+        }
+        setSavedNvrId(nvrId);
+        applyFetchedCameras(camerasBody.data?.availableCameras || []);
+        setDirectMode(false);
+        setStep(2);
+        toast.success(body?.message || 'Direct RTSP cameras saved');
+      } catch (e) {
+        toast.error(friendlyErrorMessage(e?.response?.data?.body, 'Failed to save direct RTSP cameras.'));
+      } finally {
+        setConnecting(false);
+      }
+      return;
+    }
+
     if (isLocalEdit) {
       const found = {};
       if (!form.name.trim()) found.name = 'NVR name is required.';
@@ -1306,21 +1440,28 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
     setSaving(true);
     try {
       const toAdd = fetchedCameras.filter(c => selectedCameras.has(c.channelId) && !initialAdded.has(c.channelId));
+      const toRemove = fetchedCameras.filter(c => !selectedCameras.has(c.channelId) && initialAdded.has(c.channelId));
 
-      if (toAdd.length === 0) {
-        toast.info('No new cameras selected');
+      if (toAdd.length === 0 && toRemove.length === 0) {
+        toast.info('No changes made');
         onSaved?.();
         onClose();
         return;
       }
 
-      const resp = await addSelectedCameras({ nvrId: savedNvrId, cameraIds: toAdd.map(c => c.channelId) });
+      const resp = await addSelectedCameras({
+        nvrId: savedNvrId,
+        cameraIds: selectedCameras.size > 0 ? Array.from(selectedCameras) : ['__none__'],
+      });
       const body = resp?.data?.body;
       if (body?.status !== 'success') {
         toast.error(friendlyErrorMessage(body, 'Failed to add cameras. Please try again.'));
         return;
       }
-      toast.success(`${toAdd.length} camera${toAdd.length > 1 ? 's' : ''} added`);
+      const parts = [];
+      if (toAdd.length) parts.push(`${toAdd.length} camera${toAdd.length > 1 ? 's' : ''} added`);
+      if (toRemove.length) parts.push(`${toRemove.length} camera${toRemove.length > 1 ? 's' : ''} removed`);
+      toast.success(parts.join(', '));
       onSaved?.();
       onClose();
     } catch (e) {
@@ -1332,7 +1473,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
 
   return (
     <div
-      onClick={onClose}
+      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
       style={{
         position: 'fixed', inset: 0, zIndex: 200,
         background: 'rgba(6,8,13,.62)', backdropFilter: 'blur(4px)',
@@ -1363,10 +1504,10 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: 'var(--disp)', fontWeight: 600, fontSize: 16 }}>
-              {isEdit ? 'Edit Network Recorder' : 'Add Network Recorder'}
+              {directMode ? (isEdit ? 'Edit Direct RTSP' : 'Add Direct RTSP') : (isEdit ? 'Edit Network Recorder' : 'Add Network Recorder')}
             </div>
             <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 1 }}>
-              {isLocalEdit ? 'Update NVR name and location' : isEdit ? 'Update NVR credentials and manage cameras' : 'Connect an NVR and onboard its cameras'}
+              {directMode ? 'Add streams without contacting the physical NVR' : isLocalEdit ? 'Update NVR name and location' : isEdit ? 'Update NVR credentials and manage cameras' : 'Connect an NVR and onboard its cameras'}
             </div>
           </div>
           <button onClick={onClose} style={{
@@ -1378,7 +1519,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
         </div>
 
         {/* Step indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 20px 6px', flexShrink: 0 }}>
+        {!directMode && <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 20px 6px', flexShrink: 0 }}>
           <div style={{
             width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 11, fontWeight: 600,
@@ -1396,12 +1537,39 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
             border: `1px solid ${step >= 2 ? 'var(--blue)' : 'var(--bd)'}`,
           }}>2</div>
           <span style={{ fontSize: 12, fontWeight: 600, color: step >= 2 ? 'var(--tx)' : 'var(--tx2)' }}>Select Cameras</span>
-        </div>
+        </div>}
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           {step === 1 && (
             <div style={{ padding: isMobile ? '14px 16px 18px' : '14px 20px 20px', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '13px 14px' }}>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '11px 12px', borderRadius: 10, border: '1px solid var(--bd)', background: 'var(--bg2)' }}>
+                <div>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)' }}>Direct RTSP URLs</div>
+                  <div style={{ marginTop: 2, fontSize: 11, color: 'var(--tx3)' }}>Skip NVR discovery and register streams manually</div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={directMode}
+                  aria-label="Use direct RTSP URLs"
+                  disabled={isEdit}
+                  onClick={() => {
+                    setDirectMode((enabled) => !enabled);
+                    setErrors({});
+                  }}
+                  style={{
+                    width: 38, height: 22, padding: 2, border: 0, borderRadius: 999,
+                    background: directMode ? 'var(--blue)' : 'var(--bd2)',
+                    cursor: isEdit ? 'not-allowed' : 'pointer', opacity: isEdit ? 0.65 : 1,
+                  }}
+                >
+                  <span style={{
+                    display: 'block', width: 18, height: 18, borderRadius: '50%', background: '#fff',
+                    transform: directMode ? 'translateX(16px)' : 'translateX(0)', transition: 'transform .15s ease',
+                  }} />
+                </button>
+              </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <FieldLabel required>NVR Brand</FieldLabel>
                 <div ref={brandDropdownRef} style={{ position: 'relative' }}>
@@ -1588,6 +1756,55 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                 </div>
                 <FieldError>{errors.location}</FieldError>
               </div>
+              {directMode && (
+                <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 9 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                    <FieldLabel required>Camera RTSP URLs</FieldLabel>
+                    <div style={{ display: 'flex', gap: 7 }}>
+                      <button type="button" onClick={() => importInputRef.current?.click()} style={{ padding: '6px 9px', borderRadius: 7, border: '1px solid var(--blue)', background: 'transparent', color: 'var(--blue)', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+                        Import CSV/XLSX
+                      </button>
+                      <button type="button" onClick={() => downloadDirectSample('csv')} title="Download sample CSV" style={{ padding: '6px 8px', borderRadius: 7, border: '1px solid var(--bd)', background: 'transparent', color: 'var(--tx2)', fontSize: 11.5, cursor: 'pointer' }}>Sample CSV</button>
+                      <button type="button" onClick={() => downloadDirectSample('xlsx')} title="Download sample XLSX" style={{ padding: '6px 8px', borderRadius: 7, border: '1px solid var(--bd)', background: 'transparent', color: 'var(--tx2)', fontSize: 11.5, cursor: 'pointer' }}>Sample XLSX</button>
+                      <button type="button" onClick={() => { setDirectCameras([]); setErrors((current) => ({ ...current, cameras: undefined })); }} title="Clear all RTSP URLs" style={{ padding: '6px 8px', borderRadius: 7, border: '1px solid rgba(239,68,68,.35)', background: 'transparent', color: 'var(--crit)', fontSize: 11.5, cursor: 'pointer' }}>Clear all</button>
+                      <input ref={importInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={importDirectCameras} style={{ display: 'none' }} />
+                      <button type="button" onClick={() => setDirectCameras((cameras) => [...cameras, { name: `Camera ${cameras.length + 1}`, rtspUrl: '' }])} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 9px', borderRadius: 7, border: '1px solid var(--blue)', background: 'transparent', color: 'var(--blue)', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+                        <Plus size={12} /> Add more
+                      </button>
+                    </div>
+                  </div>
+                  {directCameras.map((camera, index) => (
+                    <div key={camera.dbId || index} style={{ padding: 10, borderRadius: 9, border: '1px solid var(--bd)', background: 'var(--bg2)', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '160px 1fr auto', gap: 8, alignItems: 'center' }}>
+                      <input
+                        value={camera.name}
+                        onChange={(e) => setDirectCameras((cameras) => cameras.map((item, i) => i === index ? { ...item, name: e.target.value } : item))}
+                        placeholder={`Camera ${index + 1}`}
+                        aria-label={`Camera ${index + 1} name`}
+                        style={{ width: '100%', height: 36, padding: '0 10px', boxSizing: 'border-box', borderRadius: 8, background: 'var(--bg1)', border: '1px solid var(--bd)', color: 'var(--tx)', fontSize: 12, outline: 'none' }}
+                      />
+                      <input
+                        value={camera.rtspUrl}
+                        onChange={(e) => setDirectCameras((cameras) => cameras.map((item, i) => i === index ? { ...item, rtspUrl: e.target.value } : item))}
+                        placeholder={camera.hasRtspUrl ? 'Leave blank to keep current URL' : 'rtsp://username:password@host:554/path'}
+                        aria-label={`Camera ${index + 1} RTSP URL`}
+                        style={{ width: '100%', height: 36, padding: '0 10px', boxSizing: 'border-box', borderRadius: 8, background: 'var(--bg1)', border: '1px solid var(--bd)', color: 'var(--tx)', fontFamily: 'var(--mono)', fontSize: 11.5, outline: 'none' }}
+                      />
+                      {directCameras.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setDirectCameras((cameras) => cameras.filter((_, i) => i !== index))}
+                          aria-label={`Remove camera ${index + 1}`}
+                          style={{ width: 34, height: 34, display: 'grid', placeItems: 'center', borderRadius: 7, border: '1px solid rgba(239,68,68,.35)', background: 'rgba(239,68,68,.08)', color: 'var(--crit)', cursor: 'pointer' }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <FieldError>{errors.cameras}</FieldError>
+                </div>
+              )}
+              {!directMode && <>
                   <div style={{ gridColumn: '1 / -1' }}>
                     <ModalInput label="Public IP Address" required value={form.ip} onChange={set('ip')} placeholder="e.g. 203.0.113.24 (no http:// or port)" mono invalid={!!errors.ip} error={errors.ip} readOnly={isLocalEdit} />
                   </div>
@@ -1595,9 +1812,10 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                   {isEdit ? <div /> : <ModalInput label="Password" type="password" value={form.pass} onChange={set('pass')} placeholder="password" autoComplete="new-password" />}
                   <ModalInput label="RTSP Port" required value={form.rtsp} onChange={set('rtsp')} placeholder="554" mono invalid={!!errors.rtsp} error={errors.rtsp} readOnly={isLocalEdit} />
                   <ModalInput label="HTTP Port" required value={form.http} onChange={set('http')} placeholder="80" mono invalid={!!errors.http} error={errors.http} readOnly={isLocalEdit} />
+              </>}
             </div>
           )}
-          {step === 2 && (
+          {!directMode && step === 2 && (
             <div style={{ padding: '14px 20px 20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tx)' }}>Discovered Cameras</span>
@@ -1668,7 +1886,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                 }}
               >
                 {connecting && <Loader2 size={13} className="animate-spin" />}
-                {connecting ? 'Saving...' : isLocalEdit ? 'Save Changes' : 'Discover Cameras'}
+                {connecting ? 'Saving...' : directMode ? 'Save Direct RTSP' : isLocalEdit ? 'Save Changes' : 'Discover Cameras'}
               </button>
             ) : (
               <button
