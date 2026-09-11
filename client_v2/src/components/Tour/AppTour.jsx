@@ -31,11 +31,14 @@ export default function AppTour() {
       if (!run) return;
       const { action, index, type } = data;
 
-      // If an anchor vanishes mid-module, advance to the next step if available,
-      // but never call finish() on missing targets to prevent runaway auto-skipping.
+      // If an anchor vanishes mid-module, advance to the next step. A missing
+      // final anchor must finish the module too; controlled mode otherwise
+      // remains paused forever at that boundary.
       if (type === EVENTS.TARGET_NOT_FOUND) {
         if (index + 1 < steps.length) {
           goToStep(index + 1);
+        } else {
+          finish();
         }
         return;
       }
@@ -65,6 +68,7 @@ export default function AppTour() {
       stepIndex={stepIndex}
       run={run}
       continuous
+      scrollToFirstStep
       tooltipComponent={TourTooltip}
       onEvent={handleEvent}
       floatingOptions={{

@@ -133,7 +133,10 @@ const VehicleCheckInOutLogs = () => {
   const [exporting, setExporting] = useState(null);
 
   const { permissions, loading: permissionsLoading } = usePermissions();
-  const canView = permissions?.logs?.carLogs?.view ?? permissions?.logs?.view ?? true;
+  const canView = permissions?.logs?.vehicleCheckInOutLogs?.view
+    ?? permissions?.logs?.carLogs?.view
+    ?? permissions?.logs?.view
+    ?? true;
 
   useEffect(() => {
     const timer = setTimeout(() => {

@@ -72,7 +72,7 @@ const stevinrockLogItems = [
   { key: 'vehicle-obstruction', label: 'Vehicle Obstruction Logs', path: 'logs/vehicle-obstruction', icon: OctagonAlert, permissionKey: 'logs', permissionSubKey: 'vehicleObstructionLogs', logsConfigKey: 'vehicleObstructionLogs' },
   { key: 'vehicle-count', label: 'Vehicle Count Logs', path: 'logs/vehicle-count', icon: CarFront, permissionKey: 'logs', permissionSubKey: 'vehicleCountLogs', logsConfigKey: 'vehicleCountLogs' },
   { key: 'car', label: 'Car Logs', path: 'logs/car', icon: Car, permissionKey: 'logs', permissionSubKey: 'carLogs', logsConfigKey: 'carLogs' },
-  { key: 'vehicle-check-in-out', label: 'Vehicle Check-In/Out Logs', path: 'logs/vehicle-check-in-out', icon: ArrowLeftRight, permissionKey: 'logs', permissionSubKey: 'carLogs' },
+  { key: 'vehicle-check-in-out', label: 'Vehicle Check-In/Out Logs', path: 'logs/vehicle-check-in-out', icon: ArrowLeftRight, permissionKey: 'logs', permissionSubKey: 'vehicleCheckInOutLogs', logsConfigKey: 'vehicleCheckInOutLogs' },
   { key: 'crusher', label: 'Crusher Logs', path: 'logs/crusher', icon: Hammer, permissionKey: 'logs', permissionSubKey: 'crusherLogs', logsConfigKey: 'crusherLogs' },
   { key: 'line-crossing', label: 'Line Crossing Logs', path: 'logs/line-crossing', icon: GitBranch, permissionKey: 'logs', permissionSubKey: 'lineCrossingLogs', logsConfigKey: 'lineCrossingLogs' },
   { key: 'water-spill', label: 'Water Spill Logs', path: 'logs/water-spill', icon: Droplets, permissionKey: 'logs', permissionSubKey: 'waterSpillLogs', logsConfigKey: 'waterSpillLogs' },
@@ -116,9 +116,7 @@ export const NAV_GROUPS = [
   {
     label: 'DIMENSIONAL QC',
     items: [
-      // Mattress Measurement Logs. Ungated for now (dummy data) until a
-      // `measurementLogs` permission / logs-configuration flag exists.
-      { key: 'measurement', label: 'Measurement Logs', path: 'logs/measurement', icon: Move3d },
+      { key: 'measurement', label: 'Measurement Logs', path: 'logs/measurement', icon: Move3d, permissionKey: 'logs', permissionSubKey: 'measurementLogs', logsConfigKey: 'measurementLogs' },
     ],
   },
   {
@@ -146,10 +144,7 @@ export const NAV_GROUPS = [
       // { key: 'track', label: 'Track Logs', path: 'logs/track', icon: Activity, permissionKey: 'logs', permissionSubKey: 'trackLogs' , logsConfigKey: 'trackLogs' },
       // { key: 'visibility', label: 'Visibility Logs', path: 'logs/visibility', icon: Eye, permissionKey: 'logs', permissionSubKey: 'visibilityLogs' , logsConfigKey: 'visibilityLogs' },
       // { key: 'guard', label: 'Guard Logs', path: 'logs/guard', icon: Shield, permissionKey: 'logs', permissionSubKey: 'guardLogs' , logsConfigKey: 'guardLogs' },
-      // Sleep Activity Logs — permission-gated (logs.sleepActivityLogs). The
-      // route in routes.jsx stays live so a direct URL still reaches the page.
-      // A logsConfigKey can be added once GET /logs-configuration exposes one.
-      { key: 'sleep-activity', label: 'Sleep Activity Logs', path: 'logs/sleep-activity', icon: Moon, permissionKey: 'logs', permissionSubKey: 'sleepActivityLogs' },
+      { key: 'sleep-activity', label: 'Sleep Activity Logs', path: 'logs/sleep-activity', icon: Moon, permissionKey: 'logs', permissionSubKey: 'sleepActivityLogs', logsConfigKey: 'sleepActivityLogs' },
       // Mining incident logs — shown for every client.
       ...stevinrockLogItems,
     ],

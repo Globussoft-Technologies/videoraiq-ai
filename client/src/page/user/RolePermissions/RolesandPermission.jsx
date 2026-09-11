@@ -41,7 +41,11 @@ const initialRoles = [
   { id: 'r3', name: 'Manager', permissions: { view: true, create: true, edit: true, delete: true } },
 ];
 
-const LOG_SUB_KEYS = ['accessLogs', 'attendanceLogs', 'trackLogs', 'deskLogs', 'guardLogs', 'ANPRLogs'];
+const LOG_SUB_KEYS = [
+  'accessLogs', 'attendanceLogs', 'trackLogs', 'deskLogs', 'guardLogs', 'ANPRLogs',
+  'sleepActivityLogs', 'measurementLogs',
+  'vehicleCheckInOutLogs',
+];
 const EMPTY_ACTIONS = { view: false, create: false, edit: false, delete: false };
 
 // Ensure logs permissions are in nested {global, accessLogs, ...} shape.

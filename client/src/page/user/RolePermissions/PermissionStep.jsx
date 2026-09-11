@@ -31,12 +31,17 @@ const STEVINROCK_LOG_LABELS = {
 
 const LOG_SUB_KEYS = [
   'accessLogs', 'attendanceLogs', 'ANPRLogs', 'trackLogs', 'deskLogs', 'guardLogs',
+  'sleepActivityLogs', 'measurementLogs',
+  'vehicleCheckInOutLogs',
   ...(isStevinrockClient ? STEVINROCK_LOG_KEYS : []),
 ];
 const LOG_SUB_LABELS = {
   accessLogs: 'Access Logs',
   attendanceLogs: 'Attendance Logs',
   ANPRLogs: 'ANPR Logs',
+  sleepActivityLogs: 'Sleep Activity Logs',
+  measurementLogs: 'Measurement Logs',
+  vehicleCheckInOutLogs: 'Vehicle Check-In/Out Logs',
   // trackLogs: 'Track Logs',
   // deskLogs: 'Desk Logs',
   // guardLogs: 'Guard Logs',

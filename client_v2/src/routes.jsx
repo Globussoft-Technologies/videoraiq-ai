@@ -105,8 +105,8 @@ export const v2Routes = (
     <Route path="logs/visibility" element={guard('logs', 'visibilityLogs', <VisibilityLog />)} />
     <Route path="logs/guard" element={guard('logs', 'guardLogs', <GuardLog />)} />
     <Route path="logs/sleep-activity" element={guard('logs', 'sleepActivityLogs', <SleepActivityLogs />)} />
-    {/* Dimensional QC — Mattress Measurement Logs (dummy data, ungated for now). */}
-    <Route path="logs/measurement" element={<MeasurementLogs />} />
+    {/* Dimensional QC — Mattress Measurement Logs. */}
+    <Route path="logs/measurement" element={guard('logs', 'measurementLogs', <MeasurementLogs />)} />
 
     {/* Stevinrock incident logs — each is a thin component wrapping the shared
         IncidentLogsPage with its config; Vehicle Count is a chart page. */}
@@ -114,7 +114,7 @@ export const v2Routes = (
     <Route path="logs/vehicle-obstruction" element={guard('logs', 'vehicleObstructionLogs', <VehicleObstructionLogs />)} />
     <Route path="logs/vehicle-count" element={guard('logs', 'vehicleCountLogs', <VehicleCountLogs />)} />
     <Route path="logs/car" element={guard('logs', 'carLogs', <CarLogs />)} />
-    <Route path="logs/vehicle-check-in-out" element={guard('logs', 'carLogs', <VehicleCheckInOutLogs />)} />
+    <Route path="logs/vehicle-check-in-out" element={guard('logs', 'vehicleCheckInOutLogs', <VehicleCheckInOutLogs />)} />
     <Route path="logs/crusher" element={guard('logs', 'crusherLogs', <CrusherLogs />)} />
     <Route path="logs/line-crossing" element={guard('logs', 'lineCrossingLogs', <LineCrossingLogs />)} />
     <Route path="logs/water-spill" element={guard('logs', 'waterSpillLogs', <WaterSpillLogs />)} />

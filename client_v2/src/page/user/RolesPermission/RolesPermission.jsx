@@ -33,9 +33,10 @@ const LOG_SUBMODULES = [
   'personCountLogs', 'deskLogs', 'ANPRLogs',
   // 'productivityLogs',
   'trackLogs',
-  'visibilityLogs', 'guardLogs', 'conveyorLogs', 'vehicleObstructionLogs',
+  'visibilityLogs', 'guardLogs', 'sleepActivityLogs', 'measurementLogs',
+  'conveyorLogs', 'vehicleObstructionLogs',
   'vehicleCountLogs', 'crusherLogs', 'lineCrossingLogs', 'waterSpillLogs',
-  'unauthorizedAccessLogs', 'carLogs',
+  'unauthorizedAccessLogs', 'carLogs', 'vehicleCheckInOutLogs',
 ];
 
 const MODULE_LABELS = {
@@ -51,11 +52,13 @@ const MODULE_LABELS = {
   // productivityLogs: 'Productivity Logs',
   trackLogs: 'Track Logs',
   visibilityLogs: 'Visibility Logs', guardLogs: 'Guard Logs', ANPRLogs: 'ANPR Logs',
+  sleepActivityLogs: 'Sleep Activity Logs', measurementLogs: 'Measurement Logs',
   conveyorLogs: 'Conveyor Logs', vehicleObstructionLogs: 'Vehicle Obstruction Logs',
   vehicleCountLogs: 'Vehicle Count Logs', crusherLogs: 'Crusher Logs',
   lineCrossingLogs: 'Line Crossing Logs', waterSpillLogs: 'Water Spill Logs',
   unauthorizedAccessLogs: 'Unauthorized Access Logs', autoEmailReports: 'Auto Email Reports',
   carLogs: 'Car Logs',
+  vehicleCheckInOutLogs: 'Vehicle Check-In/Out Logs',
 };
 
 const LEGACY_MODULES_BY_ROLE = {

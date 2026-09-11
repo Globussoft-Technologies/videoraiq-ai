@@ -10,6 +10,7 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 import { usePermissions } from '@/context/PermissionContext';
 import { useLogsConfig } from '@/context/LogsConfigContext';
+import { useAuth } from '@/context/AuthContext';
 import { visibleNavItems } from '@/lib/navVisibility';
 import { SHELL_TOUR, resolveSteps, tourForItem } from '@/lib/tour/steps';
 import { fetchOnboarding, updateOnboarding, fetchTourModules } from '@/helpers/onboarding';
@@ -37,6 +38,44 @@ const ANCHOR_POLL_MS = 80;
 // same pass are present before the step list is resolved against the DOM.
 const ANCHOR_SETTLE_MS = 250;
 
+const CHECKPOINT_PREFIX = 'vq-tour-progress';
+
+function readCheckpoint(key) {
+  if (!key) return null;
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(key) || 'null');
+    if (
+      typeof saved?.moduleKey !== 'string' ||
+      !Number.isInteger(saved?.stepIndex) ||
+      saved.stepIndex < 0 ||
+      (saved.stepTarget !== undefined && typeof saved.stepTarget !== 'string')
+    ) {
+      return null;
+    }
+    return saved;
+  } catch {
+    return null;
+  }
+}
+
+function writeCheckpoint(key, value) {
+  if (!key) return;
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Storage can be unavailable in restricted/private browser contexts.
+  }
+}
+
+function clearCheckpoint(key) {
+  if (!key) return;
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    // Storage can be unavailable in restricted/private browser contexts.
+  }
+}
+
 /** Resolves once `selector` is in the DOM, or false on timeout. */
 function waitForAnchor(selector, signal) {
   return new Promise((resolve) => {
@@ -54,8 +93,17 @@ function waitForAnchor(selector, signal) {
 export function TourProvider({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const { permissions } = usePermissions();
   const { logs: logsConfig } = useLogsConfig();
+
+  const checkpointKey = useMemo(() => {
+    const memberId = user?.memberId;
+    const adminId = user?.adminId || user?._id;
+    const identity = memberId || adminId;
+    if (!identity) return null;
+    return `${CHECKPOINT_PREFIX}:${memberId ? 'member' : 'admin'}:${identity}`;
+  }, [user?.memberId, user?.adminId, user?._id]);
 
   // null while unknown — the auto-start effect must not fire on a guess.
   const [onboarded, setOnboarded] = useState(null);
@@ -96,7 +144,11 @@ export function TourProvider({ children }) {
     let alive = true;
     fetchOnboarding()
       .then((data) => {
-        if (alive) setOnboarded(data?.onboarded === true);
+        if (alive) {
+          const completed = data?.onboarded === true;
+          setOnboarded(completed);
+          if (completed) clearCheckpoint(checkpointKey);
+        }
       })
       .catch(() => {
         // Fail closed: if we can't tell, assume onboarded so a backend blip
@@ -106,17 +158,18 @@ export function TourProvider({ children }) {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [checkpointKey]);
 
   const persistOnboarded = useCallback(() => {
     setOnboarded(true);
+    clearCheckpoint(checkpointKey);
     updateOnboarding(true).catch((err) => {
       // Local state still flips, so the user isn't re-prompted this session.
       // The flag stays false server-side and the tour returns at next login —
       // an acceptable degradation, but worth surfacing in the console.
       console.warn('[tour] could not persist onboarded flag:', err?.message || err);
     });
-  }, []);
+  }, [checkpointKey]);
 
   /* ------------------------------------------------------------------ */
   /* Running a module                                                    */
@@ -141,7 +194,7 @@ export function TourProvider({ children }) {
    * which is what makes it safe for the registry to list optional anchors.
    */
   const enterModule = useCallback(
-    async (list, index) => {
+    async (list, index, initialStepIndex = 0, initialStepTarget = null) => {
       prepRef.current.cancelled = true;
       const signal = { cancelled: false };
       prepRef.current = signal;
@@ -175,8 +228,13 @@ export function TourProvider({ children }) {
         }
       }
 
+      const targetStepIndex = initialStepTarget
+        ? usable.findIndex((step) => step.target === initialStepTarget)
+        : -1;
+      const safeStepIndex =
+        targetStepIndex >= 0 ? targetStepIndex : Math.min(initialStepIndex, usable.length - 1);
       setSteps(usable);
-      setStepIndex(0);
+      setStepIndex(safeStepIndex);
       setRun(true);
       return { ok: true };
     },
@@ -223,7 +281,7 @@ export function TourProvider({ children }) {
    * the server rather than this tab's permission snapshot, so a module revoked
    * moments ago is already gone from it.
    */
-  const startGlobalTour = useCallback(async () => {
+  const startGlobalTour = useCallback(async (resume = false) => {
     let items = null;
     try {
       const served = await fetchTourModules('');
@@ -239,18 +297,32 @@ export function TourProvider({ children }) {
     const source = items ?? modules;
 
     const list = [SHELL_TOUR, ...source.map(tourForItem)];
+    const checkpoint = resume ? readCheckpoint(checkpointKey) : null;
+    const savedQueueIndex = checkpoint
+      ? list.findIndex((module) => module.key === checkpoint.moduleKey)
+      : -1;
+    const firstQueueIndex = savedQueueIndex >= 0 ? savedQueueIndex : 0;
+    const firstStepIndex = savedQueueIndex >= 0 ? checkpoint.stepIndex : 0;
+    const firstStepTarget = savedQueueIndex >= 0 ? checkpoint.stepTarget : null;
+
+    if (!resume) clearCheckpoint(checkpointKey);
     setMode(MODE_GLOBAL);
     setQueue(list);
-    for (let i = 0; i < list.length; i += 1) {
+    for (let i = firstQueueIndex; i < list.length; i += 1) {
       // eslint-disable-next-line no-await-in-loop
-      const result = await enterModule(list, i);
+      const result = await enterModule(
+        list,
+        i,
+        i === firstQueueIndex ? firstStepIndex : 0,
+        i === firstQueueIndex ? firstStepTarget : null
+      );
       if (result.ok) return;
       if (prepRef.current.cancelled) return;
     }
     // Nothing could run at all — don't strand the user mid-flow.
     stop();
     persistOnboarded();
-  }, [modules, enterModule, stop, persistOnboarded]);
+  }, [modules, checkpointKey, enterModule, stop, persistOnboarded]);
 
   /** One module, by nav key, started from the header menu. */
   const startModuleTour = useCallback(
@@ -337,7 +409,7 @@ export function TourProvider({ children }) {
     if (!permissions || Object.keys(permissions).length === 0) return;
 
     autoStarted.current = true;
-    startGlobalTour();
+    startGlobalTour(true);
   }, [onboarded, permissions, startGlobalTour]);
 
   /* ------------------------------------------------------------------ */
@@ -345,6 +417,17 @@ export function TourProvider({ children }) {
   const currentModule = queue[queueIndex] || null;
   const currentStep = steps[stepIndex] || null;
   const isGlobal = mode === MODE_GLOBAL;
+
+  // Keep only the current global-tour position. Logout clears sessionStorage;
+  // completion and global skip clear this key immediately.
+  useEffect(() => {
+    if (!isGlobal || !run || !currentModule) return;
+    writeCheckpoint(checkpointKey, {
+      moduleKey: currentModule.key,
+      stepIndex,
+      stepTarget: currentStep?.target,
+    });
+  }, [isGlobal, run, currentModule, currentStep, stepIndex, checkpointKey]);
 
   const value = useMemo(
     () => ({
