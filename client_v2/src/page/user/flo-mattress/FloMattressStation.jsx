@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import LiveCameraFeed from './components/LiveCameraFeed';
 import MeasurementLogDrawer from './components/MeasurementLogDrawer';
 import ProcessingOverlay from './components/ProcessingOverlay';
@@ -30,7 +30,10 @@ function qrIdentity(qrResponse) {
 
 export default function FloMattressStation() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { station, selectedCamera, configurationError, operationError, dismissOperationError, capturing, startCapture } = useStationIntegration();
+  const redirectedError = location.state?.stationError || null;
+  const visibleOperationError = operationError || redirectedError;
   const counts = readDecisionCounts();
   const [logOpen, setLogOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -75,7 +78,7 @@ export default function FloMattressStation() {
   const start = useCallback(() => runCapture(), [runCapture]);
 
   useEffect(() => {
-    if (capturing || processing || operationError || configurationError || !selectedCamera || !station) return undefined;
+    if (capturing || processing || visibleOperationError || configurationError || !selectedCamera || !station) return undefined;
     let active = true;
     let timer;
     let requestController;
@@ -132,12 +135,12 @@ export default function FloMattressStation() {
       window.clearTimeout(timer);
       requestController?.abort();
     };
-  }, [capturing, configurationError, operationError, processing, runCapture, selectedCamera, station]);
+  }, [capturing, configurationError, processing, runCapture, selectedCamera, station, visibleOperationError]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
       // The error dialog owns Escape while it is visible.
-      if (operationError) return;
+      if (visibleOperationError) return;
       if (isEditableShortcutTarget(event.target) || event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;
       if (logOpen) {
         if (matchesStationShortcut(event, 'l') || matchesEscapeShortcut(event)) {
@@ -153,7 +156,17 @@ export default function FloMattressStation() {
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [logOpen, operationError, start, toggleLogs]);
+  }, [logOpen, start, toggleLogs, visibleOperationError]);
+
+  const dismissVisibleOperationError = useCallback(() => {
+    dismissOperationError();
+    if (redirectedError) {
+      navigate(location.pathname, {
+        replace: true,
+        state: { ...(location.state || {}), stationError: null },
+      });
+    }
+  }, [dismissOperationError, location.pathname, location.state, navigate, redirectedError]);
 
   return (
     <main className="vq-root flex h-screen min-h-0 flex-col overflow-hidden bg-[var(--appbg)] text-[var(--tx)]">
@@ -167,7 +180,7 @@ export default function FloMattressStation() {
       <StationBottomBar onStart={start} disabled={capturing || processing || Boolean(configurationError) || !selectedCamera} capturing={capturing || processing} />
       <MeasurementLogDrawer open={logOpen} onClose={() => setLogOpen(false)} station={station} escapeBehavior="close" />
       {processing && <ProcessingOverlay secondsRemaining={secondsRemaining} />}
-      <StationErrorDialog error={operationError} onDismiss={dismissOperationError} />
+      <StationErrorDialog error={visibleOperationError} onDismiss={dismissVisibleOperationError} />
     </main>
   );
 }

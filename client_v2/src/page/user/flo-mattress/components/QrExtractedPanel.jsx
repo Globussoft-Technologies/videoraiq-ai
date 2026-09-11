@@ -39,9 +39,9 @@ export default function QrExtractedPanel({ metadata, response, readAt, image, ba
     <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--bd)] bg-[var(--glass)] shadow-[0_18px_50px_rgba(15,23,42,.08)] backdrop-blur">
       <header className="flex h-11 shrink-0 items-center gap-2.5 border-b border-[var(--bd)] px-4">
         <QrCode className="h-4 w-4 text-blue-500" />
-        <h2 className="text-[15px] font-semibold text-[var(--tx)]">QR Code Extracted</h2>
-        <span className="rounded-md border border-emerald-500 px-2 py-0.5 font-mono text-[9px] font-bold tracking-[.08em] text-emerald-500">{presentCount} / 5 PARTS</span>
-        <span className="ml-auto font-mono text-[9px] uppercase tracking-[.08em] text-[var(--tx3)]">READ {readTime(readAt)}</span>
+        <h2 className="text-[16px] font-semibold text-[var(--tx)]">QR Code Extracted</h2>
+        <span className="rounded-md border border-emerald-500 px-2 py-0.5 font-mono text-[10px] font-bold tracking-[.08em] text-emerald-500">{presentCount} / 5 PARTS</span>
+        <span className="ml-auto font-mono text-[10px] uppercase tracking-[.08em] text-[var(--tx3)]">READ {readTime(readAt)}</span>
       </header>
 
       <div className="flex shrink-0 gap-3 px-4 pt-3">
@@ -52,19 +52,19 @@ export default function QrExtractedPanel({ metadata, response, readAt, image, ba
 
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 py-2">
-            <div className="font-mono text-[8px] uppercase tracking-[.14em] text-[var(--tx3)]">Raw scan string</div>
-            <div className="mt-1 truncate font-mono text-[10px] font-semibold text-blue-500">{raw || 'Waiting for QR payload...'}</div>
+            <div className="font-mono text-[9px] uppercase tracking-[.14em] text-[var(--tx3)]">Raw scan string</div>
+            <div className="mt-1 truncate font-mono text-[11px] font-semibold text-blue-500">{raw || 'Waiting for QR payload...'}</div>
           </div>
           <div className="flex-1 rounded-lg border border-blue-400/35 bg-blue-500/10 px-3 py-2">
-            <div className="font-mono text-[8px] uppercase tracking-[.14em] text-[var(--tx3)]">Declared size from {declaredSource}</div>
-            <div className="mt-1 font-mono text-[15px] font-bold text-[var(--tx)]">{declared}</div>
-            <div className="mt-1 text-[10px] text-[var(--tx3)]">Measurements printed on the product label</div>
+            <div className="font-mono text-[9px] uppercase tracking-[.14em] text-[var(--tx3)]">Declared size from {declaredSource}</div>
+            <div className="mt-1 font-mono text-[17px] font-bold text-[var(--tx)]">{declared}</div>
+            <div className="mt-1 text-[11px] text-[var(--tx3)]">Measurements printed on the product label</div>
           </div>
         </div>
       </div>
 
       <div className="mt-2 flex min-h-0 flex-1 flex-col px-4 pb-3">
-        <div className="grid shrink-0 grid-cols-[13px_142px_minmax(0,1fr)_180px] gap-3 border-b border-[var(--bd)] px-0.5 py-2 font-mono text-[9px] font-bold uppercase tracking-[.12em] text-[var(--tx)]">
+        <div className="grid shrink-0 grid-cols-[13px_142px_minmax(0,1fr)_180px] gap-3 border-b border-[var(--bd)] px-0.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[.12em] text-[var(--tx)]">
           <span />
           <span>Part</span>
           <span>Value</span>
@@ -74,14 +74,14 @@ export default function QrExtractedPanel({ metadata, response, readAt, image, ba
           {rows.map(([label, value, note, color]) => (
             <div key={label} className="grid h-[20%] min-h-11 grid-cols-[13px_142px_minmax(0,1fr)_180px] items-center gap-3 px-0.5">
               <span className={`h-2 w-2 rounded-full ${color} shadow-[0_0_8px_currentColor]`} />
-              <span className="font-mono text-[9px] font-bold uppercase tracking-[.08em] text-[var(--tx)]">{label}</span>
+              <span className="font-mono text-[10px] font-bold uppercase tracking-[.08em] text-[var(--tx)]">{label}</span>
               <strong
-                className={`min-w-0 font-mono text-[14px] font-bold text-[var(--tx)] ${label === 'Custom size / type' ? 'whitespace-normal break-words leading-snug' : 'truncate'}`}
+                className={`min-w-0 font-mono text-[16px] font-bold text-[var(--tx)] ${label === 'Custom size / type' ? 'whitespace-normal break-words leading-snug' : 'truncate'}`}
                 title={shown(value)}
               >
                 {shown(value)}
               </strong>
-              <span className="min-w-0 truncate text-right text-[11px] font-bold text-[var(--tx)]">{note}</span>
+              <span className="min-w-0 truncate text-right text-[12px] font-semibold text-[var(--tx2)]">{note}</span>
             </div>
           ))}
         </div>

@@ -21,7 +21,10 @@ export default function StationErrorDialog({ error, onDismiss }) {
   const isConnectivityError = error.errorType === 'network-or-cors';
   const isUploadError = String(error.stage || '').includes('upload');
   const isMeasurementServiceError = String(error.stage || '').includes('measurement-start');
-  const title = isUploadError
+  const isMeasurementTimeout = error.stage === 'ds-measurement-timeout';
+  const title = isMeasurementTimeout
+    ? 'Measurement timed out'
+    : isUploadError
     ? 'Capture upload could not be completed'
     : (isMeasurementServiceError && isConnectivityError
       ? 'Measurement service connection failed'
@@ -48,7 +51,9 @@ export default function StationErrorDialog({ error, onDismiss }) {
         </dl>
 
         <p className="mt-4 text-xs leading-5 text-amber-200">
-          {isUploadError
+          {isMeasurementTimeout
+            ? 'The expected measurement time passed without receiving values from DS. The latest incident was checked once more before returning here. Please position the QR and try again.'
+            : isUploadError
             ? 'Check the backend capture endpoint and configured cloud provider. The measurement service is not called until the image and incident are saved.'
             : isMeasurementServiceError && isConnectivityError
             ? 'Postman does not enforce browser CORS. If Postman succeeds but this screen fails, allow this frontend origin in the measurement service and verify the endpoint uses the Pi LAN IP.'

@@ -6,7 +6,7 @@ import MeasurementPanel from './components/MeasurementPanel';
 import QrExtractedPanel from './components/QrExtractedPanel';
 import StationTopbar from './components/StationTopbar';
 import MeasurementLogDrawer from './components/MeasurementLogDrawer';
-import { estimatedMeasurementSeconds, hasMeasuredData, isEditableShortcutTarget, matchesEscapeShortcut, matchesStationShortcut, playStationSound, prepareStationAudio, readStationFromLocation, recordMeasurementDecision, toggleStationFullscreen, updateMeasurementIncident } from './stationIntegration';
+import { estimatedMeasurementSeconds, fetchMeasurementIncident, hasMeasuredData, isEditableShortcutTarget, logStationError, matchesEscapeShortcut, matchesStationShortcut, measurementStartUrl, playStationSound, prepareStationAudio, readStationFromLocation, recordMeasurementDecision, toggleStationFullscreen, updateMeasurementIncident } from './stationIntegration';
 import useMeasurementSocket from './useMeasurementSocket';
 
 export default function FloMattressDashboard() {
@@ -18,6 +18,7 @@ export default function FloMattressDashboard() {
   const [updating, setUpdating] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const resetInFlightRef = useRef(false);
+  const measurementTimeoutHandledRef = useRef(false);
   const intentionalFullscreenExitRef = useRef(false);
   const wasFullscreenRef = useRef(Boolean(document.fullscreenElement));
   const measurementReady = hasMeasuredData(incident);
@@ -30,6 +31,7 @@ export default function FloMattressDashboard() {
       ?? navigationQrResponse.estimated_measurement_seconds,
   });
   const [measurementSeconds, setMeasurementSeconds] = useState(estimate);
+  const [measurementDeadlineReached, setMeasurementDeadlineReached] = useState(false);
   const toggleLogs = useCallback(() => setLogOpen((current) => !current), []);
   const stop = useCallback(() => navigate('/start-measure'), [navigate]);
   const decide = useCallback(async (status) => {
@@ -52,15 +54,66 @@ export default function FloMattressDashboard() {
   useEffect(() => {
     if (measurementReady) {
       setMeasurementSeconds(0);
+      setMeasurementDeadlineReached(false);
       return undefined;
     }
     setMeasurementSeconds(estimate);
+    setMeasurementDeadlineReached(false);
     if (!estimate) return undefined;
-    const timer = window.setInterval(() => {
+    const countdownTimer = window.setInterval(() => {
       setMeasurementSeconds((current) => Math.max(0, current - 1));
     }, 1000);
-    return () => window.clearInterval(timer);
+    const deadlineTimer = window.setTimeout(() => setMeasurementDeadlineReached(true), estimate * 1000);
+    return () => {
+      window.clearInterval(countdownTimer);
+      window.clearTimeout(deadlineTimer);
+    };
   }, [estimate, incident?._id, measurementReady]);
+
+  useEffect(() => {
+    measurementTimeoutHandledRef.current = false;
+  }, [incident?._id, estimate]);
+
+  useEffect(() => {
+    if (measurementReady || estimate <= 0 || !measurementDeadlineReached || !incident?._id || measurementTimeoutHandledRef.current) return undefined;
+    measurementTimeoutHandledRef.current = true;
+    let active = true;
+
+    const handleMeasurementTimeout = async () => {
+      let latest = null;
+      let finalCheckError = '';
+      try {
+        latest = await fetchMeasurementIncident(station, incident._id);
+      } catch (error) {
+        finalCheckError = error?.message || String(error || 'Final incident check failed');
+      }
+      if (!active) return;
+      if (hasMeasuredData(latest)) {
+        setIncident(latest);
+        return;
+      }
+
+      const timeoutError = new Error('Something went wrong while waiting for the measurement. Please try again.');
+      timeoutError.stage = 'ds-measurement-timeout';
+      try {
+        timeoutError.endpoint = measurementStartUrl(station?.pi?.api, station?.pi?.device?.ip);
+      } catch {
+        timeoutError.endpoint = station?.pi?.api || '';
+      }
+      timeoutError.errorType = 'timeout';
+      timeoutError.response = {
+        incidentId: incident._id,
+        sku: incident.qrSku || incident.qrMetadata?.sku || '',
+        estimatedMeasurementSeconds: estimate,
+        finalCheckError,
+      };
+      const diagnostic = logStationError(timeoutError, { piApi: station?.pi?.api });
+      navigate('/start-measure', { replace: true, state: { station, stationError: diagnostic } });
+    };
+
+    handleMeasurementTimeout();
+    return () => { active = false; };
+  }, [estimate, incident?._id, incident?.qrMetadata?.sku, incident?.qrSku, measurementDeadlineReached, measurementReady, navigate, setIncident, station]);
   const reset = useCallback(async () => {
     if (resetInFlightRef.current) return;
     resetInFlightRef.current = true;
