@@ -104,6 +104,7 @@ export default function EmployeeRegister() {
 
   const [step, setStep] = useState(savedDraft?.step || 1);
   const [form, setForm] = useState({
+    empId: "",
     firstName: "",
     lastName: "",
     email: "",
@@ -221,8 +222,7 @@ export default function EmployeeRegister() {
     const errs = {};
     if (!form.firstName.trim()) errs.firstName = "First name is required";
     if (!form.lastName.trim()) errs.lastName = "Last name is required";
-    if (!form.email.trim()) errs.email = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Invalid email format";
+    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Invalid email format";
     if (!form.designation.trim()) errs.designation = "Designation is required";
     if (!form.department) errs.department = "Department is required";
     setErrors(errs);
@@ -233,16 +233,18 @@ export default function EmployeeRegister() {
     e.preventDefault();
     if (!validateDetails()) return;
     // Block advancing if the email is already registered (same as the client flow).
-    try {
-      const res = await isEmailExist(form.email, AUTH_TOKEN);
-      if (res?.data?.body?.data?.exists === true) {
-        toast.error("Email already exists");
+    if (form.email.trim()) {
+      try {
+        const res = await isEmailExist(form.email, AUTH_TOKEN);
+        if (res?.data?.body?.data?.exists === true) {
+          toast.error("Email already exists");
+          return;
+        }
+      } catch (err) {
+        console.error("Failed to validate email:", err);
+        toast.error("Failed to validate email");
         return;
       }
-    } catch (err) {
-      console.error("Failed to validate email:", err);
-      toast.error("Failed to validate email");
-      return;
     }
     setStep(2);
   };
@@ -281,7 +283,7 @@ export default function EmployeeRegister() {
   };
 
   const resetForm = () => {
-    setForm({ firstName: "", lastName: "", email: "", designation: "", location: "", department: "", vehicleNumber: "" });
+    setForm({ empId: "", firstName: "", lastName: "", email: "", designation: "", location: "", department: "", vehicleNumber: "" });
     setPhotos({});
     setErrors({});
     setStep(1);
@@ -300,6 +302,7 @@ export default function EmployeeRegister() {
     }
 
     const formData = new FormData();
+    formData.append("emp_id", form.empId.trim());
     formData.append("firstName", form.firstName);
     formData.append("lastName", form.lastName);
     formData.append("email", form.email);
@@ -448,27 +451,47 @@ export default function EmployeeRegister() {
               <form onSubmit={onContinue} className="flex flex-col gap-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-[7px]">
+                    <label className="text-[12.5px] font-semibold text-[#334155]">Employee ID </label>
+                    <PInput name="empId" placeholder="e.g. EMP1234" value={form.empId} onChange={set("empId")} />
+                    {errors.empId && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.empId}</div>}
+                  </div>
+                  <div className="flex flex-col gap-[7px]">
                     <label className="text-[12.5px] font-semibold text-[#334155]">First Name <span className="text-[#ef4444]">*</span></label>
                     <PInput name="firstName" placeholder="Enter first name" value={form.firstName} onChange={set("firstName")} />
                     {errors.firstName && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.firstName}</div>}
-                  </div>
-                  <div className="flex flex-col gap-[7px]">
-                    <label className="text-[12.5px] font-semibold text-[#334155]">Last Name <span className="text-[#ef4444]">*</span></label>
-                    <PInput name="lastName" placeholder="Enter last name" value={form.lastName} onChange={set("lastName")} />
-                    {errors.lastName && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.lastName}</div>}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-[7px]">
-                    <label className="text-[12.5px] font-semibold text-[#334155]">Email <span className="text-[#ef4444]">*</span></label>
+                    <label className="text-[12.5px] font-semibold text-[#334155]">Last Name <span className="text-[#ef4444]">*</span></label>
+                    <PInput name="lastName" placeholder="Enter last name" value={form.lastName} onChange={set("lastName")} />
+                    {errors.lastName && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.lastName}</div>}
+                  </div>
+                  <div className="flex flex-col gap-[7px]">
+                    <label className="text-[12.5px] font-semibold text-[#334155]">Email</label>
                     <PInput name="email" type="email" placeholder="name@company.com" value={form.email} onChange={set("email")} />
                     {errors.email && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.email}</div>}
                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-[7px]">
                     <label className="text-[12.5px] font-semibold text-[#334155]">Designation <span className="text-[#ef4444]">*</span></label>
                     <PInput name="designation" placeholder="e.g. Security Officer" value={form.designation} onChange={set("designation")} />
                     {errors.designation && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.designation}</div>}
+                  </div>
+                  <div className="flex flex-col gap-[7px]">
+                    <label className="text-[12.5px] font-semibold text-[#334155]">Department <span className="text-[#ef4444]">*</span></label>
+                    <PCombo
+                      name="department"
+                      value={form.department}
+                      onChange={set("department")}
+                      placeholder="Select department"
+                      options={departmentOptions}
+                      preferUp
+                    />
+                    {errors.department && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.department}</div>}
                   </div>
                 </div>
 
@@ -483,18 +506,6 @@ export default function EmployeeRegister() {
                       options={locationOptions}
                       preferUp
                     />
-                  </div>
-                  <div className="flex flex-col gap-[7px]">
-                    <label className="text-[12.5px] font-semibold text-[#334155]">Department <span className="text-[#ef4444]">*</span></label>
-                    <PCombo
-                      name="department"
-                      value={form.department}
-                      onChange={set("department")}
-                      placeholder="Select department"
-                      options={departmentOptions}
-                      preferUp
-                    />
-                    {errors.department && <div className="text-[11.5px] text-[#dc2626] mt-px">{errors.department}</div>}
                   </div>
                   <div className="flex flex-col gap-[7px]">
                     <label className="text-[12.5px] font-semibold text-[#334155]">Vehicle Number</label>

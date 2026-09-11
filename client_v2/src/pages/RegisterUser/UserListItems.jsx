@@ -308,6 +308,9 @@ export const UserTableRow = ({ user, index, currentPage, limit, handleEdit, hand
         </div>
       </td>
       <td className="px-3 py-3 max-w-0">
+        <span className="block text-xs text-[var(--tx2)] truncate">{user.emp_id || '—'}</span>
+      </td>
+      <td className="px-3 py-3 max-w-0">
         <span className="block text-xs text-[var(--tx2)] truncate" title={displayEmail(user.email) || 'N/A'}>
           {displayEmail(user.email) || 'N/A'}
         </span>

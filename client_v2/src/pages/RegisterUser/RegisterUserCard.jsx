@@ -88,6 +88,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
   const [step, setStep] = useState(1);
   const [collapsed, setCollapsed] = useState(false);
 
+  const [empId, setEmpId] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -170,6 +171,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
   /* ---- reset ---- */
   const reset = () => {
     setStep(1);
+    setEmpId('');
     setFirstName('');
     setLastName('');
     setEmail('');
@@ -190,8 +192,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
     else if (firstName.trim().length > 30) errs.firstName = 'First name must be at most 30 characters';
     if (!lastName.trim()) errs.lastName = 'Last name is required';
     else if (lastName.trim().length > 30) errs.lastName = 'Last name must be at most 30 characters';
-    if (!email.trim()) errs.email = 'Email is required';
-    else if (!/^[^\s@]+@[^\s@]+\.(com|net|org|in|co|io|edu|gov)$/.test(email.trim()))
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.(com|net|org|in|co|io|edu|gov)$/.test(email.trim()))
       errs.email = 'Invalid email format';
     if (!designation.trim()) errs.designation = 'Designation is required';
     if (!departmentId) errs.department = 'Department is required';
@@ -204,8 +205,12 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
       toast.error('Please fill all required fields', COMPACT_TOAST);
       return;
     }
+    if (!email.trim()) {
+      setStep(2);
+      return;
+    }
     setCheckingEmail(true);
-    try { 
+    try {
       const res = await isEmailExist(email.trim());
       if (res?.data?.body?.data?.exists === true) {
         setErrors((e) => ({ ...e, email: 'Email already exists' }));
@@ -228,6 +233,7 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
       return;
     }
     const formData = new FormData();
+    formData.append('emp_id', empId.trim());
     formData.append('firstName', firstName.trim());
     formData.append('lastName', lastName.trim());
     formData.append('email', email.trim());
@@ -288,6 +294,16 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
           {/* identity */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
+              <label className={fieldLabel}>Employee ID </label>
+              <input
+                className={fieldInput}
+                placeholder="e.g. EMP1234"
+                value={empId}
+                onChange={(e) => setEmpId(e.target.value)}
+              />
+              {errors.empId && <p className="text-xs text-[var(--crit)] mt-1">{errors.empId}</p>}
+            </div>
+            <div>
               <label className={fieldLabel}>First Name<Req /></label>
               <input
                 className={fieldInput}
@@ -309,8 +325,11 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
               />
               {errors.lastName && <p className="text-xs text-[var(--crit)] mt-1">{errors.lastName}</p>}
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className={fieldLabel}>Email<Req /></label>
+              <label className={fieldLabel}>Email </label>
               <input
                 className={fieldInput}
                 placeholder="name@org.com"
@@ -319,10 +338,6 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
               />
               {errors.email && <p className="text-xs text-[var(--crit)] mt-1">{errors.email}</p>}
             </div>
-          </div>
-
-          {/* designation + location + department */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className={fieldLabel}>Designation<Req /></label>
               <input
@@ -336,15 +351,6 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
               )}
             </div>
             <div>
-              <label className={fieldLabel}>Location</label>
-              <SelectField
-                value={location}
-                options={locationOptions}
-                onChange={setLocation}
-                placeholder="Select location"
-              />
-            </div>
-            <div>
               <label className={fieldLabel}>Department<Req /></label>
               <SelectField
                 value={departmentId}
@@ -355,6 +361,19 @@ const RegisterUserCard = ({ departments = [], locations = [], onCreated }) => {
               {errors.department && (
                 <p className="text-xs text-[var(--crit)] mt-1">{errors.department}</p>
               )}
+            </div>
+          </div>
+
+          {/* location + vehicle */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className={fieldLabel}>Location</label>
+              <SelectField
+                value={location}
+                options={locationOptions}
+                onChange={setLocation}
+                placeholder="Select location"
+              />
             </div>
             <div>
               <label className={fieldLabel}>Vehicle Number</label>

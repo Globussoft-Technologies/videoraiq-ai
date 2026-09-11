@@ -133,6 +133,7 @@ const UserDetailModal = ({ user, isOpen, onClose, nasUrl }) => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                <DetailItem icon={User} label="Employee ID" value={user.emp_id} />
                 <DetailItem icon={User} label="First Name" value={user.firstName} />
                 <DetailItem icon={User} label="Last Name" value={user.lastName} />
                 <DetailItem icon={Mail} label="Email" value={displayEmail(user.email)} />

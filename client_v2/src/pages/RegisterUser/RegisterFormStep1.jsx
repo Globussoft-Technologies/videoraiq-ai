@@ -23,6 +23,16 @@ const RegisterFormStep1 = ({ departments = [], locations = [] }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
+        <FieldLabel>Employee ID </FieldLabel>
+        <Field
+          as={Input}
+          name="empId"
+          placeholder="e.g. EMP1234"
+          className="bg-[var(--bg3)] border-[var(--bd)] text-[var(--tx)] shadow-none rounded-[10px]"
+        />
+        <ErrorMessage name="empId" component="div" className={errorClass} />
+      </div>
+      <div>
         <FieldLabel>First Name*</FieldLabel>
         <Field
           as={Input}
@@ -43,7 +53,7 @@ const RegisterFormStep1 = ({ departments = [], locations = [] }) => {
         <ErrorMessage name="lastName" component="div" className={errorClass} />
       </div>
       <div>
-        <FieldLabel>Email*</FieldLabel>
+        <FieldLabel>Email </FieldLabel>
         <Field
           as={Input}
           name="email"

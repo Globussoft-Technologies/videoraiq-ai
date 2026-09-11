@@ -30,6 +30,7 @@ const requiredImageCount = orgId === 'dubai' ? 1 : 3;
 const angleIndexMap = { Front: 0, Right: 1, Left: 2 };
 
 const validationSchemaStep1 = Yup.object().shape({
+  empId: Yup.string(),
   firstName: Yup.string()
     .min(2, 'First name must be at least 2 characters')
     .max(30, 'First name cannot exceed 30 characters')
@@ -40,8 +41,7 @@ const validationSchemaStep1 = Yup.object().shape({
     .min(1, 'Last name must be at least 1 character'),
   email: Yup.string()
     .email('Invalid email')
-    .matches(/^[^\s@]+@[^\s@]+\.(com|net|org|in|co|io|edu|gov)$/, 'Invalid email format')
-    .required('Email is required'),
+    .matches(/^[^\s@]+@[^\s@]+\.(com|net|org|in|co|io|edu|gov)$/, 'Invalid email format'),
   vehicleNumber: Yup.string(),
   designation: Yup.string().required('Designation is required'),
   location: Yup.string(),
@@ -208,6 +208,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
     () =>
       editUser
         ? {
+            empId: editUser.emp_id || '',
             firstName: editUser.firstName || '',
             lastName: editUser.lastName || '',
             email: editUser.email || '',
@@ -217,6 +218,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
             departmentId: editUser?.departmentId?._id || '',
           }
         : {
+            empId: '',
             firstName: '',
             lastName: '',
             email: '',
@@ -252,7 +254,8 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
     const formData = new FormData();
     Object.keys(values).forEach((key) => {
       const value = typeof values[key] === 'string' ? values[key].trim() : values[key];
-      formData.append(key, value);
+      const fieldName = key === 'empId' ? 'emp_id' : key;
+      formData.append(fieldName, value);
     });
     uploadedImagePaths.forEach((item) => {
       if (item instanceof File) {
@@ -411,7 +414,7 @@ const RegisterForm = ({ trigger, fetchUsers, editUser, setEditUser, locations: p
                         toast.error('Please fill all the required fields', COMPACT_TOAST);
                         return;
                       }
-                      if (editUser && values.email === editUser.email) {
+                      if (!values.email || (editUser && values.email === editUser.email)) {
                         setStep(2);
                         return;
                       }

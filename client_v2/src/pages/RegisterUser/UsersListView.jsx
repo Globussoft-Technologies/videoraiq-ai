@@ -68,12 +68,13 @@ const UsersListView = ({
             <colgroup>
               <col style={{ width: '36px' }} />
               <col style={{ width: '48px' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '12%' }} />
               <col style={{ width: '20%' }} />
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '13%' }} />
-              <col style={{ width: '13%' }} />
-              <col style={{ width: '13%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '12%' }} />
             </colgroup>
             <thead className="sticky top-0 z-10">
               <tr className="bg-[var(--bg2)] text-[var(--tx2)]">
@@ -87,8 +88,9 @@ const UsersListView = ({
                     />
                   )}
                 </th>
-                <th className="px-3 py-3 text-[11px] font-semibold text-center">#</th>
+                <th className="px-3 py-3 text-[11px] font-semibold text-center">S No</th>
                 <th className="px-3 py-3 text-[11px] font-semibold">Name</th>
+                <th className="px-3 py-3 text-[11px] font-semibold">Employee ID</th>
                 <th className="px-3 py-3 text-[11px] font-semibold">Email</th>
                 <th className="px-3 py-3 text-[11px] font-semibold">Department</th>
                 <th className="px-3 py-3 text-[11px] font-semibold">Location</th>
@@ -100,7 +102,7 @@ const UsersListView = ({
               {loading ? (
                 [...Array(8)].map((_, i) => (
                   <tr key={i} className="border-b border-[var(--bd)]">
-                    {[...Array(8)].map((__, j) => (
+                    {[...Array(9)].map((__, j) => (
                       <td key={j} className="px-4 py-3">
                         <Skeleton height={16} />
                       </td>
@@ -109,7 +111,7 @@ const UsersListView = ({
                 ))
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-[var(--tx3)] text-sm">
+                  <td colSpan={9} className="text-center py-12 text-[var(--tx3)] text-sm">
                     No users found.
                   </td>
                 </tr>
