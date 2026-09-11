@@ -7,7 +7,7 @@ import config from "config";
 import Joi from "joi";
 import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
-import { putMedia } from "../../../utils/mediaStorage.js";
+import { putMediaV2 as putMedia } from "../adminStorage/mediaStorage.v2.js";
 import Attendance from "../attendance/attendance.model.js";
 import AttendanceSettings from "../attendance/attendanceSettings.model.js";
 import AuthorizedUsers from "../authorizedUsers/authorizedUsers.model.js";
@@ -1101,23 +1101,23 @@ export async function uploadReportFiles(report, csvBuffer, pdfBuffer, xlsxBuffer
   const safeName = safeReportName();
   const files = [];
   if (pdfBuffer) {
-    const path = await putMedia({ buffer: pdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.pdf` });
+    const path = await putMedia({ adminId: report.adminId, buffer: pdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.pdf` });
     files.push({ format: "pdf", path, url: reportDownloadUrl(path, "pdf") });
   }
   if (csvBuffer) {
-    const path = await putMedia({ buffer: csvBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.csv` });
+    const path = await putMedia({ adminId: report.adminId, buffer: csvBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.csv` });
     files.push({ format: "csv", path, url: reportDownloadUrl(path, "csv") });
   }
   if (xlsxBuffer) {
-    const path = await putMedia({ buffer: xlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.xlsx` });
+    const path = await putMedia({ adminId: report.adminId, buffer: xlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `${safeName}.xlsx` });
     files.push({ format: "xlsx", path, url: reportDownloadUrl(path, "xlsx") });
   }
   if (breakPdfBuffer) {
-    const path = await putMedia({ buffer: breakPdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `break-logs.pdf` });
+    const path = await putMedia({ adminId: report.adminId, buffer: breakPdfBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `break-logs.pdf` });
     files.push({ format: "breakPdf", path, url: reportDownloadUrl(path, "pdf") });
   }
   if (breakXlsxBuffer) {
-    const path = await putMedia({ buffer: breakXlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `break-logs.xlsx` });
+    const path = await putMedia({ adminId: report.adminId, buffer: breakXlsxBuffer, mediaType: "report", folderName: String(report.adminId), originalName: `break-logs.xlsx` });
     files.push({ format: "breakXlsx", path, url: reportDownloadUrl(path, "xlsx") });
   }
   return files;

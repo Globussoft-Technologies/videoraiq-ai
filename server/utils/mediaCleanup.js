@@ -10,7 +10,18 @@
  * storage at all).
  */
 import logger from "./logger.js";
-import { deleteMedia } from "./mediaStorage.js";
+import { deleteMedia as deleteLegacyMedia } from "./mediaStorage.js";
+
+// Keep the legacy module graph unchanged. Only tenant/version encoded paths
+// lazy-load the v2 dispatcher, which avoids making v1/on-prem startup depend on
+// the optional admin-storage feature.
+async function deleteMedia(mediaPath) {
+  if (/(?:^|[\\/])v2[\\/][a-f\d]{24}[\\/](?:env|[a-f\d]{24})[\\/]/i.test(String(mediaPath))) {
+    const { deleteMediaV2 } = await import("../core/v2/adminStorage/mediaStorage.v2.js");
+    return deleteMediaV2(mediaPath);
+  }
+  return deleteLegacyMedia(mediaPath);
+}
 
 // Every media-bearing key across the documents this is used on, including
 // nested ones: incidents (Image, currentImage, videoLink, timeSeries[].Image),

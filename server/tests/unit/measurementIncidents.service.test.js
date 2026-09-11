@@ -105,6 +105,8 @@ describe("measurement incident service", () => {
       qrImage: { url: "/api/v2/measurements/captures/qr.jpg", filename: "qr.jpg" },
       qrMetadata: saved.qrMetadata,
       measuredData: {},
+      measurementImage: null,
+      status: "pending",
       dsProcessedAt: null,
     }));
     expect(mocks.sendMeasurement).toHaveBeenCalledWith("88:a2:9e:d0:95:ec", saved);

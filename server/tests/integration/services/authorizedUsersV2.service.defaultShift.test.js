@@ -38,6 +38,10 @@ vi.mock("../../../utils/newSFTPConnectionCheck.js", () => ({
   releaseSFTP: vi.fn(),
   withSFTPConnection: vi.fn(async (cb) => cb(sftpClient)),
 }));
+vi.mock("../../../core/v2/adminStorage/mediaStorage.v2.js", () => ({
+  putMediaV2: vi.fn(async ({ originalName }) => `/v2/test/${originalName}`),
+  deleteMediaV2: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("axios", () => ({
   default: { post: vi.fn(), put: vi.fn(), get: vi.fn(), delete: vi.fn() },
 }));

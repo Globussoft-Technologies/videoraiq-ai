@@ -7,7 +7,12 @@ import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
 import departmentsModel from "../departments/departments.model.js";
 import shiftModel from "../shifts/shifts.model.js";
 import FaceImagesValidator from "./faceImages.validate.js";
-import { deleteMedia, mediaExists, putMedia, toRelativeMediaPaths } from "../../../utils/mediaStorage.js";
+import {
+  deleteMediaV2 as deleteMedia,
+  mediaExistsV2 as mediaExists,
+  putMediaV2 as putMedia,
+  toRelativeMediaPathsV2 as toRelativeMediaPaths,
+} from "../adminStorage/mediaStorage.v2.js";
 import dsUserSyncService, { friendlyDSMessage } from "../../../services/dsUserSync.service.js";
 import OptimizedAccessLogs from "../accesslogs/newAccessLogs.model.js";
 
@@ -286,6 +291,7 @@ class FaceImagesService {
         uploadedFiles = await Promise.all(
           req.files.map((file) =>
             putMedia({
+              adminId,
               buffer: file.buffer,
               mediaType: "image",
               folderName: `${firstName}${lastName}`,
@@ -401,7 +407,7 @@ class FaceImagesService {
 
       const { imageIds } = req.body;
 
-      const docs = await faceImagesModel.find({ _id: { $in: imageIds } });
+      const docs = await faceImagesModel.find({ _id: { $in: imageIds }, adminId });
       if (!docs.length) {
         return res.status(404).json(Response.notFoundResp("No matching images found"));
       }

@@ -8,7 +8,6 @@ import axios from "axios";
 import Response from "../../../utils/response.js";
 import { sendPayloadToUser } from "../../../socket.js";
 import momentTZ from "moment-timezone";
-import { withSFTPConnection } from "../../../utils/newSFTPConnectionCheck.js";
 import path from "path";
 import fs from "fs";
 import { deletionQueue } from "../jobs/utils/deletionQueue.js";
@@ -21,7 +20,7 @@ import {
   NORM_PLATE_FIELD,
 } from "../../../utils/vehicleTagging.js";
 import { ALERT_FEED_EXCLUDED_TYPES } from "../../../constants/detectionTypes.js";
-import { deleteMedia } from "../../../utils/mediaStorage.js";
+import { deleteMediaV2 as deleteMedia, mediaExistsV2 as mediaExists } from "../adminStorage/mediaStorage.v2.js";
 
 import {
   Incident,
@@ -1677,15 +1676,8 @@ class IncidentsService {
         }
 
         try {
-          await withSFTPConnection(async (sftp) => {
-            const exists = await sftp.exists(incident.Image);
-            if (exists) {
-              await sftp.delete(incident.Image);
-              console.log(`Deleted from SFTP: ${incident.Image}`);
-            } else {
-              console.warn(`SFTP file missing: ${incident.Image}`);
-            }
-          });
+          const exists = await mediaExists(incident.Image);
+          if (exists) await deleteMedia(incident.Image);
         } catch (err) {
           console.error("SFTP delete failed:", err.message);
         }

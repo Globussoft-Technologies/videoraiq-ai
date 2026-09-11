@@ -4,11 +4,12 @@ import logger from "../../../utils/logger.js";
 import fs from 'fs';
 import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
 import {
-    putMedia,
-    streamMedia,
-    deleteMedia as deleteMediaFromStorage,
-    mediaExists,
-} from "../../../utils/mediaStorage.js";
+    putMediaV2,
+    streamMediaV2,
+    deleteMediaV2,
+    mediaExistsV2,
+} from "../adminStorage/mediaStorage.v2.js";
+import { parseV2StoragePath } from "../adminStorage/adminStorage.resolver.js";
 
 const cacheDir = path.join('/tmp', 'media-cache'); // You can change this to './cache' or any path
 if (!fs.existsSync(cacheDir)) {
@@ -57,7 +58,8 @@ class UploadService {
                 );
             }
 
-            const result = await putMedia({
+            const result = await putMediaV2({
+                adminId: req?.verified?.userData?.adminId,
                 buffer: file.buffer,
                 mediaType,
                 folderName,
@@ -112,7 +114,7 @@ class UploadService {
             res.setHeader("Cross-Origin-Opener-Policy", "*");
             res.setHeader("Cross-Origin-Resource-Policy", "*");
 
-            await streamMedia(mediaPath, res);
+            await streamMediaV2(mediaPath, res);
 
         } catch (error) {
             console.error("Error fetching media:", error);
@@ -132,18 +134,23 @@ class UploadService {
             if (mediaPath.includes('..')) {
                 return res.status(400).json({ status: 'failed', message: 'Invalid media path.' });
             }
+            const encodedOwner = parseV2StoragePath(mediaPath)?.adminId;
+            const requestOwner = String(req?.verified?.userData?.adminId || '');
+            if (encodedOwner && encodedOwner !== requestOwner) {
+                return res.status(403).json({ status: 'failed', message: 'Media belongs to another organisation.' });
+            }
 
             const cachedFilePath = path.join(cacheDir, path.basename(mediaPath));
             if (fs.existsSync(cachedFilePath)) {
                 fs.unlinkSync(cachedFilePath);
             }
 
-            const exists = await mediaExists(mediaPath);
+            const exists = await mediaExistsV2(mediaPath);
             if (!exists) {
                 return res.status(404).json({ status: 'failed', message: 'File not found in storage.' });
             }
 
-            await deleteMediaFromStorage(mediaPath);
+            await deleteMediaV2(mediaPath);
 
             return res.status(200).json({ status: 'success', message: 'Media deleted successfully.' });
 
@@ -163,8 +170,14 @@ class UploadService {
             if (mediaPath.includes('..')) {
                 return res.status(400).json({ status: 'failed', message: 'Invalid media path.' });
             }
+            const encodedOwner = parseV2StoragePath(mediaPath)?.adminId;
+            const requestOwner = String(req?.verified?.userData?.adminId || '');
+            if (encodedOwner && encodedOwner !== requestOwner) {
+                return res.status(403).json({ status: 'failed', message: 'Media belongs to another organisation.' });
+            }
 
-            const userDetails = await authorizedUsersModel.findById(userId);
+            const adminId = req?.verified?.userData?.adminId;
+            const userDetails = await authorizedUsersModel.findOne({ _id: userId, adminId });
             if (!userDetails) {
                 return res.status(404).json({ status: 'failed', message: 'User not found.' });
             }
@@ -177,12 +190,12 @@ class UploadService {
                 fs.unlinkSync(cachedFilePath);
             }
 
-            const exists = await mediaExists(mediaPath);
+            const exists = await mediaExistsV2(mediaPath);
             if (!exists) {
                 return res.status(404).json({ status: 'failed', message: 'File not found in storage.' });
             }
 
-            await deleteMediaFromStorage(mediaPath);
+            await deleteMediaV2(mediaPath);
 
             return res.status(200).json({ status: 'success', message: 'Media deleted successfully.' });
 

@@ -19,7 +19,6 @@ import authorizedUsersRoutes from "../../core/v2/authorizedUsers/authorizedUsers
 import detectionSettingsRoutes from "../../core/v2/detectionSettings/detectionSettings.routes.js";
 import globalScheduleRoutes from "../../core/v2/globalSchedule/globalSchedule.routes.js";
 import uploadRoutes from "../../core/v2/Uploads/uploads.routes.js";
-import storageRoutes from "../../core/v2/storage/storage.routes.js";
 import rolesRoutes from "../../core/v2/roles/roles.routes.js";
 import departmentRoutes from "../../core/v2/departments/departments.routes.js";
 import profilesRoutes from "../../core/v2/profiles/profiles.routes.js";
@@ -50,6 +49,7 @@ import videoRecordsRoutes from "../../core/v2/videoRecords/videoRecords.routes.j
 import sessionRoutes from "../../core/v2/sessions/sessions.routes.js";
 import measurementIncidentsRoutes from "../../core/v2/measurementIncidents/measurementIncidents.routes.js";
 import measurementsRoutes from "../../core/v2/measurements/measurements.routes.js";
+import adminStorageRoutes from "../../core/v2/adminStorage/adminStorage.routes.js";
 import verifyMeasurementAuth from "../../core/v2/measurementIncidents/measurementAuth.middleware.js";
 
 const router = express.Router();
@@ -85,7 +85,6 @@ router.use("/authorizedUsers", verifyToken, authorizedUsersRoutes);
 router.use("/authorizedObjects", verifyToken, authorizedObjectsRoutes);
 router.use("/detection-settings", verifyToken, detectionSettingsRoutes);
 router.use("/global-schedules", verifyToken, globalScheduleRoutes);
-router.use("/storage", storageRoutes);
 router.use("/profiles", verifyToken, profilesRoutes);
 router.use("/attendance", verifyToken, attendanceRoutes);
 router.use("/roles", verifyToken, rolesRoutes);
@@ -120,6 +119,7 @@ router.use("/video-records", verifyToken, videoRecordsRoutes);
 // Supports the normal web token and the approved station Bearer token.
 router.use("/measurement-incidents", verifyMeasurementAuth, measurementIncidentsRoutes);
 router.use("/measurements", measurementsRoutes);
+router.use("/admin-storage", adminStorageRoutes);
 
 export default router;
 

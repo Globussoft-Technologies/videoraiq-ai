@@ -19,6 +19,7 @@ const findModule = (mainPath = '', pathMap = []) => {
 };
 
 const viewPathMap = [
+  { prefix: '/api/v2/admin-storage', module: 'storageSettings' },
   ...buildPathMap([
     { path: '/permissions', module: 'permission' },
     { path: '/locations', module: 'locations' },
@@ -71,6 +72,7 @@ const createPathMap = [
 ];
 
 const editPathMap = [
+  { prefix: '/api/v2/admin-storage', module: 'storageSettings' },
   ...buildPathMap([
     { path: '/locations', module: 'locations' },
     { path: '/permissions', module: 'permission' },

@@ -8,7 +8,6 @@ import rolesModel from "../roles/roles.model.js";
 import departmentsModel from "../departments/departments.model.js";
 import path from "path";
 import axios from "axios";
-import { withSFTPConnection } from "../../../utils/newSFTPConnectionCheck.js";
 import {
   checkSftpConnection
 } from "../../../utils/sftpConnectionCheck.js";
@@ -25,7 +24,7 @@ import LocationModel from "../locations/location.model.js";
 import OptimizedAccessLogs from "../accesslogs/newAccessLogs.model.js";
 import { normalizePlate, findVehicleOwners, TAGGED_USER_FIELDS } from "../../../utils/vehicleTagging.js";
 import faceImagesModel from "../faceImages/faceImages.model.js";
-import { putMedia, deleteMedia } from "../../../utils/mediaStorage.js";
+import { putMediaV2 as putMedia, deleteMediaV2 as deleteMedia } from "../adminStorage/mediaStorage.v2.js";
 
 
 import fs from 'fs';
@@ -493,6 +492,7 @@ class AuthUsersService {
         const uploadedFiles = await Promise.all(
           req.files.map((file) =>
             putMedia({
+              adminId: data?.adminId,
               buffer: file.buffer,
               mediaType: "image",
               folderName: `${firstName}${lastName}`,
@@ -823,6 +823,7 @@ async updateAuthUser(req, res, _next) {
       uploadedFiles = await Promise.all(
         req.files.map((file) =>
           putMedia({
+            adminId: existingUser?.adminId,
             buffer: file.buffer,
             mediaType: "image",
             folderName: `${existingUser?.firstName}${existingUser?.lastName}`,

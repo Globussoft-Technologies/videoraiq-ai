@@ -339,7 +339,10 @@ export async function runRetentionSweep() {
 export function scheduleRetentionSweep() {
   try {
     const cfg = config.has("DataRetention") ? config.get("DataRetention") : {};
-    if (!cfg.enabled) {
+    // Missing global config is not a kill switch: cloud admins may have their
+    // own policy even when the shared deployment has no retention periods.
+    // Only an explicit false disables the worker process-wide.
+    if (cfg.enabled === false) {
       logger.info("[RETENTION] disabled — sweeper not scheduled");
       return;
     }

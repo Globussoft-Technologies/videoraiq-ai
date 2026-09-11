@@ -125,6 +125,8 @@ class MeasurementIncidentsService {
         qrSku: normalizedSku(input.qrMetadata.sku),
         qrMetadata: input.qrMetadata,
         measuredData: {},
+        measurementImage: null,
+        status: "pending",
         dsProcessedAt: null,
       });
       const socketPayload = incident.toObject();

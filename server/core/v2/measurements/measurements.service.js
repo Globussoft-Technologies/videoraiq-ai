@@ -1,7 +1,11 @@
 import path from "path";
 import { randomBytes } from "crypto";
 import MeasurementCapture from "./measurementCapture.model.js";
-import { deleteMedia, putMedia, streamMedia } from "../../../utils/mediaStorage.js";
+import {
+  deleteMediaV2 as deleteMedia,
+  putMediaV2 as putMedia,
+  streamMediaV2 as streamMedia,
+} from "../adminStorage/mediaStorage.v2.js";
 import logger from "../../../utils/logger.js";
 
 const MAX_CAPTURE_BYTES = 15 * 1024 * 1024;
@@ -78,6 +82,7 @@ class MeasurementsService {
         randomBytes(4).toString("hex"),
       ].join("_") + ".jpg";
       storagePath = await putMedia({
+        adminId: req.stationDevice?.admin,
         buffer: req.body,
         mediaType: "image",
         folderName: "measurement-captures",
