@@ -32,6 +32,33 @@ import { isLicensingEnforced } from "../clientConfig/detectionLicense.service.js
 const channelKey = (cam) => String(cam?.channelId ?? cam?.localChannelId ?? "");
 const APP_ENV = config.get("APP_ENV");
 
+const directCameraView = (camera) => ({
+  channelId: camera.channelId,
+  name: camera.name,
+  isAdded: camera.isAdded,
+  dbId: camera._id,
+  hasRtspUrl: Boolean(camera.manualRtspUrl),
+});
+
+const rejectDirectCameraLimit = (res, requested, { limit, inUse, remaining }) => {
+  const excess = requested - remaining;
+  const message = limit <= 0
+    ? "You do not have any camera license. Please contact support to enable cameras."
+    : `Your licence covers ${limit} camera${limit === 1 ? "" : "s"}, and ` +
+      `${inUse} ${inUse === 1 ? "is" : "are"} already added. You can add ` +
+      `${remaining} more. Remove ${excess} RTSP URL${excess === 1 ? "" : "s"} to continue.`;
+
+  return res.status(403).json(
+    Response.accessDeniedResp(message, {
+      code: "CAMERA_LICENSE_EXCEEDED",
+      limit,
+      inUse,
+      requested,
+      remaining,
+    }),
+  );
+};
+
 class NVRService {
   // old
   async registerNvr(req, res, _next) {
@@ -75,16 +102,22 @@ class NVRService {
    * quietly add cameras they have no licence for.
    */
   async getRemainingCameraLimit(userId) {
+    return (await this.getCameraCapacity(userId)).remaining;
+  }
+
+  async getCameraCapacity(userId) {
     // On-prem there is no licence to spend against — the customer owns the box.
-    if (!isLicensingEnforced()) return Infinity;
+    if (!isLicensingEnforced()) {
+      return { limit: Infinity, inUse: 0, remaining: Infinity };
+    }
 
     const admin = await adminModel
       .findOne({ user_id: userId })
       .select("purchasedCameras")
       .lean();
-    const purchased = Number(admin?.purchasedCameras) || 0;
-    const added = await Channel.countDocuments({ userId, isAdded: true });
-    return Math.max(purchased - added, 0);
+    const limit = Number(admin?.purchasedCameras) || 0;
+    const inUse = await Channel.countDocuments({ userId, isAdded: true });
+    return { limit, inUse, remaining: Math.max(limit - inUse, 0) };
   }
 
   async addNvr(req, res, _next) {
@@ -562,6 +595,12 @@ class NVRService {
       const nvr = await NVR.findById(nvrId);
       if (!nvr) {
         return res.status(404).json(Response.notFoundResp("NVR not found"));
+      }
+
+      if (nvr.connectionMode === "direct") {
+        return res.status(200).json(
+          Response.userSuccessResp("Direct RTSP cameras do not require NVR refresh", { nvr }),
+        );
       }
 
       const { brand, password } = nvr;
@@ -1120,6 +1159,167 @@ class NVRService {
       return res
         .status(500)
         .json(Response.errorResp("Failed to register and fetch cameras", error.message));
+    }
+  }
+
+  async createDirectNvr(req, res, _next) {
+    try {
+      if (APP_ENV !== "cloud") {
+        return res.status(400).json(Response.userFailResp("Direct RTSP is only available in cloud mode"));
+      }
+
+      const { error, value } = NVRValidation.directNVR(req.body);
+      if (error) {
+        return res.status(400).json(Response.userFailResp("Validation Failed", error.message));
+      }
+
+      const userId = String(req?.verified?.userData?.user_id || "");
+      if (!userId) return res.status(400).json(Response.userFailResp("Please provide user_id"));
+
+      const capacity = await this.getCameraCapacity(userId);
+      if (value.cameras.length > capacity.remaining) {
+        return rejectDirectCameraLimit(res, value.cameras.length, capacity);
+      }
+
+      const dummyId = new mongoose.Types.ObjectId().toString();
+      const nvr = await NVR.create({
+        userId,
+        nvrName: value.nvrName,
+        location: value.location.toLowerCase(),
+        brand: value.brand,
+        connectionMode: "direct",
+        ip: `direct-${dummyId}.invalid`,
+        port: 80,
+        rtspPort: 554,
+        username: "direct",
+        password: dummyId,
+        deviceName: value.nvrName,
+        cameraCount: 0,
+      });
+
+      const cameras = [];
+      for (const [index, input] of value.cameras.entries()) {
+        const camera = await Camera.create({
+          userId,
+          nvrId: nvr._id,
+          channelId: String(index + 1),
+          name: input.name,
+          streamEndpoint: "/direct",
+          rtspChannels: [],
+          manualRtspUrl: input.rtspUrl,
+          isAdded: true,
+        });
+        await registerCameraStream(`${nvr._id}-${camera._id}`, input.rtspUrl, userId);
+        cameras.push(camera);
+      }
+
+      await NVR.findByIdAndUpdate(nvr._id, { cameraCount: cameras.length });
+      emitCameraLimit({ userId });
+      autoSyncLocations(
+        { _id: req?.verified?.userData?.adminId },
+        { user_id: userId },
+      ).catch((e) => logger.error("Post-direct-NVR sync failed", e));
+
+      return res.status(201).json(
+        Response.userSuccessResp("Direct RTSP cameras registered successfully", {
+          nvr: { ...nvr.toObject(), cameraCount: cameras.length },
+          cameras: cameras.map(directCameraView),
+        }),
+      );
+    } catch (error) {
+      logger.error("Create Direct RTSP NVR Error:", error);
+      return res.status(500).json(Response.errorResp("Direct RTSP registration failed", error.message));
+    }
+  }
+
+  async updateDirectNvr(req, res, _next) {
+    try {
+      if (APP_ENV !== "cloud") {
+        return res.status(400).json(Response.userFailResp("Direct RTSP is only available in cloud mode"));
+      }
+
+      const { error, value } = NVRValidation.directNVR(req.body);
+      if (error) {
+        return res.status(400).json(Response.userFailResp("Validation Failed", error.message));
+      }
+
+      const userId = String(req?.verified?.userData?.user_id || "");
+      const nvr = await NVR.findOne({
+        _id: req.params.id,
+        userId,
+        connectionMode: "direct",
+      });
+      if (!nvr) return res.status(404).json(Response.notFoundResp("Direct RTSP NVR not found"));
+
+      const existing = await Camera.find({ nvrId: nvr._id }).select("+manualRtspUrl")
+        .setOptions({ includeInactive: true });
+      const byId = new Map(existing.map((camera) => [String(camera._id), camera]));
+      const requestedIds = value.cameras.filter((camera) => camera._id).map((camera) => camera._id);
+      if (new Set(requestedIds).size !== requestedIds.length || requestedIds.some((id) => !byId.has(id))) {
+        return res.status(400).json(Response.userFailResp("One or more cameras do not belong to this NVR"));
+      }
+
+      const newInputs = value.cameras.filter((camera) => !camera._id);
+      const removedIds = existing
+        .filter((camera) => !requestedIds.includes(String(camera._id)))
+        .map((camera) => camera._id);
+      if (removedIds.length) await Camera.deleteMany({ _id: { $in: removedIds }, nvrId: nvr._id });
+      const capacity = await this.getCameraCapacity(userId);
+      if (newInputs.length > capacity.remaining) {
+        return rejectDirectCameraLimit(res, newInputs.length, capacity);
+      }
+
+      let nextChannelId = existing.reduce(
+        (max, camera) => Math.max(max, Number.parseInt(camera.channelId, 10) || 0),
+        0,
+      );
+      const cameras = [];
+      for (const input of value.cameras) {
+        if (input._id) {
+          const camera = byId.get(input._id);
+          camera.name = input.name;
+          if (input.rtspUrl) camera.manualRtspUrl = input.rtspUrl;
+          await camera.save();
+          if (input.rtspUrl) {
+            const uid = `${nvr._id}-${camera._id}`;
+            const updated = await updateCameraStream(uid, input.rtspUrl, undefined, userId);
+            if (!updated) await registerCameraStream(uid, input.rtspUrl, userId);
+          }
+          cameras.push(camera);
+          continue;
+        }
+
+        nextChannelId += 1;
+        const camera = await Camera.create({
+          userId,
+          nvrId: nvr._id,
+          channelId: String(nextChannelId),
+          name: input.name,
+          streamEndpoint: "/direct",
+          rtspChannels: [],
+          manualRtspUrl: input.rtspUrl,
+          isAdded: true,
+        });
+        await registerCameraStream(`${nvr._id}-${camera._id}`, input.rtspUrl, userId);
+        cameras.push(camera);
+      }
+
+      nvr.nvrName = value.nvrName;
+      nvr.location = value.location.toLowerCase();
+      nvr.brand = value.brand;
+      nvr.cameraCount = await Camera.countDocuments({ nvrId: nvr._id, isAdded: true });
+      await nvr.save();
+      emitCameraLimit({ userId });
+
+      return res.status(200).json(
+        Response.userSuccessResp("Direct RTSP cameras updated successfully", {
+          nvr,
+          cameras: cameras.map(directCameraView),
+        }),
+      );
+    } catch (error) {
+      logger.error("Update Direct RTSP NVR Error:", error);
+      return res.status(500).json(Response.errorResp("Direct RTSP update failed", error.message));
     }
   }
 
@@ -2015,6 +2215,17 @@ class NVRService {
       const nvr = await NVR.findOne({ _id: nvrId, userId: user_id });
       if (!nvr) {
         return res.status(404).json(Response.notFoundResp("NVR not found"));
+      }
+
+      if (nvr.connectionMode === "direct") {
+        const cameras = await Camera.find({ nvrId }).select("+manualRtspUrl")
+          .setOptions({ includeInactive: true });
+        return res.status(200).json(
+          Response.userSuccessResp("Direct RTSP cameras retrieved successfully", {
+            nvr,
+            availableCameras: cameras.map(directCameraView),
+          }),
+        );
       }
 
       const plainPassword = decrypt(nvr.password);

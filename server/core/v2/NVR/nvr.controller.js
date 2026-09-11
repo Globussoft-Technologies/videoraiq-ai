@@ -264,6 +264,14 @@ class NVRController {
     return NVRService.registerAndFetchCameras(req, res, next);
   }
 
+  async createDirectNvr(req, res, next) {
+    return NVRService.createDirectNvr(req, res, next);
+  }
+
+  async updateDirectNvr(req, res, next) {
+    return NVRService.updateDirectNvr(req, res, next);
+  }
+
   async addSelectedCameras(req, res, next) {
     /* #swagger.tags = ['NVR']
        #swagger.description = 'Update camera selection - mark cameras in cameraIds as added (isAdded=true), others as not added (isAdded=false)'

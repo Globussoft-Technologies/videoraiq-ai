@@ -79,6 +79,26 @@ class NVRValidation {
     }).validate(data);
   }
 
+  directNVR(data) {
+    const rtspUrl = Joi.string().uri({ scheme: ["rtsp", "rtsps"] });
+    return Joi.object({
+      nvrName: Joi.string().min(1).max(50).required(),
+      location: Joi.string().trim().min(1).max(150).required(),
+      brand: Joi.string()
+        .valid("hikvision", "cpplus", "dahua", "prama", "tiandy", "securus", "hanwha")
+        .required(),
+      cameras: Joi.array().items(Joi.object({
+        _id: Joi.string().hex().length(24).optional(),
+        name: Joi.string().trim().min(1).max(100).required(),
+        rtspUrl: Joi.when("_id", {
+          is: Joi.exist(),
+          then: rtspUrl.allow("").optional(),
+          otherwise: rtspUrl.required(),
+        }),
+      })).min(1).max(128).required(),
+    }).validate(data, { abortEarly: false });
+  }
+
   updateNVR(data) {
     return Joi.object({
       ip: Joi.string().required(),

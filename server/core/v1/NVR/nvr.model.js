@@ -23,6 +23,11 @@ const localSchema = new mongoose.Schema(
       required: true,
       enum: ["hikvision", "dahua", "prama", "cpplus", "camera", "tiandy", "securus", "hanwha"],
     },
+    connectionMode: {
+      type: String,
+      enum: ["device", "direct"],
+      default: "device",
+    },
     cameraCount: {
       type: Number,
       default: 0,
@@ -80,6 +85,11 @@ const cloudSchema = new mongoose.Schema(
       type: String,
       required: true,
       enum: ["hikvision", "dahua", "prama", "cpplus", "camera", "tiandy", "securus", "hanwha"],
+    },
+    connectionMode: {
+      type: String,
+      enum: ["device", "direct"],
+      default: "device",
     },
     cameraCount: {
       type: Number,

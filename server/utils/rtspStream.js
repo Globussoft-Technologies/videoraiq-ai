@@ -140,6 +140,11 @@ export const generatePlayBackUrl = async (
 };
 
 export const buildRTSPUrl = (nvr, channel, streamType = "main") => {
+  if (nvr.connectionMode === "direct") {
+    if (!channel.manualRtspUrl) throw new Error("Direct RTSP URL is missing");
+    return decrypt(channel.manualRtspUrl);
+  }
+
   const decryptedIp = decrypt(nvr.ip);
   const decryptedPassword = decrypt(nvr.password);
   const username = nvr.username; // Already decrypted based on your data
@@ -196,7 +201,7 @@ export const registerCameraStream = async (id, rtspUrl, userId) => {
   const redisKey = `stream_url:${id}`;
   try {
     const { host, token } = await resolveStream(userId);
-    console.log(`[STREAM add-camera] id=${id} host=${host} rtsp_url=${rtspUrl}`);
+    console.log(`[STREAM add-camera] id=${id} host=${host}`);
     const response = await axios.post(
       `${host}/api/add-camera`,
       {
@@ -267,6 +272,10 @@ export const buildStreamingUrl = async (nvr, channel) => {
     let streamingUrl = null;
     const uid = `${nvr?._id}-${channel?._id}`;
     if (APP_ENV === "cloud") {
+      if (nvr?.connectionMode === "direct" && !channel?.manualRtspUrl) {
+        const { default: Channel } = await import("../core/v1/channels/channels.model.js");
+        channel = await Channel.findById(channel?._id).select("+manualRtspUrl");
+      }
       const rtspUrl = buildRTSPUrl(nvr, channel, "main");
       streamingUrl = await getStreamingUrl(uid, rtspUrl, nvr?.userId);
     } else {

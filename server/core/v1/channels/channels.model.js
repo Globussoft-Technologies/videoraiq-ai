@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import authorizedChannelsModel from "../cameraRestrictions/authorizedChannels.model.js";
 import config from "config";
+import { encrypt } from "../../../utils/cryptoUtils.js";
 const APP_ENV = config.get("APP_ENV");
 
 let ChannelSchema;
@@ -133,6 +134,7 @@ const cloudSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    manualRtspUrl: { type: String, select: false },
     isAdded: {
       type: Boolean,
       default: false,
@@ -255,6 +257,12 @@ const localSchema = new mongoose.Schema(
 
 if (APP_ENV === "cloud") {
   ChannelSchema = cloudSchema;
+  ChannelSchema.pre("save", function (next) {
+    if (this.isModified("manualRtspUrl") && this.manualRtspUrl) {
+      this.manualRtspUrl = encrypt(this.manualRtspUrl);
+    }
+    next();
+  });
 } else {
   ChannelSchema = localSchema;
 }

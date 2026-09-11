@@ -37,10 +37,11 @@ beforeEach(async () => { await clearCollections(); vi.clearAllMocks(); });
 const makeAdmin = (purchasedCameras) =>
   Admin.create({ user_id: USER_ID, login: "c", email: "c@test.com", purchasedCameras });
 
-const makeNvr = () =>
+const makeNvr = (overrides = {}) =>
   NVR.create({
     userId: USER_ID, nvrName: "NVR-1", brand: "hikvision",
     domain: "http://nvr.local", location: "HQ", localNvrId: "nvr-1",
+    ...overrides,
   });
 
 let seq = 0;
@@ -234,6 +235,11 @@ describe("getRemainingCameraLimit", () => {
     const nvr = await makeNvr();
     await makeCamera(nvr._id, true);
     expect(await NVRService.getRemainingCameraLimit(USER_ID)).toBe(1);
+    expect(await NVRService.getCameraCapacity(USER_ID)).toEqual({
+      limit: 2,
+      inUse: 1,
+      remaining: 1,
+    });
 
     await makeCamera(nvr._id, true);
     await makeCamera(nvr._id, true);
@@ -243,5 +249,26 @@ describe("getRemainingCameraLimit", () => {
   it("is 0 — not unlimited — when nothing is licensed", async () => {
     await makeAdmin(0);
     expect(await NVRService.getRemainingCameraLimit(USER_ID)).toBe(0);
+  });
+});
+
+describe("direct RTSP bypass", () => {
+  it("returns stored cameras and skips physical NVR refresh", async () => {
+    const nvr = await makeNvr({ connectionMode: "direct" });
+    const camera = await makeCamera(nvr._id, true);
+    const fetchSpy = vi.spyOn(NVRService, "_fetchCamerasFromNvr");
+
+    const edit = serviceCtx({ user_id: USER_ID, params: { nvrId: nvr._id.toString() } });
+    await NVRService.editNvrCameras(edit.req, edit.res, edit.next);
+    expect(edit.res.statusCode).toBe(200);
+    expect(payload(edit.res).data.availableCameras[0].dbId.toString()).toBe(camera._id.toString());
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    const refresh = serviceCtx({ user_id: USER_ID, params: { id: nvr._id.toString() } });
+    await NVRService.updateNvrChannels(refresh.req, refresh.res, refresh.next);
+    expect(refresh.res.statusCode).toBe(200);
+    expect(payload(refresh.res).message).toMatch(/do not require NVR refresh/i);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 });

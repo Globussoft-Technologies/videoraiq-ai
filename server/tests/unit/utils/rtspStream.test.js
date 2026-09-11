@@ -54,6 +54,14 @@ describe("buildRTSPUrl", () => {
     rtspPort: 554,
   };
 
+  it("returns the encrypted per-camera URL for a direct RTSP NVR", () => {
+    const directUrl = "rtsp://manual:secret@10.0.0.2:554/live";
+    expect(rtsp.buildRTSPUrl(
+      { connectionMode: "direct" },
+      { manualRtspUrl: encrypt(directUrl) },
+    )).toBe(directUrl);
+  });
+
   it("builds a hikvision main-stream URL", () => {
     const channel = {
       streamEndpoint: "/Streaming/Channels/",
