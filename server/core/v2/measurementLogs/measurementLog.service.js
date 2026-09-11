@@ -167,18 +167,13 @@ function toRow(doc, timezone) {
   const id = String(doc._id);
   const confidence = Number.isFinite(md.confidence) ? md.confidence : null;
 
-  // The capture is implausible when, even after unit-matching, an axis is off
-  // by more than half the labelled size (a 72" side reading 30" or 130").
-  // Combined with low confidence this means "the DS did not measure this unit".
-  const offBy = (m, p) =>
-    m != null && Number.isFinite(p) && p > 0 ? Math.abs(m - p) / p : 0;
-  const implausible =
-    hasMeasure &&
-    Math.max(
-      offBy(measured.L, printed.L),
-      offBy(measured.W, printed.W),
-      offBy(measured.H, printed.H),
-    ) > 0.5;
+  // "Implausible" means the DS reading itself is untrustworthy — not "this
+  // axis mismatches a lot", which is exactly what real QC failures look like
+  // and is already surfaced via `status`/`devFrac`/MATCH. A large gap from the
+  // label is normal, expected data here; only a low DS confidence means the
+  // numbers may just be noise. Same bar as `lowConfidence` below (0.6) — one
+  // threshold, not two, so the two flags never quietly disagree.
+  const implausible = hasMeasure && confidence != null && confidence < 0.6;
 
   return {
     id,

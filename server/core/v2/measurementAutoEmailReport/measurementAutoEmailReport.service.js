@@ -4,6 +4,8 @@ import moment from "moment-timezone";
 import sendGridMail from "@sendgrid/mail";
 import config from "config";
 import Joi from "joi";
+import path from "path";
+import { fileURLToPath } from "url";
 import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
 import { putMedia } from "../../../utils/mediaStorage.js";
@@ -14,6 +16,12 @@ import { toRow } from "../measurementLogs/measurementLog.service.js";
 import Report from "./measurementAutoEmailReport.model.js";
 import { createReportSchema, updateReportSchema } from "./measurementAutoEmailReport.validation.js";
 import { trackFailedEmail, trackOutboundEmail } from "../emailMonitoring/emailTracker.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Same PNG used by the client's own "Download Report" PDF export
+// (client_v2/src/assets/videoraiq-logo-white.png), kept as a server-side copy
+// so pdfkit can embed it without reaching into the frontend package.
+const LOGO_PATH = path.join(__dirname, "../../../assets/videoraiq-logo-white.png");
 
 const DEFAULT_TIMEZONE = "Asia/Kolkata";
 const REPORT_DISPLAY_TITLE = "Mattress QC Report";
@@ -26,12 +34,12 @@ const HEADERS = [
   "#", "Order", "Order Item", "Ref", "SKU", "Model",
   "Printed LxWxH (in)", "Measured LxWxH (in)", "Measured raw (DS)", "Unit",
   "Dev L (in)", "Dev W (in)", "Dev H (in)", "Confidence", "Match %",
-  "Station", "When", "Result", "Snapshot",
+  "Station", "When", "Result", "Snapshot", "Measurement Image",
 ];
 
 // Relative column widths for the PDF table (must have one entry per HEADER).
 const PDF_COL_WEIGHTS = [
-  3, 12, 12, 8, 10, 8, 13, 13, 13, 4, 7, 7, 7, 7, 6, 7, 15, 8, 9,
+  3, 12, 12, 8, 10, 8, 13, 13, 13, 4, 7, 7, 7, 7, 6, 7, 15, 8, 9, 9,
 ];
 
 const SNAP_LINK_TEXT = "View image";
@@ -44,6 +52,9 @@ const matchPctCell = (r) => {
 };
 
 const snapUrlOf = (r) => r.shotUrl || r.shot || r.qrImageUrl || r.measurementImageUrl || "";
+
+// The DS measurement frame specifically — distinct from the QR-cam capture above.
+const measurementImageUrlOf = (r) => r.measurementImageUrl || "";
 
 let runner = null;
 let runnerBusy = false;
@@ -142,16 +153,25 @@ async function fetchMeasurementRows(report, timezone) {
   return { rows, label, timezone };
 }
 
+const SNAP_HEADERS = ["Snapshot", "Measurement Image"];
+
 // Column set depends on whether snapshots are attached to this schedule.
 function headersFor(withSnaps) {
-  return withSnaps ? HEADERS : HEADERS.filter((h) => h !== "Snapshot");
+  return withSnaps ? HEADERS : HEADERS.filter((h) => !SNAP_HEADERS.includes(h));
+}
+
+function linkCell(url, snap) {
+  if (!url) return "—";
+  return snap === "hyperlink"
+    ? `=HYPERLINK("${url.replace(/"/g, '""')}","${SNAP_LINK_TEXT}")`
+    : SNAP_LINK_TEXT;
 }
 
 // `snap`:
 //   "text"      → "View image" plain text (XLSX turns the cell into a link)
 //   "hyperlink" → =HYPERLINK("url","View image")  (CSV — Excel/Sheets render a
 //                 clickable "View image"; opens the snapshot on click)
-//   PDF drops the column via `withSnaps: false`.
+//   PDF drops both image columns via `withSnaps: false`.
 function toCells(r, i, { snap = "text", withSnaps = true } = {}) {
   const cells = [
     i + 1,
@@ -163,11 +183,8 @@ function toCells(r, i, { snap = "text", withSnaps = true } = {}) {
     r.station, r.dateTime || r.time, r.result,
   ];
   if (withSnaps) {
-    const url = snapUrlOf(r);
-    if (!url) cells.push("—");
-    else if (snap === "hyperlink") {
-      cells.push(`=HYPERLINK("${url.replace(/"/g, '""')}","${SNAP_LINK_TEXT}")`);
-    } else cells.push(SNAP_LINK_TEXT);
+    cells.push(linkCell(snapUrlOf(r), snap));
+    cells.push(linkCell(measurementImageUrlOf(r), snap));
   }
   return cells;
 }
@@ -199,17 +216,21 @@ async function buildXlsx({ rows, label, withSnaps = true }) {
   ws.addRow([`Generated on ${moment().format("DD/MM/YYYY hh:mm A")}`]);
   ws.addRow([]);
   ws.addRow(headers);
-  const snapCol = withSnaps ? headers.indexOf("Snapshot") + 1 : 0; // ExcelJS 1-based
+  const linkCols = withSnaps
+    ? [
+        { col: headers.indexOf("Snapshot") + 1, urlOf: snapUrlOf }, // ExcelJS 1-based
+        { col: headers.indexOf("Measurement Image") + 1, urlOf: measurementImageUrlOf },
+      ]
+    : [];
   rows.forEach((r, i) => {
     const row = ws.addRow(toCells(r, i, { withSnaps }));
-    if (snapCol) {
-      const url = snapUrlOf(r);
-      if (url) {
-        const cell = row.getCell(snapCol);
-        cell.value = { text: SNAP_LINK_TEXT, hyperlink: url };
-        cell.font = { color: { argb: "FF2563EB" }, underline: true };
-      }
-    }
+    linkCols.forEach(({ col, urlOf }) => {
+      const url = urlOf(r);
+      if (!url) return;
+      const cell = row.getCell(col);
+      cell.value = { text: SNAP_LINK_TEXT, hyperlink: url };
+      cell.font = { color: { argb: "FF2563EB" }, underline: true };
+    });
   });
   ws.columns.forEach((col, idx) => {
     col.width = Math.max(12, String(headers[idx] || "").length + 2);
@@ -219,8 +240,12 @@ async function buildXlsx({ rows, label, withSnaps = true }) {
 
 const PDF_MARGIN = 24;
 const HEADER_FILL = "#2f6fd0";
-const ALT_ROW_FILL = [245, 247, 250];
+const ALT_ROW_FILL = "#f5f7fa";
 const GRID_COLOR = "#dbe2ea";
+const BAND_NAVY = "#26116C"; // rgb(38,17,105)
+const BAND_TRIANGLE = "#1B125C"; // rgb(27,18,92)
+const BAND_HEIGHT = 62;
+const BAND_TOP = 20;
 
 // Bordered, alternating-row table — matches the client "Download Report" PDF
 // (branded header, real grid, "View image" hyperlinks in the Snapshot column).
@@ -232,11 +257,12 @@ function buildPdf({ rows, label, withSnaps = true }) {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    const headers = withSnaps ? HEADERS : HEADERS.filter((h) => h !== "Snapshot");
+    const headers = withSnaps ? HEADERS : HEADERS.filter((h) => !SNAP_HEADERS.includes(h));
     const weights = withSnaps
       ? PDF_COL_WEIGHTS
-      : PDF_COL_WEIGHTS.filter((_, i) => HEADERS[i] !== "Snapshot");
+      : PDF_COL_WEIGHTS.filter((_, i) => !SNAP_HEADERS.includes(HEADERS[i]));
     const snapIdx = headers.indexOf("Snapshot");
+    const measImgIdx = headers.indexOf("Measurement Image");
 
     const pageLeft = PDF_MARGIN;
     const tableWidth = doc.page.width - PDF_MARGIN * 2;
@@ -250,18 +276,54 @@ function buildPdf({ rows, label, withSnaps = true }) {
     colX.push(pageLeft + tableWidth);
     const colW = (i) => colX[i + 1] - colX[i];
 
-    // ── branded header band ──
+    // ── branded header band — navy card with a diagonal accent, the
+    // VideoraIQ logo, a divider, and the title/summary line. Mirrors the
+    // client's own "Download Report" PDF header exactly. ──
     const summary = summariseRows(rows);
-    doc.rect(pageLeft, 20, tableWidth, 40).fill(V2_PURPLE);
+    const bandTop = BAND_TOP;
+    const bandBottom = bandTop + BAND_HEIGHT;
+
+    doc.roundedRect(pageLeft, bandTop, tableWidth, BAND_HEIGHT, 4).fill(BAND_NAVY);
+
+    // Diagonal accent, clipped to the band's rounded rect so it can't bleed
+    // past the band's left edge / corners.
+    doc.save();
+    doc.roundedRect(pageLeft, bandTop, tableWidth, BAND_HEIGHT, 4).clip();
+    doc.polygon(
+      [pageLeft, bandTop],
+      [pageLeft + 105, bandTop],
+      [pageLeft, bandTop + BAND_HEIGHT],
+    ).fill(BAND_TRIANGLE);
+    doc.restore();
+
+    // Logo — native 2560×723 (≈3.54:1); fit to a fixed height, vertically centered.
+    const logoH = 26;
+    const logoW = logoH * (2560 / 723);
+    const logoX = pageLeft + 16;
+    try {
+      doc.image(LOGO_PATH, logoX, bandTop + (BAND_HEIGHT - logoH) / 2, { height: logoH });
+    } catch {
+      doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(10)
+        .text("VideoraIQ", logoX, bandTop + BAND_HEIGHT / 2 - 5);
+    }
+
+    // Divider, clear of the logo's rendered width.
+    const dividerX = logoX + logoW + 14;
+    doc.strokeColor("#465BB2").lineWidth(1)
+      .moveTo(dividerX, bandTop + 10)
+      .lineTo(dividerX, bandBottom - 10)
+      .stroke();
+
+    const textX = dividerX + 16;
     doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(15)
-      .text("Mattress Measurement Logs", pageLeft + 14, 27);
-    doc.font("Helvetica").fontSize(8).fillColor("#e6ecff").text(
+      .text("Mattress Measurement Logs", textX, bandTop + 13);
+    doc.font("Helvetica").fontSize(8).fillColor("#dceafd").text(
       `${rows.length} record${rows.length === 1 ? "" : "s"}  |  ${summary.pass} pass  |  ${summary.mismatch} mismatch  |  ${summary.qrErr} QR error   ·   ${label}   ·   Generated ${moment().format("DD/MM/YYYY hh:mm A")}`,
-      pageLeft + 14,
-      45,
+      textX,
+      bandTop + 34,
     );
 
-    let y = 74;
+    let y = bandBottom + 14;
 
     const rowHeight = (cells, font, size) => {
       doc.font(font).fontSize(size);
@@ -278,19 +340,20 @@ function buildPdf({ rows, label, withSnaps = true }) {
       const size = header ? 6.4 : 6.2;
       const h = rowHeight(cells, font, size);
 
-      // page break
-      if (y + h > doc.page.height - PDF_MARGIN) {
+      // Page break: start a new page, repeat the header, then draw THIS row
+      // fresh at the new `y` — never fall through with stale coordinates.
+      if (!header && y + h > doc.page.height - PDF_MARGIN) {
         doc.addPage();
         y = PDF_MARGIN;
         drawRow(headers, { header: true });
+        drawRow(cells, { header, zebra, rowIndex });
+        return;
       }
 
       if (header) {
         doc.rect(pageLeft, y, tableWidth, h).fill(HEADER_FILL);
       } else if (zebra) {
-        doc.rect(pageLeft, y, tableWidth, h).fill(
-          `rgb(${ALT_ROW_FILL[0]},${ALT_ROW_FILL[1]},${ALT_ROW_FILL[2]})`,
-        );
+        doc.rect(pageLeft, y, tableWidth, h).fill(ALT_ROW_FILL);
       }
 
       doc.font(font).fontSize(size)
@@ -300,11 +363,11 @@ function buildPdf({ rows, label, withSnaps = true }) {
         const cx = colX[i] + 4;
         const cw = colW(i) - 8;
         const text = String(cell);
-        const isSnapLink = !header && i === snapIdx && text === SNAP_LINK_TEXT;
+        const isSnapLink = !header && (i === snapIdx || i === measImgIdx) && text === SNAP_LINK_TEXT;
         const isResult = !header && headers[i] === "Result";
 
         if (isSnapLink) {
-          const url = snapUrlOf(rows[rowIndex]);
+          const url = i === snapIdx ? snapUrlOf(rows[rowIndex]) : measurementImageUrlOf(rows[rowIndex]);
           doc.fillColor("#2563eb").text(text, cx, y + 3, { width: cw, underline: true });
           if (url) {
             const tw = doc.widthOfString(text);
