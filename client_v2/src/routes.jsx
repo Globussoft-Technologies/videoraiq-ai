@@ -50,6 +50,8 @@ import MeasurementLogs from './pages/MeasurementLogs/MeasurementLogs';
 import EmailMonitoringDashboard from './page/user/EmailMonitoring/EmailMonitoringDashboard';
 import AssistantPage from './page/user/Assistant/AssistantPage';
 import RaspberryPiDevices from './page/user/Administer/RaspberryPiDevices';
+import StorageSettings from './page/user/Administer/StorageSettings';
+import { ADMIN_STORAGE_UI_ENABLED } from './layout/nav.config';
 
 const STUBS = [
   ['faces', 'faces', '/logs/tagged-users'],
@@ -133,6 +135,7 @@ export const v2Routes = (
     <Route path="users" element={guard('Users', undefined, <UsersPage />)} />
     <Route path="settings" element={guard('settings', undefined, <SystemSettings />)} />
     <Route path="raspberry-pi-devices" element={guard('settings', undefined, <RaspberryPiDevices />)} />
+    {ADMIN_STORAGE_UI_ENABLED && <Route path="storage-settings" element={guard('storageSettings', undefined, <StorageSettings />)} />}
     {STUBS.map(([key, path, legacy]) => (
       <Route key={key} path={path} element={<Placeholder viewKey={key} legacyPath={legacy} />} />
     ))}

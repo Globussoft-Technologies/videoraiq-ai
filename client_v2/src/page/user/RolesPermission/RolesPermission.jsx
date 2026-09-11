@@ -21,7 +21,7 @@ import { getRoles, createRole, renameRole, updateRolePermission, deleteRole, upd
 // this editable matrix is hidden, nothing about the underlying enforcement.
 const PERMISSION_MODULES = [
   'NVR', 'channels', 'LIVE', 'dashboard', 'alerts', 'analytics', 'incidents', 'Users',
-  'roles', 'settings', 'departments', 'detectionSettings', 'profiles', 'recipients',
+  'roles', 'settings', 'storageSettings', 'departments', 'detectionSettings', 'profiles', 'recipients',
   'locations', 'playbacks', 'autoEmailReports', 'shifts',
 ];
 // Every sub-module the backend seeds under permissionConfig.logs (see
@@ -41,7 +41,7 @@ const LOG_SUBMODULES = [
 const MODULE_LABELS = {
   NVR: 'Cameras & NVRs', channels: 'Channels', LIVE: 'Live Wall', dashboard: 'Command Center',
   alerts: 'Alerts', analytics: 'Analytics',
-  incidents: 'Incident Center', Users: 'Users', permission: 'Permissions', roles: 'Roles', settings: 'Settings',
+  incidents: 'Incident Center', Users: 'Users', permission: 'Permissions', roles: 'Roles', settings: 'Settings', storageSettings: 'Storage Settings',
   departments: 'Departments', detectionSettings: 'Detection Settings', profiles: 'Profiles',
   recipients: 'Alert Recipients', locations: 'Locations', playbacks: 'Playbacks',
   shifts: 'Shift Management & Schedule',
@@ -64,7 +64,7 @@ const LEGACY_MODULES_BY_ROLE = {
   write: { view: true, create: true, edit: true, delete: false },
 };
 const LEGACY_MODULE_DENIED = { view: false, create: false, edit: false, delete: false };
-const LEGACY_MODULE_KEYS = ['settings', 'shifts'];
+const LEGACY_MODULE_KEYS = ['settings', 'storageSettings', 'shifts'];
 
 function permissionConfigForRole(role) {
   const stored = role.permissionDetails?.permissionConfig || {};

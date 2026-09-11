@@ -233,7 +233,13 @@ export function playStationSound(cue) {
   const context = prepareStationAudio();
   if (!context) return;
   const cues = {
-    accept: [{ frequency: 880, duration: 0.09, at: 0 }, { frequency: 1320, duration: 0.16, at: 0.09 }],
+    // A longer, lower rising chime remains audible on small kiosk/monitor
+    // speakers. The former short 880/1320 Hz sine cue was easily missed.
+    accept: [
+      { frequency: 520, duration: 0.16, at: 0, type: 'triangle' },
+      { frequency: 700, duration: 0.18, at: 0.13, type: 'triangle' },
+      { frequency: 920, duration: 0.24, at: 0.28, type: 'triangle' },
+    ],
     reject: [
       { frequency: 300, to: 150, duration: 0.2, at: 0, type: 'square' },
       { frequency: 220, to: 120, duration: 0.26, at: 0.2, type: 'square' },
@@ -439,7 +445,10 @@ export function dimensionsFromCustomSize(value) {
   if (!customSize || /^n\/?a$/i.test(customSize)) return {};
 
   const labeledValue = (label) => {
-    const match = new RegExp(`\\b${label}\\b\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)`, 'i').exec(customSize);
+    // Flo custom labels are emitted in both "Length: 73" and
+    // "Length Size: 73 inch" forms. Treat the optional "Size" word and unit
+    // as presentation text so the fifth QR value remains authoritative.
+    const match = new RegExp(`\\b${label}\\b(?:\\s+size)?\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)`, 'i').exec(customSize);
     return match ? Number(match[1]) : undefined;
   };
   const labeled = {

@@ -75,7 +75,12 @@ export default function QrExtractedPanel({ metadata, response, readAt, image, ba
             <div key={label} className="grid h-[20%] min-h-11 grid-cols-[13px_142px_minmax(0,1fr)_180px] items-center gap-3 px-0.5">
               <span className={`h-2 w-2 rounded-full ${color} shadow-[0_0_8px_currentColor]`} />
               <span className="font-mono text-[9px] font-bold uppercase tracking-[.08em] text-[var(--tx)]">{label}</span>
-              <strong className="min-w-0 truncate font-mono text-[14px] font-bold text-[var(--tx)]">{shown(value)}</strong>
+              <strong
+                className={`min-w-0 font-mono text-[14px] font-bold text-[var(--tx)] ${label === 'Custom size / type' ? 'whitespace-normal break-words leading-snug' : 'truncate'}`}
+                title={shown(value)}
+              >
+                {shown(value)}
+              </strong>
               <span className="min-w-0 truncate text-right text-[11px] font-bold text-[var(--tx)]">{note}</span>
             </div>
           ))}

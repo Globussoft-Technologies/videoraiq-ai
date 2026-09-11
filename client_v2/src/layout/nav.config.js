@@ -47,6 +47,7 @@ import {
 // Exported so Sidebar.jsx and lib/logOrder.js match on one literal instead of
 // each carrying their own copy.
 export const LOGS_GROUP_LABEL = 'LOGS & RECORDS';
+export const ADMIN_STORAGE_UI_ENABLED = import.meta.env.VITE_ADMIN_STORAGE_CONFIG_ENABLED !== 'false';
 
 /**
  * `logsConfigKey` ties a log item to its flag in GET /logs-configuration.
@@ -65,15 +66,15 @@ export const LOGS_GROUP_LABEL = 'LOGS & RECORDS';
 
 // Mining incident log tabs (conveyor, crusher, etc.).
 const stevinrockLogItems = [
-  { key: 'conveyor', label: 'Conveyor Logs', path: 'logs/conveyor', icon: Container, permissionKey: 'logs', permissionSubKey: 'conveyorLogs' , logsConfigKey: 'conveyorLogs' },
-  { key: 'vehicle-obstruction', label: 'Vehicle Obstruction Logs', path: 'logs/vehicle-obstruction', icon: OctagonAlert, permissionKey: 'logs', permissionSubKey: 'vehicleObstructionLogs' , logsConfigKey: 'vehicleObstructionLogs' },
-  { key: 'vehicle-count', label: 'Vehicle Count Logs', path: 'logs/vehicle-count', icon: CarFront, permissionKey: 'logs', permissionSubKey: 'vehicleCountLogs' , logsConfigKey: 'vehicleCountLogs' },
-  { key: 'car', label: 'Car Logs', path: 'logs/car', icon: Car, permissionKey: 'logs', permissionSubKey: 'carLogs' , logsConfigKey: 'carLogs' },
+  { key: 'conveyor', label: 'Conveyor Logs', path: 'logs/conveyor', icon: Container, permissionKey: 'logs', permissionSubKey: 'conveyorLogs', logsConfigKey: 'conveyorLogs' },
+  { key: 'vehicle-obstruction', label: 'Vehicle Obstruction Logs', path: 'logs/vehicle-obstruction', icon: OctagonAlert, permissionKey: 'logs', permissionSubKey: 'vehicleObstructionLogs', logsConfigKey: 'vehicleObstructionLogs' },
+  { key: 'vehicle-count', label: 'Vehicle Count Logs', path: 'logs/vehicle-count', icon: CarFront, permissionKey: 'logs', permissionSubKey: 'vehicleCountLogs', logsConfigKey: 'vehicleCountLogs' },
+  { key: 'car', label: 'Car Logs', path: 'logs/car', icon: Car, permissionKey: 'logs', permissionSubKey: 'carLogs', logsConfigKey: 'carLogs' },
   { key: 'vehicle-check-in-out', label: 'Vehicle Check-In/Out Logs', path: 'logs/vehicle-check-in-out', icon: ArrowLeftRight, permissionKey: 'logs', permissionSubKey: 'carLogs' },
-  { key: 'crusher', label: 'Crusher Logs', path: 'logs/crusher', icon: Hammer, permissionKey: 'logs', permissionSubKey: 'crusherLogs' , logsConfigKey: 'crusherLogs' },
-  { key: 'line-crossing', label: 'Line Crossing Logs', path: 'logs/line-crossing', icon: GitBranch, permissionKey: 'logs', permissionSubKey: 'lineCrossingLogs' , logsConfigKey: 'lineCrossingLogs' },
-  { key: 'water-spill', label: 'Water Spill Logs', path: 'logs/water-spill', icon: Droplets, permissionKey: 'logs', permissionSubKey: 'waterSpillLogs' , logsConfigKey: 'waterSpillLogs' },
-  { key: 'unauthorized-access', label: 'Unauthorized Access Logs', path: 'logs/unauthorized-access', icon: Ban, permissionKey: 'logs', permissionSubKey: 'unauthorizedAccessLogs' , logsConfigKey: 'unauthorizedAccessLogs' },
+  { key: 'crusher', label: 'Crusher Logs', path: 'logs/crusher', icon: Hammer, permissionKey: 'logs', permissionSubKey: 'crusherLogs', logsConfigKey: 'crusherLogs' },
+  { key: 'line-crossing', label: 'Line Crossing Logs', path: 'logs/line-crossing', icon: GitBranch, permissionKey: 'logs', permissionSubKey: 'lineCrossingLogs', logsConfigKey: 'lineCrossingLogs' },
+  { key: 'water-spill', label: 'Water Spill Logs', path: 'logs/water-spill', icon: Droplets, permissionKey: 'logs', permissionSubKey: 'waterSpillLogs', logsConfigKey: 'waterSpillLogs' },
+  { key: 'unauthorized-access', label: 'Unauthorized Access Logs', path: 'logs/unauthorized-access', icon: Ban, permissionKey: 'logs', permissionSubKey: 'unauthorizedAccessLogs', logsConfigKey: 'unauthorizedAccessLogs' },
 ];
 
 /**
@@ -88,13 +89,13 @@ const stevinrockLogItems = [
 // Center/Analytics). Sidebar.jsx hides (not disables) any item whose module
 // resolves to view:false, matching V1's Header.jsx nav filtering exactly.
 export const NAV_GROUPS = [
-  
+
   {
     label: 'EXPERIENCE',
     items: [
       { key: 'live-demo', label: 'Live Demo', path: 'live-demo', icon: CirclePlay, badge: 'NEW' },
     ],
-  },{
+  }, {
     label: 'MONITOR',
     items: [
       { key: 'overview', label: 'Command Center', path: 'dashboard', icon: LayoutDashboard, end: true, permissionKey: 'dashboard' },
@@ -128,13 +129,13 @@ export const NAV_GROUPS = [
   {
     label: LOGS_GROUP_LABEL,
     items: [
-      { key: 'attendance', label: 'Attendance Logs', path: 'logs/attendance', icon: CalendarCheck, permissionKey: 'logs', permissionSubKey: 'attendanceLogs' , logsConfigKey: 'attendanceLogs' },
-      { key: 'access', label: 'Access Logs', path: 'logs/access', icon: DoorOpen, permissionKey: 'logs', permissionSubKey: 'accessLogs' , logsConfigKey: 'accessLogs' },
-      { key: 'tagged-users', label: 'Tagged Users', path: 'logs/tagged-users', icon: Tags, permissionKey: 'logs', permissionSubKey: 'taggedUsersLogs' , logsConfigKey: 'taggedUsers' },
-      { key: 'detected-users', label: 'Detected Users', path: 'logs/detected-users', icon: ScanFace, permissionKey: 'logs', permissionSubKey: 'detectedUsersLogs' , logsConfigKey: 'detectedUsers' },
-      { key: 'person-count', label: 'Person Count Logs', path: 'logs/person-count', icon: UserCheck, permissionKey: 'logs', permissionSubKey: 'personCountLogs' , logsConfigKey: 'personCountLogs' },
-      { key: 'desk-absence', label: 'Desk Absence Logs', path: 'logs/desk-absence', icon: UserMinus, permissionKey: 'logs', permissionSubKey: 'deskLogs' , logsConfigKey: 'deskAbsenceLogs' },
-      { key: 'anpr', label: 'ANPR Logs', path: 'logs/anpr', icon: Car, permissionKey: 'logs', permissionSubKey: 'ANPRLogs' , logsConfigKey: 'anprLogs' },
+      { key: 'attendance', label: 'Attendance Logs', path: 'logs/attendance', icon: CalendarCheck, permissionKey: 'logs', permissionSubKey: 'attendanceLogs', logsConfigKey: 'attendanceLogs' },
+      { key: 'access', label: 'Access Logs', path: 'logs/access', icon: DoorOpen, permissionKey: 'logs', permissionSubKey: 'accessLogs', logsConfigKey: 'accessLogs' },
+      { key: 'tagged-users', label: 'Tagged Users', path: 'logs/tagged-users', icon: Tags, permissionKey: 'logs', permissionSubKey: 'taggedUsersLogs', logsConfigKey: 'taggedUsers' },
+      { key: 'detected-users', label: 'Detected Users', path: 'logs/detected-users', icon: ScanFace, permissionKey: 'logs', permissionSubKey: 'detectedUsersLogs', logsConfigKey: 'detectedUsers' },
+      { key: 'person-count', label: 'Person Count Logs', path: 'logs/person-count', icon: UserCheck, permissionKey: 'logs', permissionSubKey: 'personCountLogs', logsConfigKey: 'personCountLogs' },
+      { key: 'desk-absence', label: 'Desk Absence Logs', path: 'logs/desk-absence', icon: UserMinus, permissionKey: 'logs', permissionSubKey: 'deskLogs', logsConfigKey: 'deskAbsenceLogs' },
+      { key: 'anpr', label: 'ANPR Logs', path: 'logs/anpr', icon: Car, permissionKey: 'logs', permissionSubKey: 'ANPRLogs', logsConfigKey: 'anprLogs' },
       // { key: 'productivity', label: 'Productivity Logs', path: 'logs/productivity', icon: TrendingUp },
       // Hidden from the sidebar, and from the header search with it — Header.jsx
       // builds its PAGE_INDEX from NAV_GROUPS, so an item that isn't listed here
@@ -163,6 +164,7 @@ export const NAV_GROUPS = [
     items: [
       { key: 'users', label: 'User Role Detail', path: 'users', icon: Users, permissionKey: 'Users' },
       { key: 'settings', label: 'Settings', path: 'settings', icon: Settings, permissionKey: 'settings' },
+      ...(ADMIN_STORAGE_UI_ENABLED ? [{ key: 'storage-settings', label: 'Storage Settings', path: 'storage-settings', icon: HardDrive, permissionKey: 'storageSettings' }] : []),
       { key: 'raspberry-pi-devices', label: 'Raspberry Pi Devices', path: 'raspberry-pi-devices', icon: Cpu, permissionKey: 'settings' },
       { key: 'roles', label: 'Roles & Permission', path: 'roles', icon: ShieldCheck, permissionKey: 'roles' },
       { key: 'locations', label: 'Locations', path: 'locations', icon: MapPin, permissionKey: 'locations' },
@@ -227,6 +229,7 @@ export const VIEW_META = {
   'auto-email-reports': { title: 'Auto Email Reports', sub: 'Schedule attendance logs for verified recipients' },
   settings: { title: 'Settings', sub: 'Platform, alerts, privacy and integrations' },
   'raspberry-pi-devices': { title: 'Raspberry Pi Devices', sub: 'Review and approve station pairing requests' },
+  'storage-settings': { title: 'Storage', sub: 'Organisation storage provider and deployment fallback' },
   profile: { title: 'My Profile', sub: 'Your account, activity & preferences' },
   'admin-profile': { title: 'Detection Profile', sub: 'Your account and detection configuration' },
   locations: { title: 'Locations', sub: 'Locations' },

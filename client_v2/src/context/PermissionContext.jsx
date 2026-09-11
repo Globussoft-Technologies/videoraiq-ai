@@ -17,6 +17,7 @@ const DENY = { view: false, create: false, edit: false, delete: false };
 // server's four role presets, keyed by role name.
 const BACKFILLED_MODULES = {
   settings: { admin: FULL_ACCESS, read: VIEW_ONLY, write: NO_DELETE },
+  storageSettings: { admin: FULL_ACCESS, read: VIEW_ONLY, write: NO_DELETE },
   shifts: { admin: FULL_ACCESS, read: VIEW_ONLY, write: NO_DELETE },
 };
 
