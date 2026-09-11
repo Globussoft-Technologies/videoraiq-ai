@@ -51,7 +51,7 @@ import EmailMonitoringDashboard from './page/user/EmailMonitoring/EmailMonitorin
 import AssistantPage from './page/user/Assistant/AssistantPage';
 import RaspberryPiDevices from './page/user/Administer/RaspberryPiDevices';
 import StorageSettings from './page/user/Administer/StorageSettings';
-import { ADMIN_STORAGE_UI_ENABLED } from './layout/nav.config';
+import { ADMIN_STORAGE_UI_ENABLED } from './lib/featureFlags';
 
 const STUBS = [
   ['faces', 'faces', '/logs/tagged-users'],

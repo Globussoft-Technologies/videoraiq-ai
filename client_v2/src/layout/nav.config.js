@@ -41,13 +41,15 @@ import {
   CirclePlay,
   Cpu,
   Move3d,
+  HardDrive,
 } from 'lucide-react';
+
+import { ADMIN_STORAGE_UI_ENABLED } from '../lib/featureFlags';
 
 // The sidebar group whose order the user can customise (Settings ▸ Log Order).
 // Exported so Sidebar.jsx and lib/logOrder.js match on one literal instead of
 // each carrying their own copy.
 export const LOGS_GROUP_LABEL = 'LOGS & RECORDS';
-export const ADMIN_STORAGE_UI_ENABLED = import.meta.env.VITE_ADMIN_STORAGE_CONFIG_ENABLED !== 'false';
 
 /**
  * `logsConfigKey` ties a log item to its flag in GET /logs-configuration.
