@@ -25,6 +25,8 @@ const ENGINE_META = {
   absence: { short: 'CASH', name: 'Cashier Absence' },
   waterspillagedetection: { short: 'WATER', name: 'Water Spillage' },
   water: { short: 'WATER', name: 'Water Spillage' },
+  cylinderdetection: { short: 'CYL', name: 'Cylinder Stacking Detection' },
+  cylinder: { short: 'CYL', name: 'Cylinder Stacking Detection' },
   vehicledetection: { short: 'VEH', name: 'Vehicle Detection' },
   vehicle: { short: 'VEH', name: 'Vehicle Detection' },
   persondetection: { short: 'PERSON', name: 'Person Detection' },

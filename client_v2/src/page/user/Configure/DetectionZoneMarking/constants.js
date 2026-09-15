@@ -6,7 +6,7 @@ export const DETECTION_FIELD_KEYS = [
   'crowdDetectionSettings', 'lightDetectionSettings', 'doorDetectionSettings',
   'vehicleDetectionSettings', 'deskAbsenceSettings', 'guardAbsenceSettings',
   'guardSleepingDetectionSettings',
-  'conveyorDetectionSettings', 'crusherDetectionSettings', 'waterSpillageDetectionSettings',
+  'conveyorDetectionSettings', 'crusherDetectionSettings', 'cylinderDetectionSettings', 'waterSpillageDetectionSettings',
   'vehicleTypeDetectionSettings', 'loiteringDetectionSettings', 'vehicleObstructionSettings',
   'tableOccupancyDetectionSettings', 'foodServicePPEDetectionSettings', 'mobilePhoneDetectionSettings',
   'carModelDetectionSettings', 'faceAuthenticationSettings', 'vehicleCheckInOutSettings',

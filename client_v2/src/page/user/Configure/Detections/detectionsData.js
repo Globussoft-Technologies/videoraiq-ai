@@ -22,6 +22,13 @@ export const SEVERITIES = [
 
 export const SEVERITY_BY_KEY = Object.fromEntries(SEVERITIES.map((s) => [s.key, s]));
 
+// Stable product names keyed by setting type. These take precedence over an
+// older label returned by the API, so the UI does not depend on every backend
+// instance/cache being updated at exactly the same time.
+const DETECTION_LABEL_OVERRIDES = {
+  cylinderDetectionSettings: 'Cylinder Stacking Detection',
+};
+
 export const INCIDENT_STATUS = {
   new: { label: 'New', color: 'var(--crit)' },
   acknowledged: { label: 'Acknowledged', color: 'var(--warn)' },
@@ -65,6 +72,7 @@ export const DETECTION_THRESHOLDS = {
   mobilePhoneDetectionSettings: ['mobile_phone_confidence'],
   conveyorDetectionSettings: [],
   crusherDetectionSettings: [],
+  cylinderDetectionSettings: [],
   waterSpillageDetectionSettings: [],
 };
 
@@ -92,7 +100,7 @@ export function thresholdLabel(key) {
 const CATEGORY_MATCHERS = [
   ['safety', ['ppe', 'protective', 'safety', 'helmet', 'vest', 'fire', 'smoke', 'weapon']],
   ['vehicles', ['vehicle', 'traffic', 'anpr', 'plate', 'car']],
-  ['industrial', ['conveyor', 'crusher', 'spillage', 'spill', 'light']],
+  ['industrial', ['conveyor', 'crusher', 'cylinder', 'spillage', 'spill', 'light']],
   ['perimeter', ['intrusion', 'unauthorized', 'access', 'line', 'crossing', 'loiter', 'bag', 'baggage']],
   ['people', ['person', 'people', 'crowd', 'face', 'attendance']],
   ['workplace', ['desk', 'guard', 'table', 'occupancy', 'door', 'phone', 'mobile', 'retail', 'food']],
@@ -168,9 +176,10 @@ function camelize(key) {
 export function buildDetectionModels(detectionTypes) {
   return detectionEntries(detectionTypes).map(([key, value]) => {
     const rawLabel = detectionLabel(value, key);
-    const label = isAttendanceDetection(key) || isAttendanceDetection(rawLabel)
-      ? 'Attendance-detection'
-      : rawLabel;
+    const label = DETECTION_LABEL_OVERRIDES[key]
+      || (isAttendanceDetection(key) || isAttendanceDetection(rawLabel)
+        ? 'Attendance-detection'
+        : rawLabel);
     const data = value && typeof value === 'object' ? value : {};
     const settings = data.settings || {};
     const minConfidence = numberFrom(

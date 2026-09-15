@@ -112,6 +112,7 @@ const ENGINE_LABELS = {
   unattendedBaggageDetectionSettings: 'BAG',
   baggageDetectionSettings: 'BAG',
   cashDetectionSettings: 'CASH',
+  cylinderDetectionSettings: 'CYL',
   personalProtectiveEquipmentSettings: 'PPE',
   mobilePhoneDetectionSettings: 'MOB',
 };
@@ -134,6 +135,7 @@ const ENGINE_NAMES = {
   unattendedBaggageDetectionSettings: 'Unattended Baggage Detection',
   baggageDetectionSettings: 'Baggage Detection',
   cashDetectionSettings: 'Cash Detection',
+  cylinderDetectionSettings: 'Cylinder Stacking Detection',
   personalProtectiveEquipmentSettings: 'Personal Protective Equipment Detection',
   mobilePhoneDetectionSettings: 'Mobile Phone Detection',
 };

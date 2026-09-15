@@ -48,6 +48,7 @@ export const ENGINE_LABEL_MAP = {
   guardAbsenceSettings:              'Guard Absence',
   conveyorDetectionSettings:         'Conveyor Detection',
   crusherDetectionSettings:          'Crusher Detection',
+  cylinderDetectionSettings:         'Cylinder Stacking Detection',
   waterSpillageDetectionSettings:    'Water Spillage',
   loiteringDetectionSettings:        'Loitering',
   vehicleTypeDetectionSettings:      'Vehicle Type',

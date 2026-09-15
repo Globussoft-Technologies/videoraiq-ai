@@ -65,6 +65,8 @@ function cameraLabel(detection) {
 // payload as raw identifiers (e.g. "guardSleepingDetection"). Extend as needed;
 // anything not listed falls back to a title-cased version of the slug.
 const DETECTION_LABELS = {
+  cylinderDetection: 'Cylinder Stacking Detection',
+  cylinderDetectionSettings: 'Cylinder Stacking Detection',
   guardSleepingDetection: 'Sleep Activity Detection',
   guardSleepingDetectionSettings: 'Sleep Activity Detection',
   guardAbsence: 'Guard Absence Detection',
