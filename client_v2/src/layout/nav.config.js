@@ -42,6 +42,7 @@ import {
   Cpu,
   Move3d,
   HardDrive,
+  ScanLine,
 } from 'lucide-react';
 
 import { ADMIN_STORAGE_UI_ENABLED } from '../lib/featureFlags';
@@ -154,6 +155,7 @@ export const NAV_GROUPS = [
     items: [
       { key: 'cameras', label: 'Cameras & NVRs', path: 'cameras', icon: Cctv, permissionKey: 'NVR' },
       { key: 'detection-settings', label: 'Detections', path: 'detection-settings', icon: Settings2, permissionKey: 'detectionSettings' },
+      { key: 'measurement-calibration', label: 'Measurement Calibration', path: 'measurement-calibration', icon: ScanLine, permissionKey: 'settings' },
     ],
   },
   {
@@ -196,6 +198,7 @@ export const VIEW_META = {
   cameras: { title: 'Cameras & NVRs', sub: 'Device inventory & recorder health' },
   'camera-settings': { title: 'Camera Settings', sub: 'Camera alias names & department assignment' },
   'detection-settings': { title: 'Detections', sub: 'AI detections - configure & investigate incidents' },
+  'measurement-calibration': { title: 'Measurement Calibration', sub: 'Capture the RealSense surface and configure its measurement zone' },
   detections: { title: 'Detections', sub: 'AI detections — configure & investigate incidents' },
   engines: { title: 'Detection Settings', sub: 'Configure detection types per camera' },
   attendance: { title: 'Attendance Logs', sub: 'Face-recognition check-in & working hours' },

@@ -51,6 +51,7 @@ import EmailMonitoringDashboard from './page/user/EmailMonitoring/EmailMonitorin
 import AssistantPage from './page/user/Assistant/AssistantPage';
 import RaspberryPiDevices from './page/user/Administer/RaspberryPiDevices';
 import StorageSettings from './page/user/Administer/StorageSettings';
+import MeasurementCalibration from './page/user/Configure/MeasurementCalibration';
 import { ADMIN_STORAGE_UI_ENABLED } from './lib/featureFlags';
 
 const STUBS = [
@@ -127,6 +128,7 @@ export const v2Routes = (
         `detections` permission module exists server-side. */}
     <Route path="detection-settings" element={<Detections />} />
     <Route path="camera-settings" element={<CameraSettings />} />
+    <Route path="measurement-calibration" element={guard('settings', undefined, <MeasurementCalibration />)} />
     {/* <Route path="engines" element={guard('detectionSettings', undefined, <DetectionSettings />)} /> */}
     <Route path="recipients" element={guard('recipients', undefined, <AlertRecipients />)} />
     <Route path="auto-email-reports" element={guard('autoEmailReports', undefined, <AutoEmailReports />)} />
