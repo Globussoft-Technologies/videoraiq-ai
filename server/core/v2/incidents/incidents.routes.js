@@ -123,6 +123,11 @@ router.post(
   incidentsController.getCarModelDetectionLogs,
 );
 router.post(
+  "/logs/cylinder-detection",
+  viewAccessCheck,
+  incidentsController.getCylinderDetectionLogs,
+);
+router.post(
   "/logs/vehicle-check-in-out",
   viewAccessCheck,
   incidentsController.getVehicleCheckInOutLogs,

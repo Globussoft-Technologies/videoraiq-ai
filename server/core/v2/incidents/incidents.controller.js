@@ -501,6 +501,33 @@ class IncidentsController {
     return await incidentsService.getCarModelDetectionLogs(req, res, next);
   }
 
+  async getCylinderDetectionLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Cylinder Detection logs. Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, status, minCount, maxCount, minStackHeight, maxStackHeight and search. Paginated via skip/limit.'
+    #swagger.parameters['skip'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['startDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['endDate'] = { in: 'query', type: 'string', description: 'YYYY-MM-DD' }
+    #swagger.parameters['nvrId'] = { in: 'query', type: 'string' }
+    #swagger.parameters['nvrIds'] = { in: 'query', type: 'string' }
+    #swagger.parameters['channelId'] = { in: 'query', type: 'string' }
+    #swagger.parameters['channelIds'] = { in: 'query', type: 'string' }
+    #swagger.parameters['severity'] = { in: 'query', type: 'string', enum: ['low','moderate','high'] }
+    #swagger.parameters['resolved'] = { in: 'query', type: 'boolean' }
+    #swagger.parameters['reportStatus'] = { in: 'query', type: 'boolean' }
+    #swagger.parameters['status'] = { in: 'query', type: 'string' }
+    #swagger.parameters['minCount'] = { in: 'query', type: 'number' }
+    #swagger.parameters['maxCount'] = { in: 'query', type: 'number' }
+    #swagger.parameters['minStackHeight'] = { in: 'query', type: 'number' }
+    #swagger.parameters['maxStackHeight'] = { in: 'query', type: 'number' }
+    #swagger.parameters['search'] = { in: 'query', type: 'string' }
+    #swagger.responses[200] = { description: 'Cylinder detection logs fetched successfully' }
+    #swagger.responses[500] = { description: 'Internal server error' }
+    #swagger.security = [{ "EncryptedAuthToken": [] }]
+    */
+    return await incidentsService.getCylinderDetectionLogs(req, res, next);
+  }
+
   async getCarModelVehicleNumbers(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get all distinct, non-empty vehicle numbers from carModelDetection incidents for the authenticated user. No date or channel filters are applied.'

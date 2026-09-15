@@ -281,6 +281,10 @@ const LOG_SORT_FIELDS = {
   color: "color",
   colour: "color",
   year: "year",
+  currentStatus: "currentStatus",
+  count: "count",
+  cylinderCount: "cylinderCount",
+  stackHeight: "stackHeight",
   nvrName: "nvrData.nvrName",
   "nvrData.nvrName": "nvrData.nvrName",
   channelName: "channelData.name",
@@ -3368,6 +3372,38 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch car model detection logs", 500));
+    }
+  }
+
+  async getCylinderDetectionLogs(req, res, next) {
+    try {
+      const { status, minCount, maxCount, minStackHeight, maxStackHeight } = req.query;
+      const extraMatch = {};
+
+      if (status) extraMatch.currentStatus = String(status).toUpperCase();
+      if (minCount !== undefined || maxCount !== undefined) {
+        extraMatch.cylinderCount = {};
+        if (minCount !== undefined) extraMatch.cylinderCount.$gte = Number(minCount);
+        if (maxCount !== undefined) extraMatch.cylinderCount.$lte = Number(maxCount);
+      }
+      if (minStackHeight !== undefined || maxStackHeight !== undefined) {
+        extraMatch.stackHeight = {};
+        if (minStackHeight !== undefined) extraMatch.stackHeight.$gte = Number(minStackHeight);
+        if (maxStackHeight !== undefined) extraMatch.stackHeight.$lte = Number(maxStackHeight);
+      }
+
+      return await this._fetchIncidentLogs({
+        req,
+        res,
+        incidentType: "cylinderDetection",
+        extraMatch,
+        searchFields: ["incidentName", "description", "zone", "currentStatus"],
+        searchNumberFields: ["count", "cylinderCount", "stackHeight"],
+        postLookupSearch: true,
+      });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch cylinder detection logs", 500));
     }
   }
 

@@ -3,6 +3,7 @@ import request from "supertest";
 
 const mocks = vi.hoisted(() => ({
   getCarModelVehicleNumbers: vi.fn(),
+  getCylinderDetectionLogs: vi.fn(),
 }));
 
 vi.mock("../../core/v2/incidents/incidents.service.js", () => ({
@@ -38,6 +39,20 @@ beforeEach(() => {
       data: { totalCount: 0, vehicleNumbers: [] },
     }),
   );
+  mocks.getCylinderDetectionLogs.mockImplementation((req, res) =>
+    res.status(200).json({ status: "success", data: { totalCount: 0, data: [] } }),
+  );
+});
+
+describe("POST /api/v2/incidents/logs/cylinder-detection", () => {
+  it("routes the request to the cylinder log handler", async () => {
+    const response = await request(app).post(
+      "/api/v2/incidents/logs/cylinder-detection",
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.getCylinderDetectionLogs).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("GET /api/v2/incidents/logs/car-model-detection/numbers", () => {

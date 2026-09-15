@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import mongoose from "mongoose";
 import { clearCollections, connectMongo, disconnectMongo } from "../dbSetup.js";
 import { payload, serviceCtx } from "../../helpers/service.js";
 
@@ -182,6 +183,56 @@ describe("v2 cylinderDetection incidents", () => {
       "u1",
       `cameradetection_${admin._id}`,
       expect.objectContaining({ incidentType: "cylinderDetection" }),
+    );
+  });
+
+  it("returns cylinder logs with cylinder-specific filters", async () => {
+    const common = {
+      userId: "u1",
+      nvrId: new mongoose.Types.ObjectId(),
+      channelId: new mongoose.Types.ObjectId(),
+      incidentName: "Cylinder Detection",
+      severity: "high",
+    };
+    await CylinderDetectionIncident.create([
+      {
+        ...common,
+        timeOfIncident: new Date("2026-09-15T10:00:00.000Z"),
+        currentStatus: "DETECTED",
+        cylinderCount: 4,
+        stackHeight: 2.5,
+      },
+      {
+        ...common,
+        timeOfIncident: new Date("2026-09-15T11:00:00.000Z"),
+        currentStatus: "CLEAR",
+        cylinderCount: 1,
+        stackHeight: 0.5,
+      },
+    ]);
+    const { req, res, next } = serviceCtx({
+      user_id: "u1",
+      query: {
+        status: "detected",
+        minCount: "3",
+        minStackHeight: "2",
+        sortField: "stackHeight",
+        sortOrder: "desc",
+      },
+    });
+
+    await IncidentsService.getCylinderDetectionLogs(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    const result = payload(res).data;
+    expect(result.totalCount).toBe(1);
+    expect(result.data[0]).toEqual(
+      expect.objectContaining({
+        incidentType: "cylinderDetection",
+        currentStatus: "DETECTED",
+        cylinderCount: 4,
+        stackHeight: 2.5,
+      }),
     );
   });
 });
