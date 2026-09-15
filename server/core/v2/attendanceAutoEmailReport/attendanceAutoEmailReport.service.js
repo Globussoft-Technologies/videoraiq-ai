@@ -17,6 +17,7 @@ import Report from "./attendanceAutoEmailReport.model.js";
 import { createReportSchema, updateReportSchema } from "./attendanceAutoEmailReport.validation.js";
 import { trackFailedEmail, trackOutboundEmail } from "../emailMonitoring/emailTracker.js";
 import { buildMonthlyStatusWorkbook } from "./monthlyStatusSheet.js";
+import { buildAttendanceWorkbook } from "./attendanceWorkbook.js";
 import { buildBreakPdf, buildBreakWorkbook } from "./breakLogReport.js";
 
 const LOGO_URL = "https://stagingv2.videoraiq.com/src/assets/videoraiq-logo-color.png";
@@ -1173,11 +1174,19 @@ async function deliver(report, options = {}) {
   const pdfBuffer = wantsPdf ? await buildPdf({ report, rows, label: summary.label, timezone: summary.timezone }) : null;
   const pdfMs = Date.now() - pdfT0;
 
-  // The monthly-status workbook is a matrix (days as columns, one sheet per
-  // employee) built from the same rows — see monthlyStatusSheet.js.
+  // Daily Excel mirrors the PDF's expanded attendance table. Longer schedule
+  // types retain the monthly-status matrix workbook.
   const xlsxT0 = Date.now();
   const xlsxBuffer = wantsXlsx
-    ? await buildMonthlyStatusWorkbook({ rows, label: summary.label, timezone: summary.timezone, start: summary.start, end: summary.end })
+    ? report.schedule.frequency === "daily"
+      ? await buildAttendanceWorkbook({
+          headers: REPORT_HEADERS,
+          lines: reportTableRows(rows),
+          label: summary.label,
+          timezone: summary.timezone,
+          rowCount: summary.rowCount,
+        })
+      : await buildMonthlyStatusWorkbook({ rows, label: summary.label, timezone: summary.timezone, start: summary.start, end: summary.end })
     : null;
   const xlsxMs = Date.now() - xlsxT0;
 
