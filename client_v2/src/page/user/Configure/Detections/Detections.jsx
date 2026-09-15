@@ -634,51 +634,57 @@ export default function Detections() {
   }, [enteredDetections, filterCamerasApi.loading, filterCameraOptions, selectedFilterCameraId]);
 
   const models = useMemo(
-    () => buildDetectionModels(typesApi.data).map((m) => {
-      const edited = edits[m.id] || {};
-      const settingType = m.settingType || m.id;
-      const isAttendanceDetection = isAttendanceDetectionType(settingType || m.name);
-      const cameraEntry = zoneCamera?.detections?.[settingType];
-      const setting = settingFromEntry(cameraEntry);
-      const uiData = setting?.uiData || {};
-      const apiSettings = {
-        ...(setting?.modelThresholds || {}),
-        ...(uiData.settings || {}),
-        ...(setting?.settings || {}),
-      };
-      const cameraEnabled = typeof cameraEntry === 'object' ? cameraEntry?.enabled : cameraEntry;
-      const settingEnabled = setting?.active ?? setting?.enabled;
-      const cameraScopedActive = isAttendanceDetection
-        ? true
-        : zoneCamera?._id
-        ? (cameraEnabled ?? settingEnabled ?? false)
-        : m.active;
-      const apiThresholds = thresholdsFromSettings(settingType, m.thresholds, apiSettings);
-      const editedThresholds = edited.thresholds || {};
-      const thresholds = { ...apiThresholds, ...editedThresholds };
-      const firstThreshold = Object.values(thresholds)[0];
-      const scheduleMode = scheduleModeFrom(uiData.schedule);
-      return {
-        ...m,
-        ...edited,
-        name: uiData.detectionName || m.name,
-        status: uiData.status || edited.status || m.status,
-        scheduleMode: scheduleMode || edited.scheduleMode || m.scheduleMode,
-        schedule: scheduleMode || edited.schedule || m.schedule,
-        appliedCameras: uiData.appliedCameras ?? edited.appliedCameras ?? m.appliedCameras,
-        activeCameras: uiData.activeCameras ?? edited.activeCameras ?? m.activeCameras,
-        settings: { ...(m.settings || {}), ...apiSettings, ...(edited.settings || {}) },
-        thresholds,
-        sensitivity: edited.sensitivity ?? firstThreshold ?? m.sensitivity,
-        active: cameraScopedActive,
-        // When a schedule governs this detector, a manual toggle wins only
-        // until the schedule would next have changed it. Carry the expiry
-        // through so the panel can say so instead of the hold looking like
-        // the schedule silently failing.
-        overrideUntil: (typeof cameraEntry === 'object' ? cameraEntry?.overrideUntil : null) || null,
-      };
-    }),
-    [edits, typesApi.data, zoneCamera],
+    () => buildDetectionModels(typesApi.data)
+      // The types endpoint is already licence-filtered, but its short shared
+      // cache can briefly retain a type after Super Admin switches it off.
+      // The socket-fed licence snapshot updates immediately, so apply it here
+      // too and remove revoked detection cards without requiring a refresh.
+      .filter((m) => !license || (license.allowedDetections || []).includes(m.settingType || m.id))
+      .map((m) => {
+        const edited = edits[m.id] || {};
+        const settingType = m.settingType || m.id;
+        const isAttendanceDetection = isAttendanceDetectionType(settingType || m.name);
+        const cameraEntry = zoneCamera?.detections?.[settingType];
+        const setting = settingFromEntry(cameraEntry);
+        const uiData = setting?.uiData || {};
+        const apiSettings = {
+          ...(setting?.modelThresholds || {}),
+          ...(uiData.settings || {}),
+          ...(setting?.settings || {}),
+        };
+        const cameraEnabled = typeof cameraEntry === 'object' ? cameraEntry?.enabled : cameraEntry;
+        const settingEnabled = setting?.active ?? setting?.enabled;
+        const cameraScopedActive = isAttendanceDetection
+          ? true
+          : zoneCamera?._id
+          ? (cameraEnabled ?? settingEnabled ?? false)
+          : m.active;
+        const apiThresholds = thresholdsFromSettings(settingType, m.thresholds, apiSettings);
+        const editedThresholds = edited.thresholds || {};
+        const thresholds = { ...apiThresholds, ...editedThresholds };
+        const firstThreshold = Object.values(thresholds)[0];
+        const scheduleMode = scheduleModeFrom(uiData.schedule);
+        return {
+          ...m,
+          ...edited,
+          name: uiData.detectionName || m.name,
+          status: uiData.status || edited.status || m.status,
+          scheduleMode: scheduleMode || edited.scheduleMode || m.scheduleMode,
+          schedule: scheduleMode || edited.schedule || m.schedule,
+          appliedCameras: uiData.appliedCameras ?? edited.appliedCameras ?? m.appliedCameras,
+          activeCameras: uiData.activeCameras ?? edited.activeCameras ?? m.activeCameras,
+          settings: { ...(m.settings || {}), ...apiSettings, ...(edited.settings || {}) },
+          thresholds,
+          sensitivity: edited.sensitivity ?? firstThreshold ?? m.sensitivity,
+          active: cameraScopedActive,
+          // When a schedule governs this detector, a manual toggle wins only
+          // until the schedule would next have changed it. Carry the expiry
+          // through so the panel can say so instead of the hold looking like
+          // the schedule silently failing.
+          overrideUntil: (typeof cameraEntry === 'object' ? cameraEntry?.overrideUntil : null) || null,
+        };
+      }),
+    [edits, license, typesApi.data, zoneCamera],
   );
 
   useEffect(() => {

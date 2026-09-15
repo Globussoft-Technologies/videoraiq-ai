@@ -37,6 +37,7 @@ const SHORT_LABELS = {
   countVehiclesSettings: 'Vehicle Count',
   conveyorDetectionSettings: 'Conveyor',
   crusherDetectionSettings: 'Crusher',
+  cylinderDetectionSettings: 'Cylinder Stacking',
   waterSpillageDetectionSettings: 'Water Spillage',
   doorDetectionSettings: 'Door',
   lightDetectionSettings: 'Light',
