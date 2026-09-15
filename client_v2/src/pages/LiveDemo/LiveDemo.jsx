@@ -3635,7 +3635,7 @@ export default function LiveDemo({ active = true }) {
         </section>
       </div>
 
-      <div className={`mt-4 grid items-start gap-4 ${configurationAvailable ? 'xl:grid-cols-[minmax(0,1fr)_minmax(360px,580px)]' : ''}`}>
+        <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,580px)]">
         <div className="min-w-0 space-y-4">
         <section data-tour="demo-upload" className="rounded-2xl border border-[var(--bd)] bg-[var(--bg1solid)] p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-3">

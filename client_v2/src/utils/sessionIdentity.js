@@ -63,9 +63,33 @@ export function clearSessionId() {
   document.cookie = `${SESSION_ID_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;`;
 }
 
+export async function getBrowserName() {
+  try {
+    if (navigator.brave && await navigator.brave.isBrave()) {
+      return 'Brave';
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  const ua = window.navigator.userAgent || '';
+  if (/PowerBrowser|Power Browser/i.test(ua)) return "PowerBrowser";
+  if (/EdgiOS\//.test(ua) || /Edg\//.test(ua)) return "Microsoft Edge";
+  if (/OPiOS\//.test(ua) || /OPR\//.test(ua) || /Opera\//.test(ua)) return "Opera";
+  if (/CriOS\//.test(ua) || (/Chrome\//.test(ua) && !/Chromium\//.test(ua))) return "Chrome";
+  if (/FxiOS\//.test(ua) || /Firefox\//.test(ua)) return "Firefox";
+  if (/Safari\//.test(ua) && /Version\//.test(ua)) return "Safari";
+  
+  return "";
+}
+
 export async function sessionHeaders() {
-  const headers = { 'x-device-id': await getDeviceId() };
+  const headers = { 'x-device-id': getDeviceId() };
   const sessionId = getSessionId();
   if (sessionId) headers['x-session-id'] = sessionId;
+  
+  const browser = await getBrowserName();
+  if (browser) headers['x-browser'] = browser;
+  
   return headers;
 }

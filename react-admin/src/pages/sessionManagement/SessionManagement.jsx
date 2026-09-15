@@ -80,6 +80,28 @@ const formatDate = (value) => {
   }).format(date)
 }
 
+const timestampValue = (value) => {
+  if (!value) return 0
+  const date = new Date(value)
+  const time = date.getTime()
+  return Number.isNaN(time) ? 0 : time
+}
+
+const compareSessionsByLatestActivity = (a, b) => {
+  const onlineDiff =
+    Number(b.status === 'active' && Boolean(b.online)) -
+    Number(a.status === 'active' && Boolean(a.online))
+  if (onlineDiff !== 0) return onlineDiff
+
+  const lastActiveDiff = timestampValue(b.lastActiveAt) - timestampValue(a.lastActiveAt)
+  if (lastActiveDiff !== 0) return lastActiveDiff
+
+  const loginDiff = timestampValue(b.loginTime) - timestampValue(a.loginTime)
+  if (loginDiff !== 0) return loginDiff
+
+  return String(a.sessionId || '').localeCompare(String(b.sessionId || ''))
+}
+
 const shortId = (value = '') => {
   const text = String(value || '')
   return text.length > 10 ? `${text.slice(0, 6)}...${text.slice(-4)}` : text || '--'
@@ -584,7 +606,11 @@ const SessionManagement = () => {
       ? selectedOwner
       : ''
   const userTypeFilter = detailMode ? ownerType : userType
-  const visibleSessionIds = useMemo(() => sessions.map((session) => session.sessionId).filter(Boolean), [sessions])
+  const sortedSessions = useMemo(
+    () => [...sessions].sort(compareSessionsByLatestActivity),
+    [sessions]
+  )
+  const visibleSessionIds = useMemo(() => sortedSessions.map((session) => session.sessionId).filter(Boolean), [sortedSessions])
   const allVisibleSelected = visibleSessionIds.length > 0 && visibleSessionIds.every((id) => selectedSessionIds.includes(id))
   const someVisibleSelected = visibleSessionIds.some((id) => selectedSessionIds.includes(id))
 
@@ -652,6 +678,27 @@ const SessionManagement = () => {
     }
   }
 
+  // List-view twin of silentRefreshSessions: keeps the owner summary rows and
+  // the top stat cards ("Online Now" in particular) current on the same poll
+  // interval as the detail table. Without it, the summary was only refreshed
+  // by the manual Refresh button, so a user who logged in after the page
+  // loaded never appeared as online under the top badges/cards until a reload.
+  const silentRefreshSummaries = async () => {
+    if (detailMode) return
+    try {
+      const [summaryRes, overviewRes] = await Promise.all([
+        getSessionSummary({ status: '', userType, deviceId: '' }),
+        getSessionSummary({ status: '', userType: '', deviceId: '' }),
+      ])
+      const summaryData = readListData(summaryRes)
+      const overviewData = readListData(overviewRes)
+      setSummary(Array.isArray(summaryData) ? summaryData : [])
+      setOverviewSummary(Array.isArray(overviewData) ? overviewData : [])
+    } catch {
+      // A failed background refresh is silent — the last good summary stays.
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
 
@@ -687,15 +734,20 @@ const SessionManagement = () => {
     }
   }, [page, pageSize, status, userTypeFilter, selectedOwnerFilter])
 
-  // Keep the "Online" column current — the list has no socket, so poll the
-  // server's live presence flag. Only runs on the table (detail mode) and
-  // pauses while an action modal is open.
+  // Keep the presence-driven "Online" state current — the page has no socket,
+  // so poll the server's live presence flag. On the detail table that's the
+  // sessions list; on the list view it's the owner-summary rows + top stat
+  // cards (Online Now etc.), which otherwise went stale until a manual reload.
+  // Pauses while an action modal is open.
   useEffect(() => {
-    if (!detailMode || action) return undefined
-    const timer = setInterval(silentRefreshSessions, AUTO_REFRESH_MS)
+    if (action) return undefined
+    const timer = setInterval(() => {
+      if (detailMode) silentRefreshSessions()
+      else silentRefreshSummaries()
+    }, AUTO_REFRESH_MS)
     return () => clearInterval(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailMode, action, page, pageSize, status, userTypeFilter, selectedOwnerFilter])
+  }, [detailMode, action, userType, page, pageSize, status, userTypeFilter, selectedOwnerFilter])
 
   useEffect(() => {
     let cancelled = false
@@ -1244,7 +1296,7 @@ const SessionManagement = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-white/6">
-                        {sessions.map((session) => {
+                        {sortedSessions.map((session) => {
                           const selected = selectedSessionIds.includes(session.sessionId)
                           return (
                             <tr
