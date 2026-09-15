@@ -156,11 +156,21 @@ function buildLocationMatch(locations = []) {
  * falls back to the same default the Analytics reports use.
  */
 async function resolveShiftTimezone(adminId, requested) {
-  if (requested && moment.tz.zone(requested)) return requested;
+  // Moment/Chrome still expose the legacy IANA link "Asia/Calcutta", while
+  // some MongoDB/ICU builds reject it inside aggregation date operators.
+  // Use the modern equivalent for the pipeline; both zones represent the
+  // same UTC+05:30 rules, so report times remain unchanged.
+  const mongoCompatibleTimezone = (value) =>
+    String(value || "").trim().toLowerCase() === "asia/calcutta"
+      ? "Asia/Kolkata"
+      : String(value || "").trim();
+
+  const requestedTimezone = mongoCompatibleTimezone(requested);
+  if (requestedTimezone && moment.tz.zone(requestedTimezone)) return requestedTimezone;
   const admin = adminId
     ? await Admin.findById(adminId).select("timezone").lean()
     : null;
-  const configured = admin?.timezone;
+  const configured = mongoCompatibleTimezone(admin?.timezone);
   return configured && moment.tz.zone(configured) ? configured : DEFAULT_SHIFT_TZ;
 }
 
