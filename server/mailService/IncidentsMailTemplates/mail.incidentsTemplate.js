@@ -4776,6 +4776,15 @@ export const crusherDetectionTemplate = (incidentData, nvrData, channelData, tim
     timezone,
   );
 
+export const cylinderDetectionTemplate = (incidentData, nvrData, channelData, timezone) =>
+  industrialEquipmentTemplate(
+    "Cylinder Detection",
+    incidentData,
+    nvrData,
+    channelData,
+    timezone,
+  );
+
 export const waterSpillageDetectionTemplate = (
   incidentData,
   nvrData,

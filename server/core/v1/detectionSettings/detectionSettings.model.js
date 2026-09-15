@@ -862,6 +862,42 @@ const CrusherDetectionSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: CrusherDetectionSchema }),
 );
 
+// Storage schema shared by the v2 API. The v1 service intentionally does not
+// register this discriminator in its modelMap, so cylinder CRUD remains v2-only.
+const CylinderDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
+  imageRequired: {
+    type: Boolean,
+    default: false,
+  },
+  videoLinkRequirement: {
+    type: Boolean,
+    default: false,
+  },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "moderate",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  videoResolution: [Number],
+  referencePoints: Object,
+  obstruction_threshold_sec: { type: Number, default: 0 },
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+
+const CylinderDetectionSetting = DetectionSetting.discriminator(
+  "cylinderDetectionSettings",
+  new mongoose.Schema({ settings: CylinderDetectionSchema }),
+);
+
 const WaterSpillageDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
   imageRequired: {
@@ -1273,6 +1309,7 @@ export {
   GuardSleepingDetectionSetting,
   ConveyorDetectionSetting,
   CrusherDetectionSetting,
+  CylinderDetectionSetting,
   WaterSpillageDetectionSetting,
   VehicleTypeDetectionSetting,
   LoiteringDetectionSetting,

@@ -44,6 +44,7 @@ import {
   GuardSleepingIncident,
   ConveyorDetectionIncident,
   CrusherDetectionIncident,
+  CylinderDetectionIncident,
   VehicleTypeDetectionIncident,
   WaterSpillageDetectionIncident,
   LoiteringDetectionIncident,
@@ -74,6 +75,7 @@ const modelMap = {
   guardSleepingDetection: GuardSleepingIncident,
   conveyorDetection: ConveyorDetectionIncident,
   crusherDetection: CrusherDetectionIncident,
+  cylinderDetection: CylinderDetectionIncident,
   waterSpillageDetection: WaterSpillageDetectionIncident,
   vehicleTypeDetection: VehicleTypeDetectionIncident,
   loiteringDetection: LoiteringDetectionIncident,
@@ -615,6 +617,9 @@ class IncidentsService {
       } else if (incidentType === "guardSleepingDetection") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.isSleeping = req?.body?.isSleeping;
+        newIncident.Image = req?.body?.Image;
+      } else if (incidentType === "cylinderDetection") {
+        newIncident.timeOfIncident = req?.body?.timeOfIncident ?? currentTime;
         newIncident.Image = req?.body?.Image;
       } else if (incidentType === "vehicleObstruction") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
@@ -1864,6 +1869,7 @@ class IncidentsService {
                 { "detections.vehicleObstructionSettings.enabled": true },
                 { "detections.conveyorDetectionSettings.enabled": true },
                 { "detections.crusherDetectionSettings.enabled": true },
+                { "detections.cylinderDetectionSettings.enabled": true },
                 { "detections.waterSpillageDetectionSettings.enabled": true },
                 { "detections.guardPresentSettings.enabled": true },
                 { "detections.deskAbsenceSettings.enabled": true },

@@ -98,6 +98,7 @@ const detectionFields = {
   guardAbsenceSettings: detectionSettingSchema,
   conveyorDetectionSettings: detectionSettingSchema,
   crusherDetectionSettings: detectionSettingSchema,
+  cylinderDetectionSettings: detectionSettingSchema,
   waterSpillageDetectionSettings: detectionSettingSchema,
   loiteringDetectionSettings: detectionSettingSchema,
   vehicleTypeDetectionSettings: detectionSettingSchema,

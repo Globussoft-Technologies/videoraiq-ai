@@ -433,6 +433,18 @@ const CrusherDetectionIncident = Incident.discriminator(
   CrusherDetectionSchema,
 );
 
+const CylinderDetectionSchema = new Schema({
+  currentStatus: { type: String, default: null },
+  count: { type: Number, default: 0 },
+  cylinderCount: { type: Number, default: 0 },
+  stackHeight: { type: Number, default: null },
+  triggerNotification: { type: Boolean, default: true },
+});
+const CylinderDetectionIncident = Incident.discriminator(
+  "cylinderDetection",
+  CylinderDetectionSchema,
+);
+
 // Cylinder Stack Height Detection
 const VehicleTypeDetectionSchema = new Schema({
   count: {type:Number,default:0},
@@ -598,6 +610,7 @@ export  {
   GuardSleepingIncident,
   ConveyorDetectionIncident,
   CrusherDetectionIncident,
+  CylinderDetectionIncident,
   VehicleTypeDetectionIncident,
   WaterSpillageDetectionIncident,
   LoiteringDetectionIncident,

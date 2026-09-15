@@ -1415,6 +1415,7 @@ class DashboardService {
             genericObjectDetection: "Generic Object Detection",
             conveyorDetection: "Conveyor Detection",
             crusherDetection: "Crusher Detection",
+            cylinderDetection: "Cylinder Detection",
             waterSpillageDetection: "Water Spillage Detection",
           };
 

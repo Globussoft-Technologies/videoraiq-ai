@@ -180,6 +180,8 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
           let mailResponse = await MailResponse.conveyorDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "crusherDetection") {
           let mailResponse = await MailResponse.crusherDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+        } else if (detectionType === "cylinderDetection") {
+          let mailResponse = await MailResponse.cylinderDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "waterSpillageDetection") {
           let mailResponse = await MailResponse.waterSpillageDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "vehicleObstruction") {

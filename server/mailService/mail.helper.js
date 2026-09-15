@@ -26,6 +26,7 @@ import {
     entryLogTemplate,
     conveyorDetectionTemplate,
     crusherDetectionTemplate,
+    cylinderDetectionTemplate,
     waterSpillageDetectionTemplate,
     vehicleTypeDetectionTemplate,
     loiteringDetectionTemplate,
@@ -612,6 +613,21 @@ class MailHelper {
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: this._renderIncidentTemplate(crusherDetectionTemplate, timezone, data, nvrData, channelData),
+        };
+        let sendStatus = await this._sendAndTrack(email, arguments);
+        return sendStatus;
+    }
+
+    async cylinderDetection(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
+        sendGridMail.setApiKey(config.get('sendgrid.key'));
+        const email = {
+            from: {
+                name: config.get('sendgrid.name'),
+                email: config.get('sendgrid.email'),
+            },
+            to: emailAddresses,
+            subject: `[Incident Alert] ${data?.incidentName} Detected â€“ ${data?.incidentType} | Severity: ${data?.severity}`,
+            html: this._renderIncidentTemplate(cylinderDetectionTemplate, timezone, data, nvrData, channelData),
         };
         let sendStatus = await this._sendAndTrack(email, arguments);
         return sendStatus;

@@ -16,6 +16,7 @@ export const DETECTION_TYPES = {
   countVehiclesSettings: "Count Vehicles Detection",
   conveyorDetectionSettings: "Conveyor Detection",
   crusherDetectionSettings: "Crusher Detection",
+  cylinderDetectionSettings: "Cylinder Detection",
   waterSpillageDetectionSettings: "Water Spillage Detection",
 
   // countPersonsSettings: "Count Persons Detection",
@@ -79,6 +80,7 @@ export const TYPE_MAP = {
   guardSleepingDetectionSettings: "guardSleepingDetection",
   conveyorDetectionSettings: "conveyorDetection",
   crusherDetectionSettings: "crusherDetection",
+  cylinderDetectionSettings: "cylinderDetection",
   waterSpillageDetectionSettings: "waterSpillageDetection",
   vehicleTypeDetectionSettings: "vehicleTypeDetection",
   loiteringDetectionSettings: "loiteringDetection",
@@ -263,6 +265,7 @@ export const toPopulateDetections = [
   { path: "detections.guardSleepingDetectionSettings.id" },
   { path: "detections.conveyorDetectionSettings.id" },
   { path: "detections.crusherDetectionSettings.id" },
+  { path: "detections.cylinderDetectionSettings.id" },
   { path: "detections.waterSpillageDetectionSettings.id" },
   { path: "detections.vehicleTypeDetectionSettings.id" },
   { path: "detections.loiteringDetectionSettings.id" },
@@ -948,6 +951,38 @@ export const crusherDetectionSettings = {
     zone_configs: [
       { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
       { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "moderate",
+    alertThreshold: 1,
+    videoResolution: [1280, 720],
+    obstruction_threshold_sec: 0,
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const cylinderDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "cylinderDetectionSettings",
+  name: "Cylinder Detection - Area 1",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    zone_configs: [
+      { name: "Cylinder Area", capacity: 2, threshold_sec: 20 },
     ],
     imageRequired: false,
     videoLinkRequirement: true,
