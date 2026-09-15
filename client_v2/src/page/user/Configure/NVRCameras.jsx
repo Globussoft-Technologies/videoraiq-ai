@@ -591,7 +591,7 @@ function SiteFilterSelect({ options, value, onChange }) {
 }
 
 // ── Camera row ────────────────────────────────────────────────────────────────
-const CAM_COL = '90px minmax(170px, 2fr) minmax(130px, 1.2fr) minmax(0, 1.4fr) 80px';
+const CAM_COL = '90px minmax(150px, 1.6fr) minmax(130px, 1.4fr) minmax(130px, 1.2fr) minmax(0, 1.4fr) 80px';
 const NVR_GRID_STYLE = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 420px))',
@@ -601,6 +601,7 @@ const NVR_GRID_STYLE = {
 function CamRow({ c, site, onView }) {
   const sc = '#22c55e';
   const camName = c.name || c.channelName || 'Camera';
+  const aliasName = String(c.customName || '').trim();
   const engines = enabledEnginesFor(c);
 
   return (
@@ -621,6 +622,15 @@ function CamRow({ c, site, onView }) {
         <span style={{ color: 'var(--tx)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {camName}
         </span>
+      </span>
+      <span style={{
+        display: 'inline-block', width: 'fit-content', maxWidth: '100%',
+        padding: '3px 9px', borderRadius: 6,
+        background: 'var(--bg1)', border: '1px solid var(--bd)',
+        color: 'var(--tx)', fontWeight: 600,
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>
+        {aliasName || '-'}
       </span>
       <span style={{
         display: 'inline-block', width: 'fit-content', maxWidth: '100%',
@@ -2018,7 +2028,8 @@ export default function NVRCameras() {
   };
 
   const camFiltered = channels.filter(c => {
-    const nameMatch = !camSearch || (c.name || c.channelName || '').toLowerCase().includes(camSearch.toLowerCase());
+    const searchableName = `${c.name || c.channelName || ''} ${c.customName || ''}`;
+    const nameMatch = !camSearch || searchableName.toLowerCase().includes(camSearch.toLowerCase());
     const siteMatch = !siteFilter || siteOf(c).trim().toLowerCase() === siteFilter.trim().toLowerCase();
     return nameMatch && siteMatch;
   });
@@ -2218,13 +2229,13 @@ export default function NVRCameras() {
         ) : !canViewChannels ? (
           <ChannelAccessDeniedState />
         ) : (
-          <HScrollHint minWidth={720}>
+          <HScrollHint minWidth={850}>
             <div style={{
               display: 'grid', gridTemplateColumns: CAM_COL,
               padding: '10px 16px', borderBottom: '1px solid var(--bd)',
               fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.07em', color: 'var(--tx3)',
             }}>
-              {['ID', 'NAME', 'SITE', 'ENGINES', ''].map((h, i) => <span key={i}>{h}</span>)}
+              {['ID', 'NAME', 'ALIAS', 'SITE', 'ENGINES', ''].map((h, i) => <span key={i}>{h}</span>)}
             </div>
 
             <div style={{ maxHeight: 430, overflowY: 'auto' }}>
