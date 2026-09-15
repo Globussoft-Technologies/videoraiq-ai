@@ -1078,7 +1078,6 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
   const locationInputRef = useRef(null);
   const [brandOpen, setBrandOpen] = useState(false);
   const importInputRef = useRef(null);
-  const newestRtspInputRef = useRef(null);
   const brandDropdownRef = useRef(null);
   // Per-field validation, shown under each input rather than a single toast
   // that names only one problem at a time and doesn't say which field it means.
@@ -1782,10 +1781,11 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                       <button type="button" onClick={() => { setDirectCameras([]); setErrors((current) => ({ ...current, cameras: undefined })); }} title="Clear all RTSP URLs" style={{ padding: '6px 8px', borderRadius: 7, border: '1px solid rgba(239,68,68,.35)', background: 'transparent', color: 'var(--crit)', fontSize: 11.5, cursor: 'pointer' }}>Clear all</button>
                       <input ref={importInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={importDirectCameras} style={{ display: 'none' }} />
                       <button type="button" onClick={() => {
-                        setDirectCameras((cameras) => [...cameras, { name: `Camera ${cameras.length + 1}`, rtspUrl: '' }]);
-                        requestAnimationFrame(() => {
-                          newestRtspInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          newestRtspInputRef.current?.focus({ preventScroll: true });
+                        setDirectCameras((cameras) => {
+                          const camera = { name: `Camera ${cameras.length + 1}`, rtspUrl: '' };
+                          const firstStored = cameras.findIndex((item) => item.dbId);
+                          if (firstStored < 0) return [...cameras, camera];
+                          return [...cameras.slice(0, firstStored), camera, ...cameras.slice(firstStored)];
                         });
                       }} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 9px', borderRadius: 7, border: '1px solid var(--blue)', background: 'transparent', color: 'var(--blue)', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
                         <Plus size={12} /> Add more
@@ -1802,7 +1802,6 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                         style={{ width: '100%', height: 36, padding: '0 10px', boxSizing: 'border-box', borderRadius: 8, background: 'var(--bg1)', border: '1px solid var(--bd)', color: 'var(--tx)', fontSize: 12, outline: 'none' }}
                       />
                       <input
-                        ref={index === directCameras.length - 1 ? newestRtspInputRef : null}
                         value={camera.rtspUrl}
                         onChange={(e) => setDirectCameras((cameras) => cameras.map((item, i) => i === index ? { ...item, rtspUrl: e.target.value } : item))}
                         placeholder={camera.hasRtspUrl ? 'Leave blank to keep current URL' : 'rtsp://username:password@host:554/path'}
