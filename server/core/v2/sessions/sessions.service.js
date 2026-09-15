@@ -36,6 +36,8 @@ function parseBrowser(userAgent = "") {
 function parseOperatingSystem(userAgent = "") {
   const ua = String(userAgent);
   if (/Windows NT 10/.test(ua)) return "Windows 10/11";
+  if (/Windows NT 11/.test(ua)) return "Windows 11";
+  if (/Windows/.test(ua)) return "Windows 10/11"; // Fallback for Brave/fingerprint protected UAs
   if (/Android/.test(ua)) return "Android";
   if (/(iPhone|iPad|iPod)/.test(ua)) return "iOS";
   if (/Mac OS X/.test(ua)) return "macOS";

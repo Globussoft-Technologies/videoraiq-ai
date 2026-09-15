@@ -172,8 +172,8 @@ export default function IsAuth({ children }) {
     if (exchangeStarted.current) return;
     exchangeStarted.current = true;
 
-    const amemberLogin = Cookies.get('amember_login');
-    const amemberPass = Cookies.get('amember_pass');
+    const amemberLogin = Cookies.get('amember_login') 
+    const amemberPass = Cookies.get('amember_pass') 
     const token = getAccessToken();
     const searchParams = new URLSearchParams(window.location.search);
     const impersonationToken = searchParams.get('amember_impersonation') || '';
@@ -205,7 +205,7 @@ export default function IsAuth({ children }) {
         if (initial && impersonationToken) {
           const response = await fetch(`${HOST}/auth/by-impersonation-token`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...(await sessionHeaders()) },
             body: JSON.stringify({ token: impersonationToken }),
           });
           const result = await response.json();
@@ -229,7 +229,7 @@ export default function IsAuth({ children }) {
         if (initial && amemberSsoToken) {
           const response = await fetch(`${HOST}/auth/by-amember-sso-token`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...(await sessionHeaders()) },
             body: JSON.stringify({ token: amemberSsoToken }),
           });
           const result = await response.json().catch(() => ({}));
@@ -265,7 +265,7 @@ export default function IsAuth({ children }) {
         if (initial && amemberLogin && amemberPass) {
           const response = await fetch(`${HOST}/auth/by-login-pass`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...(await sessionHeaders()) },
             body: new URLSearchParams({ login: amemberLogin, pass: amemberPass }),
           });
           const result = await response.json().catch(() => ({}));
