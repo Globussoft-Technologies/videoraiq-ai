@@ -36,11 +36,12 @@ export const editIncidentDetails = async (id, data) => {
 /**
  * Paginated incident logs for one of the stevinrock detection endpoints.
  * The `endpoint` (e.g. `/incidents/logs/conveyor-detection`) selects which log
- * stream to read; all six table pages share this contract. Filters live in the
+ * stream to read; all incident-table pages share this contract. Filters live in the
  * query string, mirroring the V1 EmployeeLogs pages exactly.
  */
 export const fetchIncidentLogs = async ({
   endpoint,
+  method = 'get',
   skip,
   limit,
   startDate,
@@ -53,7 +54,9 @@ export const fetchIncidentLogs = async ({
   status,
   search,
 }) => {
-  return axios.get(`${HOST}${endpoint}`, {
+  return axios.request({
+    method,
+    url: `${HOST}${endpoint}`,
     params: {
       skip,
       limit,

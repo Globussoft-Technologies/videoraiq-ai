@@ -38,6 +38,7 @@ import VehicleCheckInOutLogs from './pages/VehicleCheckInOutLogs/VehicleCheckInO
 import ConveyorLogs from './pages/ConveyorLogs/ConveyorLogs';
 import VehicleObstructionLogs from './pages/VehicleObstructionLogs/VehicleObstructionLogs';
 import CrusherLogs from './pages/CrusherLogs/CrusherLogs';
+import CylinderLogs from './pages/CylinderLogs/CylinderLogs';
 import LineCrossingLogs from './pages/LineCrossingLogs/LineCrossingLogs';
 import WaterSpillLogs from './pages/WaterSpillLogs/WaterSpillLogs';
 import UnauthorizedAccessLogs from './pages/UnauthorizedAccessLogs/UnauthorizedAccessLogs';
@@ -117,6 +118,7 @@ export const v2Routes = (
     <Route path="logs/car" element={guard('logs', 'carLogs', <CarLogs />)} />
     <Route path="logs/vehicle-check-in-out" element={guard('logs', 'vehicleCheckInOutLogs', <VehicleCheckInOutLogs />)} />
     <Route path="logs/crusher" element={guard('logs', 'crusherLogs', <CrusherLogs />)} />
+    <Route path="logs/cylinder" element={guard('logs', 'cylinderLogs', <CylinderLogs />)} />
     <Route path="logs/line-crossing" element={guard('logs', 'lineCrossingLogs', <LineCrossingLogs />)} />
     <Route path="logs/water-spill" element={guard('logs', 'waterSpillLogs', <WaterSpillLogs />)} />
     <Route path="logs/unauthorized-access" element={guard('logs', 'unauthorizedAccessLogs', <UnauthorizedAccessLogs />)} />

@@ -215,6 +215,7 @@ export async function syncStevinrockLogPermissions(adminId) {
       "vehicleObstructionLogs",
       "vehicleCountLogs",
       "crusherLogs",
+      "cylinderLogs",
       "lineCrossingLogs",
       "waterSpillLogs",
       "unauthorizedAccessLogs",

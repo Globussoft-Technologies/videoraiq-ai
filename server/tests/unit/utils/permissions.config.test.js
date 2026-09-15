@@ -62,6 +62,7 @@ const LOG_SUBSECTIONS = [
   "vehicleCheckInOutLogs",
   "conveyorLogs",
   "crusherLogs",
+  "cylinderLogs",
   "lineCrossingLogs",
   "unauthorizedAccessLogs",
   "vehicleCountLogs",

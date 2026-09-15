@@ -15,6 +15,7 @@ const fetchAllForExport = async (config, params) => {
 
   const res = await fetchIncidentLogs({
     endpoint: config.endpoint,
+    method: config.method,
     skip: 0,
     limit: 10000,
     startDate,

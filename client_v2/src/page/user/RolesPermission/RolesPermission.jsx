@@ -35,7 +35,7 @@ const LOG_SUBMODULES = [
   'trackLogs',
   'visibilityLogs', 'guardLogs', 'sleepActivityLogs', 'measurementLogs',
   'conveyorLogs', 'vehicleObstructionLogs',
-  'vehicleCountLogs', 'crusherLogs', 'lineCrossingLogs', 'waterSpillLogs',
+  'vehicleCountLogs', 'crusherLogs', 'cylinderLogs', 'lineCrossingLogs', 'waterSpillLogs',
   'unauthorizedAccessLogs', 'carLogs', 'vehicleCheckInOutLogs',
 ];
 
@@ -55,6 +55,7 @@ const MODULE_LABELS = {
   sleepActivityLogs: 'Sleep Activity Logs', measurementLogs: 'Measurement Logs',
   conveyorLogs: 'Conveyor Logs', vehicleObstructionLogs: 'Vehicle Obstruction Logs',
   vehicleCountLogs: 'Vehicle Count Logs', crusherLogs: 'Crusher Logs',
+  cylinderLogs: 'Cylinder Stacking Logs',
   lineCrossingLogs: 'Line Crossing Logs', waterSpillLogs: 'Water Spill Logs',
   unauthorizedAccessLogs: 'Unauthorized Access Logs', autoEmailReports: 'Auto Email Reports',
   carLogs: 'Car Logs',

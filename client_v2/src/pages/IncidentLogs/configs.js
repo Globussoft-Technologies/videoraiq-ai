@@ -1,5 +1,5 @@
 /**
- * Config for each stevinrock incident-log page. All six pages share the same
+ * Config for each stevinrock incident-log page. All pages share the same
  * IncidentLogsPage component; only these values differ.
  *
  * Fields:
@@ -37,6 +37,22 @@ export const CRUSHER_CONFIG = {
   storagePrefix: 'crusher',
   permissionKey: 'crusherLogs',
   accessDenied: "You don't have permission to view Crusher Logs.",
+  showStatus: true,
+  formatStatus: false,
+  sortable: true,
+  datePickerVariant: 'preset',
+};
+
+export const CYLINDER_STACKING_CONFIG = {
+  endpoint: '/incidents/logs/cylinder-detection',
+  method: 'post',
+  title: 'Cylinder Stacking Detection Logs',
+  fileName: 'cylinder_stacking_logs',
+  sheetName: 'Cylinder Stacking Logs',
+  storagePrefix: 'cylinder_stacking',
+  permissionKey: 'cylinderLogs',
+  accessDenied: "You don't have permission to view Cylinder Stacking Logs.",
+  showStats: false,
   showStatus: true,
   formatStatus: false,
   sortable: true,
