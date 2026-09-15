@@ -107,6 +107,11 @@ describe("createAuthUser — default shift", () => {
     expect(res.statusCode).toBe(201);
     const created = await AuthorizedUsers.findOne({ email: "noshift@b.com" });
     expect(String(created.shiftId)).toBe(String(fallback._id));
+    expect(axios.post.mock.calls[0][1].profileImages).toEqual([
+      expect.stringContaining("/api/v2/uploads/v2/test/a.jpg"),
+      expect.stringContaining("/api/v2/uploads/v2/test/b.jpg"),
+      expect.stringContaining("/api/v2/uploads/v2/test/c.jpg"),
+    ]);
   });
 
   it("leaves an explicitly chosen shift alone", async () => {

@@ -45,9 +45,9 @@ if (!fs.existsSync(cacheDir)) {
     });
 }
 // Percent-encode each path segment so filenames with spaces/#/&/unicode
-// build valid, fetchable URLs; the /api/v1/uploads route decodes them back.
+// build valid, fetchable URLs; the v2 route understands both v2 and legacy keys.
 const toMediaUrl = (domain, p) =>
-  `${domain}/api/v1/uploads${String(p ?? "").split("/").map(encodeURIComponent).join("/")}`;
+  `${domain}/api/v2/uploads${String(p ?? "").split("/").map(encodeURIComponent).join("/")}`;
 
 // axios defaults to no timeout, so a hung face-recognition service would keep
 // a registration request (and anything it holds) alive forever.
