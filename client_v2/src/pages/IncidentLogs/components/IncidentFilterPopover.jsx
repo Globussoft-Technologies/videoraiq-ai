@@ -29,21 +29,22 @@ const IncidentFilterPopover = ({
   channelIds,
   severity,
   setSeverity,
+  showSeverity = true,
   showStatus = false,
   status,
   setStatus,
 }) => {
   const activeFiltersCount = useMemo(
     () =>
-      [nvrIds.length > 0, channelIds.length > 0, !!severity, showStatus && !!status].filter(Boolean)
+      [nvrIds.length > 0, channelIds.length > 0, showSeverity && !!severity, showStatus && !!status].filter(Boolean)
         .length,
-    [nvrIds, channelIds, severity, showStatus, status]
+    [nvrIds, channelIds, severity, showSeverity, showStatus, status]
   );
 
   const resetFilters = () => {
     setNvrIds([]);
     setChannelIds([]);
-    setSeverity('');
+    if (showSeverity) setSeverity('');
     if (showStatus) setStatus('');
   };
 
@@ -97,13 +98,15 @@ const IncidentFilterPopover = ({
               maxHeight="max-h-40"
               msg="No Camera Found"
             />
-            <InlineSelect
-              value={severity}
-              onChange={setSeverity}
-              options={SEVERITY_OPTIONS}
-              placeholder="Severity"
-              allLabel="All Severities"
-            />
+            {showSeverity && (
+              <InlineSelect
+                value={severity}
+                onChange={setSeverity}
+                options={SEVERITY_OPTIONS}
+                placeholder="Severity"
+                allLabel="All Severities"
+              />
+            )}
             {showStatus && (
               <InlineSelect
                 value={status}

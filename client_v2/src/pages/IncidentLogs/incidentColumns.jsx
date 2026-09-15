@@ -103,12 +103,15 @@ export const buildColumns = (config, { onSort, onPreview }) => {
         );
       },
     },
-    {
+  ];
+
+  if (config.showIncidentName !== false) {
+    cols.push({
       accessorKey: 'incidentName',
       header: sortableHeader('Incident Name', 'incidentName', onSort, sortable),
       cell: ({ row }) => <span className={styles.text}>{row.original.incidentName}</span>,
-    },
-  ];
+    });
+  }
 
   if (config.showStatus) {
     cols.push({
@@ -138,7 +141,10 @@ export const buildColumns = (config, { onSort, onPreview }) => {
       header: 'Camera Name',
       cell: ({ row }) => <span className={styles.text}>{row.original.channelName}</span>,
     },
-    {
+  );
+
+  if (config.showSeverity !== false) {
+    cols.push({
       accessorKey: 'severity',
       header: 'Severity',
       cell: ({ row }) => (
@@ -150,7 +156,10 @@ export const buildColumns = (config, { onSort, onPreview }) => {
           {row.original.severity || '--'}
         </span>
       ),
-    },
+    });
+  }
+
+  cols.push(
     {
       accessorKey: 'createdAt',
       header: sortableHeader('Time of Incident', 'createdAt', onSort, sortable),
@@ -180,12 +189,14 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
         <Image className="w-10 h-10 text-[var(--tx3)]" />
       )}
 
-      <div
-        className="absolute top-2 right-2 z-20 text-[9px] font-semibold px-[7px] py-[3px] rounded-[5px] capitalize text-white shadow-sm"
-        style={{ background: severityBg(row.severity) }}
-      >
-        {row.severity || '--'}
-      </div>
+      {config.showSeverity !== false && (
+        <div
+          className="absolute top-2 right-2 z-20 text-[9px] font-semibold px-[7px] py-[3px] rounded-[5px] capitalize text-white shadow-sm"
+          style={{ background: severityBg(row.severity) }}
+        >
+          {row.severity || '--'}
+        </div>
+      )}
 
       {config.showStatus && (
         <div className="absolute top-2 left-2 z-20 text-[9px] font-semibold px-[7px] py-[3px] rounded-[5px] text-white shadow-sm bg-[rgba(6,8,13,.82)]">
@@ -196,14 +207,18 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
 
     {config.gridVariant === 'details' ? (
       <div className="p-[11px] space-y-[9px]">
-        <IncidentCardRow icon={ShieldAlert} label="Incident" value={row.incidentName} />
-        <IncidentCardRow
-          icon={AlertTriangle}
-          label="Severity"
-          value={row.severity || '--'}
-          valueClassName="capitalize"
-          valueStyle={{ color: severityBg(row.severity) }}
-        />
+        {config.showIncidentName !== false && (
+          <IncidentCardRow icon={ShieldAlert} label="Incident" value={row.incidentName} />
+        )}
+        {config.showSeverity !== false && (
+          <IncidentCardRow
+            icon={AlertTriangle}
+            label="Severity"
+            value={row.severity || '--'}
+            valueClassName="capitalize"
+            valueStyle={{ color: severityBg(row.severity) }}
+          />
+        )}
         <IncidentCardRow icon={Server} label="NVR" value={row.nvrName} />
         <IncidentCardRow icon={Video} label="Camera" value={row.channelName} />
         <IncidentCardRow icon={Clock} label="Time" value={formatTime(row.createdAt)} />
@@ -211,9 +226,11 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
     ) : (
       <div className="p-[11px]">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[12.5px] font-semibold text-[var(--tx)] truncate">
-            {row.incidentName}
-          </span>
+          {config.showIncidentName !== false && (
+            <span className="text-[12.5px] font-semibold text-[var(--tx)] truncate">
+              {row.incidentName}
+            </span>
+          )}
           <span
             className="text-[11px] text-[var(--tx3)] whitespace-nowrap"
             style={{ fontFamily: 'var(--mono)' }}
@@ -221,12 +238,14 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
             {formatTime(row.createdAt)}
           </span>
         </div>
-        <div
-          className="text-[12px] font-semibold mt-[5px] capitalize truncate"
-          style={{ color: severityBg(row.severity) }}
-        >
-          {row.severity || '--'}
-        </div>
+        {config.showSeverity !== false && (
+          <div
+            className="text-[12px] font-semibold mt-[5px] capitalize truncate"
+            style={{ color: severityBg(row.severity) }}
+          >
+            {row.severity || '--'}
+          </div>
+        )}
         <div className="text-[10px] text-[var(--tx3)] mt-[2px] truncate">
           {row.nvrName} - {row.channelName}
         </div>

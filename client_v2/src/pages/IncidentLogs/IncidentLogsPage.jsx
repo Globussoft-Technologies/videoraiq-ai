@@ -449,6 +449,7 @@ const IncidentLogsPage = ({ config }) => {
           channelIds={channelIds}
           severity={severity}
           setSeverity={(v) => dispatch({ type: 'SET_SEVERITY', value: v })}
+          showSeverity={config.showSeverityFilter !== false}
           showStatus={config.showStatus}
           status={status}
           setStatus={(v) => dispatch({ type: 'SET_STATUS', value: v })}
