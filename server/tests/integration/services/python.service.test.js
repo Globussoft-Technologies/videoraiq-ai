@@ -242,6 +242,36 @@ describe("PythonService.startNewDetection", () => {
     );
   });
 
+  it("builds the cylinder stack contract with defaults and polygon nesting", async () => {
+    axios.post.mockResolvedValueOnce({ data: { ok: true } });
+    await PythonService.startNewDetection({
+      camera_id: "cylinder-cam",
+      nvr_id: "cylinder-nvr",
+      admin_id: "admin",
+      stream_url: "http://stream.test/cylinder/playlist.m3u8",
+      detection_modes: ["cylinder_stack"],
+      zones: [[100, 100], [900, 100], [900, 700], [100, 700]],
+      severity: "high",
+    });
+
+    expect(axios.post.mock.calls[0][1]).toEqual({
+      camera_id: "cylinder-cam",
+      nvr_id: "cylinder-nvr",
+      admin_id: "admin",
+      stream_url: "http://stream.test/cylinder/playlist.m3u8",
+      detectors: [{
+        name: "cylinderStackDetectionSettings",
+        zones: [[[100, 100], [900, 100], [900, 700], [100, 700]]],
+        cylinder_confidence: 0.35,
+        cylinder_iou: 0.45,
+        horizontal_aspect_ratio_threshold: 1.6,
+        cylinder_cooldown_sec: 60,
+        severity: "high",
+        trigger_notification: true,
+      }],
+    });
+  });
+
   it("throws 'No configurations found' when detection_modes is empty", async () => {
     await expect(
       PythonService.startNewDetection({
@@ -284,6 +314,37 @@ describe("PythonService.startNewDetection", () => {
 });
 
 describe("PythonService.updateNewDetection", () => {
+  it("updates cylinder stack settings using the DS field names", async () => {
+    axios.post.mockResolvedValueOnce({ data: { updated: true } });
+    await PythonService.updateNewDetection({
+      camera_id: "c",
+      nvr_id: "n",
+      admin_id: "a",
+      stream_url: "http://stream.test/cylinder/playlist.m3u8",
+      detection_modes: ["cylinder_stack"],
+      zones: [[[10, 10], [20, 10], [20, 20], [10, 20]]],
+      severity: "moderate",
+      confidence_thresholds: {
+        cylinder_confidence: 0.4,
+        cylinder_iou: 0.5,
+        horizontal_aspect_ratio_threshold: 1.8,
+        cylinder_cooldown_sec: 90,
+        trigger_notification: false,
+      },
+    });
+
+    expect(axios.post.mock.calls[0][1].detectors).toEqual([{
+      name: "cylinderStackDetectionSettings",
+      zones: [[[10, 10], [20, 10], [20, 20], [10, 20]]],
+      cylinder_confidence: 0.4,
+      cylinder_iou: 0.5,
+      horizontal_aspect_ratio_threshold: 1.8,
+      cylinder_cooldown_sec: 90,
+      severity: "moderate",
+      trigger_notification: false,
+    }]);
+  });
+
   it("POSTs to /detectors/update with vehicle_obstruction carrying obstruction_threshold_sec", async () => {
     axios.post.mockResolvedValueOnce({ data: { updated: true } });
     const out = await PythonService.updateNewDetection({
@@ -318,6 +379,22 @@ describe("PythonService.updateNewDetection", () => {
 });
 
 describe("PythonService.stopNewDetection", () => {
+  it("stops only the cylinder stack detector", async () => {
+    axios.post.mockResolvedValueOnce({ data: { stopped: true } });
+    await PythonService.stopNewDetection(
+      "cylinder-camera",
+      "cylinder-nvr",
+      ["cylinder_stack"],
+      "admin",
+    );
+
+    expect(axios.post.mock.calls[0][1]).toEqual({
+      camera_id: "cylinder-camera",
+      nvr_id: "cylinder-nvr",
+      detectors: ["cylinderStackDetectionSettings"],
+    });
+  });
+
   it("POSTs to /stream/stop with only camera_id+nvr_id when no detection modes given", async () => {
     axios.post.mockResolvedValueOnce({ data: { stopped: true } });
     const out = await PythonService.stopNewDetection("c1", "n1");
@@ -428,6 +505,39 @@ describe("PythonService.handleDetectionStartStop", () => {
     // pipeline that started and then had nothing to read - the camera showed as
     // running while no detections ever fired.
     expect(body.stream_url).toBe("http://stream.test/stream.m3u8");
+  });
+
+  it("uses the streaming-server URL when cylinder detection is enabled", async () => {
+    NVR.findById.mockResolvedValueOnce({
+      _id: "nvr-cylinder",
+      brand: "cpplus",
+      connectionMode: "direct",
+    });
+    axios.post.mockResolvedValueOnce({ data: { started: true } });
+    const channel = {
+      _id: { toString: () => "cam-cylinder" },
+      nvrId: { _id: { toString: () => "nvr-cylinder" } },
+    };
+
+    await PythonService.handleDetectionStartStop(
+      channel,
+      "admin-cylinder",
+      true,
+      "cylinderDetectionSettings",
+      [[1, 1], [2, 1], [2, 2], [1, 2]],
+      [],
+      [1280, 720],
+      0,
+      "high",
+    );
+
+    expect(buildStreamingUrl).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: "nvr-cylinder" }),
+      channel,
+    );
+    expect(axios.post.mock.calls[0][1].stream_url).toBe(
+      "http://stream.test/stream.m3u8",
+    );
   });
 
   it("enable=true with an unknown detection type yields empty modes and rejects", async () => {

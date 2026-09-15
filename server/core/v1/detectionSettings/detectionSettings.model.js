@@ -866,6 +866,11 @@ const CrusherDetectionSetting = DetectionSetting.discriminator(
 // register this discriminator in its modelMap, so cylinder CRUD remains v2-only.
 const CylinderDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  cylinder_confidence: { type: Number, min: 0, max: 1, default: 0.35 },
+  cylinder_iou: { type: Number, min: 0, max: 1, default: 0.45 },
+  horizontal_aspect_ratio_threshold: { type: Number, min: 0, default: 1.6 },
+  cylinder_cooldown_sec: { type: Number, min: 0, default: 60 },
+  trigger_notification: { type: Boolean, default: true },
   imageRequired: {
     type: Boolean,
     default: false,

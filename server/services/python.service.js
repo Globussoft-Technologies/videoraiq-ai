@@ -45,7 +45,25 @@ const THRESHOLD_FIELDS_BY_DETECTOR = {
   conveyorDetectionSettings: [],
   crusherDetectionSettings: [],
   waterSpillageDetectionSettings: [],
+  cylinderStackDetectionSettings: ["cylinder_confidence", "cylinder_iou"],
 };
+
+const buildCylinderStackDetector = (zones, severity, settings = {}) => ({
+  name: "cylinderStackDetectionSettings",
+  // DS expects an array of polygons. Existing settings store one polygon per
+  // camera, while newer clients may already send the outer array.
+  zones:
+    Array.isArray(zones) && zones.length && !Array.isArray(zones[0]?.[0])
+      ? [zones]
+      : zones || [],
+  cylinder_confidence: settings.cylinder_confidence ?? 0.35,
+  cylinder_iou: settings.cylinder_iou ?? 0.45,
+  horizontal_aspect_ratio_threshold:
+    settings.horizontal_aspect_ratio_threshold ?? 1.6,
+  cylinder_cooldown_sec: settings.cylinder_cooldown_sec ?? 60,
+  severity,
+  trigger_notification: settings.trigger_notification ?? true,
+});
 
 const pickDetectorThresholds = (detectorName, settings = {}) => {
   const fields = THRESHOLD_FIELDS_BY_DETECTOR[detectorName] || [];
@@ -452,6 +470,12 @@ class PythonService {
         });
       }
 
+      if (detection_modes?.includes("cylinder_stack")) {
+        detectors.push(
+          buildCylinderStackDetector(zones, severity, confidence_thresholds),
+        );
+      }
+
       if (detection_modes?.includes("water_spillage")) {
         detectors.push({
           name: "waterSpillageDetectionSettings",
@@ -721,6 +745,12 @@ class PythonService {
           zones: zones || [],
           severity,
         });
+      }
+
+      if (detection_modes?.includes("cylinder_stack")) {
+        detectors.push(
+          buildCylinderStackDetector(zones, severity, confidence_thresholds),
+        );
       }
 
       if (detection_modes?.includes("water_spillage")) {
