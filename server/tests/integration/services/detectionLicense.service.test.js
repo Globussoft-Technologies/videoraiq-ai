@@ -286,6 +286,7 @@ describe("detection visibility beyond the detection screens", () => {
     expect(logs.anprLogs).toBe(true);
     // ...unlicensed ones lose theirs, despite defaulting to true.
     expect(logs.crusherLogs).toBe(false);
+    expect(logs.cylinderLogs).toBe(false);
     expect(logs.personCountLogs).toBe(false);
     expect(logs.waterSpillLogs).toBe(false);
     expect(logs.deskAbsenceLogs).toBe(false);
@@ -325,6 +326,26 @@ describe("detection visibility beyond the detection screens", () => {
     // Not detection-gated, so these survive regardless.
     expect(logs.detectedUsers).toBe(true);
     expect(logs.visibilityLogs).toBe(true);
+  });
+
+  it("keeps Cylinder Stacking Logs visible when Cylinder Detection is licensed", async () => {
+    const { default: LogsConfigService } = await import(
+      "../../../core/v2/logsConfiguration/logsConfiguration.service.js"
+    );
+
+    const admin = await makeClient({
+      purchasedCameras: 5,
+      allocations: { cylinderDetectionSettings: 5 },
+    });
+    const { req, res, next } = serviceCtx({
+      user_id: USER_ID,
+      adminId: admin._id.toString(),
+    });
+
+    await LogsConfigService.getLogsConfiguration(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.cylinderLogs).toBe(true);
   });
 
   it("keeps Sleep Activity and Vehicle Check-In/Out logs only when their detections are licensed", async () => {

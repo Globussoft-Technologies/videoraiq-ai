@@ -28,6 +28,7 @@ const logsConfigSchema = new mongoose.Schema(
       carLogs: { type: Boolean, default: true },
       vehicleCheckInOutLogs: { type: Boolean, default: true },
       crusherLogs: { type: Boolean, default: true },
+      cylinderLogs: { type: Boolean, default: true },
       lineCrossingLogs: { type: Boolean, default: true },
       waterSpillLogs: { type: Boolean, default: true },
       unauthorizedAccessLogs: { type: Boolean, default: true },

@@ -80,6 +80,16 @@ export const LogsConfigProvider = ({ children }) => {
     return () => socket.off(`logsConfiguration_${adminId}`, handler);
   }, [socket, user?.adminId]);
 
+  // Super Admin licence changes arrive on a separate socket event. Refresh the
+  // effective logs map so an unlicensed detection's log disappears immediately.
+  useEffect(() => {
+    const adminId = user?.adminId;
+    if (!IS_LICENSING_ENABLED || !socket || !adminId) return;
+
+    socket.on(`detectionLicense_${adminId}`, refresh);
+    return () => socket.off(`detectionLicense_${adminId}`, refresh);
+  }, [socket, user?.adminId, refresh]);
+
   // Enabling or disabling a detection can change which log pages apply, and
   // toggleChannelDetection already broadcasts this event.
   useEffect(() => {

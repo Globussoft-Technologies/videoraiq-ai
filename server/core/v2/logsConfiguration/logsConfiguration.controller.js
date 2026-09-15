@@ -26,6 +26,7 @@ class LogsConfigurationController {
         carLogs: true,
         vehicleCheckInOutLogs: true,
         crusherLogs: true,
+        cylinderLogs: true,
         lineCrossingLogs: true,
         waterSpillLogs: true,
         unauthorizedAccessLogs: true
