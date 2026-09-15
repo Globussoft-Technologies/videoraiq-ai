@@ -22,7 +22,7 @@ import { buildPdf, csvField, csvCell, imageCell, shiftNameFor, shiftTimingsFor }
  * character-width hint.
  */
 const BREAK_COLUMNS = [
-  { header: "S No", width: 26, break: (ctx) => String(ctx.index + 1) },
+  { header: "S No", width: 26, pdfWidth: 30, noWrap: true, break: (ctx) => String(ctx.index + 1) },
   { header: "Employee I'd", width: 58, break: (ctx) => ctx.row.employeeId },
   { header: "Employee Name", width: 92, wrap: true, break: (ctx) => ctx.row.employee },
   { header: "Department", width: 86, wrap: true, break: (ctx) => ctx.row.department },
@@ -51,10 +51,11 @@ const BREAK_COLUMNS = [
 export const BREAK_HEADERS = BREAK_COLUMNS.map((column) => column.header);
 
 /** PDF column widths, taken from the same schema so the two cannot drift. */
-export const BREAK_PDF_COLUMNS = BREAK_COLUMNS.map(({ header, width, wrap }) => ({
+export const BREAK_PDF_COLUMNS = BREAK_COLUMNS.map(({ header, width, pdfWidth, wrap, noWrap }) => ({
   head: header,
-  width,
+  width: pdfWidth || width,
   ...(wrap ? { wrap: true } : {}),
+  ...(noWrap ? { noWrap: true } : {}),
 }));
 
 function lineFor(kind, ctx) {

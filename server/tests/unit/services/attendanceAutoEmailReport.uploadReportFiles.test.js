@@ -3,8 +3,7 @@
  *
  * Reports are no longer emailed as attachments (which hit SendGrid's ~30MB
  * message cap on large date ranges/orgs) — the generated PDF/CSV are instead
- * uploaded to whichever media backend this deployment runs (mediaStorage.js:
- * NAS over SFTP or Oracle Object Storage, switched by one config flag) and
+ * uploaded to whichever per-admin media backend this deployment runs and
  * the email links to them instead. putMedia is mocked here so this test
  * doesn't need a real SFTP/Oracle connection; it verifies the shape of what
  * uploadReportFiles/publicUrlFor produce, not the storage backend itself
@@ -12,11 +11,12 @@
  */
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("../../../utils/mediaStorage.js", () => ({
-  putMedia: vi.fn(async ({ mediaType, folderName, originalName }) => `/uploads/${mediaType}s/${folderName}/123-${originalName}`),
+vi.mock("../../../core/v2/adminStorage/mediaStorage.v2.js", () => ({
+  putMediaV2: vi.fn(async ({ adminId, mediaType, folderName, originalName }) =>
+    `/v2/${adminId}/env/nas/uploads/${mediaType}s/${folderName}/123-${originalName}`),
 }));
 
-const { putMedia } = await import("../../../utils/mediaStorage.js");
+const { putMediaV2: putMedia } = await import("../../../core/v2/adminStorage/mediaStorage.v2.js");
 const { uploadReportFiles, publicUrlFor } = await import(
   "../../../core/v2/attendanceAutoEmailReport/attendanceAutoEmailReport.service.js"
 );
@@ -24,19 +24,22 @@ const { uploadReportFiles, publicUrlFor } = await import(
 const report = { title: "Email Test", adminId: "64b000000000000000000001" };
 
 describe("attendanceAutoEmailReport.uploadReportFiles", () => {
-  it("uploads both PDF and CSV via putMedia with mediaType 'report' and returns path + public url for each", async () => {
+  it("uploads PDF, CSV and XLSX via putMedia with mediaType 'report' and returns path + public url for each", async () => {
     const csv = Buffer.from("date,name\r\n", "utf8");
     const pdf = Buffer.from("%PDF-fake", "utf8");
-    const files = await uploadReportFiles(report, csv, pdf);
+    const xlsx = Buffer.from("xlsx-fake", "utf8");
+    const files = await uploadReportFiles(report, csv, pdf, xlsx);
 
-    expect(files).toHaveLength(2);
+    expect(files).toHaveLength(3);
     const byFormat = Object.fromEntries(files.map((f) => [f.format, f]));
     expect(byFormat.pdf.path).toContain("uploads/reports/");
     expect(byFormat.csv.path).toContain("uploads/reports/");
-    expect(byFormat.pdf.url).toBe(publicUrlFor(byFormat.pdf.path));
-    expect(byFormat.csv.url).toBe(publicUrlFor(byFormat.csv.path));
+    expect(byFormat.xlsx.path).toContain("uploads/reports/");
+    expect(byFormat.pdf.url).toBe(`${publicUrlFor(byFormat.pdf.path)}?download=attendance-report.pdf`);
+    expect(byFormat.csv.url).toBe(`${publicUrlFor(byFormat.csv.path)}?download=attendance-report.csv`);
+    expect(byFormat.xlsx.url).toBe(`${publicUrlFor(byFormat.xlsx.path)}?download=attendance-report.xlsx`);
 
-    expect(putMedia).toHaveBeenCalledTimes(2);
+    expect(putMedia).toHaveBeenCalledTimes(3);
     for (const call of putMedia.mock.calls) {
       expect(call[0].mediaType).toBe("report");
       expect(call[0].folderName).toBe(String(report.adminId));
@@ -71,4 +74,17 @@ describe("attendanceAutoEmailReport.publicUrlFor", () => {
     const withoutSlash = publicUrlFor("uploads/reports/abc/file.pdf");
     expect(withoutSlash).toBe(withSlash);
   });
+
+  it.each(["nas", "aws", "gcp", "oracle"])(
+    "routes a V2 %s storage key through the provider-neutral V2 upload endpoint",
+    (provider) => {
+    const url = publicUrlFor(
+      `/v2/64b000000000000000000001/env/${provider}/uploads/reports/abc/file.pdf`,
+    );
+    expect(url).toContain(
+      `/api/v2/uploads/v2/64b000000000000000000001/env/${provider}/uploads/reports/abc/file.pdf`,
+    );
+    expect(url).not.toContain("/api/v1/uploads/v2/");
+    },
+  );
 });

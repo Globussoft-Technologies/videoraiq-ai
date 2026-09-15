@@ -50,6 +50,7 @@ import sessionRoutes from "../../core/v2/sessions/sessions.routes.js";
 import measurementIncidentsRoutes from "../../core/v2/measurementIncidents/measurementIncidents.routes.js";
 import measurementsRoutes from "../../core/v2/measurements/measurements.routes.js";
 import adminStorageRoutes from "../../core/v2/adminStorage/adminStorage.routes.js";
+import measurementCalibrationRoutes from "../../core/v2/measurementCalibration/measurementCalibration.routes.js";
 import verifyMeasurementAuth from "../../core/v2/measurementIncidents/measurementAuth.middleware.js";
 
 const router = express.Router();
@@ -120,6 +121,7 @@ router.use("/video-records", verifyToken, videoRecordsRoutes);
 router.use("/measurement-incidents", verifyMeasurementAuth, measurementIncidentsRoutes);
 router.use("/measurements", measurementsRoutes);
 router.use("/admin-storage", adminStorageRoutes);
+router.use("/measurement-calibration", measurementCalibrationRoutes);
 
 export default router;
 

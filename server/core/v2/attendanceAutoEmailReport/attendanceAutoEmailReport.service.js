@@ -683,10 +683,10 @@ export async function buildPdf({ report, rows, label, timezone, columns: columnS
     //   - time columns fit "09:45:40 AM"
     //   - Date fits "01 Jun 2026"
     const columns = columnSpec || [
-      { head: "S\u00A0No", width: 24 },
+      { head: "S\u00A0No", width: 30, noWrap: true },
       { head: "Employee I'd", width: 58 },
       { head: "Employee Name", width: 82, wrap: true },
-      { head: "Department", width: 78, wrap: true },
+      { head: "Department", width: 72, wrap: true },
       { head: "Shift I'd", width: 62, wrap: true },
       { head: "Shift Timings", width: 72 },
       { head: "Date", width: 60 },
@@ -721,8 +721,8 @@ export async function buildPdf({ report, rows, label, timezone, columns: columnS
       // (white / pale-blue zebra), so the header never blends into the first row.
       document.fillColor("#173b83").rect(x, y, pageWidth, 34).fill();
       document.fillColor("#ffffff").font("Helvetica-Bold").fontSize(7.5);
-      for (const { head, width } of columns) {
-        document.text(head, x + 4, y + 5, { width: width - 8, height: 26, lineBreak: true });
+      for (const { head, width, noWrap } of columns) {
+        document.text(head, x + 4, y + 5, { width: width - 8, height: 26, lineBreak: !noWrap });
         x += width;
       }
       return y + 34;
@@ -1080,7 +1080,15 @@ function safeReportName() {
 // — every other stored file in this codebase is resolved to a full URL by
 // prepending this same config key at link/display time, never baked in.
 export function publicUrlFor(mediaPath) {
-  return `${config.get("ImageView")}${mediaPath.startsWith("/") ? "" : "/"}${mediaPath}`;
+  // Per-admin/environment storage keys use the V2 resolver regardless of
+  // whether the selected provider is NAS, AWS, GCP or Oracle. ImageView is a
+  // legacy V1 media base, so sending a `v2/...` key through it reaches the old
+  // reader and is rejected as "Invalid media path".
+  const isV2StoragePath = /^\/?v2\//i.test(String(mediaPath || ""));
+  const base = isV2StoragePath
+    ? `${String(config.get("backendDomain")).replace(/\/+$/, "")}/api/v2/uploads`
+    : config.get("ImageView");
+  return `${base}${mediaPath.startsWith("/") ? "" : "/"}${mediaPath}`;
 }
 
 function reportDownloadUrl(mediaPath, extension) {
