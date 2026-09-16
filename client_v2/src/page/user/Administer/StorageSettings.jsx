@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Cloud, Database, HardDrive, Headphones, Loader2, Mail, Save, Server, ShieldCheck, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -43,6 +43,7 @@ export default function StorageSettings() {
   const [busy, setBusy] = useState('');
   const [tested, setTested] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const providerDrafts = useRef({});
 
   const load = async () => {
     setLoading(true);
@@ -51,14 +52,16 @@ export default function StorageSettings() {
       setStatus(next);
       setTested(false);
       const effective = next?.effective || {};
-      setForm((current) => ({
+      const loadedForm = {
         ...EMPTY,
         ...effective,
         password: '',
         secretAccessKey: '',
         sessionToken: '',
-        provider: effective.provider || current.provider || 'nas',
-      }));
+        provider: effective.provider || 'nas',
+      };
+      providerDrafts.current = { [loadedForm.provider]: loadedForm };
+      setForm(loadedForm);
     } catch (error) {
       toast.error(errorMessage(error));
     } finally {
@@ -85,6 +88,13 @@ export default function StorageSettings() {
   const set = (key) => (value) => {
     setTested(false);
     setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const switchProvider = (provider) => {
+    if (provider === form.provider) return;
+    setTested(false);
+    providerDrafts.current[form.provider] = form;
+    setForm(providerDrafts.current[provider] || { ...EMPTY, provider });
   };
 
   const run = async (kind, action) => {
@@ -167,7 +177,7 @@ export default function StorageSettings() {
           <strong>Provider</strong>
           <div className="provider-grid">
             {PROVIDERS.map(({ value, label, icon: Icon }) => (
-              <button key={value} type="button" className={`provider-btn ${form.provider === value ? 'active' : ''}`} onClick={() => set('provider')(value)}>
+              <button key={value} type="button" className={`provider-btn ${form.provider === value ? 'active' : ''}`} onClick={() => switchProvider(value)} disabled={!!busy}>
                 <Icon size={17} /> {label}
               </button>
             ))}

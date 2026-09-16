@@ -85,10 +85,14 @@ function rowDetails(entry) {
     width: numeric(customDimensions.breadth) ?? numeric(skuDimensions.breadth) ?? printedValue(metadata, 'width'),
     height: numeric(customDimensions.height) ?? numeric(skuDimensions.height) ?? printedValue(metadata, 'height'),
   };
+  const normalized = entry.normalizedMeasuredData && typeof entry.normalizedMeasuredData === 'object'
+    && Object.keys(entry.normalizedMeasuredData).length
+    ? entry.normalizedMeasuredData
+    : entry.measuredData;
   const rawMeasured = {
-    length: measuredValue(entry.measuredData, 'length'),
-    width: measuredValue(entry.measuredData, 'width'),
-    height: measuredValue(entry.measuredData, 'height'),
+    length: measuredValue(normalized, 'length'),
+    width: measuredValue(normalized, 'width'),
+    height: measuredValue(normalized, 'height'),
   };
   const measured = {
     length: rawMeasured.length == null ? null : snapMeasuredDimension(rawMeasured.length, printed.length),
@@ -115,6 +119,7 @@ function localEntryToIncident(entry) {
     updatedAt: entry.decidedAt,
     qrMetadata: entry.qrMetadata || {},
     measuredData: entry.measuredData || {},
+    normalizedMeasuredData: entry.normalizedMeasuredData || {},
   };
 }
 

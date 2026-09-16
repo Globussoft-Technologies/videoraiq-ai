@@ -6,7 +6,7 @@ import MeasurementPanel from './components/MeasurementPanel';
 import QrExtractedPanel from './components/QrExtractedPanel';
 import StationTopbar from './components/StationTopbar';
 import MeasurementLogDrawer from './components/MeasurementLogDrawer';
-import { estimatedMeasurementSeconds, fetchMeasurementIncident, hasCompleteMeasuredData, hasMeasuredData, isEditableShortcutTarget, logStationError, matchesEscapeShortcut, matchesStationShortcut, measurementStartUrl, playStationSound, prepareStationAudio, readStationFromLocation, recordMeasurementDecision, toggleStationFullscreen, updateMeasurementIncident } from './stationIntegration';
+import { estimatedMeasurementSeconds, fetchMeasurementIncident, hasCompleteMeasuredData, hasMeasuredData, isEditableShortcutTarget, logStationError, matchesEscapeShortcut, matchesStationShortcut, measurementDataForDisplay, measurementStartUrl, playStationSound, prepareStationAudio, readStationFromLocation, recordMeasurementDecision, toggleStationFullscreen, updateMeasurementIncident } from './stationIntegration';
 import useMeasurementSocket from './useMeasurementSocket';
 import useStationKioskFocus from './useStationKioskFocus';
 
@@ -208,7 +208,7 @@ export default function FloMattressDashboard() {
         <div className="absolute inset-0 opacity-[0.38] [background-image:linear-gradient(var(--grid)_1px,transparent_1px),linear-gradient(90deg,var(--grid)_1px,transparent_1px)] [background-size:44px_44px]" />
         <div className="relative z-10 grid h-full min-h-0 gap-3 xl:grid-cols-[1.08fr_1fr]">
           <QrExtractedPanel metadata={incident?.qrMetadata} response={displayedQrResponse} readAt={incident?.createdAt} image={incident?.qrImage || incident?.qrImagePath} backendIp={station?.backend?.ip} />
-          <MeasurementPanel data={incident?.measuredData} image={incident?.measurementImage} backendIp={station?.backend?.ip} qrMetadata={incident?.qrMetadata} status={incident?.status} secondsRemaining={measurementSeconds} />
+          <MeasurementPanel data={measurementDataForDisplay(incident)} image={incident?.measurementImage} backendIp={station?.backend?.ip} qrMetadata={incident?.qrMetadata} status={incident?.status} secondsRemaining={measurementSeconds} />
         </div>
       </section>
       <DashboardBottomBar onAccept={() => decide('accepted')} onReject={() => decide('rejected')} onReset={reset} disabled={!measurementReady || updating} resetDisabled={updating} status={incident?.status} />

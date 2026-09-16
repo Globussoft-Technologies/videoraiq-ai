@@ -128,6 +128,7 @@ export function recordMeasurementDecision(incident) {
     decidedAt: new Date().toISOString(),
     qrMetadata: incident.qrMetadata || {},
     measuredData: incident.measuredData || {},
+    normalizedMeasuredData: incident.normalizedMeasuredData || {},
   };
   const entries = [entry, ...readMeasurementLog().filter((item) => item.id !== entry.id)].slice(0, 80);
   localStorage.setItem(LOG_KEY, JSON.stringify(entries));
@@ -418,8 +419,14 @@ export function qrExtractionUrl(piApi, deviceIp = '') {
 }
 
 export function hasMeasuredData(incident) {
-  const data = incident?.measuredData;
+  const data = measurementDataForDisplay(incident);
   return Boolean(data && typeof data === 'object' && Object.keys(data).length);
+}
+
+export function measurementDataForDisplay(incident) {
+  const normalized = incident?.normalizedMeasuredData;
+  if (normalized && typeof normalized === 'object' && Object.keys(normalized).length) return normalized;
+  return incident?.measuredData;
 }
 
 export function snapMeasuredDimension(measured, declared, maxDifference = 1) {
@@ -447,7 +454,7 @@ function completeMeasurementAxis(data, aliases) {
 }
 
 export function hasCompleteMeasuredData(incident) {
-  const data = incident?.measuredData;
+  const data = measurementDataForDisplay(incident);
   if (!data || typeof data !== 'object') return false;
   return completeMeasurementAxis(data, ['length'])
     && completeMeasurementAxis(data, ['breadth', 'width'])

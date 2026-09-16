@@ -41,7 +41,12 @@ export default function useMeasurementSocket(station, initialIncident = null) {
       qrMetadata: latest.qrMetadata || current.qrMetadata,
       qrImagePath: latest.qrImagePath || current.qrImagePath,
       qrImage: latest.qrImage || current.qrImage,
-      measuredData: hasMeasuredData(latest) ? latest.measuredData : current.measuredData,
+      measuredData: latest.measuredData && Object.keys(latest.measuredData).length
+        ? latest.measuredData
+        : current.measuredData,
+      normalizedMeasuredData: latest.normalizedMeasuredData && Object.keys(latest.normalizedMeasuredData).length
+        ? latest.normalizedMeasuredData
+        : current.normalizedMeasuredData,
       measurementImage: latest.measurementImage || current.measurementImage,
       dsProcessedAt: latest.dsProcessedAt || current.dsProcessedAt,
       status: current.status !== 'pending' && latest.status === 'pending'
