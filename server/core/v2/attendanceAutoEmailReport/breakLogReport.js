@@ -22,7 +22,7 @@ import { buildPdf, csvField, csvCell, imageCell, shiftNameFor, shiftTimingsFor }
  * character-width hint.
  */
 const BREAK_COLUMNS = [
-  { header: "S No", width: 26, pdfWidth: 30, noWrap: true, break: (ctx) => String(ctx.index + 1) },
+  { header: "S No", width: 26, pdfWidth: 30, noWrap: true, break: (ctx) => String(ctx.serial) },
   { header: "Employee I'd", width: 58, break: (ctx) => ctx.row.employeeId },
   { header: "Employee Name", width: 92, wrap: true, break: (ctx) => ctx.row.employee },
   { header: "Department", width: 86, wrap: true, break: (ctx) => ctx.row.department },
@@ -78,16 +78,21 @@ function lineFor(kind, ctx) {
  */
 export function breakTableRows(rows) {
   const out = [];
+  let serial = 1;
   rows.forEach((row, index) => {
     const breaks = row.breaks || [];
     if (!breaks.length) {
       // The "-" placeholders come from the column schema itself (every break
       // column renders "-" when there is no break), so this line stays aligned
       // with the rest without hand-placed padding.
-      out.push(lineFor("break", { row, index, item: null }));
+      out.push(lineFor("break", { row, index, item: null, serial }));
+      serial += 1;
       return;
     }
-    for (const item of breaks) out.push(lineFor("break", { row, index, item }));
+    for (const item of breaks) {
+      out.push(lineFor("break", { row, index, item, serial }));
+      serial += 1;
+    }
     out.push(lineFor("total", { row, index, item: null }));
   });
   return out;

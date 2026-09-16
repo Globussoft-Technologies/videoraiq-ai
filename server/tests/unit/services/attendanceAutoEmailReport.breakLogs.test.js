@@ -69,6 +69,10 @@ const TWO_BREAKS = [
 ];
 
 const toMinutes = (text) => {
+  const human = /^(\d+)h(?: (\d+)m)?$/.exec(String(text));
+  if (human) return Number(human[1]) * 60 + Number(human[2] || 0);
+  const minutesOnly = /^(\d+)m(?: \d+s)?$/.exec(String(text));
+  if (minutesOnly) return Number(minutesOnly[1]);
   const [h, m] = String(text).split(":").map(Number);
   return h * 60 + m;
 };
@@ -76,7 +80,7 @@ const toMinutes = (text) => {
 describe("breakLogReport — columns", () => {
   it("carries every requested column, in order", () => {
     expect(BREAK_HEADERS).toEqual([
-      "I'd", "Employee I'd", "Employee Name", "Department", "Shift I'd", "Shift Timings", "Date", "Location",
+      "S No", "Employee I'd", "Employee Name", "Department", "Shift I'd", "Shift Timings", "Date", "Location",
       "Break #", "Break Out", "Break In", "Break Time", "Total Break Time",
       "Break Out Camera", "Break In Camera", "View Image",
     ]);
@@ -105,16 +109,24 @@ describe("breakLogReport — one row per break", () => {
     // Break 1 began when they checked OUT at 12:00 and ended on the 13:00 check-in.
     expect(at(out[0].cells, "Break Out")).toBe("12:00:00 PM");
     expect(at(out[0].cells, "Break In")).toBe("01:00:00 PM");
-    expect(at(out[0].cells, "Break Time")).toBe("01:00");
+    expect(at(out[0].cells, "Break Time")).toBe("1h");
     expect(at(out[1].cells, "Break Out")).toBe("03:30:00 PM");
     expect(at(out[1].cells, "Break In")).toBe("04:00:00 PM");
-    expect(at(out[1].cells, "Break Time")).toBe("00:30");
+    expect(at(out[1].cells, "Break Time")).toBe("30m");
   });
 
   it("numbers the breaks within each day", () => {
     const out = breakTableRows([row(TWO_BREAKS)]);
     expect(at(out[0].cells, "Break #")).toBe("1");
     expect(at(out[1].cells, "Break #")).toBe("2");
+  });
+
+  it("uses a unique S No for each rendered break row", () => {
+    const out = breakTableRows([
+      row(TWO_BREAKS),
+      row(TWO_BREAKS, "08"),
+    ]);
+    expect(out.map((line) => at(line.cells, "S No"))).toEqual(["1", "2", "", "3", "4", ""]);
   });
 
   it("names the camera at each end of the break", () => {
@@ -136,7 +148,7 @@ describe("breakLogReport — totals", () => {
     const out = breakTableRows([row(TWO_BREAKS)]);
     expect(at(out[0].cells, "Total Break Time")).toBe("");
     expect(at(out[1].cells, "Total Break Time")).toBe("");
-    expect(at(out[2].cells, "Total Break Time")).toBe("01:30");
+    expect(at(out[2].cells, "Total Break Time")).toBe("1h 30m");
   });
 
   it("the per-break durations add up to the subtotal", () => {
@@ -186,13 +198,15 @@ describe("breakLogReport — output formats", () => {
     expect(sheet).toBeDefined();
     // Header on row 4, first break on row 5.
     expect(sheet.getCell(4, BREAK_HEADERS.indexOf("Break Out") + 1).value).toBe("Break Out");
-    expect(sheet.getCell(5, BREAK_HEADERS.indexOf("Break Time") + 1).value).toBe("01:00");
-    expect(sheet.getCell(7, BREAK_HEADERS.indexOf("Total Break Time") + 1).value).toBe("01:30");
+    expect(sheet.getCell(5, BREAK_HEADERS.indexOf("S No") + 1).value).toBe("1");
+    expect(sheet.getCell(6, BREAK_HEADERS.indexOf("S No") + 1).value).toBe("2");
+    expect(sheet.getCell(5, BREAK_HEADERS.indexOf("Break Time") + 1).value).toBe("1h");
+    expect(sheet.getCell(7, BREAK_HEADERS.indexOf("Total Break Time") + 1).value).toBe("1h 30m");
   });
 
   it("writes the columns into the CSV header", () => {
     const csv = buildBreakCsv({ rows: [row(TWO_BREAKS)], label: "Aug 2026", timezone: TZ }).toString("utf8");
-    const header = csv.split("\r\n").find((line) => line.startsWith("I'd,"));
+    const header = csv.split("\r\n").find((line) => line.startsWith("S No,"));
     expect(header).toContain("Break Out,Break In,Break Time,Total Break Time");
   });
 

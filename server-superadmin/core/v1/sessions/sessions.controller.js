@@ -25,6 +25,18 @@ class SessionsController {
     return sessionsService.bulkDeleteSessions(req, res, next);
   }
 
+  async bulkLogoutSessions(req, res, next) {
+    return sessionsService.bulkLogoutSessions(req, res, next);
+  }
+
+  async bulkBlockSessions(req, res, next) {
+    return sessionsService.bulkBlockSessions(req, res, next);
+  }
+
+  async bulkUnblockSessions(req, res, next) {
+    return sessionsService.bulkUnblockSessions(req, res, next);
+  }
+
   async blockSession(req, res, next) {
     return sessionsService.blockSession(req, res, next);
   }

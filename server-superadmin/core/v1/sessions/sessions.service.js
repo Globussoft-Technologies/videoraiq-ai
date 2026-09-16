@@ -331,7 +331,7 @@ class SessionsService {
 
   async bulkDeleteSessions(req, res) {
     try {
-      const sessionIds = Array.from(new Set((req.body?.sessionIds || []).map((id) => String(id || "").trim()).filter(Boolean)));
+      const sessionIds = this.readSessionIds(req);
       if (!sessionIds.length) {
         return res.status(400).send(Response.userFailResp("sessionIds must be a non-empty array", "Validation Failed!"));
       }
@@ -349,6 +349,84 @@ class SessionsService {
     } catch (error) {
       logger.error(error);
       return res.status(500).send(Response.errorResp("Failed to delete sessions", error.message));
+    }
+  }
+
+  readSessionIds(req) {
+    return Array.from(new Set((req.body?.sessionIds || []).map((id) => String(id || "").trim()).filter(Boolean)));
+  }
+
+  async bulkLogoutSessions(req, res) {
+    return this.bulkUpdateSessionStatus(req, res, {
+      status: "logged_out",
+      eventType: "logout",
+      successMessage: "Sessions logged out successfully.",
+      failureMessage: "Failed to logout sessions",
+      onlyStatuses: ["active"],
+    });
+  }
+
+  async bulkBlockSessions(req, res) {
+    return this.bulkUpdateSessionStatus(req, res, {
+      status: "blocked",
+      eventType: "blocked",
+      successMessage: "Sessions blocked successfully.",
+      failureMessage: "Failed to block sessions",
+      onlyStatuses: ["active"],
+    });
+  }
+
+  async bulkUnblockSessions(req, res) {
+    return this.bulkUpdateSessionStatus(req, res, {
+      status: "logged_out",
+      eventType: "unblocked",
+      successMessage: "Sessions unblocked successfully.",
+      failureMessage: "Failed to unblock sessions",
+      onlyStatuses: ["blocked"],
+      reason: req.body?.reason || "Browser session unblocked",
+    });
+  }
+
+  async bulkUpdateSessionStatus(req, res, {
+    status,
+    eventType,
+    successMessage,
+    failureMessage,
+    onlyStatuses,
+    excludedStatuses,
+    reason,
+  }) {
+    try {
+      const sessionIds = this.readSessionIds(req);
+      if (!sessionIds.length) {
+        return res.status(400).send(Response.userFailResp("sessionIds must be a non-empty array", "Validation Failed!"));
+      }
+
+      const now = new Date();
+      const filter = isSuperAdmin(req) ? {} : { adminId: authUser(req).adminId };
+      const statusFilter = {};
+      if (Array.isArray(onlyStatuses) && onlyStatuses.length) statusFilter.status = { $in: onlyStatuses };
+      if (Array.isArray(excludedStatuses) && excludedStatuses.length) statusFilter.status = { $nin: excludedStatuses };
+
+      const set = { status, lastActiveAt: now };
+      if (status === "logged_out") set.logoutTime = now;
+      if (status === "blocked") {
+        set.blockedAt = now;
+        set.blockedBy = authUser(req).adminId || null;
+        set.blockReason = req.body?.reason || "";
+      }
+      const result = await sessionModel.updateMany(
+        { ...filter, ...statusFilter, sessionId: { $in: sessionIds } },
+        { $set: set, $push: { events: { type: eventType, at: now, reason: reason ?? req.body?.reason ?? "" } } }
+      );
+
+      return res.status(200).send(Response.userSuccessResp(successMessage, {
+        requestedCount: sessionIds.length,
+        modifiedCount: result.modifiedCount || 0,
+      }));
+    } catch (error) {
+      logger.error(error);
+      return res.status(500).send(Response.errorResp(failureMessage, error.message));
     }
   }
 
@@ -406,9 +484,6 @@ class SessionsService {
             status: "logged_out",
             logoutTime: now,
             lastActiveAt: now,
-            blockedAt: null,
-            blockedBy: null,
-            blockReason: "",
           },
           $push: { events: { type: "unblocked", at: now, reason: req.body?.reason || "Browser session unblocked" } },
         },
@@ -582,9 +657,6 @@ class SessionsService {
             status: "logged_out",
             logoutTime: now,
             lastActiveAt: now,
-            blockedAt: null,
-            blockedBy: null,
-            blockReason: "",
           },
           $push: { events: { type: "unblocked", at: now, reason: "Device unblocked" } },
         }
