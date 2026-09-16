@@ -22,7 +22,7 @@ import { buildPdf, csvField, csvCell, imageCell, shiftNameFor, shiftTimingsFor }
  * character-width hint.
  */
 const BREAK_COLUMNS = [
-  { header: "S No", width: 26, pdfWidth: 30, noWrap: true, break: (ctx) => String(ctx.serial) },
+  { header: "S No", width: 26, pdfWidth: 30, noWrap: true, break: (ctx) => (ctx.serial ? String(ctx.serial) : "") },
   { header: "Employee I'd", width: 58, break: (ctx) => ctx.row.employeeId },
   { header: "Employee Name", width: 92, wrap: true, break: (ctx) => ctx.row.employee },
   { header: "Department", width: 86, wrap: true, break: (ctx) => ctx.row.department },
@@ -89,10 +89,15 @@ export function breakTableRows(rows) {
       serial += 1;
       return;
     }
-    for (const item of breaks) {
-      out.push(lineFor("break", { row, index, item, serial }));
-      serial += 1;
+    for (const [breakIndex, item] of breaks.entries()) {
+      out.push(lineFor("break", {
+        row,
+        index,
+        item,
+        serial: breakIndex === 0 ? serial : "",
+      }));
     }
+    serial += 1;
     out.push(lineFor("total", { row, index, item: null }));
   });
   return out;

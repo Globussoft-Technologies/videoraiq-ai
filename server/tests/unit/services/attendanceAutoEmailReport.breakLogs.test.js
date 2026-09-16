@@ -121,12 +121,12 @@ describe("breakLogReport — one row per break", () => {
     expect(at(out[1].cells, "Break #")).toBe("2");
   });
 
-  it("uses a unique S No for each rendered break row", () => {
+  it("shows S No only on the first break row for each employee-day", () => {
     const out = breakTableRows([
       row(TWO_BREAKS),
       row(TWO_BREAKS, "08"),
     ]);
-    expect(out.map((line) => at(line.cells, "S No"))).toEqual(["1", "2", "", "3", "4", ""]);
+    expect(out.map((line) => at(line.cells, "S No"))).toEqual(["1", "", "", "2", "", ""]);
   });
 
   it("names the camera at each end of the break", () => {
@@ -199,7 +199,7 @@ describe("breakLogReport — output formats", () => {
     // Header on row 4, first break on row 5.
     expect(sheet.getCell(4, BREAK_HEADERS.indexOf("Break Out") + 1).value).toBe("Break Out");
     expect(sheet.getCell(5, BREAK_HEADERS.indexOf("S No") + 1).value).toBe("1");
-    expect(sheet.getCell(6, BREAK_HEADERS.indexOf("S No") + 1).value).toBe("2");
+    expect(sheet.getCell(6, BREAK_HEADERS.indexOf("S No") + 1).value).toBeNull();
     expect(sheet.getCell(5, BREAK_HEADERS.indexOf("Break Time") + 1).value).toBe("1h");
     expect(sheet.getCell(7, BREAK_HEADERS.indexOf("Total Break Time") + 1).value).toBe("1h 30m");
   });
