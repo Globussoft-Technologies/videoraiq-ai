@@ -14,6 +14,7 @@ import {
   Copy,
   Check,
   Ban,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
@@ -115,6 +116,7 @@ const AddProfile = () => {
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showRegLinkModal, setShowRegLinkModal] = useState(false);
   const [registrationLink, setRegistrationLink] = useState(null);
+  const [registrationLinkTerminated, setRegistrationLinkTerminated] = useState(false);
   const [regLinkCopied, setRegLinkCopied] = useState(false);
   const [terminatingRegLink, setTerminatingRegLink] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -254,6 +256,7 @@ const AddProfile = () => {
     try {
       await terminateRegistrationLink();
       setRegistrationLink(null);
+      setRegistrationLinkTerminated(true);
       setRegLinkCopied(false);
       toast.success('Registration link terminated');
     } catch (error) {
@@ -608,28 +611,39 @@ const AddProfile = () => {
               <span>Register Bulk Employee</span>
             </button>
 
-            {canCreateUsers && (
+            {canCreateUsers && !registrationLink && (
               <button data-tour="reg-link" onClick={() => setShowRegLinkModal(true)} className={actionBtn}>
                 <LinkIcon className="w-4 h-4" />
-                <span>{registrationLink ? 'Regenerate Link' : 'Generate Registration Link'}</span>
+                <span>{registrationLinkTerminated ? 'Regenerate Link' : 'Generate Registration Link'}</span>
               </button>
             )}
 
             {canCreateUsers && registrationLink && (
-              <div className="flex items-stretch h-10 rounded-xl border border-[var(--blue)]/30 bg-[var(--bg1)] shadow-sm overflow-hidden">
-                <div className="flex items-center gap-2 min-w-0 w-48 px-3" title={registrationLink.url}>
-                  <span className="shrink-0 w-2 h-2 rounded-full bg-[var(--ok)] ring-2 ring-[var(--ok)]/15" />
+              <div className="flex items-stretch gap-2 h-10 p-1 rounded-xl border border-[var(--ok)]/20 bg-[var(--ok)]/5 shadow-sm">
+                <div className="flex items-center gap-3 min-w-0 w-64 px-2" title={registrationLink.url}>
+                  <span className="shrink-0 w-3 h-3 rounded-full bg-[var(--ok)] ring-4 ring-[var(--ok)]/10" />
                   <div className="min-w-0 leading-tight">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ok)]">Active link</p>
-                    <p className="truncate text-[11px] text-[var(--tx2)]">{registrationLink.url}</p>
+                    <p className="text-sm font-semibold text-[var(--ok)]">Active Link</p>
+                    <p className="truncate text-xs text-[var(--tx2)]">{registrationLink.url}</p>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  data-tour="reg-link"
+                  onClick={() => setShowRegLinkModal(true)}
+                  title="Regenerate registration link"
+                  aria-label="Regenerate registration link"
+                  className="flex items-center justify-center gap-2 h-full px-5 rounded-lg bg-[var(--blue)] text-xs font-semibold text-white hover:opacity-90 cursor-pointer transition-all shadow-sm"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Regenerate</span>
+                </button>
                 <button
                   type="button"
                   onClick={copyRegistrationLink}
                   title="Copy registration link"
                   aria-label="Copy registration link"
-                  className="flex items-center gap-1.5 h-full px-3 border-l border-[var(--bd)] text-xs font-semibold text-[var(--blue)] hover:bg-[var(--bg3)] cursor-pointer transition-colors"
+                  className="flex items-center justify-center gap-2 h-full px-5 rounded-lg border border-[var(--blue)] bg-[var(--bg1)] text-xs font-semibold text-[var(--blue)] hover:bg-[var(--blue)]/5 cursor-pointer transition-colors"
                 >
                   {regLinkCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   <span>{regLinkCopied ? 'Copied' : 'Copy'}</span>
@@ -640,10 +654,10 @@ const AddProfile = () => {
                   disabled={terminatingRegLink}
                   title="Terminate registration link"
                   aria-label="Terminate registration link"
-                  className="flex items-center gap-1.5 h-full px-3 border-l border-[var(--bd)] text-xs font-semibold text-[var(--crit)] hover:bg-[var(--crit)]/10 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center gap-2 h-full px-5 rounded-lg bg-[var(--crit)] text-xs font-semibold text-white hover:opacity-90 cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Ban className={`w-4 h-4 ${terminatingRegLink ? 'animate-pulse' : ''}`} />
-                  <span>{terminatingRegLink ? 'Ending...' : 'End'}</span>
+                  <span>{terminatingRegLink ? 'Terminating...' : 'Terminate'}</span>
                 </button>
               </div>
             )}
@@ -718,6 +732,7 @@ const AddProfile = () => {
           activeLink={registrationLink}
           onLinkChange={(link) => {
             setRegistrationLink(link);
+            setRegistrationLinkTerminated(!link);
             setRegLinkCopied(false);
           }}
         />

@@ -103,6 +103,7 @@ const GenerateRegLinkModal = ({ open, onClose, adminId, activeLink, onLinkChange
       onLinkChange(null);
       setCopied(false);
       toast.success('Registration link terminated');
+      onClose();
     } catch (err) {
       toast.error(err?.response?.data?.msg || 'Failed to terminate registration link');
     } finally {
@@ -185,7 +186,7 @@ const GenerateRegLinkModal = ({ open, onClose, adminId, activeLink, onLinkChange
                 className="w-full flex items-center justify-center gap-2 px-3 py-2 mt-3 bg-[var(--crit)] hover:opacity-90 text-white rounded-md text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {terminating ? <Loader className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
-                {terminating ? 'Terminating...' : 'Terminate Link'}
+                {terminating ? 'Terminating...' : 'Terminate'}
               </button>
             </div>
           )}
