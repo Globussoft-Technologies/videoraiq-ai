@@ -25,7 +25,10 @@ import Pagination from '../clients/components/Pagination'
 import { notifyApiError, notifyApiSuccess } from '../../utils/apiError'
 import {
   blockSession,
+  bulkBlockSessions,
   bulkDeleteSessions,
+  bulkLogoutSessions,
+  bulkUnblockSessions,
   deleteSession,
   getAdminSessions,
   getSessionDetails,
@@ -286,6 +289,15 @@ const StatusBadge = ({ status }) => (
   </span>
 )
 
+const latestEventReason = (events = [], type) => {
+  if (!Array.isArray(events)) return ''
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    if (event?.type === type && event.reason) return event.reason
+  }
+  return ''
+}
+
 const SessionSummary = ({ rows = [], loading = false, selectedOwner = '', onSelectOwner }) => {
   if (loading) return <LoadingState message="Loading session summary..." />
   if (rows.length === 0) return <EmptyState label="No session summary found" />
@@ -474,7 +486,7 @@ const DetailsModal = ({ session, onClose }) => {
     ['Last Active', formatDate(session.lastActiveAt)],
     ['Logout Time', formatDate(session.logoutTime)],
     ['Blocked At', formatDate(session.blockedAt)],
-    ['Block Reason', session.blockReason],
+    ['Block Reason', session.blockReason || latestEventReason(session.events, 'blocked')],
   ]
 
   return (
@@ -611,6 +623,15 @@ const SessionManagement = () => {
     [sessions]
   )
   const visibleSessionIds = useMemo(() => sortedSessions.map((session) => session.sessionId).filter(Boolean), [sortedSessions])
+  const selectedSessions = useMemo(
+    () => sortedSessions.filter((session) => selectedSessionIds.includes(session.sessionId)),
+    [selectedSessionIds, sortedSessions]
+  )
+  const selectedCount = selectedSessionIds.length
+  const hasCompleteSelection = selectedCount > 0 && selectedSessions.length === selectedCount
+  const canBulkLogout = hasCompleteSelection && selectedSessions.every((session) => session.status === 'active')
+  const canBulkBlock = canBulkLogout
+  const canBulkUnblock = hasCompleteSelection && selectedSessions.every((session) => session.status === 'blocked')
   const allVisibleSelected = visibleSessionIds.length > 0 && visibleSessionIds.every((id) => selectedSessionIds.includes(id))
   const someVisibleSelected = visibleSessionIds.some((id) => selectedSessionIds.includes(id))
 
@@ -931,6 +952,49 @@ const SessionManagement = () => {
     })
   }
 
+  const confirmBulkLogout = () => {
+    if (!canBulkLogout) return
+    const targetSessionIds = selectedSessions.map((session) => session.sessionId)
+    setAction({
+      Icon: LogOut,
+      title: 'Logout selected sessions?',
+      description: `${targetSessionIds.length} active selected session${targetSessionIds.length === 1 ? '' : 's'} will be logged out immediately.`,
+      confirmLabel: 'Logout Selected',
+      success: 'Selected sessions logged out successfully',
+      failure: 'Failed to logout selected sessions',
+      run: () => bulkLogoutSessions(targetSessionIds),
+    })
+  }
+
+  const confirmBulkBlock = () => {
+    if (!canBulkBlock) return
+    const targetSessionIds = selectedSessions.map((session) => session.sessionId)
+    setAction({
+      Icon: ShieldOff,
+      title: 'Block selected sessions?',
+      description: `${targetSessionIds.length} active selected session${targetSessionIds.length === 1 ? '' : 's'} will be blocked and logged out immediately.`,
+      confirmLabel: 'Block Selected',
+      needsReason: true,
+      success: 'Selected sessions blocked successfully',
+      failure: 'Failed to block selected sessions',
+      run: (reason) => bulkBlockSessions(targetSessionIds, reason),
+    })
+  }
+
+  const confirmBulkUnblock = () => {
+    if (!canBulkUnblock) return
+    const targetSessionIds = selectedSessions.map((session) => session.sessionId)
+    setAction({
+      Icon: Unlock,
+      title: 'Unblock selected sessions?',
+      description: `${targetSessionIds.length} blocked selected session${targetSessionIds.length === 1 ? '' : 's'} will be unblocked.`,
+      confirmLabel: 'Unblock Selected',
+      success: 'Selected sessions unblocked successfully',
+      failure: 'Failed to unblock selected sessions',
+      run: () => bulkUnblockSessions(targetSessionIds),
+    })
+  }
+
   const deviceDisplayLabel = (device) =>
     device?.deviceName ||
     [device?.browser, device?.operatingSystem].filter(Boolean).join(' on ') ||
@@ -971,6 +1035,7 @@ const SessionManagement = () => {
 
   const actionsFor = (session) => {
     const deviceLabel = deviceDisplayLabel(session)
+    const canBlockSession = session.status === 'active'
     const deviceAction =
       session.status === 'blocked'
         ? {
@@ -984,6 +1049,7 @@ const SessionManagement = () => {
             key: 'block-session',
             label: `Block ${deviceLabel}`,
             Icon: ShieldOff,
+            disabled: !canBlockSession,
             onClick: () => confirmBlockSession(session),
             className: 'text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10',
           }
@@ -1261,15 +1327,44 @@ const SessionManagement = () => {
                     <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">
                       {selectedSessionIds.length} selected
                     </p>
-                    <button
-                      type="button"
-                      onClick={confirmBulkDelete}
-                      disabled={!selectedSessionIds.length}
-                      className="inline-flex h-9 items-center gap-2 rounded-xl border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-red-500/20 dark:bg-[#0b0d13] dark:text-red-300 dark:hover:bg-red-500/10"
-                    >
-                      <Trash2 size={15} strokeWidth={2.2} />
-                      Delete selected
-                    </button>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={confirmBulkLogout}
+                        disabled={!canBulkLogout}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-amber-200 bg-white px-3 text-sm font-semibold text-amber-600 transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-amber-500/20 dark:bg-[#0b0d13] dark:text-amber-300 dark:hover:bg-amber-500/10"
+                      >
+                        <LogOut size={15} strokeWidth={2.2} />
+                        Logout selected
+                      </button>
+                      <button
+                        type="button"
+                        onClick={confirmBulkBlock}
+                        disabled={!canBulkBlock}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-red-500/20 dark:bg-[#0b0d13] dark:text-red-300 dark:hover:bg-red-500/10"
+                      >
+                        <ShieldOff size={15} strokeWidth={2.2} />
+                        Block selected
+                      </button>
+                      <button
+                        type="button"
+                        onClick={confirmBulkUnblock}
+                        disabled={!canBulkUnblock}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 text-sm font-semibold text-emerald-600 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-emerald-500/20 dark:bg-[#0b0d13] dark:text-emerald-300 dark:hover:bg-emerald-500/10"
+                      >
+                        <Unlock size={15} strokeWidth={2.2} />
+                        Unblock selected
+                      </button>
+                      <button
+                        type="button"
+                        onClick={confirmBulkDelete}
+                        disabled={!selectedSessionIds.length}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-red-500/20 dark:bg-[#0b0d13] dark:text-red-300 dark:hover:bg-red-500/10"
+                      >
+                        <Trash2 size={15} strokeWidth={2.2} />
+                        Delete selected
+                      </button>
+                    </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="min-w-[1040px] w-full text-left">

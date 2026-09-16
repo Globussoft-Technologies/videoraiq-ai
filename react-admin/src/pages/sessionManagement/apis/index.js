@@ -72,6 +72,33 @@ export const bulkDeleteSessions = async (sessionIds = []) => {
   return response.data
 }
 
+export const bulkLogoutSessions = async (sessionIds = []) => {
+  const response = await axios.patch(
+    `${apiUrl}${basePath}/bulk/logout`,
+    { sessionIds },
+    { headers: await authHeaders() }
+  )
+  return response.data
+}
+
+export const bulkBlockSessions = async (sessionIds = [], reason = '') => {
+  const response = await axios.patch(
+    `${apiUrl}${basePath}/bulk/block`,
+    { sessionIds, reason },
+    { headers: await authHeaders() }
+  )
+  return response.data
+}
+
+export const bulkUnblockSessions = async (sessionIds = []) => {
+  const response = await axios.patch(
+    `${apiUrl}${basePath}/bulk/unblock`,
+    { sessionIds },
+    { headers: await authHeaders() }
+  )
+  return response.data
+}
+
 export const blockSession = async (sessionId, reason = '') => {
   const response = await axios.patch(
     `${apiUrl}${basePath}/${sessionId}/block-session`,
