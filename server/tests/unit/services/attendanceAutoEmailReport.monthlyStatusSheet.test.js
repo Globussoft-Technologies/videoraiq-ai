@@ -58,13 +58,14 @@ const row = (dateKey, status, inTime, outTime, workingMinutesDay, shift = SHIFT,
 });
 
 /** Load a generated workbook back so assertions read real cells. */
-async function build(rows) {
+async function build(rows, options = {}) {
   const buffer = await buildMonthlyStatusWorkbook({
     rows,
     label: "Jun 01 2026 To Jun 30 2026",
     timezone: TZ,
     start: START,
     end: END,
+    ...options,
   });
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
@@ -170,6 +171,16 @@ describe("monthlyStatusSheet — day grid", () => {
 });
 
 describe("monthlyStatusSheet — summary block", () => {
+  it("uses the schedule frequency in the title and working-hours labels", async () => {
+    const workbook = await build([row("2026-06-01", "Present", "21:55", "06:30", 515)], {
+      frequency: "weekly",
+    });
+    const sheet = workbook.worksheets[0];
+    expect(sheet.getCell(1, 1).value).toBe("Weekly Status Report (Basic Work Duration)");
+    expect(sheet.getCell(MONTHLY_HOURS_VALUE_ROW - 1, 1).value).toBe("Expected Weekly Working Hours");
+    expect(sheet.getCell(MONTHLY_HOURS_VALUE_ROW - 1, 2).value).toBe("Actual Weekly Working Hours");
+  });
+
   it("counts working days from the shift's week and derives expected hours from its window", async () => {
     const workbook = await build([
       row("2026-06-01", "Present", "21:55", "06:30", 515),

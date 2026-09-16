@@ -52,7 +52,7 @@ function worksheetValue(value) {
 /** Daily workbook using the PDF's expanded day/session/total table. */
 export async function buildAttendanceWorkbook({ headers, lines, label, timezone, rowCount }) {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "VideoRAIQ";
+  workbook.creator = "VideoraIQ";
   workbook.created = new Date();
 
   const sheet = workbook.addWorksheet("Attendance Report", {
@@ -71,7 +71,7 @@ export async function buildAttendanceWorkbook({ headers, lines, label, timezone,
   sheet.mergeCells(1, Math.max(2, lastColumn - 4), 2, lastColumn);
 
   const brand = sheet.getCell(1, 1);
-  brand.value = "VideoRAIQ";
+  brand.value = "VideoraIQ";
   brand.font = { bold: true, size: 24, color: { argb: "FFFFFFFF" } };
   brand.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BLUE } };
   brand.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
@@ -120,6 +120,17 @@ export async function buildAttendanceWorkbook({ headers, lines, label, timezone,
         cell.font = { ...cell.font, color: { argb: "FF3973E6" }, underline: true };
       }
     });
+  }
+
+  if (!lines.length) {
+    const row = sheet.addRow(["No attendance records"]);
+    row.height = 28;
+    sheet.mergeCells(row.number, 1, row.number, lastColumn);
+    const cell = sheet.getCell(row.number, 1);
+    cell.font = { bold: true, size: 11, color: { argb: NAVY } };
+    cell.alignment = { vertical: "middle", horizontal: "center" };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: DAY_FILL } };
+    cell.border = thinBorder;
   }
 
   headers.forEach((header, index) => {

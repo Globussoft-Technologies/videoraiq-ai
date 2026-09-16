@@ -99,6 +99,12 @@ const HEADER_FILL = "FFF2F2F2";
 const SUMMARY_FILL = "FFFFFF00"; // The yellow summary labels in the source sheet.
 const BORDER = { style: "thin", color: { argb: "FFBFBFBF" } };
 
+function reportPeriodName(frequency) {
+  if (frequency === "weekly") return "Weekly";
+  if (frequency === "custom") return "Custom";
+  return "Monthly";
+}
+
 function bordered(cell) {
   cell.border = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
   return cell;
@@ -125,7 +131,7 @@ function summaryBox(sheet, row, column, label, value) {
  * record). Days with no record at all are filled from the shift: an off day
  * reads WO, a working day reads A.
  */
-function addEmployeeSheet(workbook, { employee, rows, days, label, timezone, shift }) {
+function addEmployeeSheet(workbook, { employee, rows, days, label, timezone, shift, periodName }) {
   // Excel forbids : \ / ? * [ ] in a sheet name and caps it at 31 chars.
   const safeName = (employee.name || "Employee").replace(/[:\\/?*[\]]/g, " ").slice(0, 26);
   const sheet = workbook.addWorksheet(`${safeName}`.trim() || "Employee");
@@ -143,7 +149,7 @@ function addEmployeeSheet(workbook, { employee, rows, days, label, timezone, shi
   // ---- Title -------------------------------------------------------------
   sheet.mergeCells(1, 1, 1, lastColumn);
   const title = sheet.getCell(1, 1);
-  title.value = "Monthly Status Report (Basic Work Duration)";
+  title.value = `${periodName} Status Report (Basic Work Duration)`;
   title.font = { bold: true, size: 12 };
   title.alignment = { horizontal: "center" };
 
@@ -245,10 +251,10 @@ function addEmployeeSheet(workbook, { employee, rows, days, label, timezone, shi
     sheet,
     summaryRow + 6,
     1,
-    "Expected Monthly Working Hours",
+    `Expected ${periodName} Working Hours`,
     expectedMinutes == null ? "-" : minutesToHm(expectedMinutes),
   );
-  summaryBox(sheet, summaryRow + 6, 2, "Actual Monthly Working Hours", minutesToHm(actualMinutes));
+  summaryBox(sheet, summaryRow + 6, 2, `Actual ${periodName} Working Hours`, minutesToHm(actualMinutes));
 
   // Freeze the label column and everything above the grid, so scrolling
   // across a 31-day month keeps the row titles visible.
@@ -292,10 +298,11 @@ const MAX_EMPLOYEE_SHEETS = 200;
  * Build the monthly-status workbook and return it as a Buffer, ready to be
  * uploaded next to the report's PDF/CSV.
  */
-export async function buildMonthlyStatusWorkbook({ rows, label, timezone, start, end }) {
+export async function buildMonthlyStatusWorkbook({ rows, label, timezone, start, end, frequency = "monthly" }) {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "VideoRAIQ";
+  workbook.creator = "VideoraIQ";
   workbook.created = new Date();
+  const periodName = reportPeriodName(frequency);
 
   const employees = groupByEmployee(rows).sort((left, right) =>
     String(left.employee.name).localeCompare(String(right.employee.name)),
@@ -312,6 +319,7 @@ export async function buildMonthlyStatusWorkbook({ rows, label, timezone, start,
       label,
       timezone,
       shift: entry.shift,
+      periodName,
     });
   }
 
@@ -338,5 +346,6 @@ export const __test__ = {
   payableMinutesForDay,
   daysInRange,
   groupByEmployee,
+  reportPeriodName,
   MARK,
 };

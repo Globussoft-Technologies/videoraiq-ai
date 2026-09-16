@@ -29,4 +29,22 @@ describe("daily attendance auto-email workbook", () => {
     );
     expect(sheet.getCell("A9").fill.fgColor.argb).toBe("FFDCE6F8");
   });
+
+  it("adds a visible empty-state row when a daily report has no attendance records", async () => {
+    const buffer = await buildAttendanceWorkbook({
+      headers: ["S No", "Employee Name", "Date"],
+      lines: [],
+      label: "14 Sep 2026 - 14 Sep 2026",
+      timezone: "Asia/Kolkata",
+      rowCount: 0,
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const sheet = workbook.getWorksheet("Attendance Report");
+
+    expect(sheet.getCell("A7").value).toBe("No attendance records");
+    expect(sheet.getCell("A7").isMerged).toBe(true);
+    expect(sheet.getCell("A7").fill.fgColor.argb).toBe("FFE9EEF9");
+  });
 });

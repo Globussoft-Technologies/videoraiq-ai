@@ -129,7 +129,7 @@ const BORDER = { style: "thin", color: { argb: "FFD8DFEC" } };
 /** The break log as a real .xlsx workbook — one sheet, one row per break. */
 export async function buildBreakWorkbook({ rows, label, timezone }) {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "VideoRAIQ";
+  workbook.creator = "VideoraIQ";
   workbook.created = new Date();
   const sheet = workbook.addWorksheet("Break Logs");
 

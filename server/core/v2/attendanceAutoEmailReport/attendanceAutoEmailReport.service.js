@@ -1186,7 +1186,14 @@ async function deliver(report, options = {}) {
           timezone: summary.timezone,
           rowCount: summary.rowCount,
         })
-      : await buildMonthlyStatusWorkbook({ rows, label: summary.label, timezone: summary.timezone, start: summary.start, end: summary.end })
+      : await buildMonthlyStatusWorkbook({
+          rows,
+          label: summary.label,
+          timezone: summary.timezone,
+          start: summary.start,
+          end: summary.end,
+          frequency: report.schedule.frequency,
+        })
     : null;
   const xlsxMs = Date.now() - xlsxT0;
 
