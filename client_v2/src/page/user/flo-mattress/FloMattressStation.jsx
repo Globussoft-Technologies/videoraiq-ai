@@ -8,12 +8,14 @@ import StationBottomBar from './components/StationBottomBar';
 import StationIdleCard from './components/StationIdleCard';
 import StationTopbar from './components/StationTopbar';
 import useStationIntegration from './useStationIntegration';
+import useStationKioskFocus from './useStationKioskFocus';
 import {
   isEditableShortcutTarget,
   logStationError,
   logStationSuccess,
   matchesEscapeShortcut,
   matchesStationShortcut,
+  prepareStationAudio,
   readDecisionCounts,
   scanCameraForQr,
   toggleStationFullscreen,
@@ -31,6 +33,7 @@ function qrIdentity(qrResponse) {
 export default function FloMattressStation() {
   const navigate = useNavigate();
   const location = useLocation();
+  const kioskSurfaceRef = useStationKioskFocus();
   const { station, selectedCamera, configurationError, operationError, dismissOperationError, capturing, startCapture } = useStationIntegration();
   const redirectedError = location.state?.stationError || null;
   const visibleOperationError = operationError || redirectedError;
@@ -40,6 +43,17 @@ export default function FloMattressStation() {
   const [secondsRemaining, setSecondsRemaining] = useState(15);
   const automaticScanRef = useRef({ blockedRaw: '', lastError: '', lastDsAttemptAt: 0 });
   const toggleLogs = useCallback(() => setLogOpen((current) => !current), []);
+
+  useEffect(() => {
+    const prepareAudio = () => prepareStationAudio();
+    window.addEventListener('pointerdown', prepareAudio, { capture: true, once: true });
+    window.addEventListener('keydown', prepareAudio, { capture: true, once: true });
+    return () => {
+      window.removeEventListener('pointerdown', prepareAudio, true);
+      window.removeEventListener('keydown', prepareAudio, true);
+    };
+  }, []);
+
   const runCapture = useCallback(async (automaticCapture = null) => {
     if (capturing || processing) return;
     const startedAt = Date.now();
@@ -75,7 +89,10 @@ export default function FloMattressStation() {
       setProcessing(false);
     }
   }, [capturing, navigate, processing, startCapture, station]);
-  const start = useCallback(() => runCapture(), [runCapture]);
+  const start = useCallback(() => {
+    prepareStationAudio();
+    return runCapture();
+  }, [runCapture]);
 
   useEffect(() => {
     if (capturing || processing || visibleOperationError || configurationError || !selectedCamera || !station) return undefined;
@@ -169,7 +186,7 @@ export default function FloMattressStation() {
   }, [dismissOperationError, location.pathname, location.state, navigate, redirectedError]);
 
   return (
-    <main className="vq-root flex h-screen min-h-0 flex-col overflow-hidden bg-[var(--appbg)] text-[var(--tx)]">
+    <main ref={kioskSurfaceRef} tabIndex={-1} className="vq-root flex h-screen min-h-0 flex-col overflow-hidden bg-[var(--appbg)] text-[var(--tx)] outline-none">
       <StationTopbar running={capturing || processing} onStartStop={start} onToggleLogs={toggleLogs} onToggleFullscreen={() => toggleStationFullscreen().catch(() => {})} stationId={station?.pi?.device?.mac} {...counts} />
       <section className="relative flex min-h-0 flex-1 overflow-auto bg-[#eef0f7] p-3 dark:bg-[var(--appbg)] lg:p-4">
         <div className="relative grid min-h-[560px] w-full flex-1 gap-3 lg:min-h-0 lg:grid-cols-2 lg:items-stretch">

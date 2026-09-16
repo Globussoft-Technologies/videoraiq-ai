@@ -1,5 +1,5 @@
 import { Ruler, ScanLine } from 'lucide-react';
-import { dimensionsFromCustomSize, dimensionsFromSku, resolveBackendImageUrl } from '../stationIntegration';
+import { dimensionsFromCustomSize, dimensionsFromSku, resolveBackendImageUrl, snapMeasuredDimension } from '../stationIntegration';
 
 const firstValue = (object, keys) => keys.map((key) => object?.[key]).find((value) => value != null);
 const shown = (value, fallback = '—') => value == null || value === '' ? fallback : String(value);
@@ -20,11 +20,13 @@ function measurementRows(data, qrMetadata) {
       ?? numeric(customDimensions[axis === 'width' ? 'breadth' : axis])
       ?? numeric(skuDimensions[axis === 'width' ? 'breadth' : axis])
       ?? numeric(qrMetadata?.[axis === 'width' ? 'breadth' : axis]);
-    const measured = numeric(firstValue(item, ['measured', 'actual', 'value']))
+    const rawMeasured = numeric(firstValue(item, ['measured', 'actual', 'value']))
       ?? numeric(typeof dimensions[axis] !== 'object' ? dimensions[axis] : null)
       ?? (axis === 'width' ? numeric(source.breadth) : numeric(source[axis]));
-    const difference = numeric(firstValue(item, ['difference', 'diff', 'delta']))
-      ?? (printed != null && measured != null ? measured - printed : null);
+    const measured = rawMeasured == null ? null : snapMeasuredDimension(rawMeasured, printed);
+    const difference = printed != null && measured != null
+      ? measured - printed
+      : numeric(firstValue(item, ['difference', 'diff', 'delta']));
     const passed = measured != null && difference != null && Math.abs(difference) <= tolerance;
     return { label, printed, measured, difference, tolerance, passed };
   });

@@ -245,6 +245,11 @@ export function playStationSound(cue) {
       { frequency: 220, to: 120, duration: 0.26, at: 0.2, type: 'square' },
     ],
     reset: [{ frequency: 620, to: 420, duration: 0.14, at: 0 }, { frequency: 390, duration: 0.1, at: 0.12 }],
+    measurementReady: [
+      { frequency: 660, duration: 0.14, at: 0, type: 'sine' },
+      { frequency: 880, duration: 0.18, at: 0.12, type: 'sine' },
+      { frequency: 1100, duration: 0.24, at: 0.27, type: 'triangle' },
+    ],
   };
   const notes = cues[cue];
   if (!notes) return;
@@ -293,6 +298,13 @@ export function matchesEscapeShortcut(event) {
   const code = String(event?.code || '').toLowerCase();
   return key === 'escape' || key === 'esc' || code === 'escape'
     || event?.keyCode === 27 || event?.which === 27;
+}
+
+export function matchesSpaceShortcut(event) {
+  const key = String(event?.key || '').toLowerCase();
+  const code = String(event?.code || '').toLowerCase();
+  return key === ' ' || key === 'spacebar' || code === 'space'
+    || event?.keyCode === 32 || event?.which === 32;
 }
 
 export function cameraList(payload) {
@@ -408,6 +420,38 @@ export function qrExtractionUrl(piApi, deviceIp = '') {
 export function hasMeasuredData(incident) {
   const data = incident?.measuredData;
   return Boolean(data && typeof data === 'object' && Object.keys(data).length);
+}
+
+export function snapMeasuredDimension(measured, declared, maxDifference = 1) {
+  if (measured == null || measured === '') return null;
+  const measuredValue = Number(measured);
+  if (!Number.isFinite(measuredValue)) return null;
+  if (declared == null || declared === '') return measuredValue;
+  const declaredValue = Number(declared);
+  const allowedDifference = Number(maxDifference);
+  if (!Number.isFinite(declaredValue) || !Number.isFinite(allowedDifference) || allowedDifference < 0) {
+    return measuredValue;
+  }
+  return Math.abs(measuredValue - declaredValue) <= allowedDifference + Number.EPSILON
+    ? declaredValue
+    : measuredValue;
+}
+
+function completeMeasurementAxis(data, aliases) {
+  const source = data?.dimensions && typeof data.dimensions === 'object' ? data.dimensions : data;
+  const raw = aliases.map((alias) => source?.[alias]).find((value) => value != null && value !== '');
+  const value = raw && typeof raw === 'object'
+    ? [raw.measured, raw.actual, raw.value].find((candidate) => candidate != null && candidate !== '')
+    : raw;
+  return value != null && value !== '' && Number.isFinite(Number(value));
+}
+
+export function hasCompleteMeasuredData(incident) {
+  const data = incident?.measuredData;
+  if (!data || typeof data !== 'object') return false;
+  return completeMeasurementAxis(data, ['length'])
+    && completeMeasurementAxis(data, ['breadth', 'width'])
+    && completeMeasurementAxis(data, ['height']);
 }
 
 export function estimatedMeasurementSeconds(qrResponse) {
@@ -1097,10 +1141,30 @@ export async function captureAndUpload({ station, camera, signal, progress = {},
     throw error;
   }
 
-  let measurementResponse;
+  const dsMeasurementRequestId = clean(qrResponse?.measurement_request_id)
+    || clean(qrResponse?.measurementRequestId);
+  let measurementResponse = {};
   try {
-    measurementResponse = await startDepthMeasurement(station, qrResponse.dimensions.sku, signal);
-    progress.measurementStarted = true;
+    if (dsMeasurementRequestId) {
+      // The DS QR endpoint has already launched the depth job. Starting it a
+      // second time can leave the Pi busy until the outer request deadline.
+      progress.measurementStarted = true;
+      try {
+        logStationSuccess('measurement-already-started', {
+          incidentId: incident?._id,
+          sku: qrResponse.dimensions.sku,
+          stationId: station.pi.device.mac,
+          source: qrResponse?.source || 'ds-qr-extraction',
+          message: 'Skipped duplicate measurement start because DS already returned a measurement request ID',
+          details: { measurementRequestId: dsMeasurementRequestId },
+        });
+      } catch (logError) {
+        console.warn('[VideoraIQ measurement diagnostic error]', logError);
+      }
+    } else {
+      measurementResponse = await startDepthMeasurement(station, qrResponse.dimensions.sku, signal);
+      progress.measurementStarted = true;
+    }
   } catch (error) {
     await deleteMeasurementIncident(station, incident?._id).catch((cleanupError) => {
       console.error('[VideoraIQ incident cleanup error]', cleanupError);

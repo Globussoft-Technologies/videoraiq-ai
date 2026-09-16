@@ -7,6 +7,7 @@ import {
   fetchMeasurementIncidentLog,
   readMeasurementLog,
   readQrScanDiagnostics,
+  snapMeasuredDimension,
 } from '../stationIntegration';
 import FloButton from './FloButton';
 
@@ -84,10 +85,15 @@ function rowDetails(entry) {
     width: numeric(customDimensions.breadth) ?? numeric(skuDimensions.breadth) ?? printedValue(metadata, 'width'),
     height: numeric(customDimensions.height) ?? numeric(skuDimensions.height) ?? printedValue(metadata, 'height'),
   };
-  const measured = {
+  const rawMeasured = {
     length: measuredValue(entry.measuredData, 'length'),
     width: measuredValue(entry.measuredData, 'width'),
     height: measuredValue(entry.measuredData, 'height'),
+  };
+  const measured = {
+    length: rawMeasured.length == null ? null : snapMeasuredDimension(rawMeasured.length, printed.length),
+    width: rawMeasured.width == null ? null : snapMeasuredDimension(rawMeasured.width, printed.width),
+    height: rawMeasured.height == null ? null : snapMeasuredDimension(rawMeasured.height, printed.height),
   };
   const deltas = {
     length: printed.length != null && measured.length != null ? measured.length - printed.length : null,

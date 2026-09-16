@@ -6,12 +6,14 @@ import MeasurementPanel from './components/MeasurementPanel';
 import QrExtractedPanel from './components/QrExtractedPanel';
 import StationTopbar from './components/StationTopbar';
 import MeasurementLogDrawer from './components/MeasurementLogDrawer';
-import { estimatedMeasurementSeconds, fetchMeasurementIncident, hasMeasuredData, isEditableShortcutTarget, logStationError, matchesEscapeShortcut, matchesStationShortcut, measurementStartUrl, playStationSound, prepareStationAudio, readStationFromLocation, recordMeasurementDecision, toggleStationFullscreen, updateMeasurementIncident } from './stationIntegration';
+import { estimatedMeasurementSeconds, fetchMeasurementIncident, hasCompleteMeasuredData, hasMeasuredData, isEditableShortcutTarget, logStationError, matchesEscapeShortcut, matchesStationShortcut, measurementStartUrl, playStationSound, prepareStationAudio, readStationFromLocation, recordMeasurementDecision, toggleStationFullscreen, updateMeasurementIncident } from './stationIntegration';
 import useMeasurementSocket from './useMeasurementSocket';
+import useStationKioskFocus from './useStationKioskFocus';
 
 export default function FloMattressDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
+  const kioskSurfaceRef = useStationKioskFocus();
   const station = location.state?.station || readStationFromLocation();
   const { incident, setIncident, connected } = useMeasurementSocket(station, location.state?.incident || location.state?.capture?.incident);
   const [actionError, setActionError] = useState('');
@@ -19,9 +21,11 @@ export default function FloMattressDashboard() {
   const [logOpen, setLogOpen] = useState(false);
   const resetInFlightRef = useRef(false);
   const measurementTimeoutHandledRef = useRef(false);
+  const measurementSoundRef = useRef({ incidentId: '', complete: false });
   const intentionalFullscreenExitRef = useRef(false);
   const wasFullscreenRef = useRef(Boolean(document.fullscreenElement));
   const measurementReady = hasMeasuredData(incident);
+  const measurementComplete = hasCompleteMeasuredData(incident);
   const navigationQrResponse = location.state?.capture?.qrResponse || {};
   const incidentQrResponse = incident?.requestPayload?.qrResponse || {};
   const displayedQrResponse = { ...navigationQrResponse, ...incidentQrResponse };
@@ -34,6 +38,18 @@ export default function FloMattressDashboard() {
   const [measurementDeadlineReached, setMeasurementDeadlineReached] = useState(false);
   const toggleLogs = useCallback(() => setLogOpen((current) => !current), []);
   const stop = useCallback(() => navigate('/start-measure'), [navigate]);
+
+  useEffect(() => {
+    const incidentId = String(incident?._id || '');
+    const previous = measurementSoundRef.current;
+    if (previous.incidentId !== incidentId) {
+      measurementSoundRef.current = { incidentId, complete: measurementComplete };
+      return;
+    }
+    if (!previous.complete && measurementComplete) playStationSound('measurementReady');
+    measurementSoundRef.current = { incidentId, complete: measurementComplete };
+  }, [incident?._id, measurementComplete]);
+
   const decide = useCallback(async (status) => {
     prepareStationAudio();
     setUpdating(true);
@@ -184,7 +200,7 @@ export default function FloMattressDashboard() {
   }, [decide, incident, logOpen, measurementReady, reset, stop, toggleFullscreen, toggleLogs, updating]);
 
   return (
-    <main className="vq-root flex h-screen min-h-0 flex-col overflow-hidden bg-[var(--appbg)] text-[var(--tx)]">
+    <main ref={kioskSurfaceRef} tabIndex={-1} className="vq-root flex h-screen min-h-0 flex-col overflow-hidden bg-[var(--appbg)] text-[var(--tx)] outline-none">
       <StationTopbar running onStartStop={stop} onToggleLogs={toggleLogs} onToggleFullscreen={() => toggleFullscreen().catch(() => {})} stationId={station?.pi?.device?.mac} />
       <DashboardBanner incident={incident} connected={connected} />
       {actionError && <div role="alert" className="border-b border-red-300 bg-red-50 px-5 py-2 text-sm font-semibold text-red-700">{actionError}</div>}

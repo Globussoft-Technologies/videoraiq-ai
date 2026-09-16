@@ -1,13 +1,17 @@
 import { AlertTriangle, Clipboard, X } from 'lucide-react';
 import { useEffect } from 'react';
-import { matchesEscapeShortcut } from '../stationIntegration';
+import { matchesEscapeShortcut, matchesSpaceShortcut } from '../stationIntegration';
 import FloButton from './FloButton';
 
 export default function StationErrorDialog({ error, onDismiss }) {
   useEffect(() => {
     if (!error) return undefined;
     const onKeyDown = (event) => {
-      if (!matchesEscapeShortcut(event)) return;
+      const escapePressed = matchesEscapeShortcut(event);
+      const spacePressed = matchesSpaceShortcut(event);
+      if (!escapePressed && !spacePressed) return;
+      if (event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
+      if (spacePressed && event.target instanceof Element && event.target.closest('button, a, input, textarea, select, [contenteditable="true"]')) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       onDismiss();
@@ -67,8 +71,8 @@ export default function StationErrorDialog({ error, onDismiss }) {
           <FloButton icon={Clipboard} variant="soft" className="!min-h-10" onClick={() => navigator.clipboard?.writeText(diagnosticText)}>
             Copy details
           </FloButton>
-          <FloButton icon={X} className="ml-auto !min-h-10" onClick={onDismiss}>
-            Dismiss (Esc)
+          <FloButton icon={X} shortcut="Space" className="ml-auto !min-h-10" onClick={onDismiss}>
+            Dismiss (Space / Esc)
           </FloButton>
         </div>
       </section>
