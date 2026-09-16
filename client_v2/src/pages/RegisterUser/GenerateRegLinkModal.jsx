@@ -1,10 +1,17 @@
 import { useState } from 'react';
-import { Loader, Copy, Check, Link as LinkIcon } from 'lucide-react';
+import { Loader, Copy, Check, Link as LinkIcon, Ban } from 'lucide-react';
 import { toast } from 'sonner';
-import { generateAdminToken } from './Api';
+import { generateAdminToken, terminateRegistrationLink } from './Api';
 
-const MAX_DAYS = 3;
+const MAX_DAYS = 5;
 const REGISTER_PATH = '/employee-register';
+
+export const buildRegistrationLink = (token) => {
+  if (!token) return '';
+  const frontendUrl = import.meta.env.VITE_FRONTEND || window.location.origin;
+  const baseUrl = frontendUrl.replace('app.videoraiq.com', 'app-dashboard.videoraiq.com');
+  return `${baseUrl}${REGISTER_PATH}?token=${encodeURIComponent(token)}`;
+};
 
 /* dd/mm/yy plus the time — en-GB gives day-first ordering regardless of the
    viewer's locale, so the format doesn't change machine to machine. */
@@ -22,23 +29,18 @@ const formatExpiry = (value) => {
 };
 
 /** Modal that mints a time-limited self-registration link employees can open. */
-const GenerateRegLinkModal = ({ open, onClose, adminId }) => {
+const GenerateRegLinkModal = ({ open, onClose, adminId, activeLink, onLinkChange }) => {
   const [days, setDays] = useState('');
   const [loading, setLoading] = useState(false);
-  const [link, setLink] = useState('');
-  const [expiresAt, setExpiresAt] = useState('');
+  const [terminating, setTerminating] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  // Use VITE_FRONTEND for the registration portal, but map app.videoraiq.com to app-dashboard.videoraiq.com
-  const frontendUrl = import.meta.env.VITE_FRONTEND || window.location.origin;
-  const baseUrl = frontendUrl.replace('app.videoraiq.com', 'app-dashboard.videoraiq.com');
+  const link = activeLink?.url || '';
+  const expiresAt = activeLink?.expiresAt || '';
 
   if (!open) return null;
 
   const handleClose = () => {
     setDays('');
-    setLink('');
-    setExpiresAt('');
     setCopied(false);
     onClose();
   };
@@ -71,8 +73,10 @@ const GenerateRegLinkModal = ({ open, onClose, adminId }) => {
         toast.error(res?.msg || 'Failed to generate token');
         return;
       }
-      setLink(`${baseUrl}${REGISTER_PATH}?token=${encodeURIComponent(res.token)}`);
-      setExpiresAt(res.expiresAt || '');
+      onLinkChange({
+        url: buildRegistrationLink(res.token),
+        expiresAt: res.expiresAt || '',
+      });
       setCopied(false);
       toast.success('Registration link generated');
     } catch (err) {
@@ -89,6 +93,20 @@ const GenerateRegLinkModal = ({ open, onClose, adminId }) => {
       toast.success('Link copied');
     } catch {
       toast.error('Could not copy — select the link and copy manually');
+    }
+  };
+
+  const handleTerminate = async () => {
+    setTerminating(true);
+    try {
+      await terminateRegistrationLink();
+      onLinkChange(null);
+      setCopied(false);
+      toast.success('Registration link terminated');
+    } catch (err) {
+      toast.error(err?.response?.data?.msg || 'Failed to terminate registration link');
+    } finally {
+      setTerminating(false);
     }
   };
 
@@ -131,7 +149,7 @@ const GenerateRegLinkModal = ({ open, onClose, adminId }) => {
             disabled={loading || !days}
             className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[var(--blue)] hover:opacity-95 text-white rounded-md text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
-            {loading ? <Loader className="w-4 h-4 animate-spin" /> : 'Generate Link'}
+            {loading ? <Loader className="w-4 h-4 animate-spin" /> : link ? 'Regenerate Link' : 'Generate Link'}
           </button>
 
           {link && (
@@ -160,6 +178,15 @@ const GenerateRegLinkModal = ({ open, onClose, adminId }) => {
                   </span>
                 </p>
               )}
+              <button
+                type="button"
+                onClick={handleTerminate}
+                disabled={terminating}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 mt-3 bg-[var(--crit)] hover:opacity-90 text-white rounded-md text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {terminating ? <Loader className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
+                {terminating ? 'Terminating...' : 'Terminate Link'}
+              </button>
             </div>
           )}
         </div>

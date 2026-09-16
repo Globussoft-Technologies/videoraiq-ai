@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Check, X, Info, Camera as CameraIcon, Upload, ScanFace } from "lucide-react";
+import { ArrowLeft, Check, X, Info, Camera as CameraIcon, Upload, ScanFace, Loader } from "lucide-react";
 import logo from "@/assets/logo.svg";
 import heroShot from "@/assets/7.jpg";
 import { PInput, PCombo, PButton } from "./PortalFields";
-import { fetchDepartments, getEmployeeLocations, isEmailExist, createAuthorizedUser } from "@/pages/RegisterUser/Api";
+import { fetchDepartments, getEmployeeLocations, isEmailExist, createAuthorizedUser, validateRegistrationLink } from "@/pages/RegisterUser/Api";
 import FaceCaptureWizard from "@/pages/RegisterUser/FaceCaptureWizard";
 import getAccessToken from "@/utils/getAccessToken";
 import { decrypt } from "@/helpers/decryptNvr";
@@ -62,11 +62,16 @@ function dataUrlToFile(dataUrl, name) {
 
 export default function EmployeeRegister() {
   const navigate = useNavigate();
+  const hasRegistrationLink = useMemo(
+    () => Boolean(new URLSearchParams(window.location.search).get("token")),
+    []
+  );
 
   /* The registration link carries an AES-encrypted admin token as ?token=.
      Falls back to the cookie token when the page is opened without one, so an
      already-logged-in admin can still use the page directly. */
   const [tokenExpired, setTokenExpired] = useState(false);
+  const [linkValidated, setLinkValidated] = useState(!hasRegistrationLink);
   const AUTH_TOKEN = useMemo(() => {
     const encrypted = new URLSearchParams(window.location.search).get("token");
     if (!encrypted) return getAccessToken();
@@ -124,6 +129,40 @@ export default function EmployeeRegister() {
   const [wizardStartAngle, setWizardStartAngle] = useState(null); // which pose the wizard opens on
   const [wizardMode, setWizardMode] = useState("camera"); // 'camera' | 'upload'
   const [draftRestored, setDraftRestored] = useState(!savedDraft?.photos);
+
+  useEffect(() => {
+    if (!hasRegistrationLink) return undefined;
+    if (!AUTH_TOKEN) {
+      setTokenExpired(true);
+      setLinkValidated(true);
+      return undefined;
+    }
+
+    let active = true;
+    const validateLink = async () => {
+      try {
+        await validateRegistrationLink(AUTH_TOKEN);
+      } catch (err) {
+        if (active && [401, 403].includes(err?.response?.status)) setTokenExpired(true);
+      } finally {
+        if (active) setLinkValidated(true);
+      }
+    };
+    const validateWhenVisible = () => {
+      if (document.visibilityState === "visible") validateLink();
+    };
+
+    validateLink();
+    const timer = setInterval(validateLink, 5000);
+    window.addEventListener("focus", validateLink);
+    document.addEventListener("visibilitychange", validateWhenVisible);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      window.removeEventListener("focus", validateLink);
+      document.removeEventListener("visibilitychange", validateWhenVisible);
+    };
+  }, [AUTH_TOKEN, hasRegistrationLink]);
 
   // Photos are stored as data URLs (Files/blob URLs can't survive
   // sessionStorage or a tab reload), so they're decoded back into real Files
@@ -201,6 +240,7 @@ export default function EmployeeRegister() {
         }
       } catch (err) {
         console.error("Failed to load departments:", err);
+        if (err?.response?.status === 401) setTokenExpired(true);
       }
     };
 
@@ -211,6 +251,7 @@ export default function EmployeeRegister() {
         setLocations(locs.map((l) => l.locationName).filter(Boolean));
       } catch (err) {
         console.error("Failed to load locations:", err);
+        if (err?.response?.status === 401) setTokenExpired(true);
       }
     };
 
@@ -242,6 +283,10 @@ export default function EmployeeRegister() {
         }
       } catch (err) {
         console.error("Failed to validate email:", err);
+        if ([401, 403].includes(err?.response?.status)) {
+          setTokenExpired(true);
+          return;
+        }
         toast.error("Failed to validate email");
         return;
       }
@@ -310,6 +355,7 @@ export default function EmployeeRegister() {
     formData.append("location", form.location);
     formData.append("departmentId", form.department);
     formData.append("vehicleNumber", form.vehicleNumber.trim());
+    formData.append("userRegistrByLink", "true");
     PHOTO_SLOTS.forEach((s) => {
       const pic = photos[s.key];
       if (pic?.file) formData.append("file", pic.file);
@@ -330,6 +376,7 @@ export default function EmployeeRegister() {
       setRegistered(true);
     } catch (err) {
       console.error("Registration failed:", err);
+      if (err?.response?.status === 401) setTokenExpired(true);
       const msg =
         err?.response?.data?.body?.message ||
         err?.response?.data?.body?.error ||
@@ -340,6 +387,24 @@ export default function EmployeeRegister() {
       setIsSubmitting(false);
     }
   };
+
+  const registerAnother = async () => {
+    try {
+      await validateRegistrationLink(AUTH_TOKEN);
+      setRegistered(false);
+    } catch (err) {
+      if ([401, 403].includes(err?.response?.status)) setTokenExpired(true);
+      else toast.error("Could not validate the registration link. Please try again.");
+    }
+  };
+
+  if (!linkValidated) {
+    return (
+      <div className="vqp flex items-center justify-center min-h-screen w-full bg-[linear-gradient(180deg,#fbfcff,#f5f7fc)]">
+        <Loader className="w-8 h-8 animate-spin text-[#3b82f6]" />
+      </div>
+    );
+  }
 
   if (tokenExpired) {
     return (
@@ -377,7 +442,7 @@ export default function EmployeeRegister() {
           </p>
           <button
             type="button"
-            onClick={() => setRegistered(false)}
+            onClick={registerAnother}
             className="h-[46px] px-[26px] border-0 rounded-[12px] cursor-pointer font-['Space_Grotesk',sans-serif] font-semibold text-[14px] text-white bg-[#0f2744]"
           >
             Register another

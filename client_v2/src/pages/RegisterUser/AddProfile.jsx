@@ -11,6 +11,9 @@ import {
   Link as LinkIcon,
   CircleAlert,
   CircleCheck,
+  Copy,
+  Check,
+  Ban,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
@@ -19,6 +22,7 @@ import ConfirmationModal from '@/components/DeleteConfirmation';
 import getAccessToken from '@/utils/getAccessToken';
 import { useTheme } from '@/theme/ThemeContext';
 import { usePermissions } from '@/context/PermissionContext';
+import { useSocket } from '@/context/SocketContext';
 import RegisterForm from './RegisterForm';
 import RegisterUserCard from './RegisterUserCard';
 import VerifyUserDialog from './VerifyUserDialog';
@@ -27,7 +31,7 @@ import { UserDetailModal } from './UserDetailModal';
 import MultiSelect from './MultiSelect';
 import UsersListView from './UsersListView';
 import BulkUploadModal from './BulkUploadModal';
-import GenerateRegLinkModal from './GenerateRegLinkModal';
+import GenerateRegLinkModal, { buildRegistrationLink } from './GenerateRegLinkModal';
 import UsersPagination from './UsersPagination';
 import {
   authorizedUsers,
@@ -38,6 +42,8 @@ import {
   delete_all_users,
   bulkUploadUsers,
   updateAuthorizedUserStatus,
+  getRegistrationLink,
+  terminateRegistrationLink,
 } from './Api';
 import { stripPlaceholderEmail, displayEmail } from './displayEmail';
 import { getUserStatus } from './UserListItems';
@@ -70,6 +76,7 @@ const AddProfile = () => {
   const token = getAccessToken();
   const decodedtoken = token ? decodeJwt(token) : null;
   const { permissions } = usePermissions();
+  const { socket } = useSocket() || {};
   const canCreateUsers = permissions?.Users?.create;
   const canEditUsers = permissions?.Users?.edit;
   const canDeleteUsers = permissions?.Users?.delete;
@@ -81,6 +88,7 @@ const AddProfile = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [usersRefreshKey, setUsersRefreshKey] = useState(0);
   const [limit, setLimit] = useState(12);
   const [editUser, setEditUser] = useState(null);
   const [viewMode, setViewMode] = useState('grid');
@@ -106,6 +114,9 @@ const AddProfile = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showRegLinkModal, setShowRegLinkModal] = useState(false);
+  const [registrationLink, setRegistrationLink] = useState(null);
+  const [regLinkCopied, setRegLinkCopied] = useState(false);
+  const [terminatingRegLink, setTerminatingRegLink] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [selectedFileName, setSelectedFileName] = useState('');
   const [uploadErrors, setUploadErrors] = useState([]);
@@ -194,7 +205,63 @@ const AddProfile = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, [currentPage, debouncedSearch, selectedLocations, selectedDepartments, statusFilter, verificationFilter, limit]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentPage, debouncedSearch, selectedLocations, selectedDepartments, statusFilter, verificationFilter, limit, usersRefreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const adminId = decodedtoken?.adminId;
+    if (!socket || !adminId) return undefined;
+    const channel = `authorizedUsers_${adminId}`;
+    const refresh = () => setUsersRefreshKey((key) => key + 1);
+    socket.on(channel, refresh);
+    return () => socket.off(channel, refresh);
+  }, [socket, decodedtoken?.adminId]);
+
+  useEffect(() => {
+    if (!canCreateUsers) return;
+    getRegistrationLink()
+      .then((res) => {
+        const stored = res?.link;
+        setRegistrationLink(stored?.token
+          ? { url: buildRegistrationLink(stored.token), expiresAt: stored.expiresAt }
+          : null);
+      })
+      .catch((error) => console.error('Failed to fetch registration link', error));
+  }, [canCreateUsers]);
+
+  useEffect(() => {
+    if (!registrationLink?.expiresAt) return undefined;
+    const remaining = new Date(registrationLink.expiresAt).getTime() - Date.now();
+    if (remaining <= 0) {
+      setRegistrationLink(null);
+      return undefined;
+    }
+    const timer = setTimeout(() => setRegistrationLink(null), remaining);
+    return () => clearTimeout(timer);
+  }, [registrationLink]);
+
+  const copyRegistrationLink = async () => {
+    try {
+      await navigator.clipboard.writeText(registrationLink.url);
+      setRegLinkCopied(true);
+      toast.success('Registration link copied');
+    } catch {
+      toast.error('Could not copy the registration link');
+    }
+  };
+
+  const terminateActiveRegistrationLink = async () => {
+    setTerminatingRegLink(true);
+    try {
+      await terminateRegistrationLink();
+      setRegistrationLink(null);
+      setRegLinkCopied(false);
+      toast.success('Registration link terminated');
+    } catch (error) {
+      toast.error(error?.response?.data?.msg || 'Failed to terminate registration link');
+    } finally {
+      setTerminatingRegLink(false);
+    }
+  };
 
   const allUsersSelected = users.length > 0 && users.every((u) => selectedUserIds.includes(u._id));
 
@@ -544,8 +611,41 @@ const AddProfile = () => {
             {canCreateUsers && (
               <button data-tour="reg-link" onClick={() => setShowRegLinkModal(true)} className={actionBtn}>
                 <LinkIcon className="w-4 h-4" />
-                <span>Generate Registration Link</span>
+                <span>{registrationLink ? 'Regenerate Link' : 'Generate Registration Link'}</span>
               </button>
+            )}
+
+            {canCreateUsers && registrationLink && (
+              <div className="flex items-stretch h-10 rounded-xl border border-[var(--blue)]/30 bg-[var(--bg1)] shadow-sm overflow-hidden">
+                <div className="flex items-center gap-2 min-w-0 w-48 px-3" title={registrationLink.url}>
+                  <span className="shrink-0 w-2 h-2 rounded-full bg-[var(--ok)] ring-2 ring-[var(--ok)]/15" />
+                  <div className="min-w-0 leading-tight">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ok)]">Active link</p>
+                    <p className="truncate text-[11px] text-[var(--tx2)]">{registrationLink.url}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={copyRegistrationLink}
+                  title="Copy registration link"
+                  aria-label="Copy registration link"
+                  className="flex items-center gap-1.5 h-full px-3 border-l border-[var(--bd)] text-xs font-semibold text-[var(--blue)] hover:bg-[var(--bg3)] cursor-pointer transition-colors"
+                >
+                  {regLinkCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  <span>{regLinkCopied ? 'Copied' : 'Copy'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={terminateActiveRegistrationLink}
+                  disabled={terminatingRegLink}
+                  title="Terminate registration link"
+                  aria-label="Terminate registration link"
+                  className="flex items-center gap-1.5 h-full px-3 border-l border-[var(--bd)] text-xs font-semibold text-[var(--crit)] hover:bg-[var(--crit)]/10 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Ban className={`w-4 h-4 ${terminatingRegLink ? 'animate-pulse' : ''}`} />
+                  <span>{terminatingRegLink ? 'Ending...' : 'End'}</span>
+                </button>
+              </div>
             )}
 
             {/* Edit uses the existing modal register form (opens when editUser is set). */}
@@ -615,6 +715,11 @@ const AddProfile = () => {
           open={showRegLinkModal}
           onClose={() => setShowRegLinkModal(false)}
           adminId={decodedtoken?.adminId}
+          activeLink={registrationLink}
+          onLinkChange={(link) => {
+            setRegistrationLink(link);
+            setRegLinkCopied(false);
+          }}
         />
 
         <ImportEmpUsersModal

@@ -98,6 +98,30 @@ export const generateAdminToken = async ({ adminId, days }) => {
   return response?.data;
 };
 
+/** Fetch the current unexpired self-registration link for this admin. */
+export const getRegistrationLink = async () => {
+  const response = await axios.get(`${Api_url}/auth/registration-link`, {
+    headers: authHeaders(),
+  });
+  return response?.data;
+};
+
+/** Revoke the current self-registration link immediately. */
+export const terminateRegistrationLink = async () => {
+  const response = await axios.delete(`${Api_url}/auth/registration-link`, {
+    headers: authHeaders(),
+  });
+  return response?.data;
+};
+
+/** Confirm that a public registration token is still active and has not been revoked. */
+export const validateRegistrationLink = async (token) => {
+  const response = await axios.get(`${Api_url}/auth/registration-link/validate`, {
+    headers: { 'x-access-token': token },
+  });
+  return response?.data;
+};
+
 /* ─────────────── Register form metadata ─────────────── */
 
 /**
