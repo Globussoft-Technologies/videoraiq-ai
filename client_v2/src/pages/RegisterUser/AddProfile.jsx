@@ -52,6 +52,19 @@ const decodeJwt = (token) => {
   }
 };
 
+const deleteErrorMessage = (error, fallback) => {
+  const data = error?.response?.data;
+  const message = data?.body?.message
+    || data?.message
+    || data?.detail
+    || data?.body?.error
+    || (!error?.response && error?.message);
+
+  if (typeof message === 'string' && message.trim()) return message;
+  if (message && typeof message === 'object') return JSON.stringify(message);
+  return fallback;
+};
+
 const AddProfile = () => {
   const { theme } = useTheme();
   const token = getAccessToken();
@@ -259,26 +272,39 @@ const AddProfile = () => {
     setDeleting(true);
     const deletedIds = [];
     const failedIds = [];
+    const cleanupWarnings = [];
     let firstFailureMessage = '';
     for (const id of deleteTargetIds) {
       try {
-        await delete_user(id);
+        const response = await delete_user(id);
         deletedIds.push(id);
+        const cleanupWarning = response?.data?.body?.data?.cleanupWarning;
+        if (cleanupWarning) cleanupWarnings.push(cleanupWarning);
       } catch (error) {
         console.error('Failed to delete user', id, error);
         failedIds.push(id);
-        if (!firstFailureMessage) firstFailureMessage = error?.response?.data?.body?.message || '';
+        if (!firstFailureMessage) {
+          firstFailureMessage = deleteErrorMessage(error, 'The user could not be deleted');
+        }
       }
     }
     if (deletedIds.length > 0) {
       toast.success(
-        failedIds.length === 0
-          ? `Deleted ${deletedIds.length} user${deletedIds.length > 1 ? 's' : ''} successfully`
-          : `Deleted ${deletedIds.length}, but ${failedIds.length} failed`
+        `Deleted ${deletedIds.length} user${deletedIds.length > 1 ? 's' : ''} successfully`
       );
     }
-    if (failedIds.length > 0 && deletedIds.length === 0) {
-      toast.error(firstFailureMessage || `Failed to delete ${failedIds.length} user${failedIds.length > 1 ? 's' : ''}`);
+    if (failedIds.length > 0) {
+      toast.error(
+        firstFailureMessage
+          || `Failed to delete ${failedIds.length} user${failedIds.length > 1 ? 's' : ''}`
+      );
+    }
+    if (cleanupWarnings.length > 0) {
+      toast.warning(
+        cleanupWarnings.length === 1
+          ? cleanupWarnings[0]
+          : `${cleanupWarnings.length} users were deleted, but media cleanup failed: ${cleanupWarnings[0]}`
+      );
     }
     setOpenDeleteConfirm(false);
     setDeleteTargetIds([]);
@@ -304,15 +330,26 @@ const AddProfile = () => {
   const confirmDeleteAll = async () => {
     setDeletingAll(true);
     try {
-      await delete_all_users();
+      const response = await delete_all_users();
       toast.success('All authorized users deleted successfully');
+      const cleanupErrors = response?.data?.body?.data?.errors || [];
+      if (cleanupErrors.length > 0) {
+        const firstError = cleanupErrors[0];
+        const source = firstError.type === 'media'
+          ? 'VideoRaiQ media cleanup'
+          : `VideoRaiQ ${firstError.type || 'cleanup'}`;
+        toast.warning(
+          `${source} failed: ${firstError.error}`
+          + (cleanupErrors.length > 1 ? ` (${cleanupErrors.length} cleanup errors)` : '')
+        );
+      }
       setOpenDeleteAllConfirm(false);
       setSelectedUserIds([]);
       setCurrentPage(1);
       fetchUsers();
     } catch (error) {
       console.error('Failed to delete all users', error);
-      toast.error(error?.response?.data?.body?.message || 'Failed to delete all users');
+      toast.error(deleteErrorMessage(error, 'Failed to delete all users'));
     } finally {
       setDeletingAll(false);
     }
