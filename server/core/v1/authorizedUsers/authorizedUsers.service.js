@@ -24,6 +24,7 @@ import channelsModel from "../channels/channels.model.js";
 import LocationModel from "../locations/location.model.js";
 import OptimizedAccessLogs from "../accesslogs/newAccessLogs.model.js";
 import { normalizePlate, findVehicleOwners, TAGGED_USER_FIELDS } from "../../../utils/vehicleTagging.js";
+import { deleteMedia } from "../../../utils/mediaStorage.js";
 
 
 import fs from 'fs';
@@ -51,6 +52,25 @@ const toMediaUrl = (domain, p) =>
 // axios defaults to no timeout, so a hung face-recognition service would keep
 // a registration request (and anything it holds) alive forever.
 const FACE_SERVICE_TIMEOUT_MS = 60_000;
+
+const dsDeleteFailure = (error) => {
+  const status = error?.response?.status;
+  const payload = error?.response?.data;
+  const serializedPayload = typeof payload === "string"
+    ? payload
+    : payload !== undefined
+      ? JSON.stringify(payload)
+      : error?.message || "Unknown DS error";
+  const message = payload?.message
+    || payload?.detail
+    || payload?.error
+    || serializedPayload;
+
+  return {
+    message: typeof message === "string" ? message : JSON.stringify(message),
+    log: `status=${status || "NO_RESPONSE"} response=${serializedPayload}`,
+  };
+};
 
 class AuthUsersService {
   
@@ -134,21 +154,16 @@ class AuthUsersService {
           if (user.verified) await this.deleteUserFromDS(user);
         }
       } catch (error) {
-        logger.error("DS user deletion failed; local delete-all aborted:", error?.response?.data || error.message);
-        return res.status(502).json(
-          Response.errorResp(
-            "DS user deletion failed. No users were deleted locally.",
-            error?.response?.data?.message || error.message
-          )
-        );
-      }
-
-      // 🌐 Connect to SFTP once
-      let sftp;
-      try {
-        sftp = await checkSftpConnection();
-      } catch (e) {
-        sftp = null;
+        const dsFailure = dsDeleteFailure(error);
+        logger.error(`DS user deletion failed; local delete-all aborted. ${dsFailure.log}`);
+        return res.status(502).json({
+          statusCode: 502,
+          body: {
+            status: "failed",
+            message: `DS user deletion failed: ${dsFailure.message}. No users were deleted locally.`,
+            error: dsFailure.message,
+          },
+        });
       }
 
       // Track results
@@ -203,28 +218,10 @@ class AuthUsersService {
             if (Array.isArray(user.profilePics)) {
               for (const pic of user.profilePics) {
                 try {
-                  // Local cache
-                  const fileName = path.basename(pic);
-                  const cachedFilePath = path.join(cacheDir, fileName);
-                  if (fs.existsSync(cachedFilePath)) {
-                    const stats = fs.lstatSync(cachedFilePath);
-                    if (stats.isFile()) {
-                      fs.unlinkSync(cachedFilePath);
-                    } else if (stats.isDirectory()) {
-                      fs.rmSync(cachedFilePath, { recursive: true, force: true });
-                    }
-                  }
-                  // SFTP
-                  if (sftp) {
-                    const exists = await sftp.exists(pic);
-                    if (exists === '-') {
-                      await sftp.delete(pic);
-                    } else if (exists === 'd') {
-                      await sftp.rmdir(pic, true);
-                    }
-                  }
+                  await deleteMedia(pic);
                 } catch (err) {
-                  // Ignore file errors, log if needed
+                  logger.error(`[AUTHORIZED_USER_DELETE_ALL][LOCAL_STORAGE] userId=${user._id} path=${pic} error=${err.message}`);
+                  errors.push({ userId: user._id, type: "media", path: pic, error: err.message });
                 }
               }
             }
@@ -1265,19 +1262,33 @@ async updateAuthUser(req, res, _next) {
         try {
           await this.deleteUserFromDS(userToDelete);
         } catch (error) {
-          logger.error("DS user deletion failed; local deletion aborted:", error?.response?.data || error.message);
-          return res.status(502).json(
+          const dsFailure = dsDeleteFailure(error);
+          logger.error(`DS user deletion failed; local deletion aborted. ${dsFailure.log}`);
+          return res.status(502).json({
+            statusCode: 502,
+            body: {
+              status: "failed",
+              message: `DS user deletion failed: ${dsFailure.message}. User was not deleted locally.`,
+              error: dsFailure.message,
+            },
+          });
+        }
+
+        let deletedUser;
+        try {
+          deletedUser = await authorizedUsersModel.findOneAndDelete({
+            _id: userId,
+            adminId: isAdminExist._id,
+          });
+        } catch (error) {
+          logger.error(`[AUTHORIZED_USER_DELETE][LOCAL_DB] userId=${userId} error=${error.message}`);
+          return res.status(500).json(
             Response.errorResp(
-              "DS user deletion failed. User was not deleted locally.",
-              error?.response?.data?.message || error.message
+              `VideoRaiQ database deletion failed: ${error.message}. DS deletion had already succeeded.`,
+              error.message
             )
           );
         }
-
-        const deletedUser = await authorizedUsersModel.findOneAndDelete({
-          _id: userId,
-          adminId: isAdminExist._id,
-        });
         if (!deletedUser) {
           return res.status(404).json(Response.userFailResp("Authorized user not found"));
         }
@@ -1285,54 +1296,30 @@ async updateAuthUser(req, res, _next) {
 
 
   
-        // Define media path
-        const mediaPath = decodeURIComponent(
-          `/emp-cctv-dev-media/uploads/images/${deletedUser?.firstName}`
-        );
-        const fileName = path.basename(mediaPath);
-        const cachedFilePath = path.join(cacheDir, fileName);
-  
-        // 🧹 Delete from local cache (if exists)
-        if (fs.existsSync(cachedFilePath)) {
-          const stats = fs.lstatSync(cachedFilePath);
-          if (stats.isDirectory()) {
-            fs.rmSync(cachedFilePath, { recursive: true, force: true });
-            console.log(`Deleted local folder: ${cachedFilePath}`);
-          } else {
-            fs.unlinkSync(cachedFilePath);
-            console.log(`Deleted local file: ${cachedFilePath}`);
+        let cleanupWarning = null;
+        try {
+          for (const mediaPath of deletedUser.profilePics || []) {
+            await deleteMedia(mediaPath);
           }
-        }
-  
-        // 🌐 Connect to SFTP
-        const sftp = await checkSftpConnection();
-
-        // Check if remote path exists
-        const exists = await sftp.exists(mediaPath);
-        console.log("exists:", exists); // '-', 'd', or false
-  
-        if (exists) {
-          if (exists === 'd') {
-            // Directory — delete recursively
-            await sftp.rmdir(mediaPath, true);
-            console.log(`Deleted folder from SFTP: ${mediaPath}`);
-          } else if (exists === '-') {
-            // File — delete directly
-            await sftp.delete(mediaPath);
-            console.log(`Deleted file from SFTP: ${mediaPath}`);
-          }
+        } catch (error) {
+          cleanupWarning = `VideoRaiQ media cleanup failed: ${error.message}`;
+          logger.error(`[AUTHORIZED_USER_DELETE][LOCAL_STORAGE] userId=${userId} error=${error.message}`);
         }
 
-        // ✅ Return success response
         return res
           .status(200)
-          .json(Response.userSuccessResp("Authorized user deleted successfully", deletedUser));
+          .json(Response.userSuccessResp(
+            cleanupWarning
+              ? `Authorized user deleted from DS and VideoRaiQ database, but ${cleanupWarning}`
+              : "Authorized user deleted successfully",
+            { user: deletedUser, cleanupWarning }
+          ));
   
       } catch (error) {
-        logger.error(error);
+        logger.error(`[AUTHORIZED_USER_DELETE][VIDEORAIQ] userId=${req?.query?.userId || "missing"} error=${error.stack || error.message}`);
         return res
           .status(500)
-          .json(Response.errorResp("Failed to delete authorized user.", error.message));
+          .json(Response.errorResp(`VideoRaiQ deletion failed: ${error.message}`, error.message));
       }
     }
 

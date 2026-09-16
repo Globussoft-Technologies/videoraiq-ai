@@ -276,6 +276,7 @@ describe("AuthUsersService.deleteAllAuthUsers", () => {
     await AuthUsersService.deleteAllAuthUsers(req, res, next);
 
     expect(res.statusCode).toBe(502);
+    expect(payload(res).message).toContain("DS unavailable");
     expect(payload(res).message).toMatch(/No users were deleted locally/i);
     expect(await AuthorizedUsers.findById(user._id)).not.toBeNull();
   });

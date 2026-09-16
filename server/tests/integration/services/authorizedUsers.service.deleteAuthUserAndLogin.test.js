@@ -74,6 +74,9 @@ vi.mock("../../../utils/newSFTPConnectionCheck.js", () => ({
     mkdir: vi.fn().mockResolvedValue(undefined),
   }),
 }));
+vi.mock("../../../utils/mediaStorage.js", () => ({
+  deleteMedia: vi.fn(),
+}));
 
 const { default: AuthUsersService } = await import(
   "../../../core/v1/authorizedUsers/authorizedUsers.service.js"
@@ -88,6 +91,7 @@ const { checkSftpConnection } = await import(
   "../../../utils/sftpConnectionCheck.js"
 );
 const { default: axios } = await import("axios");
+const { deleteMedia } = await import("../../../utils/mediaStorage.js");
 
 let admin;
 let existsSpy;
@@ -208,15 +212,14 @@ describe("AuthUsersService.deleteAuthUser", () => {
     expect(remaining).toBeNull();
   });
 
-  it("deletes the local cache file branch (existsSync=true + isFile=true → fs.unlinkSync)", async () => {
-    const user = await seedUser({ firstName: "Cachefile" });
-    existsSpy.mockReturnValueOnce(true);
-    lstatSpy.mockReturnValueOnce({
-      isFile: () => true,
-      isDirectory: () => false,
-    });
-    sftpClient.exists.mockResolvedValueOnce(false);
+  it("deletes each stored profile path through the matching media provider", async () => {
+    const profilePics = [
+      "/v2/000000000000000000000001/env/nas/uploads/images/Dave/a.jpg",
+      "/v2/000000000000000000000001/env/aws/uploads/images/Dave/b.jpg",
+    ];
+    const user = await seedUser({ profilePics });
     axios.delete.mockResolvedValueOnce({ data: { ok: true } });
+    deleteMedia.mockResolvedValue(undefined);
 
     const { req, res, next } = serviceCtx({
       adminId: admin._id,
@@ -227,77 +230,9 @@ describe("AuthUsersService.deleteAuthUser", () => {
 
     await AuthUsersService.deleteAuthUser(req, res, next);
 
-    expect(unlinkSpy).toHaveBeenCalledTimes(1);
-    expect(rmSpy).not.toHaveBeenCalled();
-    expect(res.statusCode).toBe(200);
-  });
-
-  it("deletes the local cache directory branch (existsSync=true + isDirectory=true → fs.rmSync)", async () => {
-    const user = await seedUser({ firstName: "Cachedir" });
-    existsSpy.mockReturnValueOnce(true);
-    lstatSpy.mockReturnValueOnce({
-      isFile: () => false,
-      isDirectory: () => true,
-    });
-    sftpClient.exists.mockResolvedValueOnce(false);
-    axios.delete.mockResolvedValueOnce({ data: { ok: true } });
-
-    const { req, res, next } = serviceCtx({
-      adminId: admin._id,
-      query: { userId: user._id.toString() },
-    });
-    req.verified.userData.user_id = "42";
-    req.verified.userData.user_email = "del-test@test.com";
-
-    await AuthUsersService.deleteAuthUser(req, res, next);
-
-    expect(rmSpy).toHaveBeenCalledTimes(1);
-    expect(rmSpy.mock.calls[0][1]).toMatchObject({
-      recursive: true,
-      force: true,
-    });
-    expect(unlinkSpy).not.toHaveBeenCalled();
-    expect(res.statusCode).toBe(200);
-  });
-
-  it("SFTP file branch: exists returns '-' → calls sftp.delete on the remote path", async () => {
-    const user = await seedUser({ firstName: "SftpFile" });
-    sftpClient.exists.mockResolvedValueOnce("-");
-    sftpClient.delete.mockResolvedValueOnce(undefined);
-    axios.delete.mockResolvedValueOnce({ data: { ok: true } });
-
-    const { req, res, next } = serviceCtx({
-      adminId: admin._id,
-      query: { userId: user._id.toString() },
-    });
-    req.verified.userData.user_id = "42";
-    req.verified.userData.user_email = "del-test@test.com";
-
-    await AuthUsersService.deleteAuthUser(req, res, next);
-
-    expect(sftpClient.delete).toHaveBeenCalledTimes(1);
-    expect(sftpClient.rmdir).not.toHaveBeenCalled();
-    expect(res.statusCode).toBe(200);
-  });
-
-  it("SFTP directory branch: exists returns 'd' → calls sftp.rmdir(path, true)", async () => {
-    const user = await seedUser({ firstName: "SftpDir" });
-    sftpClient.exists.mockResolvedValueOnce("d");
-    sftpClient.rmdir.mockResolvedValueOnce(undefined);
-    axios.delete.mockResolvedValueOnce({ data: { ok: true } });
-
-    const { req, res, next } = serviceCtx({
-      adminId: admin._id,
-      query: { userId: user._id.toString() },
-    });
-    req.verified.userData.user_id = "42";
-    req.verified.userData.user_email = "del-test@test.com";
-
-    await AuthUsersService.deleteAuthUser(req, res, next);
-
-    expect(sftpClient.rmdir).toHaveBeenCalledTimes(1);
-    expect(sftpClient.rmdir.mock.calls[0][1]).toBe(true);
-    expect(sftpClient.delete).not.toHaveBeenCalled();
+    expect(deleteMedia).toHaveBeenNthCalledWith(1, profilePics[0]);
+    expect(deleteMedia).toHaveBeenNthCalledWith(2, profilePics[1]);
+    expect(checkSftpConnection).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(200);
   });
 
@@ -320,6 +255,8 @@ describe("AuthUsersService.deleteAuthUser", () => {
     expect(res.statusCode).toBe(502);
     expect(payload(res).status).toBe("failed");
     expect(payload(res).message).toMatch(/not deleted locally/i);
+    expect(payload(res).message).toContain("boom");
+    expect(payload(res).error).toBe("boom");
     expect(await AuthorizedUsers.findById(user._id)).not.toBeNull();
     expect(checkSftpConnection).not.toHaveBeenCalled();
   });
@@ -344,9 +281,12 @@ describe("AuthUsersService.deleteAuthUser", () => {
     expect(checkSftpConnection).not.toHaveBeenCalled();
   });
 
-  it("outer error path: returns 500 when checkSftpConnection itself rejects", async () => {
-    const user = await seedUser({ firstName: "OuterErr" });
-    checkSftpConnection.mockRejectedValueOnce(new Error("sftp gone"));
+  it("reports an exact non-fatal local-storage warning when media deletion rejects", async () => {
+    const user = await seedUser({
+      firstName: "OuterErr",
+      profilePics: ["/v2/000000000000000000000001/env/nas/uploads/images/Dave/a.jpg"],
+    });
+    deleteMedia.mockRejectedValueOnce(new Error("storage authentication failed"));
 
     const { req, res, next } = serviceCtx({
       adminId: admin._id,
@@ -357,8 +297,11 @@ describe("AuthUsersService.deleteAuthUser", () => {
 
     await AuthUsersService.deleteAuthUser(req, res, next);
 
-    expect(res.statusCode).toBe(500);
-    expect(payload(res).status).toBe("failed");
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).status).toBe("success");
+    expect(payload(res).message).toContain("VideoRaiQ media cleanup failed: storage authentication failed");
+    expect(payload(res).data.cleanupWarning).toBe("VideoRaiQ media cleanup failed: storage authentication failed");
+    expect(await AuthorizedUsers.findById(user._id)).toBeNull();
   });
 });
 
