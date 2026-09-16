@@ -180,7 +180,11 @@ describe("AuthUsersService.deleteAuthUser", () => {
     const user = await seedUser();
     // sftp.exists returns false → no rmdir/delete branch on SFTP side.
     sftpClient.exists.mockResolvedValueOnce(false);
-    axios.delete.mockResolvedValueOnce({ data: { ok: true } });
+    axios.delete.mockImplementationOnce(async () => {
+      // The local row must still exist while DS is processing the deletion.
+      expect(await AuthorizedUsers.findById(user._id)).not.toBeNull();
+      return { data: { ok: true } };
+    });
 
     const { req, res, next } = serviceCtx({
       adminId: admin._id,
@@ -297,7 +301,7 @@ describe("AuthUsersService.deleteAuthUser", () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it("AI-delete inner catch: axios.delete rejects with response → does not fail the request", async () => {
+  it("DS rejection returns 502 and preserves the local user", async () => {
     const user = await seedUser({ firstName: "AxiosResp" });
     sftpClient.exists.mockResolvedValueOnce(false);
     const err = new Error("ai delete failed");
@@ -313,12 +317,14 @@ describe("AuthUsersService.deleteAuthUser", () => {
 
     await AuthUsersService.deleteAuthUser(req, res, next);
 
-    // The inner catch swallows AI errors — overall request still succeeds.
-    expect(res.statusCode).toBe(200);
-    expect(payload(res).status).toBe("success");
+    expect(res.statusCode).toBe(502);
+    expect(payload(res).status).toBe("failed");
+    expect(payload(res).message).toMatch(/not deleted locally/i);
+    expect(await AuthorizedUsers.findById(user._id)).not.toBeNull();
+    expect(checkSftpConnection).not.toHaveBeenCalled();
   });
 
-  it("AI-delete inner catch: axios.delete rejects without a response object", async () => {
+  it("DS network failure returns 502 and preserves the local user", async () => {
     const user = await seedUser({ firstName: "AxiosNoResp" });
     sftpClient.exists.mockResolvedValueOnce(false);
     axios.delete.mockRejectedValueOnce(new Error("network down"));
@@ -332,8 +338,10 @@ describe("AuthUsersService.deleteAuthUser", () => {
 
     await AuthUsersService.deleteAuthUser(req, res, next);
 
-    // Same — inner catch handles err.message, request still 200.
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(502);
+    expect(payload(res).status).toBe("failed");
+    expect(await AuthorizedUsers.findById(user._id)).not.toBeNull();
+    expect(checkSftpConnection).not.toHaveBeenCalled();
   });
 
   it("outer error path: returns 500 when checkSftpConnection itself rejects", async () => {

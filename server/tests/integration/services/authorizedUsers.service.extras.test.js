@@ -60,6 +60,7 @@ const { default: Admin } = await import(
 const { default: Department } = await import(
   "../../../core/v1/departments/departments.model.js"
 );
+const { default: axios } = await import("axios");
 
 let admin;
 
@@ -260,6 +261,23 @@ describe("AuthUsersService.deleteAllAuthUsers", () => {
       adminId: admin._id,
     });
     expect(remaining).toBe(0);
+  });
+
+  it("aborts delete-all without local deletion when DS rejects a verified user", async () => {
+    const user = await seedEmployee({ verified: true, firstName: "Verified" });
+    axios.delete.mockRejectedValueOnce(new Error("DS unavailable"));
+
+    const { req, res, next } = serviceCtx({
+      adminId: admin._id,
+      body: {},
+    });
+    req.verified.userData.user_id = "10";
+
+    await AuthUsersService.deleteAllAuthUsers(req, res, next);
+
+    expect(res.statusCode).toBe(502);
+    expect(payload(res).message).toMatch(/No users were deleted locally/i);
+    expect(await AuthorizedUsers.findById(user._id)).not.toBeNull();
   });
 });
 

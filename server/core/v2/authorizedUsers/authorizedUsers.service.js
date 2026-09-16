@@ -73,6 +73,14 @@ class AuthUsersService {
     const { dsAuthUsersAPI } = await resolveAdminEndpoints(adminId);
     return dsAuthUsersAPI;
   }
+
+  async deleteUserFromDS(user) {
+    const url = `${await this.getDSAuthUsersAPI(user.adminId)}/delete?uid=${user._id.toString()}&db=${this.getDbName(user.adminId)}`;
+    return axios.delete(url, {
+      headers: { accept: "application/json" },
+      timeout: FACE_SERVICE_TIMEOUT_MS,
+    });
+  }
   // Resolve the current admin from the verified token payload. Prefer
   // adminId because it is the canonical app-side identifier; fall back to the
   // older user_id/email pair for legacy tokens.
@@ -116,6 +124,24 @@ class AuthUsersService {
       const users = await authorizedUsersModel.find({ adminId: data.adminId });
       if (!users.length) {
         return res.status(404).json(Response.userFailResp("No authorized users found for this admin"));
+      }
+
+      // DS is the source of truth for enrolled faces. Complete every required
+      // DS deletion before mutating any local user, department, or location
+      // data. If DS rejects a deletion, the local records remain available for
+      // a safe retry instead of becoming orphaned in the face database.
+      try {
+        for (const user of users) {
+          if (user.verified) await this.deleteUserFromDS(user);
+        }
+      } catch (error) {
+        logger.error("DS user deletion failed; local delete-all aborted:", error?.response?.data || error.message);
+        return res.status(502).json(
+          Response.errorResp(
+            "DS user deletion failed. No users were deleted locally.",
+            error?.response?.data?.message || error.message
+          )
+        );
       }
 
       // 🌐 Connect to SFTP once
@@ -202,13 +228,6 @@ class AuthUsersService {
                   // Ignore file errors, log if needed
                 }
               }
-            }
-            // Delete AI user data
-            try {
-              const url = `${await this.getDSAuthUsersAPI(user.adminId)}/delete?uid=${user._id.toString()}&db=${this.getDbName(user.adminId)}`;
-              await axios.delete(url, { headers: { accept: "application/json" } });
-            } catch (err) {
-              // Ignore AI errors, log if needed
             }
           }
           // Delete user from DB
@@ -1278,9 +1297,32 @@ async updateAuthUser(req, res, _next) {
           return res.send(Response.userFailResp("Admin not found!", "Validation Failed!"));
         }
   
-        // Delete authorized user from DB
-        const deletedUser = await authorizedUsersModel.findByIdAndDelete(userId);
+        // Read first: DS must confirm deletion before local state is mutated.
+        const userToDelete = await authorizedUsersModel.findOne({
+          _id: userId,
+          adminId: isAdminExist._id,
+        });
   
+        if (!userToDelete) {
+          return res.status(404).json(Response.userFailResp("Authorized user not found"));
+        }
+
+        try {
+          await this.deleteUserFromDS(userToDelete);
+        } catch (error) {
+          logger.error("DS user deletion failed; local deletion aborted:", error?.response?.data || error.message);
+          return res.status(502).json(
+            Response.errorResp(
+              "DS user deletion failed. User was not deleted locally.",
+              error?.response?.data?.message || error.message
+            )
+          );
+        }
+
+        const deletedUser = await authorizedUsersModel.findOneAndDelete({
+          _id: userId,
+          adminId: isAdminExist._id,
+        });
         if (!deletedUser) {
           return res.status(404).json(Response.userFailResp("Authorized user not found"));
         }
@@ -1326,23 +1368,6 @@ async updateAuthUser(req, res, _next) {
           }
         }
 
-        //Deleting User data from AI service
-        try {
-          const url = `${await this.getDSAuthUsersAPI(deletedUser?.adminId)}/delete?uid=${deletedUser?._id.toString()}&db=${this.getDbName(deletedUser?.adminId)}`;
-        
-          const response = await axios.delete(url, {
-            headers: { accept: "application/json" }
-          });
-        
-        } catch (err) {
-          if (err.response) {
-            console.log(`Delete failed (${err.response.status}): ${JSON.stringify(err.response.data)}`);
-          } else {
-            console.log("Error:", err.message);
-          }
-        }
-        
-  
         // ✅ Return success response
         return res
           .status(200)
