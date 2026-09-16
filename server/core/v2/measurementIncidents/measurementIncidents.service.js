@@ -4,6 +4,7 @@ import Response from "../../../utils/response.js";
 import { sendMeasurement, sendPayloadToUser } from "../../../socket.js";
 import MeasurementIncident from "./measurementIncidents.model.js";
 import { MeasurementDsError, processWithDs } from "./measurementDs.client.js";
+import { normalizeMeasuredData } from "./measurementNormalization.js";
 import {
   createQrMeasurementSchema,
   dsMeasurementResponseSchema,
@@ -125,6 +126,7 @@ class MeasurementIncidentsService {
         qrSku: normalizedSku(input.qrMetadata.sku),
         qrMetadata: input.qrMetadata,
         measuredData: {},
+        normalizedMeasuredData: {},
         measurementImage: null,
         status: "pending",
         dsProcessedAt: null,
@@ -207,6 +209,7 @@ class MeasurementIncidentsService {
         qrSku: normalizedSku(processed.qrMetadata?.sku || processed.qrMetadata?.skuCode),
         qrMetadata: processed.qrMetadata,
         measuredData: processed.measuredData,
+        normalizedMeasuredData: normalizeMeasuredData(processed.measuredData, processed.qrMetadata),
         measurementImage: normalizedMeasurementImage(processed.measurementImage),
         dsProcessedAt: processed.processedAt || new Date(),
       });
@@ -306,11 +309,15 @@ class MeasurementIncidentsService {
       const filter = ownedDocumentFilter(req.params.id, identity);
       if (!filter) return res.status(403).json(Response.accessDeniedResp("Measurement incident access denied"));
 
+      const target = await MeasurementIncident.findOne(filter).lean();
+      if (!target) return res.status(404).json(Response.notFoundResp("Measurement incident not found"));
+
       const incident = await MeasurementIncident.findOneAndUpdate(
-        filter,
+        { ...filter, _id: target._id },
         {
           $set: {
             measuredData: validation.value.measuredData,
+            normalizedMeasuredData: normalizeMeasuredData(validation.value.measuredData, target.qrMetadata),
             measurementImage: normalizedMeasurementImage(validation.value.measurementImage),
             dsProcessedAt: validation.value.processedAt || new Date(),
           },
@@ -374,11 +381,20 @@ class MeasurementIncidentsService {
         filter.$or = clauses;
       }
 
+      const target = await MeasurementIncident.findOne(filter).sort({ createdAt: -1 }).lean();
+      if (!target) {
+        logger.warn(
+          `[MEASUREMENT_INCIDENT] DS PATCH matched no pending incident sku=${normalizedSku(skuValidation.value)} station=${bodyValidation.value.stationId || "unspecified"}`,
+        );
+        return res.status(404).json(Response.notFoundResp("No pending Measurement Incident found for this SKU"));
+      }
+
       const incident = await MeasurementIncident.findOneAndUpdate(
-        filter,
+        { ...filter, _id: target._id },
         {
           $set: {
             measuredData: bodyValidation.value.measuredData,
+            normalizedMeasuredData: normalizeMeasuredData(bodyValidation.value.measuredData, target.qrMetadata),
             measurementImage: normalizedMeasurementImage(bodyValidation.value.measurementImage),
             dsProcessedAt: bodyValidation.value.processedAt || new Date(),
           },

@@ -132,9 +132,19 @@ function adminIdFrom(req) {
 function toRow(doc, timezone) {
   const meta = doc.qrMetadata || {};
   const md = doc.measuredData || {};
+  const normalized = doc.normalizedMeasuredData || {};
 
   const printed = { L: meta.length, W: meta.breadth, H: meta.height };
-  const measured = measuredTriple(md, printed);
+  const hasNormalized = [normalized.length, normalized.breadth ?? normalized.width, normalized.height]
+    .some((value) => Number.isFinite(value));
+  const measured = hasNormalized
+    ? {
+      L: Number.isFinite(normalized.length) ? normalized.length : null,
+      W: Number.isFinite(normalized.breadth) ? normalized.breadth : (Number.isFinite(normalized.width) ? normalized.width : null),
+      H: Number.isFinite(normalized.height) ? normalized.height : null,
+      unit: "in",
+    }
+    : measuredTriple(md, printed);
 
   const dev = {
     L: measured.L != null && printed.L != null ? measured.L - printed.L : null,

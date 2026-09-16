@@ -121,14 +121,14 @@ class ClientConfigService {
       const nvrIds = nvrs.map((n) => n._id);
       const availableCameras = nvrIds.length
         ? await channelModel
-            .countDocuments({ userId: admin.user_id, nvrId: { $in: nvrIds } })
-            .setOptions({ includeInactive: true })
+          .countDocuments({ userId: admin.user_id, nvrId: { $in: nvrIds } })
+          .setOptions({ includeInactive: true })
         : 0;
-      if (count > availableCameras) {
-        return res
-          .status(400)
-          .send(Response.userFailResp(`purchasedCameras exceeds available cameras (${availableCameras})`));
-      }
+      // if (count > availableCameras) {
+      //   return res
+      //     .status(400)
+      //     .send(Response.userFailResp(`purchasedCameras exceeds available cameras (${availableCameras})`));
+      // }
 
       // planCamerasGranted: true marks this as an EXPLICIT superadmin decision
       // — including count === 0 to deliberately block a client. Without it, a

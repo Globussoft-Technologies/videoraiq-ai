@@ -19,6 +19,7 @@ const measurementIncidentSchema = new Schema(
     qrSku: { type: String, default: null, trim: true, uppercase: true, index: true },
     qrMetadata: { type: Schema.Types.Mixed, required: true },
     measuredData: { type: Schema.Types.Mixed, default: {} },
+    normalizedMeasuredData: { type: Schema.Types.Mixed, default: {} },
     measurementImage: { type: Schema.Types.Mixed, default: null },
     status: {
       type: String,

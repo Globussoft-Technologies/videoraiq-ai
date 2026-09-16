@@ -38,6 +38,22 @@ describe("measurementLog toRow — measured dimension normalisation", () => {
     near(row, 71.5, 41.8, 5.1);
   });
 
+  it("prefers backend-normalized inches while retaining raw DS values", () => {
+    const row = toRow(
+      {
+        _id: "normalized-1",
+        status: "accepted",
+        qrMetadata: label,
+        measuredData: { length: 71.2, breadth: 41.3, height: 5.8 },
+        normalizedMeasuredData: { length: 72, breadth: 42, height: 5 },
+      },
+      "Asia/Kolkata",
+    );
+
+    near(row, 72, 42, 5);
+    expect(row.measuredRaw).toBe("71.2 × 41.3 × 5.8");
+  });
+
   it("accepts the breadth axis under the `width` key", () => {
     const row = toRow(
       { _id: "4", status: "accepted", qrMetadata: label, measuredData: { length: 182.9, width: 106.7, height: 12.8 } },

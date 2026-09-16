@@ -105,6 +105,7 @@ describe("measurement incident service", () => {
       qrImage: { url: "/api/v2/measurements/captures/qr.jpg", filename: "qr.jpg" },
       qrMetadata: saved.qrMetadata,
       measuredData: {},
+      normalizedMeasuredData: {},
       measurementImage: null,
       status: "pending",
       dsProcessedAt: null,
@@ -197,6 +198,12 @@ describe("measurement incident service", () => {
       stationId: "88:a2:9e:d0:95:ec",
       measuredData: { length: 77.9, breadth: 78.1, height: 6.1 },
     };
+    mocks.findOne.mockReturnValue({
+      lean: vi.fn().mockResolvedValue({
+        _id: updated._id,
+        qrMetadata: { length: 78, breadth: 78, height: 6 },
+      }),
+    });
     mocks.findOneAndUpdate.mockReturnValue({ lean: vi.fn().mockResolvedValue(updated) });
     const res = responseDouble();
     await service.updateMeasurement({
@@ -208,7 +215,12 @@ describe("measurement incident service", () => {
     expect(res.statusCode).toBe(200);
     expect(mocks.findOneAndUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ _id: updated._id }),
-      expect.objectContaining({ $set: expect.objectContaining({ measuredData: updated.measuredData }) }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          measuredData: updated.measuredData,
+          normalizedMeasuredData: { length: 78, breadth: 78, height: 6 },
+        }),
+      }),
       { new: true, runValidators: true },
     );
     expect(mocks.sendMeasurement).toHaveBeenCalledWith(updated.stationId, updated);
@@ -221,6 +233,14 @@ describe("measurement incident service", () => {
       stationId: "88:a2:9e:d0:95:ec",
       measuredData: { length: 77.9, breadth: 78.1, height: 6.1 },
     };
+    mocks.findOne.mockReturnValue({
+      sort: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue({
+          _id: updated._id,
+          qrMetadata: { length: 78, breadth: 78, height: 6 },
+        }),
+      }),
+    });
     mocks.findOneAndUpdate.mockReturnValue({ lean: vi.fn().mockResolvedValue(updated) });
     const res = responseDouble();
     await service.updateMeasurementBySku({
@@ -234,10 +254,11 @@ describe("measurement incident service", () => {
 
     expect(res.statusCode).toBe(200);
     expect(mocks.findOneAndUpdate).toHaveBeenCalledWith(
-      { qrSku: "G_OK8478", status: "pending" },
+      { qrSku: "G_OK8478", status: "pending", _id: updated._id },
       expect.objectContaining({
         $set: expect.objectContaining({
           measuredData: updated.measuredData,
+          normalizedMeasuredData: { length: 78, breadth: 78, height: 6 },
           measurementImage: "http://pi/results/G_OK8478.jpg",
         }),
       }),
@@ -253,6 +274,14 @@ describe("measurement incident service", () => {
       stationId: "88:a2:9e:d0:95:ec",
       measuredData: { length: 77.9, breadth: 78.1, height: 6.1 },
     };
+    mocks.findOne.mockReturnValue({
+      sort: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue({
+          _id: updated._id,
+          qrMetadata: { length: 78, breadth: 78, height: 6 },
+        }),
+      }),
+    });
     mocks.findOneAndUpdate.mockReturnValue({ lean: vi.fn().mockResolvedValue(updated) });
     const res = responseDouble();
 
@@ -267,7 +296,7 @@ describe("measurement incident service", () => {
 
     expect(res.statusCode).toBe(200);
     expect(mocks.findOneAndUpdate).toHaveBeenCalledWith(
-      { qrSku: "AGS7536-8", status: "pending" },
+      { qrSku: "AGS7536-8", status: "pending", _id: updated._id },
       expect.any(Object),
       { new: true, runValidators: true, sort: { createdAt: -1 } },
     );

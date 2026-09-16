@@ -42,6 +42,7 @@ const measurementIncidentSchema = new mongoose.Schema(
     qrSku: { type: String, index: true },
     qrMetadata: qrMetadataSchema,
     measuredData: measuredDataSchema,
+    normalizedMeasuredData: measuredDataSchema,
     measurementImage: String,
     // accepted | pending | rejected
     status: { type: String, index: true },
