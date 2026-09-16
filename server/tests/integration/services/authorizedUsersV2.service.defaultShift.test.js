@@ -45,6 +45,9 @@ vi.mock("../../../core/v2/adminStorage/mediaStorage.v2.js", () => ({
 vi.mock("axios", () => ({
   default: { post: vi.fn(), put: vi.fn(), get: vi.fn(), delete: vi.fn() },
 }));
+vi.mock("../../../socket.js", () => ({
+  sendPayloadToUser: vi.fn().mockResolvedValue(undefined),
+}));
 
 const { default: AuthUsersService } = await import(
   "../../../core/v2/authorizedUsers/authorizedUsers.service.js"
@@ -55,6 +58,7 @@ const { default: AuthorizedUsers } = await import(
 const { default: Admin } = await import("../../../core/v1/admin/admin.model.js");
 const { default: Shift } = await import("../../../core/v2/shifts/shifts.model.js");
 const { default: axios } = await import("axios");
+const { sendPayloadToUser } = await import("../../../socket.js");
 
 let admin;
 
@@ -112,6 +116,11 @@ describe("createAuthUser — default shift", () => {
       expect.stringContaining("/api/v2/uploads/v2/test/b.jpg"),
       expect.stringContaining("/api/v2/uploads/v2/test/c.jpg"),
     ]);
+    expect(sendPayloadToUser).toHaveBeenCalledWith(
+      null,
+      `authorizedUsers_${admin._id}`,
+      expect.objectContaining({ action: "created", userId: created._id })
+    );
   });
 
   it("leaves an explicitly chosen shift alone", async () => {

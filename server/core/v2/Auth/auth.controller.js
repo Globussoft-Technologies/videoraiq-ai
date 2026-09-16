@@ -48,6 +48,14 @@ class authController {
         return await AUTHService.generateAdminToken(req, res, next);
     }
 
+    async getRegistrationLink(req, res, next) {
+        return await AUTHService.getRegistrationLink(req, res, next);
+    }
+
+    async terminateRegistrationLink(req, res, next) {
+        return await AUTHService.terminateRegistrationLink(req, res, next);
+    }
+
     async getFromAmemberUserDetails(req, res, next) {
         /* #swagger.tags = ['Auth']
                             #swagger.description = 'This routes is used to get user details from aMember by username' */

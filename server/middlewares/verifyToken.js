@@ -14,6 +14,14 @@ import sessionsService from "../core/v2/sessions/sessions.service.js";
 const backendToken = config.get("Backend.token");
 let jwtSecret = config.get("jwt.secretKey");
 
+export const isRegistrationLinkActive = (decoded, registrationLink, now = Date.now()) => {
+  if (!decoded?.registrationLinkId) return true;
+  return Boolean(
+    registrationLink?.linkId === decoded.registrationLinkId
+      && new Date(registrationLink.expiresAt).getTime() > now
+  );
+};
+
 async function verifyToken(req, res, next) {
   try {
     const token = req.header("x-access-token");
@@ -56,6 +64,11 @@ async function verifyToken(req, res, next) {
             return res
               .status(401)
               .send(Response.tokenFailResp("admin not found"));
+          }
+          if (!isRegistrationLinkActive(decoded, admin.registrationLink)) {
+            return res
+              .status(401)
+              .send(Response.tokenFailResp("Registration link is invalid or has expired"));
           }
           // Check if the password was changed after the token was issued
           // if (admin.passwordChangedAt && decoded.iat * 1000 < admin.passwordChangedAt.getTime()) {

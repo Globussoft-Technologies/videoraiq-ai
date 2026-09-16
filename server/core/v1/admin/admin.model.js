@@ -55,6 +55,13 @@ const adminSchema = new mongoose.Schema({
   // this many cameras (channels) across all their NVRs. 0 = no cameras allowed
   // until the super-admin provisions a limit.
   purchasedCameras: { type: Number, default: 0 },
+  // The currently active employee self-registration invite. Generating a new
+  // invite replaces this value, which immediately invalidates the old JWT.
+  registrationLink: {
+    token: { type: String, default: null },
+    linkId: { type: String, default: null },
+    expiresAt: { type: Date, default: null },
+  },
   // Set once when a plan's default camera allowance is granted (see
   // defaultCamerasForPlan). Without it, a superadmin who deliberately drops a
   // trial client to 0 would have the grant handed straight back on their next

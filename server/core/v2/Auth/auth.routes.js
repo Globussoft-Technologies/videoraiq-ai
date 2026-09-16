@@ -9,4 +9,7 @@ router.post('/by-impersonation-token', authController.verifyImpersonation);
 router.post('/by-amember-sso-token', authController.verifyAmemberSso);
 router.get('/by-login/:username', authController.getFromAmemberUserDetails)
 router.post('/generate-admin-token', verifyToken, authController.generateAdminToken);
+router.get('/registration-link', verifyToken, authController.getRegistrationLink);
+router.delete('/registration-link', verifyToken, authController.terminateRegistrationLink);
+router.get('/registration-link/validate', verifyToken, (_req, res) => res.status(200).json({ ok: true }));
 export default router;

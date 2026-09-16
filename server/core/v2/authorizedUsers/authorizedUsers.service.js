@@ -25,6 +25,7 @@ import OptimizedAccessLogs from "../accesslogs/newAccessLogs.model.js";
 import { normalizePlate, findVehicleOwners, TAGGED_USER_FIELDS } from "../../../utils/vehicleTagging.js";
 import faceImagesModel from "../faceImages/faceImages.model.js";
 import { putMediaV2 as putMedia, deleteMediaV2 as deleteMedia } from "../adminStorage/mediaStorage.v2.js";
+import { sendPayloadToUser } from "../../../socket.js";
 
 
 import fs from 'fs';
@@ -629,7 +630,7 @@ class AuthUsersService {
                 .status(409)
                 .json(
                   Response.errorResp(
-                    "A user with similar facial data is already registered.",
+                    err.$and?.message || "A user with similar facial data is already registered.",
                     "Authorized user creation failed."
                   )
                 );
@@ -660,6 +661,12 @@ class AuthUsersService {
         } else {
           console.error("❌ User creation failed. Skipping Face Auth registration.");
         }
+
+        await sendPayloadToUser(
+          null,
+          `authorizedUsers_${newUser.adminId}`,
+          { action: "created", userId: newUser._id }
+        );
 
         return res.status(201).json(
           Response.userSuccessResp("Authorized user created successfully", newUser)

@@ -6,7 +6,7 @@ import { resolveAdminEndpoints } from "../../../utils/adminEndpoints.js";
 import { stopAllStreams, resumeAllStreams } from "../../../utils/stopStreams.js";
 import config from "config";
 import jwt from "jsonwebtoken";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import axios from "axios";
 import Admin from "../admin/admin.model.js";
 import dashboardSidebarModel from "../dashboard/dashboardSidebar.model.js";
@@ -544,9 +544,8 @@ class AUTHService {
   // fields as the login token (verifyUser), then AES-encrypt it so the frontend
   // (sharing ENCRYPTION_KEY/IV) can decrypt. Subscriptions/plan come from
   // aMember by user_id (login uses the password-based check; here we resolve the
-  // same data without a password). ponytail: any authenticated caller can mint
-  // for any adminId — add a superadmin/role guard before treating this as an
-  // impersonation endpoint.
+  // same data without a password). The link is always scoped to the
+  // authenticated admin.
   async generateAdminToken(req, res) {
     try {
       const days = parseInt(req.body?.days, 10);
@@ -554,10 +553,13 @@ class AUTHService {
         return res.status(400).json({ ok: false, msg: "days must be an integer between 1 and 5" });
       }
 
-      // Default to the authenticated admin; allow an explicit adminId override.
-      const adminId = req.body?.adminId || req?.verified?.userData?.adminId;
+      const authenticatedAdminId = req?.verified?.userData?.adminId;
+      const adminId = req.body?.adminId || authenticatedAdminId;
       if (!adminId || !/^[a-f\d]{24}$/i.test(String(adminId))) {
         return res.status(400).json({ ok: false, msg: "A valid adminId is required" });
+      }
+      if (String(adminId) !== String(authenticatedAdminId)) {
+        return res.status(403).json({ ok: false, msg: "You can only generate your own registration link" });
       }
 
       const admin = await adminModel.findById(adminId).lean();
@@ -598,6 +600,8 @@ class AUTHService {
         // login instead of a stale 0 baked into this token.
         purchasedCameras: effectiveCameras,
         streamHost: `${(admin.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
+        registrationLinkId: randomUUID(),
+        userRegistrByLink: true,
       };
 
       // firstIncidentCreatedDate — mirrors login (earliest incident overall).
@@ -627,6 +631,19 @@ class AUTHService {
       const token = encrypt(jwtToken); // frontend decrypts with the shared ENCRYPTION_KEY/IV
       const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
+      await adminModel.updateOne(
+        { _id: adminId },
+        {
+          $set: {
+            registrationLink: {
+              token,
+              linkId: tokenPayload.registrationLinkId,
+              expiresAt,
+            },
+          },
+        }
+      );
+
       return res.status(200).json({
         ok: true,
         msg: "Admin token generated",
@@ -638,6 +655,40 @@ class AUTHService {
     } catch (err) {
       logger.error(`generateAdminToken: ${err.message}`);
       return res.status(500).json({ ok: false, msg: "Failed to generate admin token" });
+    }
+  }
+
+  async getRegistrationLink(req, res) {
+    try {
+      const adminId = req?.verified?.userData?.adminId;
+      const admin = await adminModel.findById(adminId).select("registrationLink").lean();
+      const link = admin?.registrationLink;
+
+      if (!link?.token || !link?.expiresAt || new Date(link.expiresAt).getTime() <= Date.now()) {
+        if (link?.token) {
+          await adminModel.updateOne({ _id: adminId }, { $unset: { registrationLink: 1 } });
+        }
+        return res.status(200).json({ ok: true, link: null });
+      }
+
+      return res.status(200).json({
+        ok: true,
+        link: { token: link.token, expiresAt: link.expiresAt },
+      });
+    } catch (err) {
+      logger.error(`getRegistrationLink: ${err.message}`);
+      return res.status(500).json({ ok: false, msg: "Failed to fetch registration link" });
+    }
+  }
+
+  async terminateRegistrationLink(req, res) {
+    try {
+      const adminId = req?.verified?.userData?.adminId;
+      await adminModel.updateOne({ _id: adminId }, { $unset: { registrationLink: 1 } });
+      return res.status(200).json({ ok: true, msg: "Registration link terminated" });
+    } catch (err) {
+      logger.error(`terminateRegistrationLink: ${err.message}`);
+      return res.status(500).json({ ok: false, msg: "Failed to terminate registration link" });
     }
   }
 
