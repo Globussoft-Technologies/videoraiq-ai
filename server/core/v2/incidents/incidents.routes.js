@@ -83,6 +83,16 @@ router.get(
   incidentsController.getWaterSpillageDetectionLogs,
 );
 router.get(
+  "/logs/fire-smoke-detection",
+  viewAccessCheck,
+  incidentsController.getFireSmokeDetectionLogs,
+);
+router.get(
+  "/logs/person-fall-sick-detection",
+  viewAccessCheck,
+  incidentsController.getPersonFallSickDetectionLogs,
+);
+router.get(
   "/logs/unauthorized-access",
   viewAccessCheck,
   incidentsController.getUnauthorizedAccessLogs,

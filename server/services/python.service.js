@@ -65,6 +65,33 @@ const buildCylinderStackDetector = (zones, severity, settings = {}) => ({
   trigger_notification: settings.trigger_notification ?? true,
 });
 
+const buildPersonFallSickDetector = (severity, settings = {}) => ({
+  name: "personFallSickDetectionSettings",
+  person_threshold: settings.person_threshold ?? 0.65,
+  fall_max_transition_sec: settings.fall_max_transition_sec ?? 2,
+  fall_confirmation_sec: settings.fall_confirmation_sec ?? 2,
+  fall_recovery_sec: settings.fall_recovery_sec ?? 2,
+  fall_min_descent_ratio: settings.fall_min_descent_ratio ?? 0.25,
+  fall_min_horizontal_bbox_ratio:
+    settings.fall_min_horizontal_bbox_ratio ?? 0.95,
+  fall_min_torso_angle_deg: settings.fall_min_torso_angle_deg ?? 55,
+  fall_min_person_px_height: settings.fall_min_person_px_height ?? 80,
+  severity: severity ?? "high",
+  trigger_notification: settings.trigger_notification ?? false,
+  zone_name: settings.zone_name ?? "Full Frame",
+});
+
+const buildFireSmokeDetector = (severity, settings = {}) => ({
+  name: "fireSmokeDetectionSettings",
+  fire_confidence: settings.fire_confidence ?? 0.25,
+  smoke_confidence: settings.smoke_confidence ?? 0.25,
+  fire_smoke_iou: settings.fire_smoke_iou ?? 0.3,
+  fire_smoke_cooldown_sec: settings.fire_smoke_cooldown_sec ?? 60,
+  severity: severity ?? "high",
+  zone_name: settings.zone_name ?? "Full Frame",
+  trigger_notification: settings.trigger_notification ?? true,
+});
+
 const pickDetectorThresholds = (detectorName, settings = {}) => {
   const fields = THRESHOLD_FIELDS_BY_DETECTOR[detectorName] || [];
 
@@ -485,6 +512,16 @@ class PythonService {
         });
       }
 
+      if (detection_modes?.includes("personFallSickDetectionSettings")) {
+        detectors.push(
+          buildPersonFallSickDetector(severity, confidence_thresholds),
+        );
+      }
+
+      if (detection_modes?.includes("fireSmokeDetectionSettings")) {
+        detectors.push(buildFireSmokeDetector(severity, confidence_thresholds));
+      }
+
 
       if (detection_modes?.includes("intrusion")) {
         detectors.push({
@@ -760,6 +797,17 @@ class PythonService {
           zones: zones || [],
           severity,
         });
+      }
+
+
+      if (detection_modes?.includes("personFallSickDetectionSettings")) {
+        detectors.push(
+          buildPersonFallSickDetector(severity, confidence_thresholds),
+        );
+      }
+
+      if (detection_modes?.includes("fireSmokeDetectionSettings")) {
+        detectors.push(buildFireSmokeDetector(severity, confidence_thresholds));
       }
 
       if (detection_modes?.includes("vehicleType")) {

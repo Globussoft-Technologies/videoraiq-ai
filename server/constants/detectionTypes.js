@@ -34,7 +34,8 @@ export const DETECTION_TYPES = {
   // genericObjectDetectionSettings: "Generic Object Detection",
   // loiteringWithoutAuthSettings: "Loitering Without Authorization Detection",
   // loiteringWithAuthSettings: "Loitering With Authorization Detection",
-  // fireSmokeDetectionSettings: "Fire and Smoke Detection",
+  fireSmokeDetectionSettings: "Fire and Smoke Detection",
+  personFallSickDetectionSettings: "Person Fall/Sick Detection",
   // weaponDetectionSettings: "Weapon Detection",
   // unattendedBaggageDetectionSettings: "Unattended Baggage Detection",
 
@@ -68,6 +69,7 @@ export const TYPE_MAP = {
   unauthorizedAccessSettings: "unauthorizedAccess",
   lineCrossingSettings: "lineCrossing",
   fireSmokeDetectionSettings: "fireSmokeDetection",
+  personFallSickDetectionSettings: "personFallSickDetection",
   weaponDetectionSettings: "weaponDetection",
   unattendedBaggageDetectionSettings: "unattendedBaggageDetection",
   personalProtectiveEquipmentSettings: "personalProtectiveEquipment",
@@ -119,7 +121,9 @@ export const DETECTION_MODES_MAP = {
   mobilePhoneDetectionSettings: ["mobilePhoneDetection"],
   carModelDetectionSettings: ["carModelDetection"],
   vehicleCheckInOutSettings: ["vehicleCheckInOut"],
-  faceAuthenticationSettings: ["attendanceSettings"]
+  faceAuthenticationSettings: ["attendanceSettings"],
+  fireSmokeDetectionSettings: ["fireSmokeDetectionSettings"],
+  personFallSickDetectionSettings: ["personFallSickDetectionSettings"],
 };
 
 /**
@@ -169,7 +173,9 @@ export const DS_DETECTOR_BY_MODE = {
   light: "lightDetectionSettings",
   guard_absence: "guardAbsenceSettings",
   guard_sleeping: "sleepActivitySettings",
-  faceAuthenticationSettings: "attendanceSettings"
+  faceAuthenticationSettings: "attendanceSettings",
+  fireSmokeDetectionSettings: "fireSmokeDetectionSettings",
+  personFallSickDetectionSettings: "personFallSickDetectionSettings",
 };
 
 /**
@@ -253,6 +259,7 @@ export const toPopulateDetections = [
   { path: "detections.countVehiclesSettings.id" },
   { path: "detections.loiteringWithoutAuthSettings.id" },
   { path: "detections.fireSmokeDetectionSettings.id" },
+  { path: "detections.personFallSickDetectionSettings.id" },
   { path: "detections.weaponDetectionSettings.id" },
   { path: "detections.unattendedBaggageDetectionSettings.id" },
   { path: "detections.unauthorizedAccessSettings.id" },
@@ -569,6 +576,48 @@ export const fireSmokeDetectionSettings = {
     videoMaxLength: 90,
     videoDuration: 10,
     levelOfImportance: "moderate",
+    alertThreshold: 3,
+    videoResolution: [1280, 720],
+    referencePoints: {
+      1: [
+        [50, 50],
+        [150, 50],
+        [150, 150],
+        [50, 150],
+      ],
+    },
+    metricType: "gauge",
+  },
+};
+
+export const personFallSickDetectionSettings = {
+  channelId: ["664f8a09a9d345001ee326b2"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType: "personFallSickDetectionSettings",
+  name: "Person Fall/Sick Detection - Entry Gate",
+  enabled: true,
+  alerts: ["68493b14b176a495112b6522"],
+  settings: {
+    zone_configs: [
+      { "name": "Reception", "capacity": 2, "threshold_sec": 20 },
+      { "name": "Packing-A", "capacity": 5, "threshold_sec": 30 }
+    ],
+    imageRequired: false,
+    videoLinkRequirement: true,
+    videoMinLength: 5,
+    videoMaxLength: 90,
+    videoDuration: 10,
+    levelOfImportance: "high",
+    person_threshold: 0.65,
+    fall_max_transition_sec: 2,
+    fall_confirmation_sec: 2,
+    fall_recovery_sec: 2,
+    fall_min_descent_ratio: 0.25,
+    fall_min_horizontal_bbox_ratio: 0.95,
+    fall_min_torso_angle_deg: 55,
+    fall_min_person_px_height: 80,
+    trigger_notification: false,
+    zone_name: "Full Frame",
     alertThreshold: 3,
     videoResolution: [1280, 720],
     referencePoints: {

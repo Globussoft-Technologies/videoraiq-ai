@@ -46,6 +46,8 @@ const { default: Channel } = await import(
 );
 const {
   UnAuthorisedAccessSetting,
+  FireSmokeDetectionSetting,
+  PersonFallSickDetectionSetting,
   CrowdDetectionSetting,
   VehiclDetectionSetting,
   DeskAbsenceDetectionSetting,
@@ -131,6 +133,113 @@ describe("IncidentsService.createIncidents — unauthorizedAccess", () => {
 
     expect(sendPayloadToUser).toHaveBeenCalledTimes(1);
     expect(triggerAlertOnIncident).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("IncidentsService.createIncidents - fireSmokeDetection", () => {
+  it("creates a fire and smoke incident and fires the alert pipeline", async () => {
+    const { admin, nvrId, channel } = await seedScene({
+      SettingModel: FireSmokeDetectionSetting,
+      settingType: "fireSmokeDetectionSettings",
+      channelDetections: (s) => ({
+        fireSmokeDetectionSettings: { id: s._id, enabled: true },
+      }),
+    });
+
+    const incidentTime = new Date("2026-09-17T10:00:00.000Z");
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "fireSmokeDetection",
+        incidentName: "Fire/Smoke Detected",
+        nvrId: nvrId.toString(),
+        channelId: channel._id.toString(),
+        adminId: admin._id.toString(),
+        cameraId: channel._id.toString(),
+        Image: "incidents/fire-smoke.jpg",
+        videoLink: "",
+        timeOfIncident: incidentTime,
+        severity: "high",
+        zone: "Warehouse",
+        description: "Fire or smoke detected in monitored area",
+        type: "gauge",
+        count: 2,
+        fireCount: 1,
+        smokeCount: 1,
+        triggerNotification: true,
+      },
+    });
+    await IncidentsService.createIncidents(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).message).toBe("Incident created successfully");
+
+    const stored = await Incident.findOne({ channelId: channel._id });
+    expect(stored).not.toBeNull();
+    expect(stored.incidentType).toBe("fireSmokeDetection");
+    expect(stored.Image).toBe("incidents/fire-smoke.jpg");
+    expect(stored.cameraId).toBe(channel._id.toString());
+    expect(stored.zone).toBe("Warehouse");
+    expect(stored.description).toBe("Fire or smoke detected in monitored area");
+    expect(stored.type).toBe("gauge");
+    expect(stored.count).toBe(2);
+    expect(stored.fireCount).toBe(1);
+    expect(stored.smokeCount).toBe(1);
+    expect(stored.triggerNotification).toBe(true);
+    expect(stored.timeOfIncident).toEqual(incidentTime);
+    expect(triggerAlertOnIncident).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("IncidentsService.createIncidents - personFallSickDetection", () => {
+  it("stores the complete person fall/sick payload and respects disabled notifications", async () => {
+    const { admin, nvrId, channel } = await seedScene({
+      SettingModel: PersonFallSickDetectionSetting,
+      settingType: "personFallSickDetectionSettings",
+      channelDetections: (s) => ({
+        personFallSickDetectionSettings: { id: s._id, enabled: true },
+      }),
+    });
+
+    const incidentTime = new Date("2026-09-17T10:00:00.000Z");
+    const { req, res, next } = serviceCtx({
+      body: {
+        incidentType: "personFallSickDetection",
+        incidentName: "Person Fall/Sick Detection",
+        nvrId: nvrId.toString(),
+        channelId: channel._id.toString(),
+        adminId: admin._id.toString(),
+        Image: "img/person-fall.jpg",
+        cameraId: channel._id.toString(),
+        zone: "Full Frame",
+        type: "gauge",
+        description: "Possible person fall detected. Operator verification required.",
+        triggerNotification: false,
+        count: 1,
+        isFallDetected: true,
+        evidenceScore: 0.94,
+        timeOfIncident: incidentTime,
+        severity: "high",
+      },
+    });
+    await IncidentsService.createIncidents(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).message).toBe("Incident created successfully");
+    const stored = await Incident.findOne({ channelId: channel._id });
+    expect(stored.incidentType).toBe("personFallSickDetection");
+    expect(stored.Image).toBe("img/person-fall.jpg");
+    expect(stored.cameraId).toBe(channel._id.toString());
+    expect(stored.zone).toBe("Full Frame");
+    expect(stored.type).toBe("gauge");
+    expect(stored.description).toBe(
+      "Possible person fall detected. Operator verification required.",
+    );
+    expect(stored.triggerNotification).toBe(false);
+    expect(stored.count).toBe(1);
+    expect(stored.isFallDetected).toBe(true);
+    expect(stored.evidenceScore).toBe(0.94);
+    expect(stored.timeOfIncident).toEqual(incidentTime);
+    expect(triggerAlertOnIncident).not.toHaveBeenCalled();
   });
 });
 

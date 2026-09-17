@@ -29,6 +29,8 @@ import {
   LoiteringWithoutAuthIncident,
   UnauthorizedAccessIncident,
   LineCrossingAuthIncident,
+  FireSmokeDetectionIncident,
+  PersonFallSickDetectionIncident,
   LoiteringWithAuthIncident,
   CroudIncident,
   SafetyHelmetIncident,
@@ -60,6 +62,8 @@ const modelMap = {
   loiteringWithoutAuth: LoiteringWithoutAuthIncident,
   unauthorizedAccess: UnauthorizedAccessIncident,
   lineCrossing: LineCrossingAuthIncident,
+  fireSmokeDetection: FireSmokeDetectionIncident,
+  personFallSickDetection: PersonFallSickDetectionIncident,
   crowdDetection: CroudIncident,
   personalProtectiveEquipment: SafetyHelmetIncident,
   doorDetection: DoorStatusIncident,
@@ -95,6 +99,7 @@ import {
   UnAuthorisedAccessSetting,
   LineCrossingSetting,
   FireSmokeDetectionSetting,
+  PersonFallSickDetectionSetting,
   WeaponDetectionSetting,
   UnattendedBaggageDetectionSetting,
   DeskAbsenceDetectionSetting,
@@ -529,6 +534,20 @@ class IncidentsService {
       } else if (incidentType === "mobilePhoneDetection") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.Image = req?.body?.Image;
+      } else if (incidentType === "fireSmokeDetection") {
+        newIncident.timeOfIncident = req?.body?.timeOfIncident;
+        newIncident.Image = req?.body?.Image;
+        newIncident.count = req?.body?.count;
+        newIncident.fireCount = req?.body?.fireCount;
+        newIncident.smokeCount = req?.body?.smokeCount;
+        newIncident.triggerNotification = req?.body?.triggerNotification;
+      } else if (incidentType === "personFallSickDetection") {
+        newIncident.timeOfIncident = req?.body?.timeOfIncident;
+        newIncident.Image = req?.body?.Image;
+        newIncident.count = req?.body?.count;
+        newIncident.isFallDetected = req?.body?.isFallDetected;
+        newIncident.evidenceScore = req?.body?.evidenceScore;
+        newIncident.triggerNotification = req?.body?.triggerNotification;
       } else if (incidentType === "foodServicePPEDetection") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.Image = req?.body?.Image;
@@ -1546,6 +1565,7 @@ class IncidentsService {
                 { "detections.unauthorizedAccessSettings.enabled": true },
                 { "detections.lineCrossingSettings.enabled": true },
                 { "detections.fireSmokeDetectionSettings.enabled": true },
+                { "detections.personFallSickDetectionSettings.enabled": true },
                 { "detections.weaponDetectionSettings.enabled": true },
                 { "detections.unattendedBaggageDetectionSettings.enabled": true },
                 { "detections.personalProtectiveEquipmentSettings.enabled": true },
@@ -3115,6 +3135,32 @@ console.log(result,'result');
     } catch (error) {
       logger.error(error);
       next(new AppError("Failed to fetch water spillage detection logs", 500));
+    }
+  }
+
+  async getFireSmokeDetectionLogs(req, res, next) {
+    try {
+      return await this._fetchIncidentLogs({
+        req,
+        res,
+        incidentType: "fireSmokeDetection",
+      });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch fire and smoke detection logs", 500));
+    }
+  }
+
+  async getPersonFallSickDetectionLogs(req, res, next) {
+    try {
+      return await this._fetchIncidentLogs({
+        req,
+        res,
+        incidentType: "personFallSickDetection",
+      });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch person fall/sick detection logs", 500));
     }
   }
 

@@ -310,6 +310,22 @@ describe("POST /api/v1/incidents/guardAbsenceData (real vertical)", () => {
 // GET /logs/*  — incident log endpoints (vehicle/conveyor/crusher/etc.)
 // ----------------------------------------------------------------------------
 describe("GET /api/v1/incidents/logs/* (real vertical)", () => {
+  it("fire-smoke-detection: returns 200 with totalCount 0 when empty", async () => {
+    const res = await request(app).get(
+      "/api/v1/incidents/logs/fire-smoke-detection",
+    );
+    expect(res.status).toBe(200);
+    expect(inner(res).data.totalCount).toBe(0);
+  });
+
+  it("person-fall-sick-detection: returns 200 with totalCount 0 when empty", async () => {
+    const res = await request(app).get(
+      "/api/v1/incidents/logs/person-fall-sick-detection",
+    );
+    expect(res.status).toBe(200);
+    expect(inner(res).data.totalCount).toBe(0);
+  });
+
   it("vehicle-detection: returns 200 with totalCount 0 when empty", async () => {
     const res = await request(app).get(
       "/api/v1/incidents/logs/vehicle-detection",

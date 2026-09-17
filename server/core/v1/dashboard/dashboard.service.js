@@ -415,6 +415,7 @@ class DashboardService {
                   { "detections.unauthorizedAccessSettings.enabled": true },
                   { "detections.lineCrossingSettings.enabled": true },
                   { "detections.fireSmokeDetectionSettings.enabled": true },
+                  { "detections.personFallSickDetectionSettings.enabled": true },
                   { "detections.weaponDetectionSettings.enabled": true },
                   { "detections.unattendedBaggageDetectionSettings.enabled": true },
                   { "detections.personalProtectiveEquipmentSettings.enabled": true },

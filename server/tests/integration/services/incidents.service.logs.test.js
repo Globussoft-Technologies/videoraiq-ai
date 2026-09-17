@@ -54,6 +54,7 @@ const {
   ConveyorDetectionIncident,
   CrusherDetectionIncident,
   WaterSpillageDetectionIncident,
+  FireSmokeDetectionIncident,
   CountVehiclesIncident,
   LineCrossingAuthIncident,
 } = incidentsModel;
@@ -573,6 +574,34 @@ describe("IncidentsService.getWaterSpillageDetectionLogs", () => {
     });
     await IncidentsService.getWaterSpillageDetectionLogs(req, res, next);
     expect(res._body.body.data.totalCount).toBe(1);
+  });
+});
+
+describe("IncidentsService.getFireSmokeDetectionLogs", () => {
+  it("returns only fire and smoke incidents for the authenticated user", async () => {
+    await FireSmokeDetectionIncident.create({
+      timeOfIncident: new Date(),
+      nvrId: new mongoose.Types.ObjectId(),
+      channelId: new mongoose.Types.ObjectId(),
+      userId: "100",
+      incidentName: "Smoke detected",
+      severity: "high",
+    });
+    await FireSmokeDetectionIncident.create({
+      timeOfIncident: new Date(),
+      nvrId: new mongoose.Types.ObjectId(),
+      channelId: new mongoose.Types.ObjectId(),
+      userId: "200",
+      incidentName: "Other user's fire",
+    });
+
+    const { req, res, next } = serviceCtx({ user_id: "100", query: {} });
+    await IncidentsService.getFireSmokeDetectionLogs(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(res._body.body.data.totalCount).toBe(1);
+    expect(res._body.body.data.data[0].incidentType).toBe("fireSmokeDetection");
+    expect(res._body.body.data.data[0].incidentName).toBe("Smoke detected");
   });
 });
 

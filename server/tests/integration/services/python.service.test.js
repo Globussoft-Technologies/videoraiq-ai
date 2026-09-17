@@ -379,6 +379,22 @@ describe("PythonService.updateNewDetection", () => {
 });
 
 describe("PythonService.stopNewDetection", () => {
+  it("stops only the Person Fall/Sick detector", async () => {
+    axios.post.mockResolvedValueOnce({ data: { stopped: true } });
+    await PythonService.stopNewDetection(
+      "fall-camera",
+      "fall-nvr",
+      ["personFallSickDetectionSettings"],
+      "admin",
+    );
+
+    expect(axios.post.mock.calls[0][1]).toEqual({
+      camera_id: "fall-camera",
+      nvr_id: "fall-nvr",
+      detectors: ["personFallSickDetectionSettings"],
+    });
+  });
+
   it("stops only the cylinder stack detector", async () => {
     axios.post.mockResolvedValueOnce({ data: { stopped: true } });
     await PythonService.stopNewDetection(
@@ -538,6 +554,100 @@ describe("PythonService.handleDetectionStartStop", () => {
     expect(axios.post.mock.calls[0][1].stream_url).toBe(
       "http://stream.test/stream.m3u8",
     );
+  });
+
+  it("builds the Person Fall/Sick detector payload required by DS", async () => {
+    NVR.findById.mockResolvedValueOnce({
+      _id: "64b000000000000000000002",
+      userId: "u1",
+    });
+    axios.post.mockResolvedValueOnce({ data: { started: true } });
+    const channel = {
+      _id: { toString: () => "64b000000000000000000001" },
+      nvrId: { _id: { toString: () => "64b000000000000000000002" } },
+    };
+    const settings = {
+      person_threshold: 0.65,
+      fall_max_transition_sec: 2,
+      fall_confirmation_sec: 2,
+      fall_recovery_sec: 2,
+      fall_min_descent_ratio: 0.25,
+      fall_min_horizontal_bbox_ratio: 0.95,
+      fall_min_torso_angle_deg: 55,
+      fall_min_person_px_height: 80,
+      trigger_notification: false,
+      zone_name: "Full Frame",
+    };
+
+    await PythonService.handleDetectionStartStop(
+      channel,
+      "64b000000000000000000003",
+      true,
+      "personFallSickDetectionSettings",
+      [],
+      [],
+      [],
+      0,
+      "high",
+      settings,
+    );
+
+    expect(axios.post.mock.calls[0][1]).toEqual({
+      camera_id: "64b000000000000000000001",
+      nvr_id: "64b000000000000000000002",
+      admin_id: "64b000000000000000000003",
+      stream_url: "http://stream.test/stream.m3u8",
+      detectors: [{
+        name: "personFallSickDetectionSettings",
+        ...settings,
+        severity: "high",
+      }],
+    });
+  });
+
+  it("builds the Fire/Smoke detector payload required by DS", async () => {
+    NVR.findById.mockResolvedValueOnce({
+      _id: "64b000000000000000000002",
+      userId: "u1",
+    });
+    axios.post.mockResolvedValueOnce({ data: { started: true } });
+    const channel = {
+      _id: { toString: () => "64b000000000000000000001" },
+      nvrId: { _id: { toString: () => "64b000000000000000000002" } },
+    };
+    const settings = {
+      fire_confidence: 0.25,
+      smoke_confidence: 0.25,
+      fire_smoke_iou: 0.3,
+      fire_smoke_cooldown_sec: 60,
+      trigger_notification: true,
+      zone_name: "Warehouse",
+    };
+
+    await PythonService.handleDetectionStartStop(
+      channel,
+      "64b000000000000000000003",
+      true,
+      "fireSmokeDetectionSettings",
+      [],
+      [],
+      [],
+      0,
+      "high",
+      settings,
+    );
+
+    expect(axios.post.mock.calls[0][1]).toEqual({
+      camera_id: "64b000000000000000000001",
+      nvr_id: "64b000000000000000000002",
+      admin_id: "64b000000000000000000003",
+      stream_url: "http://stream.test/stream.m3u8",
+      detectors: [{
+        name: "fireSmokeDetectionSettings",
+        ...settings,
+        severity: "high",
+      }],
+    });
   });
 
   it("enable=true with an unknown detection type yields empty modes and rejects", async () => {

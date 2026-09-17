@@ -87,6 +87,7 @@ const detectionFields = {
   unauthorizedAccessSettings: detectionSettingSchema,
   lineCrossingSettings: detectionSettingSchema,
   fireSmokeDetectionSettings: detectionSettingSchema,
+  personFallSickDetectionSettings: detectionSettingSchema,
   weaponDetectionSettings: detectionSettingSchema,
   unattendedBaggageDetectionSettings: detectionSettingSchema,
   personalProtectiveEquipmentSettings: detectionSettingSchema,

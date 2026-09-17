@@ -299,8 +299,6 @@ class ChannelService {
       // ✅ Apply other updates
       Object.assign(existingChannel, updates);
 
-      
-      
       const updatedCamera = await existingChannel.save();
 
       // Refresh logs configuration and broadcast to frontend if detections/checkType changed

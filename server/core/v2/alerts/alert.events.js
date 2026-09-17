@@ -184,6 +184,10 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
           let mailResponse = await MailResponse.cylinderDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "waterSpillageDetection") {
           let mailResponse = await MailResponse.waterSpillageDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+        } else if (detectionType === "fireSmokeDetection") {
+          let mailResponse = await MailResponse.fireSmokeDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+        } else if (detectionType === "personFallSickDetection") {
+          let mailResponse = await MailResponse.personFallSickDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "vehicleObstruction") {
           let mailResponse = await MailResponse.vehicleObstruction(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "vehicleTypeDetection") {

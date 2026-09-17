@@ -83,6 +83,7 @@ class JobsService {
         { path: "detections.countVehiclesSettings.id" },
         { path: "detections.loiteringWithoutAuthSettings.id" },
         { path: "detections.fireSmokeDetectionSettings.id" },
+        { path: "detections.personFallSickDetectionSettings.id" },
         { path: "detections.weaponDetectionSettings.id" },
         { path: "detections.unattendedBaggageDetectionSettings.id" },
         { path: "detections.unauthorizedAccessSettings.id" },

@@ -31,6 +31,7 @@ vi.mock("../../../core/v2/clientConfig/detectionLicense.service.js", async (impo
   return {
     ...actual,
     assertCanEnableDetection: vi.fn().mockResolvedValue({ ok: true }),
+    getLicenseState: vi.fn().mockResolvedValue({}),
   };
 });
 
@@ -43,10 +44,13 @@ const { default: Channel } = await import(
 const { default: pythonService } = await import(
   "../../../services/python.service.js"
 );
-const { vehicleCheckInOutDetectionSetting } = await import(
+const {
+  vehicleCheckInOutDetectionSetting,
+  PersonFallSickDetectionSetting,
+} = await import(
   "../../../core/v2/detectionSettings/detectionSettings.model.js"
 );
-await import("../../../core/v1/NVR/nvr.model.js");
+const { default: NVR } = await import("../../../core/v1/NVR/nvr.model.js");
 await import("../../../core/v1/profiles/profiles.model.js");
 await import("../../../core/v1/authorizedUsers/authorizedUsers.model.js");
 await import("../../../core/v1/users/users.model.js");
@@ -135,5 +139,72 @@ describe("toggleDetection — vehicleCheckInOut geometry reaches python.service"
     // argument had displaced the existing one.
     expect(args[10]).toBeTruthy();
     expect(args[10].line_coordinates).toEqual(GEOMETRY.line_coordinates);
+  });
+});
+
+describe("toggleDetection - Person Fall/Sick DS synchronization", () => {
+  it("starts DS with the linked Person Fall/Sick settings", async () => {
+    const nvr = await NVR.create({
+      userId: "u1",
+      nvrName: "NVR",
+      brand: "hikvision",
+      domain: "http://nvr.local",
+      location: "HQ",
+      localNvrId: "nvr-1",
+    });
+    const setting = await PersonFallSickDetectionSetting.create({
+      userId: "u1",
+      settingType: "personFallSickDetectionSettings",
+      name: "Fall/Sick",
+      enabled: true,
+      settings: {
+        person_threshold: 0.65,
+        fall_max_transition_sec: 2,
+        fall_confirmation_sec: 2,
+        fall_recovery_sec: 2,
+        fall_min_descent_ratio: 0.25,
+        fall_min_horizontal_bbox_ratio: 0.95,
+        fall_min_torso_angle_deg: 55,
+        fall_min_person_px_height: 80,
+        levelOfImportance: "high",
+        trigger_notification: false,
+        zone_name: "Full Frame",
+      },
+    });
+    const channel = await Channel.create({
+      nvrId: nvr._id,
+      userId: "u1",
+      streamingPath: "/Streaming/Channels/101",
+      localChannelId: "1",
+      name: "Fall/Sick Camera",
+      isAdded: true,
+      detections: {
+        personFallSickDetectionSettings: { id: setting._id, enabled: false },
+      },
+    });
+    const { req, res, next } = serviceCtx({
+      body: {
+        channelId: channel._id.toString(),
+        detectionType: "personFallSickDetectionSettings",
+        enable: true,
+      },
+    });
+
+    await ChannelsService.toggleDetection(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(pythonService.handleDetectionStartStop).toHaveBeenCalledTimes(1);
+    const args = pythonService.handleDetectionStartStop.mock.calls[0];
+    expect(args[2]).toBe(true);
+    expect(args[3]).toBe("personFallSickDetectionSettings");
+    expect(args[8]).toBe("high");
+    expect(args[9]).toEqual(
+      expect.objectContaining({
+        person_threshold: 0.65,
+        fall_min_torso_angle_deg: 55,
+        trigger_notification: false,
+        zone_name: "Full Frame",
+      }),
+    );
   });
 });

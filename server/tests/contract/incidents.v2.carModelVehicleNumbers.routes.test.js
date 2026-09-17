@@ -4,6 +4,8 @@ import request from "supertest";
 const mocks = vi.hoisted(() => ({
   getCarModelVehicleNumbers: vi.fn(),
   getCylinderDetectionLogs: vi.fn(),
+  getFireSmokeDetectionLogs: vi.fn(),
+  getPersonFallSickDetectionLogs: vi.fn(),
 }));
 
 vi.mock("../../core/v2/incidents/incidents.service.js", () => ({
@@ -42,6 +44,12 @@ beforeEach(() => {
   mocks.getCylinderDetectionLogs.mockImplementation((req, res) =>
     res.status(200).json({ status: "success", data: { totalCount: 0, data: [] } }),
   );
+  mocks.getFireSmokeDetectionLogs.mockImplementation((req, res) =>
+    res.status(200).json({ status: "success", data: { totalCount: 0, data: [] } }),
+  );
+  mocks.getPersonFallSickDetectionLogs.mockImplementation((req, res) =>
+    res.status(200).json({ status: "success", data: { totalCount: 0, data: [] } }),
+  );
 });
 
 describe("POST /api/v2/incidents/logs/cylinder-detection", () => {
@@ -52,6 +60,28 @@ describe("POST /api/v2/incidents/logs/cylinder-detection", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.getCylinderDetectionLogs).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("GET /api/v2/incidents/logs/fire-smoke-detection", () => {
+  it("routes the request to the fire and smoke log handler", async () => {
+    const response = await request(app).get(
+      "/api/v2/incidents/logs/fire-smoke-detection",
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.getFireSmokeDetectionLogs).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("GET /api/v2/incidents/logs/person-fall-sick-detection", () => {
+  it("routes the request to the person fall log handler", async () => {
+    const response = await request(app).get(
+      "/api/v2/incidents/logs/person-fall-sick-detection",
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.getPersonFallSickDetectionLogs).toHaveBeenCalledTimes(1);
   });
 });
 

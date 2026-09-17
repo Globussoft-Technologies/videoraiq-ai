@@ -2,7 +2,11 @@ import Mail from '@sendgrid/helpers/classes/mail.js';
 import { describe, expect, it, vi } from 'vitest';
 import { EMAIL_ICON_ASSETS } from '../../../mailService/emailIconAssets.js';
 import MailHelper from '../../../mailService/mail.helper.js';
-import { LineCrossingAuthIncident } from '../../../mailService/IncidentsMailTemplates/mail.incidentsTemplate.js';
+import {
+  LineCrossingAuthIncident,
+  fireSmokeDetectionTemplate,
+  personFallSickDetectionTemplate,
+} from '../../../mailService/IncidentsMailTemplates/mail.incidentsTemplate.js';
 import { encrypt } from '../../../utils/cryptoUtils.js';
 
 const EMAIL_LOGO_URL = 'https://stagingv2.videoraiq.com/src/assets/videoraiq-logo-color.png';
@@ -22,6 +26,48 @@ vi.mock('config', async (importOriginal) => {
 });
 
 describe('mail asset normalization', () => {
+  it('renders the fire and smoke incident email details', () => {
+    const html = fireSmokeDetectionTemplate(
+      {
+        incidentName: 'Warehouse fire alert',
+        timeOfIncident: '2026-09-16T10:00:00.000Z',
+        severity: 'high',
+        description: 'Smoke detected near storage rack',
+        Image: '/incidents/fire.jpg',
+      },
+      { nvrName: 'Warehouse NVR' },
+      { name: 'Storage Camera' },
+      'UTC',
+    );
+
+    expect(html).toContain('Fire & Smoke Detection Alert');
+    expect(html).toContain('Warehouse fire alert');
+    expect(html).toContain('Warehouse NVR');
+    expect(html).toContain('Storage Camera');
+    expect(html).toContain('/incidents/fire.jpg');
+  });
+
+  it('renders the person fall/sick incident email details', () => {
+    const html = personFallSickDetectionTemplate(
+      {
+        incidentName: 'Person fall alert',
+        timeOfIncident: '2026-09-16T10:00:00.000Z',
+        severity: 'high',
+        description: 'A person fell near the loading area',
+        Image: '/incidents/person-fall.jpg',
+      },
+      { nvrName: 'Warehouse NVR' },
+      { name: 'Loading Camera' },
+      'UTC',
+    );
+
+    expect(html).toContain('Person Fall/Sick Detection Alert');
+    expect(html).toContain('Person fall alert');
+    expect(html).toContain('Warehouse NVR');
+    expect(html).toContain('Loading Camera');
+    expect(html).toContain('/incidents/person-fall.jpg');
+  });
+
   it('bundles every email icon as a unique valid PNG attachment', () => {
     const assets = Object.values(EMAIL_ICON_ASSETS);
     const contentIds = assets.map(({ contentId }) => contentId);

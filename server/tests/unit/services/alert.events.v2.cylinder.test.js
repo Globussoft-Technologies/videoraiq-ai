@@ -28,7 +28,11 @@ vi.mock("../../../core/v2/admin/admin.model.js", () => ({
   },
 }));
 vi.mock("../../../mailService/mail.helper.js", () => ({
-  default: { cylinderDetection: vi.fn().mockResolvedValue("sent") },
+  default: {
+    cylinderDetection: vi.fn().mockResolvedValue("sent"),
+    fireSmokeDetection: vi.fn().mockResolvedValue("sent"),
+    personFallSickDetection: vi.fn().mockResolvedValue("sent"),
+  },
 }));
 vi.mock(
   "../../../messagingService/IncidentsWhatsAppFunction/whatsapp.incidentsFunction.js",
@@ -131,6 +135,124 @@ describe("v2 cylinder incident alerts", () => {
       "admin-1",
       "UTC",
       { preferredChatIds: ["chat-1"] },
+    );
+  });
+
+  it("dispatches the fire and smoke email template", async () => {
+    Channel.findOne
+      .mockReturnValueOnce({
+        populate: () => ({
+          lean: async () => ({
+            _id: "channel-1",
+            name: "Warehouse Camera",
+            detections: { fireSmokeDetectionSettings: true },
+          }),
+        }),
+      })
+      .mockReturnValueOnce({
+        populate: () => ({
+          lean: async () => ({
+            detections: {
+              fireSmokeDetectionSettings: {
+                id: {
+                  name: "Warehouse Fire Detection",
+                  alerts: ["email-1"],
+                  settings: {},
+                },
+              },
+            },
+          }),
+        }),
+      });
+    NVR.findOne.mockResolvedValue({ _id: "nvr-1", nvrName: "NVR 1" });
+    Incident.findOne.mockReturnValue({
+      populate: () => ({
+        lean: async () => ({
+          _id: "incident-1",
+          incidentType: "fireSmokeDetection",
+          timeOfIncident: new Date("2026-09-16T10:00:00.000Z"),
+        }),
+      }),
+    });
+    Recipient.find
+      .mockReturnValueOnce(queryResult([{ value: "alerts@example.com" }]))
+      .mockReturnValueOnce(queryResult([]))
+      .mockReturnValueOnce(queryResult([]));
+
+    await triggerAlertOnIncident({
+      detectionType: "fireSmokeDetection",
+      nvrId: "nvr-1",
+      channelId: "channel-1",
+      saved: { _id: "incident-1" },
+      adminId: "admin-1",
+    });
+
+    expect(MailResponse.fireSmokeDetection).toHaveBeenCalledWith(
+      ["alerts@example.com"],
+      expect.objectContaining({ incidentName: "Warehouse Fire Detection" }),
+      "fireSmokeDetection",
+      expect.anything(),
+      expect.anything(),
+      "UTC",
+    );
+  });
+
+  it("dispatches the person fall/sick email template", async () => {
+    Channel.findOne
+      .mockReturnValueOnce({
+        populate: () => ({
+          lean: async () => ({
+            _id: "channel-1",
+            name: "Warehouse Camera",
+            detections: { personFallSickDetectionSettings: true },
+          }),
+        }),
+      })
+      .mockReturnValueOnce({
+        populate: () => ({
+          lean: async () => ({
+            detections: {
+              personFallSickDetectionSettings: {
+                id: {
+                  name: "Warehouse Person Fall/Sick Detection",
+                  alerts: ["email-1"],
+                  settings: {},
+                },
+              },
+            },
+          }),
+        }),
+      });
+    NVR.findOne.mockResolvedValue({ _id: "nvr-1", nvrName: "NVR 1" });
+    Incident.findOne.mockReturnValue({
+      populate: () => ({
+        lean: async () => ({
+          _id: "incident-1",
+          incidentType: "personFallSickDetection",
+          timeOfIncident: new Date("2026-09-16T10:00:00.000Z"),
+        }),
+      }),
+    });
+    Recipient.find
+      .mockReturnValueOnce(queryResult([{ value: "alerts@example.com" }]))
+      .mockReturnValueOnce(queryResult([]))
+      .mockReturnValueOnce(queryResult([]));
+
+    await triggerAlertOnIncident({
+      detectionType: "personFallSickDetection",
+      nvrId: "nvr-1",
+      channelId: "channel-1",
+      saved: { _id: "incident-1" },
+      adminId: "admin-1",
+    });
+
+    expect(MailResponse.personFallSickDetection).toHaveBeenCalledWith(
+      ["alerts@example.com"],
+      expect.objectContaining({ incidentName: "Warehouse Person Fall/Sick Detection" }),
+      "personFallSickDetection",
+      expect.anything(),
+      expect.anything(),
+      "UTC",
     );
   });
 });

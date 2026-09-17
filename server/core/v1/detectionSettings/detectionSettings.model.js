@@ -414,6 +414,12 @@ const LineCrossingSetting = DetectionSetting.discriminator(
 
 const FireSmokeDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
+  fire_confidence: { type: Number, min: 0, max: 1, default: 0.25 },
+  smoke_confidence: { type: Number, min: 0, max: 1, default: 0.25 },
+  fire_smoke_iou: { type: Number, min: 0, max: 1, default: 0.3 },
+  fire_smoke_cooldown_sec: { type: Number, min: 0, default: 60 },
+  trigger_notification: { type: Boolean, default: true },
+  zone_name: { type: String, default: "Full Frame" },
   imageRequired: {
     type: Boolean,
     default: false,
@@ -444,6 +450,49 @@ const FireSmokeDetectionSchema = new mongoose.Schema({
 const FireSmokeDetectionSetting = DetectionSetting.discriminator(
   "fireSmokeDetectionSettings",
   new mongoose.Schema({ settings: FireSmokeDetectionSchema }),
+);
+
+const PersonFallSickDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
+  person_threshold: { type: Number, min: 0, max: 1, default: 0.65 },
+  fall_max_transition_sec: { type: Number, min: 0, default: 2 },
+  fall_confirmation_sec: { type: Number, min: 0, default: 2 },
+  fall_recovery_sec: { type: Number, min: 0, default: 2 },
+  fall_min_descent_ratio: { type: Number, min: 0, max: 1, default: 0.25 },
+  fall_min_horizontal_bbox_ratio: { type: Number, min: 0, default: 0.95 },
+  fall_min_torso_angle_deg: { type: Number, min: 0, max: 180, default: 55 },
+  fall_min_person_px_height: { type: Number, min: 0, default: 80 },
+  trigger_notification: { type: Boolean, default: false },
+  zone_name: { type: String, default: "Full Frame" },
+  imageRequired: {
+    type: Boolean,
+    default: false,
+  },
+  videoLinkRequirement: {
+    type: Boolean,
+    default: false,
+  },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "high",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  videoResolution: [Number],
+  referencePoints: Object,
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+
+const PersonFallSickDetectionSetting = DetectionSetting.discriminator(
+  "personFallSickDetectionSettings",
+  new mongoose.Schema({ settings: PersonFallSickDetectionSchema }),
 );
 
 const WeaponDetectionSchema = new mongoose.Schema({
@@ -1302,6 +1351,7 @@ export {
   UnAuthorisedAccessSetting,
   LineCrossingSetting,
   FireSmokeDetectionSetting,
+  PersonFallSickDetectionSetting,
   WeaponDetectionSetting,
   UnattendedBaggageDetectionSetting,
   CrowdDetectionSetting,

@@ -4799,6 +4799,34 @@ export const waterSpillageDetectionTemplate = (
     timezone,
   );
 
+export const fireSmokeDetectionTemplate = (
+  incidentData,
+  nvrData,
+  channelData,
+  timezone,
+) =>
+  industrialEquipmentTemplate(
+    "Fire & Smoke Detection",
+    incidentData,
+    nvrData,
+    channelData,
+    timezone,
+  );
+
+export const personFallSickDetectionTemplate = (
+  incidentData,
+  nvrData,
+  channelData,
+  timezone,
+) =>
+  industrialEquipmentTemplate(
+    "Person Fall/Sick Detection",
+    incidentData,
+    nvrData,
+    channelData,
+    timezone,
+  );
+
 
   export let vehicleTypeDetectionTemplate = (incidentData, nvrData, channelData, timezone) => {
   const {

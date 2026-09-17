@@ -318,7 +318,7 @@ class DetectionSettingsController {
             description: 'Type of detection setting (e.g., countPersonsSettings, motionDetectionSettings, genericObjectDetectionSettings)',
             required: false,
             type: 'string',
-            enum: ['countPersonsSettings', 'motionDetectionSettings', 'genericObjectDetectionSettings', 'countVehiclesSettings', 'loiteringWithoutAuthSettings', 'loiteringWithAuthSettings', 'unauthorizedAccessSettings', 'lineCrossingSettings', 'fireSmokeDetectionSettings', 'weaponDetectionSettings', 'unattendedBaggageDetectionSettings', 'conveyorDetectionSettings', 'crusherDetectionSettings'],
+            enum: ['countPersonsSettings', 'motionDetectionSettings', 'genericObjectDetectionSettings', 'countVehiclesSettings', 'loiteringWithoutAuthSettings', 'loiteringWithAuthSettings', 'unauthorizedAccessSettings', 'lineCrossingSettings', 'fireSmokeDetectionSettings', 'personFallSickDetectionSettings', 'weaponDetectionSettings', 'unattendedBaggageDetectionSettings', 'conveyorDetectionSettings', 'crusherDetectionSettings'],
             example: 'motionDetectionSettings'
         }
         #swagger.parameters['skip'] = {

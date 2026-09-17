@@ -20,7 +20,11 @@ const { CylinderDetectionSetting } = await import(
 const { default: IncidentsService } = await import(
   "../../../core/v2/incidents/incidents.service.js"
 );
-const { CylinderDetectionIncident } = await import(
+const {
+  CylinderDetectionIncident,
+  FireSmokeDetectionIncident,
+  PersonFallSickDetectionIncident,
+} = await import(
   "../../../core/v2/incidents/incidents.model.js"
 );
 const { triggerAlertOnIncident } = await import(
@@ -234,5 +238,47 @@ describe("v2 cylinderDetection incidents", () => {
         stackHeight: 2.5,
       }),
     );
+  });
+});
+
+describe("v2 fireSmokeDetection logs", () => {
+  it("returns only the authenticated user's fire and smoke incidents", async () => {
+    const { nvr, channel } = await makeNvrAndChannel();
+    await FireSmokeDetectionIncident.create({
+      userId: admin.user_id,
+      nvrId: nvr._id,
+      channelId: channel._id,
+      incidentName: "Smoke detected",
+      timeOfIncident: new Date(),
+      severity: "high",
+    });
+
+    const { req, res, next } = serviceCtx({ user_id: admin.user_id, query: {} });
+    await IncidentsService.getFireSmokeDetectionLogs(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.totalCount).toBe(1);
+    expect(payload(res).data.data[0].incidentType).toBe("fireSmokeDetection");
+  });
+});
+
+describe("v2 personFallSickDetection logs", () => {
+  it("returns only the authenticated user's person fall/sick incidents", async () => {
+    const { nvr, channel } = await makeNvrAndChannel();
+    await PersonFallSickDetectionIncident.create({
+      userId: admin.user_id,
+      nvrId: nvr._id,
+      channelId: channel._id,
+      incidentName: "Person fall detected",
+      timeOfIncident: new Date(),
+      severity: "high",
+    });
+
+    const { req, res, next } = serviceCtx({ user_id: admin.user_id, query: {} });
+    await IncidentsService.getPersonFallSickDetectionLogs(req, res, next);
+
+    expect(res.statusCode).toBe(200);
+    expect(payload(res).data.totalCount).toBe(1);
+    expect(payload(res).data.data[0].incidentType).toBe("personFallSickDetection");
   });
 });

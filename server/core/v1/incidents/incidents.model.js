@@ -199,6 +199,28 @@ const LineCrossingAuthAuthSchema = new Schema({
 
 const LineCrossingAuthIncident = Incident.discriminator('lineCrossing', LineCrossingAuthAuthSchema);
 
+const FireSmokeDetectionSchema = new Schema({
+  triggerNotification: { type: Boolean, default: true },
+  count: { type: Number, default: 0, min: 0 },
+  fireCount: { type: Number, default: 0, min: 0 },
+  smokeCount: { type: Number, default: 0, min: 0 },
+});
+const FireSmokeDetectionIncident = Incident.discriminator(
+  'fireSmokeDetection',
+  FireSmokeDetectionSchema,
+);
+
+const PersonFallSickDetectionSchema = new Schema({
+  triggerNotification: { type: Boolean, default: true },
+  count: { type: Number, default: 0, min: 0 },
+  isFallDetected: { type: Boolean, default: false },
+  evidenceScore: { type: Number, default: null, min: 0, max: 1 },
+});
+const PersonFallSickDetectionIncident = Incident.discriminator(
+  'personFallSickDetection',
+  PersonFallSickDetectionSchema,
+);
+
 // Cashier Theft Detection
 const croudIncidentSchema = new Schema({
   croudCount: {type:Number},
@@ -598,6 +620,8 @@ export  {
   LoiteringWithoutAuthIncident,
   UnauthorizedAccessIncident,
   LineCrossingAuthIncident,
+  FireSmokeDetectionIncident,
+  PersonFallSickDetectionIncident,
   CroudIncident,
   SafetyHelmetIncident,
   DoorStatusIncident,

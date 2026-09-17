@@ -165,7 +165,7 @@ class NVRController {
             description: 'Type of detection setting (e.g., countPersonsSettings, motionDetectionSettings, genericObjectDetectionSettings)',
             required: false,
             type: 'string',
-            enum: ['countPersonsSettings', 'motionDetectionSettings', 'genericObjectDetectionSettings', 'countVehiclesSettings', 'loiteringWithoutAuthSettings', 'loiteringWithAuthSettings', 'unauthorizedAccessSettings', 'lineCrossingSettings', 'fireSmokeDetectionSettings', 'weaponDetectionSettings', 'unattendedBaggageDetectionSettings'],
+            enum: ['countPersonsSettings', 'motionDetectionSettings', 'genericObjectDetectionSettings', 'countVehiclesSettings', 'loiteringWithoutAuthSettings', 'loiteringWithAuthSettings', 'unauthorizedAccessSettings', 'lineCrossingSettings', 'fireSmokeDetectionSettings', 'personFallSickDetectionSettings', 'weaponDetectionSettings', 'unattendedBaggageDetectionSettings'],
             example: 'motionDetectionSettings'
             }
          #swagger.responses[200] = {
