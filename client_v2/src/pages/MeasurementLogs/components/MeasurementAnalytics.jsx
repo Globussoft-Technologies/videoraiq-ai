@@ -38,7 +38,7 @@ const InfoHint = ({ title, lines = [] }) => {
       onMouseLeave={() => setOpen(false)}
       onFocus={() => setOpen(true)}
       onBlur={() => setOpen(false)}
-      className="inline-flex items-center justify-center w-[15px] h-[15px] rounded-full text-[var(--tx3)] hover:text-[var(--tx2)] cursor-help shrink-0 outline-none"
+      className="inline-flex items-center justify-center w-[15px] h-[15px] rounded-full text-[var(--tx3)] hover:text-[var(--tx2)] shrink-0 outline-none"
       aria-label={`About ${title}`}
     >
       <Info size={13} strokeWidth={2} />
@@ -52,7 +52,7 @@ const InfoHint = ({ title, lines = [] }) => {
             <div className="text-[10.5px] font-semibold text-[var(--tx)]">{title}</div>
             <div className="mt-[5px] flex flex-col gap-[4px]">
               {lines.map((l, i) => (
-                <div key={i} className="text-[10px] text-[var(--tx3)] leading-[1.45]">
+                <div key={i} className="text-[10px] text-[var(--tx)] leading-[1.45]">
                   {l}
                 </div>
               ))}
@@ -102,14 +102,14 @@ const SkuRow = ({ s }) => (
       </span>
       <span className="text-[var(--tx3)]">→</span>
       <span
-        className="text-[var(--tx3)] cursor-help"
+        className="text-[var(--tx3)] "
         title={`Average size the camera measured for ${s.name} (L × W × H, inches). Compare against the label to see which axis drifts.`}
       >
         measured <span className="text-[var(--tx2)]">{s.measured || '—'}</span>
       </span>
     </div>
     <div
-      className="h-[6px] rounded-[3px] bg-[var(--track)] overflow-hidden cursor-help"
+      className="h-[6px] rounded-[3px] bg-[var(--track)] overflow-hidden"
       title={`${s.rate}% mismatch — ${
         s.rate === 0 ? 'all units match the label' : s.rate >= 30 ? 'high, needs attention' : 'some drift'
       }.`}

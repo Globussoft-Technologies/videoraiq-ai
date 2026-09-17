@@ -23,12 +23,10 @@ const confMeta = (c) => {
   return { color: 'var(--crit)', label: c.toFixed(2) };
 };
 
-// MATCH = how well the measured size matches the label, 0–100%.
-//   100%  → measured lands exactly on the label
-//    50%  → worst axis is half its tolerance off
-//     0%  → worst axis is at or beyond tolerance  (→ Mismatch)
-// It's the worst axis that counts: matchPct = 100 − devFrac × 100, floored at 0.
+// The backend averages the length, width and height scores. devFrac remains a
+// fallback for compatibility while frontend and backend versions roll out.
 const matchPctOf = (r) => {
+  if (Number.isFinite(r.matchPct)) return Math.max(0, Math.min(100, Math.round(r.matchPct)));
   if (!Number.isFinite(r.devFrac)) return null;
   return Math.max(0, Math.round(100 - r.devFrac * 100));
 };
@@ -65,9 +63,9 @@ const matchColor = (pct) =>
 
 // What the MATCH %, bar length and colour mean — shown on hovering the bar.
 const MATCH_LEGEND = [
-  { when: 'measured ≈ label', label: '90–100% match', dot: 'var(--ok)', bar: 'green, near-full bar' },
-  { when: 'half the tolerance off', label: '~50% match', dot: 'var(--warn)', bar: 'amber, half bar' },
-  { when: 'at / past tolerance', label: '0% match', dot: 'var(--crit)', bar: 'red, empty bar → Mismatch' },
+  { when: 'all axes close', label: '70–100% match', dot: 'var(--ok)', bar: 'green bar' },
+  { when: 'partial agreement', label: '30–69% match', dot: 'var(--warn)', bar: 'amber bar' },
+  { when: 'little agreement', label: '0–29% match', dot: 'var(--crit)', bar: 'red bar' },
   { when: 'QR unread', label: 'QR unread', dot: 'var(--tx3)', bar: 'grey, empty bar' },
 ];
 
@@ -82,7 +80,7 @@ const MatchLegendPopover = ({ anchor }) => {
     >
       <div className="text-[10.5px] font-semibold text-[var(--tx)]">Match to label</div>
       <div className="text-[9.5px] text-[var(--tx3)] mt-[2px] mb-[8px] leading-[1.4]">
-        100% = measured lands on the label · 0% = worst axis is at or beyond its tolerance
+        Average of length, width and height scores · Pass still requires every axis within tolerance
       </div>
       {MATCH_LEGEND.map((m) => (
         <div key={m.when} className="flex items-center gap-[7px] py-[3px]">
@@ -111,7 +109,7 @@ const MatchCell = ({ r }) => {
   return (
     <span className="flex items-center gap-[8px] min-w-0">
       <span
-        className="w-[70px] shrink-0 h-[6px] rounded-[3px] bg-[var(--track)] overflow-hidden block cursor-help"
+        className="w-[70px] shrink-0 h-[6px] rounded-[3px] bg-[var(--track)] overflow-hidden block"
         onMouseEnter={(e) => setAnchor(e.currentTarget.getBoundingClientRect())}
         onMouseLeave={() => setAnchor(null)}
       >

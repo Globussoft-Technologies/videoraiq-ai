@@ -23,9 +23,10 @@ const HEADERS = [
   'Confidence', 'Match %', 'Station', 'When', 'Result', 'Snapshot', 'Measurement Image',
 ];
 
-// The MATCH column on screen shows a match score (100 = on the label, 0 = at or
-// past tolerance). devFrac is the worst axis as a fraction of its tolerance.
+// Prefer the backend's average per-axis score. devFrac remains a compatibility
+// fallback while frontend and backend versions roll out.
 const matchPct = (r) => {
+  if (Number.isFinite(r.matchPct)) return `${Math.max(0, Math.min(100, Math.round(r.matchPct)))}%`;
   if (!Number.isFinite(r.devFrac)) return r.devPct === 'QR unread' ? 'QR unread' : '—';
   return `${Math.max(0, Math.round(100 - r.devFrac * 100))}%`;
 };

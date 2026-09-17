@@ -202,10 +202,12 @@ const ClientConfig = () => {
     if (!camerasTabDirty || savingCamerasRef.current) return
     savingCamerasRef.current = true
     setSavingCameras(true)
+    let pendingToggle = null
     try {
       // One PATCH per changed toggle (endpoint toggles a single detection/camera).
       let lastRes
       for (const t of dirtyCameraToggles) {
+        pendingToggle = t
         lastRes = await updateCameraDetection(adminId, t.cameraId, {
           settingType: t.settingType,
           enabled: t.enabled,
@@ -217,6 +219,27 @@ const ClientConfig = () => {
         Object.fromEntries(cameras.map((c) => [c.cameraId, { ...(c.detections || {}) }]))
       )
     } catch (err) {
+      // The pill is highlighted optimistically. If the server rejects this
+      // exact toggle (for example, the camera allocation is already full),
+      // restore only that pill to its previously persisted value.
+      if (pendingToggle) {
+        const { cameraId, settingType, enabled } = pendingToggle
+        const persistedValue = camerasBaseline[cameraId]?.[settingType] === true
+        setCameras((prev) =>
+          prev.map((camera) => {
+            if (camera.cameraId !== cameraId || camera.detections?.[settingType] !== enabled) {
+              return camera
+            }
+            return {
+              ...camera,
+              detections: {
+                ...camera.detections,
+                [settingType]: persistedValue,
+              },
+            }
+          })
+        )
+      }
       notifyApiError(err, 'Failed to update camera detections')
     } finally {
       savingCamerasRef.current = false
