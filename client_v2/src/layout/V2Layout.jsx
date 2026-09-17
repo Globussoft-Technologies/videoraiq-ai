@@ -10,11 +10,13 @@ import { TourProvider, useTour } from '../context/TourContext';
 import CameraLimitLock from '../components/CameraLimitLock';
 import { VIEW_META } from './nav.config';
 import { getLocations, getChannels } from '../helpers/monitoring';
+import { getNvrs } from '../helpers/configure';
 import { getCriticalityStats } from '../helpers/dashboard';
 import { cameraStatusId } from '../helpers/cameraStatus';
 import { useApi } from '../hooks/useApi';
 import { useCameraStatusStream } from '../hooks/useCameraStatusStream';
 import { timeAgo } from '../lib/format';
+import { shouldHidePlayback } from '../lib/nvrCapabilities';
 import LiveDemo from '../pages/LiveDemo/LiveDemo';
 
 const SEV_COLOR = { high: 'var(--crit)', critical: 'var(--crit)', moderate: 'var(--warn)', medium: 'var(--warn)', low: 'var(--tx3)' };
@@ -131,6 +133,12 @@ function Shell() {
   // Sites for the switcher (locations master data).
   const { data: locations, refetch: refreshSites } = useApi(() => getLocations(0, 100), []);
   const sites = Array.isArray(locations) ? locations : [];
+
+  // Direct-mode NVRs do not support the recorder-backed Playback page. The
+  // helper fails open while this request is loading or if it fails, and mixed
+  // accounts retain Playback for their device-mode NVRs.
+  const { data: nvrInventory } = useApi(() => getNvrs(0, 100), []);
+  const hidePlayback = shouldHidePlayback(nvrInventory?.nvrs);
 
   // Notifications + alerts badge from the recent alert feed.
   const { data: crit } = useApi(() => getCriticalityStats({}, { skip: 0, limit: 8 }), [], { pollMs: 60000 });
@@ -272,6 +280,7 @@ function Shell() {
         mobileOpen={navOpen}
         onMobileClose={() => setNavOpen(false)}
         camHealth={camHealth}
+        hidePlayback={hidePlayback}
       />
       <CameraLimitLock />
       {/* Drawer backdrop (mobile only) */}

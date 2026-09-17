@@ -53,7 +53,7 @@ const STORAGE_KEY = 'vq-sidebar-collapsed';
 
 const LOGS_COLLAPSE_KEY = 'vq-sidebar-logs-collapsed';
 
-export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = false, onMobileClose, camHealth = null }) {
+export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = false, onMobileClose, camHealth = null, hidePlayback = false }) {
   const { user } = useAuth();
   const { active: tourActive } = useTour();
   const { permissions } = usePermissions();
@@ -289,7 +289,11 @@ export default function Sidebar({ badges = {}, isMobile = false, mobileOpen = fa
           .map((group) => ({
             ...group,
             items: group.items.filter(
-              (item) => isItemVisible(item, permissions) && isItemLogEnabled(item, logsConfig),
+              (item) => (
+                !(hidePlayback && item.key === 'camera')
+                && isItemVisible(item, permissions)
+                && isItemLogEnabled(item, logsConfig)
+              ),
             ),
           }))
           // After the permission filter, so a hidden log never leaves a gap.

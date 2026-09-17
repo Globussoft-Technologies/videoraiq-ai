@@ -60,7 +60,8 @@ const fetchAllForExport = async (config, params) => {
 // Column descriptors shared by the Excel + PDF exporters. The Status column is
 // only present for log types that carry a current-status value.
 const buildExportColumns = (config) => {
-  const cols = [{ key: 'incidentName', label: 'Incident Name' }];
+  const cols = [];
+  if (config.showIncidentName !== false) cols.push({ key: 'incidentName', label: 'Incident Name' });
   if (config.showStatus) cols.push({ key: 'currentStatus', label: 'Current Status' });
   cols.push(
     { key: 'nvrName', label: 'NVR Name' },
@@ -71,8 +72,7 @@ const buildExportColumns = (config) => {
   if (config.showFireSmokeFields) {
     cols.push(
       { key: 'fireCount', label: 'Fire Objects' },
-      { key: 'smokeCount', label: 'Smoke Objects' },
-      { key: 'triggerNotification', label: 'Trigger Notification' }
+      { key: 'smokeCount', label: 'Smoke Objects' }
     );
   }
 

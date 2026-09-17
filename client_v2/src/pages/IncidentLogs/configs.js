@@ -122,9 +122,11 @@ export const FIRE_SMOKE_CONFIG = {
   storagePrefix: 'fire_smoke',
   permissionKey: 'fireSmokeLogs',
   accessDenied: "You don't have permission to view Fire & Smoke Logs.",
+  showIncidentName: false,
   showStatus: false,
   sortable: true,
   showFireSmokeFields: true,
+  gridVariant: 'details',
   datePickerVariant: 'preset',
 };
 

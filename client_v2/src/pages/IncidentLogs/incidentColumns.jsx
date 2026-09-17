@@ -1,6 +1,6 @@
 import React from 'react';
 import moment from 'moment-timezone';
-import { AlertTriangle, Clock, Image, Server, ShieldAlert, Video } from 'lucide-react';
+import { AlertTriangle, Clock, Cloud, Flame, Image, Server, ShieldAlert, Video } from 'lucide-react';
 import { styles } from './incidentState';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 
@@ -171,15 +171,6 @@ export const buildColumns = (config, { onSort, onPreview }) => {
         header: 'Smoke Objects',
         cell: ({ row }) => <span className={styles.text}>{row.original.smokeCount ?? '--'}</span>,
       },
-      {
-        accessorKey: 'triggerNotification',
-        header: 'Trigger Notification',
-        cell: ({ row }) => (
-          <span className="text-xs font-medium px-2 py-0.5 rounded bg-[var(--bg2)] text-[var(--tx2)]">
-            {row.original.triggerNotification === true || row.original.triggerNotification === 'true' ? 'Yes' : 'No'}
-          </span>
-        ),
-      },
     );
   }
 
@@ -290,6 +281,12 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
             valueClassName="capitalize"
             valueStyle={{ color: severityBg(row.severity) }}
           />
+        )}
+        {config.showFireSmokeFields && (
+          <>
+            <IncidentCardRow icon={Flame} label="Fire Objects" value={row.fireCount ?? '--'} />
+            <IncidentCardRow icon={Cloud} label="Smoke Objects" value={row.smokeCount ?? '--'} />
+          </>
         )}
         <IncidentCardRow icon={Server} label="NVR" value={row.nvrName} />
         <IncidentCardRow icon={Video} label="Camera" value={row.channelName} />
