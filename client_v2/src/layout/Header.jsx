@@ -22,6 +22,57 @@ const PAGE_INDEX = NAV_GROUPS.filter((g) => !g.hidden).flatMap((g) =>
   }))
 );
 
+const DETECTION_SEARCH_INDEX = [
+  {
+    kind: 'Detection',
+    kindColor: '#ff5b57',
+    label: 'Fire & Smoke Detection',
+    sub: 'Safety & PPE • Full-frame hazard detection',
+    keywords: 'fire smoke flame flames hazard burn flare early warning full frame',
+    to: '/detection-settings?detection=fireSmokeDetectionSettings',
+  },
+  {
+    kind: 'Detection',
+    kindColor: '#ec4899',
+    label: 'Person Fall/Sick Detection',
+    sub: 'Safety & PPE • Full-frame postural and descent analysis',
+    keywords: 'person fall sick fall/sick medical collapse slip trip posture faint health full frame',
+    to: '/detection-settings?detection=personFallSickDetectionSettings',
+  },
+  {
+    kind: 'Detection',
+    kindColor: 'var(--crit)',
+    label: 'Intrusion Detection',
+    sub: 'Perimeter & Security • Zone intrusion monitoring',
+    keywords: 'intrusion perimeter zone security',
+    to: '/detection-settings?detection=zoneIntrusionSettings',
+  },
+  {
+    kind: 'Detection',
+    kindColor: 'var(--crit)',
+    label: 'Line Crossing Detection',
+    sub: 'Perimeter & Security • Virtual tripwire tracking',
+    keywords: 'line crossing boundary perimeter tripwire',
+    to: '/detection-settings?detection=lineCrossingSettings',
+  },
+  {
+    kind: 'Detection',
+    kindColor: 'var(--warn)',
+    label: 'Personal Protective Equipment Detection',
+    sub: 'Safety & PPE • Helmet, vest, and PPE compliance',
+    keywords: 'ppe personal protective equipment helmet vest safety',
+    to: '/detection-settings?detection=personalProtectiveEquipmentSettings',
+  },
+  {
+    kind: 'Detection',
+    kindColor: 'var(--violet)',
+    label: 'ANPR Detection',
+    sub: 'Vehicles & Traffic • Automatic number plate recognition',
+    keywords: 'anpr license number plate vehicle car',
+    to: '/detection-settings?detection=vehicleDetectionSettings',
+  },
+];
+
 const iconBtn = {
   width: 36,
   height: 36,
@@ -201,6 +252,15 @@ function Header({ title, sub, sites = [], siteFilter = 'All Sites', onSiteChange
     const out = [];
     for (const p of PAGE_INDEX) {
       if (p.label.toLowerCase().includes(q) || p.sub.toLowerCase().includes(q)) out.push(p);
+    }
+    for (const d of DETECTION_SEARCH_INDEX) {
+      if (
+        d.label.toLowerCase().includes(q) ||
+        d.sub.toLowerCase().includes(q) ||
+        d.keywords.toLowerCase().includes(q)
+      ) {
+        out.push(d);
+      }
     }
     cameras.forEach((c, idx) => {
       // Positional CAM-00x label — same scheme the Live Wall grid uses (CameraGrid.jsx).

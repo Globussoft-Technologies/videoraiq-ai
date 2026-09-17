@@ -10,7 +10,24 @@ export const DETECTION_FIELD_KEYS = [
   'vehicleTypeDetectionSettings', 'loiteringDetectionSettings', 'vehicleObstructionSettings',
   'tableOccupancyDetectionSettings', 'foodServicePPEDetectionSettings', 'mobilePhoneDetectionSettings',
   'carModelDetectionSettings', 'faceAuthenticationSettings', 'vehicleCheckInOutSettings',
+  'personFallSickDetectionSettings',
 ];
+
+export const FIRE_SMOKE_SETTING_TYPE = 'fireSmokeDetectionSettings';
+export const PERSON_FALL_SICK_SETTING_TYPE = 'personFallSickDetectionSettings';
+
+export function isSpecialDetectionType(value) {
+  const normalized = String(value || '');
+  return (
+    normalized === 'fireSmokeDetectionSettings' ||
+    normalized === 'personFallSickDetectionSettings'
+  );
+}
+
+export const FULL_FRAME_DETECTION_TYPES = new Set([]);
+
+export const isFullFrameDetectionType = (settingType) =>
+  FULL_FRAME_DETECTION_TYPES.has(settingType);
 
 // Vehicle Check-In / Check-Out draws polygon zones (each with just a name +
 // entry/exit mode, like Line Crossing) plus one crossing line + inside
@@ -55,6 +72,8 @@ export const ZONE_EXTRA_FIELDS = {
   deskAbsenceSettings: ['threshold', 'capacity'],
   crowdDetectionSettings: ['capacity'],
   carModelDetectionSettings: ['company'],
+  fireSmokeDetectionSettings: ['threshold'],
+  personFallSickDetectionSettings: ['threshold'],
 };
 
 export const PRIORITY_OPTIONS = [

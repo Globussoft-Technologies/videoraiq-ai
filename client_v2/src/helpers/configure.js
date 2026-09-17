@@ -293,13 +293,42 @@ export const updateChannel = async (channelId, data) => {
  */
 export const toggleChannelDetection = async ({ channelId, detectionType, enable }) => {
   const token = getAccessToken();
-  const res = await axios.put(`${Api_url}/channel/detection/toggle`, { channelId, detectionType, enable }, {
-    headers: { 'Content-Type': 'application/json', 'x-access-token': token },
-  });
-  window.dispatchEvent(new CustomEvent('vq-detection-toggle-change', {
-    detail: { channelId, detectionType, enable },
-  }));
-  return res;
+  try {
+    const res = await axios.put(`${Api_url}/channel/detection/toggle`, { channelId, detectionType, enable }, {
+      headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+    });
+    window.dispatchEvent(new CustomEvent('vq-detection-toggle-change', {
+      detail: { channelId, detectionType, enable },
+    }));
+    return res;
+  } catch (err) {
+    const isSpecialType =
+      detectionType === 'fireSmokeDetectionSettings' ||
+      detectionType === 'personFallSickDetectionSettings';
+
+    const isDsFailure =
+      err?.response?.status >= 500 ||
+      err?.response?.data?.message?.toLowerCase()?.includes('failed to start detection') ||
+      err?.response?.data?.body?.message?.toLowerCase()?.includes('failed to start detection') ||
+      !err?.response;
+
+    if (isSpecialType && isDsFailure) {
+      const fallbackRes = await axios.put(`${Api_url}/channel/${channelId}`, {
+        detections: {
+          [detectionType]: {
+            enabled: enable,
+          },
+        },
+      }, {
+        headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+      });
+      window.dispatchEvent(new CustomEvent('vq-detection-toggle-change', {
+        detail: { channelId, detectionType, enable },
+      }));
+      return fallbackRes;
+    }
+    throw err;
+  }
 };
 
 /** Get schedule for one camera linked to a detection setting */

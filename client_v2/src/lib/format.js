@@ -56,9 +56,17 @@ export function severity(sev) {
   return { short: (sev || 'INFO').toUpperCase(), color: 'var(--blue)' };
 }
 
+const CUSTOM_DETECTION_LABELS = {
+  fireSmokeDetection: 'Fire & Smoke Detection',
+  fireSmokeDetectionSettings: 'Fire & Smoke Detection',
+  personFallSickDetection: 'Person Fall/Sick Detection',
+  personFallSickDetectionSettings: 'Person Fall/Sick Detection',
+};
+
 /** Human display name for an incident/detection type. */
 export function detectionLabel(type) {
   if (!type) return 'Detection';
+  if (CUSTOM_DETECTION_LABELS[type]) return CUSTOM_DETECTION_LABELS[type];
   return String(type)
     .replace(/([A-Z])/g, ' $1')
     .replace(/^./, (c) => c.toUpperCase())

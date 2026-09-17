@@ -1,7 +1,7 @@
 import {
   Activity, AlertCircle, Armchair, Box, Briefcase, Calendar, CalendarCheck,
   Car, CarFront, CircleOff, Clock, Clock3, CopyPlus, DoorOpen, Factory, Flame,
-  GitCommitHorizontal, Globe, Hammer, HardHat, Lightbulb, ListRestart, Package, Plus,
+  GitCommitHorizontal, Globe, Hammer, HardHat, HeartPulse, Lightbulb, ListRestart, Package, Plus,
   ScanFace, ScanLine, ShieldAlert, ShieldOff, Smartphone, Table2, Trash2, UserCheck,
   Users, UtensilsCrossed, Waves, X, ChevronDown,
 } from 'lucide-react';
@@ -40,6 +40,8 @@ const DETECTION_ICONS = {
   baggageDetectionSettings: Briefcase,
   fireSmokeDetectionSettings: Flame,
   fireDetectionSettings: Flame,
+  personFallSickDetectionSettings: HeartPulse,
+  personFallSickDetection: HeartPulse,
   weaponDetectionSettings: ShieldAlert,
   lightDetectionSettings: Lightbulb,
   personalProtectiveEquipmentSettings: HardHat,

@@ -31,6 +31,10 @@ const ENGINE_META = {
   vehicle: { short: 'VEH', name: 'Vehicle Detection' },
   persondetection: { short: 'PERSON', name: 'Person Detection' },
   person: { short: 'PERSON', name: 'Person Detection' },
+  personfallsick: { short: 'FALL', name: 'Person Fall/Sick Detection' },
+  personfallsickdetection: { short: 'FALL', name: 'Person Fall/Sick Detection' },
+  fallsick: { short: 'FALL', name: 'Person Fall/Sick Detection' },
+  fall: { short: 'FALL', name: 'Person Fall/Sick Detection' },
 };
 
 /** Human-readable short/name for a raw incidentType/detection-type string. */

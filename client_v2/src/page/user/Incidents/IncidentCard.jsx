@@ -586,6 +586,22 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
                     <span style={{ fontWeight: 700, color: '#169656' }}>Sleeping</span>
                   </span>
                 )}
+                {(item.incidentType === 'fireSmokeDetection' || item.fireCount != null || item.smokeCount != null) && (item.fireCount != null || item.smokeCount != null) && (
+                  <span style={{ flexShrink: 0, fontSize: 11, color: 'var(--tx2)' }}>
+                    {item.fireCount != null && <span style={{ color: '#ff5b57', fontWeight: 600 }}>Fire: {item.fireCount} </span>}
+                    {item.smokeCount != null && <span style={{ color: 'var(--tx3)', fontWeight: 600 }}>Smoke: {item.smokeCount}</span>}
+                  </span>
+                )}
+                {(item.incidentType === 'personFallSickDetection' || item.isFallDetected != null) && (
+                  <span style={{ flexShrink: 0, fontSize: 11 }}>
+                    {item.isFallDetected && <span style={{ color: 'var(--crit)', fontWeight: 700 }}>Fall Detected</span>}
+                    {item.evidenceScore != null && (
+                      <span style={{ color: 'var(--tx3)', marginLeft: 5 }}>
+                        ({Number(item.evidenceScore) <= 1 ? Math.round(Number(item.evidenceScore) * 100) + '%' : item.evidenceScore + '%'})
+                      </span>
+                    )}
+                  </span>
+                )}
               </div>
             </>
           )}

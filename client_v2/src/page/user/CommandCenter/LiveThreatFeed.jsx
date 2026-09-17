@@ -14,6 +14,7 @@ const TYPE_META = {
   motionDetection: { label: 'MOTN', color: '#f59e0b' },
   crowdDetection: { label: 'CRWD', color: '#f59e0b' },
   genericObjectDetection: { label: 'OBJ', color: '#f59e0b' },
+  personFallSickDetection: { label: 'FALL', color: '#ff5b57' },
 };
 
 function typeMeta(alert) {

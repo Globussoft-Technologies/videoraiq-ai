@@ -27,6 +27,8 @@ export const SEVERITY_BY_KEY = Object.fromEntries(SEVERITIES.map((s) => [s.key, 
 // instance/cache being updated at exactly the same time.
 const DETECTION_LABEL_OVERRIDES = {
   cylinderDetectionSettings: 'Cylinder Detection',
+  fireSmokeDetectionSettings: 'Fire & Smoke Detection',
+  personFallSickDetectionSettings: 'Person Fall/Sick Detection',
 };
 
 export const INCIDENT_STATUS = {
@@ -70,6 +72,8 @@ export const DETECTION_THRESHOLDS = {
   vehicleNumberPlateSettings: ['plate_confidence', 'ocr_min_confidence'],
   numberPlateDetectionSettings: ['plate_confidence', 'ocr_min_confidence'],
   mobilePhoneDetectionSettings: ['mobile_phone_confidence'],
+  fireSmokeDetectionSettings: ['fire_confidence', 'smoke_confidence', 'fire_smoke_iou'],
+  personFallSickDetectionSettings: ['person_threshold', 'fall_min_descent_ratio'],
   conveyorDetectionSettings: [],
   crusherDetectionSettings: [],
   cylinderDetectionSettings: [],
@@ -78,7 +82,7 @@ export const DETECTION_THRESHOLDS = {
 
 /** Human-friendly label for a threshold key; falls back to a title-cased key. */
 export const THRESHOLD_LABELS = {
-  person_threshold: 'Person',
+  person_threshold: 'Person Confidence',
   vest_threshold: 'Vest',
   helmet_threshold: 'Helmet',
   emp_floor: 'Employee',
@@ -89,6 +93,17 @@ export const THRESHOLD_LABELS = {
   plate_confidence: 'Plate Confidence',
   ocr_min_confidence: 'OCR Min Confidence',
   mobile_phone_confidence: 'Mobile Phone Confidence',
+  fire_confidence: 'Fire Confidence',
+  smoke_confidence: 'Smoke Confidence',
+  fire_smoke_iou: 'Fire/Smoke IoU',
+  fire_smoke_cooldown_sec: 'Alert Cooldown',
+  fall_min_descent_ratio: 'Min Descent Ratio',
+  fall_min_horizontal_bbox_ratio: 'Horizontal BBox Ratio',
+  fall_min_torso_angle_deg: 'Min Torso Angle',
+  fall_min_person_px_height: 'Min Person Height',
+  fall_max_transition_sec: 'Max Transition Window',
+  fall_confirmation_sec: 'Fall Confirmation Time',
+  fall_recovery_sec: 'Recovery Time Window',
 };
 
 export function thresholdLabel(key) {
@@ -98,7 +113,7 @@ export function thresholdLabel(key) {
 }
 
 const CATEGORY_MATCHERS = [
-  ['safety', ['ppe', 'protective', 'safety', 'helmet', 'vest', 'fire', 'smoke', 'weapon']],
+  ['safety', ['ppe', 'protective', 'safety', 'helmet', 'vest', 'fire', 'smoke', 'weapon', 'fall', 'sick']],
   ['vehicles', ['vehicle', 'traffic', 'anpr', 'plate', 'car']],
   ['industrial', ['conveyor', 'crusher', 'cylinder', 'spillage', 'spill', 'light']],
   ['perimeter', ['intrusion', 'unauthorized', 'access', 'line', 'crossing', 'loiter', 'bag', 'baggage']],

@@ -186,6 +186,7 @@ const IncidentLogsPage = ({ config }) => {
       const INCIDENT_URL = import.meta.env.VITE_INCIDENT_URL || '';
 
       const mapped = list.map((item) => ({
+        ...item,
         id: item._id,
         _id: item._id,
         incidentName: item.incidentName || '--',
@@ -197,6 +198,12 @@ const IncidentLogsPage = ({ config }) => {
         createdAt: item.createdAt,
         incidentImageUrl: item.Image ? `${INCIDENT_URL}${item.Image}` : null,
         severity: item.severity || '--',
+        count: item.count,
+        fireCount: item.fireCount,
+        smokeCount: item.smokeCount,
+        isFallDetected: item.isFallDetected,
+        evidenceScore: item.evidenceScore,
+        triggerNotification: item.triggerNotification,
       }));
 
       dispatch({ type: 'SET_ROWS', value: mapped });

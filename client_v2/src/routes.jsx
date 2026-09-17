@@ -42,6 +42,8 @@ import CylinderLogs from './pages/CylinderLogs/CylinderLogs';
 import LineCrossingLogs from './pages/LineCrossingLogs/LineCrossingLogs';
 import WaterSpillLogs from './pages/WaterSpillLogs/WaterSpillLogs';
 import UnauthorizedAccessLogs from './pages/UnauthorizedAccessLogs/UnauthorizedAccessLogs';
+import FireSmokeLogs from './pages/FireSmokeLogs/FireSmokeLogs';
+import PersonFallSickLogs from './pages/PersonFallSickLogs/PersonFallSickLogs';
 import ProductivityLog from './pages/ProductivityLog/ProductivityLog';
 import TrackLog from './pages/TrackLog/TrackLog';
 import VisibilityLog from './pages/VisibilityLog/VisibilityLog';
@@ -122,6 +124,8 @@ export const v2Routes = (
     <Route path="logs/line-crossing" element={guard('logs', 'lineCrossingLogs', <LineCrossingLogs />)} />
     <Route path="logs/water-spill" element={guard('logs', 'waterSpillLogs', <WaterSpillLogs />)} />
     <Route path="logs/unauthorized-access" element={guard('logs', 'unauthorizedAccessLogs', <UnauthorizedAccessLogs />)} />
+    <Route path="logs/fire-smoke" element={guard('logs', 'fireSmokeLogs', <FireSmokeLogs />)} />
+    <Route path="logs/person-fall-sick" element={guard('logs', 'personFallSickLogs', <PersonFallSickLogs />)} />
 
     {/* Configure */}
     <Route path="cameras" element={guard('NVR', undefined, <NVRCameras />)} />

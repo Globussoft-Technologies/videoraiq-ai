@@ -7,7 +7,7 @@ import { AsyncBoundary } from '../../../../components/States';
 import { useApi } from '../../../../hooks/useApi';
 import { usePermissions } from '@/context/PermissionContext';
 import MultiSelect from '../../../../components/MultiSelect';
-import { deleteDetectionSetting, getCamerasByNvr, getChannels, getDetectionSettings, getDetectionTypes, getNvrs, resetDetectionThresholds, toggleChannelDetection, updateChannel, updateDetectionSetting } from '../../../../helpers/configure';
+import { createDetectionSetting, deleteDetectionSetting, getCamerasByNvr, getChannels, getDetectionSettings, getDetectionTypes, getNvrs, resetDetectionThresholds, toggleChannelDetection, updateChannel, updateDetectionSetting } from '../../../../helpers/configure';
 import { useSocket } from '../../../../context/SocketContext';
 import { useAuth } from '../../../../context/AuthContext';
 import { fetchDetectionTypes as fetchIncidentFilterTypes, fetchIncidents, fetchIncidentStats } from '../../../../helpers/incidents';
@@ -456,9 +456,17 @@ function mergeDetectionSetting(camera, nvr, settingType, settingsResult) {
     camera,
   );
   const setting = getDetectionSetting(item);
-  if (!base) return base;
   if (!setting?._id) {
     const existingEntry = base.detections?.[settingType] || camera?.detections?.[settingType] || {};
+    if (existingEntry?.id) {
+      return {
+        ...base,
+        detections: {
+          ...(base.detections || {}),
+          [settingType]: existingEntry,
+        },
+      };
+    }
     return {
       ...base,
       detections: {
@@ -491,7 +499,7 @@ function mergeDetectionSetting(camera, nvr, settingType, settingsResult) {
       ...(base.detections || {}),
       [settingType]: {
         ...(typeof existingEntry === 'object' ? existingEntry : {}),
-        enabled: existingEnabled ?? settingEnabled ?? true,
+        enabled: typeof existingEnabled === 'boolean' ? existingEnabled : (settingEnabled ?? true),
         id: hydratedSetting,
       },
     },
@@ -576,16 +584,15 @@ export default function Detections() {
   const [showResetThresholdConfirm, setShowResetThresholdConfirm] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const detailCameraId = searchParams.get('camera');
+  const detailDetection = searchParams.get('detection');
   const [resettingSetting, setResettingSetting] = useState(false);
   const [resettingThresholds, setResettingThresholds] = useState(false);
   const [cameraTypeSaving, setCameraTypeSaving] = useState(false);
   const incidentRequestIdRef = useRef(0);
   const autoSelectFirstCameraRef = useRef(false);
   const suppressCameraParamExitRef = useRef(false);
-  // Set when the camera list is opened via an Engines-column chip: the detection
-  // that chip represents, applied to `selectedId` once `models` has loaded so
-  // the detail view opens filtered to it instead of the first detection.
-  const pendingDetectionRef = useRef('');
+  // Set when the camera list is opened via an Engines-column chip or deep-link param
+  const pendingDetectionRef = useRef(detailDetection || '');
 
   const typesApi = useApi(() => getDetectionTypes(), [], { initialData: {} });
   // Licensing headroom, so the limits are visible before one is hit rather than
@@ -657,13 +664,14 @@ export default function Detections() {
         const cameraScopedActive = isAttendanceDetection
           ? true
           : zoneCamera?._id
-          ? (cameraEnabled ?? settingEnabled ?? false)
+          ? (typeof cameraEnabled === 'boolean' ? cameraEnabled : (settingEnabled ?? false))
           : m.active;
         const apiThresholds = thresholdsFromSettings(settingType, m.thresholds, apiSettings);
         const editedThresholds = edited.thresholds || {};
         const thresholds = { ...apiThresholds, ...editedThresholds };
         const firstThreshold = Object.values(thresholds)[0];
         const scheduleMode = scheduleModeFrom(uiData.schedule);
+        const active = typeof edited.active === 'boolean' ? edited.active : cameraScopedActive;
         return {
           ...m,
           ...edited,
@@ -676,7 +684,7 @@ export default function Detections() {
           settings: { ...(m.settings || {}), ...apiSettings, ...(edited.settings || {}) },
           thresholds,
           sensitivity: edited.sensitivity ?? firstThreshold ?? m.sensitivity,
-          active: cameraScopedActive,
+          active,
           // When a schedule governs this detector, a manual toggle wins only
           // until the schedule would next have changed it. Carry the expiry
           // through so the panel can say so instead of the hold looking like
@@ -862,6 +870,13 @@ export default function Detections() {
       if (stateTab === 'active' && !m.active) return false;
       if (stateTab === 'paused' && m.active) return false;
       if (q) {
+        const detectionType = m.settingType || m.id || '';
+        const extraKeywords =
+          detectionType === 'fireSmokeDetectionSettings'
+            ? 'fire smoke flame flames hazard burn flare early warning full frame'
+            : detectionType === 'personFallSickDetectionSettings'
+            ? 'fall sick person fall medical slip trip collapse posture health distress faint full frame'
+            : '';
         const haystack = [
           m.name,
           m.subtitle,
@@ -869,6 +884,7 @@ export default function Detections() {
           m.settingType,
           m.category,
           CATEGORY_BY_KEY[m.category]?.label,
+          extraKeywords,
         ].filter(Boolean).join(' ').toLowerCase();
         const compactHaystack = compactSearchText(haystack);
         if (!haystack.includes(q) && (!compactQ || !compactHaystack.includes(compactQ))) return false;
@@ -1034,7 +1050,42 @@ export default function Detections() {
     const enable = typeof forcedEnable === 'boolean' ? forcedEnable : !model.active;
     setDetectionToggleLoading(detectionType);
     try {
+      // If turning on and camera does not have this detection setting in DB yet:
+      let existingEntry = zoneCamera?.detections?.[detectionType];
+      let hasExistingSetting = Boolean(existingEntry?.id);
+
+      if (enable && !hasExistingSetting && zoneCameraNvrId) {
+        try {
+          const list = await getCamerasByNvr(zoneCameraNvrId);
+          const fresh = (list || []).find((c) => String(c._id) === String(zoneCamera._id));
+          if (fresh?.detections?.[detectionType]?.id) {
+            existingEntry = fresh.detections[detectionType];
+            hasExistingSetting = true;
+            setZoneCamera((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                detections: {
+                  ...(prev.detections || {}),
+                  [detectionType]: existingEntry,
+                },
+              };
+            });
+          }
+        } catch {
+          // ignore background check errors
+        }
+      }
+
+      if (enable && !hasExistingSetting) {
+        toast.info('Please configure zones and rules before enabling this detection.');
+        setSelectedId(model.id);
+        setZoneSettingsOpen(true);
+        return;
+      }
+
       await toggleChannelDetection({ channelId: zoneCamera._id, detectionType, enable });
+      patch(model.id, { active: enable });
       setCameraDetectionEnabled(detectionType, enable);
       toast.success(`${model.name} ${enable ? 'enabled' : 'disabled'}.`);
       setLimitBlock(null);
@@ -1049,7 +1100,7 @@ export default function Detections() {
         setLimitBlock({ error: licenseError, model, detectionType });
         return;
       }
-      toast.error(err?.response?.data?.body?.message || 'Failed to update detection status.');
+      toast.error(err?.response?.data?.body?.message || err?.response?.data?.message || err?.message || 'Failed to update detection status.');
     } finally {
       setDetectionToggleLoading('');
     }
@@ -1760,7 +1811,7 @@ export default function Detections() {
                       textAlign: 'left',
                     }}
                   >
-                    {collapsedGroups[group.key] ? (
+                    {collapsedGroups[group.key] && !search.trim() ? (
                       <ChevronRight size={15} style={{ color: 'var(--tx3)', flex: '0 0 auto' }} />
                     ) : (
                       <ChevronDown size={15} style={{ color: 'var(--tx3)', flex: '0 0 auto' }} />
@@ -1782,7 +1833,7 @@ export default function Detections() {
                       {group.items.length}
                     </span>
                   </button>
-                  {collapsedGroups[group.key] ? (
+                  {collapsedGroups[group.key] && !search.trim() ? (
                     <div
                       style={{
                         background: 'var(--bg1)',

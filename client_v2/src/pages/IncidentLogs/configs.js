@@ -112,5 +112,32 @@ export const UNAUTHORIZED_ACCESS_CONFIG = {
   sortable: true,
   gridVariant: 'details',
   datePickerVariant: 'preset',
-  
+};
+
+export const FIRE_SMOKE_CONFIG = {
+  endpoint: '/incidents/logs/fire-smoke-detection',
+  title: 'Fire & Smoke Detection Logs',
+  fileName: 'fire_smoke_logs',
+  sheetName: 'Fire & Smoke Logs',
+  storagePrefix: 'fire_smoke',
+  permissionKey: 'fireSmokeLogs',
+  accessDenied: "You don't have permission to view Fire & Smoke Logs.",
+  showStatus: false,
+  sortable: true,
+  showFireSmokeFields: true,
+  datePickerVariant: 'preset',
+};
+
+export const PERSON_FALL_SICK_CONFIG = {
+  endpoint: '/incidents/logs/person-fall-sick-detection',
+  title: 'Person Fall/Sick Detection Logs',
+  fileName: 'person_fall_sick_logs',
+  sheetName: 'Person Fall/Sick Logs',
+  storagePrefix: 'person_fall_sick',
+  permissionKey: 'personFallSickLogs',
+  accessDenied: "You don't have permission to view Person Fall/Sick Logs.",
+  showStatus: false,
+  sortable: true,
+  showPersonFallSickFields: true,
+  datePickerVariant: 'preset',
 };

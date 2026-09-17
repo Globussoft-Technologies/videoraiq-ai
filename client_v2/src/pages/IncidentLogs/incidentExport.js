@@ -31,17 +31,30 @@ const fetchAllForExport = async (config, params) => {
 
   const INCIDENT_URL = import.meta.env.VITE_INCIDENT_URL || '';
   const list = res?.data?.body?.data?.data || [];
-  return list.map((item) => ({
-    incidentName: item.incidentName || '--',
-    currentStatus: formatStatus(item.currentStatus || '--', config),
-    nvrName: item.nvrData?.nvrName || '--',
-    channelName: item.channelData?.name || '--',
-    createdAt: item.createdAt
-      ? moment.utc(item.createdAt).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A')
-      : '--',
-    severity: item.severity || '--',
-    incidentImageUrl: item.Image ? `${INCIDENT_URL}${item.Image}` : '',
-  }));
+  return list.map((item) => {
+    let evidenceScoreStr = '--';
+    if (item.evidenceScore != null) {
+      const n = Number(item.evidenceScore);
+      evidenceScoreStr = Number.isNaN(n) ? String(item.evidenceScore) : n <= 1 ? `${Math.round(n * 100)}%` : `${Math.round(n)}%`;
+    }
+    return {
+      incidentName: item.incidentName || '--',
+      currentStatus: formatStatus(item.currentStatus || '--', config),
+      nvrName: item.nvrData?.nvrName || '--',
+      channelName: item.channelData?.name || '--',
+      createdAt: item.createdAt
+        ? moment.utc(item.createdAt).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A')
+        : '--',
+      severity: item.severity || '--',
+      incidentImageUrl: item.Image ? `${INCIDENT_URL}${item.Image}` : '',
+      fireCount: item.fireCount ?? '--',
+      smokeCount: item.smokeCount ?? '--',
+      count: item.count ?? '--',
+      isFallDetected: item.isFallDetected === true || item.isFallDetected === 'true' ? 'Yes' : 'No',
+      evidenceScore: evidenceScoreStr,
+      triggerNotification: item.triggerNotification === true || item.triggerNotification === 'true' ? 'Yes' : 'No',
+    };
+  });
 };
 
 // Column descriptors shared by the Excel + PDF exporters. The Status column is
@@ -52,9 +65,27 @@ const buildExportColumns = (config) => {
   cols.push(
     { key: 'nvrName', label: 'NVR Name' },
     { key: 'channelName', label: 'Camera Name' },
-    { key: 'severity', label: 'Severity' },
-    { key: 'createdAt', label: 'Time of Incident' }
+    { key: 'severity', label: 'Severity' }
   );
+
+  if (config.showFireSmokeFields) {
+    cols.push(
+      { key: 'fireCount', label: 'Fire Objects' },
+      { key: 'smokeCount', label: 'Smoke Objects' },
+      { key: 'triggerNotification', label: 'Trigger Notification' }
+    );
+  }
+
+  if (config.showPersonFallSickFields) {
+    cols.push(
+      { key: 'count', label: 'People Detected' },
+      { key: 'isFallDetected', label: 'Fall Detected' },
+      { key: 'evidenceScore', label: 'Evidence Score' },
+      { key: 'triggerNotification', label: 'Trigger Notification' }
+    );
+  }
+
+  cols.push({ key: 'createdAt', label: 'Time of Incident' });
   return cols;
 };
 

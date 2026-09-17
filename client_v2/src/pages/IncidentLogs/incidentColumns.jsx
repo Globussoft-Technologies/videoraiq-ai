@@ -159,6 +159,78 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     });
   }
 
+  if (config.showFireSmokeFields) {
+    cols.push(
+      {
+        accessorKey: 'fireCount',
+        header: 'Fire Objects',
+        cell: ({ row }) => <span className={styles.text}>{row.original.fireCount ?? '--'}</span>,
+      },
+      {
+        accessorKey: 'smokeCount',
+        header: 'Smoke Objects',
+        cell: ({ row }) => <span className={styles.text}>{row.original.smokeCount ?? '--'}</span>,
+      },
+      {
+        accessorKey: 'triggerNotification',
+        header: 'Trigger Notification',
+        cell: ({ row }) => (
+          <span className="text-xs font-medium px-2 py-0.5 rounded bg-[var(--bg2)] text-[var(--tx2)]">
+            {row.original.triggerNotification === true || row.original.triggerNotification === 'true' ? 'Yes' : 'No'}
+          </span>
+        ),
+      },
+    );
+  }
+
+  if (config.showPersonFallSickFields) {
+    cols.push(
+      {
+        accessorKey: 'count',
+        header: 'People Detected',
+        cell: ({ row }) => <span className={styles.text}>{row.original.count ?? '--'}</span>,
+      },
+      {
+        accessorKey: 'isFallDetected',
+        header: 'Fall Detected',
+        cell: ({ row }) => {
+          const isFall = row.original.isFallDetected === true || row.original.isFallDetected === 'true';
+          return (
+            <span
+              className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                isFall ? 'text-[var(--crit)] bg-[var(--crit)]/15' : 'text-[var(--tx2)] bg-[var(--bg2)]'
+              }`}
+            >
+              {isFall ? 'Yes' : 'No'}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: 'evidenceScore',
+        header: 'Evidence Score',
+        cell: ({ row }) => {
+          const s = row.original.evidenceScore;
+          let label = '--';
+          if (s != null && s !== '--') {
+            const n = Number(s);
+            label = Number.isNaN(n) ? String(s) : n <= 1 ? `${Math.round(n * 100)}%` : `${Math.round(n)}%`;
+          }
+          return <span className={styles.text}>{label}</span>;
+        },
+      },
+      {
+        accessorKey: 'triggerNotification',
+        header: 'Trigger Notification',
+        cell: ({ row }) => (
+          <span className="text-xs font-medium px-2 py-0.5 rounded bg-[var(--bg2)] text-[var(--tx2)]">
+            {row.original.triggerNotification === true || row.original.triggerNotification === 'true' ? 'Yes' : 'No'}
+          </span>
+        ),
+      },
+    );
+  }
+
   cols.push(
     {
       accessorKey: 'createdAt',

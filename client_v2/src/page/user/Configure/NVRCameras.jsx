@@ -115,6 +115,7 @@ const ENGINE_LABELS = {
   cylinderDetectionSettings: 'CYL',
   personalProtectiveEquipmentSettings: 'PPE',
   mobilePhoneDetectionSettings: 'MOB',
+  personFallSickDetectionSettings: 'FALL',
 };
 
 const ENGINE_NAMES = {
@@ -138,6 +139,7 @@ const ENGINE_NAMES = {
   cylinderDetectionSettings: 'Cylinder Detection',
   personalProtectiveEquipmentSettings: 'Personal Protective Equipment Detection',
   mobilePhoneDetectionSettings: 'Mobile Phone Detection',
+  personFallSickDetectionSettings: 'Person Fall/Sick Detection',
 };
 
 function compactEngineLabel(settingKey, setting) {

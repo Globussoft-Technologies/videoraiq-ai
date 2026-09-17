@@ -44,6 +44,8 @@ import {
   Move3d,
   HardDrive,
   ScanLine,
+  Flame,
+  HeartPulse,
 } from 'lucide-react';
 
 import { ADMIN_STORAGE_UI_ENABLED } from '../lib/featureFlags';
@@ -80,6 +82,8 @@ const stevinrockLogItems = [
   { key: 'line-crossing', label: 'Line Crossing Logs', path: 'logs/line-crossing', icon: GitBranch, permissionKey: 'logs', permissionSubKey: 'lineCrossingLogs', logsConfigKey: 'lineCrossingLogs' },
   { key: 'water-spill', label: 'Water Spill Logs', path: 'logs/water-spill', icon: Droplets, permissionKey: 'logs', permissionSubKey: 'waterSpillLogs', logsConfigKey: 'waterSpillLogs' },
   { key: 'unauthorized-access', label: 'Unauthorized Access Logs', path: 'logs/unauthorized-access', icon: Ban, permissionKey: 'logs', permissionSubKey: 'unauthorizedAccessLogs', logsConfigKey: 'unauthorizedAccessLogs' },
+  { key: 'fire-smoke', label: 'Fire & Smoke Logs', path: 'logs/fire-smoke', icon: Flame, permissionKey: 'logs', permissionSubKey: 'fireSmokeLogs', logsConfigKey: 'fireSmokeLogs' },
+  { key: 'person-fall-sick', label: 'Person Fall/Sick Logs', path: 'logs/person-fall-sick', icon: HeartPulse, permissionKey: 'logs', permissionSubKey: 'personFallSickLogs', logsConfigKey: 'personFallSickLogs' },
 ];
 
 /**

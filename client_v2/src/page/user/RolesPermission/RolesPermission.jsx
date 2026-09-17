@@ -37,6 +37,7 @@ const LOG_SUBMODULES = [
   'conveyorLogs', 'vehicleObstructionLogs',
   'vehicleCountLogs', 'crusherLogs', 'cylinderLogs', 'lineCrossingLogs', 'waterSpillLogs',
   'unauthorizedAccessLogs', 'carLogs', 'vehicleCheckInOutLogs',
+  'fireSmokeLogs', 'personFallSickLogs',
 ];
 
 const MODULE_LABELS = {
@@ -60,6 +61,8 @@ const MODULE_LABELS = {
   unauthorizedAccessLogs: 'Unauthorized Access Logs', autoEmailReports: 'Auto Email Reports',
   carLogs: 'Car Logs',
   vehicleCheckInOutLogs: 'Vehicle Check-In/Out Logs',
+  fireSmokeLogs: 'Fire & Smoke Logs',
+  personFallSickLogs: 'Person Fall/Sick Logs',
 };
 
 const LEGACY_MODULES_BY_ROLE = {
