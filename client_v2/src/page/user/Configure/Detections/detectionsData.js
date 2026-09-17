@@ -26,7 +26,7 @@ export const SEVERITY_BY_KEY = Object.fromEntries(SEVERITIES.map((s) => [s.key, 
 // older label returned by the API, so the UI does not depend on every backend
 // instance/cache being updated at exactly the same time.
 const DETECTION_LABEL_OVERRIDES = {
-  cylinderDetectionSettings: 'Cylinder Stacking Detection',
+  cylinderDetectionSettings: 'Cylinder Detection',
 };
 
 export const INCIDENT_STATUS = {

@@ -135,7 +135,7 @@ const ENGINE_NAMES = {
   unattendedBaggageDetectionSettings: 'Unattended Baggage Detection',
   baggageDetectionSettings: 'Baggage Detection',
   cashDetectionSettings: 'Cash Detection',
-  cylinderDetectionSettings: 'Cylinder Stacking Detection',
+  cylinderDetectionSettings: 'Cylinder Detection',
   personalProtectiveEquipmentSettings: 'Personal Protective Equipment Detection',
   mobilePhoneDetectionSettings: 'Mobile Phone Detection',
 };

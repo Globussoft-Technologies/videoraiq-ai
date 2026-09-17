@@ -121,7 +121,10 @@ function appliedTypesFor(camera, typeLabels, search = '') {
     settingId: detectionSettingIdFromEntry(camera?.detections?.[key]),
     order,
   }))
-    .filter(type => type.key && type.label);
+    .filter(type => type.key && type.label)
+    .filter(type => !normalizedSearch
+      || type.key.toLowerCase().includes(normalizedSearch)
+      || String(type.label || '').toLowerCase().includes(normalizedSearch));
 
   return masterList.filter(type => !isAttendanceDetectionType(type.key || type.label)).sort((a, b) => {
     if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;

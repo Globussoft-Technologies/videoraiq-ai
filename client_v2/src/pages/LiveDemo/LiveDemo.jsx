@@ -67,7 +67,7 @@ const detections = [
   // { name: 'Oil Spillage Detection', subtitle: 'Floor hazard', category: 'industrial', color: '#0ea5a4' },
   { name: 'Conveyor Belt Status Detection', subtitle: 'Equipment', category: 'industrial', color: '#059669', settingType: 'conveyorDetectionSettings' },
   { name: 'Crusher Status Detection', subtitle: 'Equipment', category: 'industrial', color: '#0d9488', settingType: 'crusherDetectionSettings' },
-  { name: 'Cylinder Stacking Detection', subtitle: 'Equipment', category: 'industrial', color: '#0891b2', settingType: 'cylinderDetectionSettings' },
+  { name: 'Cylinder Detection', subtitle: 'Equipment', category: 'industrial', color: '#0891b2', settingType: 'cylinderDetectionSettings' },
   { name: 'Light Detection', subtitle: 'Illumination', category: 'industrial', color: '#84cc16', settingType: 'lightDetectionSettings' },
 ];
 
