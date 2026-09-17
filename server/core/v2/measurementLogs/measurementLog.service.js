@@ -123,17 +123,10 @@ function adminIdFrom(req) {
   return a ? String(a) : null;
 }
 
-/**
- * Turn one measurement_incidents doc into the flat row the Measurement Logs
- * table renders. Measured dimensions are stored in centimetres; the label
- * dimensions (qrMetadata) are inches — convert measured to inches so the two
- * are comparable.
- */
-function toRow(doc, timezone) {
+function comparisonValues(doc) {
   const meta = doc.qrMetadata || {};
   const md = doc.measuredData || {};
   const normalized = doc.normalizedMeasuredData || {};
-
   const printed = { L: meta.length, W: meta.breadth, H: meta.height };
   const hasNormalized = [normalized.length, normalized.breadth ?? normalized.width, normalized.height]
     .some((value) => Number.isFinite(value));
@@ -145,27 +138,43 @@ function toRow(doc, timezone) {
       unit: "in",
     }
     : measuredTriple(md, printed);
+  return { meta, md, printed, measured };
+}
 
+function comparisonResult(doc) {
+  const { meta, md, printed, measured } = comparisonValues(doc);
   const dev = {
     L: measured.L != null && printed.L != null ? measured.L - printed.L : null,
     W: measured.W != null && printed.W != null ? measured.W - printed.W : null,
     H: measured.H != null && printed.H != null ? measured.H - printed.H : null,
   };
-
-  // Worst axis as a fraction of its tolerance — drives the "MATCH" bar and %.
   const ratios = [
     dev.L != null ? Math.abs(dev.L) / TOLERANCE.length : null,
     dev.W != null ? Math.abs(dev.W) / TOLERANCE.breadth : null,
     dev.H != null ? Math.abs(dev.H) / TOLERANCE.height : null,
-  ].filter((r) => r != null);
-  const devFrac = ratios.length ? Math.max(...ratios) : 0;
+  ];
+  const availableRatios = ratios.filter((ratio) => ratio != null);
+  const devFrac = availableRatios.length ? Math.max(...availableRatios) : 0;
+  const matchPct = ratios.every((ratio) => ratio != null)
+    ? Math.round(ratios.reduce((sum, ratio) => sum + Math.max(0, 100 - ratio * 100), 0) / ratios.length)
+    : null;
 
-  // status: rejected -> Mismatch. pending -> QR Error (unreviewed / unread).
-  // accepted -> Pass, unless the deviation already blows tolerance.
   let status;
   if (doc.status === "rejected") status = "mismatch";
   else if (doc.status === "pending") status = "qrerr";
   else status = devFrac > 1 ? "mismatch" : "pass";
+
+  return { meta, md, printed, measured, dev, devFrac, matchPct, status };
+}
+
+/**
+ * Turn one measurement_incidents doc into the flat row the Measurement Logs
+ * table renders. Measured dimensions are stored in centimetres; the label
+ * dimensions (qrMetadata) are inches — convert measured to inches so the two
+ * are comparable.
+ */
+function toRow(doc, timezone) {
+  const { meta, md, printed, measured, dev, devFrac, matchPct, status } = comparisonResult(doc);
 
   const hasMeasure = measured.L != null || measured.W != null || measured.H != null;
   const fmtTriple = (a, b, c) =>
@@ -214,6 +223,7 @@ function toRow(doc, timezone) {
         ? "QR unread"
         : `${Math.min(100, Math.round(devFrac * 100))}% of tol.`,
     devFrac,
+    matchPct,
     station: stationLabel(doc.stationId),
     stationId: doc.stationId || null,
     time: when ? moment(when).tz(timezone).format("HH:mm:ss") : "—",
@@ -242,28 +252,8 @@ function toRow(doc, timezone) {
  * records table never disagree.
  */
 function deviationOf(doc) {
-  const meta = doc.qrMetadata || {};
-  const md = doc.measuredData || {};
-  const printed = { L: meta.length, W: meta.breadth, H: meta.height };
-  const measured = measuredTriple(md, printed);
-  const dev = {
-    L: measured.L != null && printed.L != null ? measured.L - printed.L : null,
-    W: measured.W != null && printed.W != null ? measured.W - printed.W : null,
-    H: measured.H != null && printed.H != null ? measured.H - printed.H : null,
-  };
-  const ratios = [
-    dev.L != null ? Math.abs(dev.L) / TOLERANCE.length : null,
-    dev.W != null ? Math.abs(dev.W) / TOLERANCE.breadth : null,
-    dev.H != null ? Math.abs(dev.H) / TOLERANCE.height : null,
-  ].filter((r) => r != null);
-  const devFrac = ratios.length ? Math.max(...ratios) : 0;
-
-  let status;
-  if (doc.status === "rejected") status = "mismatch";
-  else if (doc.status === "pending") status = "qrerr";
-  else status = devFrac > 1 ? "mismatch" : "pass";
-
-  return { dev, devFrac, status };
+  const { dev, devFrac, matchPct, status } = comparisonResult(doc);
+  return { dev, devFrac, matchPct, status };
 }
 
 // Build the Mongo match for a measurement-logs query from the request.
@@ -335,7 +325,6 @@ function skuMismatchRows(docs, q = "") {
   for (const doc of docs) {
     const { status } = deviationOf(doc);
     const meta = doc.qrMetadata || {};
-    const md = doc.measuredData || {};
     const sku = doc.qrSku || meta.sku || "—";
     if (!sku || sku === "—") continue;
 
@@ -353,7 +342,7 @@ function skuMismatchRows(docs, q = "") {
     if (status === "mismatch") s.fails += 1;
     if (!s.declared && declared) s.declared = declared;
 
-    const mIn = measuredTriple(md, { L: meta.length, W: meta.breadth, H: meta.height });
+    const { measured: mIn } = comparisonValues(doc);
     if (mIn.L != null && mIn.W != null && mIn.H != null) {
       s.mL += mIn.L;
       s.mW += mIn.W;

@@ -52,6 +52,52 @@ describe("measurementLog toRow — measured dimension normalisation", () => {
 
     near(row, 72, 42, 5);
     expect(row.measuredRaw).toBe("71.2 × 41.3 × 5.8");
+    expect(row.matchPct).toBe(100);
+  });
+
+  it("returns 33% when exactly one axis matches and the other two are outside tolerance", () => {
+    const row = toRow(
+      {
+        _id: "one-axis-match",
+        status: "accepted",
+        qrMetadata: label,
+        normalizedMeasuredData: { length: 72, breadth: 50, height: 10 },
+        measuredData: { length: 72, breadth: 50, height: 10 },
+      },
+      "Asia/Kolkata",
+    );
+
+    expect(row.matchPct).toBe(33);
+    expect(row.status).toBe("mismatch");
+  });
+
+  it("returns 67% when two axes match but keeps strict mismatch status", () => {
+    const row = toRow(
+      {
+        _id: "two-axis-match",
+        status: "accepted",
+        qrMetadata: label,
+        normalizedMeasuredData: { length: 72, breadth: 50, height: 5 },
+        measuredData: { length: 72, breadth: 50, height: 5 },
+      },
+      "Asia/Kolkata",
+    );
+
+    expect(row.matchPct).toBe(67);
+    expect(row.status).toBe("mismatch");
+  });
+
+  it("uses normalized values for analytics deviation as well as list rows", () => {
+    const result = deviationOf({
+      status: "accepted",
+      qrMetadata: label,
+      measuredData: { length: 40, breadth: 20, height: 1 },
+      normalizedMeasuredData: { length: 72, breadth: 42, height: 5 },
+    });
+
+    expect(result.dev).toEqual({ L: 0, W: 0, H: 0 });
+    expect(result.matchPct).toBe(100);
+    expect(result.status).toBe("pass");
   });
 
   it("accepts the breadth axis under the `width` key", () => {
