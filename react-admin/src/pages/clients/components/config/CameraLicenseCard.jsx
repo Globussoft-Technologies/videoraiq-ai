@@ -1,8 +1,27 @@
+import { useState } from 'react'
 import { Video, Minus, Plus } from 'lucide-react'
 
 // Set the client's total purchased cameras. Each detection is allocated
 // independently (any camera can run several detections at once).
 const CameraLicenseCard = ({ totalCameras, onChange, licenseInUse = 0 }) => {
+  const [inputValue, setInputValue] = useState(null)
+
+  const handleInputChange = (event) => {
+    const rawValue = event.target.value
+
+    // Keep the field visually empty while it is being edited. The parent still
+    // receives 0, but must not render that 0 back before the next digit is typed.
+    if (rawValue === '') {
+      setInputValue('')
+      onChange(0)
+      return
+    }
+
+    const nextValue = Math.max(0, Number(rawValue) || 0)
+    setInputValue(String(nextValue))
+    onChange(nextValue)
+  }
+
   // Cameras already running a detection. Setting the licence below this leaves
   // the client over the limit: nothing stops, but they cannot enable a
   // detection on another camera until they free one up.
@@ -37,8 +56,10 @@ const CameraLicenseCard = ({ totalCameras, onChange, licenseInUse = 0 }) => {
         <input
           type="number"
           min={0}
-          value={totalCameras}
-          onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
+          value={inputValue ?? totalCameras}
+          onFocus={() => { setInputValue(String(totalCameras)) }}
+          onBlur={() => { setInputValue(null) }}
+          onChange={handleInputChange}
           className="h-12 w-24 rounded-xl border border-gray-200 bg-white text-center text-2xl font-bold text-blue-600 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 dark:border-white/10 dark:bg-white/4 dark:text-blue-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
         />
 

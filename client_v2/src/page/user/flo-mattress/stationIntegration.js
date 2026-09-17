@@ -6,6 +6,7 @@ const SUCCESS_LOG_KEY = 'videoraiq:station-successes';
 const QR_SCAN_LOG_KEY = 'videoraiq:qr-scan-diagnostics';
 let stationAudioContext = null;
 let qrCodeReaderPromise = null;
+let nativeQrDetectorPromise = null;
 let lastQrMissLoggedAt = 0;
 
 async function getQrCodeReader() {
@@ -577,23 +578,94 @@ async function decodeQrBlob(reader, blob) {
   }
 }
 
-async function decodeWithNativeBarcodeDetector(sourceBlob) {
-  if (typeof window.BarcodeDetector !== 'function' || typeof createImageBitmap !== 'function') return '';
-  let formats;
-  try {
-    formats = await window.BarcodeDetector.getSupportedFormats?.();
-  } catch {
-    formats = null;
+async function getNativeQrDetector() {
+  if (typeof window.BarcodeDetector !== 'function') return null;
+  if (!nativeQrDetectorPromise) {
+    nativeQrDetectorPromise = (async () => {
+      let formats;
+      try {
+        formats = await window.BarcodeDetector.getSupportedFormats?.();
+      } catch {
+        formats = null;
+      }
+      if (Array.isArray(formats) && !formats.includes('qr_code')) return null;
+      return new window.BarcodeDetector({ formats: ['qr_code'] });
+    })();
   }
-  if (Array.isArray(formats) && !formats.includes('qr_code')) return '';
-  const bitmap = await createImageBitmap(sourceBlob);
+  return nativeQrDetectorPromise;
+}
+
+async function decodeWithNativeBarcodeDetector(source) {
+  let detector;
   try {
-    const results = await new window.BarcodeDetector({ formats: ['qr_code'] }).detect(bitmap);
-    return clean(results?.[0]?.rawValue);
+    detector = await getNativeQrDetector();
   } catch {
-    return '';
+    nativeQrDetectorPromise = null;
+    return { available: false, raw: '' };
+  }
+  if (!detector) return { available: false, raw: '' };
+  let bitmap;
+  try {
+    // Blobs need decoding once. An HTMLImageElement from the live MJPEG feed
+    // can be inspected directly, avoiding a new /capture request every pass.
+    if (source instanceof Blob) {
+      if (typeof createImageBitmap !== 'function') return { available: false, raw: '' };
+      bitmap = await createImageBitmap(source);
+    }
+    const results = await detector.detect(bitmap || source);
+    return { available: true, raw: clean(results?.[0]?.rawValue) };
+  } catch {
+    // Cross-origin streams may not be readable by browser vision APIs. The
+    // station treats that as unavailable and keeps its existing snapshot/DS
+    // scanner running.
+    return { available: false, raw: '' };
   } finally {
-    bitmap.close?.();
+    bitmap?.close?.();
+  }
+}
+
+export async function scanLiveQrSource(source) {
+  if (!source) return { available: false, qrResponse: null };
+  const detected = await decodeWithNativeBarcodeDetector(source);
+  let raw = detected.raw;
+  let available = detected.available;
+
+  // BarcodeDetector is restricted to secure browser contexts on some
+  // Chromium builds. ZXing can still inspect the CORS-enabled mirror of the
+  // MJPEG stream, so keep it as the live-frame fallback without taking a new
+  // still image from the Pi.
+  if (!available) {
+    try {
+      const reader = await getQrCodeReader();
+      // decode() snapshots the pixels currently painted by the endless MJPEG
+      // response. decodeFromImageElement() waits for image.complete, which an
+      // MJPEG stream may never reach.
+      const result = reader.decode(source);
+      raw = clean(result.getText());
+      available = true;
+    } catch (error) {
+      available = isRecoverableQrDecodeError(error);
+    }
+  }
+
+  if (!available || !raw) {
+    return { available, qrResponse: null };
+  }
+  try {
+    const dimensions = parseQrPayload(raw);
+    return {
+      available: true,
+      qrResponse: {
+        found: true,
+        dimensions,
+        raw: dimensions.raw,
+        source: 'native-live-stream',
+      },
+    };
+  } catch {
+    // Ignore unrelated QR codes in view. Only a valid mattress label is
+    // allowed to start the existing measurement workflow.
+    return { available: true, qrResponse: null };
   }
 }
 
@@ -686,9 +758,9 @@ export async function decodeQrImage(jpegBlob, { required = true, fastOnly = fals
   // Chromium's native detector is the cheapest path when available. Payload
   // validation still runs before a result is accepted, so a false detection
   // cannot enter the measurement workflow.
-  const nativeRaw = await decodeWithNativeBarcodeDetector(jpegBlob);
-  if (nativeRaw) {
-    const dimensions = parseQrPayload(nativeRaw);
+  const nativeResult = await decodeWithNativeBarcodeDetector(jpegBlob);
+  if (nativeResult.raw) {
+    const dimensions = parseQrPayload(nativeResult.raw);
     return { found: true, dimensions, raw: dimensions.raw, source: 'native-barcode-detector' };
   }
 

@@ -1,9 +1,15 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, RotateCw } from 'lucide-react';
-import { cameraId, isCameraOnline, resolvePiUrl } from '../stationIntegration';
+import {
+  cameraId,
+  isCameraOnline,
+  resolvePiUrl,
+  scanLiveQrSource,
+} from '../stationIntegration';
 
 const MAX_RETRY_DELAY_MS = 8000;
 const CONNECT_TIMEOUT_MS = 10000;
+const LIVE_QR_SCAN_INTERVAL_MS = 180;
 
 function retryUrl(url, retryKey) {
   if (!url || retryKey === 0) return url;
@@ -16,7 +22,7 @@ function retryUrl(url, retryKey) {
   }
 }
 
-function LiveCameraFeed({ camera, piApi }) {
+function LiveCameraFeed({ camera, piApi, scanEnabled = false, onQrDetected, onScannerAvailabilityChange }) {
   const id = cameraId(camera);
   const online = isCameraOnline(camera);
   const baseStreamUrl = useMemo(
@@ -27,6 +33,8 @@ function LiveCameraFeed({ camera, piApi }) {
   const [streamState, setStreamState] = useState(baseStreamUrl ? 'connecting' : 'waiting');
   const retryCountRef = useRef(0);
   const retryTimerRef = useRef();
+  const streamImageRef = useRef(null);
+  const scannerImageRef = useRef(null);
   const streamUrl = useMemo(() => retryUrl(baseStreamUrl, retryKey), [baseStreamUrl, retryKey]);
 
   const retryNow = useCallback(() => {
@@ -63,6 +71,47 @@ function LiveCameraFeed({ camera, piApi }) {
     setStreamState('live');
   }, []);
 
+  useEffect(() => {
+    if (!scanEnabled || streamState !== 'live' || !onQrDetected) {
+      onScannerAvailabilityChange?.(false);
+      return undefined;
+    }
+    let active = true;
+    let timer;
+    let scannerAvailable = false;
+
+    const schedule = () => {
+      if (active) timer = window.setTimeout(scan, LIVE_QR_SCAN_INTERVAL_MS);
+    };
+    const scan = async () => {
+      // Use a separate CORS-enabled mirror for pixel access. The visible
+      // stream remains untouched, so a Pi without stream CORS can never lose
+      // its camera preview; it simply falls back to snapshot scanning.
+      const image = scannerImageRef.current || streamImageRef.current;
+      if (!image?.naturalWidth || document.visibilityState === 'hidden') {
+        schedule();
+        return;
+      }
+      const result = await scanLiveQrSource(image);
+      if (!active) return;
+      if (result.available !== scannerAvailable) {
+        scannerAvailable = result.available;
+        onScannerAvailabilityChange?.(scannerAvailable);
+      }
+      if (result.qrResponse) {
+        await onQrDetected(result.qrResponse);
+      }
+      schedule();
+    };
+
+    schedule();
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      onScannerAvailabilityChange?.(false);
+    };
+  }, [onQrDetected, onScannerAvailabilityChange, scanEnabled, streamState, streamUrl]);
+
   return (
     <section className="flex h-full min-h-[500px] flex-col overflow-hidden rounded-2xl border border-[#dfe3ec] bg-[#4b4d50] dark:border-[var(--bd)]">
       <div className="flex min-h-[48px] items-center justify-between gap-3 border-b border-[var(--bd)] bg-[#fbfcff] px-4 py-2 dark:bg-[var(--bg1)]">
@@ -81,12 +130,24 @@ function LiveCameraFeed({ camera, piApi }) {
       <div className="relative flex-1 bg-[#4b4d50]">
         {streamUrl && (
           <img
+            ref={streamImageRef}
             src={streamUrl}
             alt={`Live stream from camera ${id}`}
             onLoad={onStreamLoad}
             onError={scheduleRetry}
             decoding="async"
             className={`absolute inset-0 h-full w-full object-contain ${streamState === 'live' ? 'vq-qr-camera-focus' : ''}`}
+          />
+        )}
+        {streamUrl && scanEnabled && (
+          <img
+            ref={scannerImageRef}
+            src={streamUrl}
+            crossOrigin="anonymous"
+            alt=""
+            aria-hidden="true"
+            decoding="async"
+            className="pointer-events-none absolute h-px w-px opacity-0"
           />
         )}
         {streamState !== 'live' && (

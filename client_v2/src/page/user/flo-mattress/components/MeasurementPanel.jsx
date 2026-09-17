@@ -1,4 +1,5 @@
-import { Ruler, ScanLine } from 'lucide-react';
+import { useState } from 'react';
+import { Maximize2, Minimize2, Ruler, ScanLine } from 'lucide-react';
 import { dimensionsFromCustomSize, dimensionsFromSku, resolveBackendImageUrl, snapMeasuredDimension } from '../stationIntegration';
 
 const firstValue = (object, keys) => keys.map((key) => object?.[key]).find((value) => value != null);
@@ -33,6 +34,7 @@ function measurementRows(data, qrMetadata) {
 }
 
 export default function MeasurementPanel({ data, image, backendIp, qrMetadata, status = 'pending', secondsRemaining = 0 }) {
+  const [imageDetailsExpanded, setImageDetailsExpanded] = useState(true);
   const rows = measurementRows(data, qrMetadata);
   const complete = rows.every((row) => row.measured != null);
   const allPassed = complete && rows.every((row) => row.passed);
@@ -130,9 +132,22 @@ export default function MeasurementPanel({ data, image, backendIp, qrMetadata, s
         )}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-blue-500/5 to-cyan-400/5" />
         {resolvedImage && <div className="pointer-events-none absolute inset-x-[13%] inset-y-[20%] rounded border border-cyan-400/80 shadow-[0_0_22px_rgba(34,211,238,.2)]" />}
-        <div className="absolute inset-x-3 bottom-2 flex items-center rounded-lg border border-white/15 bg-slate-950/80 px-3 py-1.5 backdrop-blur">
-          <strong className="font-mono text-[12px] text-white">{complete ? `${measuredTriple} IN` : 'measuring...'}</strong>
-          <span className="ml-auto font-mono text-[8px] uppercase text-slate-400">STATUS <b className="text-slate-100">{shown(status)}</b></span>
+        <div className="absolute inset-x-3 bottom-2 flex items-center justify-end bg-transparent px-3 py-1.5">
+          {imageDetailsExpanded && (
+            <>
+              <strong className="mr-auto font-mono text-[12px] text-white [text-shadow:0_1px_4px_rgba(0,0,0,.95)]">{complete ? `${measuredTriple} IN` : 'measuring...'}</strong>
+              <span className="font-mono text-[8px] uppercase text-slate-200 [text-shadow:0_1px_4px_rgba(0,0,0,.95)]">STATUS <b className="text-white">{shown(status)}</b></span>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={() => setImageDetailsExpanded((current) => !current)}
+            className="ml-2 grid h-6 w-6 shrink-0 place-items-center rounded-md border border-white/25 bg-slate-950/35 text-white shadow-sm transition hover:bg-slate-950/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            aria-label={imageDetailsExpanded ? 'Minimize measurement details' : 'Maximize measurement details'}
+            title={imageDetailsExpanded ? 'Minimize details' : 'Maximize details'}
+          >
+            {imageDetailsExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          </button>
         </div>
       </div>
     </section>

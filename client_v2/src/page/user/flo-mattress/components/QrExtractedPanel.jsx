@@ -53,7 +53,7 @@ export default function QrExtractedPanel({ metadata, response, readAt, image, ba
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <div className="rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 py-2">
             <div className="font-mono text-[9px] uppercase tracking-[.14em] text-[var(--tx3)]">Raw scan string</div>
-            <div className="mt-1 truncate font-mono text-[11px] font-semibold text-blue-500">{raw || 'Waiting for QR payload...'}</div>
+            <div className="mt-1 whitespace-normal break-all font-mono text-[11px] font-semibold leading-snug text-blue-500">{raw || 'Waiting for QR payload...'}</div>
           </div>
           <div className="flex-1 rounded-lg border border-blue-400/35 bg-blue-500/10 px-3 py-2">
             <div className="font-mono text-[9px] uppercase tracking-[.14em] text-[var(--tx3)]">Declared size from {declaredSource}</div>

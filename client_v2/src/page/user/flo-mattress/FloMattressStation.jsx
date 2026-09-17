@@ -43,7 +43,9 @@ export default function FloMattressStation() {
   const [logOpen, setLogOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(15);
+  const [liveScannerAvailable, setLiveScannerAvailable] = useState(false);
   const automaticScanRef = useRef({ blockedRaw: '', lastError: '', lastDsAttemptAt: 0 });
+  const workflowBusyRef = useRef(false);
   const toggleLogs = useCallback(() => setLogOpen((current) => !current), []);
 
   useEffect(() => {
@@ -57,7 +59,8 @@ export default function FloMattressStation() {
   }, []);
 
   const runCapture = useCallback(async (automaticCapture = null) => {
-    if (capturing || processing) return;
+    if (workflowBusyRef.current || capturing || processing) return;
+    workflowBusyRef.current = true;
     const startedAt = Date.now();
     let countdown;
     setProcessing(true);
@@ -89,12 +92,14 @@ export default function FloMattressStation() {
     } finally {
       window.clearInterval(countdown);
       setProcessing(false);
+      workflowBusyRef.current = false;
     }
   }, [capturing, navigate, processing, startCapture, station]);
   const start = useCallback(() => {
     prepareStationAudio();
     return runCapture();
   }, [runCapture]);
+  const handleLiveQrDetected = useCallback((qrResponse) => runCapture({ qrResponse }), [runCapture]);
 
   useEffect(() => {
     if (capturing || processing || visibleOperationError || configurationError || !selectedCamera || !station) return undefined;
@@ -103,13 +108,20 @@ export default function FloMattressStation() {
     let requestController;
 
     const schedule = () => {
-      if (active) timer = window.setTimeout(scan, AUTO_SCAN_INTERVAL_MS);
+      // Once direct live-frame scanning works, snapshots become a low-rate
+      // safety net instead of the primary scanner.
+      const delay = liveScannerAvailable ? 1500 : AUTO_SCAN_INTERVAL_MS;
+      if (active) timer = window.setTimeout(scan, delay);
     };
     const scan = async () => {
       requestController = new AbortController();
       try {
         const now = Date.now();
-        const useDsFallback = now - automaticScanRef.current.lastDsAttemptAt >= AUTO_DS_FALLBACK_INTERVAL_MS;
+        // A readable live stream is scanned continuously without network
+        // round-trips. Keep snapshot ZXing as a fallback, but avoid racing the
+        // DS endpoint because a successful DS QR call also starts measurement.
+        const useDsFallback = !liveScannerAvailable
+          && now - automaticScanRef.current.lastDsAttemptAt >= AUTO_DS_FALLBACK_INTERVAL_MS;
         if (useDsFallback) automaticScanRef.current.lastDsAttemptAt = now;
         const detected = await scanCameraForQr(
           station,
@@ -154,7 +166,7 @@ export default function FloMattressStation() {
       window.clearTimeout(timer);
       requestController?.abort();
     };
-  }, [capturing, configurationError, processing, runCapture, selectedCamera, station, visibleOperationError]);
+  }, [capturing, configurationError, liveScannerAvailable, processing, runCapture, selectedCamera, station, visibleOperationError]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -193,7 +205,13 @@ export default function FloMattressStation() {
       <section className="relative flex min-h-0 flex-1 overflow-auto bg-[#eef0f7] p-3 dark:bg-[var(--appbg)] lg:p-4">
         <div className="relative grid min-h-[560px] w-full flex-1 gap-3 lg:min-h-0 lg:grid-cols-2 lg:items-stretch">
           <StationIdleCard onStart={start} disabled={capturing || processing || Boolean(configurationError) || !selectedCamera} capturing={capturing || processing} />
-          <LiveCameraFeed camera={selectedCamera} piApi={station?.pi?.api} />
+          <LiveCameraFeed
+            camera={selectedCamera}
+            piApi={station?.pi?.api}
+            scanEnabled={!capturing && !processing && !visibleOperationError && !configurationError}
+            onQrDetected={handleLiveQrDetected}
+            onScannerAvailabilityChange={setLiveScannerAvailable}
+          />
         </div>
       </section>
       <StationBottomBar onStart={start} disabled={capturing || processing || Boolean(configurationError) || !selectedCamera} capturing={capturing || processing} />

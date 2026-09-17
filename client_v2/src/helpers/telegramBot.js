@@ -1,6 +1,7 @@
 const FRONTEND_BOT_BY_URL = {
   'https://stagingv2.videoraiq.com': '@VideoraIQDEVAlertsbot',
   'https://app.videoraiq.com': '@VideoraIQbot',
+  "https://globussoft.videoraiq.com": '@VideoraIQbot'
 };
 
 export function telegramBotUsername() {
