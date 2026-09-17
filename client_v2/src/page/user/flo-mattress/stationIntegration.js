@@ -678,11 +678,21 @@ async function enhancedQrBlob(sourceBlob, {
   }
 }
 
-export async function decodeQrImage(jpegBlob, { required = true } = {}) {
+export async function decodeQrImage(jpegBlob, { required = true, fastOnly = false } = {}) {
   if (!(jpegBlob instanceof Blob) || !jpegBlob.size) throw new Error('Camera returned an empty image');
-  const reader = await getQrCodeReader();
   let lastDecodeError;
   let locatedButUndecodable = false;
+
+  // Chromium's native detector is the cheapest path when available. Payload
+  // validation still runs before a result is accepted, so a false detection
+  // cannot enter the measurement workflow.
+  const nativeRaw = await decodeWithNativeBarcodeDetector(jpegBlob);
+  if (nativeRaw) {
+    const dimensions = parseQrPayload(nativeRaw);
+    return { found: true, dimensions, raw: dimensions.raw, source: 'native-barcode-detector' };
+  }
+
+  const reader = await getQrCodeReader();
   try {
     const result = await decodeQrBlob(reader, jpegBlob);
     const dimensions = parseQrPayload(result.getText());
@@ -694,31 +704,30 @@ export async function decodeQrImage(jpegBlob, { required = true } = {}) {
     lastDecodeError = error;
   }
 
-  const nativeRaw = await decodeWithNativeBarcodeDetector(jpegBlob);
-  if (nativeRaw) {
-    const dimensions = parseQrPayload(nativeRaw);
-    return { found: true, dimensions, raw: dimensions.raw, source: 'native-barcode-detector' };
-  }
-
-  // @zxing/browser does not expose QRCodeDetector.detect() separately. Its
-  // documented fallback is a coarse-to-fine tile search. A 3x3 set of 62%
-  // crops overlaps enough to retain roughly 20-30% quiet-zone padding when a
-  // QR falls on a tile boundary.
-  const positions = [0, 0.5, 1];
   const candidateConfigs = [];
-  for (const cropY of positions) {
-    for (const cropX of positions) {
-      const tile = `${Math.round(cropX * 2)}-${Math.round(cropY * 2)}`;
-      candidateConfigs.push(
-        { name: `tile-${tile}-raw`, cropRatio: 0.62, cropX, cropY, mode: 'none', upscale: 1 },
-        { name: `tile-${tile}-threshold`, cropRatio: 0.62, cropX, cropY, mode: 'adaptive', upscale: 1 },
-        { name: `tile-${tile}-upscaled-threshold`, cropRatio: 0.62, cropX, cropY, mode: 'adaptive', upscale: 3 },
-      );
+  if (fastOnly) {
+    // The automatic scanner already tried native and ZXing against the full
+    // frame above. Do not add crop/upscale passes here: they delay the next
+    // fresh capture and make the continuous Pi camera stream less responsive.
+  } else {
+    // The deep fallback remains available to explicit/manual callers. A 3x3
+    // set of overlapping crops handles difficult labels without slowing every
+    // frame in the continuous automatic scanner.
+    const positions = [0, 0.5, 1];
+    for (const cropY of positions) {
+      for (const cropX of positions) {
+        const tile = `${Math.round(cropX * 2)}-${Math.round(cropY * 2)}`;
+        candidateConfigs.push(
+          { name: `tile-${tile}-raw`, cropRatio: 0.62, cropX, cropY, mode: 'none', upscale: 1 },
+          { name: `tile-${tile}-threshold`, cropRatio: 0.62, cropX, cropY, mode: 'adaptive', upscale: 1 },
+          { name: `tile-${tile}-upscaled-threshold`, cropRatio: 0.62, cropX, cropY, mode: 'adaptive', upscale: 3 },
+        );
+      }
     }
+    // Blue packaging sometimes compresses luminance contrast. Retain one
+    // full-frame red-channel pass in the deep fallback.
+    candidateConfigs.push({ name: 'full-red-channel', mode: 'contrast', channel: 'red', upscale: 1 });
   }
-  // Blue packaging sometimes compresses luminance contrast. Retain one
-  // full-frame red-channel pass after the spatial search.
-  candidateConfigs.push({ name: 'full-red-channel', mode: 'contrast', channel: 'red', upscale: 1 });
   const attemptedCandidates = [];
   for (const config of candidateConfigs) {
     let candidateBlob;
@@ -742,7 +751,7 @@ export async function decodeQrImage(jpegBlob, { required = true } = {}) {
   }
   const decodeStatus = locatedButUndecodable ? 'QR_DECODE_ERROR' : 'NO_QR_DETECTED';
   if (!required) {
-    logQrScanMiss(jpegBlob, ['zxing-raw', 'native-raw', ...attemptedCandidates.map((name) => `zxing-${name}`)], decodeStatus);
+    logQrScanMiss(jpegBlob, ['native-raw', 'zxing-raw', ...attemptedCandidates.map((name) => `zxing-${name}`)], decodeStatus);
     return null;
   }
   const wrapped = new Error(locatedButUndecodable
@@ -1033,9 +1042,10 @@ export async function captureCameraImage(station, camera, signal) {
 export async function scanCameraForQr(station, camera, signal, { useDsFallback = false } = {}) {
   const jpegBlob = await captureCameraImage(station, camera, signal);
   window.videoraiqLastQrScan = jpegBlob;
-  // On scheduled fallback attempts, ask DS first. The difficult blue-plastic
-  // labels are decoded there quickly, while the browser's multi-pass ZXing
-  // retries can otherwise delay the DS request considerably.
+  // Keep DS and local decoding sequential. In this installation the DS QR
+  // endpoint can start measurement work, so racing both paths could trigger
+  // the same mattress twice. Scheduled DS attempts remain the primary path;
+  // lightweight full-frame browser decoding handles the frames between them.
   if (useDsFallback) {
     try {
       const dsQrResponse = await extractQrWithDs(station, jpegBlob, signal, { automatic: true });
@@ -1046,7 +1056,7 @@ export async function scanCameraForQr(station, camera, signal, { useDsFallback =
       if (!error.failureReason && !error.serviceMessage) throw error;
     }
   }
-  const qrResponse = await decodeQrImage(jpegBlob, { required: false });
+  const qrResponse = await decodeQrImage(jpegBlob, { required: false, fastOnly: true });
   return qrResponse ? { jpegBlob, qrResponse } : null;
 }
 

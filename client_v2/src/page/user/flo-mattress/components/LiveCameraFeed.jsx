@@ -110,18 +110,18 @@ function LiveCameraFeed({ camera, piApi }) {
         )}
 
         {streamState === 'live' && (
-          <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 aspect-square w-[clamp(180px,24%,230px)] -translate-x-1/2 -translate-y-1/2" aria-hidden="true">
-            <div className="vq-qr-focus-frame absolute inset-0">
-              <span className="absolute inset-2 rounded-xl border border-emerald-300/20 shadow-[0_0_0_9999px_rgba(2,6,23,.13),0_0_28px_rgba(52,211,153,.22)]" />
-              <span className="vq-qr-focus-ring absolute inset-3 rounded-lg border border-emerald-300/35" />
-              <span className="vq-qr-scan-beam absolute left-4 right-4 top-4 h-px bg-gradient-to-r from-transparent via-emerald-300 to-transparent shadow-[0_0_10px_2px_rgba(52,211,153,.9)]" />
-              <span className="absolute left-0 top-0 h-7 w-7 rounded-tl-md border-l-2 border-t-2 border-emerald-400" />
-              <span className="absolute right-0 top-0 h-7 w-7 rounded-tr-md border-r-2 border-t-2 border-emerald-400" />
-              <span className="absolute bottom-0 left-0 h-7 w-7 rounded-bl-md border-b-2 border-l-2 border-emerald-400" />
-              <span className="absolute bottom-0 right-0 h-7 w-7 rounded-br-md border-b-2 border-r-2 border-emerald-400" />
+          <div className="pointer-events-none absolute inset-x-4 bottom-14 top-4 z-10" aria-hidden="true">
+            <div className="absolute inset-0">
+              <span className="absolute inset-0 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.025] shadow-[inset_0_0_34px_rgba(52,211,153,.08),0_0_24px_rgba(52,211,153,.16)]" />
+              <span className="vq-qr-focus-ring absolute inset-2 rounded-lg border border-emerald-300/25" />
+              <span className="vq-qr-scan-beam absolute left-2 right-2 top-4 h-px bg-gradient-to-r from-transparent via-emerald-300 to-transparent shadow-[0_0_12px_3px_rgba(52,211,153,.9)]" />
+              <span className="absolute left-0 top-0 h-12 w-12 rounded-tl-lg border-l-[3px] border-t-[3px] border-emerald-400" />
+              <span className="absolute right-0 top-0 h-12 w-12 rounded-tr-lg border-r-[3px] border-t-[3px] border-emerald-400" />
+              <span className="absolute bottom-0 left-0 h-12 w-12 rounded-bl-lg border-b-[3px] border-l-[3px] border-emerald-400" />
+              <span className="absolute bottom-0 right-0 h-12 w-12 rounded-br-lg border-b-[3px] border-r-[3px] border-emerald-400" />
             </div>
-            <span className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 whitespace-nowrap rounded-md bg-emerald-400 px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.08em] text-slate-950 shadow-[0_5px_18px_rgba(16,185,129,.3)]">
-              Align QR to scan
+            <span className="absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-emerald-400/95 px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.08em] text-slate-950 shadow-[0_5px_18px_rgba(16,185,129,.3)]">
+              Show QR anywhere in frame
             </span>
           </div>
         )}

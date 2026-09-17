@@ -21,8 +21,10 @@ import {
   toggleStationFullscreen,
 } from './stationIntegration';
 
-const AUTO_SCAN_INTERVAL_MS = 1500;
-const AUTO_DS_FALLBACK_INTERVAL_MS = 3000;
+// A fresh frame is requested shortly after the previous decode finishes. This
+// keeps the scanner responsive without overlapping camera/decode requests.
+const AUTO_SCAN_INTERVAL_MS = 500;
+const AUTO_DS_FALLBACK_INTERVAL_MS = 1000;
 
 function qrIdentity(qrResponse) {
   if (qrResponse?.raw) return qrResponse.raw;
