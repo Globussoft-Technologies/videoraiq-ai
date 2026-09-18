@@ -19,11 +19,7 @@ const DetectionRow = ({
   onApplyToAll,
   applyToAllCount = 0,
 }) => {
-  const { name, enabled, cameraAllocation, camerasInUse = 0, dsSupported } = detection
-  // Explicit false means DS answered and has no engine for this detection, so
-  // licensing it would never result in anything running. null means DS could
-  // not be reached — say nothing rather than a false accusation.
-  const noEngine = dsSupported === false
+  const { name, enabled, cameraAllocation, camerasInUse = 0 } = detection
   const tint = ICON_TINTS[index % ICON_TINTS.length]
 
   const setAlloc = (n) => onAllocationChange(Math.max(0, Math.min(maxCameras, n)))
@@ -48,11 +44,6 @@ const DetectionRow = ({
           <p className="truncate font-mono text-[10px] tracking-wide text-gray-400 uppercase dark:text-gray-600">
             {detection.settingType}
           </p>
-          {noEngine && (
-            <p className="mt-0.5 truncate text-[11px] font-medium text-red-600 dark:text-red-400">
-              No detection engine — cannot run even if licensed
-            </p>
-          )}
           {overAllocated && (
             <p className="mt-0.5 truncate text-[11px] font-medium text-amber-600 dark:text-amber-400">
               In use on {camerasInUse} cameras — above this allocation

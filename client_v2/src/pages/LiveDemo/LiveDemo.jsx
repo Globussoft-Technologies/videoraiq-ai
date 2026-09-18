@@ -177,6 +177,13 @@ function valueForPayload(value) {
   return trimmed;
 }
 
+function nonNegativeNumberInput(value) {
+  if (value === '') return '';
+  const numberValue = Number(value);
+  if (Number.isNaN(numberValue)) return '';
+  return String(Math.max(0, numberValue));
+}
+
 function defaultZoneSetting(index, noun = 'Zone') {
   return {
     name: `${noun} ${index + 1}`,
@@ -192,6 +199,20 @@ function syncZoneSettings(settings = [], count = 0, noun = 'Zone') {
     ...defaultZoneSetting(index, noun),
     ...(settings[index] || {}),
   }));
+}
+
+function missingRequiredZoneFields(zones = [], extraFields = [], noun = 'Zone') {
+  for (let index = 0; index < zones.length; index += 1) {
+    const zone = zones[index] || {};
+    if (!String(zone.name ?? '').trim()) return `${noun} ${index + 1} name is required`;
+    if (extraFields.includes('capacity') && String(zone.capacity ?? '').trim() === '') {
+      return `${noun} ${index + 1} capacity is required`;
+    }
+    if (extraFields.includes('threshold') && String(zone.threshold ?? '').trim() === '') {
+      return `${noun} ${index + 1} threshold is required`;
+    }
+  }
+  return '';
 }
 
 function ConfirmModal({
@@ -365,12 +386,20 @@ function SaveDemoAreaModal({
   const [name, setName] = useState(detectionName || '');
   const [zoneDrafts, setZoneDrafts] = useState([]);
   const [collapsed, setCollapsed] = useState({});
+  const [errors, setErrors] = useState({});
+  const initializedKeyRef = useRef('');
   const extraFields = ZONE_EXTRA_FIELDS[settingType] || [];
   const isLineCrossing = settingType === 'lineCrossingSettings';
   const noun = isLineCrossing ? 'Line' : 'Zone';
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      initializedKeyRef.current = '';
+      return;
+    }
+    const initKey = `${detectionName || ''}|${settingType || ''}|${zoneCount}|${zoneOffset}`;
+    if (initializedKeyRef.current === initKey) return;
+    initializedKeyRef.current = initKey;
     setName(detectionName || '');
     setZoneDrafts(Array.from({ length: Math.max(1, zoneCount) }, (_, index) => ({
       name: `${isLineCrossing ? 'Line' : 'Zone'} ${zoneOffset + index + 1}`,
@@ -381,16 +410,59 @@ function SaveDemoAreaModal({
       ...(initialZoneSettings?.[index] || {}),
     })));
     setCollapsed({});
+    setErrors({});
   }, [open, detectionName, settingType, zoneCount, zoneOffset, initialZoneSettings, isLineCrossing]);
 
   const toggleCollapsed = (index) => {
     setCollapsed((current) => ({ ...current, [index]: !current[index] }));
   };
 
+  const updateZoneDraft = (index, field, value) => {
+    setZoneDrafts((current) => current.map((zone, zoneIndex) => (
+      zoneIndex === index ? { ...zone, [field]: value } : zone
+    )));
+    setErrors((current) => ({ ...current, [`zone-${index}-${field}`]: '' }));
+  };
+
+  const handleSubmit = () => {
+    const nextErrors = {};
+
+    zoneDrafts.forEach((zone, index) => {
+      if (!String(zone.name ?? '').trim()) {
+        nextErrors[`zone-${index}-name`] = `${noun} name is required`;
+      }
+      if (extraFields.includes('capacity') && String(zone.capacity ?? '').trim() === '') {
+        nextErrors[`zone-${index}-capacity`] = 'Capacity is required';
+      }
+      if (extraFields.includes('threshold') && String(zone.threshold ?? '').trim() === '') {
+        nextErrors[`zone-${index}-threshold`] = 'Threshold is required';
+      }
+    });
+
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      toast.error('Please fill all required zone fields', COMPACT_TOAST);
+      return;
+    }
+
+    onSubmit({
+      detectionName: name.trim(),
+      severity: 'moderate',
+      zoneDrafts: zoneDrafts.map((zone) => ({
+        name: zone.name.trim(),
+        capacity: zone.capacity,
+        threshold: zone.threshold,
+        countMode: zone.countMode,
+      })),
+    });
+  };
+
   if (!open) return null;
 
   const inputClass = 'h-11 w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 text-sm font-semibold text-[var(--tx)] outline-none focus:border-[var(--blue)]';
+  const errorInputClass = 'border-red-400 focus:border-red-500';
   const labelClass = 'mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--tx3)]';
+  const errorClass = 'mt-1.5 text-[11px] font-semibold text-red-500';
 
   return (
     <div className="fixed inset-0 z-[1000] grid place-items-center bg-black/45 p-4 backdrop-blur-sm">
@@ -426,6 +498,7 @@ function SaveDemoAreaModal({
             <div className="max-h-[196px] space-y-3 overflow-y-auto pr-1">
               {zoneDrafts.map((zone, index) => {
                 const isCollapsed = !!collapsed[index];
+                const stableZoneLabel = `${noun} ${zoneOffset + index + 1}`;
                 return (
                   <div key={`save-zone-${index}`} className="rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)]">
                     <button
@@ -436,7 +509,7 @@ function SaveDemoAreaModal({
                     >
                       <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--tx)]">
                         {isCollapsed ? <ChevronDown className="h-3.5 w-3.5 text-[var(--tx3)]" /> : <ChevronUp className="h-3.5 w-3.5 text-[var(--tx3)]" />}
-                        {zone.name || `${noun} ${index + 1}`}
+                        {stableZoneLabel}
                       </span>
                     </button>
                     {!isCollapsed && (
@@ -445,25 +518,20 @@ function SaveDemoAreaModal({
                           <label className={labelClass}>{noun} Name *</label>
                           <input
                             value={zone.name}
-                            onChange={(event) => {
-                              const next = [...zoneDrafts];
-                              next[index] = { ...next[index], name: event.target.value };
-                              setZoneDrafts(next);
-                            }}
-                            className={inputClass}
+                            onChange={(event) => updateZoneDraft(index, 'name', event.target.value)}
+                            className={`${inputClass} ${errors[`zone-${index}-name`] ? errorInputClass : ''}`}
                             placeholder={`Enter ${noun.toLowerCase()} name`}
                           />
+                          {errors[`zone-${index}-name`] && (
+                            <div className={errorClass}>{errors[`zone-${index}-name`]}</div>
+                          )}
                         </div>
                         {isLineCrossing && (
                           <div>
                             <label className={labelClass}>Mode</label>
                             <select
                               value={zone.countMode || 'entry'}
-                              onChange={(event) => {
-                                const next = [...zoneDrafts];
-                                next[index] = { ...next[index], countMode: event.target.value };
-                                setZoneDrafts(next);
-                              }}
+                              onChange={(event) => updateZoneDraft(index, 'countMode', event.target.value)}
                               className={inputClass}
                             >
                               <option value="entry">Entry</option>
@@ -477,15 +545,16 @@ function SaveDemoAreaModal({
                             <label className={labelClass}>Capacity *</label>
                             <input
                               type="number"
+                              min="0"
+                              inputMode="numeric"
                               value={zone.capacity}
-                              onChange={(event) => {
-                                const next = [...zoneDrafts];
-                                next[index] = { ...next[index], capacity: event.target.value };
-                                setZoneDrafts(next);
-                              }}
-                              className={inputClass}
+                              onChange={(event) => updateZoneDraft(index, 'capacity', nonNegativeNumberInput(event.target.value))}
+                              className={`${inputClass} ${errors[`zone-${index}-capacity`] ? errorInputClass : ''}`}
                               placeholder="e.g. 10"
                             />
+                            {errors[`zone-${index}-capacity`] && (
+                              <div className={errorClass}>{errors[`zone-${index}-capacity`]}</div>
+                            )}
                           </div>
                         )}
                         {extraFields.includes('threshold') && (
@@ -493,15 +562,16 @@ function SaveDemoAreaModal({
                             <label className={labelClass}>Threshold (sec) *</label>
                             <input
                               type="number"
+                              min="0"
+                              inputMode="numeric"
                               value={zone.threshold}
-                              onChange={(event) => {
-                                const next = [...zoneDrafts];
-                                next[index] = { ...next[index], threshold: event.target.value };
-                                setZoneDrafts(next);
-                              }}
-                              className={inputClass}
+                              onChange={(event) => updateZoneDraft(index, 'threshold', nonNegativeNumberInput(event.target.value))}
+                              className={`${inputClass} ${errors[`zone-${index}-threshold`] ? errorInputClass : ''}`}
                               placeholder="e.g. 30"
                             />
+                            {errors[`zone-${index}-threshold`] && (
+                              <div className={errorClass}>{errors[`zone-${index}-threshold`]}</div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -524,15 +594,7 @@ function SaveDemoAreaModal({
           </button>
           <button
             type="button"
-            onClick={() => onSubmit({
-              detectionName: name.trim(),
-              severity: 'moderate',
-              zoneDrafts: zoneDrafts.map((zone) => ({
-                name: zone.name.trim(),
-                capacity: zone.capacity,
-                threshold: zone.threshold,
-              })),
-            })}
+            onClick={handleSubmit}
             disabled={saving}
             className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg bg-gradient-to-br from-[var(--blue)] to-[var(--violet)] px-5 text-sm font-bold text-white shadow-lg shadow-[var(--violet)]/20 disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -804,7 +866,11 @@ function DemoZoneSettingsPanel({
 
       <div className="max-h-[260px] space-y-3 overflow-y-auto pr-1">
         {zones.map((_, index) => {
-          const zone = zoneSettings[index] || defaultZoneSetting(index);
+          const zone = {
+            ...(zoneSettings[index] || defaultZoneSetting(index)),
+            capacity: nonNegativeNumberInput(zoneSettings[index]?.capacity ?? defaultZoneSetting(index).capacity),
+            threshold: nonNegativeNumberInput(zoneSettings[index]?.threshold ?? defaultZoneSetting(index).threshold),
+          };
           const isCollapsed = !!collapsed[index];
           return (
             <div key={`config-zone-${index}`} className="rounded-lg border border-[var(--bd)] bg-[var(--bg1solid)]">
@@ -868,8 +934,10 @@ function DemoZoneSettingsPanel({
                       <label className={labelClass}>Capacity *</label>
                       <input
                         type="number"
+                        min="0"
+                        inputMode="numeric"
                         value={zone.capacity}
-                        onChange={(event) => onChange(index, 'capacity', event.target.value)}
+                        onChange={(event) => onChange(index, 'capacity', nonNegativeNumberInput(event.target.value))}
                         className={inputClass}
                         placeholder="e.g. 10"
                       />
@@ -880,8 +948,10 @@ function DemoZoneSettingsPanel({
                       <label className={labelClass}>Threshold (sec) *</label>
                       <input
                         type="number"
+                        min="0"
+                        inputMode="numeric"
                         value={zone.threshold}
-                        onChange={(event) => onChange(index, 'threshold', event.target.value)}
+                        onChange={(event) => onChange(index, 'threshold', nonNegativeNumberInput(event.target.value))}
                         className={inputClass}
                         placeholder="e.g. 30"
                       />
@@ -2979,7 +3049,10 @@ export default function LiveDemo({ active = true }) {
   const handleZoneSettingChange = (index, field, value) => {
     setZoneSettings((current) => {
       const updated = syncZoneSettings(current, pendingZones.length, zoneNoun);
-      updated[index] = { ...updated[index], [field]: value };
+      const nextValue = field === 'capacity' || field === 'threshold'
+        ? nonNegativeNumberInput(value)
+        : value;
+      updated[index] = { ...updated[index], [field]: nextValue };
       return updated;
     });
   };
@@ -3019,10 +3092,10 @@ export default function LiveDemo({ active = true }) {
         detection_name: detectionName || selected.name,
         levelOfImportance: zone.severity || severity,
         ...(extraFields.includes('capacity') && String(zone.capacity ?? '').trim() !== ''
-          ? { capacity: valueForPayload(zone.capacity) }
+          ? { capacity: valueForPayload(nonNegativeNumberInput(zone.capacity)) }
           : {}),
         ...(extraFields.includes('threshold') && String(zone.threshold ?? '').trim() !== ''
-          ? { threshold_sec: valueForPayload(zone.threshold) }
+          ? { threshold_sec: valueForPayload(nonNegativeNumberInput(zone.threshold)) }
           : {}),
         camera_type: 'hikvision',
       };
@@ -3164,6 +3237,12 @@ export default function LiveDemo({ active = true }) {
 
   const handleSubmitSaveArea = async ({ detectionName, severity, zoneDrafts: submittedZones = [] }) => {
     const nextNewZones = buildNewZones();
+    const extraFields = ZONE_EXTRA_FIELDS[selected.settingType] || [];
+    const validationMessage = missingRequiredZoneFields(submittedZones, extraFields, zoneNoun);
+    if (validationMessage) {
+      toast.error(validationMessage, COMPACT_TOAST);
+      return;
+    }
     if (nextNewZones.length === 0) {
       toast.error(
         isLineCrossing
@@ -3219,6 +3298,12 @@ export default function LiveDemo({ active = true }) {
   // threshold) made to zones that are already saved, no drawing involved.
   const handleZoneSettingsPanelSave = async () => {
     if (savedZones.length === 0) return;
+    const extraFields = ZONE_EXTRA_FIELDS[selected.settingType] || [];
+    const validationMessage = missingRequiredZoneFields(savedZoneSettings, extraFields, zoneNoun);
+    if (validationMessage) {
+      toast.error(validationMessage, COMPACT_TOAST);
+      return;
+    }
 
     setSavingArea(true);
     try {
