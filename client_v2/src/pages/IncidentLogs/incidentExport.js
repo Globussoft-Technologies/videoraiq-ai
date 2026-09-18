@@ -52,7 +52,6 @@ const fetchAllForExport = async (config, params) => {
       count: item.count ?? '--',
       isFallDetected: item.isFallDetected === true || item.isFallDetected === 'true' ? 'Yes' : 'No',
       evidenceScore: evidenceScoreStr,
-      triggerNotification: item.triggerNotification === true || item.triggerNotification === 'true' ? 'Yes' : 'No',
     };
   });
 };
@@ -80,8 +79,7 @@ const buildExportColumns = (config) => {
     cols.push(
       { key: 'count', label: 'People Detected' },
       { key: 'isFallDetected', label: 'Fall Detected' },
-      { key: 'evidenceScore', label: 'Evidence Score' },
-      { key: 'triggerNotification', label: 'Trigger Notification' }
+      { key: 'evidenceScore', label: 'Evidence Score' }
     );
   }
 
@@ -239,14 +237,21 @@ const exportToGridPDF = async (config, params) => {
     const imageHeight = cardWidth / 2;
     const rowGap = 5.2;
     const bodyTopGap = 5.4;
-    const details = [
-      ['Incident', 'incidentName'],
-      ['Severity', 'severity'],
-      ['NVR', 'nvrName'],
-      ['Camera', 'channelName'],
-      ['Time', 'createdAt'],
-    ];
-    if (config.showStatus) details.splice(1, 0, ['Status', 'currentStatus']);
+    const details = [];
+    if (config.showIncidentName !== false) details.push(['Incident', 'incidentName']);
+    if (config.showStatus) details.push(['Status', 'currentStatus']);
+    if (config.showSeverity !== false) details.push(['Severity', 'severity']);
+    if (config.showFireSmokeFields) {
+      details.push(['Fire Objects', 'fireCount'], ['Smoke Objects', 'smokeCount']);
+    }
+    if (config.showPersonFallSickFields) {
+      details.push(
+        ['People Detected', 'count'],
+        ['Fall Detected', 'isFallDetected'],
+        ['Evidence Score', 'evidenceScore']
+      );
+    }
+    details.push(['NVR', 'nvrName'], ['Camera', 'channelName'], ['Time', 'createdAt']);
     const cardHeight = imageHeight + bodyTopGap + rowGap * details.length + 4;
     const firstPageStartY = 24;
     const nextPageStartY = 12;

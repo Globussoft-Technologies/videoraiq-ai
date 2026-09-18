@@ -1,6 +1,6 @@
 import React from 'react';
 import moment from 'moment-timezone';
-import { AlertTriangle, Clock, Cloud, Flame, Image, Server, ShieldAlert, Video } from 'lucide-react';
+import { Activity, AlertTriangle, Clock, Cloud, Flame, Image, Server, ShieldAlert, Users, Video } from 'lucide-react';
 import { styles } from './incidentState';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 
@@ -28,6 +28,13 @@ const severityBg = (severity) => {
 
 const formatTime = (t) =>
   t ? moment.utc(t).tz(moment.tz.guess()).format('DD/MM/YYYY hh:mm A') : '--';
+
+const formatEvidenceScore = (score) => {
+  if (score == null || score === '--') return '--';
+  const value = Number(score);
+  if (Number.isNaN(value)) return String(score);
+  return value <= 1 ? `${Math.round(value * 100)}%` : `${Math.round(value)}%`;
+};
 
 const IncidentCardRow = ({ icon: Icon, label, value, valueClassName = '', valueStyle }) => (
   <div className="flex items-center gap-2 text-xs min-w-0">
@@ -200,24 +207,7 @@ export const buildColumns = (config, { onSort, onPreview }) => {
       {
         accessorKey: 'evidenceScore',
         header: 'Evidence Score',
-        cell: ({ row }) => {
-          const s = row.original.evidenceScore;
-          let label = '--';
-          if (s != null && s !== '--') {
-            const n = Number(s);
-            label = Number.isNaN(n) ? String(s) : n <= 1 ? `${Math.round(n * 100)}%` : `${Math.round(n)}%`;
-          }
-          return <span className={styles.text}>{label}</span>;
-        },
-      },
-      {
-        accessorKey: 'triggerNotification',
-        header: 'Trigger Notification',
-        cell: ({ row }) => (
-          <span className="text-xs font-medium px-2 py-0.5 rounded bg-[var(--bg2)] text-[var(--tx2)]">
-            {row.original.triggerNotification === true || row.original.triggerNotification === 'true' ? 'Yes' : 'No'}
-          </span>
-        ),
+        cell: ({ row }) => <span className={styles.text}>{formatEvidenceScore(row.original.evidenceScore)}</span>,
       },
     );
   }
@@ -286,6 +276,21 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
           <>
             <IncidentCardRow icon={Flame} label="Fire Objects" value={row.fireCount ?? '--'} />
             <IncidentCardRow icon={Cloud} label="Smoke Objects" value={row.smokeCount ?? '--'} />
+          </>
+        )}
+        {config.showPersonFallSickFields && (
+          <>
+            <IncidentCardRow icon={Users} label="People Detected" value={row.count ?? '--'} />
+            <IncidentCardRow
+              icon={AlertTriangle}
+              label="Fall Detected"
+              value={row.isFallDetected === true || row.isFallDetected === 'true' ? 'Yes' : 'No'}
+            />
+            <IncidentCardRow
+              icon={Activity}
+              label="Evidence Score"
+              value={formatEvidenceScore(row.evidenceScore)}
+            />
           </>
         )}
         <IncidentCardRow icon={Server} label="NVR" value={row.nvrName} />

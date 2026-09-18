@@ -203,7 +203,6 @@ const IncidentLogsPage = ({ config }) => {
         smokeCount: item.smokeCount,
         isFallDetected: item.isFallDetected,
         evidenceScore: item.evidenceScore,
-        triggerNotification: item.triggerNotification,
       }));
 
       dispatch({ type: 'SET_ROWS', value: mapped });
@@ -267,6 +266,7 @@ const IncidentLogsPage = ({ config }) => {
   );
 
   const unauthorizedAccessLogs = config.storagePrefix === 'unauthorized_access';
+  const enableViewExports = unauthorizedAccessLogs || config.enableViewExports === true;
   const previewNavigationEnabled = unauthorizedAccessLogs;
   const previewRows = useMemo(
     () => (previewNavigationEnabled ? rows.filter((row) => row.incidentImageUrl) : []),
@@ -436,7 +436,7 @@ const IncidentLogsPage = ({ config }) => {
         }}
       >
         {canEdit && <ExportButton onClick={() => handleExport('excel')}>Excel</ExportButton>}
-        {canEdit && unauthorizedAccessLogs ? (
+        {canEdit && enableViewExports ? (
           <PdfViewPopover
             open={pdfViewOpen}
             exportingFormat={pdfExportingFormat}

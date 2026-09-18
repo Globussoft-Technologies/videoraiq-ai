@@ -127,6 +127,7 @@ export const FIRE_SMOKE_CONFIG = {
   sortable: true,
   showFireSmokeFields: true,
   gridVariant: 'details',
+  enableViewExports: true,
   datePickerVariant: 'preset',
 };
 
@@ -141,5 +142,7 @@ export const PERSON_FALL_SICK_CONFIG = {
   showStatus: false,
   sortable: true,
   showPersonFallSickFields: true,
+  gridVariant: 'details',
+  enableViewExports: true,
   datePickerVariant: 'preset',
 };
