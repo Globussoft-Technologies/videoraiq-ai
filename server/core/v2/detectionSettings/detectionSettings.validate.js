@@ -98,6 +98,7 @@ const thresholdFieldsBySettingType = {
   crowdDetectionSettings: ["person_threshold"],
   lineCrossingSettings: ["person_threshold"],
   countPersonsSettings: ["person_threshold"],
+  personFallSickDetectionSettings: ["person_threshold"],
   unauthorizedAccessSettings: ["person_threshold"],
   deskAbsenceSettings: ["person_threshold"],
   tableOccupancyDetectionSettings: ["person_threshold"],

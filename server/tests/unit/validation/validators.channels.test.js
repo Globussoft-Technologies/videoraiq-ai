@@ -12,6 +12,7 @@ import { describe, it, expect } from "vitest";
 import ChannelValidator from "../../../core/v1/channels/channels.validate.js";
 import AlertValidation from "../../../core/v1/alerts/alerts.validate.js";
 import DetectionSettingsValidation from "../../../core/v1/detectionSettings/detectionSettings.validate.js";
+import DetectionSettingsValidationV2 from "../../../core/v2/detectionSettings/detectionSettings.validate.js";
 import ReportValidation from "../../../core/v1/autoEmailReport/autoEmailReport.validation.js";
 
 // ---------------------------------------------------------------------------
@@ -320,6 +321,22 @@ describe("DetectionSettingsValidation.createDetectionSettingsValidation", () => 
         enabled: "yes",
       });
     expect(error).toBeDefined();
+  });
+});
+
+describe("DetectionSettingsValidation.validateConfidenceThresholds", () => {
+  it("allows person_threshold for Person Fall/Sick settings in v1 and v2", () => {
+    for (const validation of [
+      DetectionSettingsValidation,
+      DetectionSettingsValidationV2,
+    ]) {
+      expect(
+        validation.validateConfidenceThresholds(
+          "personFallSickDetectionSettings",
+          { person_threshold: 0.65 },
+        ).error,
+      ).toBeNull();
+    }
   });
 });
 
