@@ -18,7 +18,7 @@ vi.mock("../../../services/python.service.js", () => ({
   },
 }));
 
-const { revokeDetectionEverywhere } = await import(
+const { revokeDetectionEverywhere, revokeDetectionOnCamera } = await import(
   "../../../core/v2/clientConfig/detectionLicense.service.js"
 );
 const { default: Channel } = await import("../../../core/v2/channels/channels.model.js");
@@ -169,6 +169,55 @@ describe("revokeDetectionEverywhere", () => {
       adminId: ADMIN_ID, userId: USER_ID, settingType: "carModelDetectionSettings",
     });
     expect(result).toEqual({ stopped: 0, failed: 0, cameras: 0 });
+    expect(pythonService.handleDetectionStartStop).not.toHaveBeenCalled();
+  });
+});
+
+describe("revokeDetectionOnCamera", () => {
+  it("stops only the camera removed from the Super Admin assignment", async () => {
+    const nvr = await makeNvr();
+    const settingId = new mongoose.Types.ObjectId();
+    const removed = await makeCamera(nvr._id, {
+      carModelDetectionSettings: { id: settingId, enabled: true },
+    });
+    const stillAssigned = await makeCamera(nvr._id, {
+      carModelDetectionSettings: { id: settingId, enabled: true },
+    });
+
+    const result = await revokeDetectionOnCamera({
+      adminId: ADMIN_ID,
+      userId: USER_ID,
+      cameraId: removed._id,
+      settingType: "carModelDetectionSettings",
+    });
+
+    expect(result).toEqual({ stopped: 1, failed: 0 });
+    expect(
+      (await Channel.findById(removed._id)).detections.carModelDetectionSettings.enabled,
+    ).toBe(false);
+    expect(
+      (await Channel.findById(stillAssigned._id)).detections.carModelDetectionSettings.enabled,
+    ).toBe(true);
+    expect(pythonService.handleDetectionStartStop).toHaveBeenCalledTimes(1);
+  });
+
+  it("is a no-op when the camera is already stopped", async () => {
+    const nvr = await makeNvr();
+    const camera = await makeCamera(nvr._id, {
+      carModelDetectionSettings: {
+        id: new mongoose.Types.ObjectId(),
+        enabled: false,
+      },
+    });
+
+    const result = await revokeDetectionOnCamera({
+      adminId: ADMIN_ID,
+      userId: USER_ID,
+      cameraId: camera._id,
+      settingType: "carModelDetectionSettings",
+    });
+
+    expect(result).toEqual({ stopped: 0, failed: 0 });
     expect(pythonService.handleDetectionStartStop).not.toHaveBeenCalled();
   });
 });

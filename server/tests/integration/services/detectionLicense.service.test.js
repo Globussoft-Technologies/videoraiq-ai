@@ -50,6 +50,9 @@ const { default: Admin } = await import("../../../core/v2/admin/admin.model.js")
 const { default: DetectionAllocation } = await import(
   "../../../core/v2/clientConfig/clientDetectionAllocation.model.js"
 );
+const { default: CameraDetection } = await import(
+  "../../../core/v2/clientConfig/clientCameraDetection.model.js"
+);
 const { CountPersonsDetectionSetting, VehiclDetectionSetting } = await import(
   "../../../core/v2/detectionSettings/detectionSettings.model.js"
 );
@@ -173,6 +176,59 @@ describe("detection visibility restriction", () => {
     await DetectionSettingsService.getDetectionTypes(req, res, next);
 
     expect(payload(res).data.detectionTypes).toEqual({});
+  });
+});
+
+describe("superadmin camera-specific assignments", () => {
+  it("allows a selected camera and rejects an unselected camera", async () => {
+    const admin = await makeClient({
+      purchasedCameras: 2,
+      allocations: { countPersonsSettings: 2 },
+    });
+    const setting = await makeCountSetting();
+    const selected = await makeCamera({
+      name: "Selected camera",
+      detections: { countPersonsSettings: { id: setting._id, enabled: false } },
+    });
+    const unselected = await makeCamera({
+      name: "Unselected camera",
+      detections: { countPersonsSettings: { id: setting._id, enabled: false } },
+    });
+    await DetectionAllocation.updateOne(
+      { adminId: admin._id, settingType: "countPersonsSettings" },
+      { $set: { cameraSelectionConfigured: true } },
+    );
+    await CameraDetection.create({
+      adminId: admin._id,
+      cameraId: selected._id,
+      settingType: "countPersonsSettings",
+      enabled: true,
+    });
+
+    expect(payload(await toggle(admin, selected, "countPersonsSettings", true)).status).toBe(
+      "success",
+    );
+    const refused = await toggle(admin, unselected, "countPersonsSettings", true);
+    expect(refused.statusCode).toBe(403);
+    expect(payload(refused).error.code).toBe("CAMERA_NOT_ASSIGNED");
+    expect(payload(refused).message).toBe(
+      "Count Persons Detection is not assigned to this camera. Please contact support at support@videoraiq.com to add this camera.",
+    );
+  });
+
+  it("keeps count-based behavior until a camera choice is explicitly made", async () => {
+    const admin = await makeClient({
+      purchasedCameras: 2,
+      allocations: { countPersonsSettings: 2 },
+    });
+    const setting = await makeCountSetting();
+    const camera = await makeCamera({
+      detections: { countPersonsSettings: { id: setting._id, enabled: false } },
+    });
+
+    expect(payload(await toggle(admin, camera, "countPersonsSettings", true)).status).toBe(
+      "success",
+    );
   });
 });
 

@@ -62,10 +62,13 @@ const getDetectionLicenseSnapshot = async ({ adminId, userId }) => {
     allowedDetections: [...state.allocations.keys()],
     detections: [...state.allocations.entries()].map(([settingType, cameraAllocation]) => {
       const cameras = state.byType.get(settingType) || [];
+      const assigned = state.cameraAssignments.get(settingType);
       return {
         settingType,
         name: DETECTION_TYPES[settingType] || settingType,
         cameraAllocation,
+        cameraSelectionConfigured: Boolean(assigned),
+        assignedCameraIds: assigned ? [...assigned] : [],
         camerasInUse: cameras.length,
         remaining: Math.max(cameraAllocation - cameras.length, 0),
         cameras,
@@ -169,7 +172,8 @@ export const initSocket = (server) => {
           return;
         }
 
-        const { adminId, userId } = JSON.parse(message);
+        const update = JSON.parse(message);
+        const { adminId, userId } = update;
         if (!adminId) return;
 
         if (channel === "purchasedCameras:update") {
@@ -185,7 +189,31 @@ export const initSocket = (server) => {
         }
 
         if (channel === "detectionAllocation:update") {
-          const { settingType, enabled } = JSON.parse(message);
+          const { scope, cameraId, settingType, enabled } = update;
+
+          // A per-camera assignment uses the same Redis/socket bridge as the
+          // licence update, but must revoke only the deselected camera rather
+          // than every camera running this detection.
+          if (scope === "camera") {
+            if (enabled === false && cameraId && settingType) {
+              const { revokeDetectionOnCamera } = await import(
+                "./core/v2/clientConfig/detectionLicense.service.js"
+              );
+              const admin = userId
+                ? { user_id: userId }
+                : await adminModel.findById(adminId).select("user_id").lean();
+              await revokeDetectionOnCamera({
+                adminId,
+                userId: admin?.user_id || userId,
+                cameraId,
+                settingType,
+              });
+            }
+
+            await emitDetectionLicense({ adminId, userId });
+            await emitCameraLimit({ adminId, userId });
+            return;
+          }
 
           // A revoke has to actually stop the engine. The allocation alone only
           // hides the detection from the UI; the CV backend reads channels as a

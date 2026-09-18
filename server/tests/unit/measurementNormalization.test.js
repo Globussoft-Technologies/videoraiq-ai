@@ -22,9 +22,9 @@ describe("measurement incident normalization", () => {
     expect(normalized).toEqual({ length: 70.99, breadth: 43.01, height: 4.99 });
   });
 
-  it("detects centimetres for the complete record before applying the one-inch rule", () => {
+  it("keeps the current DS inch payload in inches before applying the one-inch rule", () => {
     const normalized = normalizeMeasuredData(
-      { length: 182.9, width: 106.7, height: 12.8, confidence: 0.82 },
+      { length: 72.4, width: 42.8, height: 5.8, confidence: 0.82 },
       { length: 72, breadth: 42, height: 5 },
     );
 
@@ -37,13 +37,20 @@ describe("measurement incident normalization", () => {
     });
   });
 
-  it("detects millimetres for the complete record", () => {
+  it("does not infer a unit from a mismatching QR-declared size", () => {
+    const measured = {
+      length: 79.43,
+      breadth: 70.03,
+      height: 6.47,
+      confidence: 0.96,
+    };
+
     const normalized = normalizeMeasuredData(
-      { length: 1829, breadth: 1067, height: 128 },
-      { length: 72, breadth: 42, height: 5 },
+      measured,
+      { length: 72, breadth: 48, height: 3 },
     );
 
-    expect(normalized).toEqual({ length: 72, breadth: 42, height: 5 });
+    expect(normalized).toEqual(measured);
   });
 
   it("uses parsed custom dimensions before the flat QR dimensions", () => {

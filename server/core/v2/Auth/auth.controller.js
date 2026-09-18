@@ -37,6 +37,13 @@ class authController {
         return await AUTHService.verifyAmemberSso(req, res, next);
     }
 
+    async syncAmemberUser(req, res, next) {
+        /* #swagger.tags = ['Auth']
+           #swagger.description = 'Signed server-to-server aMember user provisioning webhook' */
+        /* #swagger.security = [] */
+        return await AUTHService.syncAmemberUserWebhook(req, res, next);
+    }
+
     async generateAdminToken(req, res, next) {
         /* #swagger.tags = ['Auth']
                             #swagger.description = 'Generate an encrypted admin token valid for N days (max 5). Body: { adminId, days }. Requires an authenticated token.' */

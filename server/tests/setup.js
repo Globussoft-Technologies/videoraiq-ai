@@ -50,6 +50,7 @@ const testConfig = {
   aMember: {
     baseUrl: "http://amember.test",
     apiKey: "test-key",
+    webhookSecret: "test-amember-webhook-secret",
     customPlanID: "9999",
     topUpPlanID: "9998",
   },

@@ -32,10 +32,13 @@ class ClientLicenseService {
       const detections = [...state.allocations.entries()].map(
         ([settingType, cameraAllocation]) => {
           const cameras = state.byType.get(settingType) || [];
+          const assigned = state.cameraAssignments.get(settingType);
           return {
             settingType,
             name: DETECTION_TYPES[settingType] || settingType,
             cameraAllocation,
+            cameraSelectionConfigured: Boolean(assigned),
+            assignedCameraIds: assigned ? [...assigned] : [],
             camerasInUse: cameras.length,
             remaining: Math.max(cameraAllocation - cameras.length, 0),
             cameras,

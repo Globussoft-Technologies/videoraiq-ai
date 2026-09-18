@@ -26,11 +26,17 @@ import authorizedUsersModel from "../authorizedUsers/authorizedUsers.model.js";
 import NVRModel from "../NVR/nvr.model.js";
 import sessionsService from "../sessions/sessions.service.js";
 import usersModel from "../users/users.model.js";
+import amemberWebhookEventModel from "./amemberWebhookEvent.model.js";
 import { autoSyncLocations, syncPermissionLocations, syncStevinrockLogPermissions, syncAlertsAnalyticsPermissions } from "../../../utils/helperFunctions.js";
 const backendToken = config.get("Backend.token");
 const detectionHost = config.get("PythonService.detectionUrl");
 const APP_ENV = config.get("APP_ENV");
 const DEFAULT_FETCH_TIMEOUT_MS = 8000;
+const AMEMBER_WEBHOOK_MAX_AGE_SECONDS = 5 * 60;
+const AMEMBER_WEBHOOK_EVENTS = new Set([
+  "user.created",
+  "user.updated",
+]);
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_FETCH_TIMEOUT_MS) {
   if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
@@ -82,7 +88,158 @@ class AUTHService {
     this.impersonationSecret = config.has("aMember.impersonationSecret")
       ? config.get("aMember.impersonationSecret")
       : null;
+    this.amemberWebhookSecret = process.env.AMEMBER_WEBHOOK_SECRET ||
+      (config.has("aMember.webhookSecret")
+        ? config.get("aMember.webhookSecret")
+        : null);
     this.usedImpersonationNonces = new Map();
+  }
+
+  _verifyAmemberWebhook(req, nowSeconds = Math.floor(Date.now() / 1000)) {
+    if (!this.amemberWebhookSecret) {
+      const error = new Error("aMember webhook is not configured");
+      error.statusCode = 503;
+      throw error;
+    }
+
+    const eventId = String(req.body?.eventId || "").trim();
+    const event = String(req.body?.event || "").trim();
+    const userId = String(req.body?.userId ?? "").trim();
+    const timestamp = String(req.get?.("x-amember-timestamp") || "").trim();
+    const suppliedHeader = String(req.get?.("x-amember-signature") || "").trim();
+    const suppliedHex = suppliedHeader.startsWith("sha256=")
+      ? suppliedHeader.slice("sha256=".length)
+      : suppliedHeader;
+
+    if (!eventId || eventId.length > 128 || !AMEMBER_WEBHOOK_EVENTS.has(event)) {
+      const error = new Error("Invalid aMember webhook event");
+      error.statusCode = 400;
+      throw error;
+    }
+    if (!/^\d+$/.test(userId) || !/^\d+$/.test(timestamp)) {
+      const error = new Error("Valid userId and timestamp are required");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const timestampSeconds = Number(timestamp);
+    if (
+      !Number.isSafeInteger(timestampSeconds) ||
+      Math.abs(nowSeconds - timestampSeconds) > AMEMBER_WEBHOOK_MAX_AGE_SECONDS
+    ) {
+      const error = new Error("Expired aMember webhook timestamp");
+      error.statusCode = 401;
+      throw error;
+    }
+
+    const expected = createHmac("sha256", this.amemberWebhookSecret)
+      .update(`${timestamp}.${eventId}.${event}.${userId}`)
+      .digest();
+    let supplied;
+    try {
+      supplied = Buffer.from(suppliedHex, "hex");
+    } catch (_) {
+      supplied = Buffer.alloc(0);
+    }
+    if (
+      !/^[a-f\d]{64}$/i.test(suppliedHex) ||
+      supplied.length !== expected.length ||
+      !timingSafeEqual(supplied, expected)
+    ) {
+      const error = new Error("Invalid aMember webhook signature");
+      error.statusCode = 401;
+      throw error;
+    }
+
+    return { eventId, event, userId };
+  }
+
+  async getAmemberUserById(userId) {
+    const params = new URLSearchParams({
+      _key: this.apiKey,
+      "_filter[user_id]": String(userId),
+      _count: "1",
+    });
+    const response = await fetchWithTimeout(`${this.baseUrl}/users?${params}`);
+    if (!response.ok) {
+      const error = new Error(`aMember user API returned ${response.status}`);
+      error.statusCode = 503;
+      throw error;
+    }
+
+    const result = await response.json();
+    const user = Array.isArray(result) ? result[0] : result?.[0];
+    if (!user || String(user.user_id) !== String(userId)) {
+      const error = new Error("aMember user not found");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return user;
+  }
+
+  async syncAmemberUserWebhook(req, res) {
+    let verified;
+    try {
+      verified = this._verifyAmemberWebhook(req);
+
+      const previousEvent = await amemberWebhookEventModel
+        .findOne({ eventId: verified.eventId })
+        .lean();
+      if (previousEvent) {
+        if (
+          previousEvent.event !== verified.event ||
+          previousEvent.userId !== verified.userId
+        ) {
+          return res.status(409).json({
+            ok: false,
+            message: "eventId was already used for a different event",
+          });
+        }
+        return res.status(200).json({
+          ok: true,
+          status: "already_synchronized",
+          adminId: previousEvent.adminId,
+        });
+      }
+
+      // The webhook body is only a notification. Profile fields always come
+      // from aMember's authenticated API so callers cannot inject local data.
+      const userData = await this.getAmemberUserById(verified.userId);
+      const registration = await this.registerAdminIfNotExists(userData);
+      if (!registration?.ok || !registration?.admin) {
+        return res.status(409).json({
+          ok: false,
+          message: registration?.error || "Failed to synchronize aMember user",
+        });
+      }
+
+      try {
+        await amemberWebhookEventModel.create({
+          ...verified,
+          adminId: registration.admin._id,
+        });
+      } catch (error) {
+        // Another instance may have completed the same signed event while this
+        // one was fetching aMember. The user upsert is idempotent, so that race
+        // is a successful replay rather than an API failure.
+        if (error?.code !== 11000) throw error;
+      }
+
+      return res.status(registration.created ? 201 : 200).json({
+        ok: true,
+        status: registration.created ? "created" : "updated",
+        adminId: registration.admin._id,
+      });
+    } catch (error) {
+      const statusCode = error?.statusCode || 500;
+      if (statusCode >= 500) {
+        logger.error("aMember provisioning webhook failed:", error);
+      } else {
+        logger.warn("aMember provisioning webhook rejected:", error.message);
+      }
+      return res.status(statusCode).json({ ok: false, message: error.message });
+    }
   }
 
   _verifyImpersonationToken(token) {
@@ -1752,24 +1909,40 @@ return bypassUsers.find(
 
       const existingUser = matchingUsers[0] ?? null;
 
-      // If no admin → create new admin
+      // If no admin -> atomically create one. Two webhook deliveries can race
+      // across API instances, so a find-then-create here is not sufficient.
       if (!existingUser) {
-        const newAdmin = await adminModel.create({
-          user_id: userId,
-          login,
-          name_f: userData?.name_f ?? "",
-          name_l: userData?.name_l ?? "",
-          email,
-        });
+        const upsertResult = await adminModel.findOneAndUpdate(
+          { user_id: userId },
+          {
+            $set: {
+              login,
+              name_f: userData?.name_f ?? "",
+              name_l: userData?.name_l ?? "",
+              email,
+            },
+            $setOnInsert: { user_id: userId },
+          },
+          {
+            upsert: true,
+            new: true,
+            runValidators: true,
+            setDefaultsOnInsert: true,
+            includeResultMetadata: true,
+          },
+        );
+        const newAdmin = upsertResult.value;
+        const created = !upsertResult.lastErrorObject?.updatedExisting;
 
-        await dashboardSidebarModel.create({
-          adminId: newAdmin?._id,
-          detectionConfigs,
-        });
+        await dashboardSidebarModel.findOneAndUpdate(
+          { adminId: newAdmin._id },
+          { $setOnInsert: { adminId: newAdmin._id, detectionConfigs } },
+          { upsert: true, new: true, setDefaultsOnInsert: true },
+        );
 
         return {
           ok: true,
-          created: true,
+          created,
           admin: newAdmin,
         };
       }
@@ -1785,17 +1958,12 @@ return bypassUsers.find(
       });
       await existingUser.save();
 
-      // If admin exists → ensure dashboard config exists
-      let isDashboardConfigAvailable = await dashboardSidebarModel.findOne({
-        adminId: existingUser?._id,
-      });
-
-      if (!isDashboardConfigAvailable) {
-        await dashboardSidebarModel.create({
-          adminId: existingUser?._id,
-          detectionConfigs,
-        });
-      }
+      // If admin exists -> atomically ensure dashboard config exists.
+      await dashboardSidebarModel.findOneAndUpdate(
+        { adminId: existingUser._id },
+        { $setOnInsert: { adminId: existingUser._id, detectionConfigs } },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      );
 
       return {
         ok: true,

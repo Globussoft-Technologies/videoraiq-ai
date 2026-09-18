@@ -1,8 +1,4 @@
-const CM_PER_INCH = 2.54;
-const MM_PER_INCH = 25.4;
 const SNAP_DISTANCE_INCHES = 1;
-
-const SCALES = [1, CM_PER_INCH, MM_PER_INCH];
 
 function numeric(value) {
   if (value == null || value === "") return null;
@@ -35,26 +31,6 @@ function declaredDimensions(qrMetadata = {}) {
   };
 }
 
-function detectedScale(raw, declared) {
-  const axes = ["length", "breadth", "height"];
-  let bestScale = 1;
-  let bestError = Infinity;
-  for (const scale of SCALES) {
-    let error = 0;
-    let compared = 0;
-    for (const axis of axes) {
-      if (raw[axis] == null || declared[axis] == null || declared[axis] <= 0) continue;
-      error += Math.abs((raw[axis] / scale) - declared[axis]) / declared[axis];
-      compared += 1;
-    }
-    if (compared && error / compared < bestError) {
-      bestError = error / compared;
-      bestScale = scale;
-    }
-  }
-  return bestScale;
-}
-
 function snapped(value, declared) {
   if (value == null) return null;
   if (declared == null) return value;
@@ -72,15 +48,14 @@ export function normalizeMeasuredData(measuredData = {}, qrMetadata = {}) {
     height: axisValue(measuredData, ["height"]),
   };
   const declared = declaredDimensions(qrMetadata);
-  const scale = detectedScale(raw, declared);
   const normalized = { ...measuredData };
 
-  if (raw.length != null) normalized.length = snapped(raw.length / scale, declared.length);
+  if (raw.length != null) normalized.length = snapped(raw.length, declared.length);
   if (raw.breadth != null) {
-    normalized.breadth = snapped(raw.breadth / scale, declared.breadth);
+    normalized.breadth = snapped(raw.breadth, declared.breadth);
     if (Object.prototype.hasOwnProperty.call(measuredData, "width")) normalized.width = normalized.breadth;
   }
-  if (raw.height != null) normalized.height = snapped(raw.height / scale, declared.height);
+  if (raw.height != null) normalized.height = snapped(raw.height, declared.height);
 
   return normalized;
 }

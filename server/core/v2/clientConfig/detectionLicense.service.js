@@ -1,6 +1,7 @@
 import adminModel from "../admin/admin.model.js";
 import Channel from "../channels/channels.model.js";
 import allocationModel from "./clientDetectionAllocation.model.js";
+import cameraDetectionModel from "./clientCameraDetection.model.js";
 import { DETECTION_TYPES, TYPE_MAP } from "../../../constants/detectionTypes.js";
 import logger from "../../../utils/logger.js";
 import pythonService from "../../../services/python.service.js";
@@ -71,6 +72,7 @@ export const LICENSE_ERRORS = {
   DETECTION_NOT_LICENSED: "DETECTION_NOT_LICENSED",
   CAMERA_LICENSE_EXCEEDED: "CAMERA_LICENSE_EXCEEDED",
   DETECTION_CAMERA_LIMIT_REACHED: "DETECTION_CAMERA_LIMIT_REACHED",
+  CAMERA_NOT_ASSIGNED: "CAMERA_NOT_ASSIGNED",
 };
 
 const isMongoObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").trim());
@@ -91,6 +93,9 @@ export const detectionLimitMessage = (settingType) =>
 
 export const detectionNotLicensedMessage = (settingType) =>
   `${detectionName(settingType)} is not enabled for your account. Contact your administrator to add it to your plan.`;
+
+export const cameraNotAssignedMessage = (settingType) =>
+  `${detectionName(settingType)} is not assigned to this camera. Please contact support at support@videoraiq.com to add this camera.`;
 
 /**
  * Cameras a plan grants by default, keyed by aMember product NAME.
@@ -457,6 +462,31 @@ export const getAllowedAllocations = async (adminId) => {
 };
 
 /**
+ * Exact camera assignments for detections configured from the Super Admin
+ * Cameras tab. A detection absent from this map keeps the original numeric
+ * pool semantics until an administrator makes a camera-specific choice.
+ */
+export const getCameraAssignments = async (adminId) => {
+  if (!adminId) return new Map();
+  const configured = await allocationModel
+    .find({ adminId, enabled: true, cameraSelectionConfigured: true })
+    .select("settingType")
+    .lean();
+  const settingTypes = configured.map((row) => row.settingType);
+  if (!settingTypes.length) return new Map();
+
+  const rows = await cameraDetectionModel
+    .find({ adminId, settingType: { $in: settingTypes }, enabled: true })
+    .select("settingType cameraId")
+    .lean();
+  const assignments = new Map(settingTypes.map((settingType) => [settingType, new Set()]));
+  for (const row of rows) {
+    assignments.get(row.settingType)?.add(String(row.cameraId));
+  }
+  return assignments;
+};
+
+/**
  * The detection types a client may see, as a Set. Resolves the tenant itself so
  * callers can pass a raw token payload. Returns an empty Set when the tenant
  * cannot be resolved or nothing is licensed — callers treat that as "hide all".
@@ -533,13 +563,15 @@ export const getLicenseState = async ({ adminId, userId, channelUserId } = {}) =
       userId: null,
       purchasedCameras: 0,
       allocations: new Map(),
+      cameraAssignments: new Map(),
       licenseCameras: [],
       byType: new Map(),
     };
   }
 
-  const [allocations, usage] = await Promise.all([
+  const [allocations, cameraAssignments, usage] = await Promise.all([
     getAllowedAllocations(admin._id),
+    getCameraAssignments(admin._id),
     getUsage(admin.user_id),
   ]);
 
@@ -549,6 +581,7 @@ export const getLicenseState = async ({ adminId, userId, channelUserId } = {}) =
     userId: admin.user_id,
     purchasedCameras: Number(admin.purchasedCameras) || 0,
     allocations,
+    cameraAssignments,
     licenseCameras: usage.licenseCameras,
     byType: usage.byType,
   };
@@ -617,6 +650,23 @@ export const assertCanEnableDetection = async ({
   }
 
   // 2. Camera license — distinct cameras running any detection.
+  // Exact camera selection applies only once a superadmin has explicitly
+  // configured it for this detection. Existing clients stay count-based until
+  // that first choice is made.
+  if (
+    license.cameraAssignments?.has(settingType) &&
+    !license.cameraAssignments.get(settingType).has(targetId)
+  ) {
+    return {
+      ok: false,
+      code: LICENSE_ERRORS.CAMERA_NOT_ASSIGNED,
+      message: cameraNotAssignedMessage(settingType),
+      limit: license.allocations.get(settingType) || 0,
+      inUse: license.cameraAssignments.get(settingType).size,
+      cameras: [],
+    };
+  }
+
   const licenseCameras = license.licenseCameras || [];
   const alreadyLicensed = licenseCameras.some((camera) => camera.cameraId === targetId);
   if (!alreadyLicensed && licenseCameras.length >= license.purchasedCameras) {
@@ -703,6 +753,60 @@ export const stripUnlicensedDetectionsFromList = (channels, allowedTypes) =>
   Array.isArray(channels)
     ? channels.map((channel) => stripUnlicensedDetections(channel, allowedTypes))
     : channels;
+
+/**
+ * Stop one detection on one camera after the Super Admin removes that exact
+ * assignment. The database is corrected even if the detection engine cannot
+ * be reached, matching the whole-detection revoke semantics below.
+ */
+export const revokeDetectionOnCamera = async ({
+  adminId,
+  userId,
+  cameraId,
+  settingType,
+}) => {
+  if (!userId || !cameraId || !settingType) return { stopped: 0, failed: 0 };
+
+  const channel = await Channel.findOne({
+    _id: cameraId,
+    userId,
+    [`detections.${settingType}.enabled`]: true,
+  }).populate("nvrId");
+  if (!channel) return { stopped: 0, failed: 0 };
+
+  let failed = 0;
+  try {
+    await pythonService.handleDetectionStartStop(
+      channel,
+      adminId,
+      false,
+      settingType,
+      [],
+      [],
+      [],
+      0,
+      undefined,
+      {},
+      {},
+    );
+  } catch (error) {
+    failed = 1;
+    logger.error(
+      `[LICENSE] camera assignment revoke: engine stop failed for channel=${cameraId} ` +
+        `detector=${settingType}: ${error.message}`,
+    );
+  }
+
+  channel.detections[settingType].enabled = false;
+  channel.detections[settingType].overrideState = undefined;
+  channel.detections[settingType].overrideUntil = undefined;
+  await channel.save();
+
+  logger.info(
+    `[LICENSE] camera assignment revoked channel=${cameraId} detector=${settingType}`,
+  );
+  return { stopped: 1, failed };
+};
 
 /**
  * Stop a detection everywhere it is running for one client, because the
@@ -813,8 +917,10 @@ export default {
   NO_CAMERA_LICENSE_MESSAGE,
   detectionLimitMessage,
   detectionNotLicensedMessage,
+  cameraNotAssignedMessage,
   resolveTenant,
   getAllowedAllocations,
+  getCameraAssignments,
   getAllowedDetectionTypes,
   getUsage,
   getLicenseState,
@@ -822,6 +928,7 @@ export default {
   assertDetectionLicensed,
   stripUnlicensedDetections,
   stripUnlicensedDetectionsFromList,
+  revokeDetectionOnCamera,
   filterDetectionTypes,
   allowedIncidentTypes,
   revokeDetectionEverywhere,

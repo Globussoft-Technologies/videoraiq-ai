@@ -52,6 +52,7 @@ import measurementsRoutes from "../../core/v2/measurements/measurements.routes.j
 import adminStorageRoutes from "../../core/v2/adminStorage/adminStorage.routes.js";
 import measurementCalibrationRoutes from "../../core/v2/measurementCalibration/measurementCalibration.routes.js";
 import verifyMeasurementAuth from "../../core/v2/measurementIncidents/measurementAuth.middleware.js";
+import amemberIntegrationRoutes from "../../core/v2/integrations/amember.routes.js";
 
 const router = express.Router();
 
@@ -70,6 +71,7 @@ router.get("/health", allowCrossOriginResource, (_req, res) => {
 // v2-specific behaviour.
 // ─────────────────────────────────────────────────────────────────────────────
 router.use("/auth", authRoutes);
+router.use("/integrations/amember", amemberIntegrationRoutes);
 router.use("/auth/raspberry-pi", raspberryPiRoutes);
 router.use("/uploads", uploadRoutes);
 router.use("/admin", adminRoutes);
