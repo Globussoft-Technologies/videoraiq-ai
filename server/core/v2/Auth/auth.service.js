@@ -91,7 +91,9 @@ class AUTHService {
     this.amemberWebhookSecret = process.env.AMEMBER_WEBHOOK_SECRET ||
       (config.has("aMember.webhookSecret")
         ? config.get("aMember.webhookSecret")
-        : null);
+        : config.has("AMEMBER_WEBHOOK_SECRET")
+          ? config.get("AMEMBER_WEBHOOK_SECRET")
+          : null);
     this.usedImpersonationNonces = new Map();
   }
 
@@ -100,6 +102,37 @@ class AUTHService {
       const error = new Error("aMember webhook is not configured");
       error.statusCode = 503;
       throw error;
+    }
+
+    // aMember's current hook supports a static shared-secret header and sends
+    // its native snake_case user_id. Keep profile fields untrusted: only the ID
+    // is consumed, and the authoritative profile is fetched from aMember below.
+    const rawSecret = String(req.get?.("x-amember-webhook-secret") || "");
+    if (rawSecret) {
+      const expected = Buffer.from(String(this.amemberWebhookSecret), "utf8");
+      const supplied = Buffer.from(rawSecret, "utf8");
+      if (
+        supplied.length !== expected.length ||
+        !timingSafeEqual(supplied, expected)
+      ) {
+        const error = new Error("Invalid aMember webhook secret");
+        error.statusCode = 401;
+        throw error;
+      }
+
+      const userId = String(req.body?.user_id ?? "").trim();
+      if (!/^\d+$/.test(userId)) {
+        const error = new Error("Valid user_id is required");
+        error.statusCode = 400;
+        throw error;
+      }
+
+      return {
+        eventId: null,
+        event: "user.sync",
+        userId,
+        trackEvent: false,
+      };
     }
 
     const eventId = String(req.body?.eventId || "").trim();
@@ -151,7 +184,55 @@ class AUTHService {
       throw error;
     }
 
-    return { eventId, event, userId };
+    return { eventId, event, userId, trackEvent: true };
+  }
+
+  _safeAmemberWebhookLogValue(value, maxLength = 128) {
+    return String(value ?? "unknown").replace(/[\r\n]/g, " ").slice(0, maxLength);
+  }
+
+  _amemberWebhookLogContext(req, verified) {
+    // These values are safe operational identifiers, but they still originate
+    // outside this process. Strip line breaks to prevent forged multiline log
+    // entries. Never include the signature, timestamp, API key or shared secret.
+    const safe = this._safeAmemberWebhookLogValue;
+    return {
+      eventId: safe(verified?.eventId ?? req.body?.eventId),
+      event: safe(
+        verified?.event ?? req.body?.event ?? (req.body?.user_id != null ? "user.sync" : null),
+        40,
+      ),
+      userId: safe(verified?.userId ?? req.body?.userId ?? req.body?.user_id, 40),
+      sourceIp: safe(req.ip || req.socket?.remoteAddress, 64),
+    };
+  }
+
+  _logAmemberWebhookFailure(req, verified, statusCode, stage, message) {
+    const { eventId, event, userId, sourceIp } = this._amemberWebhookLogContext(
+      req,
+      verified,
+    );
+    const detail = this._safeAmemberWebhookLogValue(message, 500);
+    const line =
+      `[AMEMBER_WEBHOOK_FAILED] stage=${this._safeAmemberWebhookLogValue(stage, 40)} ` +
+      `status=${statusCode} ` +
+      `eventId=${eventId} event=${event} userId=${userId} sourceIp=${sourceIp} ` +
+      `error=${detail}`;
+
+    if (statusCode >= 500) logger.error(line);
+    else logger.warn(line);
+  }
+
+  _logAmemberWebhookSuccess(req, verified, status, adminId) {
+    const { eventId, event, userId, sourceIp } = this._amemberWebhookLogContext(
+      req,
+      verified,
+    );
+    logger.info(
+      `[AMEMBER_WEBHOOK_SYNCED] status=${status} eventId=${eventId} event=${event} ` +
+        `userId=${userId} adminId=${this._safeAmemberWebhookLogValue(adminId, 40)} ` +
+        `sourceIp=${sourceIp}`,
+    );
   }
 
   async getAmemberUserById(userId) {
@@ -180,22 +261,39 @@ class AUTHService {
 
   async syncAmemberUserWebhook(req, res) {
     let verified;
+    let stage = "verification";
     try {
       verified = this._verifyAmemberWebhook(req);
 
-      const previousEvent = await amemberWebhookEventModel
-        .findOne({ eventId: verified.eventId })
-        .lean();
+      stage = "replay_check";
+      const previousEvent = verified.trackEvent
+        ? await amemberWebhookEventModel
+            .findOne({ eventId: verified.eventId })
+            .lean()
+        : null;
       if (previousEvent) {
         if (
           previousEvent.event !== verified.event ||
           previousEvent.userId !== verified.userId
         ) {
+          this._logAmemberWebhookFailure(
+            req,
+            verified,
+            409,
+            stage,
+            "eventId was already used for a different event",
+          );
           return res.status(409).json({
             ok: false,
             message: "eventId was already used for a different event",
           });
         }
+        this._logAmemberWebhookSuccess(
+          req,
+          verified,
+          "already_synchronized",
+          previousEvent.adminId,
+        );
         return res.status(200).json({
           ok: true,
           status: "already_synchronized",
@@ -205,39 +303,51 @@ class AUTHService {
 
       // The webhook body is only a notification. Profile fields always come
       // from aMember's authenticated API so callers cannot inject local data.
+      stage = "amember_user_lookup";
       const userData = await this.getAmemberUserById(verified.userId);
+      stage = "admin_sync";
       const registration = await this.registerAdminIfNotExists(userData);
       if (!registration?.ok || !registration?.admin) {
+        const message = registration?.error || "Failed to synchronize aMember user";
+        this._logAmemberWebhookFailure(req, verified, 409, stage, message);
         return res.status(409).json({
           ok: false,
-          message: registration?.error || "Failed to synchronize aMember user",
+          message,
         });
       }
 
-      try {
-        await amemberWebhookEventModel.create({
-          ...verified,
-          adminId: registration.admin._id,
-        });
-      } catch (error) {
-        // Another instance may have completed the same signed event while this
-        // one was fetching aMember. The user upsert is idempotent, so that race
-        // is a successful replay rather than an API failure.
-        if (error?.code !== 11000) throw error;
+      if (verified.trackEvent) {
+        stage = "event_record";
+        try {
+          await amemberWebhookEventModel.create({
+            eventId: verified.eventId,
+            event: verified.event,
+            userId: verified.userId,
+            adminId: registration.admin._id,
+          });
+        } catch (error) {
+          // Another instance may have completed the same signed event while this
+          // one was fetching aMember. The user upsert is idempotent, so that race
+          // is a successful replay rather than an API failure.
+          if (error?.code !== 11000) throw error;
+        }
       }
 
+      const resultStatus = registration.created ? "created" : "updated";
+      this._logAmemberWebhookSuccess(
+        req,
+        verified,
+        resultStatus,
+        registration.admin._id,
+      );
       return res.status(registration.created ? 201 : 200).json({
         ok: true,
-        status: registration.created ? "created" : "updated",
+        status: resultStatus,
         adminId: registration.admin._id,
       });
     } catch (error) {
       const statusCode = error?.statusCode || 500;
-      if (statusCode >= 500) {
-        logger.error("aMember provisioning webhook failed:", error);
-      } else {
-        logger.warn("aMember provisioning webhook rejected:", error.message);
-      }
+      this._logAmemberWebhookFailure(req, verified, statusCode, stage, error.message);
       return res.status(statusCode).json({ ok: false, message: error.message });
     }
   }
