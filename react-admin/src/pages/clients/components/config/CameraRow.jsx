@@ -4,7 +4,7 @@ import { pillColor, shortLabel, PILL_OFF } from './cameraDetections'
 // Pills are driven straight off the camera's own `detections` object — one pill
 // per key present. Clicking a pill toggles that detection's enabled flag; the
 // parent tracks the change and persists it on Save.
-const CameraRow = ({ camera, onToggle }) => {
+const CameraRow = ({ camera, limits, selectedCounts, onToggle }) => {
   const { name, channelId, nvrName, detections = {} } = camera
   const settingTypes = Object.keys(detections)
 
@@ -33,17 +33,25 @@ const CameraRow = ({ camera, onToggle }) => {
           settingTypes.map((settingType, i) => {
             const enabled = detections[settingType] === true
             const label = shortLabel(settingType)
+            const limit = limits[settingType] ?? 0
+            const selected = selectedCounts[settingType] || 0
+            const atLimit = !enabled && selected >= limit
             return (
               <button
                 key={settingType}
                 type="button"
                 onClick={() => onToggle(camera.cameraId, settingType, !enabled)}
-                title={`${enabled ? 'Disable' : 'Enable'} ${label}`}
+                disabled={atLimit}
+                title={
+                  atLimit
+                    ? `${label}: ${selected} of ${limit} cameras selected. Deselect another camera first.`
+                    : `${enabled ? 'Disable' : 'Enable'} ${label} (${selected} of ${limit} selected)`
+                }
                 className={`inline-flex cursor-pointer rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors ${
                   enabled ? pillColor(i) : PILL_OFF
-                }`}
+                } ${atLimit ? 'cursor-not-allowed opacity-40' : ''}`}
               >
-                {label}
+                {label} {selected}/{limit}
               </button>
             )
           })

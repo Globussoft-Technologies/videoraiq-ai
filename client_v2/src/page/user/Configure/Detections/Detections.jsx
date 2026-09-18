@@ -1048,6 +1048,19 @@ export default function Detections() {
       return;
     }
     const enable = typeof forcedEnable === 'boolean' ? forcedEnable : !model.active;
+    const assignment = (license?.detections || []).find(
+      (row) => row.settingType === detectionType,
+    );
+    if (
+      enable &&
+      assignment?.cameraSelectionConfigured &&
+      !(assignment.assignedCameraIds || []).map(String).includes(String(zoneCamera._id))
+    ) {
+      toast.error(
+        `${model.name} is not assigned to this camera. Please contact support at support@videoraiq.com to add this camera.`,
+      );
+      return;
+    }
     setDetectionToggleLoading(detectionType);
     try {
       // If turning on and camera does not have this detection setting in DB yet:
@@ -1403,6 +1416,16 @@ export default function Detections() {
       // The editor already applied the successful local update; skip noisy background refresh errors.
     }
   };
+
+  // Camera-specific assignments arrive over the existing detection licence
+  // socket event. Re-read the open camera after each pushed snapshot so a
+  // Super Admin deselection immediately changes an active toggle to disabled.
+  useEffect(() => {
+    if (!license || !zoneCamera?._id) return;
+    refreshZoneCamera();
+    // refreshZoneCamera intentionally captures the currently open camera.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [license]);
 
   /**
    * Saving a per-camera schedule only confirms the schedule DOCUMENT was

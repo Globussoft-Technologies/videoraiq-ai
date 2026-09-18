@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 import CameraRow from './CameraRow'
 
-const CamerasPanel = ({ cameras, onToggle }) => {
+const CamerasPanel = ({ cameras, detections, onToggle }) => {
   const [query, setQuery] = useState('')
 
   const filtered = useMemo(() => {
@@ -15,6 +15,23 @@ const CamerasPanel = ({ cameras, onToggle }) => {
         String(c.channelId).includes(q)
     )
   }, [cameras, query])
+
+  const limits = useMemo(
+    () => Object.fromEntries(
+      detections.map((d) => [d.settingType, Number(d.cameraAllocation) || 0])
+    ),
+    [detections]
+  )
+
+  const selectedCounts = useMemo(() => {
+    const counts = {}
+    for (const camera of cameras) {
+      for (const [settingType, enabled] of Object.entries(camera.detections || {})) {
+        if (enabled) counts[settingType] = (counts[settingType] || 0) + 1
+      }
+    }
+    return counts
+  }, [cameras])
 
   return (
     <div>
@@ -36,6 +53,10 @@ const CamerasPanel = ({ cameras, onToggle }) => {
 
         <span className="text-sm text-gray-400 dark:text-gray-500">
           {cameras.length} {cameras.length === 1 ? 'camera' : 'cameras'} provisioned
+        </span>
+
+        <span className="text-xs text-gray-400 dark:text-gray-500">
+          Select cameras up to each detection's licensed allowance.
         </span>
 
         {/* Add Camera — display-only until its POST endpoint exists */}
@@ -65,7 +86,13 @@ const CamerasPanel = ({ cameras, onToggle }) => {
           </p>
         ) : (
           filtered.map((camera) => (
-            <CameraRow key={camera.cameraId} camera={camera} onToggle={onToggle} />
+            <CameraRow
+              key={camera.cameraId}
+              camera={camera}
+              limits={limits}
+              selectedCounts={selectedCounts}
+              onToggle={onToggle}
+            />
           ))
         )}
       </div>

@@ -27,6 +27,7 @@ import {
   syncDetectionCatalog,
 } from './apis/put'
 import { getApiMessage, notifyApiError, notifyApiSuccess } from '../../utils/apiError'
+import { toast } from 'react-toastify'
 
 // How long edits must settle before an auto-save fires. Long enough that
 // holding a stepper is one request, short enough to feel immediate.
@@ -172,6 +173,22 @@ const ClientConfig = () => {
 
   // Flip one camera's detection pill in local state (persisted on Save).
   const toggleCameraDetection = (cameraId, settingType, enabled) => {
+    if (enabled) {
+      const allocation = detections.find((d) => d.settingType === settingType)
+      const limit = Number(allocation?.cameraAllocation) || 0
+      const selected = cameras.reduce(
+        (count, camera) => count + (camera.detections?.[settingType] === true ? 1 : 0),
+        0
+      )
+
+      if (selected >= limit) {
+        toast.warning(
+          `${allocation?.name || settingType} is already assigned to ${selected} of ${limit} allowed cameras. Deselect a camera first.`
+        )
+        return
+      }
+    }
+
     setCameras((prev) =>
       prev.map((c) =>
         c.cameraId === cameraId
@@ -550,7 +567,11 @@ const ClientConfig = () => {
           camerasLoading ? (
             <LoadingState message="Loading cameras…" />
           ) : (
-            <CamerasPanel cameras={cameras} onToggle={toggleCameraDetection} />
+            <CamerasPanel
+              cameras={cameras}
+              detections={detections}
+              onToggle={toggleCameraDetection}
+            />
           )
         ) : (
           <>
