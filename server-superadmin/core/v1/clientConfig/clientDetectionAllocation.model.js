@@ -25,6 +25,10 @@ const clientDetectionAllocationSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    cameraSelectionConfigured: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

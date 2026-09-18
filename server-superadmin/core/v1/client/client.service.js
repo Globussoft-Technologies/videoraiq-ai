@@ -10,6 +10,7 @@ import clientCameraDetectionModel from "../clientConfig/clientCameraDetection.mo
 import { Incident } from "../incidents/incidents.model.js";
 import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
 import AUTHService from "../Auth/auth.service.js";
+import { redis } from "../../../utils/database.js";
 
 const baseUrl = config.get("aMember.baseUrl");
 const apiKey = config.get("aMember.apiKey");
@@ -311,7 +312,7 @@ class ClientService {
         // Detection types this admin has enabled at the allocation level.
         clientDetectionAllocationModel
           .find({ adminId, enabled: true })
-          .select("settingType")
+          .select("settingType cameraAllocation")
           .lean(),
       ]);
 
@@ -369,7 +370,16 @@ class ClientService {
       });
 
       return res.send(
-        Response.SuccessResp("Client cameras fetched", { totalCount: rows.length, cameras: rows })
+        Response.SuccessResp("Client cameras fetched", {
+          totalCount: rows.length,
+          cameras: rows,
+          detectionAllocations: Object.fromEntries(
+            allocations.map((allocation) => [
+              allocation.settingType,
+              Number(allocation.cameraAllocation) || 0,
+            ]),
+          ),
+        })
       );
     } catch (err) {
       logger.error(`client getClientCameras: ${err.message}`);
@@ -395,6 +405,11 @@ class ClientService {
           .send(Response.userFailResp("settingType (string) and enabled (boolean) are required"));
       }
 
+      const admin = await adminModel.findById(adminId).select("user_id").lean();
+      if (!admin) {
+        return res.status(404).send(Response.notFoundResp("Client not found"));
+      }
+
       // The detection must be enabled for this admin at the allocation level.
       const allowed = await clientDetectionAllocationModel
         .findOne({ adminId, settingType, enabled: true })
@@ -406,16 +421,43 @@ class ClientService {
           .send(Response.userFailResp("This detection is not enabled for this client"));
       }
 
+      // Never allow a row to be created for a camera owned by another client,
+      // or for a camera that is no longer part of this client's active list.
+      const camera = await channelModel
+        .findOne({ _id: cameraId, userId: admin.user_id, isAdded: true })
+        .select("_id")
+        .lean();
+      if (!camera) {
+        return res
+          .status(404)
+          .send(Response.notFoundResp("Camera not found for this client"));
+      }
+
+      // Opt in to exact camera enforcement only after an administrator makes
+      // a choice. Merely opening the grid seeds false rows and must not alter
+      // an existing client's count-based licensing behaviour.
+      await clientDetectionAllocationModel.updateOne(
+        { _id: allowed._id },
+        { $set: { cameraSelectionConfigured: true } },
+      );
+
       // Enforce the allocation cap: this detection may be enabled on at most
       // `cameraAllocation` cameras for the admin. Only checked when enabling;
       // exclude the current camera so re-enabling an already-on camera doesn't
       // consume an extra slot.
       if (enabled) {
+        // Stale rows for removed/un-added cameras must not consume the current
+        // allowance. This used to make the grid look empty while still
+        // rejecting the first visible selections as "already full".
+        const activeCameraIds = await channelModel.distinct("_id", {
+          userId: admin.user_id,
+          isAdded: true,
+        });
         const alreadyEnabled = await clientCameraDetectionModel.countDocuments({
           adminId,
           settingType,
           enabled: true,
-          cameraId: { $ne: cameraId },
+          cameraId: { $in: activeCameraIds, $ne: cameraId },
         });
         if (alreadyEnabled + 1 > (allowed.cameraAllocation || 0)) {
           return res
@@ -433,6 +475,25 @@ class ClientService {
         { $set: { enabled } },
         { new: true, upsert: true }
       );
+
+      // Reuse the existing licence Redis bridge so connected V2 clients see
+      // camera-specific changes immediately. The client backend consumes this
+      // scope without treating it as a whole-detection revoke.
+      redis
+        .publish(
+          "detectionAllocation:update",
+          JSON.stringify({
+            scope: "camera",
+            adminId,
+            userId: admin.user_id,
+            cameraId,
+            settingType,
+            enabled: updated.enabled,
+          }),
+        )
+        .catch((error) =>
+          logger.error(`camera detection assignment publish failed: ${error.message}`),
+        );
 
       return res.send(
         Response.SuccessResp("Detection updated", {
