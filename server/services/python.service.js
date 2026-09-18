@@ -76,13 +76,21 @@ const buildPersonFallSickDetector = (severity, settings = {}) => ({
     settings.fall_min_horizontal_bbox_ratio ?? 0.95,
   fall_min_torso_angle_deg: settings.fall_min_torso_angle_deg ?? 55,
   fall_min_person_px_height: settings.fall_min_person_px_height ?? 80,
+  fall_annotation_hold_sec: settings.fall_annotation_hold_sec ?? 3,
   severity: severity ?? "high",
   trigger_notification: settings.trigger_notification ?? false,
   zone_name: settings.zone_name ?? "Full Frame",
 });
 
-const buildFireSmokeDetector = (severity, settings = {}) => ({
+const buildFireSmokeDetector = (
+  zones,
+  zone_configs,
+  severity,
+  settings = {},
+) => ({
   name: "fireSmokeDetectionSettings",
+  zone_configs,
+  zones: zones || [],
   fire_confidence: settings.fire_confidence ?? 0.25,
   smoke_confidence: settings.smoke_confidence ?? 0.25,
   fire_smoke_iou: settings.fire_smoke_iou ?? 0.3,
@@ -519,7 +527,14 @@ class PythonService {
       }
 
       if (detection_modes?.includes("fireSmokeDetectionSettings")) {
-        detectors.push(buildFireSmokeDetector(severity, confidence_thresholds));
+        detectors.push(
+          buildFireSmokeDetector(
+            zones,
+            zone_configs,
+            severity,
+            confidence_thresholds,
+          ),
+        );
       }
 
 
@@ -807,7 +822,14 @@ class PythonService {
       }
 
       if (detection_modes?.includes("fireSmokeDetectionSettings")) {
-        detectors.push(buildFireSmokeDetector(severity, confidence_thresholds));
+        detectors.push(
+          buildFireSmokeDetector(
+            zones,
+            zone_configs,
+            severity,
+            confidence_thresholds,
+          ),
+        );
       }
 
       if (detection_modes?.includes("vehicleType")) {

@@ -166,6 +166,7 @@ describe("toggleDetection - Person Fall/Sick DS synchronization", () => {
         fall_min_horizontal_bbox_ratio: 0.95,
         fall_min_torso_angle_deg: 55,
         fall_min_person_px_height: 80,
+        fall_annotation_hold_sec: 3,
         levelOfImportance: "high",
         trigger_notification: false,
         zone_name: "Full Frame",
@@ -202,6 +203,7 @@ describe("toggleDetection - Person Fall/Sick DS synchronization", () => {
       expect.objectContaining({
         person_threshold: 0.65,
         fall_min_torso_angle_deg: 55,
+        fall_annotation_hold_sec: 3,
         trigger_notification: false,
         zone_name: "Full Frame",
       }),

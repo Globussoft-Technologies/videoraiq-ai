@@ -616,6 +616,7 @@ export const personFallSickDetectionSettings = {
     fall_min_horizontal_bbox_ratio: 0.95,
     fall_min_torso_angle_deg: 55,
     fall_min_person_px_height: 80,
+    fall_annotation_hold_sec: 3,
     trigger_notification: false,
     zone_name: "Full Frame",
     alertThreshold: 3,

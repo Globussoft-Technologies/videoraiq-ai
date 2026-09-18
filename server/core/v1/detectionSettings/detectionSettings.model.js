@@ -462,6 +462,7 @@ const PersonFallSickDetectionSchema = new mongoose.Schema({
   fall_min_horizontal_bbox_ratio: { type: Number, min: 0, default: 0.95 },
   fall_min_torso_angle_deg: { type: Number, min: 0, max: 180, default: 55 },
   fall_min_person_px_height: { type: Number, min: 0, default: 80 },
+  fall_annotation_hold_sec: { type: Number, min: 0, default: 3 },
   trigger_notification: { type: Boolean, default: false },
   zone_name: { type: String, default: "Full Frame" },
   imageRequired: {
