@@ -516,8 +516,11 @@ class MeasurementLogService {
         if (when) {
           const k = bucketKey(moment(when).tz(timezone));
           const bucket = buckets.get(k) || { ok: 0, fail: 0 };
-          if (status === "mismatch") bucket.fail += 1;
-          else bucket.ok += 1;
+          // Keep the chart consistent with the records Pass filter: only a
+          // derived backend pass is a pass. Mismatches and QR errors are both
+          // failures for throughput purposes.
+          if (status === "pass") bucket.ok += 1;
+          else bucket.fail += 1;
           buckets.set(k, bucket);
         }
 
