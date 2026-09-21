@@ -180,7 +180,7 @@ describe("detection visibility restriction", () => {
 });
 
 describe("superadmin camera-specific assignments", () => {
-  it("allows a selected camera and rejects an unselected camera", async () => {
+  it("reserves a selected slot while leaving the rest of the allocation flexible", async () => {
     const admin = await makeClient({
       purchasedCameras: 2,
       allocations: { countPersonsSettings: 2 },
@@ -190,8 +190,12 @@ describe("superadmin camera-specific assignments", () => {
       name: "Selected camera",
       detections: { countPersonsSettings: { id: setting._id, enabled: false } },
     });
-    const unselected = await makeCamera({
-      name: "Unselected camera",
+    const flexible = await makeCamera({
+      name: "Flexible camera",
+      detections: { countPersonsSettings: { id: setting._id, enabled: false } },
+    });
+    const blocked = await makeCamera({
+      name: "Blocked camera",
       detections: { countPersonsSettings: { id: setting._id, enabled: false } },
     });
     await DetectionAllocation.updateOne(
@@ -208,12 +212,45 @@ describe("superadmin camera-specific assignments", () => {
     expect(payload(await toggle(admin, selected, "countPersonsSettings", true)).status).toBe(
       "success",
     );
-    const refused = await toggle(admin, unselected, "countPersonsSettings", true);
+    expect(payload(await toggle(admin, flexible, "countPersonsSettings", true)).status).toBe(
+      "success",
+    );
+    const refused = await toggle(admin, blocked, "countPersonsSettings", true);
     expect(refused.statusCode).toBe(403);
     expect(payload(refused).error.code).toBe("CAMERA_NOT_ASSIGNED");
     expect(payload(refused).message).toBe(
       "Count Persons Detection is not assigned to this camera. Please contact support at support@videoraiq.com to add this camera.",
     );
+  });
+
+  it("uses a strict allowlist when every allocated slot has a selected camera", async () => {
+    const admin = await makeClient({
+      purchasedCameras: 3,
+      allocations: { countPersonsSettings: 2 },
+    });
+    const setting = await makeCountSetting();
+    const selected = await Promise.all([1, 2].map((index) => makeCamera({
+      name: `Selected camera ${index}`,
+      detections: { countPersonsSettings: { id: setting._id, enabled: false } },
+    })));
+    const unselected = await makeCamera({
+      name: "Unselected camera",
+      detections: { countPersonsSettings: { id: setting._id, enabled: false } },
+    });
+    await DetectionAllocation.updateOne(
+      { adminId: admin._id, settingType: "countPersonsSettings" },
+      { $set: { cameraSelectionConfigured: true } },
+    );
+    await CameraDetection.insertMany(selected.map((camera) => ({
+      adminId: admin._id,
+      cameraId: camera._id,
+      settingType: "countPersonsSettings",
+      enabled: true,
+    })));
+
+    const refused = await toggle(admin, unselected, "countPersonsSettings", true);
+    expect(refused.statusCode).toBe(403);
+    expect(payload(refused).error.code).toBe("CAMERA_NOT_ASSIGNED");
   });
 
   it("keeps count-based behavior until a camera choice is explicitly made", async () => {

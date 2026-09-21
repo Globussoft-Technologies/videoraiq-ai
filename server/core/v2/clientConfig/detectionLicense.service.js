@@ -649,24 +649,36 @@ export const assertCanEnableDetection = async ({
     };
   }
 
-  // 2. Camera license — distinct cameras running any detection.
-  // Exact camera selection applies only once a superadmin has explicitly
-  // configured it for this detection. Existing clients stay count-based until
-  // that first choice is made.
-  if (
-    license.cameraAssignments?.has(settingType) &&
-    !license.cameraAssignments.get(settingType).has(targetId)
-  ) {
-    return {
-      ok: false,
-      code: LICENSE_ERRORS.CAMERA_NOT_ASSIGNED,
-      message: cameraNotAssignedMessage(settingType),
-      limit: license.allocations.get(settingType) || 0,
-      inUse: license.cameraAssignments.get(settingType).size,
-      cameras: [],
-    };
+  // 2. Camera-specific reservations. With no configured cameras, the entire
+  // allocation is flexible. Each selected camera reserves one slot, while the
+  // remaining slots stay available for any other cameras.
+  const allocation = license.allocations.get(settingType) || 0;
+  const camerasForType = license.byType.get(settingType) || [];
+  const alreadyRunning = camerasForType.some((camera) => camera.cameraId === targetId);
+  const assignedCameras = license.cameraAssignments?.get(settingType);
+
+  // Selected cameras reserve only their own slots. Any unselected portion of
+  // the allocation remains flexible: allocation=2 with one selected camera
+  // allows that camera plus any one other camera. Selecting both slots turns
+  // it into a strict two-camera allowlist.
+  if (assignedCameras && !assignedCameras.has(targetId) && !alreadyRunning) {
+    const flexibleSlots = Math.max(allocation - assignedCameras.size, 0);
+    const flexibleInUse = camerasForType.filter(
+      (camera) => !assignedCameras.has(camera.cameraId),
+    );
+    if (flexibleInUse.length >= flexibleSlots) {
+      return {
+        ok: false,
+        code: LICENSE_ERRORS.CAMERA_NOT_ASSIGNED,
+        message: cameraNotAssignedMessage(settingType),
+        limit: flexibleSlots,
+        inUse: flexibleInUse.length,
+        cameras: flexibleInUse,
+      };
+    }
   }
 
+  // 3. Overall camera license — distinct cameras running any detection.
   const licenseCameras = license.licenseCameras || [];
   const alreadyLicensed = licenseCameras.some((camera) => camera.cameraId === targetId);
   if (!alreadyLicensed && licenseCameras.length >= license.purchasedCameras) {
@@ -680,10 +692,7 @@ export const assertCanEnableDetection = async ({
     };
   }
 
-  // 3. Detection-wise camera limit — cameras running THIS detection.
-  const allocation = license.allocations.get(settingType) || 0;
-  const camerasForType = license.byType.get(settingType) || [];
-  const alreadyRunning = camerasForType.some((camera) => camera.cameraId === targetId);
+  // 4. Detection-wise camera limit — cameras running THIS detection.
   if (!alreadyRunning && camerasForType.length >= allocation) {
     return {
       ok: false,
