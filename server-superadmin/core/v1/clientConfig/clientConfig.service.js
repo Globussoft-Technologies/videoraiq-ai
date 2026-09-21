@@ -199,6 +199,12 @@ class ClientConfigService {
       if (req.body?.enabled !== undefined) {
         update.enabled = Boolean(req.body.enabled);
       }
+      // Zero cameras means the detection has no usable entitlement. Treat it
+      // as a full revoke so the Redis subscriber stops it through DS on every
+      // camera instead of leaving existing engines running indefinitely.
+      if (update.cameraAllocation === 0) {
+        update.enabled = false;
+      }
       if (Object.keys(update).length === 0) {
         return res.status(400).send(Response.userFailResp("Provide cameraAllocation and/or enabled"));
       }
