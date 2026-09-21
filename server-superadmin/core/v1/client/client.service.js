@@ -146,9 +146,14 @@ class ClientService {
   async fleetOverview(req, res) {
     try {
       const since24h = new Date(Date.now() - 24 * 3600000);
+      // Search affects only the camera-utilisation panel. The headline totals,
+      // plans, health and alerts must remain fleet-wide while one client is
+      // being located in that list. Plain substring matching avoids turning
+      // user input into an executable regular expression.
+      const search = String(req.query?.search || "").trim().slice(0, 120).toLowerCase();
 
       const [admins, nvrAgg, detectionAgg, controlAgg, alerts24h] = await Promise.all([
-        adminModel.find().select("user_id name_f name_l login purchasedCameras").lean(),
+        adminModel.find().select("user_id name_f name_l login email purchasedCameras subscriptionSnapshot").lean(),
         NVRModel.aggregate([{ $group: { _id: "$userId", cameras: { $sum: "$cameraCount" } } }]),
         clientCameraDetectionModel.aggregate([
           { $match: { enabled: true } },
@@ -184,12 +189,20 @@ class ClientService {
       const detectionsRunning = detectionAgg.reduce((s, d) => s + d.count, 0);
       const controls = Object.fromEntries(controlAgg.map((c) => [c._id, c.count]));
 
-      const cameraUtilisation = enriched.map((a) => ({
-        adminId: a._id,
-        name: `${a.name_f || ""} ${a.name_l || ""}`.trim() || a.login,
-        provisioned: provisionedByUser[a.user_id] || 0,
-        licensed: a.purchasedCameras || 0,
-      }));
+      const cameraUtilisation = enriched
+        .filter((a) => {
+          if (!search) return true;
+          const fullName = `${a.name_f || ""} ${a.name_l || ""}`.trim();
+          return [fullName, a.name_f, a.name_l, a.login, a.email, a.user_id]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(search));
+        })
+        .map((a) => ({
+          adminId: a._id,
+          name: `${a.name_f || ""} ${a.name_l || ""}`.trim() || a.login,
+          provisioned: provisionedByUser[a.user_id] || 0,
+          licensed: a.purchasedCameras || 0,
+        }));
 
       const planCounts = {};
       for (const a of enriched) {

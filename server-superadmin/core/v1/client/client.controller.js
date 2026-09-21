@@ -15,6 +15,7 @@ class ClientController {
     async fleetOverview(req, res, next) {
         /* #swagger.tags = ['Client'] */
         /* #swagger.description = 'Fleet Overview stats: header tiles (clients, active, cameras licensed/provisioned, detections running, alerts 24h), camera utilisation per client, clients by plan, detections by type, camera health. Super-admin token required.' */
+        /* #swagger.parameters['search'] = { in: 'query', description: 'Filter only the camera-utilisation client list by name, login, email, or user ID' } */
         return await clientService.fleetOverview(req, res, next);
     }
 
