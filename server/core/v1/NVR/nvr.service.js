@@ -1063,7 +1063,7 @@ class NVRService {
 
         const uid = `${savedNvr._id}-${savedCam._id}`;
         const rtspUrl = buildRTSPUrl(savedNvr, savedCam, "main");
-        registerCameraStream(uid, rtspUrl, savedNvr?.userId);
+        await registerCameraStream(uid, rtspUrl, savedNvr?.userId);
         savedCameras.push(savedCam);
       }
 
@@ -1139,11 +1139,24 @@ class NVRService {
           "InputProxyChannel"
         );
 
-        const statuses = await fetchAllPaged(
-          "/ISAPI/ContentMgmt/InputProxy/channels/status",
-          "InputProxyChannelStatusList",
-          "InputProxyChannelStatus"
-        );
+        const statusPath = "/ISAPI/ContentMgmt/InputProxy/channels/status";
+        let statuses = [];
+        // Hikvision can expose the input channel before its proxy stream ID is
+        // available. Do not build/register a URL ending in `/Channels/`.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          statuses = await fetchAllPaged(
+            statusPath,
+            "InputProxyChannelStatusList",
+            "InputProxyChannelStatus"
+          );
+          const missingStreamId = channels.some((ch) => {
+            const status = statuses.find((s) => s.id === ch.id);
+            const ids = status?.streamingProxyChannelIdList?.streamingProxyChannelId;
+            return !ids || (Array.isArray(ids) ? ids.length === 0 : !ids);
+          });
+          if (!missingStreamId) break;
+          if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 750));
+        }
 
         const streamingChannels = await fetchAllPaged(
           "/ISAPI/Streaming/channels",
@@ -1168,8 +1181,15 @@ class NVRService {
         for (const ch of channels) {
           const chId = ch.id;
           const status = statuses.find((s) => s.id === chId);
-          const streamIds =
+          const rawStreamIds =
             status?.streamingProxyChannelIdList?.streamingProxyChannelId || [];
+          const streamIds = Array.isArray(rawStreamIds) ? rawStreamIds : [rawStreamIds];
+
+          if (!streamIds.length) {
+            throw new Error(
+              `Hikvision did not return an RTSP stream channel for camera ${chId}. Please retry discovery.`
+            );
+          }
 
           const rtspChannels = streamIds.map((id) => ({
             id,
