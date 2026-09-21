@@ -19,7 +19,7 @@ vi.mock("../../../utils/mediaStorage.js", () => ({
   putMedia: vi.fn(async () => "/uploads/reports/1/x"),
 }));
 
-const { reportTableRows, rowFromAttendance, buildCsv, REPORT_HEADERS } = await import(
+const { applyPeriodTotals, reportTableRows, rowFromAttendance, buildCsv, REPORT_HEADERS } = await import(
   "../../../core/v2/attendanceAutoEmailReport/attendanceAutoEmailReport.service.js"
 );
 
@@ -50,6 +50,25 @@ function toMinutes(text) {
 }
 
 describe("attendanceAutoEmailReport per-session break time", () => {
+  it("adds each employee's selected-period break total in hours and minutes", () => {
+    const rows = [
+      { employeeKey: "e1", workingMinutesDay: 60, breakMinutesDay: 35 },
+      { employeeKey: "e1", workingMinutesDay: 90, breakMinutesDay: 50 },
+      { employeeKey: "e2", workingMinutesDay: 30, breakMinutesDay: 10 },
+    ];
+
+    applyPeriodTotals(rows);
+
+    expect(rows[0].breakHoursPeriod).toBe("01:25");
+    expect(rows[1].breakHoursPeriod).toBe("01:25");
+    expect(rows[2].breakHoursPeriod).toBe("00:10");
+  });
+
+  it("places the selected-period break total after the daily break total", () => {
+    const daily = REPORT_HEADERS.indexOf("Total Break Hours for the Day");
+    expect(REPORT_HEADERS[daily + 1]).toBe("Total Break Hours for the Selected Period");
+  });
+
   it("exposes the column right after the day's working-hours total", () => {
     const breakTime = REPORT_HEADERS.indexOf("Break Time");
     expect(breakTime).toBeGreaterThan(-1);
@@ -131,7 +150,7 @@ describe("attendanceAutoEmailReport per-session break time", () => {
       rules,
     );
     const csv = buildCsv({ report: {}, rows: [row], label: "Aug 2026", timezone: TZ }).toString("utf8");
-    const header = csv.split("\r\n").find((line) => line.startsWith("ID,"));
+    const header = csv.split("\r\n").find((line) => line.includes("Total Working Hours for the Day"));
     expect(header).toContain("Total Working Hours for the Day,Break Time,Total Break Hours for the Day");
   });
 });

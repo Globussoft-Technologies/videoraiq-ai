@@ -80,7 +80,7 @@ const toMinutes = (text) => {
 describe("breakLogReport — columns", () => {
   it("carries every requested column, in order", () => {
     expect(BREAK_HEADERS).toEqual([
-      "S No", "Employee I'd", "Employee Name", "Department", "Shift I'd", "Shift Timings", "Date", "Location",
+      "S No", "Employee ID", "Employee Name", "Department", "Shift ID", "Shift Timings", "Date", "Location",
       "Break #", "Break Out", "Break In", "Break Time", "Total Break Time",
       "Break Out Camera", "Break In Camera", "View Image",
     ]);
@@ -88,10 +88,10 @@ describe("breakLogReport — columns", () => {
 
   it("fills the identity columns from the employee and their shift", () => {
     const line = breakTableRows([row(TWO_BREAKS)])[0].cells;
-    expect(at(line, "Employee I'd")).toBe("103198");
+    expect(at(line, "Employee ID")).toBe("103198");
     expect(at(line, "Employee Name")).toBe("Chethan S");
     expect(at(line, "Department")).toBe("software development");
-    expect(at(line, "Shift I'd")).toBe("morning shift");
+    expect(at(line, "Shift ID")).toBe("morning shift");
     expect(at(line, "Shift Timings")).toBe("10:00 - 19:00");
     expect(at(line, "Date")).toBe("07 Aug 2026");
     expect(at(line, "Location")).toBe("bangalore");
@@ -148,7 +148,7 @@ describe("breakLogReport — totals", () => {
     const out = breakTableRows([row(TWO_BREAKS)]);
     expect(at(out[0].cells, "Total Break Time")).toBe("");
     expect(at(out[1].cells, "Total Break Time")).toBe("");
-    expect(at(out[2].cells, "Total Break Time")).toBe("1h 30m");
+    expect(at(out[2].cells, "Total Break Time")).toBe("01:30");
   });
 
   it("the per-break durations add up to the subtotal", () => {
@@ -201,7 +201,7 @@ describe("breakLogReport — output formats", () => {
     expect(sheet.getCell(5, BREAK_HEADERS.indexOf("S No") + 1).value).toBe("1");
     expect(sheet.getCell(6, BREAK_HEADERS.indexOf("S No") + 1).value).toBeNull();
     expect(sheet.getCell(5, BREAK_HEADERS.indexOf("Break Time") + 1).value).toBe("1h");
-    expect(sheet.getCell(7, BREAK_HEADERS.indexOf("Total Break Time") + 1).value).toBe("1h 30m");
+    expect(sheet.getCell(7, BREAK_HEADERS.indexOf("Total Break Time") + 1).value).toBe("01:30");
   });
 
   it("writes the columns into the CSV header", () => {

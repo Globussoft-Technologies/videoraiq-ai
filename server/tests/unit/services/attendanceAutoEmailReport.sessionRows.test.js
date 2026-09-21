@@ -28,6 +28,23 @@ function attendance(events) {
 const ev = (cameraType, time) => ({ cameraType, timestamp: `2026-08-07T${time}:00.000Z`, images: { frame: `/f/${time}.jpg` } });
 
 describe("attendanceAutoEmailReport session sub-rows", () => {
+  it("uses separate check-in and checkout image columns", () => {
+    const row = rowFromAttendance(
+      attendance([ev("checkin", "09:00"), ev("checkout", "17:00")]),
+      "Asia/Kolkata",
+      rules
+    );
+    const day = reportTableRows([row])[0].cells;
+    const checkin = day[REPORT_HEADERS.indexOf("Checkin Image")];
+    const checkout = day[REPORT_HEADERS.indexOf("Checkout Image")];
+
+    expect(REPORT_HEADERS).not.toContain("View Image");
+    expect(checkin).toMatchObject({ text: "Checkin Image" });
+    expect(checkout).toMatchObject({ text: "Checkout Image" });
+    expect(checkin.link).toContain("/f/09:00.jpg");
+    expect(checkout.link).toContain("/f/17:00.jpg");
+  });
+
   it("puts the first work session on the day line and the rest in `sessions`", () => {
     const row = rowFromAttendance(
       attendance([ev("checkin", "10:00"), ev("checkout", "10:30"), ev("checkin", "11:00"), ev("checkout", "12:15")]),
@@ -76,21 +93,21 @@ describe("attendanceAutoEmailReport session sub-rows", () => {
 
     // Day line: id + name + first session's check-in / check-out / duration.
     const day = out[0].cells;
-    expect(at(day, "ID")).toBe("1");
-    expect(at(day, "Name")).toBe("Nagul Lingiri");
+    expect(at(day, "Employee ID")).toBe("1");
+    expect(at(day, "Employee Name")).toBe("Nagul Lingiri");
     expect(at(day, "Duration")).toBe("00:30"); // session 1 duration
     expect(at(day, "Total Working Hours for the Day")).toBe(""); // lives on the total line
-    expect(at(day, "Total Working Hours for the period selected")).toBe("");
+    expect(at(day, "Total Working Hours for the Selected Period")).toBe("");
 
     // Session line: session 2 only, no identity, own duration.
-    expect(at(out[1].cells, "Name")).toBe("");
+    expect(at(out[1].cells, "Employee Name")).toBe("");
     expect(at(out[1].cells, "Duration")).toBe("01:15");
 
     // Total line: Σ session working + break + the period total.
     const total = out[2].cells;
     expect(at(total, "Total Working Hours for the Day")).toBe("01:45");
     expect(at(total, "Total Break Hours for the Day")).toBe("00:30");
-    expect(at(total, "Total Working Hours for the period selected")).toBe("01:45");
+    expect(at(total, "Total Working Hours for the Selected Period")).toBe("01:45");
   });
 
   it("emits just a day + total block when the day has a single session", () => {

@@ -9,10 +9,10 @@ const BORDER_COLOR = "FFC9D4EA";
 
 const COLUMN_WIDTHS = {
   "S No": 8,
-  "Employee I'd": 15,
+  "Employee ID": 15,
   "Employee Name": 24,
   Department: 20,
-  "Shift I'd": 17,
+  "Shift ID": 17,
   "Shift Timings": 24,
   Date: 16,
   "Location/Unit Number": 22,
@@ -22,10 +22,12 @@ const COLUMN_WIDTHS = {
   "Total Working Hours for the Day": 20,
   "Break Time": 15,
   "Total Break Hours for the Day": 20,
-  "Total Working Hours for the period selected": 23,
+  "Total Break Hours for the Selected Period": 23,
+  "Total Working Hours for the Selected Period": 23,
   "Checkin Camera": 20,
   "Checkout Camera": 20,
-  "View Image": 15,
+  "Checkin Image": 15,
+  "Checkout Image": 15,
 };
 
 const thinBorder = {

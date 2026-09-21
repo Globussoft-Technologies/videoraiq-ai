@@ -2,7 +2,7 @@ import axios from "axios";
 import PDFDocument from "pdfkit";
 import moment from "moment-timezone";
 import mongoose from "mongoose";
-import sendGridMail from "@sendgrid/mail";
+import sendGridMail from "../../../mailService/mail.transport.js";
 import config from "config";
 import Joi from "joi";
 import Response from "../../../utils/response.js";
@@ -261,7 +261,6 @@ export function rowFromAttendance(item, timezone, rules) {
   //     added into any working figure.
   const breakPairs = pairBreaks(events);
   const breakMinutes = breakMinutesFromPairs(breakPairs);
-  const breakDurationMs = breakDurationMsFromPairs(breakPairs);
 
   // Each break gap keyed by the check-in that ENDED it, so a session can look
   // up how long the employee was away immediately before it started. Keying by
@@ -328,9 +327,10 @@ export function rowFromAttendance(item, timezone, rules) {
     workingHoursDay: formatPeriodDuration(workingMinutesDay),
     // The day line shows the first work session, and nothing precedes it.
     breakBefore: firstSessionCells ? firstSessionCells.breakBefore : "-",
-    breakHoursDay: formatUnitDurationFromMs(breakDurationMs),
+    breakHoursDay: formatPeriodDuration(breakMinutes),
     // Filled in by applyPeriodTotals once every day for this employee has been read.
-    workingHoursPeriod: "00:00:00",
+    workingHoursPeriod: "00:00",
+    breakHoursPeriod: "00:00",
     // Per-employee period total sums this (the summed session working minutes).
     workingMinutesDay: workingMinutesDay,
     breakMinutesDay: breakMinutes,
@@ -341,7 +341,8 @@ export function rowFromAttendance(item, timezone, rules) {
     // sessions at all).
     checkInCamera: firstSessionCells ? firstSessionCells.checkInCamera : eventCamera(firstCheckIn),
     checkOutCamera: firstSessionCells ? firstSessionCells.checkOutCamera : eventCamera(lastCheckOut),
-    viewImage: firstSessionCells ? firstSessionCells.checkInImage : (firstCheckIn ? checkInImageUrl(firstCheckIn) : "-"),
+    checkInImage: firstSessionCells ? firstSessionCells.checkInImage : (firstCheckIn ? checkInImageUrl(firstCheckIn) : "-"),
+    checkOutImage: firstSessionCells ? firstSessionCells.checkOutImage : (lastCheckOut ? checkInImageUrl(lastCheckOut) : "-"),
     sessions,
     // One entry per break the employee took that day, in order. The break log
     // report renders one row from each; the attendance report only ever needs
@@ -448,21 +449,25 @@ async function streamReportRows(report, reference, onRow) {
   return { timezone, start, end, label, rowCount, rules };
 }
 
-// "Total Working Hours for the period selected" = per-employee sum of Total
-// Working Hrs (Day) — i.e. the summed work-session minutes — across every day
-// in the report range. Fillable only once all rows are collected. Mutates rows
-// in place.
+// Selected-period totals are per-employee sums of daily working and break time
+// across every day in the report range. They can only be filled after every
+// row has been collected. Mutates rows in place.
 export function applyPeriodTotals(rows) {
   const totals = new Map();
   for (const row of rows) {
-    totals.set(row.employeeKey, (totals.get(row.employeeKey) || 0) + (row.workingMinutesDay || 0));
+    const current = totals.get(row.employeeKey) || { workingMinutes: 0, breakMinutes: 0 };
+    current.workingMinutes += row.workingMinutesDay || 0;
+    current.breakMinutes += row.breakMinutesDay || 0;
+    totals.set(row.employeeKey, current);
   }
   for (const row of rows) {
-    const periodMinutes = totals.get(row.employeeKey) || 0;
-    row.workingMinutesPeriod = periodMinutes;
+    const periodTotals = totals.get(row.employeeKey) || { workingMinutes: 0, breakMinutes: 0 };
+    row.workingMinutesPeriod = periodTotals.workingMinutes;
+    row.breakMinutesPeriod = periodTotals.breakMinutes;
     // Hours and minutes ("223:51"), hours accumulating rather than rolling
     // into days, so the column stays comparable and summable.
-    row.workingHoursPeriod = formatPeriodDuration(periodMinutes);
+    row.workingHoursPeriod = formatPeriodDuration(periodTotals.workingMinutes);
+    row.breakHoursPeriod = formatPeriodDuration(periodTotals.breakMinutes);
   }
   return rows;
 }
@@ -518,7 +523,7 @@ export function shiftTimingsFor(shift) {
 // hand-placed "" padding, and adding/reordering a column can't misalign rows.
 const REPORT_COLUMNS = [
   { header: "S No", day: (ctx) => String(ctx.index + 1) },
-  { header: "Employee I'd", day: (ctx) => ctx.row.employeeId },
+  { header: "Employee ID", day: (ctx) => ctx.row.employeeId },
   {
     header: "Employee Name",
     day: (ctx) => ctx.row.employee,
@@ -528,7 +533,7 @@ const REPORT_COLUMNS = [
   // against, so the report shows it beside the times rather than leaving the
   // reader to look it up. Unassigned employees render "-", never a default
   // shift they were never actually on.
-  { header: "Shift I'd", day: (ctx) => shiftNameFor(ctx.row.shift) },
+  { header: "Shift ID", day: (ctx) => shiftNameFor(ctx.row.shift) },
   { header: "Shift Timings", day: (ctx) => shiftTimingsFor(ctx.row.shift) },
   { header: "Date", day: (ctx) => ctx.row.date },
   { header: "Location/Unit Number", day: (ctx) => ctx.row.location },
@@ -564,7 +569,11 @@ const REPORT_COLUMNS = [
     total: (ctx) => ctx.row.breakHoursDay,
   },
   {
-    header: "Total Working Hours for the period selected",
+    header: "Total Break Hours for the Selected Period",
+    total: (ctx) => ctx.row.breakHoursPeriod,
+  },
+  {
+    header: "Total Working Hours for the Selected Period",
     total: (ctx) => ctx.row.workingHoursPeriod,
   },
   {
@@ -578,9 +587,14 @@ const REPORT_COLUMNS = [
     session: (ctx) => ctx.session.checkOutCamera,
   },
   {
-    header: "View Image",
-    day: (ctx) => imageCell(ctx.row.viewImage),
-    session: (ctx) => imageCell(ctx.session.checkInImage),
+    header: "Checkin Image",
+    day: (ctx) => imageCell(ctx.row.checkInImage, "Checkin Image"),
+    session: (ctx) => imageCell(ctx.session.checkInImage, "Checkin Image"),
+  },
+  {
+    header: "Checkout Image",
+    day: (ctx) => imageCell(ctx.row.checkOutImage, "Checkout Image"),
+    session: (ctx) => imageCell(ctx.session.checkOutImage, "Checkout Image"),
   },
 ];
 
@@ -621,7 +635,7 @@ export function reportTableRows(rows) {
 }
 
 // Renders one CSV field. An image cell arrives as { text, link } and is written
-// as an Excel/Sheets/LibreOffice HYPERLINK formula so the "View Image" label
+// as an Excel/Sheets/LibreOffice HYPERLINK formula so the supplied image label
 // shows instead of the raw path and stays clickable. The formula itself
 // contains a comma and quotes, so it must be CSV-quoted here (inner quotes
 // doubled) \u2014 spreadsheets un-double and evaluate it on import. Because the
@@ -684,24 +698,26 @@ export async function buildPdf({ report, rows, label, timezone, columns: columnS
     //   - time columns fit "09:45:40 AM"
     //   - Date fits "01 Jun 2026"
     const columns = columnSpec || [
-      { head: "S\u00A0No", width: 30, noWrap: true },
-      { head: "Employee I'd", width: 58 },
-      { head: "Employee Name", width: 82, wrap: true },
-      { head: "Department", width: 72, wrap: true },
-      { head: "Shift I'd", width: 62, wrap: true },
-      { head: "Shift Timings", width: 72 },
-      { head: "Date", width: 60 },
-      { head: "Location/Unit Number", width: 56, wrap: true },
-      { head: "Check in", width: 66 },
-      { head: "Check out", width: 66 },
-      { head: "Duration", width: 50 },
-      { head: "Total Working Hrs (Day)", width: 62 },
-      { head: "Break Time", width: 58 },
-      { head: "Total Break Hrs (Day)", width: 60 },
-      { head: "Total Working Hrs (Period)", width: 68 },
-      { head: "Checkin Camera", width: 76, wrap: true },
-      { head: "Checkout Camera", width: 76, wrap: true },
-      { head: "View Image", width: 52 },
+      { head: "S\u00A0No", width: 26, noWrap: true },
+      { head: "Employee ID", width: 48 },
+      { head: "Employee Name", width: 72, wrap: true },
+      { head: "Department", width: 62, wrap: true },
+      { head: "Shift ID", width: 52, wrap: true },
+      { head: "Shift Timings", width: 64 },
+      { head: "Date", width: 54 },
+      { head: "Location/Unit Number", width: 52, wrap: true },
+      { head: "Check in", width: 58 },
+      { head: "Check out", width: 58 },
+      { head: "Duration", width: 44 },
+      { head: "Total Working Hrs (Day)", width: 54 },
+      { head: "Break Time", width: 48 },
+      { head: "Total Break Hrs (Day)", width: 54 },
+      { head: "Total Break Hrs (Period)", width: 58 },
+      { head: "Total Working Hrs (Period)", width: 58 },
+      { head: "Checkin Camera", width: 64, wrap: true },
+      { head: "Checkout Camera", width: 64, wrap: true },
+      { head: "Checkin Image", width: 48 },
+      { head: "Checkout Image", width: 48 },
     ];
     const tableLines = lineSpec || reportTableRows(rows);
     const heading = title || "Attendance Report";
@@ -912,13 +928,6 @@ function pdfExternalLinkNewWindow(document, x, y, width, height, url) {
   // differ on which location they inspect when deciding whether to reuse the
   // current tab.
   document.annotate(x, y, width, height, { Subtype: "Link", A: action, NewWindow: true });
-}
-
-function breakDurationMsFromPairs(pairs) {
-  return pairs.reduce((sum, pair) => {
-    const ms = new Date(pair.checkin.timestamp) - new Date(pair.checkout.timestamp);
-    return sum + (ms > 0 ? ms : 0);
-  }, 0);
 }
 
 function emailHtml(report, details) {

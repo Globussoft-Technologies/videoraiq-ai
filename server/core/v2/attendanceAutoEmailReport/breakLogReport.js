@@ -23,10 +23,10 @@ import { buildPdf, csvField, csvCell, imageCell, shiftNameFor, shiftTimingsFor }
  */
 const BREAK_COLUMNS = [
   { header: "S No", width: 26, pdfWidth: 30, noWrap: true, break: (ctx) => (ctx.serial ? String(ctx.serial) : "") },
-  { header: "Employee I'd", width: 58, break: (ctx) => ctx.row.employeeId },
+  { header: "Employee ID", width: 58, break: (ctx) => ctx.row.employeeId },
   { header: "Employee Name", width: 92, wrap: true, break: (ctx) => ctx.row.employee },
   { header: "Department", width: 86, wrap: true, break: (ctx) => ctx.row.department },
-  { header: "Shift I'd", width: 74, wrap: true, break: (ctx) => shiftNameFor(ctx.row.shift) },
+  { header: "Shift ID", width: 74, wrap: true, break: (ctx) => shiftNameFor(ctx.row.shift) },
   { header: "Shift Timings", width: 76, break: (ctx) => shiftTimingsFor(ctx.row.shift) },
   { header: "Date", width: 64, break: (ctx) => ctx.row.date },
   { header: "Location", width: 68, wrap: true, break: (ctx) => ctx.row.location },
