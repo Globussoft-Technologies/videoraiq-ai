@@ -298,6 +298,28 @@ const latestEventReason = (events = [], type) => {
   return ''
 }
 
+const latestEventAt = (events = [], type) => {
+  if (!Array.isArray(events)) return ''
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    if (event?.type === type && event.at) return event.at
+  }
+  return ''
+}
+
+const hasEventType = (events = [], type) =>
+  Array.isArray(events) && events.some((event) => event?.type === type)
+
+const blockedReason = (session = {}) => {
+  const events = Array.isArray(session.events) ? session.events : []
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const reason = events[index]?.type === 'blocked' ? String(events[index]?.reason || '').trim() : ''
+    if (reason && reason !== 'Device is blocked') return reason
+  }
+  const reason = String(session.blockReason || '').trim()
+  return reason === 'Device is blocked' ? '' : reason
+}
+
 const SessionSummary = ({ rows = [], loading = false, selectedOwner = '', onSelectOwner }) => {
   if (loading) return <LoadingState message="Loading session summary..." />
   if (rows.length === 0) return <EmptyState label="No session summary found" />
@@ -476,6 +498,8 @@ const ActionModal = ({ action, onClose, onConfirm, busy }) => {
 
 const DetailsModal = ({ session, onClose }) => {
   if (!session) return null
+  const wasBlocked = session.status === 'blocked' || hasEventType(session.events, 'blocked') || Boolean(session.blockedAt)
+  const wasUnblocked = Boolean(session.unblockedAt)
   const rows = [
     ['Session ID', session.sessionId],
     ['Device', session.deviceName],
@@ -485,8 +509,13 @@ const DetailsModal = ({ session, onClose }) => {
     ['Login Time', formatDate(session.loginTime)],
     ['Last Active', formatDate(session.lastActiveAt)],
     ['Logout Time', formatDate(session.logoutTime)],
-    ['Blocked At', formatDate(session.blockedAt)],
-    ['Block Reason', session.blockReason || latestEventReason(session.events, 'blocked')],
+    ...(wasBlocked
+      ? [
+          ['Blocked At', formatDate(session.blockedAt || latestEventAt(session.events, 'blocked'))],
+          ['Block Reason', blockedReason(session)],
+        ]
+      : []),
+    ...(wasUnblocked ? [['Unblocked At', formatDate(session.unblockedAt)]] : []),
   ]
 
   return (

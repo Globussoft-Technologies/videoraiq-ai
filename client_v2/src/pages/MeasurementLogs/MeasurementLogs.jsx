@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import moment from 'moment';
-import { getMeasurementAnalytics } from './api';
+import { getMeasurementAnalytics, getMeasurementRecords } from './api';
 import MeasurementKpis from './components/MeasurementKpis';
 import MeasurementAnalytics from './components/MeasurementAnalytics';
 import MeasurementRecords from './components/MeasurementRecords';
@@ -28,9 +28,11 @@ const MeasurementLogs = () => {
   // Rows currently matching the table filters — shared so both the table
   // toolbar and the Download Report panel export the same selection.
   const [rows, setRows] = useState([]);
+  const [reportRows, setReportRows] = useState([]);
 
-  // Global date-range filter. { from, to } as YYYY-MM-DD strings; null = off.
-  const [dateRange, setDateRange] = useState({ from: null, to: null });
+  // Global date-range filter. Start with today selected by default.
+  const today = moment().format('YYYY-MM-DD');
+  const [dateRange, setDateRange] = useState({ from: today, to: today });
 
   const [analytics, setAnalytics] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
@@ -51,6 +53,22 @@ const MeasurementLogs = () => {
   useEffect(() => {
     loadAnalytics();
   }, [loadAnalytics]);
+
+  // Download Report is scoped only by the global date range. It must not use
+  // the table's status, SKU, station, or search filters.
+  useEffect(() => {
+    let cancelled = false;
+    getMeasurementRecords({ all: true, ...toIsoWindow(dateRange) })
+      .then(({ rows: allRows }) => {
+        if (!cancelled) setReportRows(allRows);
+      })
+      .catch(() => {
+        if (!cancelled) setReportRows([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dateRange]);
 
   const maxDate = useMemo(() => new Date(), []);
 
@@ -93,7 +111,7 @@ const MeasurementLogs = () => {
         loading={analyticsLoading}
       />
       <MeasurementRecords onRowsChange={setRows} dateRange={dateRange} />
-      <ReportsAutomation rows={rows} />
+      <ReportsAutomation rows={reportRows} />
     </div>
   );
 };
