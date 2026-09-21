@@ -155,13 +155,19 @@ function comparisonResult(doc) {
   ];
   const availableRatios = ratios.filter((ratio) => ratio != null);
   const devFrac = availableRatios.length ? Math.max(...availableRatios) : 0;
-  const matchPct = ratios.every((ratio) => ratio != null)
+  const confidence = Number.isFinite(md.confidence) ? md.confidence : null;
+  const hasPrintedDimensions = [printed.L, printed.W, printed.H].every(Number.isFinite);
+  const hasMeasuredDimensions = [measured.L, measured.W, measured.H].every(Number.isFinite);
+  const completeComparison =
+    hasPrintedDimensions && hasMeasuredDimensions && ratios.every((ratio) => ratio != null) && confidence != null;
+  const matchPct = completeComparison
     ? Math.round(ratios.reduce((sum, ratio) => sum + Math.max(0, 100 - ratio * 100), 0) / ratios.length)
-    : null;
+    : 0;
 
   let status;
   if (doc.status === "rejected") status = "mismatch";
   else if (doc.status === "pending") status = "qrerr";
+  else if (!completeComparison) status = "mismatch";
   else status = devFrac > 1 ? "mismatch" : "pass";
 
   return { meta, md, printed, measured, dev, devFrac, matchPct, status };
