@@ -19,6 +19,10 @@ function isSuperAdmin(req) {
   return Boolean(req.superAdmin);
 }
 
+function actionActorId(req) {
+  return authUser(req).adminId || req.superAdmin?._id || req.superAdmin?.id || null;
+}
+
 function currentUserFilter(req) {
   if (isSuperAdmin(req)) return {};
 
@@ -412,8 +416,15 @@ class SessionsService {
       if (status === "logged_out") set.logoutTime = now;
       if (status === "blocked") {
         set.blockedAt = now;
-        set.blockedBy = authUser(req).adminId || null;
+        set.blockedBy = actionActorId(req);
         set.blockReason = req.body?.reason || "";
+        set.unblockedAt = null;
+      }
+      if (eventType === "unblocked") {
+        set.blockedAt = null;
+        set.blockedBy = null;
+        set.blockReason = "";
+        set.unblockedAt = now;
       }
       const result = await sessionModel.updateMany(
         { ...filter, ...statusFilter, sessionId: { $in: sessionIds } },
@@ -484,6 +495,10 @@ class SessionsService {
             status: "logged_out",
             logoutTime: now,
             lastActiveAt: now,
+            blockedAt: null,
+            blockedBy: null,
+            blockReason: "",
+            unblockedAt: now,
           },
           $push: { events: { type: "unblocked", at: now, reason: req.body?.reason || "Browser session unblocked" } },
         },
@@ -510,8 +525,9 @@ class SessionsService {
       if (status === "logged_out") set.logoutTime = now;
       if (status === "blocked") {
         set.blockedAt = now;
-        set.blockedBy = authUser(req).adminId || null;
+        set.blockedBy = actionActorId(req);
         set.blockReason = req.body?.reason || "";
+        set.unblockedAt = null;
       }
       const session = await sessionModel.findOneAndUpdate(
         { ...filter, sessionId: req.params.sessionId },
@@ -535,7 +551,7 @@ class SessionsService {
 
       const now = new Date();
       const reason = req.body?.reason || "";
-      const blockedBy = authUser(req).adminId || null;
+      const blockedBy = actionActorId(req);
       const deviceFilter = { adminId: session.adminId, memberId: session.memberId || null, userType: session.userType, deviceId: session.deviceId };
       const sessionBlockFilter = { ...deviceFilter, status: "active" };
       const device = await blockedDeviceModel.findOneAndUpdate(
@@ -559,7 +575,7 @@ class SessionsService {
 
       await sessionModel.updateMany(
         sessionBlockFilter,
-        { $set: { status: "blocked", blockedAt: now, blockedBy, blockReason: reason }, $push: { events: { type: "blocked", at: now, reason } } }
+        { $set: { status: "blocked", blockedAt: now, blockedBy, blockReason: reason, unblockedAt: null }, $push: { events: { type: "blocked", at: now, reason } } }
       );
 
       return res.status(200).send(Response.userSuccessResp("Device blocked successfully.", device));
@@ -657,6 +673,10 @@ class SessionsService {
             status: "logged_out",
             logoutTime: now,
             lastActiveAt: now,
+            blockedAt: null,
+            blockedBy: null,
+            blockReason: "",
+            unblockedAt: now,
           },
           $push: { events: { type: "unblocked", at: now, reason: "Device unblocked" } },
         }

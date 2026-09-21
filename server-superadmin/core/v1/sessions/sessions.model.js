@@ -44,6 +44,7 @@ const sessionSchema = new mongoose.Schema(
     blockedAt: { type: Date, default: null },
     blockedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
     blockReason: { type: String, trim: true, default: "" },
+    unblockedAt: { type: Date, default: null },
     events: { type: [sessionEventSchema], default: [] },
   },
   { timestamps: true }

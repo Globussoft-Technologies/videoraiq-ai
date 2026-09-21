@@ -250,7 +250,7 @@ class SessionsService {
     if (sessionId) {
       const now = new Date();
       await sessionModel.updateOne(
-        { ...currentUserFilter(userData), sessionId },
+        { ...currentUserFilter(userData), sessionId, status: { $ne: "blocked" } },
         {
           $set: {
             status: "blocked",

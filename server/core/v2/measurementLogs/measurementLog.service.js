@@ -379,7 +379,7 @@ class MeasurementLogService {
    * GET /api/v2/measurement-logs
    * Query: status (all|pass|mismatch|qrerr), sku, station, q (order / ref / sku),
    *        fromDate / toDate (ISO — the global date-range filter),
-   *        from / to (HH:mm — legacy time-of-day filter), skip, limit.
+   *        from / to (HH:mm — legacy time-of-day filter), skip, limit, all.
    */
   async list(req, res) {
     try {
@@ -387,6 +387,7 @@ class MeasurementLogService {
       if (!adminId) return res.status(401).json(Response.userFailResp("Authentication context is missing"));
 
       const timezone = req.query.timezone || "Asia/Kolkata";
+      const allRows = req.query.all === "true";
       const skip = Math.max(parseInt(req.query.skip || "0", 10), 0);
       const limit = Math.min(Math.max(parseInt(req.query.limit || "200", 10), 1), 1000);
 
@@ -396,7 +397,7 @@ class MeasurementLogService {
 
       const docs = await MeasurementIncident.find(match)
         .sort({ dsProcessedAt: -1, createdAt: -1 })
-        .limit(limit + skip + 500) // headroom for the post-map status filter
+        .limit(allRows ? 20000 : limit + skip + 500) // headroom for the post-map status filter
         .lean();
 
       let rows = docs.map((d) => toRow(d, timezone));
@@ -410,7 +411,7 @@ class MeasurementLogService {
       if (to) rows = rows.filter((r) => r.time !== "—" && r.time <= to);
 
       const total = rows.length;
-      const paged = rows.slice(skip, skip + limit);
+      const paged = allRows ? rows : rows.slice(skip, skip + limit);
 
       // Aggregates for the KPI cards + analytics.
       const all = docs.map((d) => toRow(d, timezone));
@@ -428,7 +429,7 @@ class MeasurementLogService {
           rows: paged,
           total,
           skip,
-          limit,
+          limit: allRows ? paged.length : limit,
           stats,
           skus: [...new Set(all.map((r) => r.sku).filter((s) => s && s !== "—"))].sort(),
           stations: [...new Set(all.map((r) => r.station).filter((s) => s && s !== "—"))].sort(),
