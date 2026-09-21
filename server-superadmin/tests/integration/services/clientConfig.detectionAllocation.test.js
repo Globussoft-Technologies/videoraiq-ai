@@ -144,5 +144,9 @@ describe("detection allocation revocation", () => {
       "detectionAllocation:update",
       expect.stringContaining('"scope":"camera"'),
     );
+    expect(redis.publish).toHaveBeenCalledWith(
+      "detectionAllocation:update",
+      expect.stringContaining('"revokeRunningDetection":true'),
+    );
   });
 });

@@ -503,7 +503,9 @@ class ClientService {
 
       // Reuse the existing licence Redis bridge so connected V2 clients see
       // camera-specific changes immediately. The client backend consumes this
-      // scope without treating it as a whole-detection revoke.
+      // scope without treating it as a whole-detection revoke. Removing a
+      // reservation makes that slot flexible again; it must not stop a
+      // detection that is already running on the same camera.
       redis
         .publish(
           "detectionAllocation:update",
@@ -514,6 +516,7 @@ class ClientService {
             cameraId,
             settingType,
             enabled: updated.enabled,
+            revokeRunningDetection: false,
           }),
         )
         .catch((error) =>

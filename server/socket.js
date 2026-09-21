@@ -106,6 +106,20 @@ export const emitDetectionLicense = async ({ adminId, userId }) => {
   }
 };
 
+// Tell connected clients only after a permission change actually stopped a
+// running detector. This is separate from the licence snapshot: snapshots are
+// also sent for grants and harmless edits, which must not show a closure modal.
+const emitPermissionClosure = ({ adminId, settingType, closedCameras, reason }) => {
+  if (!io || !adminId || !settingType || !closedCameras?.length) return;
+  io.emit(`detectionPermissionClosed_${adminId}`, {
+    settingType,
+    detectionName: DETECTION_TYPES[settingType] || settingType,
+    cameras: closedCameras,
+    reason,
+    closedAt: new Date().toISOString(),
+  });
+};
+
 export const initSocket = (server) => {
   io = new Server(server, {
     cors: {
@@ -189,24 +203,59 @@ export const initSocket = (server) => {
         }
 
         if (channel === "detectionAllocation:update") {
-          const { scope, cameraId, settingType, enabled } = update;
+          const {
+            scope,
+            cameraId,
+            settingType,
+            enabled,
+            revokeRunningDetection,
+          } = update;
 
           // A per-camera assignment uses the same Redis/socket bridge as the
-          // licence update, but must revoke only the deselected camera rather
-          // than every camera running this detection.
+          // licence update. Manually removing a reservation makes the slot
+          // flexible and does not stop anything. Allocation trimming sets the
+          // explicit revoke flag because that operation removes a usable slot.
           if (scope === "camera") {
-            if (enabled === false && cameraId && settingType) {
+            if (
+              enabled === false &&
+              revokeRunningDetection !== false &&
+              cameraId &&
+              settingType
+            ) {
               const { revokeDetectionOnCamera } = await import(
                 "./core/v2/clientConfig/detectionLicense.service.js"
               );
               const admin = userId
                 ? { user_id: userId }
                 : await adminModel.findById(adminId).select("user_id").lean();
-              await revokeDetectionOnCamera({
+              const result = await revokeDetectionOnCamera({
                 adminId,
                 userId: admin?.user_id || userId,
                 cameraId,
                 settingType,
+              });
+              emitPermissionClosure({
+                adminId,
+                settingType,
+                closedCameras: result.closedCameras,
+                reason: "camera_permission_revoked",
+              });
+            }
+
+            if (enabled === true && settingType) {
+              const { reconcileDetectionCameraAllocation } = await import(
+                "./core/v2/clientConfig/detectionLicense.service.js"
+              );
+              const result = await reconcileDetectionCameraAllocation({
+                adminId,
+                userId,
+                settingType,
+              });
+              emitPermissionClosure({
+                adminId,
+                settingType,
+                closedCameras: result.closedCameras,
+                reason: "camera_permission_reconciled",
               });
             }
 
@@ -227,10 +276,31 @@ export const initSocket = (server) => {
             const admin = userId
               ? { user_id: userId }
               : await adminModel.findById(adminId).select("user_id").lean();
-            await revokeDetectionEverywhere({
+            const result = await revokeDetectionEverywhere({
               adminId,
               userId: admin?.user_id || userId,
               settingType,
+            });
+            emitPermissionClosure({
+              adminId,
+              settingType,
+              closedCameras: result.closedCameras,
+              reason: "detection_permission_revoked",
+            });
+          } else if (settingType) {
+            const { reconcileDetectionCameraAllocation } = await import(
+              "./core/v2/clientConfig/detectionLicense.service.js"
+            );
+            const result = await reconcileDetectionCameraAllocation({
+              adminId,
+              userId,
+              settingType,
+            });
+            emitPermissionClosure({
+              adminId,
+              settingType,
+              closedCameras: result.closedCameras,
+              reason: "detection_allocation_reconciled",
             });
           }
 

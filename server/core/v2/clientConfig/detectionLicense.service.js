@@ -774,14 +774,16 @@ export const revokeDetectionOnCamera = async ({
   cameraId,
   settingType,
 }) => {
-  if (!userId || !cameraId || !settingType) return { stopped: 0, failed: 0 };
+  if (!userId || !cameraId || !settingType) {
+    return { stopped: 0, failed: 0, closedCameras: [] };
+  }
 
   const channel = await Channel.findOne({
     _id: cameraId,
     userId,
     [`detections.${settingType}.enabled`]: true,
   }).populate("nvrId");
-  if (!channel) return { stopped: 0, failed: 0 };
+  if (!channel) return { stopped: 0, failed: 0, closedCameras: [] };
 
   let failed = 0;
   try {
@@ -814,7 +816,70 @@ export const revokeDetectionOnCamera = async ({
   logger.info(
     `[LICENSE] camera assignment revoked channel=${cameraId} detector=${settingType}`,
   );
-  return { stopped: 1, failed };
+  return {
+    stopped: 1,
+    failed,
+    closedCameras: [{ cameraId: String(channel._id), name: cameraLabel(channel) }],
+  };
+};
+
+/**
+ * Bring already-running cameras back inside the current mixed allocation after
+ * the Super Admin changes reservations or reduces the allowance.
+ *
+ * Selected cameras consume reserved slots. The remainder is a flexible pool.
+ * If a newly selected (but not currently running) camera shrinks that pool
+ * below its current usage, stop the newest flexible camera(s) first. Selecting
+ * one of the cameras already running does not create an excess and closes
+ * nothing.
+ */
+export const reconcileDetectionCameraAllocation = async ({
+  adminId,
+  userId,
+  settingType,
+}) => {
+  if ((!adminId && !userId) || !settingType) {
+    return { stopped: 0, failed: 0, closedCameras: [] };
+  }
+
+  const state = await getLicenseState({ adminId, userId });
+  if (!state.resolved) return { stopped: 0, failed: 0, closedCameras: [] };
+
+  const allocation = state.allocations.get(settingType) || 0;
+  const assignedCameras = state.cameraAssignments.get(settingType) || new Set();
+  const flexibleSlots = Math.max(allocation - assignedCameras.size, 0);
+  const flexibleRunning = (state.byType.get(settingType) || []).filter(
+    (camera) => !assignedCameras.has(String(camera.cameraId)),
+  );
+  const excess = Math.max(flexibleRunning.length - flexibleSlots, 0);
+  if (!excess) return { stopped: 0, failed: 0, closedCameras: [] };
+
+  const flexibleIds = flexibleRunning.map((camera) => camera.cameraId);
+  const newestFirst = await Channel.find({
+    _id: { $in: flexibleIds },
+    userId: state.userId,
+    [`detections.${settingType}.enabled`]: true,
+  })
+    .sort({ updatedAt: -1, _id: -1 })
+    .select("_id")
+    .lean();
+
+  let stopped = 0;
+  let failed = 0;
+  const closedCameras = [];
+  for (const camera of newestFirst.slice(0, excess)) {
+    const result = await revokeDetectionOnCamera({
+      adminId: state.adminId,
+      userId: state.userId,
+      cameraId: camera._id,
+      settingType,
+    });
+    stopped += result.stopped;
+    failed += result.failed;
+    closedCameras.push(...result.closedCameras);
+  }
+
+  return { stopped, failed, closedCameras };
 };
 
 /**
@@ -839,7 +904,9 @@ export const revokeDetectionOnCamera = async ({
  * the licence read from is correct either way.
  */
 export const revokeDetectionEverywhere = async ({ adminId, userId, settingType }) => {
-  if (!userId || !settingType) return { stopped: 0, failed: 0 };
+  if (!userId || !settingType) {
+    return { stopped: 0, failed: 0, cameras: 0, closedCameras: [] };
+  }
 
   const channels = await Channel.find({
     userId,
@@ -848,6 +915,7 @@ export const revokeDetectionEverywhere = async ({ adminId, userId, settingType }
 
   let stopped = 0;
   let failed = 0;
+  const closedCameras = [];
 
   for (const channel of channels) {
     try {
@@ -882,6 +950,10 @@ export const revokeDetectionEverywhere = async ({ adminId, userId, settingType }
       channel.detections[settingType].overrideUntil = undefined;
       await channel.save();
       stopped += 1;
+      closedCameras.push({
+        cameraId: String(channel._id),
+        name: cameraLabel(channel),
+      });
     } catch (err) {
       logger.error(
         `[LICENSE] revoke: could not disable channel=${channel._id} ` +
@@ -897,7 +969,7 @@ export const revokeDetectionEverywhere = async ({ adminId, userId, settingType }
     );
   }
 
-  return { stopped, failed, cameras: channels.length };
+  return { stopped, failed, cameras: channels.length, closedCameras };
 };
 
 /** DETECTION_TYPES narrowed to what this client may see. */
@@ -938,6 +1010,7 @@ export default {
   stripUnlicensedDetections,
   stripUnlicensedDetectionsFromList,
   revokeDetectionOnCamera,
+  reconcileDetectionCameraAllocation,
   filterDetectionTypes,
   allowedIncidentTypes,
   revokeDetectionEverywhere,

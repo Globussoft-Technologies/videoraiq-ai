@@ -262,6 +262,10 @@ class ClientConfigService {
                   cameraId,
                   settingType,
                   enabled: false,
+                  // Unlike manually removing a camera reservation, reducing
+                  // the allocation removes an actual usable slot. The newest
+                  // assignment therefore has to stop if it is running.
+                  revokeRunningDetection: true,
                 }),
               )
               .catch((error) =>

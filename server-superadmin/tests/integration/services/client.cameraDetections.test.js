@@ -106,6 +106,24 @@ describe("client camera detection assignments", () => {
     expect(payload(await update(admin._id, active._id)).status).toBe("success");
   });
 
+  it("makes a manually deselected camera slot flexible without revoking a running detection", async () => {
+    const { admin, nvr } = await makeClient(undefined, 2);
+    const camera = await makeCamera(admin.user_id, nvr._id, 1);
+
+    expect(payload(await update(admin._id, camera._id, true)).status).toBe("success");
+    redis.publish.mockClear();
+
+    expect(payload(await update(admin._id, camera._id, false)).status).toBe("success");
+    const [, message] = redis.publish.mock.calls[0];
+    expect(JSON.parse(message)).toMatchObject({
+      scope: "camera",
+      cameraId: String(camera._id),
+      settingType: PPE,
+      enabled: false,
+      revokeRunningDetection: false,
+    });
+  });
+
   it("rejects a camera that belongs to a different client", async () => {
     const first = await makeClient("client-1");
     const second = await makeClient("client-2");

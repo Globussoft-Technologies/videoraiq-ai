@@ -18,11 +18,22 @@ vi.mock("../../../services/python.service.js", () => ({
   },
 }));
 
-const { revokeDetectionEverywhere, revokeDetectionOnCamera } = await import(
+const {
+  revokeDetectionEverywhere,
+  revokeDetectionOnCamera,
+  reconcileDetectionCameraAllocation,
+} = await import(
   "../../../core/v2/clientConfig/detectionLicense.service.js"
 );
 const { default: Channel } = await import("../../../core/v2/channels/channels.model.js");
 const { default: NVR } = await import("../../../core/v2/NVR/nvr.model.js");
+const { default: Admin } = await import("../../../core/v2/admin/admin.model.js");
+const { default: Allocation } = await import(
+  "../../../core/v2/clientConfig/clientDetectionAllocation.model.js"
+);
+const { default: CameraDetection } = await import(
+  "../../../core/v2/clientConfig/clientCameraDetection.model.js"
+);
 const { default: pythonService } = await import("../../../services/python.service.js");
 await import("../../../core/v2/detectionSettings/detectionSettings.model.js");
 await import("../../../core/v2/profiles/profiles.model.js");
@@ -68,6 +79,9 @@ describe("revokeDetectionEverywhere", () => {
     });
 
     expect(result.stopped).toBe(2);
+    expect(result.closedCameras.map((camera) => camera.cameraId)).toEqual(
+      expect.arrayContaining([String(a._id), String(b._id)]),
+    );
     for (const id of [a._id, b._id]) {
       const fresh = await Channel.findById(id);
       expect(fresh.detections.carModelDetectionSettings.enabled).toBe(false);
@@ -168,7 +182,7 @@ describe("revokeDetectionEverywhere", () => {
     const result = await revokeDetectionEverywhere({
       adminId: ADMIN_ID, userId: USER_ID, settingType: "carModelDetectionSettings",
     });
-    expect(result).toEqual({ stopped: 0, failed: 0, cameras: 0 });
+    expect(result).toEqual({ stopped: 0, failed: 0, cameras: 0, closedCameras: [] });
     expect(pythonService.handleDetectionStartStop).not.toHaveBeenCalled();
   });
 });
@@ -191,7 +205,11 @@ describe("revokeDetectionOnCamera", () => {
       settingType: "carModelDetectionSettings",
     });
 
-    expect(result).toEqual({ stopped: 1, failed: 0 });
+    expect(result).toEqual({
+      stopped: 1,
+      failed: 0,
+      closedCameras: [{ cameraId: String(removed._id), name: removed.name }],
+    });
     expect(
       (await Channel.findById(removed._id)).detections.carModelDetectionSettings.enabled,
     ).toBe(false);
@@ -217,7 +235,98 @@ describe("revokeDetectionOnCamera", () => {
       settingType: "carModelDetectionSettings",
     });
 
-    expect(result).toEqual({ stopped: 0, failed: 0 });
+    expect(result).toEqual({ stopped: 0, failed: 0, closedCameras: [] });
+    expect(pythonService.handleDetectionStartStop).not.toHaveBeenCalled();
+  });
+});
+
+describe("reconcileDetectionCameraAllocation", () => {
+  const settingType = "carModelDetectionSettings";
+
+  const makeLicensedAdmin = async () => {
+    const admin = await Admin.create({
+      user_id: USER_ID,
+      login: "camera-reconcile",
+      email: "camera-reconcile@test.com",
+      purchasedCameras: 3,
+    });
+    await Allocation.create({
+      adminId: admin._id,
+      settingType,
+      cameraAllocation: 2,
+      enabled: true,
+      cameraSelectionConfigured: true,
+    });
+    return admin;
+  };
+
+  it("closes the newest flexible camera when a third camera reserves one slot", async () => {
+    const admin = await makeLicensedAdmin();
+    const nvr = await makeNvr();
+    const settingId = new mongoose.Types.ObjectId();
+    const first = await makeCamera(nvr._id, {
+      [settingType]: { id: settingId, enabled: true },
+    });
+    const newest = await makeCamera(nvr._id, {
+      [settingType]: { id: settingId, enabled: true },
+    });
+    const reserved = await makeCamera(nvr._id, {
+      [settingType]: { id: settingId, enabled: false },
+    });
+    await Channel.collection.updateOne(
+      { _id: first._id },
+      { $set: { updatedAt: new Date("2026-09-21T10:00:00.000Z") } },
+    );
+    await Channel.collection.updateOne(
+      { _id: newest._id },
+      { $set: { updatedAt: new Date("2026-09-21T10:01:00.000Z") } },
+    );
+    await CameraDetection.create({
+      adminId: admin._id,
+      cameraId: reserved._id,
+      settingType,
+      enabled: true,
+    });
+
+    const result = await reconcileDetectionCameraAllocation({
+      adminId: admin._id,
+      userId: USER_ID,
+      settingType,
+    });
+
+    expect(result.closedCameras).toEqual([
+      expect.objectContaining({ cameraId: String(newest._id) }),
+    ]);
+    expect((await Channel.findById(first._id)).detections[settingType].enabled).toBe(true);
+    expect((await Channel.findById(newest._id)).detections[settingType].enabled).toBe(false);
+  });
+
+  it("keeps both running when the reserved camera is already one of them", async () => {
+    const admin = await makeLicensedAdmin();
+    const nvr = await makeNvr();
+    const settingId = new mongoose.Types.ObjectId();
+    const reserved = await makeCamera(nvr._id, {
+      [settingType]: { id: settingId, enabled: true },
+    });
+    const flexible = await makeCamera(nvr._id, {
+      [settingType]: { id: settingId, enabled: true },
+    });
+    await CameraDetection.create({
+      adminId: admin._id,
+      cameraId: reserved._id,
+      settingType,
+      enabled: true,
+    });
+
+    const result = await reconcileDetectionCameraAllocation({
+      adminId: admin._id,
+      userId: USER_ID,
+      settingType,
+    });
+
+    expect(result).toEqual({ stopped: 0, failed: 0, closedCameras: [] });
+    expect((await Channel.findById(reserved._id)).detections[settingType].enabled).toBe(true);
+    expect((await Channel.findById(flexible._id)).detections[settingType].enabled).toBe(true);
     expect(pythonService.handleDetectionStartStop).not.toHaveBeenCalled();
   });
 });
