@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { Search, Plus, X, Loader2, ArrowLeft, Pencil, ListVideo, Play, Maximize2, Minimize2, ArrowUpRight, Cctv, Trash2, ChevronDown } from 'lucide-react';
+import { Search, Plus, X, Loader2, ArrowLeft, Pencil, ListVideo, Play, Maximize2, Minimize2, ArrowUpRight, Cctv, Trash2, ChevronDown, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { ShieldOff } from 'lucide-react';
 import { AsyncBoundary } from '../../../components/States';
@@ -261,26 +261,48 @@ function FieldError({ children }) {
   );
 }
 
-function ModalInput({ label, required, invalid, error, ...props }) {
+function ModalInput({ label, required, invalid, error, passwordToggle = false, type = 'text', ...props }) {
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const isReadOnly = props.readOnly || props.disabled;
+  const hasPasswordToggle = passwordToggle && type === 'password';
   return (
     <div>
       <FieldLabel required={required}>{label}</FieldLabel>
-      <input
-        {...props}
-        style={{
-          width: '100%', height: 38, padding: '0 12px', boxSizing: 'border-box',
-          borderRadius: 9,
-          background: isReadOnly ? 'var(--bg3)' : 'var(--bg2)',
-          border: `1px solid ${invalid ? 'var(--crit, #ef4444)' : 'var(--bd)'}`,
-          fontSize: 12.5,
-          color: isReadOnly ? 'var(--tx3)' : 'var(--tx)',
-          outline: 'none',
-          opacity: isReadOnly ? 0.6 : 1,
-          cursor: isReadOnly ? 'not-allowed' : 'text',
-          ...(props.mono ? { fontFamily: 'var(--mono)' } : {}),
-        }}
-      />
+      <div style={{ position: 'relative' }}>
+        <input
+          {...props}
+          type={hasPasswordToggle && passwordVisible ? 'text' : type}
+          style={{
+            width: '100%', height: 38, padding: `0 ${hasPasswordToggle ? 40 : 12}px 0 12px`, boxSizing: 'border-box',
+            borderRadius: 9,
+            background: isReadOnly ? 'var(--bg3)' : 'var(--bg2)',
+            border: `1px solid ${invalid ? 'var(--crit, #ef4444)' : 'var(--bd)'}`,
+            fontSize: 12.5,
+            color: isReadOnly ? 'var(--tx3)' : 'var(--tx)',
+            outline: 'none',
+            opacity: isReadOnly ? 0.6 : 1,
+            cursor: isReadOnly ? 'not-allowed' : 'text',
+            ...(props.mono ? { fontFamily: 'var(--mono)' } : {}),
+          }}
+        />
+        {hasPasswordToggle && (
+          <button
+            type="button"
+            onClick={() => setPasswordVisible((visible) => !visible)}
+            disabled={isReadOnly}
+            aria-label={passwordVisible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+            title={passwordVisible ? 'Hide password' : 'Show password'}
+            style={{
+              position: 'absolute', right: 0, top: 0, width: 38, height: 38,
+              display: 'grid', placeItems: 'center', border: 'none', background: 'transparent',
+              color: 'var(--tx3)', cursor: isReadOnly ? 'not-allowed' : 'pointer',
+              opacity: isReadOnly ? 0.5 : 1,
+            }}
+          >
+            {passwordVisible ? <EyeOff size={15} /> : <Eye size={15} />}
+          </button>
+        )}
+      </div>
       <FieldError>{error}</FieldError>
     </div>
   );
@@ -1371,6 +1393,10 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
     if (!form.location.trim()) found.location = 'Select or create a location.';
     if (!ip) found.ip = 'Public IP address is required.';
     if (!form.user.trim()) found.user = 'Username is required.';
+    if (isEdit && (form.oldPass || form.newPass)) {
+      if (!form.oldPass) found.oldPass = 'Current password is required.';
+      if (!form.newPass) found.newPass = 'New password is required.';
+    }
     if (!String(form.rtsp || '').trim()) found.rtsp = 'RTSP port is required.';
     if (!String(form.http || '').trim()) found.http = 'HTTP port is required.';
     setErrors(found);
@@ -1830,7 +1856,38 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
                     <ModalInput label="Public IP Address" required value={form.ip} onChange={set('ip')} placeholder="e.g. 203.0.113.24 (no http:// or port)" mono invalid={!!errors.ip} error={errors.ip} readOnly={isLocalEdit} />
                   </div>
                   <ModalInput label="Username" required value={form.user} onChange={set('user')} placeholder="admin" invalid={!!errors.user} error={errors.user} readOnly={isLocalEdit} autoComplete="off" />
-                  {isEdit ? <div /> : <ModalInput label="Password" type="password" value={form.pass} onChange={set('pass')} placeholder="password" autoComplete="new-password" />}
+                  {isEdit ? (
+                    <ModalInput
+                      label="Old Password"
+                      type="password"
+                      passwordToggle
+                      value={form.oldPass}
+                      onChange={set('oldPass')}
+                      placeholder="Enter your old password"
+                      invalid={!!errors.oldPass}
+                      error={errors.oldPass}
+                      readOnly={isLocalEdit}
+                      autoComplete="current-password"
+                    />
+                  ) : (
+                    <ModalInput label="Password" type="password" passwordToggle value={form.pass} onChange={set('pass')} placeholder="password" autoComplete="new-password" />
+                  )}
+                  {isEdit && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <ModalInput
+                        label="New Password"
+                        type="password"
+                        passwordToggle
+                        value={form.newPass}
+                          onChange={set('newPass')}
+                          placeholder="Enter new password"
+                        invalid={!!errors.newPass}
+                        error={errors.newPass}
+                        readOnly={isLocalEdit}
+                        autoComplete="new-password"
+                      />
+                    </div>
+                  )}
                   <ModalInput label="RTSP Port" required value={form.rtsp} onChange={set('rtsp')} placeholder="554" mono invalid={!!errors.rtsp} error={errors.rtsp} readOnly={isLocalEdit} />
                   <ModalInput label="HTTP Port" required value={form.http} onChange={set('http')} placeholder="80" mono invalid={!!errors.http} error={errors.http} readOnly={isLocalEdit} />
               </>}
