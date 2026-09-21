@@ -2,6 +2,11 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { getLicense, IS_LICENSING_ENABLED } from '../helpers/license';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
+import PermissionClosureDialog from '../components/PermissionClosureDialog';
+
+// Temporarily hidden. Keep the socket event and dialog implementation ready so
+// this can be restored later without changing the permission/revoke flow.
+const SHOW_PERMISSION_CLOSURE_DIALOG = false;
 
 /**
  * The client's detection licence, fetched once per session and shared.
@@ -28,6 +33,7 @@ export const LicenseProvider = ({ children }) => {
   const { socket } = useSocket() || {};
   const [license, setLicense] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [closureNotices, setClosureNotices] = useState([]);
   // Same out-of-order guard the permission provider uses: a fetch started for a
   // previous user must never overwrite the current user's licence.
   const requestIdRef = useRef(0);
@@ -96,11 +102,59 @@ export const LicenseProvider = ({ children }) => {
     return () => socket.off(`detectionLicense_${adminId}`, handler);
   }, [socket, user?.adminId]);
 
+  // Permission-driven shutdowns are different from ordinary licence refreshes:
+  // the server emits this event only after it actually turns a running
+  // detection off. Queue unrelated notices, while combining cameras from the
+  // same permission action so a bulk reduction produces one useful dialog.
+  useEffect(() => {
+    const adminId = user?.adminId;
+    if (!SHOW_PERMISSION_CLOSURE_DIALOG || !IS_LICENSING_ENABLED || !socket || !adminId) {
+      return;
+    }
+
+    const handler = (payload) => {
+      if (!payload?.settingType || !Array.isArray(payload.cameras) || !payload.cameras.length) {
+        return;
+      }
+      setClosureNotices((current) => {
+        const matchingIndex = current.findIndex(
+          (notice) =>
+            notice.settingType === payload.settingType && notice.reason === payload.reason,
+        );
+        if (matchingIndex < 0) return [...current, payload];
+
+        const existing = current[matchingIndex];
+        const cameras = [...(existing.cameras || [])];
+        const cameraIds = new Set(cameras.map((camera) => String(camera.cameraId || '')));
+        payload.cameras.forEach((camera) => {
+          if (!cameraIds.has(String(camera.cameraId || ''))) cameras.push(camera);
+        });
+
+        return current.map((notice, index) =>
+          index === matchingIndex ? { ...notice, ...payload, cameras } : notice,
+        );
+      });
+    };
+
+    socket.on(`detectionPermissionClosed_${adminId}`, handler);
+    return () => socket.off(`detectionPermissionClosed_${adminId}`, handler);
+  }, [socket, user?.adminId]);
+
+  useEffect(() => {
+    setClosureNotices([]);
+  }, [user?.adminId]);
+
   const allowedDetections = new Set(license?.allowedDetections || []);
 
   return (
     <LicenseContext.Provider value={{ license, allowedDetections, loading, refresh }}>
       {children}
+      {SHOW_PERMISSION_CLOSURE_DIALOG && (
+        <PermissionClosureDialog
+          notice={closureNotices[0]}
+          onClose={() => setClosureNotices((current) => current.slice(1))}
+        />
+      )}
     </LicenseContext.Provider>
   );
 };

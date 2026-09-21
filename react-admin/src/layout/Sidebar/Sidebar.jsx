@@ -17,13 +17,14 @@ import {
 import ThemeToggle from './ThemeToggle'
 import { useTheme } from '../../context/ThemeContext'
 import { getAuthUser, getInitials, clearAuthUser } from '../../utils/authUser'
+import { getClients } from '../../pages/clients/apis/get'
 import logoWhite from '../../assets/videoraiq-logo-white.png'
 import logoColor from '../../assets/videoraiq-logo-color.png'
 import logoMark from '../../assets/videoraiq-circle-white.png'
 
 const NAV = [
   { to: '/fleet', label: 'Fleet Overview', Icon: LayoutGrid },
-  { to: '/clients', label: 'Clients', Icon: Building2, badge: 6 },
+  { to: '/clients', label: 'Clients', Icon: Building2, showClientCount: true },
   { to: '/detection-catalog', label: 'Detection Catalog', Icon: ScanEye },
   { to: '/subscription-plans', label: 'Subscription Plans', Icon: CreditCard },
   { to: '/feature-roadmap', label: 'Feature Roadmap', Icon: Menu },
@@ -39,7 +40,29 @@ const Sidebar = () => {
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+  const [clientCount, setClientCount] = useState(null)
   const menuRef = useRef(null)
+
+  // Fetch only one row; the API's totalCount is the authoritative client total.
+  useEffect(() => {
+    let cancelled = false
+
+    const loadClientCount = async () => {
+      try {
+        const res = await getClients(0, 1)
+        if (cancelled) return
+        const data = res?.body?.data ?? res?.data ?? {}
+        setClientCount(Number.isFinite(data.totalCount) ? data.totalCount : null)
+      } catch {
+        if (!cancelled) setClientCount(null)
+      }
+    }
+
+    loadClientCount()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Close the profile dropdown when clicking outside of it.
   useEffect(() => {
@@ -114,7 +137,7 @@ const Sidebar = () => {
           </p>
         )}
         <ul className="flex flex-col gap-0.5">
-          {NAV.map(({ to, label, Icon, badge }) => (
+          {NAV.map(({ to, label, Icon, showClientCount }) => (
             <li key={to}>
               <NavLink
                 to={to}
@@ -143,7 +166,7 @@ const Sidebar = () => {
                     {!collapsed && (
                       <>
                         <span className="flex-1">{label}</span>
-                        {badge != null && (
+                        {showClientCount && clientCount != null && (
                           <span
                             className={`min-w-5 rounded-full px-1.5 py-0.5 text-center text-[11px] font-semibold ${
                               isActive
@@ -151,7 +174,7 @@ const Sidebar = () => {
                                 : 'bg-gray-100 text-gray-500 dark:bg-white/8 dark:text-gray-400'
                             }`}
                           >
-                            {badge}
+                            {clientCount}
                           </span>
                         )}
                       </>
