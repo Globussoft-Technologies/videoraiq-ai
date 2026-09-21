@@ -1051,10 +1051,26 @@ export default function Detections() {
     const assignment = (license?.detections || []).find(
       (row) => row.settingType === detectionType,
     );
+    const assignedCameraIds = new Set(
+      (assignment?.assignedCameraIds || []).map(String),
+    );
+    const runningCameraIds = (assignment?.cameras || []).map((camera) =>
+      String(camera.cameraId || camera._id || ''),
+    );
+    const targetCameraId = String(zoneCamera._id);
+    const flexibleSlots = Math.max(
+      Number(assignment?.cameraAllocation || 0) - assignedCameraIds.size,
+      0,
+    );
+    const flexibleInUse = runningCameraIds.filter(
+      (cameraId) => cameraId && !assignedCameraIds.has(cameraId),
+    ).length;
     if (
       enable &&
       assignment?.cameraSelectionConfigured &&
-      !(assignment.assignedCameraIds || []).map(String).includes(String(zoneCamera._id))
+      !assignedCameraIds.has(targetCameraId) &&
+      !runningCameraIds.includes(targetCameraId) &&
+      flexibleInUse >= flexibleSlots
     ) {
       toast.error(
         `${model.name} is not assigned to this camera. Please contact support at support@videoraiq.com to add this camera.`,
