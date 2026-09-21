@@ -400,6 +400,21 @@ const ClientConfig = () => {
       // Re-sync stats + baseline from the server so the meters, the usage
       // counts and the dirty state all reflect what was actually stored.
       const fresh = await getClientConfig(adminId)
+      // Reducing a detection allowance can automatically deselect the most
+      // recently assigned camera(s). If the grid has already been opened,
+      // reload it so those selected pills disappear without a page refresh.
+      if (camerasLoaded && dirtyDetections.length > 0 && !camerasTabDirty) {
+        const cameraRes = await getClientCameras(adminId)
+        const cameraData = cameraRes?.body?.data ?? cameraRes?.data ?? {}
+        const cameraList = Array.isArray(cameraData.cameras) ? cameraData.cameras : []
+        setCameras(cameraList)
+        setCamerasBaseline(
+          Object.fromEntries(cameraList.map((camera) => [
+            camera.cameraId,
+            { ...(camera.detections || {}) },
+          ]))
+        )
+      }
       if (latestRef.current.detections === sentDetections &&
           latestRef.current.totalCameras === sentTotalCameras) {
         applyData(fresh)
