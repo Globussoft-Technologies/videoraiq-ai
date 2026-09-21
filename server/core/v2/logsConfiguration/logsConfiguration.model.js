@@ -1,4 +1,10 @@
 import mongoose from "mongoose";
+import { DETECTION_LOG_METADATA } from "../../../constants/detectionTypes.js";
+
+const detectionLogFields = Object.fromEntries(
+  [...new Set(Object.values(DETECTION_LOG_METADATA).map(({ logsConfigKey }) => logsConfigKey))]
+    .map((key) => [key, { type: Boolean, default: true }]),
+);
 
 const logsConfigSchema = new mongoose.Schema(
   {
@@ -32,6 +38,7 @@ const logsConfigSchema = new mongoose.Schema(
       lineCrossingLogs: { type: Boolean, default: true },
       waterSpillLogs: { type: Boolean, default: true },
       unauthorizedAccessLogs: { type: Boolean, default: true },
+      ...detectionLogFields,
     },
   },
   { timestamps: true }

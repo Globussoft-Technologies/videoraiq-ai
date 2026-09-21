@@ -6,6 +6,7 @@ import NVRModel from "../core/v1/NVR/nvr.model.js";
 import locationModel from "../core/v1/locations/location.model.js";
 import permissionModel from "../core/v1/permission/permissions.model.js";
 import departmentsModel from "../core/v1/departments/departments.model.js";
+import { DETECTION_LOG_PERMISSION_KEYS } from "../constants/detectionTypes.js";
 
 export async function getEmpAuthInfo(email) {
   try {
@@ -210,19 +211,7 @@ export async function syncStevinrockLogPermissions(adminId) {
 
     // Log sections introduced after the original permission seed. Each is
     // back-filled independently so partially-migrated docs still get the rest.
-    const logKeys = [
-      "conveyorLogs",
-      "vehicleObstructionLogs",
-      "vehicleCountLogs",
-      "crusherLogs",
-      "cylinderLogs",
-      "lineCrossingLogs",
-      "waterSpillLogs",
-      "unauthorizedAccessLogs",
-      "sleepActivityLogs",
-      "measurementLogs",
-      "vehicleCheckInOutLogs",
-    ];
+    const logKeys = [...DETECTION_LOG_PERMISSION_KEYS, "measurementLogs"];
 
     // Per-tier value + the role-name matcher, matching syncPermissionLocations'
     // admin / read / write / custom split. Custom (non admin/read/write) roles

@@ -49,6 +49,41 @@ export const DETECTION_TYPES = {
 }
 
 /**
+ * Detection types that expose a dedicated logs page.
+ *
+ * This is the single integration point for a detection-backed log. Default
+ * role templates, the login backfill, and logs-configuration licensing derive
+ * their keys from here. A newly shipped detection therefore needs one entry
+ * here instead of parallel edits to every admin/read/write permission matrix.
+ *
+ * `permissionKey` is stored under permissionConfig.logs.
+ * `logsConfigKey` is stored by LogsConfiguration and used by the sidebar.
+ */
+export const DETECTION_LOG_METADATA = Object.freeze({
+  countPersonsSettings: { permissionKey: "personCountLogs", logsConfigKey: "personCountLogs" },
+  countVehiclesSettings: { permissionKey: "vehicleCountLogs", logsConfigKey: "vehicleCountLogs" },
+  deskAbsenceSettings: { permissionKey: "deskLogs", logsConfigKey: "deskAbsenceLogs" },
+  guardAbsenceSettings: { permissionKey: "guardLogs", logsConfigKey: "guardLogs" },
+  guardSleepingDetectionSettings: { permissionKey: "sleepActivityLogs", logsConfigKey: "sleepActivityLogs" },
+  conveyorDetectionSettings: { permissionKey: "conveyorLogs", logsConfigKey: "conveyorLogs" },
+  crusherDetectionSettings: { permissionKey: "crusherLogs", logsConfigKey: "crusherLogs" },
+  cylinderDetectionSettings: { permissionKey: "cylinderLogs", logsConfigKey: "cylinderLogs" },
+  waterSpillageDetectionSettings: { permissionKey: "waterSpillLogs", logsConfigKey: "waterSpillLogs" },
+  lineCrossingSettings: { permissionKey: "lineCrossingLogs", logsConfigKey: "lineCrossingLogs" },
+  vehicleObstructionSettings: { permissionKey: "vehicleObstructionLogs", logsConfigKey: "vehicleObstructionLogs" },
+  carModelDetectionSettings: { permissionKey: "carLogs", logsConfigKey: "carLogs" },
+  vehicleCheckInOutSettings: { permissionKey: "vehicleCheckInOutLogs", logsConfigKey: "vehicleCheckInOutLogs" },
+  unauthorizedAccessSettings: { permissionKey: "unauthorizedAccessLogs", logsConfigKey: "unauthorizedAccessLogs" },
+  vehicleDetectionSettings: { permissionKey: "ANPRLogs", logsConfigKey: "anprLogs" },
+  fireSmokeDetectionSettings: { permissionKey: "fireSmokeLogs", logsConfigKey: "fireSmokeLogs" },
+  personFallSickDetectionSettings: { permissionKey: "personFallSickLogs", logsConfigKey: "personFallSickLogs" },
+});
+
+export const DETECTION_LOG_PERMISSION_KEYS = Object.freeze([
+  ...new Set(Object.values(DETECTION_LOG_METADATA).map(({ permissionKey }) => permissionKey)),
+]);
+
+/**
  * Incident types the Alerts / Incident Center list leaves out. That list only
  * shows incidents carrying a reviewable snapshot, and these engines never
  * produce one — a person/vehicle count is a running tally, a line cross is a

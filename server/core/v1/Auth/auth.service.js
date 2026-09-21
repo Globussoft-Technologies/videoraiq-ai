@@ -15,6 +15,7 @@ import rolesModel from "../roles/roles.model.js";
 import {
   adminConfig,
   completeConfig,
+  LOG_PERMISSION_KEYS,
   readConfig,
   writeConfig,
 } from "../permission/permissions.config.js";
@@ -41,26 +42,6 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_FETCH_TIM
     clearTimeout(timer);
   }
 }
-
-// Every logs sub-permission the backfill maintains. Add new log types here and
-// the migration picks them up for existing admins automatically.
-// productivityLogs is intentionally absent — those logs are hidden from the UI.
-const LOG_PERMISSION_KEYS = [
-  "global",
-  "accessLogs",
-  "attendanceLogs",
-  "taggedUsersLogs",
-  "detectedUsersLogs",
-  "personCountLogs",
-  "trackLogs",
-  "visibilityLogs",
-  "deskLogs",
-  "guardLogs",
-  "sleepActivityLogs",
-  "measurementLogs",
-  "ANPRLogs",
-  "vehicleCheckInOutLogs",
-];
 
 class AUTHService {
   constructor() {

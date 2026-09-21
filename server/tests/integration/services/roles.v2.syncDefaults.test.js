@@ -38,6 +38,8 @@ let adminId;
 const seedStaleRole = async (preset) => {
   const staleConfig = cloneConfig(preset.config);
   delete staleConfig.logs.carLogs;
+  delete staleConfig.logs.fireSmokeLogs;
+  delete staleConfig.logs.personFallSickLogs;
   delete staleConfig.playbacks;
   const permission = await permissionModel.create({
     adminId,
@@ -96,10 +98,17 @@ describe("v2 syncDefaultRoles", () => {
     for (const preset of DEFAULT_ROLE_PRESETS) {
       const reported = data.roles.find((r) => r.roleName === preset.roleName);
       expect(reported.added).toEqual(
-        expect.arrayContaining(["logs.carLogs", "playbacks"]),
+        expect.arrayContaining([
+          "logs.carLogs",
+          "logs.fireSmokeLogs",
+          "logs.personFallSickLogs",
+          "playbacks",
+        ]),
       );
       const { config } = await configFor(preset.roleName);
       expect(config.logs.carLogs).toEqual(preset.config.logs.carLogs);
+      expect(config.logs.fireSmokeLogs).toEqual(preset.config.logs.fireSmokeLogs);
+      expect(config.logs.personFallSickLogs).toEqual(preset.config.logs.personFallSickLogs);
     }
   });
 
@@ -111,14 +120,26 @@ describe("v2 syncDefaultRoles", () => {
     expect(admin.config.logs.carLogs).toEqual({
       view: true, create: true, edit: true, delete: true,
     });
+    expect(admin.config.logs.fireSmokeLogs).toEqual({
+      view: true, create: true, edit: true, delete: true,
+    });
+    expect(admin.config.logs.personFallSickLogs).toEqual({
+      view: true, create: true, edit: true, delete: true,
+    });
 
     const read = await configFor("read");
     expect(read.config.logs.carLogs).toEqual({
       view: true, create: false, edit: false, delete: false,
     });
+    expect(read.config.logs.fireSmokeLogs).toEqual({
+      view: true, create: false, edit: false, delete: false,
+    });
 
     const write = await configFor("write");
     expect(write.config.logs.carLogs).toEqual({
+      view: true, create: true, edit: true, delete: false,
+    });
+    expect(write.config.logs.personFallSickLogs).toEqual({
       view: true, create: true, edit: true, delete: false,
     });
   });

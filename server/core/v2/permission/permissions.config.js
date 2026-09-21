@@ -1,3 +1,5 @@
+import { DETECTION_LOG_PERMISSION_KEYS } from "../../../constants/detectionTypes.js";
+
 export let completeConfig = {
     NVR: { view: false, create: false, edit: false, delete: false },
     channels: { view: false, create: false, edit: false, delete: false },
@@ -197,8 +199,25 @@ export let writeConfig = {
     playbacks: { view: true, create: true, edit: true, delete: false }
 };
 
+// Detection-backed log permissions come from one shared registry. This keeps
+// future detection log additions out of four duplicated role matrices and,
+// crucially, makes sync-defaults see the new key automatically.
+const addDetectionLogPermissions = (config, permission) => {
+    for (const key of DETECTION_LOG_PERMISSION_KEYS) {
+        if (!config.logs[key]) config.logs[key] = { ...permission };
+    }
+};
 
+addDetectionLogPermissions(completeConfig, { view: false, create: false, edit: false, delete: false });
+addDetectionLogPermissions(adminConfig, { view: true, create: true, edit: true, delete: true });
+addDetectionLogPermissions(readConfig, { view: true, create: false, edit: false, delete: false });
+addDetectionLogPermissions(writeConfig, { view: true, create: true, edit: true, delete: false });
 
+// Used by the legacy login backfill. Productivity logs remain intentionally
+// hidden and are not introduced into old permission documents by that path.
+export const LOG_PERMISSION_KEYS = Object.freeze(
+    Object.keys(completeConfig.logs).filter((key) => key !== "productivityLogs"),
+);
 
 /**
  * Canonical definition of the three seeded roles.

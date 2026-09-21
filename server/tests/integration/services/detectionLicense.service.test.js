@@ -385,6 +385,8 @@ describe("detection visibility beyond the detection screens", () => {
     expect(logs.deskAbsenceLogs).toBe(false);
     expect(logs.sleepActivityLogs).toBe(false);
     expect(logs.vehicleCheckInOutLogs).toBe(false);
+    expect(logs.fireSmokeLogs).toBe(false);
+    expect(logs.personFallSickLogs).toBe(false);
     // Non-detection logs are never touched by licensing.
     expect(logs.attendanceLogs).toBe(true);
     expect(logs.accessLogs).toBe(true);
@@ -441,7 +443,7 @@ describe("detection visibility beyond the detection screens", () => {
     expect(payload(res).data.cylinderLogs).toBe(true);
   });
 
-  it("keeps Sleep Activity and Vehicle Check-In/Out logs only when their detections are licensed", async () => {
+  it("keeps registered detection logs only when their detections are licensed", async () => {
     const { default: LogsConfigService } = await import(
       "../../../core/v2/logsConfiguration/logsConfiguration.service.js"
     );
@@ -451,6 +453,8 @@ describe("detection visibility beyond the detection screens", () => {
       allocations: {
         guardSleepingDetectionSettings: 5,
         vehicleCheckInOutSettings: 5,
+        fireSmokeDetectionSettings: 5,
+        personFallSickDetectionSettings: 5,
       },
     });
     const { req, res, next } = serviceCtx({
@@ -463,6 +467,8 @@ describe("detection visibility beyond the detection screens", () => {
     const logs = payload(res).data;
     expect(logs.sleepActivityLogs).toBe(true);
     expect(logs.vehicleCheckInOutLogs).toBe(true);
+    expect(logs.fireSmokeLogs).toBe(true);
+    expect(logs.personFallSickLogs).toBe(true);
     expect(logs.personCountLogs).toBe(false);
     expect(logs.carLogs).toBe(false);
   });

@@ -5,24 +5,18 @@ import Response from "../../../utils/response.js";
 import logger from "../../../utils/logger.js";
 import { sendPayloadToUser } from "../../../socket.js";
 import { getAllowedDetectionTypes } from "../clientConfig/detectionLicense.service.js";
+import { DETECTION_LOG_METADATA } from "../../../constants/detectionTypes.js";
 
 // Map detection field names to log types
 const DETECTION_TO_LOGS_MAP = {
-  countPersonsSettings: "personCountLogs",
-  countVehiclesSettings: "vehicleCountLogs",
-  deskAbsenceSettings: "deskAbsenceLogs",
-  guardAbsenceSettings: "guardLogs",
-  guardSleepingDetectionSettings: "sleepActivityLogs",
-  conveyorDetectionSettings: "conveyorLogs",
-  crusherDetectionSettings: "crusherLogs",
-  cylinderDetectionSettings: "cylinderLogs",
-  waterSpillageDetectionSettings: "waterSpillLogs",
-  lineCrossingSettings: "lineCrossingLogs",
-  vehicleObstructionSettings: "vehicleObstructionLogs",
-  carModelDetectionSettings: "carLogs",
-  vehicleCheckInOutSettings: "vehicleCheckInOutLogs",
-  unauthorizedAccessSettings: "unauthorizedAccessLogs",
+  ...Object.fromEntries(
+    Object.entries(DETECTION_LOG_METADATA).map(
+      ([settingType, { logsConfigKey }]) => [settingType, logsConfigKey],
+    ),
+  ),
   genericObjectDetectionSettings: "detectedUsers",
+  // Keep the existing auto-enable behavior; ANPR licensing is still derived
+  // from DETECTION_LOG_METADATA below.
   vehicleDetectionSettings: "detectedUsers",
 };
 
@@ -30,9 +24,8 @@ const DETECTION_TO_LOGS_MAP = {
  * Which detections each log page is built from. A page stays visible while ANY
  * of its detections is licensed.
  *
- * Deliberately separate from DETECTION_TO_LOGS_MAP above. That map is
- * detection -> log for the AUTO-ENABLE loop and so can only express one log per
- * detection; licensing needs the inverse, and it is many-to-many:
+ * Derived from the same detection-log registry as DETECTION_TO_LOGS_MAP above.
+ * The inverse stays many-to-many because multiple detections may feed one page:
  *   - ANPR Logs has no auto-enable entry at all but is plainly ANPR.
  *
  * Log types absent from this map are NOT detection outputs. They are always
@@ -52,23 +45,13 @@ const DETECTION_TO_LOGS_MAP = {
  *                                a general availability view and kept on by
  *                                default rather than following Desk Absence.
  */
-const LOG_REQUIRED_DETECTIONS = {
-  personCountLogs: ["countPersonsSettings"],
-  vehicleCountLogs: ["countVehiclesSettings"],
-  deskAbsenceLogs: ["deskAbsenceSettings"],
-  guardLogs: ["guardAbsenceSettings"],
-  sleepActivityLogs: ["guardSleepingDetectionSettings"],
-  conveyorLogs: ["conveyorDetectionSettings"],
-  crusherLogs: ["crusherDetectionSettings"],
-  cylinderLogs: ["cylinderDetectionSettings"],
-  waterSpillLogs: ["waterSpillageDetectionSettings"],
-  lineCrossingLogs: ["lineCrossingSettings"],
-  vehicleObstructionLogs: ["vehicleObstructionSettings"],
-  carLogs: ["carModelDetectionSettings"],
-  vehicleCheckInOutLogs: ["vehicleCheckInOutSettings"],
-  unauthorizedAccessLogs: ["unauthorizedAccessSettings"],
-  anprLogs: ["vehicleDetectionSettings"],
-};
+const LOG_REQUIRED_DETECTIONS = Object.entries(DETECTION_LOG_METADATA).reduce(
+  (logs, [settingType, { logsConfigKey }]) => {
+    (logs[logsConfigKey] ||= []).push(settingType);
+    return logs;
+  },
+  {},
+);
 
 /**
  * Detection-visibility restriction, applied to the log pages.

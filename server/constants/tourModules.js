@@ -39,6 +39,8 @@ export const TOUR_MODULES = [
   { "key": "line-crossing", "label": "Line Crossing Logs", "path": "logs/line-crossing", "permissionKey": "logs", "permissionSubKey": "lineCrossingLogs", "logsConfigKey": "lineCrossingLogs", "group": "LOGS & RECORDS" },
   { "key": "water-spill", "label": "Water Spill Logs", "path": "logs/water-spill", "permissionKey": "logs", "permissionSubKey": "waterSpillLogs", "logsConfigKey": "waterSpillLogs", "group": "LOGS & RECORDS" },
   { "key": "unauthorized-access", "label": "Unauthorized Access Logs", "path": "logs/unauthorized-access", "permissionKey": "logs", "permissionSubKey": "unauthorizedAccessLogs", "logsConfigKey": "unauthorizedAccessLogs", "group": "LOGS & RECORDS" },
+  { "key": "fire-smoke", "label": "Fire & Smoke Logs", "path": "logs/fire-smoke", "permissionKey": "logs", "permissionSubKey": "fireSmokeLogs", "logsConfigKey": "fireSmokeLogs", "group": "LOGS & RECORDS" },
+  { "key": "person-fall-sick", "label": "Person Fall/Sick Logs", "path": "logs/person-fall-sick", "permissionKey": "logs", "permissionSubKey": "personFallSickLogs", "logsConfigKey": "personFallSickLogs", "group": "LOGS & RECORDS" },
   { "key": "cameras", "label": "Cameras & NVRs", "path": "cameras", "group": "CONFIGURE", "permissionKey": "NVR" },
   { "key": "detection-settings", "label": "Detections", "path": "detection-settings", "group": "CONFIGURE", "permissionKey": "detectionSettings" },
   { "key": "users", "label": "User Role Detail", "path": "users", "group": "ADMINISTER", "permissionKey": "Users" },
