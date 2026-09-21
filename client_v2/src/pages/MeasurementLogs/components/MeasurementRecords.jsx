@@ -26,6 +26,10 @@ const confMeta = (c) => {
 // The backend averages the length, width and height scores. devFrac remains a
 // fallback for compatibility while frontend and backend versions roll out.
 const matchPctOf = (r) => {
+  // The API uses null to mean that the comparison is incomplete. Do not fall
+  // back to devFrac in that case: missing dimensions/confidence must not look
+  // like a 100% match when devFrac happens to be 0.
+  if (r.matchPct === null) return null;
   if (Number.isFinite(r.matchPct)) return Math.max(0, Math.min(100, Math.round(r.matchPct)));
   if (!Number.isFinite(r.devFrac)) return null;
   return Math.max(0, Math.round(100 - r.devFrac * 100));
@@ -34,7 +38,7 @@ const matchPctOf = (r) => {
 const matchLabel = (r) => {
   if (r.devPct === 'QR unread') return 'QR unread';
   const pct = matchPctOf(r);
-  return pct == null ? r.devPct : `${pct}% match`;
+  return pct == null ? '—' : `${pct}% match`;
 };
 
 // Status filter pill — `accent` is a theme-token colour for the active state.

@@ -81,13 +81,13 @@ const SkuRow = ({ s }) => (
         {s.name}
       </span>
       <span
-        className="ml-auto font-[var(--mono)] text-[10px] text-[var(--tx3)] shrink-0 cursor-help"
+        className="ml-auto font-[var(--mono)] text-[10px] text-[var(--tx3)] shrink-0"
         title={`${s.fails} of ${s.count} measured ${s.name} unit(s) did not match the printed label (mismatches / total measured).`}
       >
         {s.fails}/{s.count}
       </span>
       <span
-        className="font-[var(--mono)] text-[11.5px] font-bold shrink-0 cursor-help"
+        className="font-[var(--mono)] text-[11.5px] font-bold shrink-0"
         title={`Mismatch rate for ${s.name}: ${s.fails} ÷ ${s.count} = ${s.rate}% of measured units are out of tolerance.`}
       >
         {s.rate}%
@@ -95,7 +95,7 @@ const SkuRow = ({ s }) => (
     </div>
     <div className="flex items-center gap-2 mb-[5px] font-[var(--mono)] text-[10px]">
       <span
-        className="text-[var(--tx3)] cursor-help"
+        className="text-[var(--tx3)]"
         title={`Printed label size for ${s.name} (L × W × H, inches).`}
       >
         label <span className="text-[var(--tx2)]">{s.declared || '—'}</span>
@@ -292,13 +292,13 @@ const DeviationByAxis = ({ rows, loading }) => (
               <div className="flex items-baseline gap-2 mb-[6px]">
                 <span className="text-[12.5px] font-semibold">{a.axis}</span>
                 <span
-                  className="font-[var(--mono)] text-[10px] text-[var(--tx3)] cursor-help"
+                  className="font-[var(--mono)] text-[10px] text-[var(--tx3)]"
                   title={`Allowed deviation for the ${a.axis} axis: ±${a.tolIn} in. A unit passes this axis when measured − printed is within ±${a.tolIn} in.`}
                 >
                   tol ±{a.tolIn} in
                 </span>
                 <span
-                  className="ml-auto font-[var(--mono)] text-[13px] font-bold cursor-help"
+                  className="ml-auto font-[var(--mono)] text-[13px] font-bold"
                   style={{ color }}
                   title={`Average deviation on ${a.axis}: ${a.avgIn} in across ${a.measured ?? '—'} measured unit(s).`}
                 >
@@ -306,7 +306,7 @@ const DeviationByAxis = ({ rows, loading }) => (
                 </span>
               </div>
               <div
-                className="h-[6px] rounded-[3px] bg-[var(--track)] overflow-hidden cursor-help"
+                className="h-[6px] rounded-[3px] bg-[var(--track)] overflow-hidden"
                 title={`Average deviation uses ${pct}% of the ±${a.tolIn} in tolerance${
                   pct >= 100 ? ' (bar capped at 100%)' : ''
                 }.`}
@@ -318,13 +318,11 @@ const DeviationByAxis = ({ rows, loading }) => (
               </div>
               <div className="flex gap-3 mt-[5px] font-[var(--mono)] text-[10px] text-[var(--tx3)]">
                 <span
-                  className="cursor-help"
                   title={`Largest single-unit deviation on ${a.axis} in this window: ${a.maxIn} in.`}
                 >
                   max {a.maxIn} in
                 </span>
                 <span
-                  className="cursor-help"
                   title={`${a.outOfTol} of ${a.measured ?? '—'} measured units exceeded the ±${a.tolIn} in tolerance on ${a.axis}.`}
                 >
                   {a.outOfTol}

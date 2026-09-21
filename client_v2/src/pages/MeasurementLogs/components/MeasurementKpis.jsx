@@ -56,7 +56,7 @@ const MeasurementKpis = ({ kpis, loading = false, error = '' }) => {
         {cards.map((k) => (
           <div
             key={k.label}
-            className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[13px] p-[15px] cursor-help"
+            className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[13px] p-[15px]"
             title={k.hint}
           >
             <div className="text-[11px] text-[var(--tx2)]">{k.label}</div>

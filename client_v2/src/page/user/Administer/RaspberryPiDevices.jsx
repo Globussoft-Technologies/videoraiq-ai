@@ -140,10 +140,18 @@ export default function RaspberryPiDevices() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, padding: 22 }}>
       <div style={{ alignItems: 'center', display: 'flex', gap: 9 }}>
         <div>
-          <div style={{ color: 'var(--tx)', fontSize: 15, fontWeight: 700 }}>Raspberry Pi registration requests</div>
+          <div style={{ alignItems: 'center', display: 'flex', gap: 8 }}>
+            <div style={{ color: 'var(--tx)', fontSize: 15, fontWeight: 700 }}>Raspberry Pi registration requests</div>
+            <span
+              title={`${devices.length} Raspberry Pi registration request${devices.length === 1 ? '' : 's'}`}
+              aria-label={`${devices.length} Raspberry Pi registration request${devices.length === 1 ? '' : 's'}`}
+              style={{ background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 7, color: 'var(--tx3)', fontFamily: 'var(--mono)', fontSize: 10, padding: '3px 8px' }}
+            >
+              {devices.length}
+            </span>
+          </div>
           <div style={{ color: 'var(--tx3)', fontSize: 11.5, marginTop: 3 }}>New requests appear automatically. Confirm the code, MAC and IP before approving.</div>
         </div>
-        <span style={{ background: 'var(--bg2)', border: '1px solid var(--bd)', borderRadius: 7, color: 'var(--tx3)', fontFamily: 'var(--mono)', fontSize: 10, padding: '3px 8px' }}>{devices.length}</span>
         <div style={{ marginLeft: 'auto' }}>
           <RefreshControl
             onManualRefresh={() => loadDevices({ quiet: true })}
