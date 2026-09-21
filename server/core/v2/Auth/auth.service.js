@@ -750,6 +750,41 @@ class AUTHService {
     return { id, name: null, expiresAt: currentSubscription.expiry };
   }
 
+  async persistSubscriptionSnapshot(
+    adminId,
+    subscriptions,
+    currentPlan,
+    source = "amember_login",
+  ) {
+    if (!adminId) return;
+
+    const normalizedSubscriptions = {};
+    for (const [planId, expiry] of Object.entries(subscriptions || {})) {
+      if (expiry != null) normalizedSubscriptions[String(planId)] = String(expiry);
+    }
+
+    const expiresAt = currentPlan?.expiresAt
+      ? new Date(currentPlan.expiresAt)
+      : null;
+
+    await adminModel.updateOne(
+      { _id: adminId },
+      {
+        $set: {
+          subscriptionSnapshot: {
+            subscriptions: normalizedSubscriptions,
+            planId: currentPlan?.id == null ? null : String(currentPlan.id),
+            planName: currentPlan?.name || null,
+            expiresAt:
+              expiresAt && !Number.isNaN(expiresAt.getTime()) ? expiresAt : null,
+            syncedAt: new Date(),
+            source,
+          },
+        },
+      },
+    );
+  }
+
   // POST a license payload to a single endpoint. Best-effort: never throws.
   async _postAdminLicense(url, payload) {
     try {
@@ -1388,12 +1423,14 @@ return bypassUsers.find(
         // envs). Must never block or fail the login flow — errors are swallowed
         // inside stopAllStreams; the admin lookup/flag write are guarded so they
         // can't throw. Mark streamsStopped so we know to resume on reactivation.
+        let inactiveAdminId = null;
         try {
           const expiredAdmin = await adminModel
             .findOne({ email: userData?.email, user_id: userData?.user_id })
             .select("_id")
             .lean();
           if (expiredAdmin?._id) {
+            inactiveAdminId = expiredAdmin._id;
             stopAllStreams(expiredAdmin._id);
             adminModel
               .updateOne({ _id: expiredAdmin._id }, { $set: { streamsStopped: true } })
@@ -1429,6 +1466,26 @@ return bypassUsers.find(
         const isExpired = Boolean(
           latest?.expiry && new Date(latest.expiry).getTime() < Date.now()
         );
+
+        // Replace any previously active snapshot as soon as an authenticated
+        // login reports inactive/expired access. Use the login response first;
+        // access history is only a fallback for displaying the last expiry.
+        if (inactiveAdminId) {
+          try {
+            await this.persistSubscriptionSnapshot(
+              inactiveAdminId,
+              knownSubscriptions,
+              latest
+                ? { id: latest.plan, name: null, expiresAt: latest.expiry }
+                : null,
+              bypassUser ? "bypass_login" : "amember_login",
+            );
+          } catch (error) {
+            logger.warn(
+              `[SUBSCRIPTION_SNAPSHOT] Failed to persist inactive admin ${inactiveAdminId}: ${error.message}`,
+            );
+          }
+        }
 
         return res.status(403).json({
           ok: false,
@@ -1554,6 +1611,23 @@ return bypassUsers.find(
         userData?.user_id,
         bypassUser
       );
+
+      // Persist the same authenticated aMember subscription state placed in
+      // the JWT. Super Admin can then show the current expiry without issuing
+      // a second, potentially stale /access request. This cache write must not
+      // prevent an otherwise valid user from logging in.
+      try {
+        await this.persistSubscriptionSnapshot(
+          adminData?._id,
+          userData?.subscriptions,
+          currentPlan,
+          bypassUser ? "bypass_login" : "amember_login",
+        );
+      } catch (error) {
+        logger.warn(
+          `[SUBSCRIPTION_SNAPSHOT] Failed to persist admin ${adminData?._id}: ${error.message}`,
+        );
+      }
 
       // Same one-time plan grant as the other login paths (generateAdminToken,
       // getAmemberUserDetails, v1's verifyUser). This is client_v2's actual

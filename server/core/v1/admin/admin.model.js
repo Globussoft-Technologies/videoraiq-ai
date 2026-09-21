@@ -55,6 +55,21 @@ const adminSchema = new mongoose.Schema({
   // this many cameras (channels) across all their NVRs. 0 = no cameras allowed
   // until the super-admin provisions a limit.
   purchasedCameras: { type: Number, default: 0 },
+  // Last subscription state returned by aMember's authenticated login API.
+  // Super Admin reads this shared snapshot instead of relying on a separate
+  // /access lookup, which can lag behind the login response.
+  subscriptionSnapshot: {
+    subscriptions: { type: Map, of: String, default: {} },
+    planId: { type: String, default: null },
+    planName: { type: String, default: null },
+    expiresAt: { type: Date, default: null },
+    syncedAt: { type: Date, default: null },
+    source: {
+      type: String,
+      enum: ["amember_login", "bypass_login"],
+      default: null,
+    },
+  },
   // The currently active employee self-registration invite. Generating a new
   // invite replaces this value, which immediately invalidates the old JWT.
   registrationLink: {

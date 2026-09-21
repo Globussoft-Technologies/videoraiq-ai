@@ -5,6 +5,7 @@ import adminModel from "../admin/admin.model.js";
 import channelModel from "../channels/channels.model.js";
 import NVRModel from "../NVR/nvr.model.js";
 import allocationModel from "./clientDetectionAllocation.model.js";
+import cameraDetectionModel from "./clientCameraDetection.model.js";
 import { DETECTION_TYPES } from "../../../constants/detectionTypes.js";
 import { resolveDetectionTypes } from "../detectionCatalog/detectionTypes.resolver.js";
 import { redis } from "../../../utils/database.js";
@@ -215,6 +216,61 @@ class ClientConfigService {
         { new: true, upsert: true, setDefaultsOnInsert: true }
       ).lean();
 
+      // If an exact camera selection already exists and its allowance is
+      // reduced, remove the most recently assigned camera(s) first. updatedAt
+      // represents assignment order because enabling a row updates it. Each
+      // removal is published as a camera-scoped revoke below so DS stops only
+      // that detector on that camera.
+      let removedCameraIds = [];
+      if (
+        update.cameraAllocation !== undefined &&
+        doc.enabled &&
+        doc.cameraSelectionConfigured
+      ) {
+        const activeCameraIds = await channelModel.distinct("_id", {
+          userId: admin.user_id,
+          isAdded: true,
+        });
+        const selected = await cameraDetectionModel
+          .find({
+            adminId,
+            settingType,
+            enabled: true,
+            cameraId: { $in: activeCameraIds },
+          })
+          .sort({ updatedAt: -1, _id: -1 })
+          .select("_id cameraId")
+          .lean();
+        const excess = Math.max(selected.length - doc.cameraAllocation, 0);
+        const removed = selected.slice(0, excess);
+
+        if (removed.length) {
+          await cameraDetectionModel.updateMany(
+            { _id: { $in: removed.map((row) => row._id) } },
+            { $set: { enabled: false } },
+          );
+          removedCameraIds = removed.map((row) => String(row.cameraId));
+
+          for (const cameraId of removedCameraIds) {
+            redis
+              .publish(
+                "detectionAllocation:update",
+                JSON.stringify({
+                  scope: "camera",
+                  adminId,
+                  userId: admin.user_id,
+                  cameraId,
+                  settingType,
+                  enabled: false,
+                }),
+              )
+              .catch((error) =>
+                logger.error(`automatic camera detection revoke publish failed: ${error.message}`),
+              );
+          }
+        }
+      }
+
       // Notify the client app (separate process) so connected users see the new
       // allocation live, exactly as purchased-cameras changes already do.
       // Without this a detection granted or revoked here stays invisible until
@@ -239,6 +295,7 @@ class ClientConfigService {
           name: catalogEntry?.name || DETECTION_TYPES[settingType],
           cameraAllocation: doc.cameraAllocation,
           enabled: doc.enabled,
+          removedCameraIds,
         })
       );
     } catch (err) {

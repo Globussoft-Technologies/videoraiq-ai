@@ -42,6 +42,21 @@ const adminSchema = new mongoose.Schema({
   // field on the Client Configuration screen; also the "/N" limit in the
   // Clients table's cameras-used/purchased column.
   purchasedCameras: { type: Number, default: 0 },
+  // Shared snapshot written by the client backend after an authenticated
+  // aMember login. Status is intentionally computed from expiresAt at read
+  // time so it changes to expired without requiring another database write.
+  subscriptionSnapshot: {
+    subscriptions: { type: Map, of: String, default: {} },
+    planId: { type: String, default: null },
+    planName: { type: String, default: null },
+    expiresAt: { type: Date, default: null },
+    syncedAt: { type: Date, default: null },
+    source: {
+      type: String,
+      enum: ["amember_login", "bypass_login"],
+      default: null,
+    },
+  },
   // True once purchasedCameras has been explicitly set — either by this
   // screen (updatePurchasedCameras, including to 0 to deliberately block a
   // client) or by server's own default-camera grant on first login. This is

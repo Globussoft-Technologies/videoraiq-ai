@@ -24,6 +24,22 @@ export const pickLatestExpiry = (subscriptions = {}) => {
   return times.length ? new Date(Math.max(...times)) : null;
 };
 
+export const subscriptionStatusFromSnapshot = (
+  snapshot,
+  now = Date.now(),
+) => {
+  if (!snapshot?.syncedAt) return null;
+  if (!snapshot.expiresAt) return { expireDate: null, status: "inactive" };
+
+  const expireDate = new Date(snapshot.expiresAt);
+  if (Number.isNaN(expireDate.getTime())) return null;
+
+  return {
+    expireDate,
+    status: now <= expireDate.getTime() ? "active" : "expired",
+  };
+};
+
 class ClientService {
   // Latest invoice's product title from aMember (best-effort — returns null on any failure).
   async _getLatestInvoiceName(userId) {
@@ -46,7 +62,10 @@ class ClientService {
   }
 
   // Expiry date + status derived from the aMember access (subscriptions) API.
-  async _getSubscriptionStatus(userId) {
+  async _getSubscriptionStatus(userId, snapshot = null) {
+    const storedStatus = subscriptionStatusFromSnapshot(snapshot);
+    if (storedStatus) return storedStatus;
+
     try {
       const access = await AUTHService.getAmemberAccessByUserId(userId);
       const subscriptions = AUTHService.extractSubscriptions(access); // { product_id: expire_date }
@@ -94,9 +113,12 @@ class ClientService {
       // Enrich each admin from aMember. One admin's failure never fails the page.
       const rows = await Promise.all(
         admins.map(async (admin) => {
+          const snapshot = admin.subscriptionSnapshot;
           const [plan, sub] = await Promise.all([
-            this._getLatestInvoiceName(admin.user_id),
-            this._getSubscriptionStatus(admin.user_id),
+            snapshot?.planName
+              ? Promise.resolve(snapshot.planName)
+              : this._getLatestInvoiceName(admin.user_id),
+            this._getSubscriptionStatus(admin.user_id, snapshot),
           ]);
           return {
             adminId: admin._id,
@@ -145,9 +167,12 @@ class ClientService {
       // fleet size, cache the responses if clients grow into the hundreds.
       const enriched = await Promise.all(
         admins.map(async (a) => {
+          const snapshot = a.subscriptionSnapshot;
           const [plan, sub] = await Promise.all([
-            this._getLatestInvoiceName(a.user_id),
-            this._getSubscriptionStatus(a.user_id),
+            snapshot?.planName
+              ? Promise.resolve(snapshot.planName)
+              : this._getLatestInvoiceName(a.user_id),
+            this._getSubscriptionStatus(a.user_id, snapshot),
           ]);
           return { ...a, plan, status: sub.status };
         })
