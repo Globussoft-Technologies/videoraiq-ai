@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Building2, CircleCheck, Video, VideoOff, ScanEye, TriangleAlert } from 'lucide-react'
 import Topbar from '../../layout/Topbar'
 import LoadingState from '../../components/UI/LoadingState'
@@ -20,6 +20,12 @@ const FleetOverview = () => {
   const [graph, setGraph] = useState({ buckets: [], total: 0, hours: 24 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [utilisationQuery, setUtilisationQuery] = useState('')
+  const [debouncedUtilisationQuery, setDebouncedUtilisationQuery] = useState('')
+  const [utilisationLoading, setUtilisationLoading] = useState(false)
+  const [utilisationError, setUtilisationError] = useState('')
+  const [initialOverviewLoaded, setInitialOverviewLoaded] = useState(false)
+  const lastUtilisationSearchRef = useRef('')
 
   useEffect(() => {
     let cancelled = false
@@ -37,6 +43,7 @@ const FleetOverview = () => {
         if (cancelled) return
 
         setOverview(unwrap(ovRes))
+        setInitialOverviewLoaded(true)
         setTopClients(unwrap(topRes).clients || [])
         const g = unwrap(graphRes)
         setGraph({ buckets: g.buckets || [], total: g.total || 0, hours: g.hours || 24 })
@@ -53,6 +60,49 @@ const FleetOverview = () => {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    const timer = setTimeout(
+      () => setDebouncedUtilisationQuery(utilisationQuery.trim()),
+      350,
+    )
+    return () => clearTimeout(timer)
+  }, [utilisationQuery])
+
+  useEffect(() => {
+    if (
+      !initialOverviewLoaded ||
+      debouncedUtilisationQuery === lastUtilisationSearchRef.current
+    ) {
+      return undefined
+    }
+
+    let cancelled = false
+    lastUtilisationSearchRef.current = debouncedUtilisationQuery
+    setUtilisationLoading(true)
+    setUtilisationError('')
+
+    getFleetOverview(debouncedUtilisationQuery)
+      .then((response) => {
+        if (cancelled) return
+        const data = unwrap(response)
+        setOverview((current) => ({
+          ...current,
+          cameraUtilisation: data.cameraUtilisation || [],
+        }))
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setUtilisationError(getApiMessage(err, 'Failed to search camera utilisation'))
+      })
+      .finally(() => {
+        if (!cancelled) setUtilisationLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [debouncedUtilisationQuery, initialOverviewLoaded])
 
   const t = overview?.totals || {}
 
@@ -129,7 +179,13 @@ const FleetOverview = () => {
 
             {/* Utilisation + plans */}
             <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-              <CameraUtilisation rows={overview?.cameraUtilisation || []} />
+              <CameraUtilisation
+                rows={overview?.cameraUtilisation || []}
+                query={utilisationQuery}
+                onQueryChange={setUtilisationQuery}
+                searching={utilisationLoading}
+                searchError={utilisationError}
+              />
               <ClientsByPlan rows={overview?.clientsByPlan || []} />
             </div>
 

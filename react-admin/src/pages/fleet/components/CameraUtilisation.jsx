@@ -1,3 +1,5 @@
+import { Loader2, Search, X } from 'lucide-react'
+
 const AVATAR_COLORS = [
   'from-blue-500 to-purple-500',
   'from-purple-500 to-pink-500',
@@ -22,21 +24,63 @@ const meterColor = (ratio, over) => {
   return 'bg-green-500'
 }
 
-const CameraUtilisation = ({ rows = [] }) => {
+const CameraUtilisation = ({
+  rows = [],
+  query = '',
+  onQueryChange,
+  searching = false,
+  searchError = '',
+}) => {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/8 dark:bg-[#0b0d13]">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
           Camera Utilisation by Client
         </h2>
-        <span className="font-mono text-[10px] tracking-[0.12em] text-gray-400 uppercase dark:text-gray-600">
+
+        <div className="relative min-w-48 flex-1 sm:max-w-sm">
+          <Search
+            size={14}
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => onQueryChange?.(event.target.value)}
+            placeholder="Search clients…"
+            aria-label="Search camera utilisation by client"
+            className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pr-9 pl-9 text-xs text-gray-900 placeholder:text-gray-400 outline-none transition-colors focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 dark:border-white/8 dark:bg-white/4 dark:text-white dark:placeholder:text-gray-600 dark:focus:border-purple-400/60"
+          />
+          {searching ? (
+            <Loader2
+              size={14}
+              className="absolute top-1/2 right-3 -translate-y-1/2 animate-spin text-purple-500"
+              aria-label="Searching"
+            />
+          ) : query ? (
+            <button
+              type="button"
+              onClick={() => onQueryChange?.('')}
+              aria-label="Clear client search"
+              className="absolute top-1/2 right-2.5 flex -translate-y-1/2 cursor-pointer items-center justify-center rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-white/8 dark:hover:text-gray-300"
+            >
+              <X size={14} />
+            </button>
+          ) : null}
+        </div>
+
+        <span className="ml-auto font-mono text-[10px] tracking-[0.12em] text-gray-400 uppercase dark:text-gray-600">
           Provisioned / Licensed
         </span>
       </div>
 
+      {searchError && (
+        <p className="mb-3 text-xs text-red-500 dark:text-red-400">{searchError}</p>
+      )}
+
       {rows.length === 0 ? (
         <p className="py-8 text-center text-sm text-gray-400 dark:text-gray-500">
-          No camera data available.
+          {query.trim() ? `No clients match “${query.trim()}”.` : 'No camera data available.'}
         </p>
       ) : (
         // ~5 rows visible; the rest scroll. pr-2 keeps the scrollbar clear of the meters.
