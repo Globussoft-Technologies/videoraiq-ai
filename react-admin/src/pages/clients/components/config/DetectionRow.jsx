@@ -1,4 +1,5 @@
-import { CopyCheck, Minus, Plus, ScanEye } from 'lucide-react'
+import { CopyCheck, Minus, Plus } from 'lucide-react'
+import { DETECTION_META, FALLBACK_META } from '../../../detectionCatalog/data'
 
 // Rotating accent for the detection icon tile, keyed by index.
 const ICON_TINTS = [
@@ -21,6 +22,7 @@ const DetectionRow = ({
 }) => {
   const { name, enabled, cameraAllocation, camerasInUse = 0 } = detection
   const tint = ICON_TINTS[index % ICON_TINTS.length]
+  const DetectionIcon = (DETECTION_META[detection.settingType] || FALLBACK_META).Icon
 
   const setAlloc = (n) => onAllocationChange(Math.max(0, Math.min(maxCameras, n)))
 
@@ -37,7 +39,7 @@ const DetectionRow = ({
       {/* Detection type */}
       <div className="flex items-center gap-3">
         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tint}`}>
-          <ScanEye size={17} strokeWidth={2} />
+          <DetectionIcon size={17} strokeWidth={2} />
         </span>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{name}</p>
