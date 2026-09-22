@@ -30,7 +30,11 @@ const channelNumber = (item, index) => {
 export const normalizeHoneywellChannels = (payload, deviceInfo = {}) => {
   const data = unwrapData(payload);
   const items =
-    data?.channel_param?.items ?? data?.channelParam?.items ?? data?.channels ?? data?.items ?? [];
+    data?.channel_param?.items ??
+    data?.channelParam?.items ??
+    data?.channels ??
+    data?.items ??
+    [];
   const normalizedItems = Array.isArray(items) ? items : [];
   const declaredCount = Number(
     firstValue(unwrapData(deviceInfo), ["channel_num", "channelNum", "camera_num", "cameraCount"], 0),
@@ -84,7 +88,10 @@ const apiPost = async (client, baseUrl, path, token, body = {}) => {
   return { response, payload };
 };
 
-/** Honeywell I-HPNVR uses TVT Digest login followed by X-csrftoken API calls. */
+/**
+ * Honeywell I-HPNVR recorders use TVT's HTTP API: Digest login followed by
+ * X-csrftoken-authenticated device and channel calls.
+ */
 export async function fetchHoneywellTvtCameras({
   ip,
   port,
@@ -112,7 +119,10 @@ export async function fetchHoneywellTvtCameras({
     throw new Error(code ? `Honeywell authentication failed: ${code}` : "Honeywell authentication failed");
   }
 
-  const token = loginPayload?.token || loginPayload?.data?.token || loginResponse.headers?.get?.("x-csrftoken");
+  const token =
+    loginPayload?.token ||
+    loginPayload?.data?.token ||
+    loginResponse.headers?.get?.("x-csrftoken");
   if (!token) throw new Error("Honeywell login succeeded but no session token was returned");
 
   const [deviceResult, channelResult] = await Promise.all([
@@ -130,5 +140,6 @@ export async function fetchHoneywellTvtCameras({
   const deviceInfo = normalizeHoneywellDeviceInfo(deviceResult.payload);
   const cameras = normalizeHoneywellChannels(channelResult.payload, deviceResult.payload);
   if (!cameras.length) throw new Error("Honeywell NVR returned no camera channels");
+
   return { deviceInfo, cameras };
 }

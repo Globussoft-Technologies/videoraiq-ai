@@ -5,7 +5,7 @@ import {
   ArrowUpFromLine,
   BetweenHorizontalStart,
   BriefcaseConveyorBelt,
-  BroomSparkles,
+  BrushCleaning,
   Car,
   CarFront,
   ChefHat,
@@ -195,6 +195,14 @@ export const DETECTION_META = {
     Icon: Droplet,
     tint: 'bg-cyan-50 text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-300',
   },
+  equipmentOilLeakageDetectionSettings: {
+    Icon: Droplet,
+    tint: 'bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300',
+  },
+  vehicleFuelOilLeakageDetectionSettings: {
+    Icon: Droplets,
+    tint: 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300',
+  },
   gunnyBagsMaterialsWrongLocationDetectionSettings: {
     Icon: PackageX,
     tint: 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300',
@@ -208,7 +216,7 @@ export const DETECTION_META = {
     tint: 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300',
   },
   spillsDirtyMessyAreasDetectionSettings: {
-    Icon: BroomSparkles,
+    Icon: BrushCleaning,
     tint: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300',
   },
   carModelDetectionSettings: {
