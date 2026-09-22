@@ -683,6 +683,48 @@ class IncidentsController {
     return await incidentsService.getPersonFallSickDetectionLogs(req, res, next);
   }
 
+  async getWorkingAtHeightDetectionLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Working at Height Detection logs.'
+    #swagger.security = [{ "EncryptedAuthToken": [] }] */
+    return incidentsService.getWorkingAtHeightDetectionLogs(req, res, next);
+  }
+
+  async getOilLeakageDetectionLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Oil Leakage Detection logs.'
+    #swagger.security = [{ "EncryptedAuthToken": [] }] */
+    return incidentsService.getOilLeakageDetectionLogs(req, res, next);
+  }
+
+  async getGunnyBagsMaterialsWrongLocationDetectionLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Gunny Bags/Materials Wrong Location Detection logs.'
+    #swagger.security = [{ "EncryptedAuthToken": [] }] */
+    return incidentsService.getGunnyBagsMaterialsWrongLocationDetectionLogs(req, res, next);
+  }
+
+  async getSandDustWasteScrapDisposalDetectionLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Sand, Dust, Waste and Scrap Disposal Detection logs.'
+    #swagger.security = [{ "EncryptedAuthToken": [] }] */
+    return incidentsService.getSandDustWasteScrapDisposalDetectionLogs(req, res, next);
+  }
+
+  async getUnauthorizedAnimalEntryDetectionLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Unauthorized Animal Entry Detection logs.'
+    #swagger.security = [{ "EncryptedAuthToken": [] }] */
+    return incidentsService.getUnauthorizedAnimalEntryDetectionLogs(req, res, next);
+  }
+
+  async getSpillsDirtyMessyAreasDetectionLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Spills, Dirty or Messy Areas Detection logs.'
+    #swagger.security = [{ "EncryptedAuthToken": [] }] */
+    return incidentsService.getSpillsDirtyMessyAreasDetectionLogs(req, res, next);
+  }
+
   async getUnauthorizedAccessLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get Unauthorized Access logs (tabular). Filters: startDate, endDate, nvrId/nvrIds, channelId/channelIds, severity, resolved, reportStatus, search. Paginated via skip/limit.'

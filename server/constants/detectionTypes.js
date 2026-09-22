@@ -46,7 +46,31 @@ export const DETECTION_TYPES = {
   mobilePhoneDetectionSettings: "Mobile Phone Detection",
   carModelDetectionSettings: "Car Model Detection",
   vehicleCheckInOutSettings: "Vehicle Check-In / Check-Out Detection",
-}
+  workingAtHeightDetectionSettings: "Working at Height Detection",
+  oilLeakageDetectionSettings: "Oil Leakage Detection",
+  gunnyBagsMaterialsWrongLocationDetectionSettings: "Gunny Bags/Materials Wrong Location Detection",
+  sandDustWasteScrapDisposalDetectionSettings: "Sand, Dust, Waste & Scrap Disposal Detection",
+  unauthorizedAnimalEntryDetectionSettings: "Unauthorized Animal Entry Detection",
+  spillsDirtyMessyAreasDetectionSettings: "Spills, Dirty or Messy Areas Detection",
+};
+
+export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
+  "workingAtHeightDetectionSettings",
+  "oilLeakageDetectionSettings",
+  "gunnyBagsMaterialsWrongLocationDetectionSettings",
+  "sandDustWasteScrapDisposalDetectionSettings",
+  "unauthorizedAnimalEntryDetectionSettings",
+  "spillsDirtyMessyAreasDetectionSettings",
+]);
+
+export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
+  "workingAtHeightDetection",
+  "oilLeakageDetection",
+  "gunnyBagsMaterialsWrongLocationDetection",
+  "sandDustWasteScrapDisposalDetection",
+  "unauthorizedAnimalEntryDetection",
+  "spillsDirtyMessyAreasDetection",
+]);
 
 /**
  * Detection types that expose a dedicated logs page.
@@ -77,6 +101,12 @@ export const DETECTION_LOG_METADATA = Object.freeze({
   vehicleDetectionSettings: { permissionKey: "ANPRLogs", logsConfigKey: "anprLogs" },
   fireSmokeDetectionSettings: { permissionKey: "fireSmokeLogs", logsConfigKey: "fireSmokeLogs" },
   personFallSickDetectionSettings: { permissionKey: "personFallSickLogs", logsConfigKey: "personFallSickLogs" },
+  workingAtHeightDetectionSettings: { permissionKey: "workingAtHeightLogs", logsConfigKey: "workingAtHeightLogs" },
+  oilLeakageDetectionSettings: { permissionKey: "oilLeakageLogs", logsConfigKey: "oilLeakageLogs" },
+  gunnyBagsMaterialsWrongLocationDetectionSettings: { permissionKey: "wrongLocationLogs", logsConfigKey: "wrongLocationLogs" },
+  sandDustWasteScrapDisposalDetectionSettings: { permissionKey: "wasteDisposalLogs", logsConfigKey: "wasteDisposalLogs" },
+  unauthorizedAnimalEntryDetectionSettings: { permissionKey: "animalEntryLogs", logsConfigKey: "animalEntryLogs" },
+  spillsDirtyMessyAreasDetectionSettings: { permissionKey: "messyAreaLogs", logsConfigKey: "messyAreaLogs" },
 });
 
 export const DETECTION_LOG_PERMISSION_KEYS = Object.freeze([
@@ -128,6 +158,12 @@ export const TYPE_MAP = {
   carModelDetectionSettings: "carModelDetection",
   vehicleCheckInOutSettings: "vehicleCheckInOut",
   faceAuthenticationSettings: "attendanceSettings",
+  workingAtHeightDetectionSettings: "workingAtHeightDetection",
+  oilLeakageDetectionSettings: "oilLeakageDetection",
+  gunnyBagsMaterialsWrongLocationDetectionSettings: "gunnyBagsMaterialsWrongLocationDetection",
+  sandDustWasteScrapDisposalDetectionSettings: "sandDustWasteScrapDisposalDetection",
+  unauthorizedAnimalEntryDetectionSettings: "unauthorizedAnimalEntryDetection",
+  spillsDirtyMessyAreasDetectionSettings: "spillsDirtyMessyAreasDetection",
 };
 
 export const DETECTION_MODES_MAP = {
@@ -159,6 +195,12 @@ export const DETECTION_MODES_MAP = {
   faceAuthenticationSettings: ["attendanceSettings"],
   fireSmokeDetectionSettings: ["fireSmokeDetectionSettings"],
   personFallSickDetectionSettings: ["personFallSickDetectionSettings"],
+  workingAtHeightDetectionSettings: ["workingAtHeightDetectionSettings"],
+  oilLeakageDetectionSettings: ["oilLeakageDetectionSettings"],
+  gunnyBagsMaterialsWrongLocationDetectionSettings: ["gunnyBagsMaterialsWrongLocationDetectionSettings"],
+  sandDustWasteScrapDisposalDetectionSettings: ["sandDustWasteScrapDisposalDetectionSettings"],
+  unauthorizedAnimalEntryDetectionSettings: ["unauthorizedAnimalEntryDetectionSettings"],
+  spillsDirtyMessyAreasDetectionSettings: ["spillsDirtyMessyAreasDetectionSettings"],
 };
 
 /**
@@ -211,6 +253,12 @@ export const DS_DETECTOR_BY_MODE = {
   faceAuthenticationSettings: "attendanceSettings",
   fireSmokeDetectionSettings: "fireSmokeDetectionSettings",
   personFallSickDetectionSettings: "personFallSickDetectionSettings",
+  workingAtHeightDetectionSettings: "workingAtHeightDetectionSettings",
+  oilLeakageDetectionSettings: "oilLeakageDetectionSettings",
+  gunnyBagsMaterialsWrongLocationDetectionSettings: "gunnyBagsMaterialsWrongLocationDetectionSettings",
+  sandDustWasteScrapDisposalDetectionSettings: "sandDustWasteScrapDisposalDetectionSettings",
+  unauthorizedAnimalEntryDetectionSettings: "unauthorizedAnimalEntryDetectionSettings",
+  spillsDirtyMessyAreasDetectionSettings: "spillsDirtyMessyAreasDetectionSettings",
 };
 
 /**
@@ -275,7 +323,13 @@ export const DS_LOGIC_BY_MODE = {
   foodServicePPEDetection: "foodServicePPEDetection",
   carModelDetection: "carModelDetectionSettings",
   vehicleCheckInOut: "vehicleCheckInOutSettings",
-  faceAuthenticationSettings: "attendanceSettings"
+  faceAuthenticationSettings: "attendanceSettings",
+  workingAtHeightDetectionSettings: "workingAtHeightDetectionSettings",
+  oilLeakageDetectionSettings: "oilLeakageDetectionSettings",
+  gunnyBagsMaterialsWrongLocationDetectionSettings: "gunnyBagsMaterialsWrongLocationDetectionSettings",
+  sandDustWasteScrapDisposalDetectionSettings: "sandDustWasteScrapDisposalDetectionSettings",
+  unauthorizedAnimalEntryDetectionSettings: "unauthorizedAnimalEntryDetectionSettings",
+  spillsDirtyMessyAreasDetectionSettings: "spillsDirtyMessyAreasDetectionSettings",
 };
 
 /** DS logic names for one of our setting types. */
@@ -320,7 +374,13 @@ export const toPopulateDetections = [
   { path: "detections.mobilePhoneDetectionSettings.id" },
   { path: "detections.carModelDetectionSettings.id" },
   { path: "detections.vehicleCheckInOutSettings.id" },
-  { path: "detections.faceAuthenticationSettings.id" }
+  { path: "detections.faceAuthenticationSettings.id" },
+  { path: "detections.workingAtHeightDetectionSettings.id" },
+  { path: "detections.oilLeakageDetectionSettings.id" },
+  { path: "detections.gunnyBagsMaterialsWrongLocationDetectionSettings.id" },
+  { path: "detections.sandDustWasteScrapDisposalDetectionSettings.id" },
+  { path: "detections.unauthorizedAnimalEntryDetectionSettings.id" },
+  { path: "detections.spillsDirtyMessyAreasDetectionSettings.id" },
 ];
 
 // sample payloads
@@ -1437,3 +1497,48 @@ export const attendanceSettings = {
     zone_name: "Cashier Counter",
   },
 };
+
+const industrialDetectionExample = (settingType, name) => ({
+  channelId: ["664f89e8a9d345001ee326b1"],
+  NVRId: "664f895da9d345001ee326a9",
+  settingType,
+  name,
+  enabled: true,
+  alerts: [],
+  settings: {
+    zone_configs: [],
+    imageRequired: true,
+    videoLinkRequirement: false,
+    levelOfImportance: "high",
+    alertThreshold: 1,
+    videoResolution: [1920, 1080],
+    detectionTimeGap: 30,
+    referencePoints: {},
+    metricType: "gauge",
+  },
+});
+
+export const workingAtHeightDetectionSettings = industrialDetectionExample(
+  "workingAtHeightDetectionSettings",
+  "Working at Height Detection",
+);
+export const oilLeakageDetectionSettings = industrialDetectionExample(
+  "oilLeakageDetectionSettings",
+  "Oil Leakage Detection",
+);
+export const gunnyBagsMaterialsWrongLocationDetectionSettings = industrialDetectionExample(
+  "gunnyBagsMaterialsWrongLocationDetectionSettings",
+  "Gunny Bags/Materials Wrong Location Detection",
+);
+export const sandDustWasteScrapDisposalDetectionSettings = industrialDetectionExample(
+  "sandDustWasteScrapDisposalDetectionSettings",
+  "Sand, Dust, Waste & Scrap Disposal Detection",
+);
+export const unauthorizedAnimalEntryDetectionSettings = industrialDetectionExample(
+  "unauthorizedAnimalEntryDetectionSettings",
+  "Unauthorized Animal Entry Detection",
+);
+export const spillsDirtyMessyAreasDetectionSettings = industrialDetectionExample(
+  "spillsDirtyMessyAreasDetectionSettings",
+  "Spills, Dirty or Messy Areas Detection",
+);

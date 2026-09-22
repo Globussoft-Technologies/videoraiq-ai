@@ -242,6 +242,35 @@ describe("PythonService.startNewDetection", () => {
     );
   });
 
+  it.each([
+    "workingAtHeightDetectionSettings",
+    "oilLeakageDetectionSettings",
+    "gunnyBagsMaterialsWrongLocationDetectionSettings",
+    "sandDustWasteScrapDisposalDetectionSettings",
+    "unauthorizedAnimalEntryDetectionSettings",
+    "spillsDirtyMessyAreasDetectionSettings",
+  ])("builds the exact DS payload for %s", async (mode) => {
+    axios.post.mockResolvedValueOnce({ data: { ok: true } });
+
+    await PythonService.startNewDetection({
+      camera_id: "industrial-camera",
+      nvr_id: "industrial-nvr",
+      admin_id: "industrial-admin",
+      stream_url: "rtsp://industrial.test/stream",
+      detection_modes: [mode],
+      zones: [[1, 2]],
+      severity: "high",
+    });
+
+    expect(axios.post.mock.calls[0][1]).toEqual({
+      camera_id: "industrial-camera",
+      nvr_id: "industrial-nvr",
+      admin_id: "industrial-admin",
+      stream_url: "rtsp://industrial.test/stream",
+      detectors: [{ name: mode }],
+    });
+  });
+
   it("builds the cylinder stack contract with defaults and polygon nesting", async () => {
     axios.post.mockResolvedValueOnce({ data: { ok: true } });
     await PythonService.startNewDetection({
@@ -379,6 +408,30 @@ describe("PythonService.updateNewDetection", () => {
 });
 
 describe("PythonService.stopNewDetection", () => {
+  it.each([
+    "workingAtHeightDetectionSettings",
+    "oilLeakageDetectionSettings",
+    "gunnyBagsMaterialsWrongLocationDetectionSettings",
+    "sandDustWasteScrapDisposalDetectionSettings",
+    "unauthorizedAnimalEntryDetectionSettings",
+    "spillsDirtyMessyAreasDetectionSettings",
+  ])("stops only the selected industrial detector %s", async (mode) => {
+    axios.post.mockResolvedValueOnce({ data: { stopped: true } });
+
+    await PythonService.stopNewDetection(
+      "industrial-camera",
+      "industrial-nvr",
+      [mode],
+      "industrial-admin",
+    );
+
+    expect(axios.post.mock.calls[0][1]).toEqual({
+      camera_id: "industrial-camera",
+      nvr_id: "industrial-nvr",
+      detectors: [mode],
+    });
+  });
+
   it("stops only the Person Fall/Sick detector", async () => {
     axios.post.mockResolvedValueOnce({ data: { stopped: true } });
     await PythonService.stopNewDetection(

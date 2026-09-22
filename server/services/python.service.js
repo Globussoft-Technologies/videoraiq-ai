@@ -10,12 +10,24 @@ import axios from "axios";
 import {
   DETECTION_MODES_MAP,
   DS_DETECTOR_BY_MODE,
+  INDUSTRIAL_SETTING_TYPES,
   dsDetectorsForModes,
 } from "../constants/detectionTypes.js";
 import { DetectionSetting } from "../core/v1/detectionSettings/detectionSettings.model.js";
 import { resolveAdminEndpoints } from "../utils/adminEndpoints.js";
 const detectionHost = config.get("PythonService.detectionUrl");
 const APP_ENV = config.get("APP_ENV");
+
+const INDUSTRIAL_DETECTORS = new Set(INDUSTRIAL_SETTING_TYPES);
+
+const appendIndustrialDetectors = (detectors, modes) => {
+  for (const name of modes || []) {
+    if (INDUSTRIAL_DETECTORS.has(name)) {
+      // These six DS contracts currently accept the detector discriminator only.
+      detectors.push({ name });
+    }
+  }
+};
 
 const THRESHOLD_FIELDS_BY_DETECTOR = {
   faceAuth: ["person_threshold"],
@@ -635,6 +647,8 @@ class PythonService {
         });
       }
 
+      appendIndustrialDetectors(detectors, detection_modes);
+
       // ❗️ Validation
       if (!detectors.length) {
         throw new Error("No configurations found");
@@ -897,6 +911,8 @@ class PythonService {
           car_company: confidence_thresholds?.company || undefined,
         });
       }
+
+      appendIndustrialDetectors(detectors, detection_modes);
 
       // ❗️ Validation
       if (!detectors.length) {

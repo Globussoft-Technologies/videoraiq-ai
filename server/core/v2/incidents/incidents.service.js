@@ -19,7 +19,11 @@ import {
   escapeRegex,
   NORM_PLATE_FIELD,
 } from "../../../utils/vehicleTagging.js";
-import { ALERT_FEED_EXCLUDED_TYPES } from "../../../constants/detectionTypes.js";
+import {
+  ALERT_FEED_EXCLUDED_TYPES,
+  INDUSTRIAL_INCIDENT_TYPES,
+  TYPE_MAP,
+} from "../../../constants/detectionTypes.js";
 import { deleteMediaV2 as deleteMedia, mediaExistsV2 as mediaExists } from "../adminStorage/mediaStorage.v2.js";
 
 import {
@@ -54,7 +58,13 @@ import {
   FoodServicePPEDetectionIncident,
   MobilePhoneDetectionIncident,
   CarModelDetectionIncident,
-  VehicleCheckInOutIncident
+  VehicleCheckInOutIncident,
+  WorkingAtHeightDetectionIncident,
+  OilLeakageDetectionIncident,
+  GunnyBagsMaterialsWrongLocationDetectionIncident,
+  SandDustWasteScrapDisposalDetectionIncident,
+  UnauthorizedAnimalEntryDetectionIncident,
+  SpillsDirtyMessyAreasDetectionIncident,
 } from "./incidents.model.js";
 const modelMap = {
   countPersons: CountPersonIncident,
@@ -87,7 +97,13 @@ const modelMap = {
   foodServicePPEDetection: FoodServicePPEDetectionIncident,
   mobilePhoneDetection: MobilePhoneDetectionIncident,
   carModelDetection: CarModelDetectionIncident,
-  vehicleCheckInOut: VehicleCheckInOutIncident
+  vehicleCheckInOut: VehicleCheckInOutIncident,
+  workingAtHeightDetection: WorkingAtHeightDetectionIncident,
+  oilLeakageDetection: OilLeakageDetectionIncident,
+  gunnyBagsMaterialsWrongLocationDetection: GunnyBagsMaterialsWrongLocationDetectionIncident,
+  sandDustWasteScrapDisposalDetection: SandDustWasteScrapDisposalDetectionIncident,
+  unauthorizedAnimalEntryDetection: UnauthorizedAnimalEntryDetectionIncident,
+  spillsDirtyMessyAreasDetection: SpillsDirtyMessyAreasDetectionIncident,
 };
 import channelsModel from "./../channels/channels.model.js";
 import adminModel from "../admin/admin.model.js";
@@ -129,6 +145,12 @@ import {
   allowedIncidentTypes,
   getAllowedDetectionTypes,
 } from "../clientConfig/detectionLicense.service.js";
+
+const industrialIncidentTypes = new Set(INDUSTRIAL_INCIDENT_TYPES);
+
+const settingTypeForIncident = (incidentType) =>
+  Object.entries(TYPE_MAP).find(([, mappedType]) => mappedType === incidentType)?.[0]
+  || `${incidentType}Settings`;
 
 const normalizeVehicleObstructionPayload = (body = {}) => {
   const vehicleNumber = body.vehicleNumber == null ? "" : String(body.vehicleNumber).trim();
@@ -377,7 +399,7 @@ class IncidentsService {
           .findOne({ _id: channelId })
           .populate("profile")
           .lean();
-        let detectionType = channelData.detections[`${incidentType}Settings`];
+        let detectionType = channelData.detections[settingTypeForIncident(incidentType)];
 
         if (!detectionType) {
           return res.send(
@@ -661,6 +683,12 @@ class IncidentsService {
         newIncident.isFallDetected = req?.body?.isFallDetected;
         newIncident.evidenceScore = req?.body?.evidenceScore;
         newIncident.triggerNotification = req?.body?.triggerNotification;
+      } else if (industrialIncidentTypes.has(incidentType)) {
+        newIncident.timeOfIncident = req?.body?.timeOfIncident ?? currentTime;
+        newIncident.Image = req?.body?.Image;
+        newIncident.count = req?.body?.count;
+        newIncident.alertThreshold = req?.body?.alertThreshold;
+        newIncident.triggerNotification = req?.body?.triggerNotification;
       } else if (incidentType === "foodServicePPEDetection") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         newIncident.Image = req?.body?.Image;
@@ -810,7 +838,7 @@ class IncidentsService {
         .populate("profile")
         .lean();
 
-      let detectionType = channelData.detections[`${incidentType}Settings`];
+      let detectionType = channelData.detections[settingTypeForIncident(incidentType)];
       if (!detectionType) {
         return res.send(
           Response.validationFailResp(
@@ -4282,6 +4310,65 @@ console.log(result,'result');
       logger.error(error);
       next(new AppError("Failed to fetch person fall/sick detection logs", 500));
     }
+  }
+
+  async _getIndustrialDetectionLogs(req, res, next, incidentType) {
+    try {
+      return await this._fetchIncidentLogs({
+        req,
+        res,
+        incidentType,
+        searchNumberFields: ["count", "alertThreshold"],
+        postLookupSearch: true,
+      });
+    } catch (error) {
+      logger.error(error);
+      next(new AppError("Failed to fetch industrial detection logs", 500));
+    }
+  }
+
+  async getWorkingAtHeightDetectionLogs(req, res, next) {
+    return this._getIndustrialDetectionLogs(req, res, next, "workingAtHeightDetection");
+  }
+
+  async getOilLeakageDetectionLogs(req, res, next) {
+    return this._getIndustrialDetectionLogs(req, res, next, "oilLeakageDetection");
+  }
+
+  async getGunnyBagsMaterialsWrongLocationDetectionLogs(req, res, next) {
+    return this._getIndustrialDetectionLogs(
+      req,
+      res,
+      next,
+      "gunnyBagsMaterialsWrongLocationDetection",
+    );
+  }
+
+  async getSandDustWasteScrapDisposalDetectionLogs(req, res, next) {
+    return this._getIndustrialDetectionLogs(
+      req,
+      res,
+      next,
+      "sandDustWasteScrapDisposalDetection",
+    );
+  }
+
+  async getUnauthorizedAnimalEntryDetectionLogs(req, res, next) {
+    return this._getIndustrialDetectionLogs(
+      req,
+      res,
+      next,
+      "unauthorizedAnimalEntryDetection",
+    );
+  }
+
+  async getSpillsDirtyMessyAreasDetectionLogs(req, res, next) {
+    return this._getIndustrialDetectionLogs(
+      req,
+      res,
+      next,
+      "spillsDirtyMessyAreasDetection",
+    );
   }
 
   async getUnauthorizedAccessLogs(req, res, next) {

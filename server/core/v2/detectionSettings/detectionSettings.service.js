@@ -31,7 +31,13 @@ import {
   loiteringDetectionSettings,
   tableOccupancyDetectionSettings,
   foodServicePPEDetectionSettings,
-  mobilePhoneDetectionSettings
+  mobilePhoneDetectionSettings,
+  workingAtHeightDetectionSettings,
+  oilLeakageDetectionSettings,
+  gunnyBagsMaterialsWrongLocationDetectionSettings,
+  sandDustWasteScrapDisposalDetectionSettings,
+  unauthorizedAnimalEntryDetectionSettings,
+  spillsDirtyMessyAreasDetectionSettings,
 } from "../../../constants/detectionTypes.js";
 import pythonService from "../../../services/python.service.js";
 import logger from "../../../utils/logger.js";
@@ -71,7 +77,13 @@ import {
   MobilePhoneDetectionSetting,
   carModelDetectionSchemaSetting,
   vehicleCheckInOutDetectionSetting,
-  attendanceDetectionSetting
+  attendanceDetectionSetting,
+  WorkingAtHeightDetectionSetting,
+  OilLeakageDetectionSetting,
+  GunnyBagsMaterialsWrongLocationDetectionSetting,
+  SandDustWasteScrapDisposalDetectionSetting,
+  UnauthorizedAnimalEntryDetectionSetting,
+  SpillsDirtyMessyAreasDetectionSetting,
 } from "./detectionSettings.model.js";
 import Channel from "../channels/channels.model.js";
 import {
@@ -122,6 +134,12 @@ const modelMap = {
   carModelDetectionSettings: carModelDetectionSchemaSetting,
   vehicleCheckInOutSettings: vehicleCheckInOutDetectionSetting,
   faceAuthenticationSettings: attendanceDetectionSetting,
+  workingAtHeightDetectionSettings: WorkingAtHeightDetectionSetting,
+  oilLeakageDetectionSettings: OilLeakageDetectionSetting,
+  gunnyBagsMaterialsWrongLocationDetectionSettings: GunnyBagsMaterialsWrongLocationDetectionSetting,
+  sandDustWasteScrapDisposalDetectionSettings: SandDustWasteScrapDisposalDetectionSetting,
+  unauthorizedAnimalEntryDetectionSettings: UnauthorizedAnimalEntryDetectionSetting,
+  spillsDirtyMessyAreasDetectionSettings: SpillsDirtyMessyAreasDetectionSetting,
 };
 
 const DEFAULT_DETECTION_SCHEDULE = { mode: "always" };
@@ -1633,6 +1651,12 @@ class DetectionSettingService {
         cylinderDetectionSettings,
         waterSpillageDetectionSettings,
         vehicleObstructionSettings,
+        workingAtHeightDetectionSettings,
+        oilLeakageDetectionSettings,
+        gunnyBagsMaterialsWrongLocationDetectionSettings,
+        sandDustWasteScrapDisposalDetectionSettings,
+        unauthorizedAnimalEntryDetectionSettings,
+        spillsDirtyMessyAreasDetectionSettings,
       };
 
       return res.status(200).json(

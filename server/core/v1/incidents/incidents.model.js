@@ -487,6 +487,66 @@ const WaterSpillageDetectionIncident = Incident.discriminator(
   WaterSpillageDetectionSchema,
 );
 
+const WorkingAtHeightDetectionSchema = new Schema({
+  count: { type: Number, default: 1, min: 0 },
+  alertThreshold: { type: Number, default: 400 },
+  triggerNotification: { type: Boolean, default: true },
+});
+const WorkingAtHeightDetectionIncident = Incident.discriminator(
+  "workingAtHeightDetection",
+  WorkingAtHeightDetectionSchema,
+);
+
+const OilLeakageDetectionSchema = new Schema({
+  count: { type: Number, default: 1, min: 0 },
+  alertThreshold: { type: Number, default: 400 },
+  triggerNotification: { type: Boolean, default: true },
+});
+const OilLeakageDetectionIncident = Incident.discriminator(
+  "oilLeakageDetection",
+  OilLeakageDetectionSchema,
+);
+
+const GunnyBagsMaterialsWrongLocationDetectionSchema = new Schema({
+  count: { type: Number, default: 1, min: 0 },
+  alertThreshold: { type: Number, default: 400 },
+  triggerNotification: { type: Boolean, default: true },
+});
+const GunnyBagsMaterialsWrongLocationDetectionIncident = Incident.discriminator(
+  "gunnyBagsMaterialsWrongLocationDetection",
+  GunnyBagsMaterialsWrongLocationDetectionSchema,
+);
+
+const SandDustWasteScrapDisposalDetectionSchema = new Schema({
+  count: { type: Number, default: 1, min: 0 },
+  alertThreshold: { type: Number, default: 400 },
+  triggerNotification: { type: Boolean, default: true },
+});
+const SandDustWasteScrapDisposalDetectionIncident = Incident.discriminator(
+  "sandDustWasteScrapDisposalDetection",
+  SandDustWasteScrapDisposalDetectionSchema,
+);
+
+const UnauthorizedAnimalEntryDetectionSchema = new Schema({
+  count: { type: Number, default: 1, min: 0 },
+  alertThreshold: { type: Number, default: 400 },
+  triggerNotification: { type: Boolean, default: true },
+});
+const UnauthorizedAnimalEntryDetectionIncident = Incident.discriminator(
+  "unauthorizedAnimalEntryDetection",
+  UnauthorizedAnimalEntryDetectionSchema,
+);
+
+const SpillsDirtyMessyAreasDetectionSchema = new Schema({
+  count: { type: Number, default: 1, min: 0 },
+  alertThreshold: { type: Number, default: 400 },
+  triggerNotification: { type: Boolean, default: true },
+});
+const SpillsDirtyMessyAreasDetectionIncident = Incident.discriminator(
+  "spillsDirtyMessyAreasDetection",
+  SpillsDirtyMessyAreasDetectionSchema,
+);
+
 // Cylinder Stack Height Detection
 const loiteringDetectionSchema = new Schema({
   count: {type:Number,default:0},
@@ -642,5 +702,11 @@ export  {
   FoodServicePPEDetectionIncident,
   MobilePhoneDetectionIncident,
   CarModelDetectionIncident,
-  VehicleCheckInOutIncident
+  VehicleCheckInOutIncident,
+  WorkingAtHeightDetectionIncident,
+  OilLeakageDetectionIncident,
+  GunnyBagsMaterialsWrongLocationDetectionIncident,
+  SandDustWasteScrapDisposalDetectionIncident,
+  UnauthorizedAnimalEntryDetectionIncident,
+  SpillsDirtyMessyAreasDetectionIncident,
 };

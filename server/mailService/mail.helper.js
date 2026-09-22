@@ -30,6 +30,7 @@ import {
     waterSpillageDetectionTemplate,
     fireSmokeDetectionTemplate,
     personFallSickDetectionTemplate,
+    industrialDetectionTemplate,
     vehicleTypeDetectionTemplate,
     loiteringDetectionTemplate,
     vehicleObstructionTemplate,
@@ -674,6 +675,20 @@ class MailHelper {
             to: emailAddresses,
             subject: `[Incident Alert] ${data?.incidentName} Detected – ${data?.incidentType} | Severity: ${data?.severity}`,
             html: this._renderIncidentTemplate(personFallSickDetectionTemplate, timezone, data, nvrData, channelData),
+        };
+        return await this._sendAndTrack(email, arguments);
+    }
+
+    async industrialDetection(emailAddresses, data, detectionType, nvrData, channelData, timezone) {
+        sendGridMail.setApiKey(config.get('sendgrid.key'));
+        const email = {
+            from: {
+                name: config.get('sendgrid.name'),
+                email: config.get('sendgrid.email'),
+            },
+            to: emailAddresses,
+            subject: `[Incident Alert] ${data?.incidentName} Detected - ${data?.incidentType} | Severity: ${data?.severity}`,
+            html: this._renderIncidentTemplate(industrialDetectionTemplate, timezone, data, nvrData, channelData),
         };
         return await this._sendAndTrack(email, arguments);
     }

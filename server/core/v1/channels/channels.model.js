@@ -111,6 +111,12 @@ const detectionFields = {
   vehicleCheckInOutSettings: detectionSettingSchema,
   faceAuthenticationSettings: detectionSettingSchema,
   guardSleepingDetectionSettings: detectionSettingSchema,
+  workingAtHeightDetectionSettings: detectionSettingSchema,
+  oilLeakageDetectionSettings: detectionSettingSchema,
+  gunnyBagsMaterialsWrongLocationDetectionSettings: detectionSettingSchema,
+  sandDustWasteScrapDisposalDetectionSettings: detectionSettingSchema,
+  unauthorizedAnimalEntryDetectionSettings: detectionSettingSchema,
+  spillsDirtyMessyAreasDetectionSettings: detectionSettingSchema,
 };
 
 // ! old

@@ -93,6 +93,36 @@ router.get(
   incidentsController.getPersonFallSickDetectionLogs,
 );
 router.get(
+  "/logs/working-at-height-detection",
+  viewAccessCheck,
+  incidentsController.getWorkingAtHeightDetectionLogs,
+);
+router.get(
+  "/logs/oil-leakage-detection",
+  viewAccessCheck,
+  incidentsController.getOilLeakageDetectionLogs,
+);
+router.get(
+  "/logs/gunny-bags-materials-wrong-location-detection",
+  viewAccessCheck,
+  incidentsController.getGunnyBagsMaterialsWrongLocationDetectionLogs,
+);
+router.get(
+  "/logs/sand-dust-waste-scrap-disposal-detection",
+  viewAccessCheck,
+  incidentsController.getSandDustWasteScrapDisposalDetectionLogs,
+);
+router.get(
+  "/logs/unauthorized-animal-entry-detection",
+  viewAccessCheck,
+  incidentsController.getUnauthorizedAnimalEntryDetectionLogs,
+);
+router.get(
+  "/logs/spills-dirty-messy-areas-detection",
+  viewAccessCheck,
+  incidentsController.getSpillsDirtyMessyAreasDetectionLogs,
+);
+router.get(
   "/logs/unauthorized-access",
   viewAccessCheck,
   incidentsController.getUnauthorizedAccessLogs,

@@ -9,6 +9,10 @@ import { Incident } from '../incidents/incidents.model.js';
 import adminModel from '../admin/admin.model.js';
 import logger from '../../../utils/logger.js';
 import {
+  INDUSTRIAL_INCIDENT_TYPES,
+  TYPE_MAP,
+} from '../../../constants/detectionTypes.js';
+import {
   resolveTelegramZoneConfig,
   isIncidentWithinZoneWindow,
   resolvePreferredTelegramChatIds,
@@ -74,9 +78,10 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
       return;
     }
     // Step 3: Find matching detection config based on detectionType
-    const matchedDetection = Object.entries(channel.detections).find(
-      ([key]) => key === `${detectionType}Settings`
-    )?.[1];
+    const settingType = Object.entries(TYPE_MAP).find(
+      ([, incidentType]) => incidentType === detectionType,
+    )?.[0] || `${detectionType}Settings`;
+    const matchedDetection = channel.detections[settingType];
 
 
     if (!matchedDetection) {
@@ -188,6 +193,8 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
           let mailResponse = await MailResponse.fireSmokeDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "personFallSickDetection") {
           let mailResponse = await MailResponse.personFallSickDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+        } else if (INDUSTRIAL_INCIDENT_TYPES.includes(detectionType)) {
+          let mailResponse = await MailResponse.industrialDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "vehicleObstruction") {
           let mailResponse = await MailResponse.vehicleObstruction(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "vehicleTypeDetection") {

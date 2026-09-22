@@ -987,6 +987,168 @@ const WaterSpillageDetectionSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: WaterSpillageDetectionSchema }),
 );
 
+const WorkingAtHeightDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
+  imageRequired: { type: Boolean, default: true },
+  videoLinkRequirement: { type: Boolean, default: false },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "high",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  videoResolution: [Number],
+  detectionTimeGap: { type: Number, default: 30 },
+  referencePoints: Object,
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+const WorkingAtHeightDetectionSetting = DetectionSetting.discriminator(
+  "workingAtHeightDetectionSettings",
+  new mongoose.Schema({ settings: WorkingAtHeightDetectionSchema }),
+);
+
+const OilLeakageDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
+  imageRequired: { type: Boolean, default: true },
+  videoLinkRequirement: { type: Boolean, default: false },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "high",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  videoResolution: [Number],
+  detectionTimeGap: { type: Number, default: 30 },
+  referencePoints: Object,
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+const OilLeakageDetectionSetting = DetectionSetting.discriminator(
+  "oilLeakageDetectionSettings",
+  new mongoose.Schema({ settings: OilLeakageDetectionSchema }),
+);
+
+const GunnyBagsMaterialsWrongLocationDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
+  imageRequired: { type: Boolean, default: true },
+  videoLinkRequirement: { type: Boolean, default: false },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "high",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  videoResolution: [Number],
+  detectionTimeGap: { type: Number, default: 30 },
+  referencePoints: Object,
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+const GunnyBagsMaterialsWrongLocationDetectionSetting = DetectionSetting.discriminator(
+  "gunnyBagsMaterialsWrongLocationDetectionSettings",
+  new mongoose.Schema({ settings: GunnyBagsMaterialsWrongLocationDetectionSchema }),
+);
+
+const SandDustWasteScrapDisposalDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
+  imageRequired: { type: Boolean, default: true },
+  videoLinkRequirement: { type: Boolean, default: false },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "high",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  videoResolution: [Number],
+  detectionTimeGap: { type: Number, default: 30 },
+  referencePoints: Object,
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+const SandDustWasteScrapDisposalDetectionSetting = DetectionSetting.discriminator(
+  "sandDustWasteScrapDisposalDetectionSettings",
+  new mongoose.Schema({ settings: SandDustWasteScrapDisposalDetectionSchema }),
+);
+
+const UnauthorizedAnimalEntryDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
+  imageRequired: { type: Boolean, default: true },
+  videoLinkRequirement: { type: Boolean, default: false },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "high",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  videoResolution: [Number],
+  detectionTimeGap: { type: Number, default: 30 },
+  referencePoints: Object,
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+const UnauthorizedAnimalEntryDetectionSetting = DetectionSetting.discriminator(
+  "unauthorizedAnimalEntryDetectionSettings",
+  new mongoose.Schema({ settings: UnauthorizedAnimalEntryDetectionSchema }),
+);
+
+const SpillsDirtyMessyAreasDetectionSchema = new mongoose.Schema({
+  ...zoneConfigsField,
+  imageRequired: { type: Boolean, default: true },
+  videoLinkRequirement: { type: Boolean, default: false },
+  videoMinLength: Number,
+  videoMaxLength: Number,
+  videoDuration: Number,
+  levelOfImportance: {
+    type: String,
+    enum: ["low", "moderate", "high"],
+    default: "high",
+  },
+  alertThreshold: { type: Number, default: 1 },
+  videoResolution: [Number],
+  detectionTimeGap: { type: Number, default: 30 },
+  referencePoints: Object,
+  metricType: {
+    type: String,
+    enum: ["gauge", "counter", "binary"],
+    default: "gauge",
+  },
+});
+const SpillsDirtyMessyAreasDetectionSetting = DetectionSetting.discriminator(
+  "spillsDirtyMessyAreasDetectionSettings",
+  new mongoose.Schema({ settings: SpillsDirtyMessyAreasDetectionSchema }),
+);
+
 
 
 const VehicleTypeDetectionSchema = new mongoose.Schema({
@@ -1376,4 +1538,10 @@ export {
   carModelDetectionSchemaSetting,
   vehicleCheckInOutDetectionSetting,
   attendanceDetectionSetting,
+  WorkingAtHeightDetectionSetting,
+  OilLeakageDetectionSetting,
+  GunnyBagsMaterialsWrongLocationDetectionSetting,
+  SandDustWasteScrapDisposalDetectionSetting,
+  UnauthorizedAnimalEntryDetectionSetting,
+  SpillsDirtyMessyAreasDetectionSetting,
 };

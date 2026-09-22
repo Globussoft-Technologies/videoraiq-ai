@@ -6,6 +6,12 @@ const mocks = vi.hoisted(() => ({
   getCylinderDetectionLogs: vi.fn(),
   getFireSmokeDetectionLogs: vi.fn(),
   getPersonFallSickDetectionLogs: vi.fn(),
+  getWorkingAtHeightDetectionLogs: vi.fn(),
+  getOilLeakageDetectionLogs: vi.fn(),
+  getGunnyBagsMaterialsWrongLocationDetectionLogs: vi.fn(),
+  getSandDustWasteScrapDisposalDetectionLogs: vi.fn(),
+  getUnauthorizedAnimalEntryDetectionLogs: vi.fn(),
+  getSpillsDirtyMessyAreasDetectionLogs: vi.fn(),
 }));
 
 vi.mock("../../core/v2/incidents/incidents.service.js", () => ({
@@ -50,6 +56,18 @@ beforeEach(() => {
   mocks.getPersonFallSickDetectionLogs.mockImplementation((req, res) =>
     res.status(200).json({ status: "success", data: { totalCount: 0, data: [] } }),
   );
+  for (const handler of [
+    mocks.getWorkingAtHeightDetectionLogs,
+    mocks.getOilLeakageDetectionLogs,
+    mocks.getGunnyBagsMaterialsWrongLocationDetectionLogs,
+    mocks.getSandDustWasteScrapDisposalDetectionLogs,
+    mocks.getUnauthorizedAnimalEntryDetectionLogs,
+    mocks.getSpillsDirtyMessyAreasDetectionLogs,
+  ]) {
+    handler.mockImplementation((req, res) =>
+      res.status(200).json({ status: "success", data: { totalCount: 0, data: [] } }),
+    );
+  }
 });
 
 describe("POST /api/v2/incidents/logs/cylinder-detection", () => {
@@ -82,6 +100,22 @@ describe("GET /api/v2/incidents/logs/person-fall-sick-detection", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.getPersonFallSickDetectionLogs).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("separate industrial detection log routes", () => {
+  it.each([
+    ["working-at-height-detection", "getWorkingAtHeightDetectionLogs"],
+    ["oil-leakage-detection", "getOilLeakageDetectionLogs"],
+    ["gunny-bags-materials-wrong-location-detection", "getGunnyBagsMaterialsWrongLocationDetectionLogs"],
+    ["sand-dust-waste-scrap-disposal-detection", "getSandDustWasteScrapDisposalDetectionLogs"],
+    ["unauthorized-animal-entry-detection", "getUnauthorizedAnimalEntryDetectionLogs"],
+    ["spills-dirty-messy-areas-detection", "getSpillsDirtyMessyAreasDetectionLogs"],
+  ])("routes /logs/%s to %s", async (path, handlerName) => {
+    const response = await request(app).get(`/api/v2/incidents/logs/${path}`);
+
+    expect(response.status).toBe(200);
+    expect(mocks[handlerName]).toHaveBeenCalledTimes(1);
   });
 });
 

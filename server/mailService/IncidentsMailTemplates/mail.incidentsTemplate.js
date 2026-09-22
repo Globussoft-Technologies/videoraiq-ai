@@ -4625,6 +4625,9 @@ const industrialEquipmentTemplate = (
 
   const severityStyle = getSeverityStyles(severity);
   const formattedTime = formatEmailTime(timeOfIncident, timezone);
+  const imageUrl = /^https?:\/\//i.test(Image || "")
+    ? Image
+    : `${config.get("ImageView")}${Image || ""}`;
 
   return `<!DOCTYPE html>
 <html>
@@ -4724,7 +4727,7 @@ const industrialEquipmentTemplate = (
               ${
                 Image
                   ? `<img
-                src="${config.get("ImageView") + Image}"
+                src="${imageUrl}"
                 alt="${equipmentLabel} Incident Image"
                 width="100%"
                 style="max-width:552px;border-radius:8px;border:1px solid #E2E8F0;display:block;"
@@ -4821,6 +4824,20 @@ export const personFallSickDetectionTemplate = (
 ) =>
   industrialEquipmentTemplate(
     "Person Fall/Sick Detection",
+    incidentData,
+    nvrData,
+    channelData,
+    timezone,
+  );
+
+export const industrialDetectionTemplate = (
+  incidentData,
+  nvrData,
+  channelData,
+  timezone,
+) =>
+  industrialEquipmentTemplate(
+    incidentData?.incidentName || incidentData?.incidentType || "Industrial Detection",
     incidentData,
     nvrData,
     channelData,
