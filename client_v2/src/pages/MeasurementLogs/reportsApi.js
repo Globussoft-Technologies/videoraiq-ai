@@ -76,18 +76,21 @@ export function formToPayload(form) {
     dayOfMonth: Math.min(Math.max(parseInt(form.dom, 10) || 1, 1), 28),
   };
   if (form.freq === 'custom') {
-    // Backend Joi wants full ISO datetimes.
+    // Preserve the selected calendar date across browser/server timezones.
+    // Midnight can cross into the previous date when converted to UTC; noon
+    // UTC remains on the same calendar date for the supported plant zones.
     schedule.startDate = form.startDate
-      ? new Date(`${form.startDate}T00:00:00`).toISOString()
+      ? `${form.startDate}T12:00:00.000Z`
       : null;
     schedule.endDate = form.endDate
-      ? new Date(`${form.endDate}T23:59:59`).toISOString()
+      ? `${form.endDate}T12:00:00.000Z`
       : null;
   }
   return {
     title: form.name.trim(),
     recipients: form.recipients,
     reportType: form.report,
+    recordStatus: form.recordStatus || 'all',
     includeSnapshots: !!form.includeSnaps,
     formats: form.formats,
     schedule,
@@ -104,6 +107,7 @@ export function reportToForm(r) {
     id: r._id,
     name: r.title || '',
     report: r.reportType || 'full',
+    recordStatus: r.recordStatus || 'all',
     freq: r.schedule?.frequency || 'daily',
     time: r.schedule?.time || '07:00',
     day: NUM_TO_DAY[r.schedule?.weekday ?? 1] || 'mon',

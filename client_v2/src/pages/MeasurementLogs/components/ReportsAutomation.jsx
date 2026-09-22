@@ -177,7 +177,7 @@ const ReportsAutomation = ({ rows = [] }) => {
         <div className="p-[13px_16px] border-b border-[var(--bd)]">
           <div className="font-[var(--disp)] font-semibold text-[14px]">Download Report</div>
           <div className="text-[11px] text-[var(--tx3)] mt-[3px]">
-            Applies the filters above · {selectedCount} records selected
+            Report includes the selected date range · {selectedCount} records selected
           </div>
         </div>
         <div className="p-[14px_16px] flex flex-col gap-[10px]">

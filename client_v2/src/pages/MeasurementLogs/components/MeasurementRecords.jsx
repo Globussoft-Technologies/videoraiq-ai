@@ -11,7 +11,7 @@ import SnapshotPreviewModal from './SnapshotPreviewModal';
 // MATCH bar takes any surplus on wide viewports (1fr), keeping slack at the
 // right edge. Widen ORDER·REF / SKU·MODEL to use the freed space.
 const GRID_COLS =
-  '52px minmax(200px,1.15fr) minmax(184px,1.05fr) 112px 118px 118px 56px 150px 92px 122px';
+  '52px minmax(200px,1.15fr) minmax(184px,1.05fr) 112px 118px 118px 56px 150px 92px 82px 122px';
 const GRID_MIN_W = 1180;
 
 // DS measurement confidence → colour + label. Anything under 0.6 is unreliable
@@ -107,6 +107,7 @@ const MatchLegendPopover = ({ anchor }) => {
 
 const MatchCell = ({ r }) => {
   const unread = r.devPct === 'QR unread';
+  const incomplete = unread && r.matchPct === 0;
   const pct = matchPctOf(r) ?? 0;
   const color = matchColor(pct);
   const [anchor, setAnchor] = useState(null);
@@ -117,7 +118,7 @@ const MatchCell = ({ r }) => {
         onMouseEnter={(e) => setAnchor(e.currentTarget.getBoundingClientRect())}
         onMouseLeave={() => setAnchor(null)}
       >
-        {!unread && (
+        {(!unread || incomplete) && (
           <span
             className="block h-full rounded-[3px] transition-[width]"
             style={{ width: `${Math.max(pct, 3)}%`, background: color }}
@@ -126,12 +127,38 @@ const MatchCell = ({ r }) => {
       </span>
       <span
         className="font-[var(--mono)] text-[9.5px] whitespace-nowrap shrink-0"
-        style={{ color: unread ? 'var(--tx3)' : color }}
+        style={{ color: unread && !incomplete ? 'var(--tx3)' : color }}
       >
-        {matchLabel(r)}
+        {incomplete ? '0% match' : matchLabel(r)}
       </span>
       {anchor && <MatchLegendPopover anchor={anchor} />}
     </span>
+  );
+};
+
+// Grid-mode equivalent of the list MATCH cell. Keep the same custom legend
+// and hover behavior instead of falling back to the browser's native title.
+const GridMatchBar = ({ r }) => {
+  const [anchor, setAnchor] = useState(null);
+  const unread = r.devPct === 'QR unread';
+  const matchP = matchPctOf(r);
+  const incomplete = unread && r.matchPct === 0;
+  return (
+    <>
+      <span
+        className="flex-1 h-[6px] rounded-[3px] bg-[var(--track)] overflow-hidden block"
+        onMouseEnter={(e) => setAnchor(e.currentTarget.getBoundingClientRect())}
+        onMouseLeave={() => setAnchor(null)}
+      >
+        {(!unread || incomplete) && (
+          <span
+            className="block h-full rounded-[3px]"
+            style={{ width: `${Math.max(matchP ?? 0, 3)}%`, background: matchColor(matchP ?? 0) }}
+          />
+        )}
+      </span>
+      {anchor && <MatchLegendPopover anchor={anchor} />}
+    </>
   );
 };
 
@@ -234,6 +261,7 @@ const PAGE_SIZES = [12, 25, 50, 100];
 
 const MeasurementRecords = ({ onRowsChange, dateRange }) => {
   const [statusF, setStatusF] = useState('all');
+  const [dbStatusF, setDbStatusF] = useState('all');
   const [skuF, setSkuF] = useState('all');
   const [stationF, setStationF] = useState('all');
   const [q, setQ] = useState('');
@@ -274,6 +302,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
       ...toIsoWindow({ from: fromDate, to: toDate }),
     };
     if (statusF !== 'all') params.status = statusF;
+    if (dbStatusF !== 'all') params.recordStatus = dbStatusF;
     if (skuF !== 'all') params.sku = skuF;
     if (stationF !== 'all') params.station = stationF;
     if (qDebounced) params.q = qDebounced;
@@ -299,7 +328,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
     return () => {
       cancelled = true;
     };
-  }, [fromDate, toDate, statusF, skuF, stationF, qDebounced]);
+  }, [fromDate, toDate, statusF, dbStatusF, skuF, stationF, qDebounced]);
 
   const skuOptions = useMemo(() => {
     const base = skuList.length
@@ -317,10 +346,11 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
   // The server already applied every filter — the table renders rows as-is.
   const filtered = records;
 
-  const filterActive = statusF !== 'all' || skuF !== 'all' || stationF !== 'all' || q;
+  const filterActive = statusF !== 'all' || dbStatusF !== 'all' || skuF !== 'all' || stationF !== 'all' || q;
 
   const clear = () => {
     setStatusF('all');
+    setDbStatusF('all');
     setSkuF('all');
     setStationF('all');
     setQ('');
@@ -329,7 +359,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
   // Any filter / result change sends the user back to the first page.
   useEffect(() => {
     setPage(1);
-  }, [statusF, skuF, stationF, qDebounced, fromDate, toDate, pageSize]);
+  }, [statusF, dbStatusF, skuF, stationF, qDebounced, fromDate, toDate, pageSize]);
 
   const totalRows = filtered.length;
   const pageCount = Math.max(1, Math.ceil(totalRows / pageSize));
@@ -372,6 +402,17 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
         <StatusPill active={statusF === 'pass'} accent="var(--ok)" onClick={() => setStatusF('pass')}>Pass</StatusPill>
         <StatusPill active={statusF === 'mismatch'} accent="var(--crit)" onClick={() => setStatusF('mismatch')}>Mismatch</StatusPill>
         <StatusPill active={statusF === 'qrerr'} accent="var(--warn)" onClick={() => setStatusF('qrerr')}>QR Error</StatusPill>
+        <select
+          className={selectCls}
+          value={dbStatusF}
+          onChange={(e) => setDbStatusF(e.target.value)}
+          aria-label="Filter by record status"
+        >
+          <option value="all">Record status: All</option>
+          <option value="pending">Pending</option>
+          <option value="accepted">Accepted</option>
+          <option value="rejected">Rejected</option>
+        </select>
 
         <select className={selectCls} value={skuF} onChange={(e) => setSkuF(e.target.value)}>
           {skuOptions.map((v) => (
@@ -476,7 +517,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
           >
             <span>SNAP</span><span>ORDER · REF</span><span>SKU · MODEL</span>
             <span>PRINTED L×W×H (in)</span><span>MEASURED L×W×H (in)</span><span>Δ L / W / H (in)</span>
-            <span>CONF</span><span>MATCH</span><span>STATION</span><span>WHEN · RESULT</span>
+            <span>CONF</span><span>MATCH</span><span>STATION</span><span>STATUS</span><span>WHEN · RESULT</span>
           </div>
           <div>
             {pageRows.map((r, idx) => {
@@ -534,6 +575,13 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
                     title={r.station}
                   >
                     {r.station}
+                  </span>
+                  <span
+                    className="font-[var(--mono)] text-[10px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis"
+                    style={{ color: r.recordStatus === 'accepted' ? 'var(--ok)' : r.recordStatus === 'rejected' ? 'var(--crit)' : r.recordStatus === 'pending' ? 'var(--warn)' : 'var(--tx3)' }}
+                    title="Persisted measurement incident status"
+                  >
+                    {r.recordStatus}
                   </span>
                   <span title={r.dateTime}>
                     <span className="block font-[var(--mono)] text-[11px] text-[var(--tx2)]">{r.time}</span>
@@ -650,25 +698,16 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
 
                   {/* match bar */}
                   <div className="flex items-center gap-[8px]">
-                    <span className="flex-1 h-[6px] rounded-[3px] bg-[var(--track)] overflow-hidden block">
-                      {r.devPct !== 'QR unread' && (
-                        <span
-                          className="block h-full rounded-[3px]"
-                          style={{
-                            width: `${Math.max(matchP ?? 0, 3)}%`,
-                            background: matchColor(matchP ?? 0),
-                          }}
-                        />
-                      )}
-                    </span>
+                    <GridMatchBar r={r} />
                     <span
                       className="font-[var(--mono)] text-[9.5px] font-semibold whitespace-nowrap shrink-0"
                       style={{
                         color:
-                          r.devPct === 'QR unread' ? 'var(--tx3)' : matchColor(matchP ?? 0),
+                          r.devPct === 'QR unread' && r.matchPct !== 0
+                            ? 'var(--tx3)' : matchColor(matchP ?? 0),
                       }}
                     >
-                      {matchLabel(r)}
+                      {r.devPct === 'QR unread' && r.matchPct === 0 ? '0% match' : matchLabel(r)}
                     </span>
                   </div>
 

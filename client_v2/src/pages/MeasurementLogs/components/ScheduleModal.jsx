@@ -7,6 +7,7 @@ import MultiSelect from '@/components/MultiSelect';
 
 const EMPTY = {
   name: '', report: 'full', freq: 'daily', time: '07:00', day: 'mon', dom: '1',
+  recordStatus: 'all',
   startDate: '', endDate: '',
   scope: 'all', formats: ['pdf'], includeSnaps: true,
   recipients: [],
@@ -183,21 +184,34 @@ const ScheduleModal = ({ initial, recipients = [], stations = [], onClose, onSav
 
           {/* Report type */}
           <Section title="Report type" icon={FileText}>
-            <FieldLabel required>Report preset</FieldLabel>
-            <select
-              className={selectCls}
-              value={form.report}
-              onChange={(e) => set('report', e.target.value)}
-            >
-              {REPORT_OPTS.map((o) => (
-                <option key={o.v} value={o.v}>
-                  {o.l}
-                </option>
-              ))}
-            </select>
-            {reportDesc && (
-              <p className="mt-[6px] text-[10.5px] text-[var(--tx3)] leading-snug">{reportDesc}</p>
-            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <FieldLabel required>Report preset</FieldLabel>
+                <select
+                  className={selectCls}
+                  value={form.report}
+                  onChange={(e) => set('report', e.target.value)}
+                >
+                  {REPORT_OPTS.map((o) => (
+                    <option key={o.v} value={o.v}>
+                      {o.l}
+                    </option>
+                  ))}
+                </select>
+                {reportDesc && (
+                  <p className="mt-[6px] text-[10.5px] text-[var(--tx3)] leading-snug">{reportDesc}</p>
+                )}
+              </div>
+              <div>
+                <FieldLabel>Record status</FieldLabel>
+              <select className={selectCls} value={form.recordStatus} onChange={(e) => set('recordStatus', e.target.value)}>
+                <option value="all">All record statuses</option>
+                <option value="pending">Pending</option>
+                <option value="accepted">Accepted</option>
+                <option value="rejected">Rejected</option>
+              </select>
+              </div>
+            </div>
           </Section>
 
           {/* Frequency */}

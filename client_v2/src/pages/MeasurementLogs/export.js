@@ -20,7 +20,7 @@ const HEADERS = [
   '#', 'Order', 'Order Item', 'Ref', 'SKU', 'Model',
   'Printed LxWxH (in)', 'Measured LxWxH (in)', 'Measured raw (DS)', 'Unit',
   'Dev L (in)', 'Dev W (in)', 'Dev H (in)',
-  'Confidence', 'Match %', 'Station', 'When', 'Result', 'Snapshot', 'Measurement Image',
+  'Confidence', 'Match %', 'Station', 'Status', 'Result', 'Snapshot', 'Measurement Image',
 ];
 
 // Prefer the backend's average per-axis score. devFrac remains a compatibility
@@ -69,7 +69,7 @@ const toRow = (r, i, { asAscii = false, snap = 'text' } = {}) => {
     r.declared, r.measured, r.measuredRaw || '—', r.measuredUnit || '—',
     r.devL, r.devB, r.devH,
     r.confidence != null ? Number(r.confidence).toFixed(2) : '—',
-    matchPct(r), r.station, r.dateTime || r.time,
+    matchPct(r), r.station, r.recordStatus || '—', r.dateTime || r.time,
     STATUS_META[r.status]?.label || r.status,
     linkCell(snapshotUrl(r), snap),
     linkCell(measurementImageUrl(r), snap),
@@ -306,7 +306,7 @@ const TOAST_VERB = {
 /** Entry point for the toolbar / Download Report buttons. */
 export const exportMeasurementRecords = async (format, rows) => {
   if (!rows?.length) {
-    toast.error('No records match the current filters');
+    toast.error('No records to export');
     return;
   }
   try {
