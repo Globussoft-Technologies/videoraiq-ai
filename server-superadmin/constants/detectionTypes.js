@@ -40,6 +40,8 @@ export const DETECTION_TYPES = {
   tableOccupancyDetectionSettings: "Table Occupancy Detection",
   foodServicePPEDetectionSettings: "Food Service PPE Detection",
   mobilePhoneDetectionSettings: "Mobile Phone Detection",
+  equipmentOilLeakageDetectionSettings: "Equipment Oil Leakage Detection",
+  vehicleFuelOilLeakageDetectionSettings: "Vehicle Fuel/Oil Leakage Detection",
 }
 export const DETECTION_TYPES2 = {
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
@@ -75,6 +77,8 @@ export const DETECTION_TYPES2 = {
   tableOccupancyDetectionSettings: "Table Occupancy Detection",
   foodServicePPEDetectionSettings: "Food Service PPE Detection",
   mobilePhoneDetectionSettings: "Mobile Phone Detection",
+  equipmentOilLeakageDetectionSettings: "Equipment Oil Leakage Detection",
+  vehicleFuelOilLeakageDetectionSettings: "Vehicle Fuel/Oil Leakage Detection",
 }
 // Short marketing-style descriptions for the Detection Catalog cards.
 // Keyed by settingType; falls back to "" if a type is missing.
@@ -106,6 +110,8 @@ export const DETECTION_DESCRIPTIONS = {
   tableOccupancyDetectionSettings: "Table occupancy & seating status",
   foodServicePPEDetectionSettings: "Kitchen hygiene & food-service PPE",
   mobilePhoneDetectionSettings: "Phone usage in restricted zones",
+  equipmentOilLeakageDetectionSettings: "Oil leakage from industrial equipment",
+  vehicleFuelOilLeakageDetectionSettings: "Fuel or oil leakage from vehicles",
 };
 
 export const TYPE_MAP = {
@@ -136,6 +142,8 @@ export const TYPE_MAP = {
   tableOccupancyDetectionSettings: "tableOccupancySettings",
   foodServicePPEDetectionSettings: "foodServicePPEDetection",
   mobilePhoneDetectionSettings: "mobilePhoneDetection",
+  equipmentOilLeakageDetectionSettings: "equipmentOilLeakageDetection",
+  vehicleFuelOilLeakageDetectionSettings: "vehicleFuelOilLeakageDetection",
 };
 
 export const DETECTION_MODES_MAP = {
@@ -160,6 +168,8 @@ export const DETECTION_MODES_MAP = {
   foodServicePPEDetectionSettings: ["foodServicePPEDetection"],
   countPersonsSettings: ["countPersons"],
   mobilePhoneDetectionSettings: ["mobilePhoneDetection"],
+  equipmentOilLeakageDetectionSettings: ["equipmentOilLeakageDetectionSettings"],
+  vehicleFuelOilLeakageDetectionSettings: ["vehicleFuelOilLeakageDetectionSettings"],
 };
 
 export const DETECTION_OBJECTS_TYPES_MAP = {

@@ -48,6 +48,8 @@ const detectionFields = {
   foodServicePPEDetectionSettings: detectionSettingSchema,
   vehicleObstructionSettings: detectionSettingSchema,
   mobilePhoneDetectionSettings: detectionSettingSchema,
+  equipmentOilLeakageDetectionSettings: detectionSettingSchema,
+  vehicleFuelOilLeakageDetectionSettings: detectionSettingSchema,
 };
 
 // ! old
