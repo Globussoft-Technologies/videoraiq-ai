@@ -187,6 +187,11 @@ export const buildRTSPUrl = (nvr, channel, streamType = "main") => {
     const channelId = channel.channelId;
     const stream = streamType === "main" ? 0 : 1;
     return `rtsp://${decryptedIp}:${nvr.rtspPort}/user=${username}&password=${sofiaHash}&channel=${channelId}&stream=${stream}.sdp?real_stream`;
+  } else if (nvr.brand === "honeywell") {
+    // Honeywell I-HPNVR (TVT OEM): /chID=N&streamType=main|sub
+    const channelId = channel.channelId;
+    const stream = streamType === "main" ? "main" : "sub";
+    return `rtsp://${encodeURIComponent(username)}:${encodeURIComponent(decryptedPassword)}@${decryptedIp}:${nvr.rtspPort}/chID=${channelId}&streamType=${stream}`;
   } else if (nvr.brand === "camera") {
     // Generic Camera: rtsp://user:pass@ip:port/stream
     const streamEndpoint = channel.streamEndpoint; // e.g., /stream

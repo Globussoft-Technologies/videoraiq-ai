@@ -85,7 +85,7 @@ class NVRValidation {
       nvrName: Joi.string().min(1).max(50).required(),
       location: Joi.string().trim().min(1).max(150).required(),
       brand: Joi.string()
-        .valid("hikvision", "cpplus", "dahua", "prama", "tiandy", "securus", "hanwha")
+        .valid("hikvision", "cpplus", "dahua", "prama", "tiandy", "securus", "hanwha", "honeywell")
         .required(),
       cameras: Joi.array().items(Joi.object({
         _id: Joi.string().hex().length(24).optional(),
@@ -136,10 +136,10 @@ class NVRValidation {
         "any.required": "nvrName is required",
       }),
       brand: Joi.string()
-        .valid("hikvision", "cpplus", "dahua", "prama", "tiandy", "securus", "hanwha")
+        .valid("hikvision", "cpplus", "dahua", "prama", "tiandy", "securus", "hanwha", "honeywell")
         .required()
         .messages({
-          "any.only": "brand must be one of hikvision, cpplus, dahua, prama, tiandy, securus, hanwha",
+          "any.only": "brand must be one of hikvision, cpplus, dahua, prama, tiandy, securus, hanwha, honeywell",
           "any.required": "brand is required",
         }),
       deviceName: Joi.string().allow("").optional(),
@@ -189,7 +189,7 @@ class NVRValidation {
     return Joi.object({
       nvrName: Joi.string().optional(),
       brand: Joi.string()
-        .valid("hikvision", "cpplus", "dahua", "prama", "tiandy", "securus", "hanwha")
+        .valid("hikvision", "cpplus", "dahua", "prama", "tiandy", "securus", "hanwha", "honeywell")
         .optional(),
       deviceName: Joi.string().allow("").optional(),
       location: Joi.string().allow("").optional(),

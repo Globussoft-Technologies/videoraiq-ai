@@ -133,6 +133,18 @@ describe("buildRTSPUrl", () => {
     );
   });
 
+  it("builds Honeywell TVT main and sub-stream URLs", () => {
+    const nvr = { ...baseNvr, brand: "honeywell" };
+    const channel = { channelId: "3" };
+
+    expect(rtsp.buildRTSPUrl(nvr, channel, "main")).toBe(
+      `rtsp://admin:${passwordPlain}@${ipPlain}:554/chID=3&streamType=main`,
+    );
+    expect(rtsp.buildRTSPUrl(nvr, channel, "sub")).toBe(
+      `rtsp://admin:${passwordPlain}@${ipPlain}:554/chID=3&streamType=sub`,
+    );
+  });
+
   it("builds a generic camera URL", () => {
     const channel = { streamEndpoint: "/stream" };
     const url = rtsp.buildRTSPUrl(

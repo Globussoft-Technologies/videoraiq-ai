@@ -53,7 +53,7 @@ describe("NVR model (local schema, APP_ENV=local)", () => {
 
   it("only accepts brand from the enum", async () => {
     await expect(NVR.create({ ...base(), brand: "axis" })).rejects.toThrow();
-    for (const brand of ["hikvision", "dahua", "prama", "cpplus", "camera"]) {
+    for (const brand of ["hikvision", "dahua", "prama", "cpplus", "camera", "honeywell"]) {
       await expect(
         NVR.create({ ...base(), brand, localNvrId: `id-${brand}` })
       ).resolves.toBeDefined();

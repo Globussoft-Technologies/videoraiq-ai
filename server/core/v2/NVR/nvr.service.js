@@ -18,6 +18,7 @@ import { parseXml } from "../../../utils/xmlParse.js";
 import mongoose from "mongoose";
 import { emitCameraLimit } from "../../../socket.js";
 import { isLicensingEnforced } from "../clientConfig/detectionLicense.service.js";
+import { fetchHoneywellTvtCameras } from "./honeywellTvt.js";
 
 /**
  * A channel's identifier, whichever field this deployment stores it in.
@@ -514,6 +515,13 @@ class NVRService {
           // TODO: Add Dahua auth test logic
         } else if (existingNvr.brand === "prama") {
           // TODO: Add Prama auth test logic
+        } else if (existingNvr.brand === "honeywell") {
+          await fetchHoneywellTvtCameras({
+            ip,
+            port,
+            username,
+            password: passwordToUse,
+          });
         }
 
         // Optional: Handle unknown brands
@@ -1906,6 +1914,8 @@ class NVRService {
         });
 
         return { deviceInfo, cameras };
+      } else if (brand.toLowerCase() === "honeywell") {
+        return await fetchHoneywellTvtCameras({ ip, port, username, password });
       } else if (brand.toLowerCase() === "securus") {
         // XiongMai Sofia DVR/NVR — three sources: ONVIF (port 8899) + DVRIP (port 34567) + HTML
         const { createHash } = await import("crypto");
