@@ -20,7 +20,7 @@ const HEADERS = [
   '#', 'Order', 'Order Item', 'Ref', 'SKU', 'Model',
   'Printed LxWxH (in)', 'Measured LxWxH (in)', 'Measured raw (DS)', 'Unit',
   'Dev L (in)', 'Dev W (in)', 'Dev H (in)',
-  'Confidence', 'Match %', 'Station', 'Status', 'Result', 'Snapshot', 'Measurement Image',
+  'Confidence', 'Match %', 'Station', 'Status', 'When', 'Result', 'Snapshot', 'Measurement Image',
 ];
 
 // Prefer the backend's average per-axis score. devFrac remains a compatibility
