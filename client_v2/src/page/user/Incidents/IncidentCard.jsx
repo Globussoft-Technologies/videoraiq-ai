@@ -28,6 +28,8 @@ const SEV_LABEL = {
 const INDUSTRIAL_DETECTION_TYPES = new Set([
   'workingAtHeightDetection',
   'oilLeakageDetection',
+  'equipmentOilLeakageDetection',
+  'vehicleFuelOilLeakageDetection',
   'gunnyBagsMaterialsWrongLocationDetection',
   'sandDustWasteScrapDisposalDetection',
   'unauthorizedAnimalEntryDetection',

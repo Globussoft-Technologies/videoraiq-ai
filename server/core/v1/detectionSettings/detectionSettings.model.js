@@ -1040,6 +1040,14 @@ const OilLeakageDetectionSetting = DetectionSetting.discriminator(
   "oilLeakageDetectionSettings",
   new mongoose.Schema({ settings: OilLeakageDetectionSchema }),
 );
+const EquipmentOilLeakageDetectionSetting = DetectionSetting.discriminator(
+  "equipmentOilLeakageDetectionSettings",
+  new mongoose.Schema({ settings: OilLeakageDetectionSchema.clone() }),
+);
+const VehicleFuelOilLeakageDetectionSetting = DetectionSetting.discriminator(
+  "vehicleFuelOilLeakageDetectionSettings",
+  new mongoose.Schema({ settings: OilLeakageDetectionSchema.clone() }),
+);
 
 const GunnyBagsMaterialsWrongLocationDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
@@ -1540,6 +1548,8 @@ export {
   attendanceDetectionSetting,
   WorkingAtHeightDetectionSetting,
   OilLeakageDetectionSetting,
+  EquipmentOilLeakageDetectionSetting,
+  VehicleFuelOilLeakageDetectionSetting,
   GunnyBagsMaterialsWrongLocationDetectionSetting,
   SandDustWasteScrapDisposalDetectionSetting,
   UnauthorizedAnimalEntryDetectionSetting,

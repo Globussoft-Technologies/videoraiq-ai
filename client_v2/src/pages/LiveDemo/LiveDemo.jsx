@@ -70,6 +70,8 @@ const detections = [
   { name: 'Cylinder Detection', subtitle: 'Equipment', category: 'industrial', color: '#0891b2', settingType: 'cylinderDetectionSettings' },
   { name: 'Working at Height Detection', subtitle: 'Industrial safety', category: 'industrial', color: '#f59e0b', settingType: 'workingAtHeightDetectionSettings' },
   { name: 'Oil Leakage Detection', subtitle: 'Leak hazard', category: 'industrial', color: '#06b6d4', settingType: 'oilLeakageDetectionSettings' },
+  { name: 'Equipment Oil Leakage Detection', subtitle: 'Equipment leak hazard', category: 'industrial', color: '#0891b2', settingType: 'equipmentOilLeakageDetectionSettings' },
+  { name: 'Vehicle Fuel/Oil Leakage Detection', subtitle: 'Vehicle leak hazard', category: 'industrial', color: '#0e7490', settingType: 'vehicleFuelOilLeakageDetectionSettings' },
   { name: 'Gunny Bags/Materials Wrong Location Detection', subtitle: 'Material placement', category: 'industrial', color: '#8b5cf6', settingType: 'gunnyBagsMaterialsWrongLocationDetectionSettings' },
   { name: 'Sand, Dust, Waste & Scrap Disposal Detection', subtitle: 'Waste disposal', category: 'industrial', color: '#78716c', settingType: 'sandDustWasteScrapDisposalDetectionSettings' },
   { name: 'Unauthorized Animal Entry Detection', subtitle: 'Animal entry', category: 'industrial', color: '#ef4444', settingType: 'unauthorizedAnimalEntryDetectionSettings' },

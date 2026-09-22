@@ -245,6 +245,8 @@ describe("PythonService.startNewDetection", () => {
   it.each([
     "workingAtHeightDetectionSettings",
     "oilLeakageDetectionSettings",
+    "equipmentOilLeakageDetectionSettings",
+    "vehicleFuelOilLeakageDetectionSettings",
     "gunnyBagsMaterialsWrongLocationDetectionSettings",
     "sandDustWasteScrapDisposalDetectionSettings",
     "unauthorizedAnimalEntryDetectionSettings",
@@ -411,6 +413,8 @@ describe("PythonService.stopNewDetection", () => {
   it.each([
     "workingAtHeightDetectionSettings",
     "oilLeakageDetectionSettings",
+    "equipmentOilLeakageDetectionSettings",
+    "vehicleFuelOilLeakageDetectionSettings",
     "gunnyBagsMaterialsWrongLocationDetectionSettings",
     "sandDustWasteScrapDisposalDetectionSettings",
     "unauthorizedAnimalEntryDetectionSettings",

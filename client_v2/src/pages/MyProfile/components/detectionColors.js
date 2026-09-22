@@ -52,6 +52,8 @@ const SHORT_LABELS = {
   mobilePhoneDetectionSettings: 'Mobile Phone',
   workingAtHeightDetectionSettings: 'Working at Height',
   oilLeakageDetectionSettings: 'Oil Leakage',
+  equipmentOilLeakageDetectionSettings: 'Equipment Oil Leakage',
+  vehicleFuelOilLeakageDetectionSettings: 'Vehicle Fuel/Oil Leakage',
   gunnyBagsMaterialsWrongLocationDetectionSettings: 'Wrong Location',
   sandDustWasteScrapDisposalDetectionSettings: 'Waste Disposal',
   unauthorizedAnimalEntryDetectionSettings: 'Animal Entry',

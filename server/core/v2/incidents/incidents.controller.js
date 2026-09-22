@@ -697,6 +697,20 @@ class IncidentsController {
     return incidentsService.getOilLeakageDetectionLogs(req, res, next);
   }
 
+  async getEquipmentOilLeakageDetectionLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Equipment Oil Leakage Detection logs.'
+    #swagger.security = [{ "EncryptedAuthToken": [] }] */
+    return incidentsService.getEquipmentOilLeakageDetectionLogs(req, res, next);
+  }
+
+  async getVehicleFuelOilLeakageDetectionLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Vehicle Fuel/Oil Leakage Detection logs.'
+    #swagger.security = [{ "EncryptedAuthToken": [] }] */
+    return incidentsService.getVehicleFuelOilLeakageDetectionLogs(req, res, next);
+  }
+
   async getGunnyBagsMaterialsWrongLocationDetectionLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get Gunny Bags/Materials Wrong Location Detection logs.'

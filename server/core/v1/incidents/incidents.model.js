@@ -506,6 +506,14 @@ const OilLeakageDetectionIncident = Incident.discriminator(
   "oilLeakageDetection",
   OilLeakageDetectionSchema,
 );
+const EquipmentOilLeakageDetectionIncident = Incident.discriminator(
+  "equipmentOilLeakageDetection",
+  OilLeakageDetectionSchema.clone(),
+);
+const VehicleFuelOilLeakageDetectionIncident = Incident.discriminator(
+  "vehicleFuelOilLeakageDetection",
+  OilLeakageDetectionSchema.clone(),
+);
 
 const GunnyBagsMaterialsWrongLocationDetectionSchema = new Schema({
   count: { type: Number, default: 1, min: 0 },
@@ -705,6 +713,8 @@ export  {
   VehicleCheckInOutIncident,
   WorkingAtHeightDetectionIncident,
   OilLeakageDetectionIncident,
+  EquipmentOilLeakageDetectionIncident,
+  VehicleFuelOilLeakageDetectionIncident,
   GunnyBagsMaterialsWrongLocationDetectionIncident,
   SandDustWasteScrapDisposalDetectionIncident,
   UnauthorizedAnimalEntryDetectionIncident,

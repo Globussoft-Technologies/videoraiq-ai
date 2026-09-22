@@ -103,6 +103,16 @@ router.get(
   incidentsController.getOilLeakageDetectionLogs,
 );
 router.get(
+  "/logs/equipment-oil-leakage-detection",
+  viewAccessCheck,
+  incidentsController.getEquipmentOilLeakageDetectionLogs,
+);
+router.get(
+  "/logs/vehicle-fuel-oil-leakage-detection",
+  viewAccessCheck,
+  incidentsController.getVehicleFuelOilLeakageDetectionLogs,
+);
+router.get(
   "/logs/gunny-bags-materials-wrong-location-detection",
   viewAccessCheck,
   incidentsController.getGunnyBagsMaterialsWrongLocationDetectionLogs,

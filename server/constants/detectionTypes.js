@@ -48,6 +48,8 @@ export const DETECTION_TYPES = {
   vehicleCheckInOutSettings: "Vehicle Check-In / Check-Out Detection",
   workingAtHeightDetectionSettings: "Working at Height Detection",
   oilLeakageDetectionSettings: "Oil Leakage Detection",
+  equipmentOilLeakageDetectionSettings: "Equipment Oil Leakage Detection",
+  vehicleFuelOilLeakageDetectionSettings: "Vehicle Fuel/Oil Leakage Detection",
   gunnyBagsMaterialsWrongLocationDetectionSettings: "Gunny Bags/Materials Wrong Location Detection",
   sandDustWasteScrapDisposalDetectionSettings: "Sand, Dust, Waste & Scrap Disposal Detection",
   unauthorizedAnimalEntryDetectionSettings: "Unauthorized Animal Entry Detection",
@@ -57,6 +59,8 @@ export const DETECTION_TYPES = {
 export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
   "workingAtHeightDetectionSettings",
   "oilLeakageDetectionSettings",
+  "equipmentOilLeakageDetectionSettings",
+  "vehicleFuelOilLeakageDetectionSettings",
   "gunnyBagsMaterialsWrongLocationDetectionSettings",
   "sandDustWasteScrapDisposalDetectionSettings",
   "unauthorizedAnimalEntryDetectionSettings",
@@ -66,6 +70,8 @@ export const INDUSTRIAL_SETTING_TYPES = Object.freeze([
 export const INDUSTRIAL_INCIDENT_TYPES = Object.freeze([
   "workingAtHeightDetection",
   "oilLeakageDetection",
+  "equipmentOilLeakageDetection",
+  "vehicleFuelOilLeakageDetection",
   "gunnyBagsMaterialsWrongLocationDetection",
   "sandDustWasteScrapDisposalDetection",
   "unauthorizedAnimalEntryDetection",
@@ -103,6 +109,8 @@ export const DETECTION_LOG_METADATA = Object.freeze({
   personFallSickDetectionSettings: { permissionKey: "personFallSickLogs", logsConfigKey: "personFallSickLogs" },
   workingAtHeightDetectionSettings: { permissionKey: "workingAtHeightLogs", logsConfigKey: "workingAtHeightLogs" },
   oilLeakageDetectionSettings: { permissionKey: "oilLeakageLogs", logsConfigKey: "oilLeakageLogs" },
+  equipmentOilLeakageDetectionSettings: { permissionKey: "equipmentOilLeakageLogs", logsConfigKey: "equipmentOilLeakageLogs" },
+  vehicleFuelOilLeakageDetectionSettings: { permissionKey: "vehicleFuelOilLeakageLogs", logsConfigKey: "vehicleFuelOilLeakageLogs" },
   gunnyBagsMaterialsWrongLocationDetectionSettings: { permissionKey: "wrongLocationLogs", logsConfigKey: "wrongLocationLogs" },
   sandDustWasteScrapDisposalDetectionSettings: { permissionKey: "wasteDisposalLogs", logsConfigKey: "wasteDisposalLogs" },
   unauthorizedAnimalEntryDetectionSettings: { permissionKey: "animalEntryLogs", logsConfigKey: "animalEntryLogs" },
@@ -160,6 +168,8 @@ export const TYPE_MAP = {
   faceAuthenticationSettings: "attendanceSettings",
   workingAtHeightDetectionSettings: "workingAtHeightDetection",
   oilLeakageDetectionSettings: "oilLeakageDetection",
+  equipmentOilLeakageDetectionSettings: "equipmentOilLeakageDetection",
+  vehicleFuelOilLeakageDetectionSettings: "vehicleFuelOilLeakageDetection",
   gunnyBagsMaterialsWrongLocationDetectionSettings: "gunnyBagsMaterialsWrongLocationDetection",
   sandDustWasteScrapDisposalDetectionSettings: "sandDustWasteScrapDisposalDetection",
   unauthorizedAnimalEntryDetectionSettings: "unauthorizedAnimalEntryDetection",
@@ -197,6 +207,8 @@ export const DETECTION_MODES_MAP = {
   personFallSickDetectionSettings: ["personFallSickDetectionSettings"],
   workingAtHeightDetectionSettings: ["workingAtHeightDetectionSettings"],
   oilLeakageDetectionSettings: ["oilLeakageDetectionSettings"],
+  equipmentOilLeakageDetectionSettings: ["equipmentOilLeakageDetectionSettings"],
+  vehicleFuelOilLeakageDetectionSettings: ["vehicleFuelOilLeakageDetectionSettings"],
   gunnyBagsMaterialsWrongLocationDetectionSettings: ["gunnyBagsMaterialsWrongLocationDetectionSettings"],
   sandDustWasteScrapDisposalDetectionSettings: ["sandDustWasteScrapDisposalDetectionSettings"],
   unauthorizedAnimalEntryDetectionSettings: ["unauthorizedAnimalEntryDetectionSettings"],
@@ -255,6 +267,8 @@ export const DS_DETECTOR_BY_MODE = {
   personFallSickDetectionSettings: "personFallSickDetectionSettings",
   workingAtHeightDetectionSettings: "workingAtHeightDetectionSettings",
   oilLeakageDetectionSettings: "oilLeakageDetectionSettings",
+  equipmentOilLeakageDetectionSettings: "equipmentOilLeakageDetectionSettings",
+  vehicleFuelOilLeakageDetectionSettings: "vehicleFuelOilLeakageDetectionSettings",
   gunnyBagsMaterialsWrongLocationDetectionSettings: "gunnyBagsMaterialsWrongLocationDetectionSettings",
   sandDustWasteScrapDisposalDetectionSettings: "sandDustWasteScrapDisposalDetectionSettings",
   unauthorizedAnimalEntryDetectionSettings: "unauthorizedAnimalEntryDetectionSettings",
@@ -326,6 +340,8 @@ export const DS_LOGIC_BY_MODE = {
   faceAuthenticationSettings: "attendanceSettings",
   workingAtHeightDetectionSettings: "workingAtHeightDetectionSettings",
   oilLeakageDetectionSettings: "oilLeakageDetectionSettings",
+  equipmentOilLeakageDetectionSettings: "equipmentOilLeakageDetectionSettings",
+  vehicleFuelOilLeakageDetectionSettings: "vehicleFuelOilLeakageDetectionSettings",
   gunnyBagsMaterialsWrongLocationDetectionSettings: "gunnyBagsMaterialsWrongLocationDetectionSettings",
   sandDustWasteScrapDisposalDetectionSettings: "sandDustWasteScrapDisposalDetectionSettings",
   unauthorizedAnimalEntryDetectionSettings: "unauthorizedAnimalEntryDetectionSettings",
@@ -377,6 +393,8 @@ export const toPopulateDetections = [
   { path: "detections.faceAuthenticationSettings.id" },
   { path: "detections.workingAtHeightDetectionSettings.id" },
   { path: "detections.oilLeakageDetectionSettings.id" },
+  { path: "detections.equipmentOilLeakageDetectionSettings.id" },
+  { path: "detections.vehicleFuelOilLeakageDetectionSettings.id" },
   { path: "detections.gunnyBagsMaterialsWrongLocationDetectionSettings.id" },
   { path: "detections.sandDustWasteScrapDisposalDetectionSettings.id" },
   { path: "detections.unauthorizedAnimalEntryDetectionSettings.id" },
@@ -1525,6 +1543,14 @@ export const workingAtHeightDetectionSettings = industrialDetectionExample(
 export const oilLeakageDetectionSettings = industrialDetectionExample(
   "oilLeakageDetectionSettings",
   "Oil Leakage Detection",
+);
+export const equipmentOilLeakageDetectionSettings = industrialDetectionExample(
+  "equipmentOilLeakageDetectionSettings",
+  "Equipment Oil Leakage Detection",
+);
+export const vehicleFuelOilLeakageDetectionSettings = industrialDetectionExample(
+  "vehicleFuelOilLeakageDetectionSettings",
+  "Vehicle Fuel/Oil Leakage Detection",
 );
 export const gunnyBagsMaterialsWrongLocationDetectionSettings = industrialDetectionExample(
   "gunnyBagsMaterialsWrongLocationDetectionSettings",

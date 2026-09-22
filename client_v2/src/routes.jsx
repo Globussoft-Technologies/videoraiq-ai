@@ -46,6 +46,8 @@ import FireSmokeLogs from './pages/FireSmokeLogs/FireSmokeLogs';
 import PersonFallSickLogs from './pages/PersonFallSickLogs/PersonFallSickLogs';
 import WorkingAtHeightLogs from './pages/WorkingAtHeightLogs/WorkingAtHeightLogs';
 import OilLeakageLogs from './pages/OilLeakageLogs/OilLeakageLogs';
+import EquipmentOilLeakageLogs from './pages/EquipmentOilLeakageLogs/EquipmentOilLeakageLogs';
+import VehicleFuelOilLeakageLogs from './pages/VehicleFuelOilLeakageLogs/VehicleFuelOilLeakageLogs';
 import WrongLocationLogs from './pages/WrongLocationLogs/WrongLocationLogs';
 import WasteDisposalLogs from './pages/WasteDisposalLogs/WasteDisposalLogs';
 import AnimalEntryLogs from './pages/AnimalEntryLogs/AnimalEntryLogs';
@@ -134,6 +136,8 @@ export const v2Routes = (
     <Route path="logs/person-fall-sick" element={guard('logs', 'personFallSickLogs', <PersonFallSickLogs />)} />
     <Route path="logs/working-at-height" element={guard('logs', 'workingAtHeightLogs', <WorkingAtHeightLogs />)} />
     <Route path="logs/oil-leakage" element={guard('logs', 'oilLeakageLogs', <OilLeakageLogs />)} />
+    <Route path="logs/equipment-oil-leakage" element={guard('logs', 'equipmentOilLeakageLogs', <EquipmentOilLeakageLogs />)} />
+    <Route path="logs/vehicle-fuel-oil-leakage" element={guard('logs', 'vehicleFuelOilLeakageLogs', <VehicleFuelOilLeakageLogs />)} />
     <Route path="logs/wrong-location" element={guard('logs', 'wrongLocationLogs', <WrongLocationLogs />)} />
     <Route path="logs/waste-disposal" element={guard('logs', 'wasteDisposalLogs', <WasteDisposalLogs />)} />
     <Route path="logs/animal-entry" element={guard('logs', 'animalEntryLogs', <AnimalEntryLogs />)} />

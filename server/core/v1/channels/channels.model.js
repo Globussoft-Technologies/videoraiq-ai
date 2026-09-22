@@ -113,6 +113,8 @@ const detectionFields = {
   guardSleepingDetectionSettings: detectionSettingSchema,
   workingAtHeightDetectionSettings: detectionSettingSchema,
   oilLeakageDetectionSettings: detectionSettingSchema,
+  equipmentOilLeakageDetectionSettings: detectionSettingSchema,
+  vehicleFuelOilLeakageDetectionSettings: detectionSettingSchema,
   gunnyBagsMaterialsWrongLocationDetectionSettings: detectionSettingSchema,
   sandDustWasteScrapDisposalDetectionSettings: detectionSettingSchema,
   unauthorizedAnimalEntryDetectionSettings: detectionSettingSchema,

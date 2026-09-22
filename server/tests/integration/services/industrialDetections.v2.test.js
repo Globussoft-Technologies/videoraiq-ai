@@ -42,6 +42,20 @@ const CASES = [
     logMethod: "getOilLeakageDetectionLogs",
   },
   {
+    settingType: "equipmentOilLeakageDetectionSettings",
+    incidentType: "equipmentOilLeakageDetection",
+    SettingModel: settingsModels.EquipmentOilLeakageDetectionSetting,
+    IncidentModel: incidentModels.EquipmentOilLeakageDetectionIncident,
+    logMethod: "getEquipmentOilLeakageDetectionLogs",
+  },
+  {
+    settingType: "vehicleFuelOilLeakageDetectionSettings",
+    incidentType: "vehicleFuelOilLeakageDetection",
+    SettingModel: settingsModels.VehicleFuelOilLeakageDetectionSetting,
+    IncidentModel: incidentModels.VehicleFuelOilLeakageDetectionIncident,
+    logMethod: "getVehicleFuelOilLeakageDetectionLogs",
+  },
+  {
     settingType: "gunnyBagsMaterialsWrongLocationDetectionSettings",
     incidentType: "gunnyBagsMaterialsWrongLocationDetection",
     SettingModel: settingsModels.GunnyBagsMaterialsWrongLocationDetectionSetting,

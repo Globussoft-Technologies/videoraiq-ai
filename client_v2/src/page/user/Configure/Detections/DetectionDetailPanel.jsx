@@ -68,6 +68,8 @@ const DETECTION_ICONS = {
   waterSpillageDetectionSettings: Waves,
   workingAtHeightDetectionSettings: HardHat,
   oilLeakageDetectionSettings: Droplet,
+  equipmentOilLeakageDetectionSettings: Droplet,
+  vehicleFuelOilLeakageDetectionSettings: Droplet,
   gunnyBagsMaterialsWrongLocationDetectionSettings: PackageSearch,
   sandDustWasteScrapDisposalDetectionSettings: Trash2,
   unauthorizedAnimalEntryDetectionSettings: PawPrint,

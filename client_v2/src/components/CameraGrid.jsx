@@ -51,6 +51,8 @@ export const ENGINE_LABEL_MAP = {
   personFallSickDetection:           'Person Fall/Sick Detection',
   workingAtHeightDetectionSettings:  'Working at Height Detection',
   oilLeakageDetectionSettings:       'Oil Leakage Detection',
+  equipmentOilLeakageDetectionSettings: 'Equipment Oil Leakage Detection',
+  vehicleFuelOilLeakageDetectionSettings: 'Vehicle Fuel/Oil Leakage Detection',
   gunnyBagsMaterialsWrongLocationDetectionSettings: 'Gunny Bags/Materials Wrong Location Detection',
   sandDustWasteScrapDisposalDetectionSettings: 'Sand, Dust, Waste & Scrap Disposal Detection',
   unauthorizedAnimalEntryDetectionSettings: 'Unauthorized Animal Entry Detection',

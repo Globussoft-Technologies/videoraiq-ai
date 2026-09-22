@@ -4,6 +4,8 @@ import { clearCollections, connectMongo, disconnectMongo } from "../dbSetup.js";
 import {
   WorkingAtHeightDetectionIncident,
   OilLeakageDetectionIncident,
+  EquipmentOilLeakageDetectionIncident,
+  VehicleFuelOilLeakageDetectionIncident,
   GunnyBagsMaterialsWrongLocationDetectionIncident,
   SandDustWasteScrapDisposalDetectionIncident,
   UnauthorizedAnimalEntryDetectionIncident,
@@ -13,6 +15,8 @@ import {
 const INCIDENT_MODELS = [
   [WorkingAtHeightDetectionIncident, "workingAtHeightDetection"],
   [OilLeakageDetectionIncident, "oilLeakageDetection"],
+  [EquipmentOilLeakageDetectionIncident, "equipmentOilLeakageDetection"],
+  [VehicleFuelOilLeakageDetectionIncident, "vehicleFuelOilLeakageDetection"],
   [GunnyBagsMaterialsWrongLocationDetectionIncident, "gunnyBagsMaterialsWrongLocationDetection"],
   [SandDustWasteScrapDisposalDetectionIncident, "sandDustWasteScrapDisposalDetection"],
   [UnauthorizedAnimalEntryDetectionIncident, "unauthorizedAnimalEntryDetection"],

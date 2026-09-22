@@ -51,6 +51,8 @@ const INCIDENT_COLOR = {
   loiteringDetection: '#f5a623',
   workingAtHeightDetection: '#f59e0b',
   oilLeakageDetection: '#06b6d4',
+  equipmentOilLeakageDetection: '#0891b2',
+  vehicleFuelOilLeakageDetection: '#0e7490',
   gunnyBagsMaterialsWrongLocationDetection: '#8b5cf6',
   sandDustWasteScrapDisposalDetection: '#78716c',
   unauthorizedAnimalEntryDetection: '#ef4444',

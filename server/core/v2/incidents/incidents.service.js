@@ -61,6 +61,8 @@ import {
   VehicleCheckInOutIncident,
   WorkingAtHeightDetectionIncident,
   OilLeakageDetectionIncident,
+  EquipmentOilLeakageDetectionIncident,
+  VehicleFuelOilLeakageDetectionIncident,
   GunnyBagsMaterialsWrongLocationDetectionIncident,
   SandDustWasteScrapDisposalDetectionIncident,
   UnauthorizedAnimalEntryDetectionIncident,
@@ -100,6 +102,8 @@ const modelMap = {
   vehicleCheckInOut: VehicleCheckInOutIncident,
   workingAtHeightDetection: WorkingAtHeightDetectionIncident,
   oilLeakageDetection: OilLeakageDetectionIncident,
+  equipmentOilLeakageDetection: EquipmentOilLeakageDetectionIncident,
+  vehicleFuelOilLeakageDetection: VehicleFuelOilLeakageDetectionIncident,
   gunnyBagsMaterialsWrongLocationDetection: GunnyBagsMaterialsWrongLocationDetectionIncident,
   sandDustWasteScrapDisposalDetection: SandDustWasteScrapDisposalDetectionIncident,
   unauthorizedAnimalEntryDetection: UnauthorizedAnimalEntryDetectionIncident,
@@ -4333,6 +4337,14 @@ console.log(result,'result');
 
   async getOilLeakageDetectionLogs(req, res, next) {
     return this._getIndustrialDetectionLogs(req, res, next, "oilLeakageDetection");
+  }
+
+  async getEquipmentOilLeakageDetectionLogs(req, res, next) {
+    return this._getIndustrialDetectionLogs(req, res, next, "equipmentOilLeakageDetection");
+  }
+
+  async getVehicleFuelOilLeakageDetectionLogs(req, res, next) {
+    return this._getIndustrialDetectionLogs(req, res, next, "vehicleFuelOilLeakageDetection");
   }
 
   async getGunnyBagsMaterialsWrongLocationDetectionLogs(req, res, next) {

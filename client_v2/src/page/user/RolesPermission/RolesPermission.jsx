@@ -39,6 +39,7 @@ const LOG_SUBMODULES = [
   'unauthorizedAccessLogs', 'carLogs', 'vehicleCheckInOutLogs',
   'fireSmokeLogs', 'personFallSickLogs',
   'workingAtHeightLogs', 'oilLeakageLogs', 'wrongLocationLogs',
+  'equipmentOilLeakageLogs', 'vehicleFuelOilLeakageLogs',
   'wasteDisposalLogs', 'animalEntryLogs', 'messyAreaLogs',
 ];
 
@@ -67,6 +68,8 @@ const MODULE_LABELS = {
   personFallSickLogs: 'Person Fall/Sick Logs',
   workingAtHeightLogs: 'Working at Height Logs',
   oilLeakageLogs: 'Oil Leakage Logs',
+  equipmentOilLeakageLogs: 'Equipment Oil Leakage Logs',
+  vehicleFuelOilLeakageLogs: 'Vehicle Fuel/Oil Leakage Logs',
   wrongLocationLogs: 'Gunny Bags/Materials Wrong Location Logs',
   wasteDisposalLogs: 'Sand, Dust, Waste & Scrap Disposal Logs',
   animalEntryLogs: 'Unauthorized Animal Entry Logs',

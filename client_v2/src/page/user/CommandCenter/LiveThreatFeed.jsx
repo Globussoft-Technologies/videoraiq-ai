@@ -17,6 +17,8 @@ const TYPE_META = {
   personFallSickDetection: { label: 'FALL', color: '#ff5b57' },
   workingAtHeightDetection: { label: 'WAH', color: '#f59e0b' },
   oilLeakageDetection: { label: 'OIL', color: '#06b6d4' },
+  equipmentOilLeakageDetection: { label: 'EQ-OIL', color: '#0891b2' },
+  vehicleFuelOilLeakageDetection: { label: 'VEH-OIL', color: '#0e7490' },
   gunnyBagsMaterialsWrongLocationDetection: { label: 'LOC', color: '#8b5cf6' },
   sandDustWasteScrapDisposalDetection: { label: 'WASTE', color: '#78716c' },
   unauthorizedAnimalEntryDetection: { label: 'ANML', color: '#ef4444' },

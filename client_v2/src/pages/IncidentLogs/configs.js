@@ -188,6 +188,24 @@ export const OIL_LEAKAGE_CONFIG = industrialDetectionConfig({
   permissionKey: 'oilLeakageLogs',
 });
 
+export const EQUIPMENT_OIL_LEAKAGE_CONFIG = industrialDetectionConfig({
+  endpoint: '/incidents/logs/equipment-oil-leakage-detection',
+  title: 'Equipment Oil Leakage Detection Logs',
+  fileName: 'equipment_oil_leakage_logs',
+  sheetName: 'Equipment Oil Leakage Logs',
+  storagePrefix: 'equipment_oil_leakage',
+  permissionKey: 'equipmentOilLeakageLogs',
+});
+
+export const VEHICLE_FUEL_OIL_LEAKAGE_CONFIG = industrialDetectionConfig({
+  endpoint: '/incidents/logs/vehicle-fuel-oil-leakage-detection',
+  title: 'Vehicle Fuel/Oil Leakage Detection Logs',
+  fileName: 'vehicle_fuel_oil_leakage_logs',
+  sheetName: 'Vehicle Fuel Oil Leakage Logs',
+  storagePrefix: 'vehicle_fuel_oil_leakage',
+  permissionKey: 'vehicleFuelOilLeakageLogs',
+});
+
 export const WRONG_LOCATION_CONFIG = industrialDetectionConfig({
   endpoint: '/incidents/logs/gunny-bags-materials-wrong-location-detection',
   title: 'Gunny Bags/Materials Wrong Location Detection Logs',

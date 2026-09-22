@@ -213,6 +213,19 @@ function rangeForReport(report, reference = moment()) {
   return { timezone, start, end, label: `${start.format("DD MMM YYYY")} – ${end.format("DD MMM YYYY")}` };
 }
 
+// A one-day custom range is still a daily report from the recipient's point
+// of view. Use the PDF-style attendance table for it instead of routing it to
+// the multi-day status-matrix workbook solely because its frequency is named
+// "custom".
+export function usesDailyAttendanceWorkbook(report, summary) {
+  if (report?.schedule?.frequency === "daily") return true;
+  if (!summary?.start || !summary?.end) return false;
+  const timezone = validTimezone(summary.timezone) || reportTimezone(report);
+  const startDay = moment(summary.start).tz(timezone).format("YYYY-MM-DD");
+  const endDay = moment(summary.end).tz(timezone).format("YYYY-MM-DD");
+  return startDay === endDay;
+}
+
 function statusForRow(row, rules) {
   if (!row.firstCheckIn) return "Absent";
   if (!row.lastCheckOut) return "Checked In";
@@ -1184,11 +1197,12 @@ async function deliver(report, options = {}) {
   const pdfBuffer = wantsPdf ? await buildPdf({ report, rows, label: summary.label, timezone: summary.timezone }) : null;
   const pdfMs = Date.now() - pdfT0;
 
-  // Daily Excel mirrors the PDF's expanded attendance table. Longer schedule
-  // types retain the monthly-status matrix workbook.
+  // Single-day Excel mirrors the PDF's expanded attendance table, including a
+  // custom schedule whose start/end are the same day. Multi-day schedules
+  // retain the status-matrix workbook.
   const xlsxT0 = Date.now();
   const xlsxBuffer = wantsXlsx
-    ? report.schedule.frequency === "daily"
+    ? usesDailyAttendanceWorkbook(report, summary)
       ? await buildAttendanceWorkbook({
           headers: REPORT_HEADERS,
           lines: reportTableRows(rows),

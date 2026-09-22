@@ -37,6 +37,8 @@ const ENGINE_META = {
   fall: { short: 'FALL', name: 'Person Fall/Sick Detection' },
   workingatheightdetection: { short: 'WAH', name: 'Working at Height Detection' },
   oilleakagedetection: { short: 'OIL', name: 'Oil Leakage Detection' },
+  equipmentoilleakagedetection: { short: 'EQ-OIL', name: 'Equipment Oil Leakage Detection' },
+  vehiclefueloilleakagedetection: { short: 'VEH-OIL', name: 'Vehicle Fuel/Oil Leakage Detection' },
   gunnybagsmaterialswronglocationdetection: { short: 'LOC', name: 'Gunny Bags/Materials Wrong Location Detection' },
   sanddustwastescrapdisposaldetection: { short: 'WASTE', name: 'Sand, Dust, Waste & Scrap Disposal Detection' },
   unauthorizedanimalentrydetection: { short: 'ANML', name: 'Unauthorized Animal Entry Detection' },
