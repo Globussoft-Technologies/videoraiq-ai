@@ -49,6 +49,12 @@ const INCIDENT_COLOR = {
   deskAbsence: '#f5a623',
   guardAbsence: '#ef4444',
   loiteringDetection: '#f5a623',
+  workingAtHeightDetection: '#f59e0b',
+  oilLeakageDetection: '#06b6d4',
+  gunnyBagsMaterialsWrongLocationDetection: '#8b5cf6',
+  sandDustWasteScrapDisposalDetection: '#78716c',
+  unauthorizedAnimalEntryDetection: '#ef4444',
+  spillsDirtyMessyAreasDetection: '#14b8a6',
 };
 
 function eventColor(type) {

@@ -32,7 +32,7 @@ export default function DetectionCard({ model, color, selected, onSelect, onTogg
         opacity: model.active ? 1 : 0.65,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
         <span
           style={{
             width: 8,
@@ -50,16 +50,16 @@ export default function DetectionCard({ model, color, selected, onSelect, onTogg
             fontSize: 13,
             fontWeight: 600,
             color: 'var(--tx)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
+            whiteSpace: 'normal',
+            overflowWrap: 'anywhere',
+            lineHeight: 1.3,
           }}
           title={model.name}
         >
           {model.name}
         </span>
         {!hideToggle && (
-          <span onClick={(e) => e.stopPropagation()} style={{ flex: '0 0 auto' }}>
+          <span onClick={(e) => e.stopPropagation()} style={{ flex: '0 0 auto', marginTop: 1 }}>
             <Toggle on={model.active} onChange={onToggle} disabled={toggleDisabled} />
           </span>
         )}
@@ -78,9 +78,9 @@ export default function DetectionCard({ model, color, selected, onSelect, onTogg
             fontSize: 11.5,
             fontWeight: 500,
             color: 'var(--tx)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
+            whiteSpace: 'normal',
+            overflowWrap: 'anywhere',
+            lineHeight: 1.35,
           }}
         >
           {model.subtitle}

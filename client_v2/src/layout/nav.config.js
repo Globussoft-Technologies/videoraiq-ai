@@ -46,6 +46,12 @@ import {
   ScanLine,
   Flame,
   HeartPulse,
+  HardHat,
+  Droplet,
+  PackageSearch,
+  Trash2,
+  PawPrint,
+  BrushCleaning,
 } from 'lucide-react';
 
 import { ADMIN_STORAGE_UI_ENABLED } from '../lib/featureFlags';
@@ -84,6 +90,12 @@ const stevinrockLogItems = [
   { key: 'unauthorized-access', label: 'Unauthorized Access Logs', path: 'logs/unauthorized-access', icon: Ban, permissionKey: 'logs', permissionSubKey: 'unauthorizedAccessLogs', logsConfigKey: 'unauthorizedAccessLogs' },
   { key: 'fire-smoke', label: 'Fire & Smoke Logs', path: 'logs/fire-smoke', icon: Flame, permissionKey: 'logs', permissionSubKey: 'fireSmokeLogs', logsConfigKey: 'fireSmokeLogs' },
   { key: 'person-fall-sick', label: 'Person Fall/Sick Logs', path: 'logs/person-fall-sick', icon: HeartPulse, permissionKey: 'logs', permissionSubKey: 'personFallSickLogs', logsConfigKey: 'personFallSickLogs' },
+  { key: 'working-at-height', label: 'Working at Height Logs', path: 'logs/working-at-height', icon: HardHat, permissionKey: 'logs', permissionSubKey: 'workingAtHeightLogs', logsConfigKey: 'workingAtHeightLogs' },
+  { key: 'oil-leakage', label: 'Oil Leakage Logs', path: 'logs/oil-leakage', icon: Droplet, permissionKey: 'logs', permissionSubKey: 'oilLeakageLogs', logsConfigKey: 'oilLeakageLogs' },
+  { key: 'wrong-location', label: 'Gunny Bags/Materials Wrong Location Logs', path: 'logs/wrong-location', icon: PackageSearch, permissionKey: 'logs', permissionSubKey: 'wrongLocationLogs', logsConfigKey: 'wrongLocationLogs' },
+  { key: 'waste-disposal', label: 'Sand, Dust, Waste & Scrap Disposal Logs', path: 'logs/waste-disposal', icon: Trash2, permissionKey: 'logs', permissionSubKey: 'wasteDisposalLogs', logsConfigKey: 'wasteDisposalLogs' },
+  { key: 'animal-entry', label: 'Unauthorized Animal Entry Logs', path: 'logs/animal-entry', icon: PawPrint, permissionKey: 'logs', permissionSubKey: 'animalEntryLogs', logsConfigKey: 'animalEntryLogs' },
+  { key: 'messy-area', label: 'Messy Area Logs', path: 'logs/messy-area', icon: BrushCleaning, permissionKey: 'logs', permissionSubKey: 'messyAreaLogs', logsConfigKey: 'messyAreaLogs' },
 ];
 
 /**
@@ -229,6 +241,12 @@ export const VIEW_META = {
   'line-crossing': { title: 'Line Crossing Logs', sub: 'Boundary & line-crossing detections' },
   'water-spill': { title: 'Water Spill Logs', sub: 'Water spillage detections' },
   'unauthorized-access': { title: 'Unauthorized Access Logs', sub: 'Restricted-zone entry detections' },
+  'working-at-height': { title: 'Working at Height Logs', sub: 'Unsafe work-at-height detections' },
+  'oil-leakage': { title: 'Oil Leakage Logs', sub: 'Oil leakage and floor-hazard detections' },
+  'wrong-location': { title: 'Wrong Location Logs', sub: 'Misplaced gunny bags and material detections' },
+  'waste-disposal': { title: 'Waste Disposal Logs', sub: 'Sand, dust, waste and scrap disposal detections' },
+  'animal-entry': { title: 'Unauthorized Animal Entry Logs', sub: 'Unauthorized animal entry detections' },
+  'messy-area': { title: 'Messy Area Logs', sub: 'Spill, dirty and messy-area detections' },
   users: { title: 'User Role Detail', sub: 'Manage users and their assigned roles' },
   roles: { title: 'Roles & Permission', sub: 'Define roles and per-module access' },
   recipients: { title: 'Alert Recipients', sub: 'Who gets notified for each detection type' },

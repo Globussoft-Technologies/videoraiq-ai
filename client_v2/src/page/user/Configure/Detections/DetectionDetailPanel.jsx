@@ -3,7 +3,7 @@ import {
   Car, CarFront, CircleOff, Clock, Clock3, CopyPlus, DoorOpen, Factory, Flame,
   GitCommitHorizontal, Globe, Hammer, HardHat, HeartPulse, Lightbulb, ListRestart, Package, Plus,
   ScanFace, ScanLine, ShieldAlert, ShieldOff, Smartphone, Table2, Trash2, UserCheck,
-  Users, UtensilsCrossed, Waves, X, ChevronDown,
+  Users, UtensilsCrossed, Waves, X, ChevronDown, Droplet, PackageSearch, PawPrint, Sparkles,
 } from 'lucide-react';
 import { Toggle } from '../../../../components/primitives';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -66,6 +66,12 @@ const DETECTION_ICONS = {
   crusherDetectionSettings: Hammer,
   cylinderDetectionSettings: Package,
   waterSpillageDetectionSettings: Waves,
+  workingAtHeightDetectionSettings: HardHat,
+  oilLeakageDetectionSettings: Droplet,
+  gunnyBagsMaterialsWrongLocationDetectionSettings: PackageSearch,
+  sandDustWasteScrapDisposalDetectionSettings: Trash2,
+  unauthorizedAnimalEntryDetectionSettings: PawPrint,
+  spillsDirtyMessyAreasDetectionSettings: Sparkles,
   'Attendance-detection': UserCheck,
 };
 

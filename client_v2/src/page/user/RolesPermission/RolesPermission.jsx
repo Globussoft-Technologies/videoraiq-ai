@@ -38,6 +38,8 @@ const LOG_SUBMODULES = [
   'vehicleCountLogs', 'crusherLogs', 'cylinderLogs', 'lineCrossingLogs', 'waterSpillLogs',
   'unauthorizedAccessLogs', 'carLogs', 'vehicleCheckInOutLogs',
   'fireSmokeLogs', 'personFallSickLogs',
+  'workingAtHeightLogs', 'oilLeakageLogs', 'wrongLocationLogs',
+  'wasteDisposalLogs', 'animalEntryLogs', 'messyAreaLogs',
 ];
 
 const MODULE_LABELS = {
@@ -63,6 +65,12 @@ const MODULE_LABELS = {
   vehicleCheckInOutLogs: 'Vehicle Check-In/Out Logs',
   fireSmokeLogs: 'Fire & Smoke Logs',
   personFallSickLogs: 'Person Fall/Sick Logs',
+  workingAtHeightLogs: 'Working at Height Logs',
+  oilLeakageLogs: 'Oil Leakage Logs',
+  wrongLocationLogs: 'Gunny Bags/Materials Wrong Location Logs',
+  wasteDisposalLogs: 'Sand, Dust, Waste & Scrap Disposal Logs',
+  animalEntryLogs: 'Unauthorized Animal Entry Logs',
+  messyAreaLogs: 'Spills, Dirty or Messy Areas Logs',
 };
 
 const LEGACY_MODULES_BY_ROLE = {

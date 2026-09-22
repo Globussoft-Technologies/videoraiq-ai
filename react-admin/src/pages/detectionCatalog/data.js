@@ -27,6 +27,9 @@ import {
   Crosshair,
   Luggage,
   ScanEye,
+  Trash2,
+  PawPrint,
+  Sparkles,
 } from 'lucide-react'
 
 // Icon + tint for each detection, keyed by the API's `settingType`.
@@ -141,6 +144,30 @@ export const DETECTION_META = {
   unattendedBaggageDetectionSettings: {
     Icon: Luggage,
     tint: 'bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-300',
+  },
+  workingAtHeightDetectionSettings: {
+    Icon: HardHat,
+    tint: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300',
+  },
+  oilLeakageDetectionSettings: {
+    Icon: Droplets,
+    tint: 'bg-cyan-50 text-cyan-600 dark:bg-cyan-500/10 dark:text-cyan-300',
+  },
+  gunnyBagsMaterialsWrongLocationDetectionSettings: {
+    Icon: Package,
+    tint: 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300',
+  },
+  sandDustWasteScrapDisposalDetectionSettings: {
+    Icon: Trash2,
+    tint: 'bg-stone-100 text-stone-600 dark:bg-stone-500/15 dark:text-stone-300',
+  },
+  unauthorizedAnimalEntryDetectionSettings: {
+    Icon: PawPrint,
+    tint: 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300',
+  },
+  spillsDirtyMessyAreasDetectionSettings: {
+    Icon: Sparkles,
+    tint: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300',
   },
 }
 

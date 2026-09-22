@@ -29,6 +29,12 @@ const DETECTION_LABEL_OVERRIDES = {
   cylinderDetectionSettings: 'Cylinder Detection',
   fireSmokeDetectionSettings: 'Fire & Smoke Detection',
   personFallSickDetectionSettings: 'Person Fall/Sick Detection',
+  workingAtHeightDetectionSettings: 'Working at Height Detection',
+  oilLeakageDetectionSettings: 'Oil Leakage Detection',
+  gunnyBagsMaterialsWrongLocationDetectionSettings: 'Gunny Bags/Materials Wrong Location Detection',
+  sandDustWasteScrapDisposalDetectionSettings: 'Sand, Dust, Waste & Scrap Disposal Detection',
+  unauthorizedAnimalEntryDetectionSettings: 'Unauthorized Animal Entry Detection',
+  spillsDirtyMessyAreasDetectionSettings: 'Spills, Dirty or Messy Areas Detection',
 };
 
 export const INCIDENT_STATUS = {
@@ -78,6 +84,12 @@ export const DETECTION_THRESHOLDS = {
   crusherDetectionSettings: [],
   cylinderDetectionSettings: [],
   waterSpillageDetectionSettings: [],
+  workingAtHeightDetectionSettings: [],
+  oilLeakageDetectionSettings: [],
+  gunnyBagsMaterialsWrongLocationDetectionSettings: [],
+  sandDustWasteScrapDisposalDetectionSettings: [],
+  unauthorizedAnimalEntryDetectionSettings: [],
+  spillsDirtyMessyAreasDetectionSettings: [],
 };
 
 /** Human-friendly label for a threshold key; falls back to a title-cased key. */
@@ -115,7 +127,7 @@ export function thresholdLabel(key) {
 const CATEGORY_MATCHERS = [
   ['safety', ['ppe', 'protective', 'safety', 'helmet', 'vest', 'fire', 'smoke', 'weapon', 'fall', 'sick']],
   ['vehicles', ['vehicle', 'traffic', 'anpr', 'plate', 'car']],
-  ['industrial', ['conveyor', 'crusher', 'cylinder', 'spillage', 'spill', 'light']],
+  ['industrial', ['conveyor', 'crusher', 'cylinder', 'spillage', 'spill', 'light', 'height', 'oil', 'gunny', 'material', 'sand', 'dust', 'waste', 'scrap', 'animal', 'messy']],
   ['perimeter', ['intrusion', 'unauthorized', 'access', 'line', 'crossing', 'loiter', 'bag', 'baggage']],
   ['people', ['person', 'people', 'crowd', 'face', 'attendance']],
   ['workplace', ['desk', 'guard', 'table', 'occupancy', 'door', 'phone', 'mobile', 'retail', 'food']],

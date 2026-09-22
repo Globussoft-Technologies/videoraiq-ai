@@ -50,6 +50,12 @@ const SHORT_LABELS = {
   tableOccupancyDetectionSettings: 'Table Occupancy',
   foodServicePPEDetectionSettings: 'Food PPE',
   mobilePhoneDetectionSettings: 'Mobile Phone',
+  workingAtHeightDetectionSettings: 'Working at Height',
+  oilLeakageDetectionSettings: 'Oil Leakage',
+  gunnyBagsMaterialsWrongLocationDetectionSettings: 'Wrong Location',
+  sandDustWasteScrapDisposalDetectionSettings: 'Waste Disposal',
+  unauthorizedAnimalEntryDetectionSettings: 'Animal Entry',
+  spillsDirtyMessyAreasDetectionSettings: 'Messy Area',
 };
 
 export function humanize(settingType) {

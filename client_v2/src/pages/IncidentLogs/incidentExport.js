@@ -50,6 +50,7 @@ const fetchAllForExport = async (config, params) => {
       fireCount: item.fireCount ?? '--',
       smokeCount: item.smokeCount ?? '--',
       count: item.count ?? '--',
+      alertThreshold: item.alertThreshold ?? '--',
       isFallDetected: item.isFallDetected === true || item.isFallDetected === 'true' ? 'Yes' : 'No',
       evidenceScore: evidenceScoreStr,
     };
@@ -80,6 +81,13 @@ const buildExportColumns = (config) => {
       { key: 'count', label: 'People Detected' },
       { key: 'isFallDetected', label: 'Fall Detected' },
       { key: 'evidenceScore', label: 'Evidence Score' }
+    );
+  }
+
+  if (config.showIndustrialFields) {
+    cols.push(
+      { key: 'count', label: 'Objects Detected' },
+      { key: 'alertThreshold', label: 'Alert Threshold' }
     );
   }
 
@@ -250,6 +258,9 @@ const exportToGridPDF = async (config, params) => {
         ['Fall Detected', 'isFallDetected'],
         ['Evidence Score', 'evidenceScore']
       );
+    }
+    if (config.showIndustrialFields) {
+      details.push(['Objects Detected', 'count'], ['Alert Threshold', 'alertThreshold']);
     }
     details.push(['NVR', 'nvrName'], ['Camera', 'channelName'], ['Time', 'createdAt']);
     const cardHeight = imageHeight + bodyTopGap + rowGap * details.length + 4;

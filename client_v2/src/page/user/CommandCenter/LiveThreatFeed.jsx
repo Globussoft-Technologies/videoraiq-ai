@@ -15,6 +15,12 @@ const TYPE_META = {
   crowdDetection: { label: 'CRWD', color: '#f59e0b' },
   genericObjectDetection: { label: 'OBJ', color: '#f59e0b' },
   personFallSickDetection: { label: 'FALL', color: '#ff5b57' },
+  workingAtHeightDetection: { label: 'WAH', color: '#f59e0b' },
+  oilLeakageDetection: { label: 'OIL', color: '#06b6d4' },
+  gunnyBagsMaterialsWrongLocationDetection: { label: 'LOC', color: '#8b5cf6' },
+  sandDustWasteScrapDisposalDetection: { label: 'WASTE', color: '#78716c' },
+  unauthorizedAnimalEntryDetection: { label: 'ANML', color: '#ef4444' },
+  spillsDirtyMessyAreasDetection: { label: 'MESSY', color: '#14b8a6' },
 };
 
 function typeMeta(alert) {

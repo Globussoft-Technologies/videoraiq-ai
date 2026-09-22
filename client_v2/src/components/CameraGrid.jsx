@@ -49,6 +49,12 @@ export const ENGINE_LABEL_MAP = {
   vehicleObstructionSettings:        'Vehicle Obstruction',
   personFallSickDetectionSettings:   'Person Fall/Sick Detection',
   personFallSickDetection:           'Person Fall/Sick Detection',
+  workingAtHeightDetectionSettings:  'Working at Height Detection',
+  oilLeakageDetectionSettings:       'Oil Leakage Detection',
+  gunnyBagsMaterialsWrongLocationDetectionSettings: 'Gunny Bags/Materials Wrong Location Detection',
+  sandDustWasteScrapDisposalDetectionSettings: 'Sand, Dust, Waste & Scrap Disposal Detection',
+  unauthorizedAnimalEntryDetectionSettings: 'Unauthorized Animal Entry Detection',
+  spillsDirtyMessyAreasDetectionSettings: 'Spills, Dirty or Messy Areas Detection',
 };
 
 /* ── Extract enabled engines from channel.detections object ─────────────── */

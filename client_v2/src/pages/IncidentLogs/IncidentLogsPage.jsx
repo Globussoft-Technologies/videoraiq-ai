@@ -199,6 +199,7 @@ const IncidentLogsPage = ({ config }) => {
         incidentImageUrl: item.Image ? `${INCIDENT_URL}${item.Image}` : null,
         severity: item.severity || '--',
         count: item.count,
+        alertThreshold: item.alertThreshold,
         fireCount: item.fireCount,
         smokeCount: item.smokeCount,
         isFallDetected: item.isFallDetected,

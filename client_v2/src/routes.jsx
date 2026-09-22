@@ -44,6 +44,12 @@ import WaterSpillLogs from './pages/WaterSpillLogs/WaterSpillLogs';
 import UnauthorizedAccessLogs from './pages/UnauthorizedAccessLogs/UnauthorizedAccessLogs';
 import FireSmokeLogs from './pages/FireSmokeLogs/FireSmokeLogs';
 import PersonFallSickLogs from './pages/PersonFallSickLogs/PersonFallSickLogs';
+import WorkingAtHeightLogs from './pages/WorkingAtHeightLogs/WorkingAtHeightLogs';
+import OilLeakageLogs from './pages/OilLeakageLogs/OilLeakageLogs';
+import WrongLocationLogs from './pages/WrongLocationLogs/WrongLocationLogs';
+import WasteDisposalLogs from './pages/WasteDisposalLogs/WasteDisposalLogs';
+import AnimalEntryLogs from './pages/AnimalEntryLogs/AnimalEntryLogs';
+import MessyAreaLogs from './pages/MessyAreaLogs/MessyAreaLogs';
 import ProductivityLog from './pages/ProductivityLog/ProductivityLog';
 import TrackLog from './pages/TrackLog/TrackLog';
 import VisibilityLog from './pages/VisibilityLog/VisibilityLog';
@@ -126,6 +132,12 @@ export const v2Routes = (
     <Route path="logs/unauthorized-access" element={guard('logs', 'unauthorizedAccessLogs', <UnauthorizedAccessLogs />)} />
     <Route path="logs/fire-smoke" element={guard('logs', 'fireSmokeLogs', <FireSmokeLogs />)} />
     <Route path="logs/person-fall-sick" element={guard('logs', 'personFallSickLogs', <PersonFallSickLogs />)} />
+    <Route path="logs/working-at-height" element={guard('logs', 'workingAtHeightLogs', <WorkingAtHeightLogs />)} />
+    <Route path="logs/oil-leakage" element={guard('logs', 'oilLeakageLogs', <OilLeakageLogs />)} />
+    <Route path="logs/wrong-location" element={guard('logs', 'wrongLocationLogs', <WrongLocationLogs />)} />
+    <Route path="logs/waste-disposal" element={guard('logs', 'wasteDisposalLogs', <WasteDisposalLogs />)} />
+    <Route path="logs/animal-entry" element={guard('logs', 'animalEntryLogs', <AnimalEntryLogs />)} />
+    <Route path="logs/messy-area" element={guard('logs', 'messyAreaLogs', <MessyAreaLogs />)} />
 
     {/* Configure */}
     <Route path="cameras" element={guard('NVR', undefined, <NVRCameras />)} />

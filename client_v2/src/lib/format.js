@@ -61,6 +61,18 @@ const CUSTOM_DETECTION_LABELS = {
   fireSmokeDetectionSettings: 'Fire & Smoke Detection',
   personFallSickDetection: 'Person Fall/Sick Detection',
   personFallSickDetectionSettings: 'Person Fall/Sick Detection',
+  workingAtHeightDetection: 'Working at Height Detection',
+  workingAtHeightDetectionSettings: 'Working at Height Detection',
+  oilLeakageDetection: 'Oil Leakage Detection',
+  oilLeakageDetectionSettings: 'Oil Leakage Detection',
+  gunnyBagsMaterialsWrongLocationDetection: 'Gunny Bags/Materials Wrong Location Detection',
+  gunnyBagsMaterialsWrongLocationDetectionSettings: 'Gunny Bags/Materials Wrong Location Detection',
+  sandDustWasteScrapDisposalDetection: 'Sand, Dust, Waste & Scrap Disposal Detection',
+  sandDustWasteScrapDisposalDetectionSettings: 'Sand, Dust, Waste & Scrap Disposal Detection',
+  unauthorizedAnimalEntryDetection: 'Unauthorized Animal Entry Detection',
+  unauthorizedAnimalEntryDetectionSettings: 'Unauthorized Animal Entry Detection',
+  spillsDirtyMessyAreasDetection: 'Spills, Dirty or Messy Areas Detection',
+  spillsDirtyMessyAreasDetectionSettings: 'Spills, Dirty or Messy Areas Detection',
 };
 
 /** Human display name for an incident/detection type. */

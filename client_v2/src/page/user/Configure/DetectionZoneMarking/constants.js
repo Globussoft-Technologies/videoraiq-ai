@@ -11,6 +11,9 @@ export const DETECTION_FIELD_KEYS = [
   'tableOccupancyDetectionSettings', 'foodServicePPEDetectionSettings', 'mobilePhoneDetectionSettings',
   'carModelDetectionSettings', 'faceAuthenticationSettings', 'vehicleCheckInOutSettings',
   'personFallSickDetectionSettings',
+  'workingAtHeightDetectionSettings', 'oilLeakageDetectionSettings',
+  'gunnyBagsMaterialsWrongLocationDetectionSettings', 'sandDustWasteScrapDisposalDetectionSettings',
+  'unauthorizedAnimalEntryDetectionSettings', 'spillsDirtyMessyAreasDetectionSettings',
 ];
 
 export const FIRE_SMOKE_SETTING_TYPE = 'fireSmokeDetectionSettings';
@@ -74,6 +77,12 @@ export const ZONE_EXTRA_FIELDS = {
   carModelDetectionSettings: ['company'],
   fireSmokeDetectionSettings: ['threshold'],
   personFallSickDetectionSettings: ['threshold'],
+  workingAtHeightDetectionSettings: ['threshold'],
+  oilLeakageDetectionSettings: ['threshold'],
+  gunnyBagsMaterialsWrongLocationDetectionSettings: ['threshold'],
+  sandDustWasteScrapDisposalDetectionSettings: ['threshold'],
+  unauthorizedAnimalEntryDetectionSettings: ['threshold'],
+  spillsDirtyMessyAreasDetectionSettings: ['threshold'],
 };
 
 export const PRIORITY_OPTIONS = [

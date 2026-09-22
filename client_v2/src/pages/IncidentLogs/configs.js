@@ -146,3 +146,80 @@ export const PERSON_FALL_SICK_CONFIG = {
   enableViewExports: true,
   datePickerVariant: 'preset',
 };
+
+const industrialDetectionConfig = ({
+  endpoint,
+  title,
+  fileName,
+  sheetName,
+  storagePrefix,
+  permissionKey,
+}) => ({
+  endpoint,
+  title,
+  fileName,
+  sheetName,
+  storagePrefix,
+  permissionKey,
+  accessDenied: `You don't have permission to view ${title}.`,
+  showStatus: false,
+  sortable: true,
+  showIndustrialFields: true,
+  gridVariant: 'details',
+  enableViewExports: true,
+  datePickerVariant: 'preset',
+});
+
+export const WORKING_AT_HEIGHT_CONFIG = industrialDetectionConfig({
+  endpoint: '/incidents/logs/working-at-height-detection',
+  title: 'Working at Height Detection Logs',
+  fileName: 'working_at_height_logs',
+  sheetName: 'Working at Height Logs',
+  storagePrefix: 'working_at_height',
+  permissionKey: 'workingAtHeightLogs',
+});
+
+export const OIL_LEAKAGE_CONFIG = industrialDetectionConfig({
+  endpoint: '/incidents/logs/oil-leakage-detection',
+  title: 'Oil Leakage Detection Logs',
+  fileName: 'oil_leakage_logs',
+  sheetName: 'Oil Leakage Logs',
+  storagePrefix: 'oil_leakage',
+  permissionKey: 'oilLeakageLogs',
+});
+
+export const WRONG_LOCATION_CONFIG = industrialDetectionConfig({
+  endpoint: '/incidents/logs/gunny-bags-materials-wrong-location-detection',
+  title: 'Gunny Bags/Materials Wrong Location Detection Logs',
+  fileName: 'wrong_location_logs',
+  sheetName: 'Wrong Location Logs',
+  storagePrefix: 'wrong_location',
+  permissionKey: 'wrongLocationLogs',
+});
+
+export const WASTE_DISPOSAL_CONFIG = industrialDetectionConfig({
+  endpoint: '/incidents/logs/sand-dust-waste-scrap-disposal-detection',
+  title: 'Sand, Dust, Waste & Scrap Disposal Detection Logs',
+  fileName: 'waste_disposal_logs',
+  sheetName: 'Waste Disposal Logs',
+  storagePrefix: 'waste_disposal',
+  permissionKey: 'wasteDisposalLogs',
+});
+
+export const ANIMAL_ENTRY_CONFIG = industrialDetectionConfig({
+  endpoint: '/incidents/logs/unauthorized-animal-entry-detection',
+  title: 'Unauthorized Animal Entry Detection Logs',
+  fileName: 'animal_entry_logs',
+  sheetName: 'Animal Entry Logs',
+  storagePrefix: 'animal_entry',
+  permissionKey: 'animalEntryLogs',
+});
+
+export const MESSY_AREA_CONFIG = industrialDetectionConfig({
+  endpoint: '/incidents/logs/spills-dirty-messy-areas-detection',
+  title: 'Spills, Dirty or Messy Areas Detection Logs',
+  fileName: 'messy_area_logs',
+  sheetName: 'Messy Area Logs',
+  storagePrefix: 'messy_area',
+  permissionKey: 'messyAreaLogs',
+});

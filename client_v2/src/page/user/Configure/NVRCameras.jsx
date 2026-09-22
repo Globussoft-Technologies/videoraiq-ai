@@ -116,6 +116,12 @@ const ENGINE_LABELS = {
   personalProtectiveEquipmentSettings: 'PPE',
   mobilePhoneDetectionSettings: 'MOB',
   personFallSickDetectionSettings: 'FALL',
+  workingAtHeightDetectionSettings: 'WAH',
+  oilLeakageDetectionSettings: 'OIL',
+  gunnyBagsMaterialsWrongLocationDetectionSettings: 'LOC',
+  sandDustWasteScrapDisposalDetectionSettings: 'WASTE',
+  unauthorizedAnimalEntryDetectionSettings: 'ANML',
+  spillsDirtyMessyAreasDetectionSettings: 'MESSY',
 };
 
 const ENGINE_NAMES = {
@@ -140,6 +146,12 @@ const ENGINE_NAMES = {
   personalProtectiveEquipmentSettings: 'Personal Protective Equipment Detection',
   mobilePhoneDetectionSettings: 'Mobile Phone Detection',
   personFallSickDetectionSettings: 'Person Fall/Sick Detection',
+  workingAtHeightDetectionSettings: 'Working at Height Detection',
+  oilLeakageDetectionSettings: 'Oil Leakage Detection',
+  gunnyBagsMaterialsWrongLocationDetectionSettings: 'Gunny Bags/Materials Wrong Location Detection',
+  sandDustWasteScrapDisposalDetectionSettings: 'Sand, Dust, Waste & Scrap Disposal Detection',
+  unauthorizedAnimalEntryDetectionSettings: 'Unauthorized Animal Entry Detection',
+  spillsDirtyMessyAreasDetectionSettings: 'Spills, Dirty or Messy Areas Detection',
 };
 
 function compactEngineLabel(settingKey, setting) {

@@ -212,6 +212,21 @@ export const buildColumns = (config, { onSort, onPreview }) => {
     );
   }
 
+  if (config.showIndustrialFields) {
+    cols.push(
+      {
+        accessorKey: 'count',
+        header: 'Objects Detected',
+        cell: ({ row }) => <span className={styles.text}>{row.original.count ?? '--'}</span>,
+      },
+      {
+        accessorKey: 'alertThreshold',
+        header: 'Alert Threshold',
+        cell: ({ row }) => <span className={styles.text}>{row.original.alertThreshold ?? '--'}</span>,
+      },
+    );
+  }
+
   cols.push(
     {
       accessorKey: 'createdAt',
@@ -291,6 +306,12 @@ export const renderIncidentCard = (row, config, { onPreview }) => (
               label="Evidence Score"
               value={formatEvidenceScore(row.evidenceScore)}
             />
+          </>
+        )}
+        {config.showIndustrialFields && (
+          <>
+            <IncidentCardRow icon={Activity} label="Objects Detected" value={row.count ?? '--'} />
+            <IncidentCardRow icon={AlertTriangle} label="Alert Threshold" value={row.alertThreshold ?? '--'} />
           </>
         )}
         <IncidentCardRow icon={Server} label="NVR" value={row.nvrName} />

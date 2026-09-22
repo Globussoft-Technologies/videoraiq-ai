@@ -29,7 +29,13 @@ class LogsConfigurationController {
         cylinderLogs: true,
         lineCrossingLogs: true,
         waterSpillLogs: true,
-        unauthorizedAccessLogs: true
+        unauthorizedAccessLogs: true,
+        workingAtHeightLogs: true,
+        oilLeakageLogs: true,
+        wrongLocationLogs: true,
+        wasteDisposalLogs: true,
+        animalEntryLogs: true,
+        messyAreaLogs: true
       }
     }
     #swagger.responses[400] = { description: 'Missing adminId' }
@@ -49,7 +55,13 @@ class LogsConfigurationController {
       schema: {
         logs: {
           attendanceLogs: true,
-          accessLogs: false
+          accessLogs: false,
+          workingAtHeightLogs: true,
+          oilLeakageLogs: true,
+          wrongLocationLogs: true,
+          wasteDisposalLogs: true,
+          animalEntryLogs: true,
+          messyAreaLogs: true
         }
       }
     }

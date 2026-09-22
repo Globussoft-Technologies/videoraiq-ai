@@ -68,6 +68,12 @@ const detections = [
   { name: 'Conveyor Belt Status Detection', subtitle: 'Equipment', category: 'industrial', color: '#059669', settingType: 'conveyorDetectionSettings' },
   { name: 'Crusher Status Detection', subtitle: 'Equipment', category: 'industrial', color: '#0d9488', settingType: 'crusherDetectionSettings' },
   { name: 'Cylinder Detection', subtitle: 'Equipment', category: 'industrial', color: '#0891b2', settingType: 'cylinderDetectionSettings' },
+  { name: 'Working at Height Detection', subtitle: 'Industrial safety', category: 'industrial', color: '#f59e0b', settingType: 'workingAtHeightDetectionSettings' },
+  { name: 'Oil Leakage Detection', subtitle: 'Leak hazard', category: 'industrial', color: '#06b6d4', settingType: 'oilLeakageDetectionSettings' },
+  { name: 'Gunny Bags/Materials Wrong Location Detection', subtitle: 'Material placement', category: 'industrial', color: '#8b5cf6', settingType: 'gunnyBagsMaterialsWrongLocationDetectionSettings' },
+  { name: 'Sand, Dust, Waste & Scrap Disposal Detection', subtitle: 'Waste disposal', category: 'industrial', color: '#78716c', settingType: 'sandDustWasteScrapDisposalDetectionSettings' },
+  { name: 'Unauthorized Animal Entry Detection', subtitle: 'Animal entry', category: 'industrial', color: '#ef4444', settingType: 'unauthorizedAnimalEntryDetectionSettings' },
+  { name: 'Spills, Dirty or Messy Areas Detection', subtitle: 'Housekeeping', category: 'industrial', color: '#14b8a6', settingType: 'spillsDirtyMessyAreasDetectionSettings' },
   { name: 'Light Detection', subtitle: 'Illumination', category: 'industrial', color: '#84cc16', settingType: 'lightDetectionSettings' },
 ];
 

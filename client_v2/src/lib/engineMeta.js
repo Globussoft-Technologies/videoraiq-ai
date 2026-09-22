@@ -35,6 +35,12 @@ const ENGINE_META = {
   personfallsickdetection: { short: 'FALL', name: 'Person Fall/Sick Detection' },
   fallsick: { short: 'FALL', name: 'Person Fall/Sick Detection' },
   fall: { short: 'FALL', name: 'Person Fall/Sick Detection' },
+  workingatheightdetection: { short: 'WAH', name: 'Working at Height Detection' },
+  oilleakagedetection: { short: 'OIL', name: 'Oil Leakage Detection' },
+  gunnybagsmaterialswronglocationdetection: { short: 'LOC', name: 'Gunny Bags/Materials Wrong Location Detection' },
+  sanddustwastescrapdisposaldetection: { short: 'WASTE', name: 'Sand, Dust, Waste & Scrap Disposal Detection' },
+  unauthorizedanimalentrydetection: { short: 'ANML', name: 'Unauthorized Animal Entry Detection' },
+  spillsdirtymessyareasdetection: { short: 'MESSY', name: 'Spills, Dirty or Messy Areas Detection' },
 };
 
 /** Human-readable short/name for a raw incidentType/detection-type string. */

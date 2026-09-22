@@ -876,6 +876,18 @@ export default function Detections() {
             ? 'fire smoke flame flames hazard burn flare early warning full frame'
             : detectionType === 'personFallSickDetectionSettings'
             ? 'fall sick person fall medical slip trip collapse posture health distress faint full frame'
+            : detectionType === 'workingAtHeightDetectionSettings'
+            ? 'working at height elevated work industrial safety'
+            : detectionType === 'oilLeakageDetectionSettings'
+            ? 'oil leakage leak spill floor hazard'
+            : detectionType === 'gunnyBagsMaterialsWrongLocationDetectionSettings'
+            ? 'gunny bags materials wrong location misplaced'
+            : detectionType === 'sandDustWasteScrapDisposalDetectionSettings'
+            ? 'sand dust waste scrap disposal'
+            : detectionType === 'unauthorizedAnimalEntryDetectionSettings'
+            ? 'unauthorized animal entry intrusion'
+            : detectionType === 'spillsDirtyMessyAreasDetectionSettings'
+            ? 'spills dirty messy areas housekeeping'
             : '';
         const haystack = [
           m.name,
