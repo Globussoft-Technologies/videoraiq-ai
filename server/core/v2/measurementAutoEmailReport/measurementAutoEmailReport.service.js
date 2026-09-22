@@ -34,12 +34,12 @@ const HEADERS = [
   "#", "Order", "Order Item", "Ref", "SKU", "Model",
   "Printed LxWxH (in)", "Measured LxWxH (in)", "Measured raw (DS)", "Unit",
   "Dev L (in)", "Dev W (in)", "Dev H (in)", "Confidence", "Match %",
-  "Station", "When", "Result", "Snapshot", "Measurement Image",
+  "Station", "Status", "When", "Result", "Snapshot", "Measurement Image",
 ];
 
 // Relative column widths for the PDF table (must have one entry per HEADER).
 const PDF_COL_WEIGHTS = [
-  3, 12, 12, 8, 10, 8, 13, 13, 13, 4, 7, 7, 7, 7, 6, 7, 15, 8, 9, 9,
+  3, 12, 12, 8, 10, 8, 13, 13, 13, 4, 7, 7, 7, 7, 6, 7, 7, 15, 8, 9, 9,
 ];
 
 const SNAP_LINK_TEXT = "View image";
@@ -138,6 +138,9 @@ async function fetchMeasurementRows(report, timezone) {
       ),
     };
   }
+  if (["pending", "accepted", "rejected"].includes(report.recordStatus)) {
+    match.status = report.recordStatus;
+  }
 
   const docs = await MeasurementIncident.find(match)
     .sort({ dsProcessedAt: -1, createdAt: -1 })
@@ -180,7 +183,7 @@ function toCells(r, i, { snap = "text", withSnaps = true } = {}) {
     r.devL, r.devB, r.devH,
     r.confidence != null ? Number(r.confidence).toFixed(2) : "—",
     matchPctCell(r),
-    r.station, r.dateTime || r.time, r.result,
+    r.station, r.recordStatus || "—", r.dateTime || r.time, r.result,
   ];
   if (withSnaps) {
     cells.push(linkCell(snapUrlOf(r), snap));
@@ -810,13 +813,18 @@ function dueKey(report, now = moment()) {
   const timezone = reportTimezone(report);
   const local = now.clone().tz(timezone);
   const [hour, minute] = (report.schedule.time || "07:00").split(":").map(Number);
-  if (local.hour() < hour || (local.hour() === hour && local.minute() < minute)) return null;
+  if (report.schedule.frequency !== "custom" && (local.hour() < hour || (local.hour() === hour && local.minute() < minute))) return null;
   const dateKey = local.format("YYYY-MM-DD");
   if (report.schedule.frequency === "daily") return `daily:${dateKey}`;
   if (report.schedule.frequency === "weekly") return local.day() === report.schedule.weekday ? `weekly:${dateKey}` : null;
   if (report.schedule.frequency === "monthly") return local.date() === report.schedule.dayOfMonth ? `monthly:${dateKey}` : null;
-  const sendDate = moment(report.schedule.endDate).tz(timezone).add(1, "day").format("YYYY-MM-DD");
-  return dateKey >= sendDate ? `custom:${report._id}` : null;
+  // Custom reports are one-shot runs at the selected time on the selected
+  // start date. Compare the complete local datetime so a report scheduled for
+  // today is not rejected because of UTC/date-boundary conversion. If the
+  // server was briefly down, the date comparison lets it send once afterward.
+  const start = moment(report.schedule.startDate).tz(timezone).startOf("day");
+  start.hour(hour).minute(minute).second(0).millisecond(0);
+  return local.valueOf() >= start.valueOf() ? `custom:${report._id}` : null;
 }
 
 /* ─────────────── controller surface ─────────────── */

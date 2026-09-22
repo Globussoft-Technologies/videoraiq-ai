@@ -103,8 +103,15 @@ export const isScheduleActiveNow = (schedule) => {
  * overrideUntil both read as "no" — so the schedule governs exactly as it did
  * before, with no migration.
  */
-export const isManualOverrideActive = (detection, now = new Date()) => {
+export const isManualOverrideActive = (detection, schedule, now = new Date()) => {
   const until = detection?.overrideUntil;
+  // An Always schedule has no boundary at which a manual choice can expire.
+  // Keep the explicit choice active until the user changes it again (or the
+  // schedule is removed). The old two-argument call remains time-bound only,
+  // which preserves the behaviour of documents created before this support.
+  if (!until && schedule?.mode === "always" && typeof detection?.overrideState === "boolean") {
+    return true;
+  }
   if (!until) return false;
   const expiry = new Date(until).getTime();
   return Number.isFinite(expiry) && expiry > now.getTime();
@@ -133,10 +140,12 @@ export const manualOverrideFor = (schedule, enable, now = new Date()) => {
   if (isScheduleActiveNow(schedule) === enable) return none;
 
   const until = nextScheduleBoundary(schedule, now);
-  // A schedule with no boundary inside a week (always-on, or empty) gives the
-  // override nothing to expire against; leave the schedule in charge rather
-  // than granting an unbounded one.
-  if (!until) return none;
+  // Always has no boundary, so the manual choice remains in force until the
+  // user changes it again. Other boundary-less schedules remain unchanged.
+  if (!until) {
+    if (schedule?.mode === "always") return { overrideState: enable, overrideUntil: null };
+    return none;
+  }
 
   return { overrideState: enable, overrideUntil: until };
 };
@@ -401,7 +410,7 @@ export const resolveDesiredDetectionState = async (
   // returned so callers can show what will resume, and so the toggle path can
   // ask the schedule's own verdict without the override answering for it.
   const detection = channel?.detections?.[settingType];
-  if (isManualOverrideActive(detection)) {
+  if (isManualOverrideActive(detection, schedule)) {
     return {
       active: detection.overrideState === true,
       schedule,

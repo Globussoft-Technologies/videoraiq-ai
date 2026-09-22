@@ -63,6 +63,7 @@ const measurementAutoEmailReportSchema = new mongoose.Schema(
       enum: ["full", "pass", "mismatch", "qrerror"],
       default: "full",
     },
+    recordStatus: { type: String, enum: ["all", "pending", "accepted", "rejected"], default: "all" },
     includeSnapshots: { type: Boolean, default: true },
     mismatchOnly: { type: Boolean, default: false },
     enabled: { type: Boolean, default: true },

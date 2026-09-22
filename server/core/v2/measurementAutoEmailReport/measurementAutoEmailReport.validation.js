@@ -45,6 +45,7 @@ const base = {
   target,
   formats: Joi.array().items(Joi.string().valid(...FORMATS)).min(1).unique(),
   reportType: Joi.string().valid(...REPORT_TYPES),
+  recordStatus: Joi.string().valid("all", "pending", "accepted", "rejected").default("all"),
   includeSnapshots: Joi.boolean(),
   // Deprecated — the `reportType` preset (mismatch) now covers this. Still
   // accepted so older clients / stored payloads don't 400; it is ignored.

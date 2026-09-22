@@ -144,10 +144,10 @@ describe("manualOverrideFor", () => {
     });
   });
 
-  it("records nothing for an always-on schedule, which has no boundary to lapse at", () => {
+  it("keeps a manual choice for an always-on schedule, which has no boundary to lapse at", () => {
     atKolkata("10:30");
     expect(manualOverrideFor({ mode: "always" }, false)).toEqual({
-      overrideState: null,
+      overrideState: false,
       overrideUntil: null,
     });
   });

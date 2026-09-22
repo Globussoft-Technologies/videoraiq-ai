@@ -166,11 +166,13 @@ function comparisonResult(doc) {
 
   let status;
   if (doc.status === "rejected") status = "mismatch";
-  else if (doc.status === "pending") status = "qrerr";
-  else if (!completeComparison) status = "mismatch";
+  // A pending database status is only a QR error when there is no complete
+  // dimensional comparison. Once measured L/W/H and confidence are present,
+  // the actual dimensions determine pass vs mismatch.
+  else if (!completeComparison) status = doc.status === "pending" ? "qrerr" : "mismatch";
   else status = devFrac > 1 ? "mismatch" : "pass";
 
-  return { meta, md, printed, measured, dev, devFrac, matchPct, status };
+  return { meta, md, printed, measured, dev, devFrac, matchPct, status, completeComparison };
 }
 
 /**
@@ -225,7 +227,7 @@ function toRow(doc, timezone) {
     // Share of the per-axis tolerance the worst axis uses, capped at 100%
     // (at or beyond tolerance it's a mismatch either way; the raw ratio is noisy).
     devPct:
-      doc.status === "pending"
+      status === "qrerr"
         ? "QR unread"
         : `${Math.min(100, Math.round(devFrac * 100))}% of tol.`,
     devFrac,
@@ -235,6 +237,7 @@ function toRow(doc, timezone) {
     time: when ? moment(when).tz(timezone).format("HH:mm:ss") : "—",
     date: when ? moment(when).tz(timezone).format("DD MMM YYYY") : "—",
     dateTime: when ? moment(when).tz(timezone).format("DD MMM YYYY, HH:mm:ss") : "—",
+    recordStatus: doc.status || "—",
     status,
     confidence,
     // DS confidence below this reads as "don't trust the numbers without the
@@ -272,8 +275,8 @@ function buildMatch(req, adminId) {
       : s;
   }
   if (req.query.sku && req.query.sku !== "all") match.qrSku = req.query.sku;
-  if (["accepted", "pending", "rejected"].includes(req.query.dbStatus)) {
-    match.status = req.query.dbStatus;
+  if (["accepted", "pending", "rejected"].includes(req.query.recordStatus)) {
+    match.status = req.query.recordStatus;
   }
   if (req.query.q) {
     const rx = new RegExp(String(req.query.q).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
@@ -329,7 +332,7 @@ function skuMismatchRows(docs, q = "") {
   const skuMap = new Map();
 
   for (const doc of docs) {
-    const { status } = deviationOf(doc);
+    const { status, completeComparison } = comparisonResult(doc);
     const meta = doc.qrMetadata || {};
     const sku = doc.qrSku || meta.sku || "—";
     if (!sku || sku === "—") continue;
@@ -345,7 +348,10 @@ function skuMismatchRows(docs, q = "") {
       skuMap.get(sku) ||
       { sku, model, declared, count: 0, fails: 0, mL: 0, mW: 0, mH: 0, mN: 0 };
     s.count += 1;
-    if (status === "mismatch") s.fails += 1;
+    // A SKU rate describes label-vs-measured agreement. A record without a
+    // complete measurement cannot agree with the label, so it is a mismatch
+    // for this rate even when its operational status remains `qrerr`.
+    if (status === "mismatch" || !completeComparison) s.fails += 1;
     if (!s.declared && declared) s.declared = declared;
 
     const { measured: mIn } = comparisonValues(doc);

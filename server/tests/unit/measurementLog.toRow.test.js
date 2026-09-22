@@ -174,4 +174,24 @@ describe("measurementLog toRow — measured dimension normalisation", () => {
     expect(devFrac).toBeGreaterThan(1);
     expect(status).toBe("mismatch");
   });
+
+  it("derives pass or mismatch from measurements even when the incident is still pending", () => {
+    const pass = toRow({
+      _id: "pending-with-measurement-pass",
+      status: "pending",
+      qrMetadata: label,
+      measuredData: { length: 182.9, breadth: 106.7, height: 12.8, confidence: 0.9 },
+    }, "Asia/Kolkata");
+    const mismatch = toRow({
+      _id: "pending-with-measurement-mismatch",
+      status: "pending",
+      qrMetadata: label,
+      measuredData: { length: 190, breadth: 106.7, height: 12.8, confidence: 0.9 },
+    }, "Asia/Kolkata");
+
+    expect(pass.status).toBe("pass");
+    expect(mismatch.status).toBe("mismatch");
+    expect(pass.devPct).not.toBe("QR unread");
+    expect(mismatch.devPct).not.toBe("QR unread");
+  });
 });
