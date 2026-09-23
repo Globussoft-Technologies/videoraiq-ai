@@ -24,6 +24,7 @@ import useHlsPlayer from '../../../hooks/useHlsPlayer';
 import { streamUrl } from '../../../lib/stream';
 import HScrollHint from '../../../components/HScrollHint';
 import { usePermissions } from '@/context/PermissionContext';
+import { isLocalSetup } from '@/utils/jwt';
 import * as XLSX from 'xlsx';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -45,9 +46,6 @@ function useIsMobile(maxWidth = 640) {
 
 // Add/Edit/Delete NVR and Manage Cameras are cloud-only actions — a local
 // setup provisions NVRs outside this UI, so these are hidden there.
-const IS_LOCAL_SETUP = import.meta.env.VITE_LOCAL_SETUP === 'true';
-const SHOW_NVR_ACTIONS = !IS_LOCAL_SETUP;
-
 function statusColor(status) {
   const s = (status || '').toLowerCase();
   if (s === 'online' || s === 'active') return '#22c55e';
@@ -423,6 +421,7 @@ function ChannelAccessDeniedState() {
 
 // ── NVR card ─────────────────────────────────────────────────────────────────
 function NvrCard({ nvr, onEdit, onCameraSettings, onDelete }) {
+  const SHOW_NVR_ACTIONS = !isLocalSetup();
   const cameraCount = nvr.cameraCount ?? nvr.usedChannels ?? nvr.used ?? 0;
   const channelCapacity = inferChannelCapacity(nvr, cameraCount);
   const channelPercent = channelCapacity > 0
@@ -1085,7 +1084,7 @@ function friendlyErrorMessage(body, fallback) {
 // ── Add / Edit NVR wizard ───────────────────────────────────────────────────
 function AddNvrModal({ onClose, onSaved, editingNvr }) {
   const isEdit = !!editingNvr;
-  const isLocalEdit = IS_LOCAL_SETUP && isEdit;
+  const isLocalEdit = isLocalSetup() && isEdit;
   const [directMode, setDirectMode] = useState(editingNvr?.connectionMode === 'direct');
   const isMobile = useIsMobile();
 
@@ -2010,6 +2009,7 @@ function AddNvrModal({ onClose, onSaved, editingNvr }) {
 
 // ── main page ─────────────────────────────────────────────────────────────────
 export default function NVRCameras() {
+  const SHOW_NVR_ACTIONS = !isLocalSetup();
   const navigate = useNavigate();
   const { setCamHealth } = useOutletContext() || {};
   const { permissions, loading: permissionsLoading } = usePermissions();

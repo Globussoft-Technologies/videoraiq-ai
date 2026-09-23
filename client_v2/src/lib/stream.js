@@ -1,6 +1,5 @@
 import getStreamHost from '../utils/getStreamHost';
-
-const LOCAL_SETUP = import.meta.env.VITE_LOCAL_SETUP === 'true';
+import { isLocalSetup } from '../utils/jwt';
 
 /**
  * Build the HLS playlist URL for a channel, mirroring V1 (StreamModal):
@@ -13,7 +12,7 @@ export function streamUrl(channel) {
   const path = channel?.streamingUrl || channel?.StreamingUrl || channel?.config?.StreamingUrl || '';
   if (!path) return '';
   if (/^https?:\/\//i.test(path)) return path;
-  if (LOCAL_SETUP) return `/${path.replace(/^\/+/, '')}`;
+  if (isLocalSetup()) return `/${path.replace(/^\/+/, '')}`;
   const host = getStreamHost();
   if (!host) return path;
   return `${host.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;

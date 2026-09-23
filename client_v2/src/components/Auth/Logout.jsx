@@ -2,9 +2,9 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { logout } from '@/hooks/logout';
 import { useAuth } from '@/context/AuthContext';
+import { isLocalSetup } from '@/utils/jwt';
 
 const envValue = (key) => String(import.meta.env[key] || '').trim();
-const isLocalSetup = () => envValue('VITE_LOCAL_SETUP').toLowerCase() === 'true';
 
 const logoutRedirectUrl = () => {
   const loginUrl = envValue('VITE_AMEMBER_LOGIN_URL');
@@ -40,10 +40,12 @@ export default function Logout() {
   useEffect(() => {
     let mounted = true;
     const signOut = async () => {
+      // Read the JWT claim before logout removes the access-token cookie.
+      const localSetup = isLocalSetup();
       await logout();
       if (!mounted) return;
       setUser(null);
-      if (isLocalSetup() && !envValue('VITE_AMEMBER_LOGIN_URL')) {
+      if (localSetup && !envValue('VITE_AMEMBER_LOGIN_URL')) {
         navigate('/admin-login', { replace: true });
       } else {
         window.location.replace(logoutRedirectUrl());

@@ -9,6 +9,7 @@ import { PInput, PEye, PButton } from "./PortalFields";
 import { userLogin, forgotPassword } from "@/page/user/Users/api/post/Index";
 import AuthLoader from "@/page/user/Users/AuthLoader";
 import { setSessionId } from "@/utils/sessionIdentity";
+import { isLocalSetup } from "@/utils/jwt";
 import "./portal.css";
 
 const url = import.meta.env.VITE_ENV;
@@ -18,7 +19,6 @@ const accessCookieName = () =>
   url === "dev" ? "dev-access-token" : url === "prod" ? "prod-access-token" : "access-token";
 
 const envValue = (key) => String(import.meta.env[key] || "").trim();
-const isLocalSetup = () => envValue("VITE_LOCAL_SETUP").toLowerCase() === "true";
 
 const adminLoginUrl = () => {
   const frontendUrl = envValue("VITE_FRONTEND").replace(/\/+$/, "");

@@ -1,6 +1,5 @@
 import axios from 'axios';
-
-const LOCAL_SETUP = import.meta.env.VITE_LOCAL_SETUP === 'true';
+import { isLocalSetup } from '../utils/jwt';
 
 /**
  * Status API routing has two modes:
@@ -48,7 +47,7 @@ function nvrDomainBase(target) {
 }
 
 function targetStatusBase(target) {
-  if (LOCAL_SETUP) {
+  if (isLocalSetup()) {
     const domainBase = nvrDomainBase(target);
     if (domainBase) return domainBase;
   }
