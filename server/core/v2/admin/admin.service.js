@@ -900,7 +900,7 @@ class AdminService {
           isModuleVisible(module, permissions) &&
           isModuleLogEnabled(module, logs)
       )).filter((module) => matchesSearch(module, search))
-        .map(({ key, label, group, path }) => ({ key, label, group, path }));
+        .map(({ key, label, group, path, description }) => ({ key, label, group, path, description }));
 
       // Never cache this. The whole point of resolving it server-side is that a
       // permission revoked a minute ago is reflected immediately — a browser or

@@ -53,6 +53,7 @@ import adminStorageRoutes from "../../core/v2/adminStorage/adminStorage.routes.j
 import measurementCalibrationRoutes from "../../core/v2/measurementCalibration/measurementCalibration.routes.js";
 import verifyMeasurementAuth from "../../core/v2/measurementIncidents/measurementAuth.middleware.js";
 import amemberIntegrationRoutes from "../../core/v2/integrations/amember.routes.js";
+import assistantRoutes from "../../core/v2/assistant/assistant.routes.js";
 
 const router = express.Router();
 
@@ -106,6 +107,7 @@ router.use("/entry", verifyToken, entryRoutes);
 router.use("/vehicle", verifyToken, vehicleRoutes);
 router.use("/locations", verifyToken, locationRoutes);
 router.use("/analytics", verifyToken, analyticsRoutes);
+router.use("/assistant", verifyToken, assistantRoutes);
 // faceImages.routes.js applies verifyToken per-route, so mount plain (like v1).
 router.use("/faceImages", faceImagesRoutes);
 // Telegram: /link-code + /unlink are authed inside the router; /webhook is

@@ -30,12 +30,13 @@ describe("tour module catalogue", () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it("gives every module a key, label, path and group", () => {
+  it("gives every module assistant-ready metadata", () => {
     for (const module of TOUR_MODULES) {
       expect(module.key, JSON.stringify(module)).toBeTruthy();
       expect(module.label, module.key).toBeTruthy();
       expect(module.path, module.key).toBeTruthy();
       expect(module.group, module.key).toBeTruthy();
+      expect(module.description, `${module.key} needs an assistant description`).toBeTruthy();
     }
   });
 
@@ -64,6 +65,19 @@ describe("tour module catalogue", () => {
     expect(
       stale,
       `tourModules.js lists modules nav.config.js no longer has: ${stale.join(", ")}`,
+    ).toEqual([]);
+
+    // Hidden prototype-only modules are intentionally absent from the server
+    // catalogue. Every visible addition must be registered here so search,
+    // tours and the assistant cannot silently drift from the sidebar.
+    const intentionallyHidden = new Set(["faces"]);
+    const serverKeys = new Set(TOUR_MODULES.filter((m) => !m.tourOnly).map((m) => m.key));
+    const missing = [...clientKeys].filter(
+      (key) => !intentionallyHidden.has(key) && !serverKeys.has(key),
+    );
+    expect(
+      missing,
+      `nav.config.js has modules missing from tourModules.js: ${missing.join(", ")}`,
     ).toEqual([]);
 
     // And every label must match, so a rename on one side is caught too.

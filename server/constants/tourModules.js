@@ -12,7 +12,61 @@
  * permission fields mirror nav.config.js so the filter here produces exactly
  * the same visible set the sidebar does.
  */
-export const TOUR_MODULES = [
+const MODULE_DESCRIPTIONS = {
+  "live-demo": "Explore representative monitoring, detection, alert and incident workflows using demonstration data without affecting production cameras.",
+  overview: "View real-time operational totals and health indicators across the organisation's sites.",
+  wall: "Monitor multiple authorized camera streams together in a live video grid.",
+  camera: "Review recorded camera footage and seek to relevant events.",
+  alerts: "Review detection alerts and their visual evidence, severity and current status.",
+  incidents: "Investigate, report and resolve detection incidents across authorized cameras.",
+  analytics: "Explore detection trends, activity patterns, heatmaps and camera performance.",
+  measurement: "Compare declared and measured mattress dimensions, deviations, exports and reports.",
+  "logs-records": "Open the operational logs and records available to the current role.",
+  attendance: "Review face-recognition check-ins, check-outs and calculated working hours.",
+  access: "Audit recognized and unrecognized entry activity captured by access cameras.",
+  "tagged-users": "Review identities that operators manually associated with detected people.",
+  "detected-users": "Review detected face folders and tag or remove detections.",
+  "person-count": "Review zone occupancy and person-count measurements over time.",
+  "desk-absence": "Review workstation or seat-absence detections.",
+  anpr: "Review vehicle entry, exit and number-plate recognition records.",
+  "sleep-activity": "Review sleeping and awake-state detection events.",
+  conveyor: "Review conveyor load and operating-state detections.",
+  "vehicle-obstruction": "Review vehicles detected as blocking monitored paths or areas.",
+  "vehicle-count": "Review vehicle throughput and count measurements over time.",
+  car: "Review detected vehicle make, model and year records.",
+  "vehicle-check-in-out": "Review vehicle custody and check-in/check-out crossing history.",
+  crusher: "Review crusher operating-state detections.",
+  cylinder: "Review cylinder stacking detections and related records.",
+  "line-crossing": "Review boundary and line-crossing events.",
+  "water-spill": "Review water-spillage and floor-hazard detections.",
+  "unauthorized-access": "Review restricted-zone entry detections.",
+  "fire-smoke": "Review fire and smoke detections.",
+  "person-fall-sick": "Review detected falls and sickness-related events.",
+  "working-at-height": "Review unsafe work-at-height detections.",
+  "oil-leakage": "Review oil leakage and related floor-hazard detections.",
+  "equipment-oil-leakage": "Review oil leakage detections originating from equipment.",
+  "vehicle-fuel-oil-leakage": "Review fuel or oil leakage detections originating from vehicles.",
+  "wrong-location": "Review materials or gunny bags detected in incorrect locations.",
+  "waste-disposal": "Review sand, dust, waste and scrap-disposal detections.",
+  "animal-entry": "Review unauthorized animal-entry detections.",
+  "messy-area": "Review spill, dirty-area and messy-area detections.",
+  cameras: "Configure NVRs, cameras, streams and camera inventory.",
+  "detection-settings": "Enable and configure AI detection types for cameras.",
+  "measurement-calibration": "Capture a RealSense surface and configure the dimensional-measurement zone.",
+  users: "Manage application users and their assigned roles.",
+  settings: "Manage platform, alert, privacy and integration settings.",
+  "raspberry-pi-devices": "Review and approve Raspberry Pi station pairing requests.",
+  roles: "Define roles and control per-module permissions.",
+  locations: "Manage organisation locations used to group operational resources.",
+  departments: "Manage departments and teams.",
+  shifts: "Create shift rules, configure working days and assign staff to shifts.",
+  "shift-schedule": "View and manage employee shift assignments across the schedule.",
+  register: "Create an employee profile and capture enrollment images.",
+  recipients: "Configure verified recipients for detection alerts.",
+  "auto-email-reports": "Schedule recurring attendance and operational email reports.",
+};
+
+const TOUR_MODULE_DEFINITIONS = [
   { "key": "live-demo", "label": "Live Demo", "path": "live-demo", "group": "EXPERIENCE" },
   { "key": "overview", "label": "Command Center", "path": "dashboard", "group": "MONITOR", "permissionKey": "dashboard" },
   { "key": "wall", "label": "Live Wall", "path": "live", "group": "MONITOR", "permissionKey": "LIVE" },
@@ -37,13 +91,23 @@ export const TOUR_MODULES = [
   { "key": "car", "label": "Car Logs", "path": "logs/car", "permissionKey": "logs", "permissionSubKey": "carLogs", "logsConfigKey": "carLogs", "group": "LOGS & RECORDS" },
   { "key": "vehicle-check-in-out", "label": "Vehicle Check-In/Out Logs", "path": "logs/vehicle-check-in-out", "permissionKey": "logs", "permissionSubKey": "vehicleCheckInOutLogs", "logsConfigKey": "vehicleCheckInOutLogs", "group": "LOGS & RECORDS" },
   { "key": "crusher", "label": "Crusher Logs", "path": "logs/crusher", "permissionKey": "logs", "permissionSubKey": "crusherLogs", "logsConfigKey": "crusherLogs", "group": "LOGS & RECORDS" },
+  { "key": "cylinder", "label": "Cylinder Stacking Logs", "path": "logs/cylinder", "permissionKey": "logs", "permissionSubKey": "cylinderLogs", "logsConfigKey": "cylinderLogs", "group": "LOGS & RECORDS" },
   { "key": "line-crossing", "label": "Line Crossing Logs", "path": "logs/line-crossing", "permissionKey": "logs", "permissionSubKey": "lineCrossingLogs", "logsConfigKey": "lineCrossingLogs", "group": "LOGS & RECORDS" },
   { "key": "water-spill", "label": "Water Spill Logs", "path": "logs/water-spill", "permissionKey": "logs", "permissionSubKey": "waterSpillLogs", "logsConfigKey": "waterSpillLogs", "group": "LOGS & RECORDS" },
   { "key": "unauthorized-access", "label": "Unauthorized Access Logs", "path": "logs/unauthorized-access", "permissionKey": "logs", "permissionSubKey": "unauthorizedAccessLogs", "logsConfigKey": "unauthorizedAccessLogs", "group": "LOGS & RECORDS" },
   { "key": "fire-smoke", "label": "Fire & Smoke Logs", "path": "logs/fire-smoke", "permissionKey": "logs", "permissionSubKey": "fireSmokeLogs", "logsConfigKey": "fireSmokeLogs", "group": "LOGS & RECORDS" },
   { "key": "person-fall-sick", "label": "Person Fall/Sick Logs", "path": "logs/person-fall-sick", "permissionKey": "logs", "permissionSubKey": "personFallSickLogs", "logsConfigKey": "personFallSickLogs", "group": "LOGS & RECORDS" },
+  { "key": "working-at-height", "label": "Working at Height Logs", "path": "logs/working-at-height", "permissionKey": "logs", "permissionSubKey": "workingAtHeightLogs", "logsConfigKey": "workingAtHeightLogs", "group": "LOGS & RECORDS" },
+  { "key": "oil-leakage", "label": "Oil Leakage Logs", "path": "logs/oil-leakage", "permissionKey": "logs", "permissionSubKey": "oilLeakageLogs", "logsConfigKey": "oilLeakageLogs", "group": "LOGS & RECORDS" },
+  { "key": "equipment-oil-leakage", "label": "Equipment Oil Leakage Logs", "path": "logs/equipment-oil-leakage", "permissionKey": "logs", "permissionSubKey": "equipmentOilLeakageLogs", "logsConfigKey": "equipmentOilLeakageLogs", "group": "LOGS & RECORDS" },
+  { "key": "vehicle-fuel-oil-leakage", "label": "Vehicle Fuel/Oil Leakage Logs", "path": "logs/vehicle-fuel-oil-leakage", "permissionKey": "logs", "permissionSubKey": "vehicleFuelOilLeakageLogs", "logsConfigKey": "vehicleFuelOilLeakageLogs", "group": "LOGS & RECORDS" },
+  { "key": "wrong-location", "label": "Gunny Bags/Materials Wrong Location Logs", "path": "logs/wrong-location", "permissionKey": "logs", "permissionSubKey": "wrongLocationLogs", "logsConfigKey": "wrongLocationLogs", "group": "LOGS & RECORDS" },
+  { "key": "waste-disposal", "label": "Sand, Dust, Waste & Scrap Disposal Logs", "path": "logs/waste-disposal", "permissionKey": "logs", "permissionSubKey": "wasteDisposalLogs", "logsConfigKey": "wasteDisposalLogs", "group": "LOGS & RECORDS" },
+  { "key": "animal-entry", "label": "Unauthorized Animal Entry Logs", "path": "logs/animal-entry", "permissionKey": "logs", "permissionSubKey": "animalEntryLogs", "logsConfigKey": "animalEntryLogs", "group": "LOGS & RECORDS" },
+  { "key": "messy-area", "label": "Messy Area Logs", "path": "logs/messy-area", "permissionKey": "logs", "permissionSubKey": "messyAreaLogs", "logsConfigKey": "messyAreaLogs", "group": "LOGS & RECORDS" },
   { "key": "cameras", "label": "Cameras & NVRs", "path": "cameras", "group": "CONFIGURE", "permissionKey": "NVR" },
   { "key": "detection-settings", "label": "Detections", "path": "detection-settings", "group": "CONFIGURE", "permissionKey": "detectionSettings" },
+  { "key": "measurement-calibration", "label": "Measurement Calibration", "path": "measurement-calibration", "group": "CONFIGURE", "permissionKey": "settings" },
   { "key": "users", "label": "User Role Detail", "path": "users", "group": "ADMINISTER", "permissionKey": "Users" },
   { "key": "settings", "label": "Settings", "path": "settings", "group": "ADMINISTER", "permissionKey": "settings" },
   { "key": "raspberry-pi-devices", "label": "Raspberry Pi Devices", "path": "raspberry-pi-devices", "group": "ADMINISTER", "permissionKey": "settings" },
@@ -56,6 +120,11 @@ export const TOUR_MODULES = [
   { "key": "recipients", "label": "Alert Recipients", "path": "recipients", "group": "SETTINGS", "permissionKey": "recipients" },
   { "key": "auto-email-reports", "label": "Auto Email Reports", "path": "auto-email-reports", "group": "SETTINGS", "permissionKey": "autoEmailReports" }
 ];
+
+export const TOUR_MODULES = TOUR_MODULE_DEFINITIONS.map((module) => ({
+  ...module,
+  description: MODULE_DESCRIPTIONS[module.key],
+}));
 
 /**
  * Role presets for permission configs stored before the `settings` module

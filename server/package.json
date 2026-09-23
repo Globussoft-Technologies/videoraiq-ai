@@ -29,6 +29,7 @@
   "description": "",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.864.0",
+    "@google/genai": "^2.24.0",
     "@sendgrid/mail": "^8.1.5",
     "archiver": "^8.0.0",
     "async-mutex": "^0.5.0",
