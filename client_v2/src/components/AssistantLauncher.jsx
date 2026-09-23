@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { MessageCircle } from 'lucide-react';
 import { LAUNCHER_LABEL } from '@/page/user/Assistant/assistant.copy';
 
@@ -14,6 +14,7 @@ import { LAUNCHER_LABEL } from '@/page/user/Assistant/assistant.copy';
  */
 export default function AssistantLauncher({ to = '/assistant' }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [hover, setHover] = useState(false);
 
   return (
@@ -31,7 +32,11 @@ export default function AssistantLauncher({ to = '/assistant' }) {
     >
       <button
         type="button"
-        onClick={() => navigate(to)}
+        onClick={() =>
+          navigate(to, {
+            state: { assistantReturnTo: `${location.pathname}${location.search}${location.hash}` },
+          })
+        }
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         aria-label={`Open ${LAUNCHER_LABEL}`}

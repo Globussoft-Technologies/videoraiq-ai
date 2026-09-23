@@ -1,33 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { askAssistant } from '@/helpers/assistant';
+import {
+  askAssistant,
+  deleteAssistantConversation,
+  getAssistantConversation,
+  listAssistantConversations,
+  renameAssistantConversation,
+} from '@/helpers/assistant';
 
-/**
- * Conversation state for the AI Assistant page.
- *
- * Threads live in localStorage rather than on the server: there is no
- * assistant API yet, so persisting client-side is what makes "Chat history"
- * survive a reload today. When the backend lands, swap the load/save pair for
- * fetches — the rest of the hook's surface (newChat/selectChat/send) doesn't
- * change.
- */
-const STORE_KEY = 'vq_assistant_conversations';
 const ACTIVE_KEY = 'vq_assistant_active_id';
-/** Keeps one runaway paste from bloating localStorage; the rail ellipsises anyway. */
-const MAX_TITLE_CHARS = 90;
+const PAGE_SIZE = 10;
 
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
     : `c_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-
-function loadConversations() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
-    return Array.isArray(raw) ? raw : [];
-  } catch {
-    return [];
-  }
-}
 
 function loadActiveId() {
   try {
@@ -38,46 +24,127 @@ function loadActiveId() {
 }
 
 export function useConversations() {
-  const [conversations, setConversations] = useState(loadConversations);
+  const [conversations, setConversations] = useState([]);
   const [activeId, setActiveId] = useState(loadActiveId);
+  const [messages, setMessages] = useState([]);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPagination, setHistoryPagination] = useState({
+    page: 1,
+    limit: PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  });
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [threadLoading, setThreadLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const abortRef = useRef(null);
+  const controllersRef = useRef(new Set());
+  const activeIdRef = useRef(activeId);
+  const selectedRequestRef = useRef(0);
 
-  useEffect(() => {
+  const loadHistoryPage = useCallback(async (page = 1) => {
+    setHistoryLoading(true);
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(conversations));
+      const result = await listAssistantConversations({ page, limit: PAGE_SIZE });
+      setConversations(result?.conversations || []);
+      setHistoryPagination(result?.pagination || { page, limit: PAGE_SIZE, total: 0, totalPages: 1 });
     } catch {
-      /* ignore quota / private-mode failures */
+      setConversations([]);
+      setHistoryPagination({ page, limit: PAGE_SIZE, total: 0, totalPages: 1 });
+    } finally {
+      setHistoryLoading(false);
     }
-  }, [conversations]);
+  }, []);
 
   useEffect(() => {
+    loadHistoryPage(historyPage);
+  }, [historyPage, loadHistoryPage]);
+
+  useEffect(() => {
+    activeIdRef.current = activeId;
     try {
       if (activeId) localStorage.setItem(ACTIVE_KEY, activeId);
       else localStorage.removeItem(ACTIVE_KEY);
     } catch {
-      /* ignore */
+      // Storage availability must not stop the assistant from working.
     }
   }, [activeId]);
 
-  // Abort an in-flight request if the page unmounts mid-answer.
-  useEffect(() => () => abortRef.current?.abort(), []);
+  const selectChat = useCallback(async (id) => {
+    if (!id) return;
+    // Let a response for the previous chat finish in the background. Its
+    // completion refreshes history but cannot replace this chat's messages.
+    abortRef.current = null;
+    setSending(false);
+    const requestId = ++selectedRequestRef.current;
+    activeIdRef.current = id;
+    setActiveId(id);
+    setThreadLoading(true);
+    try {
+      const conversation = await getAssistantConversation(id);
+      if (requestId === selectedRequestRef.current) setMessages(conversation?.messages || []);
+    } catch {
+      if (requestId === selectedRequestRef.current) {
+        setActiveId(null);
+        setMessages([]);
+      }
+    } finally {
+      if (requestId === selectedRequestRef.current) setThreadLoading(false);
+    }
+  }, []);
 
-  const active = conversations.find((c) => c.id === activeId) || null;
-  const messages = active?.messages || [];
+  useEffect(() => {
+    if (activeId) selectChat(activeId);
+    // Restore the last open server-side chat once when the page mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  /**
-   * "New chat" only clears the active selection — no empty thread is written.
-   * A conversation is created on the first actual send, so the history rail
-   * never accumulates untitled 0-message rows.
-   */
-  const newChat = useCallback(() => setActiveId(null), []);
+  useEffect(
+    () => () => {
+      controllersRef.current.forEach((controller) => controller.abort());
+      controllersRef.current.clear();
+    },
+    []
+  );
 
-  const selectChat = useCallback((id) => setActiveId(id), []);
+  const newChat = useCallback(() => {
+    ++selectedRequestRef.current;
+    // Starting another chat must not discard an answer already being
+    // generated for the previous conversation.
+    abortRef.current = null;
+    setSending(false);
+    setThreadLoading(false);
+    activeIdRef.current = null;
+    setActiveId(null);
+    setMessages([]);
+  }, []);
 
-  const deleteChat = useCallback((id) => {
-    setConversations((prev) => prev.filter((c) => c.id !== id));
-    setActiveId((cur) => (cur === id ? null : cur));
+  const deleteChat = useCallback(
+    async (id) => {
+      await deleteAssistantConversation(id);
+      if (activeId === id) {
+        abortRef.current?.abort();
+        abortRef.current = null;
+        setSending(false);
+        ++selectedRequestRef.current;
+        activeIdRef.current = null;
+        setActiveId(null);
+        setMessages([]);
+      }
+
+      const nextPage = conversations.length === 1 && historyPage > 1 ? historyPage - 1 : historyPage;
+      if (nextPage !== historyPage) setHistoryPage(nextPage);
+      else await loadHistoryPage(nextPage);
+    },
+    [activeId, conversations.length, historyPage, loadHistoryPage]
+  );
+
+  const renameChat = useCallback(async (id, title) => {
+    const renamed = await renameAssistantConversation(id, title);
+    setConversations((current) =>
+      current.map((conversation) => (conversation.id === id ? { ...conversation, ...renamed } : conversation))
+    );
+    return renamed;
   }, []);
 
   const stop = useCallback(() => {
@@ -91,66 +158,125 @@ export function useConversations() {
       const text = String(raw || '').trim();
       if (!text || sending) return;
 
-      const now = new Date().toISOString();
-      const userMsg = { id: uid(), role: 'user', text, at: now };
-
-      // Resolve the target thread from the current render's state (not inside a
-      // setState updater) so the updaters stay pure — StrictMode invokes them
-      // twice in dev and any side effect in there would double-fire.
-      const existing = conversations.find((c) => c.id === activeId) || null;
-      const targetId = existing?.id || uid();
-      const history = existing ? existing.messages.map(({ role, text: t }) => ({ role, text: t })) : [];
-
-      if (existing) {
-        setConversations((prev) =>
-          prev.map((c) => (c.id === targetId ? { ...c, messages: [...c.messages, userMsg], updatedAt: now } : c))
-        );
-      } else {
-        setConversations((prev) => [
-          { id: targetId, title: text.slice(0, MAX_TITLE_CHARS), messages: [userMsg], createdAt: now, updatedAt: now },
-          ...prev,
-        ]);
-        setActiveId(targetId);
-      }
-
+      const optimisticMessage = {
+        id: uid(),
+        role: 'user',
+        text,
+        at: new Date().toISOString(),
+      };
+      setMessages((current) => [...current, optimisticMessage]);
       setSending(true);
+
       const controller = new AbortController();
+      const sourceConversationId = activeId;
+      const sourceViewRequest = selectedRequestRef.current;
+      controllersRef.current.add(controller);
       abortRef.current = controller;
       try {
-        const { text: reply } = await askAssistant({ message: text, history, signal: controller.signal });
-        const at = new Date().toISOString();
-        const botMsg = { id: uid(), role: 'assistant', text: reply, at };
-        setConversations((prev) =>
-          prev.map((c) => (c.id === targetId ? { ...c, messages: [...c.messages, botMsg], updatedAt: at } : c))
-        );
-      } catch (err) {
-        // A user-triggered stop is not a failure — don't leave an error bubble.
-        const aborted = err?.name === 'AbortError' || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED';
+        const result = await askAssistant({
+          message: text,
+          conversationId: sourceConversationId,
+          signal: controller.signal,
+        });
+        const persistedId = result?.conversation?.id;
+        const stillViewingSource = sourceViewRequest === selectedRequestRef.current;
+        if (stillViewingSource) {
+          if (persistedId) {
+            activeIdRef.current = persistedId;
+            setActiveId(persistedId);
+          }
+
+          const userMessage = result?.userMessage || optimisticMessage;
+          const assistantMessage =
+            result?.assistantMessage || { id: uid(), role: 'assistant', text: result?.text || '', at: new Date().toISOString() };
+          setMessages((current) => [
+            ...current.filter((message) => message.id !== optimisticMessage.id),
+            userMessage,
+            assistantMessage,
+          ]);
+        } else if (persistedId && activeIdRef.current === persistedId) {
+          const conversation = await getAssistantConversation(persistedId);
+          setMessages(conversation?.messages || []);
+        }
+
+        if (historyPage !== 1) setHistoryPage(1);
+        else await loadHistoryPage(1);
+      } catch (error) {
+        const aborted =
+          error?.name === 'AbortError' || error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED';
         if (!aborted) {
-          const at = new Date().toISOString();
-          const errMsg = {
-            id: uid(),
-            role: 'assistant',
-            error: true,
-            at,
-            text:
-              err?.response?.data?.body?.message ||
-              err?.message ||
-              "Couldn't reach the assistant. Please try again.",
-          };
-          setConversations((prev) =>
-            prev.map((c) => (c.id === targetId ? { ...c, messages: [...c.messages, errMsg], updatedAt: at } : c))
-          );
+          const persistedId = error?.response?.data?.body?.data?.conversationId || sourceConversationId;
+          const stillViewingSource = sourceViewRequest === selectedRequestRef.current;
+          if (persistedId) {
+            try {
+              const conversation = await getAssistantConversation(persistedId);
+              if (stillViewingSource || activeIdRef.current === persistedId) {
+                activeIdRef.current = persistedId;
+                setActiveId(persistedId);
+                setMessages(conversation?.messages || []);
+              }
+            } catch {
+              if (stillViewingSource) {
+                setMessages((current) => [
+                  ...current,
+                  {
+                    id: uid(),
+                    role: 'assistant',
+                    error: true,
+                    at: new Date().toISOString(),
+                    text: error?.response?.data?.body?.message || error?.message || "Couldn't reach the assistant.",
+                  },
+                ]);
+              }
+            }
+          } else if (stillViewingSource) {
+            setMessages((current) => [
+              ...current,
+              {
+                id: uid(),
+                role: 'assistant',
+                error: true,
+                at: new Date().toISOString(),
+                text: error?.response?.data?.body?.message || error?.message || "Couldn't reach the assistant.",
+              },
+            ]);
+          }
+          if (historyPage !== 1) setHistoryPage(1);
+          else await loadHistoryPage(1);
         }
       } finally {
-        abortRef.current = null;
-        setSending(false);
+        controllersRef.current.delete(controller);
+        if (abortRef.current === controller) abortRef.current = null;
+        if (sourceViewRequest === selectedRequestRef.current) setSending(false);
       }
     },
-    [activeId, conversations, sending]
+    [activeId, historyPage, loadHistoryPage, sending]
   );
 
-  return { conversations, activeId, active, messages, sending, newChat, selectChat, deleteChat, send, stop };
+  const changeHistoryPage = useCallback((page) => {
+    setHistoryPage((current) => Math.max(1, Number(page) || current));
+  }, []);
+
+  const active = conversations.find((conversation) => conversation.id === activeId) || null;
+
+  return {
+    conversations,
+    activeId,
+    active,
+    messages,
+    sending,
+    historyLoading,
+    threadLoading,
+    historyPage,
+    historyPagination,
+    changeHistoryPage,
+    newChat,
+    selectChat,
+    deleteChat,
+    renameChat,
+    send,
+    stop,
+  };
 }
 
 export default useConversations;

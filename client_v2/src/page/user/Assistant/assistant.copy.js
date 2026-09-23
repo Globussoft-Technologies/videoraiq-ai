@@ -20,10 +20,10 @@ export const COMPOSER_FOOTNOTE = "Answers are limited to data you're authorized 
  * suggestions stay honest once the API is wired.
  */
 export const SUGGESTED_PROMPTS = [
-  'How many alerts were raised today?',
-  'Show the attendance summary for this month',
-  'Which cameras are offline right now?',
-  'Top 5 cameras by detections this week',
+  'How many incidents were detected in the last 24 hours?',
+  'Break down the last 24 hours of incidents by detection type',
+  'How many incidents are unresolved or high severity?',
+  'How many cameras have detections active right now?',
 ];
 
 /** The launcher pill label, bottom-left of every page. */

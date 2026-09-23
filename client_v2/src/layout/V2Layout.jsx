@@ -99,7 +99,10 @@ function Shell() {
   const navigate = useNavigate();
   const viewKey = currentViewKey(location.pathname);
   const meta = VIEW_META[viewKey] || VIEW_META.overview;
-  const fixedViewportPage = viewKey === 'camera';
+  // Playback and Assistant both manage their own internal scrollers. Keeping
+  // the outer shell fixed prevents the chat composer from falling below the
+  // viewport and avoids rendering the normal page footer inside the chat UI.
+  const fixedViewportPage = viewKey === 'camera' || viewKey === 'assistant';
   const isLiveDemo = viewKey === 'live-demo';
   const [hasVisitedLiveDemo, setHasVisitedLiveDemo] = useState(isLiveDemo);
 
@@ -336,7 +339,7 @@ function Shell() {
           </div>
         </div>
         {/* Hidden on the assistant's own page — nothing to launch from there. */}
-        {/* {viewKey !== 'assistant' && <AssistantLauncher />} */}
+        {viewKey !== 'assistant' && <AssistantLauncher />}
       </main>
       <AppTour />
     </div>

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, PanelLeft, PanelLeftClose } from 'lucide-react';
+import { Plus, PanelLeft, PanelLeftClose, Trash2, X } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import ChatHistoryRail from './ChatHistoryRail';
 import EmptyState from './EmptyState';
 import MessageThread from './MessageThread';
 import Composer from './Composer';
 import { useConversations } from '@/hooks/useConversations';
+import DeleteConfirmation from '@/components/DeleteConfirmation';
 
 const RAIL_KEY = 'vq_assistant_rail_open';
 /**
@@ -16,9 +19,10 @@ const RAIL_KEY = 'vq_assistant_rail_open';
 const NARROW_PX = 820;
 
 /** Slim actions row above the thread — no title, the shell header already has it. */
-function ActionsRow({ railOpen, onToggleRail, onNewChat, isNarrow }) {
+function ActionsRow({ railOpen, onToggleRail, onNewChat, onClose, isNarrow }) {
   const [toggleHover, setToggleHover] = useState(false);
   const [newHover, setNewHover] = useState(false);
+  const [closeHover, setCloseHover] = useState(false);
   const ToggleIcon = isNarrow ? PanelLeft : railOpen ? PanelLeftClose : PanelLeft;
 
   return (
@@ -91,6 +95,31 @@ function ActionsRow({ railOpen, onToggleRail, onNewChat, isNarrow }) {
         <Plus size={15} strokeWidth={2.1} />
         New chat
       </button>
+
+      <button
+        type="button"
+        onClick={onClose}
+        onMouseEnter={() => setCloseHover(true)}
+        onMouseLeave={() => setCloseHover(false)}
+        title="Close AI Assistant"
+        aria-label="Close AI Assistant"
+        style={{
+          width: 34,
+          height: 34,
+          borderRadius: 9,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flex: '0 0 auto',
+          cursor: 'pointer',
+          color: closeHover ? 'var(--tx)' : 'var(--tx2)',
+          background: closeHover ? 'var(--bg3)' : 'var(--bg2)',
+          border: `1px solid ${closeHover ? 'var(--bd2)' : 'var(--bd)'}`,
+          transition: 'background .15s, border-color .15s, color .15s',
+        }}
+      >
+        <X size={16} strokeWidth={2} />
+      </button>
     </div>
   );
 }
@@ -105,10 +134,28 @@ function ActionsRow({ railOpen, onToggleRail, onNewChat, isNarrow }) {
  * what makes a chat layout usable.
  */
 export default function AssistantPage() {
-  const { conversations, activeId, messages, sending, newChat, selectChat, deleteChat, send, stop } =
-    useConversations();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const {
+    conversations,
+    activeId,
+    messages,
+    sending,
+    historyLoading,
+    historyPage,
+    historyPagination,
+    changeHistoryPage,
+    newChat,
+    selectChat,
+    deleteChat,
+    renameChat,
+    send,
+    stop,
+  } = useConversations();
 
   const [draft, setDraft] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Measure the page, not the window — see NARROW_PX.
   const rootRef = useRef(null);
@@ -180,6 +227,36 @@ export default function AssistantPage() {
     setDraft('');
   }, [newChat]);
 
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteChat(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch (error) {
+      toast.error(error?.response?.data?.body?.message || 'Failed to delete this chat. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteChat, deleteTarget]);
+
+  const handleRename = useCallback(
+    async (id, title) => {
+      try {
+        await renameChat(id, title);
+      } catch (error) {
+        toast.error(error?.response?.data?.body?.message || 'Failed to rename this chat. Please try again.');
+        throw error;
+      }
+    },
+    [renameChat]
+  );
+
+  const handleClose = useCallback(() => {
+    const returnTo = location.state?.assistantReturnTo;
+    navigate(typeof returnTo === 'string' && !returnTo.startsWith('/assistant') ? returnTo : '/dashboard');
+  }, [location.state, navigate]);
+
   const hasThread = messages.length > 0;
 
   return (
@@ -198,17 +275,25 @@ export default function AssistantPage() {
         activeId={activeId}
         onSelect={selectChat}
         onNew={handleNewChat}
-        onDelete={deleteChat}
+        onDelete={(id) => setDeleteTarget(conversations.find((conversation) => conversation.id === id) || null)}
+        onRename={handleRename}
         isNarrow={isNarrow}
         open={isNarrow ? drawerOpen : railOpen}
         onClose={() => setDrawerOpen(false)}
+        page={historyPage}
+        pagination={historyPagination}
+        onPageChange={changeHistoryPage}
+        loading={historyLoading}
       />
 
-      <section style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <section
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden' }}
+      >
         <ActionsRow
           railOpen={railOpen}
           onToggleRail={toggleRail}
           onNewChat={handleNewChat}
+          onClose={handleClose}
           isNarrow={isNarrow}
         />
 
@@ -236,6 +321,22 @@ export default function AssistantPage() {
 
         <Composer value={draft} onChange={setDraft} onSend={handleSend} onStop={stop} sending={sending} />
       </section>
+
+      <DeleteConfirmation
+        open={!!deleteTarget}
+        title="Delete chat"
+        icon={<Trash2 className="w-7 h-7 text-[var(--crit)]" />}
+        message={
+          deleteTarget
+            ? <>Are you sure you want to delete "{deleteTarget.title}"? This chat history cannot be recovered.</>
+            : 'Are you sure you want to delete this chat?'
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        loading={deleting}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }
