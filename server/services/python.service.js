@@ -20,11 +20,19 @@ const APP_ENV = config.get("APP_ENV");
 
 const INDUSTRIAL_DETECTORS = new Set(INDUSTRIAL_SETTING_TYPES);
 
-const appendIndustrialDetectors = (detectors, modes) => {
+const appendIndustrialDetectors = (
+  detectors,
+  modes,
+  { zones, zone_configs, severity } = {},
+) => {
   for (const name of modes || []) {
     if (INDUSTRIAL_DETECTORS.has(name)) {
-      // These six DS contracts currently accept the detector discriminator only.
-      detectors.push({ name });
+      detectors.push({
+        name,
+        zone_configs,
+        zones: zones || [],
+        severity,
+      });
     }
   }
 };
@@ -647,7 +655,11 @@ class PythonService {
         });
       }
 
-      appendIndustrialDetectors(detectors, detection_modes);
+      appendIndustrialDetectors(detectors, detection_modes, {
+        zones,
+        zone_configs,
+        severity,
+      });
 
       // ❗️ Validation
       if (!detectors.length) {
@@ -912,7 +924,11 @@ class PythonService {
         });
       }
 
-      appendIndustrialDetectors(detectors, detection_modes);
+      appendIndustrialDetectors(detectors, detection_modes, {
+        zones,
+        zone_configs,
+        severity,
+      });
 
       // ❗️ Validation
       if (!detectors.length) {

@@ -43,6 +43,16 @@ import {
   stripUnlicensedDetectionsFromList,
 } from "../clientConfig/detectionLicense.service.js";
 const APP_ENV = config.get("APP_ENV");
+const isLocalAppEnv = (appEnv) => appEnv === "local" || appEnv === "onprem";
+
+const resolveAppEnv = async (userId) => {
+  if (!userId) return APP_ENV;
+  const admin = await adminModel
+    .findOne({ user_id: String(userId) })
+    .select("appEnv")
+    .lean();
+  return admin?.appEnv || APP_ENV;
+};
 
 // Licensing refusal -> HTTP. 403 with the human message the UI shows verbatim,
 // plus the machine-readable code and the cameras currently holding the slot so
@@ -1075,7 +1085,8 @@ class ChannelService {
         );
       }
 
-      const camera_id = APP_ENV === 'local' ? channel?.localChannelId :`${channel.nvrId}-${channel._id}`;
+      const effectiveAppEnv = await resolveAppEnv(channel?.userId);
+      const camera_id = isLocalAppEnv(effectiveAppEnv) ? channel?.localChannelId :`${channel.nvrId}-${channel._id}`;
 
       // const nvrId = channel.nvrId;
       // const allChannels = await Channel.find({ nvrId });
@@ -1109,7 +1120,7 @@ class ChannelService {
 
       return res.status(200).json(
         Response.userSuccessResp("Playback URL retrieved successfully", {
-          playbackUrl: APP_ENV === 'local' ? `${streamHost}/${rtspUrl}` : rtspUrl,
+          playbackUrl: isLocalAppEnv(effectiveAppEnv) ? `${streamHost}/${rtspUrl}` : rtspUrl,
         })
       );
     } catch (error) {
@@ -1178,10 +1189,41 @@ class ChannelService {
         headers = { "Content-Type": "application/xml" };
         body = hikvisionXml;
       } else if (brand === "dahua") {
-        // Implement Dahua-specific logic here
-        return res
-          .status(501)
-          .json(Response.userFailResp("Dahua support not implemented yet"));
+        // Dahua uses the mediaFileFind CGI instead of Hikvision's ISAPI XML.
+        const dahuaUrl = `http://${ip}:${port}/cgi-bin/mediaFileFind.cgi`;
+        const toDahuaTime = (value) => {
+          const date = new Date(value);
+          if (Number.isNaN(date.getTime())) throw new Error("Invalid playback time");
+          return date.toISOString().slice(0, 19).replace("T", " ");
+        };
+        const query = new URLSearchParams({
+          action: "findFile",
+          "condition.Channel": String(channel),
+          "condition.StartTime": toDahuaTime(startTime),
+          "condition.EndTime": toDahuaTime(endTime),
+          "condition.Types[0]": "dav",
+          "condition.DB.Records[0]": "All",
+        });
+
+        const create = await client.fetch(`${dahuaUrl}?action=factory.create`);
+        const createText = await create.text();
+        const object = createText.match(/result=([^\r\n]+)/)?.[1]?.trim();
+        if (!object) throw new Error(`Dahua recording search initialization failed: ${createText}`);
+
+        try {
+          const search = await client.fetch(`${dahuaUrl}?${query.toString()}&object=${encodeURIComponent(object)}`);
+          const searchText = await search.text();
+          const timeline = searchText
+            .split(/\r?\n/)
+            .filter((line) => line.startsWith("items["))
+            .map((line) => line.trim());
+          return res.status(200).json(
+            Response.userSuccessResp("Playback timeline fetched successfully", { timeline })
+          );
+        } finally {
+          await client.fetch(`${dahuaUrl}?action=close&object=${encodeURIComponent(object)}`)
+            .catch(() => undefined);
+        }
       } else {
         return res.status(400).json(Response.userFailResp("Unsupported brand"));
       }

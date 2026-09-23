@@ -1121,7 +1121,7 @@ class AdminService {
   // A field set to null/"" reverts to the global config default. Only fields
   // present in the body are updated. Kept named updateStreamHost for route
   // compatibility. Overridable fields:
-  //   streamHost, streamToken, dsAuthUsersAPI, attendanceUrl, detectionUrl,
+  //   streamHost, streamToken, dsAuthUsersAPI, attendanceUrl, detectionUrl, appEnv,
   //   telegramBotToken, telegramChatId, retention{Incidents,Attendance,AccessLogs}
   async updateStreamHost(req, res, next) {
     try {
@@ -1132,6 +1132,7 @@ class AdminService {
         "dsAuthUsersAPI",
         "attendanceUrl",
         "detectionUrl",
+        "appEnv",
         "telegramBotToken",
         "telegramChatId",
       ];
@@ -1145,10 +1146,18 @@ class AdminService {
         return res.send(Response.userFailResp(`Provide one of: ${overridable.join(", ")}.`, "Validation Failed!"));
       }
 
-      const isValid = (v) => v === null || v === "" || typeof v === "string";
+      const isValid = (f, v) =>
+        f === "appEnv"
+          ? v === null || v === "" || ["cloud", "local", "onprem"].includes(v)
+          : v === null || v === "" || typeof v === "string";
       for (const f of provided) {
-        if (!isValid(req.body[f])) {
-          return res.send(Response.userFailResp(`${f} must be a string, empty string, or null.`, "Validation Failed!"));
+        if (!isValid(f, req.body[f])) {
+          return res.send(Response.userFailResp(
+            f === "appEnv"
+              ? "appEnv must be cloud, local, onprem, empty string, or null."
+              : `${f} must be a string, empty string, or null.`,
+            "Validation Failed!",
+          ));
         }
       }
 
@@ -1175,6 +1184,7 @@ class AdminService {
           dsAuthUsersAPI: updatedAdmin.dsAuthUsersAPI,
           attendanceUrl: updatedAdmin.attendanceUrl,
           detectionUrl: updatedAdmin.detectionUrl,
+          appEnv: updatedAdmin.appEnv,
           telegramBotToken: updatedAdmin.telegramBotToken,
           telegramChatId: updatedAdmin.telegramChatId,
         })

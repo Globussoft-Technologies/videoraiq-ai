@@ -4,8 +4,6 @@ import config from "config";
 import { encrypt } from "../../../utils/cryptoUtils.js";
 const APP_ENV = config.get("APP_ENV");
 
-let ChannelSchema;
-
 // The {mode, timezone, days} shape used by the per-camera detection schedule
 // below. Exported (not inlined) so the NVR-level global schedule in
 // core/v1/globalSchedule/globalSchedule.model.js persists the identical shape
@@ -122,7 +120,7 @@ const detectionFields = {
 };
 
 // ! old
-const cloudSchema = new mongoose.Schema(
+const ChannelSchema = new mongoose.Schema(
   {
     nvrId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -134,16 +132,15 @@ const cloudSchema = new mongoose.Schema(
       required: true,
     },
     channelId: String,
+    streamingPath: String,
+    localChannelId: String,
     rtspChannels: [Object],
     name: String,
     ipAddress: String,
     model: String,
     serialNumber: String,
     firmwareVersion: String,
-    streamEndpoint: {
-      type: String,
-      required: true,
-    },
+    streamEndpoint: String,
     manualRtspUrl: { type: String, select: false },
     isAdded: {
       type: Boolean,
@@ -265,17 +262,16 @@ const localSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-if (APP_ENV === "cloud") {
-  ChannelSchema = cloudSchema;
-  ChannelSchema.pre("save", function (next) {
-    if (this.isModified("manualRtspUrl") && this.manualRtspUrl) {
-      this.manualRtspUrl = encrypt(this.manualRtspUrl);
-    }
-    next();
-  });
-} else {
-  ChannelSchema = localSchema;
+if (!["cloud", "local", "onprem"].includes(APP_ENV)) {
+  throw new Error(`Invalid APP_ENV: ${APP_ENV}`);
 }
+
+ChannelSchema.pre("save", function (next) {
+  if (this.isModified("manualRtspUrl") && this.manualRtspUrl) {
+    this.manualRtspUrl = encrypt(this.manualRtspUrl);
+  }
+  next();
+});
 
 ChannelSchema.pre("save", function (next) {
   try {

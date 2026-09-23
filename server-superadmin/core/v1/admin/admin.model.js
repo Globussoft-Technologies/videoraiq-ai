@@ -77,6 +77,11 @@ const adminSchema = new mongoose.Schema({
   dsAuthUsersAPI: { type: String, default: null },
   attendanceUrl: { type: String, default: null },
   detectionUrl: { type: String, default: null },
+  appEnv: {
+    type: String,
+    enum: ["cloud", "local", "onprem", null],
+    default: null,
+  },
   // Per-admin detection config. Key = settingType, value = custom display name.
   // If a key is present, that detection is allowed for this admin.
   // Empty object = all detections allowed with default names.

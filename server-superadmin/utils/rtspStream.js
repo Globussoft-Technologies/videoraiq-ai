@@ -8,6 +8,7 @@ const api_host = config.get("RTSPStream.host");
 const api_token = config.get("RTSPStream.token");
 const terminateHost = config.get("RTSPStream.terminateHost");
 const APP_ENV = config.get("APP_ENV");
+const resolveAppEnv = (admin) => admin?.appEnv || APP_ENV;
 
 // Resolve the RTSP stream host + token for a given resource owner. A specific
 // admin can override both via admin.streamHost / admin.streamToken; everyone
@@ -17,15 +18,16 @@ export const resolveStream = async (userId) => {
   try {
     const admin = await adminModel
       .findOne({ user_id: String(userId) })
-      .select("streamHost streamToken")
+      .select("streamHost streamToken appEnv")
       .lean();
     return {
       host: admin?.streamHost || api_host,
       token: admin?.streamToken || api_token,
+      appEnv: resolveAppEnv(admin),
     };
   } catch (err) {
     logger.error(`Failed to resolve stream config for ${userId}`, err.message);
-    return { host: api_host, token: api_token };
+    return { host: api_host, token: api_token, appEnv: APP_ENV };
   }
 };
 
@@ -233,7 +235,8 @@ export const buildStreamingUrl = async (nvr, channel) => {
   try {
     let streamingUrl = null;
     const uid = `${nvr?._id}-${channel?._id}`;
-    if (APP_ENV === "cloud") {
+    const { appEnv } = await resolveStream(nvr?.userId);
+    if (appEnv === "cloud") {
       const rtspUrl = buildRTSPUrl(nvr, channel, "main");
       streamingUrl = await getStreamingUrl(uid, rtspUrl, nvr?.userId);
     } else {

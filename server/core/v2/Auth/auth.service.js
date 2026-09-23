@@ -32,6 +32,13 @@ import { autoSyncLocations, syncPermissionLocations, syncStevinrockLogPermission
 const backendToken = config.get("Backend.token");
 const detectionHost = config.get("PythonService.detectionUrl");
 const APP_ENV = config.get("APP_ENV");
+const envClaims = (admin) => {
+  const appEnv = admin?.appEnv || null;
+  return {
+    appEnv,
+    VITE_LOCAL_SETUP: appEnv === "local" || appEnv === "onprem",
+  };
+};
 const DEFAULT_FETCH_TIMEOUT_MS = 8000;
 const AMEMBER_WEBHOOK_MAX_AGE_SECONDS = 5 * 60;
 const AMEMBER_WEBHOOK_EVENTS = new Set([
@@ -465,6 +472,7 @@ class AUTHService {
         impersonatedByAdminId: payload.admin_id,
         enablePhoneRecipients: config.get("enablePhoneRecipients"),
         streamHost: `${(admin.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
+        ...envClaims(admin),
       };
       this.usedImpersonationNonces.set(payload.nonce, payload.exp);
 
@@ -883,6 +891,7 @@ class AUTHService {
         // login instead of a stale 0 baked into this token.
         purchasedCameras: effectiveCameras,
         streamHost: `${(admin.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
+        ...envClaims(admin),
         registrationLinkId: randomUUID(),
         userRegistrByLink: true,
       };
@@ -1641,6 +1650,7 @@ return bypassUsers.find(
         // Resolved RTSP stream host (per-admin override or global default),
         // normalised to always end with a single trailing slash.
         streamHost: `${(adminData?.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
+        ...envClaims(adminData),
       };
 
       // Presets live in permissions.config.js so that this seeder and
@@ -1892,7 +1902,7 @@ return bypassUsers.find(
         const memberUser = await usersModel
           .findOne({ $or: [{ userName: username }, { email: username }] })
           .populate("roleIds", "role empRoleId")
-          .populate("adminId", "user_id streamHost")
+          .populate("adminId", "user_id streamHost appEnv")
           .lean();
 
         if (!memberUser) {
@@ -1909,7 +1919,7 @@ return bypassUsers.find(
           });
         }
 
-        const parentAdmin = await adminModel.findById(memberUser.adminId?._id).select("user_id streamHost").lean();
+        const parentAdmin = await adminModel.findById(memberUser.adminId?._id).select("user_id streamHost appEnv").lean();
         if (!parentAdmin) {
           return res.status(404).json({ success: false, message: "Parent admin not found for this user" });
         }
@@ -1936,6 +1946,7 @@ return bypassUsers.find(
           memberId: memberUser?._id,
           userSubscriptionType: formattedSubscriptions,
           streamHost: `${(parentAdmin?.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
+          ...envClaims(parentAdmin),
         };
 
         const sessionAccess = await sessionsService.ensureDeviceCanLogin(req, tokenPayload);
@@ -2001,6 +2012,7 @@ return bypassUsers.find(
         // Resolved RTSP stream host (per-admin override or global default),
         // normalised to always end with a single trailing slash.
         streamHost: `${(isUserExist?.streamHost || config.get("RTSPStream.host")).replace(/\/+$/, "")}/`,
+        ...envClaims(isUserExist),
       };
       const sessionAccess = await sessionsService.ensureDeviceCanLogin(req, tokenPayload);
       if (!sessionAccess.allowed) {

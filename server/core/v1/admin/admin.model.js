@@ -93,6 +93,11 @@ const adminSchema = new mongoose.Schema({
   dsAuthUsersAPI: { type: String, default: null },
   attendanceUrl: { type: String, default: null },
   detectionUrl: { type: String, default: null },
+  appEnv: {
+    type: String,
+    enum: ["cloud", "local", "onprem", null],
+    default: null,
+  },
   // Per-admin incident Telegram bot + channel. Incidents post to Telegram ONLY
   // if BOTH are set (no global fallback); otherwise this admin gets no Telegram.
   telegramBotToken: { type: String, default: null },

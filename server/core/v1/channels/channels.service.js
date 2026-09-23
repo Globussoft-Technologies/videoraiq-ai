@@ -36,6 +36,16 @@ import DetectionSettingsValidation from "../detectionSettings/detectionSettings.
 import Recipient from "../verifyRecipients/recipients.model.js";
 import config from "config"
 const APP_ENV = config.get("APP_ENV");
+const isLocalAppEnv = (appEnv) => appEnv === "local" || appEnv === "onprem";
+
+const resolveAppEnv = async (userId) => {
+  if (!userId) return APP_ENV;
+  const admin = await adminModel
+    .findOne({ user_id: String(userId) })
+    .select("appEnv")
+    .lean();
+  return admin?.appEnv || APP_ENV;
+};
 
 const isMongoObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").trim());
 
@@ -876,7 +886,8 @@ class ChannelService {
         );
       }
 
-      const camera_id = APP_ENV === 'local' ? channel?.localChannelId :`${channel.nvrId}-${channel._id}`;
+      const effectiveAppEnv = await resolveAppEnv(channel?.userId);
+      const camera_id = isLocalAppEnv(effectiveAppEnv) ? channel?.localChannelId :`${channel.nvrId}-${channel._id}`;
 
       // const nvrId = channel.nvrId;
       // const allChannels = await Channel.find({ nvrId });
@@ -910,7 +921,7 @@ class ChannelService {
 
       return res.status(200).json(
         Response.userSuccessResp("Playback URL retrieved successfully", {
-          playbackUrl: APP_ENV === 'local' ? `${streamHost}/${rtspUrl}` : rtspUrl,
+          playbackUrl: isLocalAppEnv(effectiveAppEnv) ? `${streamHost}/${rtspUrl}` : rtspUrl,
         })
       );
     } catch (error) {

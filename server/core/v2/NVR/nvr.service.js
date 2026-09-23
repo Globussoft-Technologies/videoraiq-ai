@@ -32,6 +32,8 @@ import { fetchHoneywellTvtCameras } from "./honeywellTvt.js";
  */
 const channelKey = (cam) => String(cam?.channelId ?? cam?.localChannelId ?? "");
 const APP_ENV = config.get("APP_ENV");
+const isLocalAppEnv = (appEnv) => appEnv === "local" || appEnv === "onprem";
+const resolveAppEnv = (admin) => admin?.appEnv || APP_ENV;
 
 const directCameraView = (camera) => ({
   channelId: camera.channelId,
@@ -121,6 +123,18 @@ class NVRService {
     return { limit, inUse, remaining: Math.max(limit - inUse, 0) };
   }
 
+  async getEffectiveAppEnv(req, admin = null) {
+    if (admin) return resolveAppEnv(admin);
+
+    const adminId = req?.verified?.userData?.adminId;
+    const userId = req?.verified?.userData?.user_id;
+    const adminDoc = adminId
+      ? await adminModel.findById(adminId).select("appEnv").lean()
+      : await adminModel.findOne({ user_id: userId }).select("appEnv").lean();
+
+    return resolveAppEnv(adminDoc);
+  }
+
   async addNvr(req, res, _next) {
     try {
       const userId = req?.verified?.userData?.user_id;
@@ -131,6 +145,12 @@ class NVRService {
         return res
           .status(400)
           .json(Response.userFailResp("Please provide valid user_id"));
+      }
+      const effectiveAppEnv = resolveAppEnv(isAdminExist);
+      if (!isLocalAppEnv(effectiveAppEnv)) {
+        return res
+          .status(400)
+          .json(Response.userFailResp("Add NVR metadata is only available in on-prem mode"));
       }
       const { error, value } = NVRValidation.registerNvrMetadataSchema(
         req.body,
@@ -283,7 +303,8 @@ class NVRService {
       }
 
       // only for on premise
-      if (APP_ENV === "local") {
+      const effectiveAppEnv = await this.getEffectiveAppEnv(req);
+      if (isLocalAppEnv(effectiveAppEnv)) {
         const userId = req?.verified?.userData?.user_id;
         const { error, value } = NVRValidation.updateNvrLocalSchema(req.body);
 
@@ -682,8 +703,9 @@ class NVRService {
       // const nvrId = await NVR.findOne({ localNvrId: id }).select("_id");
 
       // !old
+      const effectiveAppEnv = await this.getEffectiveAppEnv(req);
       const nvrId =
-        APP_ENV === "cloud"
+        effectiveAppEnv === "cloud"
           ? await NVR.findOne({ _id: id }).select("_id")
           : await NVR.findOne({ localNvrId: id }).select("_id");
 
@@ -1172,7 +1194,8 @@ class NVRService {
 
   async createDirectNvr(req, res, _next) {
     try {
-      if (APP_ENV !== "cloud") {
+      const effectiveAppEnv = await this.getEffectiveAppEnv(req);
+      if (effectiveAppEnv !== "cloud") {
         return res.status(400).json(Response.userFailResp("Direct RTSP is only available in cloud mode"));
       }
 
@@ -1242,7 +1265,8 @@ class NVRService {
 
   async updateDirectNvr(req, res, _next) {
     try {
-      if (APP_ENV !== "cloud") {
+      const effectiveAppEnv = await this.getEffectiveAppEnv(req);
+      if (effectiveAppEnv !== "cloud") {
         return res.status(400).json(Response.userFailResp("Direct RTSP is only available in cloud mode"));
       }
 

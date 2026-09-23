@@ -346,14 +346,14 @@ class AdminController {
 
   async updateStreamHost(req, res, next) {
     /* #swagger.tags = ['Admin']
-    #swagger.description = 'Set or clear a target admin RTSP stream host override. Pass streamHost null or empty to revert to the global host.'
+    #swagger.description = 'Set or clear target admin endpoint/appEnv overrides. Pass null or empty to revert a field to the global config.'
     #swagger.parameters['data'] = {
         in: 'body',
-        description: 'Target admin user_id and streamHost',
+        description: 'Target admin user_id and any of streamHost, streamToken, dsAuthUsersAPI, attendanceUrl, detectionUrl, appEnv',
         required: true,
         schema: { $ref: "#/definitions/updateStreamHost" }
     }
-    #swagger.responses[200] = { description: 'streamHost updated successfully' }
+    #swagger.responses[200] = { description: 'Admin override updated successfully' }
     #swagger.responses[500] = { description: 'Internal server error' }
     */
     return await adminService.updateStreamHost(req, res, next);

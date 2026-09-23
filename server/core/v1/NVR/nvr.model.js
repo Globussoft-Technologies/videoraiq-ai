@@ -5,10 +5,7 @@ import authorizedChannelsModel from "../cameraRestrictions/authorizedChannels.mo
 import config from "config";
 const APP_ENV = config.get("APP_ENV");
 
-let NVRSchema;
-
-// ! new
-const localSchema = new mongoose.Schema(
+const NVRSchema = new mongoose.Schema(
   {
     userId: {
       type: String,
@@ -32,69 +29,23 @@ const localSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    domain: {
-      type: String,
-      required: true,
-    },
-    deviceName: String,
-    location: {
-      type: String,
-      required: true,
-    },
-    localNvrId: {
-      type: String,
-      required: true,
-    },
-  },
-  { timestamps: true }
-);
-
-// ! old
-const cloudSchema = new mongoose.Schema(
-  {
-    userId: {
-      type: String,
-      required: true,
-    },
-    nvrName: {
-      type: String,
-      required: true,
-    },
     ip: {
       type: String,
-      required: true,
       // unique: true,
     },
     port: {
       type: Number,
-      required: true,
     },
     rtspPort: {
       type: Number,
-      required: true,
     },
     username: {
       type: String,
-      required: true,
     },
     password: {
       type: String,
-      required: true,
     },
-    brand: {
-      type: String,
-      required: true,
-      enum: ["hikvision", "dahua", "prama", "cpplus", "camera", "tiandy", "securus", "hanwha", "honeywell"],
-    },
-    connectionMode: {
-      type: String,
-      enum: ["device", "direct"],
-      default: "device",
-    },
-    cameraCount: {
-      type: Number,
-      default: 0,
-    },
+    domain: String,
     deviceName: String,
     model: String,
     serialNumber: String,
@@ -105,46 +56,39 @@ const cloudSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    localNvrId: String,
   },
   { timestamps: true }
 );
 
-if (APP_ENV === "cloud") {
-  NVRSchema = cloudSchema;
-
-  // Compound unique index: IP + port + userId
-  NVRSchema.index({ ip: 1, port: 1, userId: 1 }, { unique: true });
-
-  // Encrypt sensitive fields before save
-  NVRSchema.pre("save", function (next) {
-    if (this.isModified("password")) {
-      this.password = encrypt(this.password);
-    }
-    if (this.isModified("ip")) {
-      this.ip = encrypt(this.ip);
-    }
-    if (this.isModified("serialNumber")) {
-      this.serialNumber = encrypt(this.serialNumber);
-    }
-    if (this.isModified("macAddress")) {
-      this.macAddress = encrypt(this.macAddress);
-    }
-    next();
-  });
-
-  // Decrypt method
-  NVRSchema.methods.getDecryptedPassword = function () {
-    return decrypt(this.password);
-  };
-} else if (APP_ENV === "local" || APP_ENV === "onprem") {
-  // "onprem" is the on-premise deployment (config/onprem.json); "local" is the
-  // older name for the same shape and is still what the test config uses.
-  // Without accepting both, an on-premise install throws here at module load
-  // and the server never starts.
-  NVRSchema = localSchema;
-} else {
+if (!["cloud", "local", "onprem"].includes(APP_ENV)) {
   throw new Error(`Invalid APP_ENV: ${APP_ENV}`);
 }
+
+NVRSchema.index(
+  { ip: 1, port: 1, userId: 1 },
+  { unique: true, partialFilterExpression: { ip: { $exists: true }, port: { $exists: true } } },
+);
+
+NVRSchema.pre("save", function (next) {
+  if (this.isModified("password") && this.password) {
+    this.password = encrypt(this.password);
+  }
+  if (this.isModified("ip") && this.ip) {
+    this.ip = encrypt(this.ip);
+  }
+  if (this.isModified("serialNumber") && this.serialNumber) {
+    this.serialNumber = encrypt(this.serialNumber);
+  }
+  if (this.isModified("macAddress") && this.macAddress) {
+    this.macAddress = encrypt(this.macAddress);
+  }
+  next();
+});
+
+NVRSchema.methods.getDecryptedPassword = function () {
+  return decrypt(this.password);
+};
 
 async function applyNvrAccessControl(query) {
   const memberId = query._conditions?.memberId;

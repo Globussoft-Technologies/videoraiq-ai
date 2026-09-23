@@ -18,6 +18,8 @@ import { buildRTSPUrl, updateCameraStream, registerCameraStream, buildStreamingU
 import { parseXml } from "../../../utils/xmlParse.js";
 import mongoose from "mongoose";
 const APP_ENV = config.get("APP_ENV");
+const isLocalAppEnv = (appEnv) => appEnv === "local" || appEnv === "onprem";
+const resolveAppEnv = (admin) => admin?.appEnv || APP_ENV;
 
 class NVRService {
   // old
@@ -67,6 +69,18 @@ class NVRService {
     return Math.max(purchased - added, 0);
   }
 
+  async getEffectiveAppEnv(req, admin = null) {
+    if (admin) return resolveAppEnv(admin);
+
+    const adminId = req?.verified?.userData?.adminId;
+    const userId = req?.verified?.userData?.user_id;
+    const adminDoc = adminId
+      ? await adminModel.findById(adminId).select("appEnv").lean()
+      : await adminModel.findOne({ user_id: userId }).select("appEnv").lean();
+
+    return resolveAppEnv(adminDoc);
+  }
+
   async addNvr(req, res, _next) {
     try {
       const userId = req?.verified?.userData?.user_id;
@@ -77,6 +91,12 @@ class NVRService {
         return res
           .status(400)
           .json(Response.userFailResp("Please provide valid user_id"));
+      }
+      const effectiveAppEnv = resolveAppEnv(isAdminExist);
+      if (!isLocalAppEnv(effectiveAppEnv)) {
+        return res
+          .status(400)
+          .json(Response.userFailResp("Add NVR metadata is only available in on-prem mode"));
       }
       const { error, value } = NVRValidation.registerNvrMetadataSchema(
         req.body,
@@ -225,7 +245,8 @@ class NVRService {
       }
 
       // only for on premise
-      if (APP_ENV === "local") {
+      const effectiveAppEnv = await this.getEffectiveAppEnv(req);
+      if (isLocalAppEnv(effectiveAppEnv)) {
         const userId = req?.verified?.userData?.user_id;
         const { error, value } = NVRValidation.updateNvrLocalSchema(req.body);
 
@@ -611,8 +632,9 @@ class NVRService {
       // const nvrId = await NVR.findOne({ localNvrId: id }).select("_id");
 
       // !old
+      const effectiveAppEnv = await this.getEffectiveAppEnv(req);
       const nvrId =
-        APP_ENV === "cloud"
+        effectiveAppEnv === "cloud"
           ? await NVR.findOne({ _id: id }).select("_id")
           : await NVR.findOne({ localNvrId: id }).select("_id");
 
