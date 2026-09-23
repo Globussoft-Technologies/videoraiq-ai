@@ -25,9 +25,9 @@ import logoMark from '../../assets/videoraiq-circle-white.png'
 const NAV = [
   { to: '/fleet', label: 'Fleet Overview', Icon: LayoutGrid },
   { to: '/clients', label: 'Clients', Icon: Building2, showClientCount: true },
-  { to: '/detection-catalog', label: 'Detection Catalog', Icon: ScanEye },
-  { to: '/subscription-plans', label: 'Subscription Plans', Icon: CreditCard },
-  { to: '/feature-roadmap', label: 'Feature Roadmap', Icon: Menu },
+  // { to: '/detection-catalog', label: 'Detection Catalog', Icon: ScanEye },
+  // { to: '/subscription-plans', label: 'Subscription Plans', Icon: CreditCard },
+  // { to: '/feature-roadmap', label: 'Feature Roadmap', Icon: Menu },
   { to: '/session-management', label: 'Session Management', Icon: MonitorCog },
 ]
 
