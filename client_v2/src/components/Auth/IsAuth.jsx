@@ -6,10 +6,10 @@ import { useAuth } from '@/context/AuthContext';
 import { useSocket } from '@/context/SocketContext';
 import { logout } from '@/hooks/logout';
 import { setSessionId, sessionHeaders } from '@/utils/sessionIdentity';
+import { isLocalSetup } from '@/utils/jwt';
 
 const HOST = import.meta.env.VITE_BACKEND;
 const envValue = (key) => String(import.meta.env[key] || '').trim();
-const isLocalSetup = () => envValue('VITE_LOCAL_SETUP').toLowerCase() === 'true';
 
 const accessCookieName = () => {
   const env = envValue('VITE_ENV');
@@ -124,11 +124,13 @@ export default function IsAuth({ children }) {
   const exchangeStarted = useRef(false);
   const cancelledRef = useRef(false);
   const cancelTimerRef = useRef(null);
+  // Keep the claim available after logout clears the token cookie.
+  const localSetupRef = useRef(isLocalSetup());
 
   const toLogin = () => {
     const target = loginRedirectUrl();
 
-    if (isLocalSetup() || target === '/admin-login') {
+    if (localSetupRef.current || target === '/admin-login') {
       navigate('/admin-login', { replace: true, state: { from: location } });
       return;
     }
@@ -220,6 +222,7 @@ export default function IsAuth({ children }) {
             secure: window.location.protocol === 'https:',
             path: '/',
           });
+          localSetupRef.current = isLocalSetup();
           setSessionId(result.sessionId);
           setUser(result.user);
           setIsLoading(false);
@@ -256,6 +259,7 @@ export default function IsAuth({ children }) {
             secure: window.location.protocol === 'https:',
             path: '/',
           });
+          localSetupRef.current = isLocalSetup();
           setSessionId(result.sessionId);
           setUser(result.user);
           setIsLoading(false);
@@ -309,6 +313,7 @@ export default function IsAuth({ children }) {
             secure: window.location.protocol === 'https:',
             path: '/',
           });
+          localSetupRef.current = isLocalSetup();
           setSessionId(result.sessionId);
           deleteCookie('amember_login');
           deleteCookie('amember_pass');
