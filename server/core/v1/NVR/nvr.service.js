@@ -636,7 +636,12 @@ class NVRService {
       const nvrId =
         effectiveAppEnv === "cloud"
           ? await NVR.findOne({ _id: id }).select("_id")
-          : await NVR.findOne({ localNvrId: id }).select("_id");
+          : await NVR.findOne({
+              $or: [
+                { localNvrId: id },
+                ...(mongoose.Types.ObjectId.isValid(id) ? [{ _id: id }] : []),
+              ],
+            }).select("_id");
 
       if (!nvrId) {
         return res.status(400).json(Response.userFailResp("NVR not found"));
