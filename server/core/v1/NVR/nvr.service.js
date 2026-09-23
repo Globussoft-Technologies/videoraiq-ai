@@ -1215,13 +1215,10 @@ class NVRService {
           const status = statuses.find((s) => s.id === chId);
           const rawStreamIds =
             status?.streamingProxyChannelIdList?.streamingProxyChannelId || [];
-          const streamIds = Array.isArray(rawStreamIds) ? rawStreamIds : [rawStreamIds];
-
-          if (!streamIds.length) {
-            throw new Error(
-              `Hikvision did not return an RTSP stream channel for camera ${chId}. Please retry discovery.`
-            );
-          }
+          const streamIds = (Array.isArray(rawStreamIds) ? rawStreamIds : [rawStreamIds]).filter(Boolean);
+          const streamError = !streamIds.length
+            ? `Hikvision did not return an RTSP stream channel for camera ${chId}. Please retry discovery.`
+            : null;
 
           const rtspChannels = streamIds.map((id) => ({
             id,
@@ -1231,6 +1228,8 @@ class NVRService {
           cameraList.push({
             channelId: chId,
             rtspChannels,
+            status: streamError ? "unavailable" : "available",
+            error: streamError,
             name: ch?.name || `Camera ${chId}`,
             ipAddress: ch?.sourceInputPortDescriptor?.ipAddress || "",
             model: ch?.sourceInputPortDescriptor?.model || "",
