@@ -293,9 +293,6 @@ function Shell() {
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 75 }}
         />
       )}
-      {/* `position: relative` anchors the AI Assistant launcher to the bottom-right
-          of the content area rather than the viewport, so it tracks the content
-          column as the sidebar collapses instead of floating over it. */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
         <Header
           title={meta.title}
@@ -338,8 +335,9 @@ function Shell() {
             )}
           </div>
         </div>
-        {/* Hidden on the assistant's own page — nothing to launch from there. */}
-        {viewKey !== 'assistant' && <AssistantLauncher />}
+        {/* Assistant launcher hidden for now.
+        <AssistantLauncher />
+        */}
       </main>
       <AppTour />
     </div>

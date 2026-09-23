@@ -81,9 +81,7 @@ export const ZONE_EXTRA_FIELDS = {
   personFallSickDetectionSettings: ['threshold'],
   workingAtHeightDetectionSettings: ['threshold'],
   oilLeakageDetectionSettings: ['threshold'],
-  gunnyBagsMaterialsWrongLocationDetectionSettings: ['threshold'],
   sandDustWasteScrapDisposalDetectionSettings: ['threshold'],
-  unauthorizedAnimalEntryDetectionSettings: ['threshold'],
   spillsDirtyMessyAreasDetectionSettings: ['threshold'],
 };
 
