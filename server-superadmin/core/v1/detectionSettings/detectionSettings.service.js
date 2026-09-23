@@ -318,8 +318,86 @@ class DetectionSettingService {
       }
 
       const settingType = detectionSetting.settingType;
+      const channelId = req?.query?.channelId || req?.body?.channelId;
 
-      // 2. Remove reference from Channel model
+      // Stop the runtime detector only on the requested camera. Legacy callers
+      // without channelId still select every linked camera below.
+      const linkedChannelQuery = {
+        [`detections.${settingType}.id`]: id,
+      };
+      if (channelId) linkedChannelQuery._id = channelId;
+
+      const linkedChannels = await Channel.find(linkedChannelQuery).populate("nvrId");
+      if (channelId && linkedChannels.length === 0) {
+        return res.status(404).json(
+          Response.userFailResp("Detection setting is not linked to this camera"),
+        );
+      }
+      const stopFailures = [];
+
+      for (const channel of linkedChannels) {
+        if (channel?.detections?.[settingType]?.enabled !== true) continue;
+
+        try {
+          await pythonService.handleDetectionStartStop(
+            channel,
+            req?.verified?.userData?.adminId,
+            false,
+            settingType,
+          );
+        } catch (error) {
+          logger.error(
+            `Failed to stop ${settingType} before deleting setting ${id} ` +
+              `from channel ${channel?._id}:`,
+            error,
+          );
+          stopFailures.push({
+            channelId: String(channel?._id || ""),
+            message: error?.response?.data?.message || error?.message || "Stop failed",
+          });
+        }
+      }
+
+      if (stopFailures.length) {
+        return res.status(502).json(
+          Response.errorResp(
+            "Detection settings were not deleted because one or more running detectors could not be stopped",
+            JSON.stringify(stopFailures),
+          ),
+        );
+      }
+
+      if (channelId) {
+        await Channel.updateOne(
+          { _id: channelId, [`detections.${settingType}.id`]: id },
+          { $unset: { [`detections.${settingType}`]: 1 } },
+        );
+
+        const remainingLinkedCameras = await Channel.countDocuments({
+          [`detections.${settingType}.id`]: id,
+        });
+        const deletedSetting = remainingLinkedCameras === 0;
+
+        if (deletedSetting) {
+          await DetectionSetting.deleteOne({ _id: id });
+        } else {
+          await DetectionSetting.updateOne(
+            { _id: id },
+            { $unset: { [`settings.referencePoints.${channelId}`]: 1 } },
+          );
+        }
+
+        return res.status(200).json(
+          Response.userSuccessResp("Detection settings reset for camera successfully", {
+            channelId,
+            deletedSetting,
+            remainingLinkedCameras,
+          }),
+        );
+      }
+
+      // Legacy callers without channelId retain the previous global-delete
+      // behavior.
       await Channel.updateMany(
         { [`detections.${settingType}.id`]: id },
         { $unset: { [`detections.${settingType}`]: 1 } },

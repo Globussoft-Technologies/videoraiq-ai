@@ -16,7 +16,9 @@ export const updateZoneDetectionSetting = (settingId, payload) => (
 
 export const createZoneDetectionSetting = (payload) => createDetectionSetting(payload);
 
-export const deleteZoneDetectionSetting = (settingId) => deleteDetectionSetting(settingId);
+export const deleteZoneDetectionSetting = (settingId, channelId) => (
+  deleteDetectionSetting(settingId, channelId)
+);
 
 export const updateDetectionAlerts = (settingId, alertIds) => (
   updateDetectionSetting(settingId, { alerts: alertIds })

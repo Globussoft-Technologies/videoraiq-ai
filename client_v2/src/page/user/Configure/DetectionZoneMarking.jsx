@@ -776,10 +776,10 @@ export default function DetectionZoneMarking({
     setSavingZoneIndex(index);
     try {
       // Check-In / Check-Out needs at least one zone to mean anything â€” deleting
-      // the last one removes the whole detection setting (line included)
+      // the last one resets this camera's detection link (line included)
       // instead of leaving an orphaned line with zero zones behind it.
       if (isCheckInOut && nextZones.length === 0) {
-        await deleteZoneDetectionSetting(activeType.settingId);
+        await deleteZoneDetectionSetting(activeType.settingId, camera._id);
         setZones([]);
         setLineZone({ points: [], insideReferencePoint: null });
         setLaneNameDraft('');
@@ -798,10 +798,8 @@ export default function DetectionZoneMarking({
     }
   };
 
-  // "Reset Detection UI" â€” same DELETE /detection-settings/:id V1 uses
-  // under that label (Innersettings.jsx â†’ ResetConfirmationDialog). Removes the
-  // whole DetectionSetting doc and unlinks it from every camera referencing it,
-  // not just this one.
+  // Reset only this camera. The shared DetectionSetting remains available to
+  // other linked cameras and is deleted only after its final camera is reset.
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -809,7 +807,7 @@ export default function DetectionZoneMarking({
     if (!activeType?.settingId || !canDeleteDetection) return;
     setDeleting(true);
     try {
-      await deleteZoneDetectionSetting(activeType.settingId);
+      await deleteZoneDetectionSetting(activeType.settingId, camera._id);
       toast.success('Detection settings reset successfully.');
       setZones([]);
       setPoints([]);

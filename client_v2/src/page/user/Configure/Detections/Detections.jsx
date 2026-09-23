@@ -1157,7 +1157,7 @@ export default function Detections() {
 
     setResettingSetting(true);
     try {
-      await deleteDetectionSetting(selectedDetectionSettingId);
+      await deleteDetectionSetting(selectedDetectionSettingId, zoneCamera._id);
       setZoneSettingsOpen(false);
       setShowResetConfirm(false);
       setZoneCamera((prev) => {

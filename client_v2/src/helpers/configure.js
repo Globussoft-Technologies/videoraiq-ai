@@ -156,14 +156,14 @@ export const createDetectionSetting = async (data) => {
 };
 
 /**
- * Fully delete a DetectionSetting — same DELETE /detection-settings/:id
- * V1 uses (exposed there as "Reset Detection UI"). Removes the whole document
- * and unsets detections.<settingType> on every channel referencing it.
+ * Reset one camera's DetectionSetting link. The backend deletes the shared
+ * setting document only when this was its final linked camera.
  */
-export const deleteDetectionSetting = async (id) => {
+export const deleteDetectionSetting = async (id, channelId) => {
   const token = getAccessToken();
   const res = await axios.delete(`${Api_url}/detection-settings/${id}`, {
     headers: { 'x-access-token': token },
+    params: channelId ? { channelId } : undefined,
   });
   return unwrap(res);
 };
