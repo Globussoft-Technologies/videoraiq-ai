@@ -935,7 +935,7 @@ const UnauthorizedParkingDetectionSetting = DetectionSetting.discriminator(
         name: String,
         threshold_sec: Number,
       }],
-      vehicle_threshold: confidenceThresholdFields.vehicle_threshold,
+      vehicle_threshold: { type: Number, min: 0, max: 1, default: 0.5 },
     }, { _id: false }),
   }),
 );
