@@ -718,7 +718,9 @@ class NVRService {
         return res.status(400).json(Response.userFailResp("NVR not found"));
       }
 
-      const deletedNVR = await DeleteService.deleteNVR(nvrId);
+      const deletedNVR = await DeleteService.deleteNVR(nvrId, {
+        appEnv: effectiveAppEnv,
+      });
       if (!deletedNVR) {
         return res.status(400).json(Response.userFailResp("NVR not found"));
       }
@@ -750,8 +752,11 @@ class NVRService {
           .status(400)
           .json(Response.userFailResp("No NVRs found to delete"));
       }
+      const effectiveAppEnv = await this.getEffectiveAppEnv(req);
       for (const nvr of nvrs) {
-        await DeleteService.deleteNVR(nvr._id);
+        await DeleteService.deleteNVR(nvr._id, {
+          appEnv: effectiveAppEnv,
+        });
       }
 
       return res

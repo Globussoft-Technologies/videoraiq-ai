@@ -113,6 +113,7 @@ vi.mock("../../../utils/rtspStream.js", () => ({
 vi.mock("axios", () => ({ default: { delete: vi.fn(async () => ({})) } }));
 
 const { default: DeleteService } = await import("../../../services/delete.service.js");
+const { default: axios } = await import("axios");
 const { default: authorizedChannelsModel } = await import(
   "../../../core/v1/cameraRestrictions/authorizedChannels.model.js"
 );
@@ -186,5 +187,15 @@ describe("DeleteService.deleteNVR", () => {
     await DeleteService.deleteNVR({ _id: "nvr-9" });
 
     expect(h.deletedNvrIds).toEqual(["nvr-9"]);
+  });
+
+  it("skips streaming-server cleanup when the effective appEnv is onprem", async () => {
+    h.channels = [{ _id: "cam-added", userId: "u1", isAdded: true }];
+
+    await DeleteService.deleteNVR("nvr-1", { appEnv: "onprem" });
+
+    expect(axios.delete).not.toHaveBeenCalled();
+    expect(h.deletedChannelIds).toEqual(["cam-added"]);
+    expect(h.deletedNvrIds).toEqual(["nvr-1"]);
   });
 });

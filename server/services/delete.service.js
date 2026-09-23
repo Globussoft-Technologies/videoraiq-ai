@@ -23,9 +23,10 @@ const INCIDENT_MEDIA_SELECT = "_id Image currentImage videoLink timeSeries.Image
 export const INCIDENT_BATCH_SIZE = 200;
 
 class DeleteService {
-  static async deleteNVR(nId) {
+  static async deleteNVR(nId, options = {}) {
     try {
       const nvrId = nId?._id ? nId._id : nId;
+      const appEnv = options.appEnv || APP_ENV;
 
       // includeInactive: the Channel pre(/^find/) hook injects { isAdded: true }
       // into every query unless we opt out. Without it this finds only added
@@ -43,7 +44,7 @@ class DeleteService {
         // Only added cameras were ever registered with the streaming service
         // (registerCameraStream runs in the add flow), so tearing down an
         // un-added one would 404 and abort the whole delete.
-        if (APP_ENV === "cloud" && channel.isAdded) {
+        if (appEnv === "cloud" && channel.isAdded) {
           const uid = `${nvrId.toString()}-${channel._id.toString()}`;
           const redisKey = `stream_url:${uid}`;
           await this.deleteStreamingCamera(uid, channel.userId);
