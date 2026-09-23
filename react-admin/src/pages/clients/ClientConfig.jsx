@@ -31,7 +31,7 @@ import { toast } from 'react-toastify'
 
 // How long edits must settle before an auto-save fires. Long enough that
 // holding a stepper is one request, short enough to feel immediate.
-const AUTOSAVE_DELAY_MS = 700
+const AUTOSAVE_DELAY_MS = 3000
 
 const getInitials = (name = '') => {
   const parts = name.trim().split(/\s+/).filter(Boolean)
