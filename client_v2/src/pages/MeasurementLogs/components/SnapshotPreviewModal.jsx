@@ -7,21 +7,15 @@ import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 // frame (measurementImageUrl) the length/width/height come from. Both matter
 // to a reviewer checking a Mismatch / QR Error row, so this modal switches
 // between them via tabs rather than picking just one.
-const TABS = [
-  { key: 'qr', label: 'QR Capture' },
-  { key: 'measurement', label: 'Measurement Frame' },
-];
-
 const SnapshotPreviewModal = ({
-  qrImage,
-  measurementImage,
+  image,
+  imageLabel = 'Image',
   hasPrevious = false,
   hasNext = false,
   onPrevious,
   onNext,
   onClose,
 }) => {
-  const [tab, setTab] = useState(qrImage ? 'qr' : 'measurement');
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
@@ -31,14 +25,6 @@ const SnapshotPreviewModal = ({
   // Prev/Next moves to a different RECORD, not a different image — keep the
   // user's chosen tab (QR vs Measurement) across records, only falling back
   // when the newly-loaded record is missing the currently selected image.
-  useEffect(() => {
-    setTab((current) => {
-      const stillAvailable = current === 'qr' ? qrImage : measurementImage;
-      if (stillAvailable) return current;
-      return qrImage ? 'qr' : 'measurement';
-    });
-  }, [qrImage, measurementImage]);
-
   // Reset zoom/pan whenever the visible image changes (record or tab) — but
   // NOT fullscreen: Prev/Next changes qrImage/measurementImage as it moves to
   // the next record, and fullscreen should persist across that navigation
@@ -47,7 +33,7 @@ const SnapshotPreviewModal = ({
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setDragging(false);
-  }, [qrImage, measurementImage, tab]);
+  }, [image]);
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -130,9 +116,9 @@ const SnapshotPreviewModal = ({
     };
   }, [dragging]);
 
-  if (!qrImage && !measurementImage) return null;
+  if (!image) return null;
 
-  const src = tab === 'qr' ? qrImage : measurementImage;
+  const src = image;
 
   const zoomControls = (
     <div
@@ -172,7 +158,7 @@ const SnapshotPreviewModal = ({
     </div>
   );
 
-  const image = (
+  const renderedImage = (
     <div
       className={
         fullscreen
@@ -183,7 +169,7 @@ const SnapshotPreviewModal = ({
       {src ? (
         <ImageWithLoader
           src={src}
-          alt={TABS.find((t) => t.key === tab)?.label}
+          alt={imageLabel}
           className={
             fullscreen
               ? 'w-full h-full flex items-center justify-center bg-black'
@@ -264,7 +250,7 @@ const SnapshotPreviewModal = ({
             <X className="w-5 h-5" />
           </button>
           {zoomControls}
-          {image}
+          {renderedImage}
         </div>
       ) : null}
       <div
@@ -279,35 +265,11 @@ const SnapshotPreviewModal = ({
           <X className="w-5 h-5 text-[var(--tx)]" />
         </button>
 
-        <div className="flex items-center justify-between gap-[10px] mb-[12px]">
-          <div className="flex items-center gap-[6px]">
-            {TABS.map((t) => {
-              const disabled = t.key === 'qr' ? !qrImage : !measurementImage;
-              const active = tab === t.key;
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => setTab(t.key)}
-                  className={`px-[12px] h-[30px] rounded-[8px] text-[11.5px] font-semibold border transition-colors ${
-                    disabled
-                      ? 'opacity-40 cursor-not-allowed border-[var(--bd)] text-[var(--tx3)]'
-                      : active
-                        ? 'bg-[var(--blue)] border-[var(--blue)] text-white cursor-pointer'
-                        : 'bg-[var(--bg2)] border-[var(--bd)] text-[var(--tx2)] hover:text-[var(--tx)] cursor-pointer'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
-
+        <div className="flex items-center justify-end gap-[10px] mb-[12px]">
           {src && zoomControls}
         </div>
 
-        {image}
+        {renderedImage}
       </div>
     </div>
   );

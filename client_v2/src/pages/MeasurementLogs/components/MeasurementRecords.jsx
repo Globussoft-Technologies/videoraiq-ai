@@ -11,7 +11,7 @@ import SnapshotPreviewModal from './SnapshotPreviewModal';
 // MATCH bar takes any surplus on wide viewports (1fr), keeping slack at the
 // right edge. Widen ORDER·REF / SKU·MODEL to use the freed space.
 const GRID_COLS =
-  '52px minmax(200px,1.15fr) minmax(184px,1.05fr) 112px 118px 118px 56px 150px 92px 82px 122px';
+  '52px 52px minmax(200px,1.15fr) minmax(184px,1.05fr) 112px 118px 118px 56px 150px 92px 82px 122px';
 const GRID_MIN_W = 1180;
 
 // DS measurement confidence → colour + label. Anything under 0.6 is unreliable
@@ -197,6 +197,12 @@ const SnapThumb = ({ src, onOpen }) => {
   );
 };
 
+const ImageThumb = ({ src, label, onOpen }) => {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return <NoImageTile />;
+  return <button type="button" onClick={onOpen} title={`View ${label}`} className="w-[44px] h-[30px] shrink-0 rounded-[6px] overflow-hidden bg-[var(--bg2)] block cursor-pointer border-0 p-0 transition-opacity hover:opacity-80"><img src={src} alt="" loading="lazy" className="w-full h-full object-cover" onError={() => setFailed(true)} /></button>;
+};
+
 // Large snapshot for the grid card — same fallback, fills its container.
 const SnapImage = ({ src }) => {
   const [failed, setFailed] = useState(false);
@@ -369,6 +375,21 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
     () => filtered.slice(pageStart, pageStart + pageSize),
     [filtered, pageStart, pageSize],
   );
+  const previewItems = useMemo(
+    () => pageRows.flatMap((r) => [
+      (r.qrImageUrl || r.shot) && { src: r.qrImageUrl || r.shot, label: 'QR Capture' },
+      r.measurementImageUrl && { src: r.measurementImageUrl, label: 'Measurement Frame' },
+    ].filter(Boolean)),
+    [pageRows],
+  );
+  const previewIndexFor = (row, image) => {
+    const rowIndex = pageRows.indexOf(row);
+    const before = pageRows.slice(0, rowIndex).reduce(
+      (count, item) => count + Boolean(item.qrImageUrl || item.shot) + Boolean(item.measurementImageUrl),
+      0,
+    );
+    return before + (image === 'measurement' ? Number(Boolean(row.qrImageUrl || row.shot)) : 0);
+  };
 
   // Close any open snapshot when the visible page changes underneath it.
   useEffect(() => {
@@ -515,7 +536,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
             className="grid gap-x-[10px] p-[10px_16px] border-b border-[var(--bd2)] font-[var(--mono)] text-[9px] tracking-[.06em] text-[var(--tx3)] bg-[var(--bg1solid)] sticky top-0 z-[2]"
             style={{ gridTemplateColumns: GRID_COLS }}
           >
-            <span>SNAP</span><span>ORDER · REF</span><span>SKU · MODEL</span>
+            <span>SNAP</span><span>MEAS</span><span>ORDER · REF</span><span>SKU · MODEL</span>
             <span>PRINTED L×W×H (in)</span><span>MEASURED L×W×H (in)</span><span>Δ L / W / H (in)</span>
             <span>CONF</span><span>MATCH</span><span>STATION</span><span>STATUS</span><span>WHEN · RESULT</span>
           </div>
@@ -528,7 +549,8 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
                   className="grid gap-x-[10px] p-[10px_16px] border-b border-[var(--bd)] items-center text-[12.5px] transition-colors hover:bg-[var(--bg2)]"
                   style={{ gridTemplateColumns: GRID_COLS }}
                 >
-                  <SnapThumb src={r.shot} onOpen={() => setPreviewIdx(idx)} />
+                  <ImageThumb src={r.qrImageUrl || r.shot} label="QR capture" onOpen={() => setPreviewIdx(previewIndexFor(r, 'qr'))} />
+                  <ImageThumb src={r.measurementImageUrl} label="measurement frame" onOpen={() => setPreviewIdx(previewIndexFor(r, 'measurement'))} />
                   <span className="min-w-0">
                     <span className="block font-[var(--mono)] text-[11.5px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
                       {r.orderId}
@@ -614,7 +636,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
             const sm = STATUS_META[r.status];
             const cm = confMeta(r.confidence);
             const matchP = matchPctOf(r);
-            const hasShot = Boolean(r.shot);
+            const hasShot = Boolean(r.shot || r.qrImageUrl || r.measurementImageUrl);
             return (
               <div
                 key={r.id}
@@ -622,7 +644,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
               >
                 {/* Snapshot */}
                 <div
-                  onClick={() => hasShot && setPreviewIdx(idx)}
+                  onClick={() => hasShot && setPreviewIdx(previewIndexFor(r, 'qr'))}
                   className={`relative aspect-[16/10] bg-[#0a0e15] shrink-0 ${
                     hasShot ? 'cursor-pointer' : ''
                   }`}
@@ -819,14 +841,14 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
         </div>
       )}
 
-      {previewIdx >= 0 && pageRows[previewIdx] && (
+      {previewIdx >= 0 && previewItems[previewIdx] && (
         <SnapshotPreviewModal
-          qrImage={pageRows[previewIdx].qrImageUrl}
-          measurementImage={pageRows[previewIdx].measurementImageUrl}
+          image={previewItems[previewIdx].src}
+          imageLabel={previewItems[previewIdx].label}
           hasPrevious={previewIdx > 0}
-          hasNext={previewIdx < pageRows.length - 1}
+          hasNext={previewIdx < previewItems.length - 1}
           onPrevious={() => setPreviewIdx((i) => Math.max(0, i - 1))}
-          onNext={() => setPreviewIdx((i) => Math.min(pageRows.length - 1, i + 1))}
+          onNext={() => setPreviewIdx((i) => Math.min(previewItems.length - 1, i + 1))}
           onClose={() => setPreviewIdx(-1)}
         />
       )}
