@@ -42,6 +42,7 @@ const SHORT_LABELS = {
   doorDetectionSettings: 'Door',
   lightDetectionSettings: 'Light',
   vehicleObstructionSettings: 'Obstruction',
+  unauthorizedParkingDetectionSettings: 'No Parking',
   deskAbsenceSettings: 'Desk Absence',
   guardAbsenceSettings: 'Guard Absence',
   countPersonsSettings: 'Count Persons',

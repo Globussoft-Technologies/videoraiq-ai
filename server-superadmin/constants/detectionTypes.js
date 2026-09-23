@@ -9,6 +9,7 @@
 export const DETECTION_TYPES = {
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
   vehicleDetectionSettings: "ANPR Detection",
+  unauthorizedParkingDetectionSettings: "Unauthorized Parking Detection",
   unauthorizedAccessSettings: "Intrusion Detection",
   crowdDetectionSettings: "Crowd Detection",
   lineCrossingSettings: "Line Crossing Detection",
@@ -46,6 +47,7 @@ export const DETECTION_TYPES = {
 export const DETECTION_TYPES2 = {
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
   vehicleDetectionSettings: "ANPR Detection",
+  unauthorizedParkingDetectionSettings: "Unauthorized Parking Detection",
   unauthorizedAccessSettings: "Intrusion Detection",
   crowdDetectionSettings: "Crowd Detection",
   lineCrossingSettings: "Line Crossing Detection",
@@ -85,6 +87,7 @@ export const DETECTION_TYPES2 = {
 export const DETECTION_DESCRIPTIONS = {
   personalProtectiveEquipmentSettings: "Helmet, vest & mask compliance monitoring",
   vehicleDetectionSettings: "Vehicle plate capture & watchlist",
+  unauthorizedParkingDetectionSettings: "Vehicle parked in a configured no-parking zone",
   unauthorizedAccessSettings: "Zone entry & perimeter breach alerts",
   crowdDetectionSettings: "Density & occupancy thresholds",
   lineCrossingSettings: "Directional tripwire counting",
@@ -131,6 +134,7 @@ export const TYPE_MAP = {
   doorDetectionSettings: "doorDetection",
   lightDetectionSettings: "lightDetection",
   vehicleDetectionSettings: "vehicleDetection",
+  unauthorizedParkingDetectionSettings: "unauthorizedParkingDetection",
   deskAbsenceSettings: "deskAbsence",
   guardAbsenceSettings: "guardAbsence",
   conveyorDetectionSettings: "conveyorDetection",
@@ -161,6 +165,7 @@ export const DETECTION_MODES_MAP = {
   crusherDetectionSettings: ["crusher"],
   waterSpillageDetectionSettings: ["water_spillage"],
   vehicleDetectionSettings: ["ANPR"],
+  unauthorizedParkingDetectionSettings: ["unauthorizedParking"],
   vehicleTypeDetectionSettings: ["vehicleType"],
   loiteringDetectionSettings: ["loitering"],
   vehicleObstructionSettings: ["vehicleObstruction"],
@@ -196,6 +201,7 @@ export const toPopulateDetections = [
   { path: "detections.lightDetectionSettings.id" },
   { path: "detections.doorDetectionSettings.id" },
   { path: "detections.vehicleDetectionSettings.id" },
+  { path: "detections.unauthorizedParkingDetectionSettings.id" },
   { path: "detections.deskAbsenceSettings.id" },
   { path: "detections.guardAbsenceSettings.id" },
   { path: "detections.conveyorDetectionSettings.id" },
@@ -993,5 +999,16 @@ export const mobilePhoneDetectionSettings = {
     },
     metricType: "gauge",
     zone_name: "Cashier Counter",
+  },
+};
+
+export const unauthorizedParkingDetectionSettings = {
+  ...vehicleObstructionSettings,
+  settingType: "unauthorizedParkingDetectionSettings",
+  name: "Unauthorized Parking Detection - No Parking Zone",
+  settings: {
+    ...vehicleObstructionSettings.settings,
+    vehicle_threshold: 0.5,
+    zone_configs: [{ name: "No Parking Zone", threshold_sec: 10 }],
   },
 };

@@ -37,6 +37,7 @@ import CarLogs from './pages/CarLogs/CarLogs';
 import VehicleCheckInOutLogs from './pages/VehicleCheckInOutLogs/VehicleCheckInOutLogs';
 import ConveyorLogs from './pages/ConveyorLogs/ConveyorLogs';
 import VehicleObstructionLogs from './pages/VehicleObstructionLogs/VehicleObstructionLogs';
+import UnauthorizedParkingLogs from './pages/UnauthorizedParkingLogs/UnauthorizedParkingLogs';
 import CrusherLogs from './pages/CrusherLogs/CrusherLogs';
 import CylinderLogs from './pages/CylinderLogs/CylinderLogs';
 import LineCrossingLogs from './pages/LineCrossingLogs/LineCrossingLogs';
@@ -124,6 +125,7 @@ export const v2Routes = (
         IncidentLogsPage with its config; Vehicle Count is a chart page. */}
     <Route path="logs/conveyor" element={guard('logs', 'conveyorLogs', <ConveyorLogs />)} />
     <Route path="logs/vehicle-obstruction" element={guard('logs', 'vehicleObstructionLogs', <VehicleObstructionLogs />)} />
+    <Route path="logs/unauthorized-parking" element={guard('logs', 'unauthorizedParkingLogs', <UnauthorizedParkingLogs />)} />
     <Route path="logs/vehicle-count" element={guard('logs', 'vehicleCountLogs', <VehicleCountLogs />)} />
     <Route path="logs/car" element={guard('logs', 'carLogs', <CarLogs />)} />
     <Route path="logs/vehicle-check-in-out" element={guard('logs', 'vehicleCheckInOutLogs', <VehicleCheckInOutLogs />)} />

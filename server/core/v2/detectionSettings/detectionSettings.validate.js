@@ -107,6 +107,7 @@ const thresholdFieldsBySettingType = {
   vehicleObstructionSettings: ["vehicle_threshold"],
   vehicleTypeDetectionSettings: ["vehicle_threshold", "forklift_threshold"],
   vehicleDetectionSettings: ["plate_confidence", "ocr_min_confidence"],
+  unauthorizedParkingDetectionSettings: ["vehicle_threshold"],
   mobilePhoneDetectionSettings: ["mobile_phone_confidence"],
   cylinderDetectionSettings: ["cylinder_confidence", "cylinder_iou"],
 };

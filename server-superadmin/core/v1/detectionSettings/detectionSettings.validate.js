@@ -22,6 +22,7 @@ const thresholdFieldsBySettingType = {
   loiteringDetectionSettings: ["person_threshold"],
   countVehiclesSettings: ["vehicle_threshold"],
   vehicleObstructionSettings: ["vehicle_threshold"],
+  unauthorizedParkingDetectionSettings: ["vehicle_threshold"],
   vehicleTypeDetectionSettings: ["vehicle_threshold", "forklift_threshold"],
   numberPlateDetectionSettings: ["plate_confidence", "ocr_min_confidence"],
   mobilePhoneDetectionSettings: ["mobile_phone_confidence"],

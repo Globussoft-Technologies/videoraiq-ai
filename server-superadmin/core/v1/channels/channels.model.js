@@ -37,6 +37,7 @@ const detectionFields = {
   doorDetectionSettings: detectionSettingSchema,
   lightDetectionSettings: detectionSettingSchema,
   vehicleDetectionSettings: detectionSettingSchema,
+  unauthorizedParkingDetectionSettings: detectionSettingSchema,
   deskAbsenceSettings: detectionSettingSchema,
   guardAbsenceSettings: detectionSettingSchema,
   conveyorDetectionSettings: detectionSettingSchema,

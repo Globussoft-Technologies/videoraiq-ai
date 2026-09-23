@@ -197,6 +197,8 @@ export const triggerAlertOnIncident = async ({ detectionType, nvrId, channelId, 
           let mailResponse = await MailResponse.industrialDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "vehicleObstruction") {
           let mailResponse = await MailResponse.vehicleObstruction(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
+        } else if (detectionType === "unauthorizedParkingDetection") {
+          let mailResponse = await MailResponse.vehicleObstruction(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "vehicleTypeDetection") {
           let mailResponse = await MailResponse.vehicleTypeDetection(emailAddresses, incidentData, detectionType, nvrData, channelData, adminTz)
         } else if (detectionType === "loiteringDetection") {

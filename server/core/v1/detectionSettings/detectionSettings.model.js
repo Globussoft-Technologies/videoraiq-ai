@@ -1301,6 +1301,12 @@ const VehicleObstructionDetectionSetting = DetectionSetting.discriminator(
   new mongoose.Schema({ settings: VehicleObstructionDetectionSchema }),
 );
 
+const UnauthorizedParkingDetectionSchema = VehicleObstructionDetectionSchema.clone();
+const UnauthorizedParkingDetectionSetting = DetectionSetting.discriminator(
+  "unauthorizedParkingDetectionSettings",
+  new mongoose.Schema({ settings: UnauthorizedParkingDetectionSchema }),
+);
+
 const FoodServicePPEDetectionSchema = new mongoose.Schema({
   ...zoneConfigsField,
   person_threshold: confidenceThresholdFields.person_threshold,
@@ -1540,6 +1546,7 @@ export {
   VehicleTypeDetectionSetting,
   LoiteringDetectionSetting,
   VehicleObstructionDetectionSetting,
+  UnauthorizedParkingDetectionSetting,
   TableOccupancyDetectionSetting,
   FoodServicePPEDetectionSetting,
   MobilePhoneDetectionSetting,

@@ -10,6 +10,7 @@ export const DETECTION_TYPES = {
   faceAuthenticationSettings: "Attendance Settings",
   personalProtectiveEquipmentSettings: "Personal Protective Equipment Detection",
   vehicleDetectionSettings: "ANPR Detection",
+  unauthorizedParkingDetectionSettings: "Unauthorized Parking Detection",
   unauthorizedAccessSettings: "Intrusion Detection",
   crowdDetectionSettings: "Crowd Detection",
   lineCrossingSettings: "Line Crossing Detection",
@@ -101,6 +102,7 @@ export const DETECTION_LOG_METADATA = Object.freeze({
   waterSpillageDetectionSettings: { permissionKey: "waterSpillLogs", logsConfigKey: "waterSpillLogs" },
   lineCrossingSettings: { permissionKey: "lineCrossingLogs", logsConfigKey: "lineCrossingLogs" },
   vehicleObstructionSettings: { permissionKey: "vehicleObstructionLogs", logsConfigKey: "vehicleObstructionLogs" },
+  unauthorizedParkingDetectionSettings: { permissionKey: "unauthorizedParkingLogs", logsConfigKey: "unauthorizedParkingLogs" },
   carModelDetectionSettings: { permissionKey: "carLogs", logsConfigKey: "carLogs" },
   vehicleCheckInOutSettings: { permissionKey: "vehicleCheckInOutLogs", logsConfigKey: "vehicleCheckInOutLogs" },
   unauthorizedAccessSettings: { permissionKey: "unauthorizedAccessLogs", logsConfigKey: "unauthorizedAccessLogs" },
@@ -150,6 +152,7 @@ export const TYPE_MAP = {
   doorDetectionSettings: "doorDetection",
   lightDetectionSettings: "lightDetection",
   vehicleDetectionSettings: "vehicleDetection",
+  unauthorizedParkingDetectionSettings: "unauthorizedParkingDetection",
   deskAbsenceSettings: "deskAbsence",
   guardAbsenceSettings: "guardAbsence",
   guardSleepingDetectionSettings: "guardSleepingDetection",
@@ -193,6 +196,7 @@ export const DETECTION_MODES_MAP = {
   cylinderDetectionSettings: ["cylinder_stack"],
   waterSpillageDetectionSettings: ["water_spillage"],
   vehicleDetectionSettings: ["ANPR"],
+  unauthorizedParkingDetectionSettings: ["unauthorizedParking"],
   vehicleTypeDetectionSettings: ["vehicleType"],
   loiteringDetectionSettings: ["loitering"],
   vehicleObstructionSettings: ["vehicleObstruction"],
@@ -247,6 +251,7 @@ export const DS_DETECTOR_BY_MODE = {
   cylinder_stack: "cylinderStackDetectionSettings",
   water_spillage: "waterSpillageDetectionSettings",
   ANPR: "numberPlateDetectionSettings",
+  unauthorizedParking: "unauthorizedParkingDetectionSettings",
   vehicleType: "vehicleTypeDetectionSettings",
   loitering: "loiteringDetectionSettings",
   vehicleObstruction: "vehicleObstructionSettings",
@@ -329,6 +334,7 @@ export const DS_LOGIC_BY_MODE = {
   cylinder_stack: "cylinderStackDetectionSettings",
   water_spillage: "waterSpillageDetectionSettings",
   ANPR: "numberPlateDetectionSettings",
+  unauthorizedParking: "unauthorizedParkingDetectionSettings",
   loitering: "loiteringDetectionSettings",
   vehicleType: "vehicleTypeDetectionSettings",
   tableOccupancySettings: "tableOccupancySettings",
@@ -375,6 +381,7 @@ export const toPopulateDetections = [
   { path: "detections.lightDetectionSettings.id" },
   { path: "detections.doorDetectionSettings.id" },
   { path: "detections.vehicleDetectionSettings.id" },
+  { path: "detections.unauthorizedParkingDetectionSettings.id" },
   { path: "detections.deskAbsenceSettings.id" },
   { path: "detections.guardAbsenceSettings.id" },
   { path: "detections.guardSleepingDetectionSettings.id" },
@@ -1239,6 +1246,17 @@ export const vehicleObstructionSettings = {
       ],
     },
     metricType: "gauge",
+  },
+};
+
+export const unauthorizedParkingDetectionSettings = {
+  ...vehicleObstructionSettings,
+  settingType: "unauthorizedParkingDetectionSettings",
+  name: "Unauthorized Parking Detection - No Parking Zone",
+  settings: {
+    ...vehicleObstructionSettings.settings,
+    vehicle_threshold: 0.5,
+    zone_configs: [{ name: "No Parking Zone", threshold_sec: 10 }],
   },
 };
 

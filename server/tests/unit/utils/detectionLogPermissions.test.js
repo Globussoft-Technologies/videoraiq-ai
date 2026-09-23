@@ -38,4 +38,12 @@ describe("detection-backed log permissions", () => {
       logsConfigKey: "personFallSickLogs",
     });
   });
+
+  it("registers Unauthorized Parking as a detection-backed log", () => {
+    expect(DETECTION_LOG_METADATA.unauthorizedParkingDetectionSettings).toEqual({
+      permissionKey: "unauthorizedParkingLogs",
+      logsConfigKey: "unauthorizedParkingLogs",
+    });
+    expect(DETECTION_LOG_PERMISSION_KEYS).toContain("unauthorizedParkingLogs");
+  });
 });

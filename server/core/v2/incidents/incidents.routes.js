@@ -113,6 +113,11 @@ router.get(
   incidentsController.getVehicleFuelOilLeakageDetectionLogs,
 );
 router.get(
+  "/logs/unauthorized-parking-detection",
+  viewAccessCheck,
+  incidentsController.getUnauthorizedParkingDetectionLogs,
+);
+router.get(
   "/logs/gunny-bags-materials-wrong-location-detection",
   viewAccessCheck,
   incidentsController.getGunnyBagsMaterialsWrongLocationDetectionLogs,

@@ -52,6 +52,7 @@ const DETECTION_ICONS = {
   vehicleDetectionSettings: Car,
   vehicleTypeDetectionSettings: CarFront,
   vehicleObstructionSettings: CircleOff,
+  unauthorizedParkingDetectionSettings: CarFront,
   numberPlateDetectionSettings: ScanLine,
   anprSettings: ScanLine,
   vehicleNumberPlateSettings: ScanLine,

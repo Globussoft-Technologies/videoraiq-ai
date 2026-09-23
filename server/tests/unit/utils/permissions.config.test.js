@@ -67,6 +67,7 @@ const LOG_SUBSECTIONS = [
   "unauthorizedAccessLogs",
   "vehicleCountLogs",
   "vehicleObstructionLogs",
+  "unauthorizedParkingLogs",
   "waterSpillLogs",
 ];
 

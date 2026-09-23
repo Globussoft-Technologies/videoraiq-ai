@@ -59,6 +59,7 @@ const THRESHOLD_FIELDS_BY_DETECTOR = {
   loiteringDetectionSettings: ["person_threshold"],
   countVehiclesSettings: ["vehicle_threshold"],
   vehicleObstructionSettings: ["vehicle_threshold"],
+  unauthorizedParkingDetectionSettings: ["vehicle_threshold"],
   vehicleTypeDetectionSettings: ["vehicle_threshold", "forklift_threshold"],
   numberPlateDetectionSettings: ["plate_confidence", "ocr_min_confidence"],
   mobilePhoneDetectionSettings: ["mobile_phone_confidence"],
@@ -592,6 +593,16 @@ class PythonService {
           zones: zones || [],
         });
       }
+
+      if (detection_modes?.includes("unauthorizedParking")) {
+        detectors.push({
+          name: "unauthorizedParkingDetectionSettings",
+          zone_configs,
+          zones: zones || [],
+          vehicle_threshold: confidence_thresholds.vehicle_threshold ?? 0.5,
+          severity,
+        });
+      }
       if (detection_modes?.includes("tableOccupancySettings")) {
 
         detectors.push({
@@ -881,6 +892,16 @@ class PythonService {
           zone_configs,
           obstruction_threshold_sec: obstruction_threshold_sec,
           zones: zones || [],
+        });
+      }
+
+      if (detection_modes?.includes("unauthorizedParking")) {
+        detectors.push({
+          name: "unauthorizedParkingDetectionSettings",
+          zone_configs,
+          zones: zones || [],
+          vehicle_threshold: confidence_thresholds.vehicle_threshold ?? 0.5,
+          severity,
         });
       }
       if (detection_modes?.includes("tableOccupancySettings")) {

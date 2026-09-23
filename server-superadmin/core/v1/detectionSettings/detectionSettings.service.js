@@ -24,6 +24,7 @@ import {
   waterSpillageDetectionSettings,
   toPopulateDetections,
   vehicleObstructionSettings,
+  unauthorizedParkingDetectionSettings,
   loiteringDetectionSettings,
   tableOccupancyDetectionSettings,
   foodServicePPEDetectionSettings,
@@ -59,6 +60,7 @@ import {
   VehicleTypeDetectionSetting,
   LoiteringDetectionSetting,
   VehicleObstructionDetectionSetting,
+  UnauthorizedParkingDetectionSetting,
   TableOccupancyDetectionSetting,
   FoodServicePPEDetectionSetting,
   MobilePhoneDetectionSetting
@@ -91,6 +93,7 @@ const modelMap = {
   vehicleTypeDetectionSettings: VehicleTypeDetectionSetting,
   loiteringDetectionSettings: LoiteringDetectionSetting,
   vehicleObstructionSettings: VehicleObstructionDetectionSetting,
+  unauthorizedParkingDetectionSettings: UnauthorizedParkingDetectionSetting,
   tableOccupancyDetectionSettings: TableOccupancyDetectionSetting,
   mobilePhoneDetectionSettings: MobilePhoneDetectionSetting,
   foodServicePPEDetectionSettings: FoodServicePPEDetectionSetting
@@ -702,6 +705,7 @@ class DetectionSettingService {
         crusherDetectionSettings,
         waterSpillageDetectionSettings,
         vehicleObstructionSettings,
+        unauthorizedParkingDetectionSettings,
       };
 
       return res.status(200).json(

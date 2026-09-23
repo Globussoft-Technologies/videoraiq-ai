@@ -50,7 +50,12 @@ async function resolveAdminId(metadata = {}) {
 
 function messageIdFromSendGrid(sendStatus) {
   const response = Array.isArray(sendStatus) ? sendStatus[0] : sendStatus;
-  return normalizeMessageId(response?.headers?.["x-message-id"] || response?.headers?.["X-Message-Id"] || null);
+  return normalizeMessageId(
+    response?.messageId ||
+    response?.headers?.["x-message-id"] ||
+    response?.headers?.["X-Message-Id"] ||
+    null,
+  );
 }
 
 function normalizeMessageId(value) {

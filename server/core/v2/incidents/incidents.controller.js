@@ -711,6 +711,13 @@ class IncidentsController {
     return incidentsService.getVehicleFuelOilLeakageDetectionLogs(req, res, next);
   }
 
+  async getUnauthorizedParkingDetectionLogs(req, res, next) {
+    /* #swagger.tags = ['Incidents']
+    #swagger.description = 'Get Unauthorized Parking Detection logs.'
+    #swagger.security = [{ "EncryptedAuthToken": [] }] */
+    return incidentsService.getUnauthorizedParkingDetectionLogs(req, res, next);
+  }
+
   async getGunnyBagsMaterialsWrongLocationDetectionLogs(req, res, next) {
     /* #swagger.tags = ['Incidents']
     #swagger.description = 'Get Gunny Bags/Materials Wrong Location Detection logs.'

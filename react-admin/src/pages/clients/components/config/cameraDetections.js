@@ -32,6 +32,7 @@ const SHORT_OVERRIDES = {
   unauthorizedAccessSettings: 'Intrusion',
   foodServicePPEDetectionSettings: 'Food PPE',
   vehicleObstructionSettings: 'Vehicle/Obstruction',
+  unauthorizedParkingDetectionSettings: 'Unauthorized Parking',
 }
 
 export const shortLabel = (settingType = '') => {

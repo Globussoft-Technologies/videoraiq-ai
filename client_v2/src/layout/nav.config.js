@@ -80,6 +80,7 @@ export const LOGS_GROUP_LABEL = 'LOGS & RECORDS';
 const stevinrockLogItems = [
   { key: 'conveyor', label: 'Conveyor Logs', path: 'logs/conveyor', icon: Container, permissionKey: 'logs', permissionSubKey: 'conveyorLogs', logsConfigKey: 'conveyorLogs' },
   { key: 'vehicle-obstruction', label: 'Vehicle Obstruction Logs', path: 'logs/vehicle-obstruction', icon: OctagonAlert, permissionKey: 'logs', permissionSubKey: 'vehicleObstructionLogs', logsConfigKey: 'vehicleObstructionLogs' },
+  { key: 'unauthorized-parking', label: 'Unauthorized Parking Logs', path: 'logs/unauthorized-parking', icon: OctagonAlert, permissionKey: 'logs', permissionSubKey: 'unauthorizedParkingLogs', logsConfigKey: 'unauthorizedParkingLogs' },
   { key: 'vehicle-count', label: 'Vehicle Count Logs', path: 'logs/vehicle-count', icon: CarFront, permissionKey: 'logs', permissionSubKey: 'vehicleCountLogs', logsConfigKey: 'vehicleCountLogs' },
   { key: 'car', label: 'Car Logs', path: 'logs/car', icon: Car, permissionKey: 'logs', permissionSubKey: 'carLogs', logsConfigKey: 'carLogs' },
   { key: 'vehicle-check-in-out', label: 'Vehicle Check-In/Out Logs', path: 'logs/vehicle-check-in-out', icon: ArrowLeftRight, permissionKey: 'logs', permissionSubKey: 'vehicleCheckInOutLogs', logsConfigKey: 'vehicleCheckInOutLogs' },
@@ -236,6 +237,7 @@ export const VIEW_META = {
   measurement: { title: 'Mattress Measurement Logs', sub: 'Declared vs measured L×W×H · deviation, exports & scheduled reports' },
   conveyor: { title: 'Conveyor Logs', sub: 'Conveyor load / running-state detections' },
   'vehicle-obstruction': { title: 'Vehicle Obstruction Logs', sub: 'Blocked-path & obstruction detections' },
+  'unauthorized-parking': { title: 'Unauthorized Parking Logs', sub: 'Vehicles detected in restricted parking zones' },
   'vehicle-count': { title: 'Vehicle Count Logs', sub: 'Vehicle throughput over time' },
   car: { title: 'Car Logs', sub: 'Detected vehicle model and year records' },
   'vehicle-check-in-out': { title: 'Vehicle Check-In/Out Logs', sub: 'Vehicle custody — one row per car, expand for its crossings' },

@@ -47,6 +47,7 @@ export const ENGINE_LABEL_MAP = {
   tableOccupancyDetectionSettings:   'Table Occupancy',
   foodServicePPEDetectionSettings:   'Food Safety PPE',
   vehicleObstructionSettings:        'Vehicle Obstruction',
+  unauthorizedParkingDetectionSettings: 'Unauthorized Parking',
   personFallSickDetectionSettings:   'Person Fall/Sick Detection',
   personFallSickDetection:           'Person Fall/Sick Detection',
   workingAtHeightDetectionSettings:  'Working at Height Detection',

@@ -109,6 +109,8 @@ export const triggerAlertOnIncident = async ({detectionType, nvrId, channelId ,s
           let mailResponse = await MailResponse.waterSpillageDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
         } else if(detectionType==="vehicleObstruction"){
           let mailResponse = await MailResponse.vehicleObstruction(emailAddresses,incidentData,detectionType,nvrData,channelData)
+        } else if(detectionType==="unauthorizedParkingDetection"){
+          let mailResponse = await MailResponse.vehicleObstruction(emailAddresses,incidentData,detectionType,nvrData,channelData)
         } else if(detectionType==="vehicleTypeDetection"){
           let mailResponse = await MailResponse.vehicleTypeDetection(emailAddresses,incidentData,detectionType,nvrData,channelData)
         } else if(detectionType==="loiteringDetection"){

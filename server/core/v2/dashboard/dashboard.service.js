@@ -491,6 +491,7 @@ class DashboardService {
                   { "detections.crusherDetectionSettings.enabled": true },
                   { "detections.waterSpillageDetectionSettings.enabled": true },
                   { "detections.vehicleObstructionSettings.enabled": true },
+                  { "detections.unauthorizedParkingDetectionSettings.enabled": true },
                   { "detections.vehicleTypeDetectionSettings.enabled": true },
                 ]
               }),

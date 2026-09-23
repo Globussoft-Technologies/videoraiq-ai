@@ -45,6 +45,7 @@ import {
   BagDetectionIncident,
   VehicleDetectionIncident,
   VehicleObstructionIncident,
+  UnauthorizedParkingDetectionIncident,
   DeskAbsenceIncident,
   GuardAbsenceIncident,
   GuardSleepingIncident,
@@ -86,6 +87,7 @@ const modelMap = {
   bagDetection: BagDetectionIncident,
   vehicleDetection: VehicleDetectionIncident,
   vehicleObstruction: VehicleObstructionIncident,
+  unauthorizedParkingDetection: UnauthorizedParkingDetectionIncident,
   deskAbsence: DeskAbsenceIncident,
   guardAbsence: GuardAbsenceIncident,
   guardSleepingDetection: GuardSleepingIncident,
@@ -660,6 +662,12 @@ class IncidentsService {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         ((newIncident.count = req?.body?.count),
           (newIncident.Image = req?.body?.Image));
+      } else if (incidentType === "unauthorizedParkingDetection") {
+        newIncident.timeOfIncident = req?.body?.timeOfIncident;
+        newIncident.count = req?.body?.count ?? 1;
+        newIncident.alertThreshold = req?.body?.alertThreshold;
+        newIncident.triggerNotification = req?.body?.triggerNotification;
+        newIncident.Image = req?.body?.Image;
       } else if (incidentType === "vehicleTypeDetection") {
         newIncident.timeOfIncident = req?.body?.timeOfIncident;
         ((newIncident.vehicleType = req?.body?.vehicleType),
@@ -1923,6 +1931,7 @@ class IncidentsService {
                 { "detections.lightDetectionSettings.enabled": true },
                 { "detections.vehicleDetectionSettings.enabled": true },
                 { "detections.vehicleObstructionSettings.enabled": true },
+                { "detections.unauthorizedParkingDetectionSettings.enabled": true },
                 { "detections.conveyorDetectionSettings.enabled": true },
                 { "detections.crusherDetectionSettings.enabled": true },
                 { "detections.cylinderDetectionSettings.enabled": true },
@@ -4345,6 +4354,10 @@ console.log(result,'result');
 
   async getVehicleFuelOilLeakageDetectionLogs(req, res, next) {
     return this._getIndustrialDetectionLogs(req, res, next, "vehicleFuelOilLeakageDetection");
+  }
+
+  async getUnauthorizedParkingDetectionLogs(req, res, next) {
+    return this._getIndustrialDetectionLogs(req, res, next, "unauthorizedParkingDetection");
   }
 
   async getGunnyBagsMaterialsWrongLocationDetectionLogs(req, res, next) {

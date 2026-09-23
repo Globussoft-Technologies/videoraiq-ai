@@ -4676,6 +4676,10 @@ export const vehicleObstructionTemplate = (
     currentStatus, // OPENED | CLOSED
   } = incidentData;
 
+  const alertTitle = incidentData?.incidentType === "unauthorizedParkingDetection"
+    ? "Unauthorized Parking Alert"
+    : "Vehicle and Obstruction Alert";
+
   const getSeverityStyles = (level = "low") => {
     switch (level) {
       case "high":
@@ -4716,7 +4720,7 @@ export const vehicleObstructionTemplate = (
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Vehicle Detection Incident Report</title>
+  <title>${alertTitle} Incident Report</title>
 </head>
 
 <body style="margin:0;padding:0;background-color:#F4F6F8;font-family:Arial,Helvetica,sans-serif;">
@@ -4739,7 +4743,7 @@ export const vehicleObstructionTemplate = (
           <!-- Header -->
           <tr>
             <td style="padding:20px 24px;background:#0F172A;color:#ffffff;">
-              <h2 style="margin:0;font-size:20px;">Vehicle and Obstruction Alert</h2>
+              <h2 style="margin:0;font-size:20px;">${alertTitle}</h2>
               <p style="margin:4px 0 0;font-size:13px;opacity:0.9;">
                 Automated Incident Notification
               </p>

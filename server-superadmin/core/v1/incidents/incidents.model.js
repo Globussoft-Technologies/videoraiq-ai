@@ -361,6 +361,17 @@ const vehicleObstructionSchema = new Schema({
 });
 const VehicleObstructionIncident = Incident.discriminator('vehicleObstruction', vehicleObstructionSchema);
 
+const UnauthorizedParkingDetectionIncident = Incident.discriminator(
+  'unauthorizedParkingDetection',
+  new Schema({
+    count: { type: Number, default: 1, min: 0 },
+    alertThreshold: { type: Number, default: null },
+    triggerNotification: { type: Boolean, default: true },
+    vehicleNumber: { type: String, default: null },
+    vehicleType: { type: String, default: null },
+  }),
+);
+
 const DeskAbsenceSchema = new Schema({
   personPresent: { type: Boolean },
   triggerNotification: { type: Boolean, default: true },
@@ -543,6 +554,7 @@ export  {
   BagDetectionIncident,
   VehicleDetectionIncident,
   VehicleObstructionIncident,
+  UnauthorizedParkingDetectionIncident,
   DeskAbsenceIncident,
   GuardAbsenceIncident,
   ConveyorDetectionIncident,

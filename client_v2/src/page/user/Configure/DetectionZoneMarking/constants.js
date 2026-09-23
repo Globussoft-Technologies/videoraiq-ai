@@ -8,6 +8,7 @@ export const DETECTION_FIELD_KEYS = [
   'guardSleepingDetectionSettings',
   'conveyorDetectionSettings', 'crusherDetectionSettings', 'cylinderDetectionSettings', 'waterSpillageDetectionSettings',
   'vehicleTypeDetectionSettings', 'loiteringDetectionSettings', 'vehicleObstructionSettings',
+  'unauthorizedParkingDetectionSettings',
   'tableOccupancyDetectionSettings', 'foodServicePPEDetectionSettings', 'mobilePhoneDetectionSettings',
   'carModelDetectionSettings', 'faceAuthenticationSettings', 'vehicleCheckInOutSettings',
   'personFallSickDetectionSettings',
@@ -66,6 +67,7 @@ export const MIN_POINTS_TO_CLOSE = 3;
 
 export const ZONE_EXTRA_FIELDS = {
   vehicleObstructionSettings: ['threshold'],
+  unauthorizedParkingDetectionSettings: ['threshold'],
   guardAbsenceSettings: ['threshold'],
   guardSleepingDetectionSettings: ['threshold'],
   loiteringDetectionSettings: ['threshold'],

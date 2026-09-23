@@ -22,6 +22,7 @@ class LogsConfigurationController {
         measurementLogs: true,
         conveyorLogs: true,
         vehicleObstructionLogs: true,
+        unauthorizedParkingLogs: true,
         vehicleCountLogs: true,
         carLogs: true,
         vehicleCheckInOutLogs: true,

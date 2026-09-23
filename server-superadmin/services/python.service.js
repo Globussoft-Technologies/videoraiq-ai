@@ -258,6 +258,15 @@ class PythonService {
           zones: zones || [],
         });
       }
+      if (detection_modes?.includes("unauthorizedParking")) {
+        detectors.push({
+          name: "unauthorizedParkingDetectionSettings",
+          zone_configs,
+          zones: zones || [],
+          vehicle_threshold: 0.5,
+          severity,
+        });
+      }
       if( detection_modes?.includes("tableOccupancySettings")) {
         
         detectors.push({
@@ -427,6 +436,15 @@ class PythonService {
           name: "vehicleObstructionSettings",
           obstruction_threshold_sec: obstruction_threshold_sec,
           zones: zones || [],
+        });
+      }
+      if (detection_modes?.includes("unauthorizedParking")) {
+        detectors.push({
+          name: "unauthorizedParkingDetectionSettings",
+          zone_configs,
+          zones: zones || [],
+          vehicle_threshold: 0.5,
+          severity,
         });
       }
       if( detection_modes?.includes("tableOccupancySettings")) {
@@ -625,6 +643,9 @@ class PythonService {
       }
       if( detectionModes?.includes("vehicleObstruction")) {
         detectors.push("vehicleObstructionSettings");
+      }
+      if (detectionModes?.includes("unauthorizedParking")) {
+        detectors.push("unauthorizedParkingDetectionSettings");
       }
       if( detectionModes?.includes("tableOccupancySettings")) {
         detectors.push("tableOccupancyDetectionSettings");

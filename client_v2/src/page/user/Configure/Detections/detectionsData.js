@@ -37,6 +37,7 @@ const DETECTION_LABEL_OVERRIDES = {
   sandDustWasteScrapDisposalDetectionSettings: 'Sand, Dust, Waste & Scrap Disposal Detection',
   unauthorizedAnimalEntryDetectionSettings: 'Unauthorized Animal Entry Detection',
   spillsDirtyMessyAreasDetectionSettings: 'Spills, Dirty or Messy Areas Detection',
+  unauthorizedParkingDetectionSettings: 'Unauthorized Parking Detection',
 };
 
 export const INCIDENT_STATUS = {
@@ -74,6 +75,7 @@ export const DETECTION_THRESHOLDS = {
   countVehiclesSettings: ['vehicle_threshold'],
   vehicleCheckInOutSettings: ['vehicle_threshold'],
   vehicleObstructionSettings: ['vehicle_threshold'],
+  unauthorizedParkingDetectionSettings: ['vehicle_threshold'],
   vehicleTypeDetectionSettings: ['vehicle_threshold', 'forklift_threshold'],
   vehicleDetectionSettings: ['plate_confidence', 'ocr_min_confidence'],
   anprSettings: ['plate_confidence', 'ocr_min_confidence'],

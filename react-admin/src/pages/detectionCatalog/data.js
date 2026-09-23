@@ -119,6 +119,10 @@ export const DETECTION_META = {
     Icon: CircleParkingOff,
     tint: 'bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-300',
   },
+  unauthorizedParkingDetectionSettings: {
+    Icon: CircleParkingOff,
+    tint: 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300',
+  },
   deskAbsenceSettings: {
     Icon: LampDesk,
     tint: 'bg-purple-50 text-purple-500 dark:bg-purple-500/10 dark:text-purple-300',

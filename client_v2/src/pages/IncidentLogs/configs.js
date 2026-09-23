@@ -170,6 +170,15 @@ const industrialDetectionConfig = ({
   datePickerVariant: 'preset',
 });
 
+export const UNAUTHORIZED_PARKING_CONFIG = industrialDetectionConfig({
+  endpoint: '/incidents/logs/unauthorized-parking-detection',
+  title: 'Unauthorized Parking Detection Logs',
+  fileName: 'unauthorized_parking_logs',
+  sheetName: 'Unauthorized Parking Logs',
+  storagePrefix: 'unauthorized_parking',
+  permissionKey: 'unauthorizedParkingLogs',
+});
+
 export const WORKING_AT_HEIGHT_CONFIG = industrialDetectionConfig({
   endpoint: '/incidents/logs/working-at-height-detection',
   title: 'Working at Height Detection Logs',

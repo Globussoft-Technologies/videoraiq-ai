@@ -226,6 +226,7 @@ class AdminController {
             lineCrossingSettings: 'Line Crossing Detection',
             vehicleDetectionSettings: 'ANPR Detection',
             vehicleObstructionSettings: 'Vehicle & Obstruction Detection',
+            unauthorizedParkingDetectionSettings: 'Unauthorized Parking Detection',
             deskAbsenceSettings: 'Desk Absence Detection',
             guardAbsenceSettings: 'Guard Absence Detection',
             countVehiclesSettings: 'Count Vehicles Detection',
