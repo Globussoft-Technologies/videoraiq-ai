@@ -6,6 +6,7 @@ import FloButton from './FloButton';
 export default function StationErrorDialog({ error, onDismiss }) {
   useEffect(() => {
     if (!error) return undefined;
+    const autoDismissTimer = window.setTimeout(onDismiss, 2000);
     const onKeyDown = (event) => {
       const escapePressed = matchesEscapeShortcut(event);
       const spacePressed = matchesSpaceShortcut(event);
@@ -17,7 +18,10 @@ export default function StationErrorDialog({ error, onDismiss }) {
       onDismiss();
     };
     window.addEventListener('keydown', onKeyDown, true);
-    return () => window.removeEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.clearTimeout(autoDismissTimer);
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
   }, [error, onDismiss]);
 
   if (!error) return null;

@@ -10,6 +10,41 @@ import {
 const MAX_RETRY_DELAY_MS = 8000;
 const CONNECT_TIMEOUT_MS = 10000;
 const LIVE_QR_SCAN_INTERVAL_MS = 180;
+const HARD_REFRESH_AFTER_RETRY_COUNT = 2;
+const HARD_REFRESH_DELAY_MS = 4000;
+const HARD_REFRESH_GUARD_PREFIX = 'videoraiq:camera-stream-hard-refresh:';
+
+function hardRefreshGuardKey(streamUrl) {
+  return `${HARD_REFRESH_GUARD_PREFIX}${streamUrl}`;
+}
+
+function canScheduleHardRefresh(streamUrl) {
+  if (!streamUrl) return false;
+  try {
+    return !window.sessionStorage.getItem(hardRefreshGuardKey(streamUrl));
+  } catch {
+    // Avoid a reload loop when browser storage is unavailable.
+    return false;
+  }
+}
+
+function markHardRefresh(streamUrl) {
+  try {
+    window.sessionStorage.setItem(hardRefreshGuardKey(streamUrl), `${Date.now()}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearHardRefreshGuard(streamUrl) {
+  if (!streamUrl) return;
+  try {
+    window.sessionStorage.removeItem(hardRefreshGuardKey(streamUrl));
+  } catch {
+    // Stream recovery must not depend on browser storage being available.
+  }
+}
 
 function retryUrl(url, retryKey) {
   if (!url || retryKey === 0) return url;
@@ -33,6 +68,8 @@ function LiveCameraFeed({ camera, piApi, scanEnabled = false, onQrDetected, onSc
   const [streamState, setStreamState] = useState(baseStreamUrl ? 'connecting' : 'waiting');
   const retryCountRef = useRef(0);
   const retryTimerRef = useRef();
+  const hardRefreshTimerRef = useRef();
+  const hardRefreshScheduledRef = useRef(false);
   const streamImageRef = useRef(null);
   const scannerImageRef = useRef(null);
   const streamUrl = useMemo(() => retryUrl(baseStreamUrl, retryKey), [baseStreamUrl, retryKey]);
@@ -46,17 +83,35 @@ function LiveCameraFeed({ camera, piApi, scanEnabled = false, onQrDetected, onSc
   const scheduleRetry = useCallback(() => {
     window.clearTimeout(retryTimerRef.current);
     retryCountRef.current += 1;
+
+    if (
+      retryCountRef.current >= HARD_REFRESH_AFTER_RETRY_COUNT
+      && !hardRefreshScheduledRef.current
+      && scanEnabled
+      && canScheduleHardRefresh(baseStreamUrl)
+    ) {
+      hardRefreshScheduledRef.current = true;
+      hardRefreshTimerRef.current = window.setTimeout(() => {
+        if (markHardRefresh(baseStreamUrl)) window.location.reload();
+      }, HARD_REFRESH_DELAY_MS);
+    }
+
     const delay = Math.min(1000 * (2 ** (retryCountRef.current - 1)), MAX_RETRY_DELAY_MS);
     setStreamState('retrying');
     retryTimerRef.current = window.setTimeout(retryNow, delay);
-  }, [retryNow]);
+  }, [baseStreamUrl, retryNow, scanEnabled]);
 
   useEffect(() => {
     window.clearTimeout(retryTimerRef.current);
+    window.clearTimeout(hardRefreshTimerRef.current);
     retryCountRef.current = 0;
+    hardRefreshScheduledRef.current = false;
     setRetryKey(0);
     setStreamState(baseStreamUrl ? 'connecting' : 'waiting');
-    return () => window.clearTimeout(retryTimerRef.current);
+    return () => {
+      window.clearTimeout(retryTimerRef.current);
+      window.clearTimeout(hardRefreshTimerRef.current);
+    };
   }, [baseStreamUrl]);
 
   useEffect(() => {
@@ -65,11 +120,20 @@ function LiveCameraFeed({ camera, piApi, scanEnabled = false, onQrDetected, onSc
     return () => window.clearTimeout(retryTimerRef.current);
   }, [scheduleRetry, streamUrl]);
 
+  useEffect(() => {
+    if (scanEnabled) return;
+    window.clearTimeout(hardRefreshTimerRef.current);
+    hardRefreshScheduledRef.current = false;
+  }, [scanEnabled]);
+
   const onStreamLoad = useCallback(() => {
     window.clearTimeout(retryTimerRef.current);
+    window.clearTimeout(hardRefreshTimerRef.current);
     retryCountRef.current = 0;
+    hardRefreshScheduledRef.current = false;
+    clearHardRefreshGuard(baseStreamUrl);
     setStreamState('live');
-  }, []);
+  }, [baseStreamUrl]);
 
   useEffect(() => {
     if (!scanEnabled || streamState !== 'live' || !onQrDetected) {

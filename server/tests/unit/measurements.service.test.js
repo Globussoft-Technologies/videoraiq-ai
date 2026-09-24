@@ -1,24 +1,36 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  create: vi.fn(),
+  findOneAndUpdate: vi.fn(),
   deleteOne: vi.fn(),
   findOne: vi.fn(),
   deleteMedia: vi.fn(),
-  putMedia: vi.fn(),
   streamMedia: vi.fn(),
+  storeMeasurementMediaBuffer: vi.fn(),
+  streamMeasurementMediaReference: vi.fn(),
+  deleteMeasurementMediaReference: vi.fn(),
+  loggerInfo: vi.fn(),
+  loggerWarn: vi.fn(),
 }));
 
 vi.mock("../../core/v2/measurements/measurementCapture.model.js", () => ({
-  default: { create: mocks.create, deleteOne: mocks.deleteOne, findOne: mocks.findOne },
+  default: {
+    findOneAndUpdate: mocks.findOneAndUpdate,
+    deleteOne: mocks.deleteOne,
+    findOne: mocks.findOne,
+  },
 }));
 vi.mock("../../utils/mediaStorage.js", () => ({
   deleteMedia: mocks.deleteMedia,
-  putMedia: mocks.putMedia,
   streamMedia: mocks.streamMedia,
 }));
+vi.mock("../../core/v2/measurementMedia/measurementMedia.service.js", () => ({
+  storeMeasurementMediaBuffer: mocks.storeMeasurementMediaBuffer,
+  streamMeasurementMediaReference: mocks.streamMeasurementMediaReference,
+  deleteMeasurementMediaReference: mocks.deleteMeasurementMediaReference,
+}));
 vi.mock("../../utils/logger.js", () => ({
-  default: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+  default: { error: vi.fn(), info: mocks.loggerInfo, warn: mocks.loggerWarn },
 }));
 
 const { default: service, isJpeg } = await import(
@@ -62,13 +74,48 @@ function responseDouble() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.putMedia.mockResolvedValue("/uploads/images/measurement-captures/capture.jpg");
-  mocks.create.mockResolvedValue({});
+  mocks.storeMeasurementMediaBuffer.mockResolvedValue({
+    cloudPath: "/uploads/images/measurement-captures/capture.jpg",
+    stablePath: "/api/v2/measurement-media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  });
+  mocks.findOneAndUpdate.mockResolvedValue({});
   mocks.deleteOne.mockResolvedValue({ deletedCount: 1 });
   mocks.deleteMedia.mockResolvedValue(undefined);
+  mocks.streamMeasurementMediaReference.mockResolvedValue(false);
+  mocks.deleteMeasurementMediaReference.mockResolvedValue(false);
 });
 
 describe("measurement capture upload", () => {
+  it("records DS request and connectivity diagnostics in backend logs", async () => {
+    const res = responseDouble();
+    await service.createDiagnostic(request({
+      body: {
+        event: "unreachable",
+        endpoint: "http://192.168.0.177:8000/v1/dimensions/measure",
+        sku: "AGK7872",
+        dimensions: { length: 78, width: 72, height: 6 },
+        durationMs: 2031,
+        message: "Failed to fetch",
+      },
+    }), res);
+
+    expect(res.statusCode).toBe(202);
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(expect.stringContaining(
+      "[MEASUREMENT_DS] event=unreachable station=aa:bb:cc:dd:ee:ff",
+    ));
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(expect.stringContaining(
+      "endpoint=http://192.168.0.177:8000/v1/dimensions/measure",
+    ));
+  });
+
+  it("rejects unknown DS diagnostic event names", async () => {
+    const res = responseDouble();
+    await service.createDiagnostic(request({ body: { event: "anything" } }), res);
+    expect(res.statusCode).toBe(400);
+    expect(mocks.loggerInfo).not.toHaveBeenCalled();
+    expect(mocks.loggerWarn).not.toHaveBeenCalled();
+  });
+
   it("recognizes JPEG start/end framing", () => {
     expect(isJpeg(jpeg())).toBe(true);
     expect(isJpeg(Buffer.from("not-jpeg"))).toBe(false);
@@ -89,16 +136,22 @@ describe("measurement capture upload", () => {
       url: expect.stringMatching(/^http:\/\/backend:5055\/api\/v2\/measurements\/captures\//),
       captured_at: "2026-09-08T10:30:00.000Z",
     });
-    expect(mocks.putMedia).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.storeMeasurementMediaBuffer).toHaveBeenCalledWith(expect.objectContaining({
       buffer: req.body,
-      mediaType: "image",
       folderName: "measurement-captures",
+      contentType: "image/jpeg",
+      source: "qr-capture",
+      sourceReference: expect.stringMatching(/\.jpg$/),
     }));
-    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({
-      stationId: "aa:bb:cc:dd:ee:ff",
-      cameraId: "top-camera",
-      bytes: req.body.length,
-    }));
+    expect(mocks.findOneAndUpdate).toHaveBeenCalledWith(
+      { filename: res.payload.filename },
+      { $setOnInsert: expect.objectContaining({
+        stationId: "aa:bb:cc:dd:ee:ff",
+        cameraId: "top-camera",
+        bytes: req.body.length,
+      }) },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    );
   });
 
   it("rejects a station header that does not match the token", async () => {
@@ -107,7 +160,7 @@ describe("measurement capture upload", () => {
       headers: { "x-station-id": "11:22:33:44:55:66" },
     }), res);
     expect(res.statusCode).toBe(403);
-    expect(mocks.putMedia).not.toHaveBeenCalled();
+    expect(mocks.storeMeasurementMediaBuffer).not.toHaveBeenCalled();
   });
 
   it("rejects invalid JPEG bytes", async () => {
@@ -155,5 +208,57 @@ describe("measurement capture upload", () => {
       "/uploads/images/measurement-captures/capture.jpg",
       res,
     );
+  });
+
+  it("keeps the QR capture flow running when the image is pending in local MinIO", async () => {
+    const stablePath = "/api/v2/measurement-media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    mocks.storeMeasurementMediaBuffer.mockResolvedValue({ cloudPath: null, stablePath });
+    const res = responseDouble();
+
+    await service.createCapture(request(), res);
+
+    expect(res.statusCode).toBe(201);
+    expect(mocks.findOneAndUpdate).toHaveBeenCalledWith(
+      { filename: res.payload.filename },
+      { $setOnInsert: expect.objectContaining({ storagePath: stablePath }) },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    );
+  });
+
+  it("streams a pending QR capture through the resilient media layer", async () => {
+    const stablePath = "/api/v2/measurement-media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    mocks.findOne.mockReturnValue({
+      lean: vi.fn().mockResolvedValue({ filename: "capture.jpg", storagePath: stablePath }),
+    });
+    mocks.streamMeasurementMediaReference.mockResolvedValue(true);
+    const res = responseDouble();
+
+    await service.fetchCapture(request({ params: { filename: "capture.jpg" } }), res);
+
+    expect(mocks.streamMeasurementMediaReference).toHaveBeenCalledWith(stablePath, res);
+    expect(mocks.streamMedia).not.toHaveBeenCalled();
+  });
+
+  it("deletes a pending QR capture through the resilient media layer", async () => {
+    const stablePath = "/api/v2/measurement-media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    mocks.findOne.mockReturnValue({
+      lean: vi.fn().mockResolvedValue({
+        _id: "650000000000000000000700",
+        filename: "capture.jpg",
+        storagePath: stablePath,
+      }),
+    });
+    mocks.deleteMeasurementMediaReference.mockResolvedValue(true);
+    const res = responseDouble();
+
+    await service.deleteCapture(request({ params: { filename: "capture.jpg" } }), res);
+
+    expect(mocks.deleteMeasurementMediaReference).toHaveBeenCalledWith({
+      reference: stablePath,
+      sourceReference: "capture.jpg",
+    });
+    expect(mocks.deleteMedia).not.toHaveBeenCalled();
+    expect(mocks.deleteOne).toHaveBeenCalledWith({ _id: "650000000000000000000700" });
+    expect(res.statusCode).toBe(200);
   });
 });

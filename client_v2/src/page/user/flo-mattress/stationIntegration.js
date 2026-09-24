@@ -835,16 +835,58 @@ export async function decodeQrImage(jpegBlob, { required = true, fastOnly = fals
   throw wrapped;
 }
 
-export async function startDepthMeasurement(station, sku, signal) {
+export function measurementStartPayload(qrDimensions = {}) {
+  const source = typeof qrDimensions === 'string' ? { sku: qrDimensions } : (qrDimensions || {});
+  const custom = source.custom_dimensions || source.customDimensions || {};
+  const skuDimensions = dimensionsFromSku(source.sku_variant || source.skuVariant || source.sku);
+  const numericDimension = (...values) => {
+    const value = values.find((candidate) => candidate != null
+      && candidate !== '' && Number.isFinite(Number(candidate)) && Number(candidate) > 0);
+    return value == null ? undefined : Number(value);
+  };
+  const payload = {
+    sku: clean(source.sku).toUpperCase(),
+    length: numericDimension(custom.length, source.length, skuDimensions.length),
+    width: numericDimension(custom.width, custom.breadth, source.width, source.breadth, skuDimensions.breadth),
+    height: numericDimension(custom.height, source.height, skuDimensions.height),
+  };
+  return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined));
+}
+
+function reportMeasurementApiDiagnostic(station, diagnostic) {
+  const backendIp = station?.backend?.ip;
+  const token = station?.backend?.token;
+  if (!backendIp || !token) return;
+  fetch(`${backendOrigin(backendIp)}/api/v2/measurements/diagnostics`, {
+    method: 'POST',
+    keepalive: true,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(diagnostic),
+  }).catch((error) => {
+    console.warn('[VideoraIQ measurement diagnostic delivery failed]', error);
+  });
+}
+
+export async function startDepthMeasurement(station, qrDimensions, signal) {
   const endpoint = measurementStartUrl(station?.pi?.api, station?.pi?.device?.ip);
-  const normalizedSku = clean(sku).toUpperCase();
+  const requestPayload = measurementStartPayload(qrDimensions);
+  const startedAt = Date.now();
+  reportMeasurementApiDiagnostic(station, {
+    event: 'request',
+    endpoint,
+    sku: requestPayload.sku,
+    dimensions: requestPayload,
+  });
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
       signal,
       cache: 'no-store',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sku: normalizedSku }),
+      body: JSON.stringify(requestPayload),
     });
     let payload;
     try {
@@ -854,17 +896,44 @@ export async function startDepthMeasurement(station, sku, signal) {
       throw error;
     }
     const result = payload?.body?.data || payload?.body || payload?.data || payload;
+    reportMeasurementApiDiagnostic(station, {
+      event: 'success',
+      endpoint,
+      sku: requestPayload.sku,
+      dimensions: requestPayload,
+      status: response.status,
+      durationMs: Date.now() - startedAt,
+    });
     logStationSuccess('measurement-start-response', {
-      sku: normalizedSku,
+      sku: requestPayload.sku,
       stationId: station?.pi?.device?.mac,
       source: 'raspberry-pi-measurement-api',
-      message: 'Depth measurement API accepted the decoded SKU',
-      details: result,
+      message: 'Depth measurement API accepted the QR-declared dimensions',
+      details: { request: requestPayload, response: result },
     });
     return result && typeof result === 'object' ? result : {};
   } catch (error) {
-    if (error.name === 'AbortError') throw error;
+    if (error.name === 'AbortError') {
+      reportMeasurementApiDiagnostic(station, {
+        event: 'timeout',
+        endpoint,
+        sku: requestPayload.sku,
+        dimensions: requestPayload,
+        durationMs: Date.now() - startedAt,
+        message: 'Measurement request was aborted after the workflow timeout',
+      });
+      throw error;
+    }
     const networkFailure = error instanceof TypeError || /failed to fetch/i.test(error.message);
+    reportMeasurementApiDiagnostic(station, {
+      event: networkFailure ? 'unreachable' : 'service-error',
+      endpoint,
+      sku: requestPayload.sku,
+      dimensions: requestPayload,
+      status: error.status || null,
+      durationMs: Date.now() - startedAt,
+      message: error.message,
+    });
     const wrapped = new Error(networkFailure
       ? `Unable to reach the measurement API at ${endpoint}. Check port 8000 and browser CORS access.`
       : error.message);
@@ -1251,7 +1320,7 @@ export async function captureAndUpload({ station, camera, signal, progress = {},
         console.warn('[VideoraIQ measurement diagnostic error]', logError);
       }
     } else {
-      measurementResponse = await startDepthMeasurement(station, qrResponse.dimensions.sku, signal);
+      measurementResponse = await startDepthMeasurement(station, qrResponse.dimensions, signal);
       progress.measurementStarted = true;
     }
   } catch (error) {

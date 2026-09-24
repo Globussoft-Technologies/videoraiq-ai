@@ -202,6 +202,10 @@ export default function FloMattressStation() {
   return (
     <main ref={kioskSurfaceRef} tabIndex={-1} className="vq-root flex h-screen min-h-0 flex-col overflow-hidden bg-[var(--appbg)] text-[var(--tx)] outline-none">
       <StationTopbar running={capturing || processing} onStartStop={start} onToggleLogs={toggleLogs} onToggleFullscreen={() => toggleStationFullscreen().catch(() => {})} stationId={station?.pi?.device?.mac} {...counts} />
+      <div className="flex min-h-11 shrink-0 items-center gap-3 border-b border-indigo-200 bg-gradient-to-r from-cyan-50 to-violet-50 px-5 text-base font-semibold text-[var(--tx)] dark:border-[var(--bd)] dark:from-cyan-500/10 dark:to-violet-500/10">
+        <span className="h-3 w-3 shrink-0 rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.7)]" />
+        <span>Reset — hold the QR label under the camera to rescan</span>
+      </div>
       <section className="relative flex min-h-0 flex-1 overflow-auto bg-[#eef0f7] p-3 dark:bg-[var(--appbg)] lg:p-4">
         <div className="relative grid min-h-[560px] w-full flex-1 gap-3 lg:min-h-0 lg:grid-cols-2 lg:items-stretch">
           <StationIdleCard onStart={start} disabled={capturing || processing || Boolean(configurationError) || !selectedCamera} capturing={capturing || processing} />
