@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { createPortal } from 'react-dom';
 import { useLocation, useOutletContext } from 'react-router-dom';
 import moment from 'moment-timezone';
-import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2, Clock, Car, Building2, CalendarClock, Hash, Server, Video, Minus, Plus, RotateCcw } from 'lucide-react';
+  import { Search, X, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, Maximize2, Minimize2, Flag, Trash2, Check, Clock, Car, Building2, CalendarClock, Hash, Server, Video, Minus, Plus, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { AsyncBoundary } from '../../../components/States';
 import SharedMultiSelect from '../../../components/MultiSelect';
@@ -24,13 +24,14 @@ import RefreshControl from '../../../components/RefreshControl';
 import DeleteConfirmation from '../../../components/DeleteConfirmation';
 import { useApi } from '../../../hooks/useApi';
 import { num, detectionLabel, shortDateTime, mediaUrl } from '../../../lib/format';
-import { fetchIncidents, fetchIncidentStats, fetchDetectionTypes, deleteIncidents } from '../../../helpers/incidents';
+import { fetchIncidents, fetchIncidentStats, fetchDetectionTypes, deleteIncidents, bulkResolveIncidents } from '../../../helpers/incidents';
 import { getLocations, getChannels } from '../../../helpers/monitoring';
 import { getNvrs } from '../../../helpers/configure';
 import axios from 'axios';
 import getAccessToken from '../../../utils/getAccessToken';
 
 const PAGE_SIZE_OPTIONS = [12, 20, 60, 100];
+const DELETE_BATCH_SIZE = 250;
 
 const SEVERITIES = [
   { key: 'high',     label: 'High'   },
@@ -39,7 +40,6 @@ const SEVERITIES = [
 ];
 
 const STATUSES = [
-  { key: 'new',          label: 'New'      },
   { key: 'resolved',     label: 'Resolved' },
 ];
 
@@ -1312,7 +1312,17 @@ export default function IncidentCenter() {
 
   const [selectedForDelete, setSelectedForDelete] = useState([]);
   const [deleting, setDeleting] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteAllConfirmOpen, setDeleteAllConfirmOpen] = useState(false);
+  const [selectedForResolve, setSelectedForResolve] = useState(() => new Set());
+  const [resolveMenuOpen, setResolveMenuOpen] = useState(false);
+  const [resolveMode, setResolveMode] = useState(null);
+  const [resolveConfirm, setResolveConfirm] = useState(null);
+  const [resolvingBulk, setResolvingBulk] = useState(false);
+  const [resolveSuccessAnimating, setResolveSuccessAnimating] = useState(false);
+  const resolveMenuRef = useRef(null);
+  const resolveSuccessTimerRef = useRef(null);
 
   // The plate controls only make sense once the selection is limited to
   // detection types that actually carry a vehicle number.
@@ -1373,11 +1383,12 @@ export default function IncidentCenter() {
     if (deptIds.length)    f.department         = deptIds;
     if (locIds.length)     f.location           = locIds;
     if (sevSet.size)       f.severity           = [...sevSet];
-    // The API treats a missing statusFilter as unresolved-only. “All” is an
-    // explicit union so resolved High incidents are not silently omitted.
+    // The Incident Center's All view is the active incident feed. Resolved
+    // incidents belong in the Resolved tab and must not appear here unless a
+    // caller explicitly selects the resolved status.
     f.statusFilter = statusSet.size
       ? [...statusSet]
-      : ['new', 'reported', 'resolved'];
+      : ['new', 'reported'];
     if (showsVehicleControls) {
       if (debouncedVehicleSearch.trim()) f.search = debouncedVehicleSearch.trim();
       if (tagStatus) f.tagStatus = tagStatus;
@@ -1400,6 +1411,8 @@ export default function IncidentCenter() {
     }
     return f;
   }, [ctxLoc, detTypes, dateFrom, dateTo, nvrIds, channelIds, deptIds, locIds, sevSet, statusSet, showsVehicleControls, debouncedVehicleSearch, tagStatus, timeFrom, timeTo, timeRangeError]);
+
+  const isResolvedView = statusSet.size === 1 && statusSet.has('resolved');
 
   const stats = useApi(() => fetchIncidentStats(serverFilter), [JSON.stringify(serverFilter)], { pollMs: 60000 });
   const types = useApi(() => fetchDetectionTypes(), []);
@@ -1449,10 +1462,27 @@ export default function IncidentCenter() {
       };
     });
     stats.refetch({ silent: true });
+    if (resolved) grid.refetch({ silent: true });
   }, [grid, stats]);
 
   const totalCount = grid.data?.totalCount ?? 0;
   const pages      = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  const currentPageIds = useMemo(
+    () => items.map((item) => item._id || item.id).filter(Boolean),
+    [items]
+  );
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (resolveMenuRef.current && !resolveMenuRef.current.contains(event.target)) {
+        setResolveMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  useEffect(() => () => clearTimeout(resolveSuccessTimerRef.current), []);
 
   // Running total of everything shown up to and including this page — 12, 24,
   // 36 … — instead of a flat per-page count that reads the same on every page.
@@ -1462,7 +1492,13 @@ export default function IncidentCenter() {
   // reasoning as client's Incidents page: deleteIncidents takes an explicit
   // id list, not a filter, so carrying stale selections across a page change
   // would silently delete incidents the user can no longer see.
-  useEffect(() => { setSelectedForDelete([]); }, [page]);
+  // A filter change invalidates selected IDs; pagination preserves manual
+  // selections so returning to a page shows the same checked cards.
+  useEffect(() => {
+    setSelectedForDelete([]);
+    setSelectedForResolve(new Set());
+    setResolveMode(null);
+  }, [pageSize, JSON.stringify(serverFilter)]);
 
   const handleToggleSelectForDelete = useCallback((id) => {
     setSelectedForDelete((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -1471,7 +1507,103 @@ export default function IncidentCenter() {
   const allOnPageSelected = items.length > 0 && items.every((item) => selectedForDelete.includes(item._id || item.id));
 
   const handleToggleSelectAll = () => {
-    setSelectedForDelete(allOnPageSelected ? [] : items.map((item) => item._id || item.id));
+    const pageIds = items.map((item) => item._id || item.id).filter(Boolean);
+    setSelectedForDelete((prev) => {
+      if (allOnPageSelected) return prev.filter((id) => !pageIds.includes(id));
+      return [...new Set([...prev, ...pageIds])];
+    });
+  };
+
+  const handleResolveScope = useCallback((mode) => {
+    if (mode === 'page') {
+      // Page scope follows the visible page until a card is manually toggled.
+      setSelectedForResolve(new Set());
+      setResolveMode('page');
+      return;
+    }
+
+    if (mode === 'filtered') {
+      // Filtered scope is sent to the API as a filter, so there is no reason
+      // to keep page IDs around while it is active.
+      setSelectedForResolve(new Set());
+      setResolveMode('filtered');
+      return;
+    }
+
+    // Selecting this radio must not rebuild or clear the user's IDs.
+    setResolveMode('selected');
+  }, []);
+
+  const handleToggleResolveSelection = useCallback((id) => {
+    // A checkbox click always operates on the visible selection. If the
+    // current scope is page/all, start with the visible page selected and
+    // then remove/add the clicked incident. This is what turns a page-wide
+    // selection of 12 into a selected-incidents scope of 11.
+    const next = new Set(resolveMode === 'page' || resolveMode === 'filtered'
+      ? currentPageIds
+      : selectedForResolve);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    // Treat an exact match with the currently loaded page as page scope. This
+    // prevents the menu from showing two equivalent choices such as
+    // "Selected incidents (12)" and "Current page incidents (12)". The first
+    // deselection makes the scope explicit and changes it to "selected".
+    const isFullCurrentPage = next.size === currentPageIds.length
+      && currentPageIds.every((pageId) => next.has(pageId));
+    setSelectedForResolve(isFullCurrentPage ? new Set() : next);
+    setResolveMode(next.size ? (isFullCurrentPage ? 'page' : 'selected') : null);
+  }, [currentPageIds, resolveMode, selectedForResolve]);
+
+  const openResolveConfirmation = useCallback((mode) => {
+    const count = mode === 'selected'
+      ? selectedForResolve.size
+      : mode === 'page'
+        ? currentPageIds.length
+        : totalCount;
+    if (!count || resolvingBulk) return;
+    setResolveMenuOpen(false);
+    setResolveConfirm({ mode, count });
+  }, [resolvingBulk, currentPageIds.length, selectedForResolve.size, totalCount]);
+
+  const handlePrimaryResolve = useCallback(() => {
+    const mode = resolveMode || (selectedForResolve.size > 0 ? 'selected' : 'page');
+    openResolveConfirmation(mode);
+  }, [openResolveConfirmation, resolveMode, selectedForResolve.size]);
+
+  const handleConfirmBulkResolve = async () => {
+    if (!resolveConfirm || resolvingBulk) return;
+    setResolvingBulk(true);
+    try {
+      const { mode } = resolveConfirm;
+      const result = await bulkResolveIncidents({
+        mode,
+        incidentIds: mode === 'selected'
+          ? [...selectedForResolve]
+          : mode === 'page'
+            ? currentPageIds
+            : [],
+        filters: serverFilter,
+      });
+      const resolvedCount = Number(
+        result?.resolvedCount ?? result?.body?.resolvedCount ?? result?.data?.resolvedCount ?? 0
+      );
+      toast.success(`${resolvedCount} incident${resolvedCount === 1 ? '' : 's'} marked as resolved`);
+      setSelectedForResolve(new Set());
+      setResolveMode(null);
+      setResolveConfirm(null);
+      stats.refetch();
+      setResolveSuccessAnimating(true);
+      clearTimeout(resolveSuccessTimerRef.current);
+      resolveSuccessTimerRef.current = setTimeout(() => {
+        setResolveSuccessAnimating(false);
+        grid.refetch({ silent: true });
+        stats.refetch({ silent: true });
+      }, 850);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || err?.response?.data?.body?.message || 'Failed to resolve incidents');
+    } finally {
+      setResolvingBulk(false);
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -1491,6 +1623,47 @@ export default function IncidentCenter() {
       toast.error(err?.response?.data?.body?.message || 'Failed to delete incidents');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleConfirmDeleteAll = async () => {
+    if (deletingAll || !totalCount) return;
+    setDeletingAll(true);
+    try {
+      // The backend only exposes delete-by-incidentIds. Fetch every matching
+      // ID using the same filters, then reuse that existing endpoint in small
+      // batches so the request body stays within safe limits.
+      const ids = [];
+      let skip = 0;
+      while (ids.length < totalCount) {
+        const result = await fetchIncidents(
+          { skip, limit: DELETE_BATCH_SIZE },
+          serverFilter,
+        );
+        const batchIds = (result?.items || [])
+          .map((item) => item._id || item.id)
+          .filter(Boolean);
+        if (!batchIds.length) break;
+        ids.push(...batchIds);
+        skip += batchIds.length;
+        if (batchIds.length < DELETE_BATCH_SIZE) break;
+      }
+
+      const uniqueIds = [...new Set(ids)];
+      for (let i = 0; i < uniqueIds.length; i += DELETE_BATCH_SIZE) {
+        await deleteIncidents(uniqueIds.slice(i, i + DELETE_BATCH_SIZE));
+      }
+
+      toast.success(`${uniqueIds.length} incident${uniqueIds.length === 1 ? '' : 's'} deleted successfully`);
+      setSelectedForDelete([]);
+      setDeleteAllConfirmOpen(false);
+      setPage(0);
+      grid.refetch();
+      stats.refetch();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || err?.response?.data?.body?.message || 'Failed to delete incidents');
+    } finally {
+      setDeletingAll(false);
     }
   };
 
@@ -1554,6 +1727,8 @@ export default function IncidentCenter() {
     setNvrIds([]); setChannelIds([]); setDeptIds([]); setLocIds([]);
     setVehicleSearch(''); setDebouncedVehicleSearch(''); setTagStatus('');
     setTimeFrom(''); setTimeTo('');
+    setSelectedForResolve(new Set());
+    setResolveMode(null);
     setPage(0);
   }, []);
 
@@ -1580,6 +1755,11 @@ export default function IncidentCenter() {
   return (
     <div ref={pageRef} className="vq-inc-page" style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 20, background: 'var(--bg0)', minHeight: '100%', overflow: isPageFS ? 'auto' : undefined }}>
       <style>{`
+        @keyframes vq-resolve-success {
+          0% { opacity: 0; transform: translateY(-2px) scale(.98); }
+          35% { opacity: 1; transform: translateY(0) scale(1.02); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
         @media (max-width: 1024px) {
           .vq-inc-kpis { grid-template-columns: repeat(2,1fr) !important; }
           .vq-inc-cards { grid-template-columns: repeat(2,1fr) !important; }
@@ -1742,6 +1922,117 @@ export default function IncidentCenter() {
           ))}
         </div>
 
+        {!isResolvedView && (
+          <>
+            {/* Bulk resolve controls stay in the existing toolbar so they do not
+                add a second, visually heavy action row above the grid. */}
+            <div style={{ width: 1, height: 20, background: 'var(--bd2)' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+          <div ref={resolveMenuRef} style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'stretch' }}>
+              <button
+                type="button"
+                onClick={() => setResolveMenuOpen((open) => !open)}
+                disabled={resolvingBulk || !items.length}
+                aria-expanded={resolveMenuOpen}
+                style={{ display: 'flex', alignItems: 'center', fontSize: 11.5, fontWeight: 600, color: '#fff', background: '#22c55e', border: '1px solid #22c55e', borderRight: '1px solid rgba(255,255,255,.45)', borderRadius: '7px 0 0 7px', padding: '6px 10px', cursor: resolvingBulk || !items.length ? 'not-allowed' : 'pointer', opacity: resolvingBulk || !items.length ? 0.65 : 1, whiteSpace: 'nowrap' }}
+              >
+                {resolvingBulk
+                  ? 'Resolving…'
+                  : resolveMode === 'filtered'
+                    ? `Mark as resolved (${num(totalCount)})`
+                    : resolveMode === 'page'
+                      ? `Mark as resolved (${num(currentPageIds.length)})`
+                      : resolveMode === 'selected'
+                        ? `Mark as resolved (${num(selectedForResolve.size)})`
+                        : 'Mark as resolved'}
+              </button>
+              <button
+                type="button"
+                aria-label="Choose resolve action"
+                onClick={() => setResolveMenuOpen((open) => !open)}
+                disabled={resolvingBulk}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', background: '#22c55e', border: '1px solid #22c55e', borderLeft: 0, borderRadius: '0 7px 7px 0', padding: '0 7px', cursor: resolvingBulk ? 'not-allowed' : 'pointer', opacity: resolvingBulk ? 0.65 : 1 }}
+              >
+                <ChevronDown size={13} />
+              </button>
+            </div>
+            {resolveMenuOpen && (
+              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 300, minWidth: 250, padding: 8, background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.18)' }}>
+                <div style={{ padding: '3px 8px 7px', color: 'var(--tx3)', fontSize: 11, fontWeight: 600 }}>Resolve scope</div>
+                {resolveMode === 'selected' && selectedForResolve.size > 0 && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '10px 9px', borderRadius: 8, background: resolveMode === 'selected' ? 'rgba(34,197,94,.14)' : 'transparent', color: 'var(--tx)', cursor: !resolvingBulk ? 'pointer' : 'not-allowed', fontSize: 12.5, fontWeight: resolveMode === 'selected' ? 600 : 500 }}>
+                    <input type="radio" name="resolve-scope" checked={resolveMode === 'selected'} onChange={() => handleResolveScope('selected')} disabled={resolvingBulk} style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }} />
+                    <span aria-hidden="true" style={{ width: 15, height: 15, borderRadius: '50%', border: `2px solid ${resolveMode === 'selected' ? '#22c55e' : 'var(--tx3)'}`, background: resolveMode === 'selected' ? '#22c55e' : 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {resolveMode === 'selected' && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff' }} />}
+                    </span>
+                    <span>Selected incidents ({num(selectedForResolve.size)})</span>
+                  </label>
+                )}
+                <label style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '10px 9px', borderRadius: 8, background: resolveMode === 'page' ? 'rgba(34,197,94,.14)' : 'transparent', color: items.length ? 'var(--tx)' : 'var(--tx3)', cursor: items.length && !resolvingBulk ? 'pointer' : 'not-allowed', fontSize: 12.5, fontWeight: resolveMode === 'page' ? 600 : 500, transition: 'background .15s' }}>
+                  <input
+                    type="radio"
+                    name="resolve-scope"
+                    checked={resolveMode === 'page'}
+                    onChange={() => handleResolveScope('page')}
+                    disabled={!items.length || resolvingBulk}
+                    style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }}
+                  />
+                  <span aria-hidden="true" style={{ width: 15, height: 15, borderRadius: '50%', border: `2px solid ${resolveMode === 'page' ? '#22c55e' : 'var(--tx3)'}`, background: resolveMode === 'page' ? '#22c55e' : 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}>
+                    {resolveMode === 'page' && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff' }} />}
+                  </span>
+                  <span>Current page incidents ({num(items.length)})</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '10px 9px', borderRadius: 8, background: resolveMode === 'filtered' ? 'rgba(34,197,94,.14)' : 'transparent', color: totalCount ? 'var(--tx)' : 'var(--tx3)', cursor: totalCount && !resolvingBulk ? 'pointer' : 'not-allowed', fontSize: 12.5, fontWeight: resolveMode === 'filtered' ? 600 : 500, transition: 'background .15s' }}>
+                  <input
+                    type="radio"
+                    name="resolve-scope"
+                    checked={resolveMode === 'filtered'}
+                    onChange={() => handleResolveScope('filtered')}
+                    disabled={!totalCount || resolvingBulk}
+                    style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }}
+                  />
+                  <span aria-hidden="true" style={{ width: 15, height: 15, borderRadius: '50%', border: `2px solid ${resolveMode === 'filtered' ? '#22c55e' : 'var(--tx3)'}`, background: resolveMode === 'filtered' ? '#22c55e' : 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}>
+                    {resolveMode === 'filtered' && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff' }} />}
+                  </span>
+                  <span>All incidents ({num(totalCount)})</span>
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                  <button
+                    type="button"
+                    onClick={handlePrimaryResolve}
+                    disabled={resolvingBulk || !resolveMode}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #22c55e', borderRadius: 7, background: '#22c55e', color: '#fff', fontSize: 11.5, fontWeight: 600, cursor: resolvingBulk || !resolveMode ? 'not-allowed' : 'pointer', opacity: resolvingBulk || !resolveMode ? 0.6 : 1 }}
+                  >
+                    Apply
+                  </button>
+                  {(resolveMode || selectedForResolve.size > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedForResolve(new Set());
+                      setResolveMode(null);
+                      setResolveMenuOpen(false);
+                    }}
+                    disabled={resolvingBulk}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #dc2626', borderRadius: 7, background: '#dc2626', color: '#fff', fontSize: 11.5, fontWeight: 600, cursor: resolvingBulk ? 'not-allowed' : 'pointer', boxShadow: '0 2px 6px rgba(220,38,38,.22)' }}
+                  >
+                    Clear selection
+                  </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+            </div>
+            {resolveSuccessAnimating && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--ok)', fontSize: 11.5, fontWeight: 600, animation: 'vq-resolve-success .85s ease-out both', whiteSpace: 'nowrap' }}>
+                <Check size={13} strokeWidth={3} /> Moving to Resolved…
+              </span>
+            )}
+          </>
+        )}
+
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 12, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>
             {grid.loading ? 'Loading…' : `Showing ${shownCount} of ${num(totalCount)}`}
@@ -1772,7 +2063,7 @@ export default function IncidentCenter() {
         </div>
       </div>
 
-      {/* ── Delete mode action bar ──────────────────────────────────────────── */}
+      {/* Delete mode action bar */}
       {isDeleteMode && (
         <div style={{
           background: 'var(--bg1solid)', border: '1px solid var(--bd)', borderRadius: 12,
@@ -1797,17 +2088,50 @@ export default function IncidentCenter() {
                 {allOnPageSelected ? 'Deselect All' : 'Select All'}
               </button>
             )}
+            {selectedForDelete.length > 0 && (
+              <button
+                onClick={() => setSelectedForDelete([])}
+                disabled={deleting || deletingAll}
+                style={{
+                  fontSize: 12.5, fontWeight: 600,
+                  border: '1px solid var(--bd)', borderRadius: 8, padding: '7px 14px',
+                  background: '#fff7ed', borderColor: '#fdba74', color: '#c2410c',
+                  cursor: deleting || deletingAll ? 'not-allowed' : 'pointer',
+                  opacity: deleting || deletingAll ? 0.6 : 1,
+                }}
+                onMouseEnter={e => { if (!deleting && !deletingAll) e.currentTarget.style.background = '#fed7aa'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#fff7ed'; }}
+              >
+                Deselect Selected ({selectedForDelete.length})
+              </button>
+            )}
             <button
               onClick={() => selectedForDelete.length > 0 && setDeleteConfirmOpen(true)}
-              disabled={selectedForDelete.length === 0 || deleting}
+              disabled={selectedForDelete.length === 0 || deleting || deletingAll}
               style={{
                 fontSize: 12.5, fontWeight: 600, color: '#fff',
                 background: 'var(--crit)', border: '1px solid var(--crit)', borderRadius: 8,
-                padding: '7px 16px', cursor: selectedForDelete.length === 0 || deleting ? 'not-allowed' : 'pointer',
-                opacity: selectedForDelete.length === 0 || deleting ? 0.5 : 1,
+                padding: '7px 16px', cursor: selectedForDelete.length === 0 || deleting || deletingAll ? 'not-allowed' : 'pointer',
+                opacity: selectedForDelete.length === 0 || deleting || deletingAll ? 0.5 : 1,
               }}
+              onMouseEnter={e => { if (selectedForDelete.length > 0 && !deleting && !deletingAll) e.currentTarget.style.background = '#dc2626'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'var(--crit)'; }}
             >
-              {deleting ? 'Deleting…' : 'Delete Selected'}
+              {deleting ? 'Deleting…' : `Delete Selected (${selectedForDelete.length})`}
+            </button>
+            <button
+              onClick={() => totalCount > 0 && setDeleteAllConfirmOpen(true)}
+              disabled={!totalCount || deleting || deletingAll}
+              style={{
+                fontSize: 12.5, fontWeight: 600, color: '#fff',
+                background: '#b91c1c', border: '1px solid #b91c1c', borderRadius: 8,
+                padding: '7px 16px', cursor: !totalCount || deleting || deletingAll ? 'not-allowed' : 'pointer',
+                opacity: !totalCount || deleting || deletingAll ? 0.5 : 1,
+              }}
+              onMouseEnter={e => { if (totalCount > 0 && !deleting && !deletingAll) e.currentTarget.style.background = '#991b1b'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#b91c1c'; }}
+            >
+              {deletingAll ? 'Deleting All…' : `Delete All (${num(totalCount)})`}
             </button>
           </div>
         </div>
@@ -1884,6 +2208,10 @@ export default function IncidentCenter() {
                   onTagUser={setTagIncident}
                   onUntagUser={setUntagIncident}
                   onViewUser={setViewUser}
+                  hideResolveControls={isResolvedView}
+                  resolveSelected={resolveMode === 'filtered' || resolveMode === 'page' || selectedForResolve.has(item._id || item.id)}
+                  resolveSelectionActive={!!resolveMode}
+                  onToggleResolve={() => handleToggleResolveSelection(item._id || item.id)}
                   deleteMode={isDeleteMode}
                   selectedForDelete={selectedForDelete.includes(item._id || item.id)}
                   onToggleDelete={() => handleToggleSelectForDelete(item._id || item.id)}
@@ -1994,6 +2322,37 @@ export default function IncidentCenter() {
         onClose={() => setDeleteConfirmOpen(false)}
         onConfirm={handleConfirmDelete}
         loading={deleting}
+      />
+
+      <DeleteConfirmation
+        open={deleteAllConfirmOpen}
+        icon={<Trash2 className="text-[var(--crit)] h-8 w-8" />}
+        title="Confirm Delete All"
+        message={<>Are you sure you want to delete all {num(totalCount)} incidents matching the current filters?<br />This action applies across all pages and cannot be undone.</>}
+        confirmLabel="Delete All"
+        onClose={() => !deletingAll && setDeleteAllConfirmOpen(false)}
+        onConfirm={handleConfirmDeleteAll}
+        loading={deletingAll}
+      />
+
+      <DeleteConfirmation
+        open={!!resolveConfirm}
+        icon={<Check className="text-[var(--ok)] h-8 w-8" />}
+        title="Confirm resolve"
+        message={resolveConfirm?.mode === 'filtered'
+          ? <>
+              Mark {resolveConfirm.count} incidents as resolved?
+              <br />
+              This action applies to all incidents matching the current filters, across all pages.
+            </>
+          : resolveConfirm?.mode === 'page'
+            ? `Mark all ${resolveConfirm.count} incidents on this page as resolved?`
+            : `Mark ${resolveConfirm?.count || 0} selected incident${resolveConfirm?.count === 1 ? '' : 's'} as resolved?`}
+        confirmLabel="Mark as resolved"
+        confirmClass="bg-[var(--ok)] text-white hover:opacity-90 shadow-sm shadow-[var(--ok)]/20"
+        onClose={() => !resolvingBulk && setResolveConfirm(null)}
+        onConfirm={handleConfirmBulkResolve}
+        loading={resolvingBulk}
       />
     </div>
   );

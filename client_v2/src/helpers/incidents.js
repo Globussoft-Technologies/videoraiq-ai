@@ -96,6 +96,16 @@ export const updateIncidentResolved = async ({ incidentId, incidentType, resolve
   return unwrap(res);
 };
 
+export const bulkResolveIncidents = async ({ mode, incidentIds = [], filters = {} }) => {
+  const token = getAccessToken();
+  const res = await axios.put(
+    `${Api_url}/incidents/bulk`,
+    { mode, incidentIds, filters, resolved: true },
+    { headers: { 'Content-Type': 'application/json', 'x-access-token': token } }
+  );
+  return unwrap(res) || {};
+};
+
 export const deleteIncidents = async (incidentIds = []) => {
   const token = getAccessToken();
   const res = await axios.delete(
@@ -104,4 +114,3 @@ export const deleteIncidents = async (incidentIds = []) => {
   );
   return unwrap(res);
 };
-

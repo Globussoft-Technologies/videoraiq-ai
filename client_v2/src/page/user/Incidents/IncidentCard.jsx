@@ -286,7 +286,7 @@ function Spinner({ size = 14, color = '#fff' }) {
 }
 
 /* ── Card ─────────────────────────────────────────────────────────────────── */
-export default function IncidentCard({ item, onClick, onRefresh, onResolvedChange, onOpenLightbox, onTagUser, onUntagUser, onViewUser, deleteMode, selectedForDelete, onToggleDelete }) {
+export default function IncidentCard({ item, onClick, onRefresh, onResolvedChange, onOpenLightbox, onTagUser, onUntagUser, onViewUser, hideResolveControls, resolveSelected, resolveSelectionActive, onToggleResolve, deleteMode, selectedForDelete, onToggleDelete }) {
   const [reportOpen,   setReportOpen]   = useState(false);
   // const [previewOpen,  setPreviewOpen]  = useState(false);   // preview disabled
   const [resolving,    setResolving]    = useState(false);
@@ -387,8 +387,10 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
         onMouseLeave={() => setHover(false)}
         style={{
           background: 'var(--bg1solid)',
-          border: `1px solid ${deleteMode && selectedForDelete ? 'var(--crit)' : 'var(--bd)'}`,
-          boxShadow: deleteMode && selectedForDelete
+          border: `${resolveSelected || (deleteMode && selectedForDelete) ? '2px' : '1px'} solid ${resolveSelected ? '#22c55e' : deleteMode && selectedForDelete ? 'var(--crit)' : 'var(--bd)'}`,
+          boxShadow: resolveSelected
+            ? '0 0 0 2px rgba(34,197,94,.2), 0 4px 16px rgba(34,197,94,.16)'
+            : deleteMode && selectedForDelete
             ? '0 0 0 2px rgba(239,68,68,.3), 0 4px 16px rgba(0,0,0,.14)'
             : hover ? '0 4px 16px rgba(0,0,0,.14)' : '0 1px 4px rgba(0,0,0,.06)',
           borderRadius: 12,
@@ -396,7 +398,7 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
           cursor: 'pointer',
           display: 'flex',
           flexDirection: 'column',
-          transition: 'box-shadow .15s, border-color .15s',
+          transition: 'box-shadow .15s, border-color .15s, background .15s',
           position: 'relative',
         }}
       >
@@ -431,16 +433,39 @@ export default function IncidentCard({ item, onClick, onRefresh, onResolvedChang
             </div>
           )}
 
+          {!hideResolveControls && (hover || resolveSelected || resolveSelectionActive) && (
+            <div
+              role="checkbox"
+              tabIndex={0}
+              aria-checked={!!resolveSelected}
+              aria-label={resolveSelected ? 'Deselect incident' : 'Select incident'}
+              onClick={(e) => { e.stopPropagation(); onToggleResolve?.(); }}
+              onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); onToggleResolve?.(); } }}
+              title={resolveSelected ? 'Remove from selection' : 'Select incident'}
+              style={{
+                position: 'absolute', top: 9, left: 9, zIndex: 10,
+                width: 22, height: 22, borderRadius: 6,
+                background: resolveSelected ? '#22c55e' : 'rgba(0,0,0,.62)',
+                border: `2px solid ${resolveSelected ? '#22c55e' : '#fff'}`,
+                boxShadow: '0 1px 4px rgba(0,0,0,.4)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', transition: 'background .15s, border-color .15s',
+              }}
+            >
+              {resolveSelected && <Check size={14} color="#fff" strokeWidth={3} />}
+            </div>
+          )}
+
           {/* Top-left: mark-as-resolved (shown on hover). The detection-type
              badge lives bottom-left instead, so it never collides with the
              "Persons: N" / ID labels the engine bakes into the top of the frame. */}
-          <div style={{ position: 'absolute', top: 9, left: 9, right: 9, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ position: 'absolute', top: 9, left: !hideResolveControls && (hover || resolveSelected || resolveSelectionActive) ? 38 : 9, right: 9, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             {/* Mark as resolved — normally hover-only, but stays mounted while a
                 save is in flight or its confirmation is showing. Gating purely
                 on `hover` meant moving the pointer off the card mid-request
                 unmounted the button and took the spinner with it, so the action
                 looked like it had done nothing. */}
-            {(localResolved || hover || resolving || saveFlash) && (
+            {!hideResolveControls && (localResolved || hover || resolving || saveFlash) && (
               <button
                 onClick={handleMarkResolved}
                 disabled={resolving}
