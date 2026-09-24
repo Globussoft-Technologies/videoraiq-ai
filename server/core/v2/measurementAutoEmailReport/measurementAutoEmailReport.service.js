@@ -34,7 +34,7 @@ const HEADERS = [
   "#", "Order", "Order Item", "Ref", "SKU", "Model",
   "Printed LxWxH (in)", "Measured LxWxH (in)", "Measured raw (DS)", "Unit",
   "Dev L (in)", "Dev W (in)", "Dev H (in)", "Confidence", "Match %",
-  "Station", "Status", "When", "Result", "Snapshot", "Measurement Image",
+  "Status", "When", "Result", "Snapshot", "Measurement Image",
 ];
 
 // Relative column widths for the PDF table (must have one entry per HEADER).
@@ -183,7 +183,7 @@ function toCells(r, i, { snap = "text", withSnaps = true } = {}) {
     r.devL, r.devB, r.devH,
     r.confidence != null ? Number(r.confidence).toFixed(2) : "—",
     matchPctCell(r),
-    r.station, r.recordStatus || "—", r.dateTime || r.time, r.result,
+    r.recordStatus || "—", r.dateTime || r.time, r.result,
   ];
   if (withSnaps) {
     cells.push(linkCell(snapUrlOf(r), snap));
