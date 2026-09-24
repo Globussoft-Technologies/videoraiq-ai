@@ -299,15 +299,17 @@ export default function PlaybackTimelineBar({
     [segments, dayStart]
   );
 
+  const futureStartMs = Math.max(0, Math.min(DAY_MS, Date.now() - dayStart));
   const thumbStepMs = Math.max(15 * 1000, windowDurationMs / 10);
   const getNearestFrame = useCallback(
     (targetMs) => {
-      if (!thumbnailCache || thumbnailCache.size === 0) return null;
+      if (targetMs >= futureStartMs || !thumbnailCache || thumbnailCache.size === 0) return null;
       if (thumbnailCache.has(targetMs)) return thumbnailCache.get(targetMs);
       let closestKey = null;
       let minDiff = Infinity;
       const maxDiff = thumbStepMs * 1.5;
       for (const [key] of thumbnailCache.entries()) {
+        if (key >= futureStartMs) continue;
         const diff = Math.abs(key - targetMs);
         if (diff < minDiff) {
           minDiff = diff;
@@ -316,7 +318,7 @@ export default function PlaybackTimelineBar({
       }
       return (closestKey != null && minDiff <= maxDiff) ? thumbnailCache.get(closestKey) : null;
     },
-    [thumbnailCache, thumbStepMs]
+    [thumbnailCache, thumbStepMs, futureStartMs]
   );
 
   const visibleStartMs = Math.max(0, Math.min(DAY_MS, (scrollLeft / Math.max(1, trackWidthPx)) * DAY_MS));
@@ -327,7 +329,7 @@ export default function PlaybackTimelineBar({
   const visibleThumbs = useMemo(() => {
     const list = [];
     for (let t = Math.floor(bufferedStartMs / thumbStepMs) * thumbStepMs; t <= bufferedEndMs; t += thumbStepMs) {
-      if (t < 0 || t > DAY_MS) continue;
+      if (t < 0 || t > DAY_MS || t >= futureStartMs) continue;
       const leftPct = (t / DAY_MS) * 100;
       const widthPct = (thumbStepMs / DAY_MS) * 100;
       const frameUrl = getNearestFrame(t);
@@ -335,7 +337,7 @@ export default function PlaybackTimelineBar({
       list.push({ timeMs: t, leftPct, widthPct, frameUrl, recorded });
     }
     return list;
-  }, [bufferedStartMs, bufferedEndMs, thumbStepMs, getNearestFrame, isRecorded]);
+  }, [bufferedStartMs, bufferedEndMs, thumbStepMs, getNearestFrame, isRecorded, futureStartMs]);
 
   const tickStepSec = currentZoomConfig.tickStepSec;
   const tickStepMs = tickStepSec * 1000;
@@ -372,6 +374,7 @@ export default function PlaybackTimelineBar({
     Math.min(containerWidth - previewWidth / 2 - 8, hoverX - scrollLeft)
   );
   const hoverRecorded = hoverMs !== null && isRecorded(hoverMs);
+  const hoverIsFuture = hoverMs !== null && isFutureSeek(dayStart, hoverMs);
   const previewFrameUrl = hoverRecorded ? getNearestFrame(hoverMs) : null;
 
   return (
@@ -382,7 +385,7 @@ export default function PlaybackTimelineBar({
         borderColor: isDark ? 'var(--bd)' : 'rgba(0,0,0,0.12)'
       }}
     >
-      {isHovering && hoverMs !== null && (
+      {isHovering && hoverMs !== null && !hoverIsFuture && (
         <div
           className="absolute bottom-full mb-2 z-50 rounded-xl border p-1.5 shadow-xl pointer-events-none"
           style={{
@@ -455,6 +458,7 @@ export default function PlaybackTimelineBar({
               </div>
             ))}
             <div className="absolute left-0 top-0 bottom-0 pointer-events-none" style={{ width: `${cursorPct}%`, background: 'linear-gradient(90deg, rgba(37,99,235,0.2) 0%, rgba(6,182,212,0.25) 100%)' }} />
+            {futureStartMs < DAY_MS && <div className="absolute top-0 bottom-0 right-0 bg-[#0c1017] pointer-events-none" style={{ left: `${(futureStartMs / DAY_MS) * 100}%` }} />}
           </div>
           {events.map((ev) => {
             const t = new Date(ev.timeOfIncident).getTime();
