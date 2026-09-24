@@ -366,15 +366,49 @@ export default function PlaybackTimelineBar({
   );
   const cursorVisible = cursorPx >= scrollLeft && cursorPx <= scrollLeft + containerWidth;
   const cursorLabelOffset = clampLabelCenter(cursorPx) - cursorPx;
+  const previewWidth = Math.min(208, containerWidth - 16);
+  const previewCenter = Math.max(
+    previewWidth / 2 + 8,
+    Math.min(containerWidth - previewWidth / 2 - 8, hoverX - scrollLeft)
+  );
+  const hoverRecorded = hoverMs !== null && isRecorded(hoverMs);
+  const previewFrameUrl = hoverRecorded ? getNearestFrame(hoverMs) : null;
 
   return (
     <div 
-      className="flex flex-col gap-2 p-3 sm:p-3.5 rounded-xl border shadow-sm select-none transition-all"
+      className="relative flex flex-col gap-2 p-3 sm:p-3.5 rounded-xl border shadow-sm select-none transition-all"
       style={{
         backgroundColor: isDark ? 'var(--bg1)' : '#ffffff',
         borderColor: isDark ? 'var(--bd)' : 'rgba(0,0,0,0.12)'
       }}
     >
+      {isHovering && hoverMs !== null && (
+        <div
+          className="absolute bottom-full mb-2 z-50 rounded-xl border p-1.5 shadow-xl pointer-events-none"
+          style={{
+            left: `${(scrollRef.current?.offsetLeft || 14) + previewCenter}px`,
+            transform: 'translateX(-50%)',
+            width: previewWidth,
+            backgroundColor: isDark ? 'var(--bg1)' : '#ffffff',
+            borderColor: isDark ? 'var(--bd)' : 'rgba(0,0,0,0.12)',
+            color: isDark ? '#f1f5f9' : '#334155',
+          }}
+        >
+          <div className="aspect-video overflow-hidden rounded-md bg-[#0c1017] flex items-center justify-center">
+            {previewFrameUrl ? (
+              <img src={previewFrameUrl} alt={`Recording preview at ${formatClock(hoverMs, true)}`} className="w-full h-full object-cover" />
+            ) : (
+              <span className="px-2 text-center text-[11px] text-slate-300">
+                {hoverRecorded ? 'Preview unavailable' : 'No recording at this time'}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center justify-between gap-2 px-1 pt-1.5 text-[11px] font-medium">
+            <span>Preview</span>
+            <span className="font-mono font-semibold text-violet-600 dark:text-violet-400">{formatClock(hoverMs, true)}</span>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <div className="flex items-center gap-1.5 font-semibold" style={{ color: isDark ? '#f1f5f9' : '#000000' }}>
@@ -400,11 +434,11 @@ export default function PlaybackTimelineBar({
         </div>
       </div>
 
-      <div ref={scrollRef} onScroll={handleScroll} className="relative w-full overflow-x-auto overflow-y-hidden rounded-lg pb-6 pt-7 focus:outline-none" style={{ scrollbarWidth: widthMultiplier > 1 ? 'thin' : 'none', scrollbarColor: isDark ? 'var(--bd) transparent' : 'rgba(0,0,0,0.2) transparent' }}>
+      <div ref={scrollRef} onScroll={handleScroll} onMouseEnter={() => setIsHovering(true)} onMouseLeave={() => { setIsHovering(false); setHoverMs(null); }} onPointerMove={handlePointerMove} className="relative w-full overflow-x-auto overflow-y-hidden rounded-lg pb-6 pt-7 focus:outline-none" style={{ scrollbarWidth: widthMultiplier > 1 ? 'thin' : 'none', scrollbarColor: isDark ? 'var(--bd) transparent' : 'rgba(0,0,0,0.2) transparent' }}>
         {isHovering && hoverMs !== null && (
-          <div className="absolute top-[2px] transform -translate-x-1/2 px-2 py-0.5 rounded bg-slate-900/95 border border-white/20 text-white font-mono text-[10px] font-semibold shadow-md pointer-events-none z-30 whitespace-nowrap text-center" style={{ left: `${clampLabelCenter(hoverX)}px`, width: timeLabelWidth }}>{formatClock(hoverMs, true)}</div>
+          <div className="absolute top-[2px] transform -translate-x-1/2 px-2 py-0.5 rounded bg-slate-900/95 border border-white/20 text-white font-mono text-[10px] font-semibold shadow-md pointer-events-none z-40 whitespace-nowrap text-center" style={{ left: `${clampLabelCenter(hoverX)}px`, width: timeLabelWidth }}>{formatClock(hoverMs, true)}</div>
         )}
-        <div ref={trackRef} onClick={handleTrackClick} onPointerDown={handlePointerDown} onMouseEnter={() => setIsHovering(true)} onMouseLeave={() => { setIsHovering(false); setHoverMs(null); }} onPointerMove={handlePointerMove} className="relative h-14 sm:h-16 bg-[#0c1017] rounded-lg border cursor-pointer shadow-inner" style={{ width: `${widthMultiplier * 100}%`, minWidth: '100%', borderColor: isDark ? 'var(--bd)' : 'rgba(0,0,0,0.2)', cursor: isHovering && hoverMs !== null && isFutureSeek(dayStart, hoverMs) ? 'not-allowed' : 'pointer' }}>
+        <div ref={trackRef} onClick={handleTrackClick} onPointerDown={handlePointerDown} className="relative h-14 sm:h-16 bg-[#0c1017] rounded-lg border cursor-pointer shadow-inner" style={{ width: `${widthMultiplier * 100}%`, minWidth: '100%', borderColor: isDark ? 'var(--bd)' : 'rgba(0,0,0,0.2)', cursor: isHovering && hoverMs !== null && isFutureSeek(dayStart, hoverMs) ? 'not-allowed' : 'pointer' }}>
           <div className="absolute inset-0 overflow-hidden rounded-lg pointer-events-none">
             <div className="absolute inset-0 opacity-15 pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #374151 0, #374151 2px, transparent 2px, transparent 8px)' }} />
             {segments.map((seg, i) => {
