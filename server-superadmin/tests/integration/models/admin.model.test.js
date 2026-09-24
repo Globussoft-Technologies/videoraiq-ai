@@ -40,6 +40,7 @@ describe("Admin model", () => {
     expect(doc.name_l).toBe("");
     expect(doc.empData).toEqual([]);
     expect(doc.logsSound).toBe(false);
+    expect(doc.purchasedCameras).toBe(20);
     expect(doc.createdAt).toBeInstanceOf(Date);
     expect(doc.updatedAt).toBeInstanceOf(Date);
   });

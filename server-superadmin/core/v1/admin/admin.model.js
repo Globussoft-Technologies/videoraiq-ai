@@ -41,7 +41,7 @@ const adminSchema = new mongoose.Schema({
   // Total cameras this client has purchased — the "Total Purchased Cameras"
   // field on the Client Configuration screen; also the "/N" limit in the
   // Clients table's cameras-used/purchased column.
-  purchasedCameras: { type: Number, default: 0 },
+  purchasedCameras: { type: Number, default: 20 },
   // Shared snapshot written by the client backend after an authenticated
   // aMember login. Status is intentionally computed from expiresAt at read
   // time so it changes to expired without requiring another database write.

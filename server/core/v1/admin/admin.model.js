@@ -52,9 +52,9 @@ const adminSchema = new mongoose.Schema({
   // Per-admin IANA timezone (e.g. "Asia/Kolkata"). null = not set.
   timezone: { type: String, default: null },
   // Camera purchase limit set by the super-admin app. Admins may add at most
-  // this many cameras (channels) across all their NVRs. 0 = no cameras allowed
-  // until the super-admin provisions a limit.
-  purchasedCameras: { type: Number, default: 0 },
+  // this many cameras (channels) across all their NVRs. New clients start with
+  // 20 cameras; an explicit 0 still means no cameras are allowed.
+  purchasedCameras: { type: Number, default: 20 },
   // Last subscription state returned by aMember's authenticated login API.
   // Super Admin reads this shared snapshot instead of relying on a separate
   // /access lookup, which can lag behind the login response.
