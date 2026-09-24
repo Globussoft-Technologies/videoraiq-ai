@@ -1,14 +1,32 @@
 import path from "path";
-import { randomBytes } from "crypto";
+import { createHash } from "crypto";
 import MeasurementCapture from "./measurementCapture.model.js";
 import {
   deleteMediaV2 as deleteMedia,
-  putMediaV2 as putMedia,
   streamMediaV2 as streamMedia,
 } from "../adminStorage/mediaStorage.v2.js";
 import logger from "../../../utils/logger.js";
+import {
+  deleteMeasurementMediaReference,
+  storeMeasurementMediaBuffer,
+  streamMeasurementMediaReference,
+} from "../measurementMedia/measurementMedia.service.js";
 
 const MAX_CAPTURE_BYTES = 15 * 1024 * 1024;
+const MEASUREMENT_DIAGNOSTIC_EVENTS = new Set([
+  "request",
+  "success",
+  "timeout",
+  "unreachable",
+  "service-error",
+]);
+
+function safeLogValue(value, maxLength = 300) {
+  return String(value ?? "")
+    .replace(/[\r\n\t]+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
 
 function safeFilenamePart(value) {
   return String(value || "unknown")
@@ -37,6 +55,50 @@ function captureUrl(req, filename) {
 }
 
 class MeasurementsService {
+  async createDiagnostic(req, res) {
+    const stationId = String(req.stationToken?.stationId || "").trim().toLowerCase();
+    const event = safeLogValue(req.body?.event, 40).toLowerCase();
+    if (!MEASUREMENT_DIAGNOSTIC_EVENTS.has(event)) {
+      return res.status(400).json({ ok: false, message: "Invalid measurement diagnostic event" });
+    }
+
+    const endpoint = safeLogValue(req.body?.endpoint);
+    const sku = safeLogValue(req.body?.sku, 100).toUpperCase();
+    const rawStatus = req.body?.status;
+    const rawDurationMs = req.body?.durationMs;
+    const status = rawStatus !== null && rawStatus !== undefined && rawStatus !== ""
+      && Number.isInteger(Number(rawStatus)) ? Number(rawStatus) : null;
+    const durationMs = rawDurationMs !== null && rawDurationMs !== undefined && rawDurationMs !== ""
+      && Number.isFinite(Number(rawDurationMs))
+      ? Math.max(0, Math.round(Number(rawDurationMs)))
+      : null;
+    const message = safeLogValue(req.body?.message);
+    const dimensions = req.body?.dimensions && typeof req.body.dimensions === "object"
+      ? {
+          length: Number(req.body.dimensions.length) || null,
+          width: Number(req.body.dimensions.width) || null,
+          height: Number(req.body.dimensions.height) || null,
+        }
+      : null;
+    const details = [
+      `event=${event}`,
+      `station=${safeLogValue(stationId, 100)}`,
+      `endpoint=${endpoint || "unknown"}`,
+      `sku=${sku || "unknown"}`,
+      dimensions ? `dimensions=${dimensions.length}x${dimensions.width}x${dimensions.height}` : "",
+      status !== null ? `status=${status}` : "",
+      durationMs !== null ? `durationMs=${durationMs}` : "",
+      message ? `message=${message}` : "",
+    ].filter(Boolean).join(" ");
+
+    if (["timeout", "unreachable", "service-error"].includes(event)) {
+      logger.warn(`[MEASUREMENT_DS] ${details}`);
+    } else {
+      logger.info(`[MEASUREMENT_DS] ${details}`);
+    }
+    return res.status(202).json({ ok: true });
+  }
+
   async createCapture(req, res) {
     const cameraId = String(req.get("x-camera-id") || "").trim();
     const stationId = String(req.get("x-station-id") || "").trim().toLowerCase();
@@ -74,30 +136,51 @@ class MeasurementsService {
     }
 
     let storagePath = "";
+    let filename = "";
     try {
-      const filename = [
-        Date.now(),
+      const captureIdentity = createHash("sha256")
+        .update(stationId)
+        .update("\0")
+        .update(cameraId)
+        .update("\0")
+        .update(capturedAt.toISOString())
+        .update("\0")
+        .update(req.body)
+        .digest("hex");
+      filename = [
+        capturedAt.getTime(),
         safeFilenamePart(stationId),
         safeFilenamePart(cameraId),
-        randomBytes(4).toString("hex"),
+        captureIdentity.slice(0, 16),
       ].join("_") + ".jpg";
-      storagePath = await putMedia({
+      const asset = await storeMeasurementMediaBuffer({
         adminId: req.stationDevice?.admin,
         buffer: req.body,
-        mediaType: "image",
         folderName: "measurement-captures",
         originalName: filename,
-      });
-
-      await MeasurementCapture.create({
-        filename,
-        storagePath,
+        contentType: "image/jpeg",
         stationId,
-        cameraId,
-        captureTrigger,
-        capturedAt,
-        bytes: req.body.length,
+        idempotencyKey: `qr-capture:${captureIdentity}`,
+        source: "qr-capture",
+        sourceReference: filename,
       });
+      storagePath = asset.cloudPath || asset.stablePath;
+
+      await MeasurementCapture.findOneAndUpdate(
+        { filename },
+        {
+          $setOnInsert: {
+            filename,
+            storagePath,
+            stationId,
+            cameraId,
+            captureTrigger,
+            capturedAt,
+            bytes: req.body.length,
+          },
+        },
+        { new: true, upsert: true, setDefaultsOnInsert: true },
+      );
 
       logger.info(
         `[MEASUREMENT_CAPTURE] Upload stored filename=${filename} station=${stationId} camera=${cameraId} bytes=${req.body.length} storagePath=${storagePath}`,
@@ -111,8 +194,15 @@ class MeasurementsService {
         url: captureUrl(req, filename),
         captured_at: capturedAt.toISOString(),
       });
-    } catch {
-      if (storagePath) await deleteMedia(storagePath).catch(() => {});
+    } catch (error) {
+      if (storagePath) {
+        const handled = await deleteMeasurementMediaReference({
+          reference: storagePath,
+          sourceReference: filename,
+        }).catch(() => false);
+        if (!handled) await deleteMedia(storagePath).catch(() => {});
+      }
+      logger.error(`[MEASUREMENT_CAPTURE] Upload failed station=${stationId} camera=${cameraId}: ${error.message}`);
       return res.status(500).json({ ok: false, message: "Failed to store measurement capture" });
     }
   }
@@ -127,7 +217,11 @@ class MeasurementsService {
     try {
       const capture = await MeasurementCapture.findOne({ filename, stationId }).lean();
       if (!capture) return res.status(404).json({ ok: false, message: "Capture not found" });
-      await deleteMedia(capture.storagePath);
+      const handled = await deleteMeasurementMediaReference({
+        reference: capture.storagePath,
+        sourceReference: capture.filename,
+      });
+      if (!handled) await deleteMedia(capture.storagePath);
       await MeasurementCapture.deleteOne({ _id: capture._id });
       logger.info(
         `[MEASUREMENT_CAPTURE] Upload deleted filename=${filename} station=${stationId} storagePath=${capture.storagePath}`,
@@ -153,7 +247,8 @@ class MeasurementsService {
       // 5055). Helmet defaults this header to same-origin, which lets the
       // image open directly but prevents an <img> on the UI from embedding it.
       res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-      await streamMedia(capture.storagePath, res);
+      const handled = await streamMeasurementMediaReference(capture.storagePath, res);
+      if (!handled) await streamMedia(capture.storagePath, res);
     } catch (error) {
       if (!res.headersSent) {
         return res.status(error.statusCode || 500).json({

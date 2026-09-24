@@ -260,16 +260,20 @@ async function objectExists(provider, mediaPath) {
 }
 
 /** Upload media to the globally selected backend and return its stored path. */
-export async function putMedia({ buffer, mediaType, folderName, originalName }) {
+export async function putMedia({ buffer, mediaType, folderName, originalName, objectId }) {
   if (!["image", "video", "report"].includes(mediaType)) {
     const error = new Error("Invalid media type.");
     error.statusCode = 400;
     throw error;
   }
   const folder = sanitizeSegment(folderName);
-  const leaf = `${Date.now()}-${randomUUID()}-${sanitizeSegment(
-    path.basename(String(originalName ?? ""))
-  )}`;
+  const safeOriginalName = sanitizeSegment(path.basename(String(originalName ?? "")));
+  // Existing callers keep the timestamp/UUID naming scheme. Measurement-media
+  // retries opt into a deterministic leaf so replaying a pending upload
+  // overwrites the same object instead of creating duplicates.
+  const leaf = objectId
+    ? `${sanitizeSegment(objectId)}-${safeOriginalName}`
+    : `${Date.now()}-${randomUUID()}-${safeOriginalName}`;
   const provider = getActiveProvider();
 
   if (OBJECT_PROVIDERS.has(provider)) {

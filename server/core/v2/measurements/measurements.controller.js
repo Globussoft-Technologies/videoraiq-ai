@@ -10,6 +10,12 @@ class MeasurementsController {
     return measurementsService.createCapture(req, res);
   }
 
+  async createDiagnostic(req, res) {
+    /* #swagger.tags = ['Measurements']
+       #swagger.description = 'Record station-side DS measurement API connectivity diagnostics.' */
+    return measurementsService.createDiagnostic(req, res);
+  }
+
   async fetchCapture(req, res) {
     /* #swagger.tags = ['Measurements']
        #swagger.description = 'Fetch a stored measurement capture by filename.' */

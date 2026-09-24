@@ -31,6 +31,7 @@ export const createQrMeasurementSchema = Joi.object({
 export const dsMeasurementResponseSchema = Joi.object({
   qrMetadata: nonEmptyObject.required(),
   measuredData: nonEmptyObject.required(),
+  normalizedMeasuredData: nonEmptyObject.optional(),
   measurementImage: imageReference.optional(),
   processedAt: Joi.date().iso().optional(),
 }).unknown(true);
@@ -41,12 +42,14 @@ export const measurementStatusSchema = Joi.object({
 
 export const measurementDataUpdateSchema = Joi.object({
   measuredData: nonEmptyObject.required(),
+  normalizedMeasuredData: nonEmptyObject.optional(),
   measurementImage: imageReference.optional(),
   processedAt: Joi.date().iso().optional(),
 }).unknown(false);
 
 export const measurementBySkuUpdateSchema = Joi.object({
   measuredData: nonEmptyObject.required(),
+  normalizedMeasuredData: nonEmptyObject.optional(),
   measurementImage: imageReference.optional(),
   processedAt: Joi.date().iso().optional(),
   stationId: Joi.string().trim().max(100).optional(),

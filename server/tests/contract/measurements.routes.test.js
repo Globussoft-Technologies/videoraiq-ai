@@ -13,6 +13,7 @@ vi.mock("../../core/v2/measurements/measurements.controller.js", () => ({
       route: "capture",
       raw: Buffer.isBuffer(req.body),
     })),
+    createDiagnostic: vi.fn((_req, res) => res.status(202).json({ route: "diagnostic" })),
     fetchCapture: vi.fn((req, res) => res.status(200).json({
       route: "fetch",
       filename: req.params.filename,
@@ -46,6 +47,14 @@ describe("streaming-server measurement capture routes", () => {
   it("exposes stored captures by filename", async () => {
     const response = await request(app).get(`${BASE}/captures/example.jpg`);
     expect(response.body).toEqual({ route: "fetch", filename: "example.jpg" });
+  });
+
+  it("accepts station measurement diagnostics", async () => {
+    const response = await request(app)
+      .post(`${BASE}/diagnostics`)
+      .send({ event: "request" });
+    expect(response.status).toBe(202);
+    expect(response.body).toEqual({ route: "diagnostic" });
   });
 
   it("deletes a station-owned capture", async () => {

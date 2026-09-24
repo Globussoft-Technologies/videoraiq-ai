@@ -10,6 +10,10 @@ const mocks = vi.hoisted(() => ({
   processWithDs: vi.fn(),
   sendPayloadToUser: vi.fn(),
   sendMeasurement: vi.fn(),
+  resolveMeasurementMediaReference: vi.fn(async (value) => {
+    if (typeof value === "string") return value.trim() || null;
+    return value?.url || value?.storagePath || null;
+  }),
 }));
 
 vi.mock("../../core/v2/measurementIncidents/measurementIncidents.model.js", () => ({
@@ -36,6 +40,10 @@ vi.mock("../../core/v2/measurementIncidents/measurementDs.client.js", () => ({
 vi.mock("../../socket.js", () => ({
   sendPayloadToUser: mocks.sendPayloadToUser,
   sendMeasurement: mocks.sendMeasurement,
+}));
+
+vi.mock("../../core/v2/measurementMedia/measurementMedia.service.js", () => ({
+  resolveMeasurementMediaReference: mocks.resolveMeasurementMediaReference,
 }));
 
 vi.mock("../../utils/logger.js", () => ({
@@ -114,9 +122,16 @@ describe("measurement incident service", () => {
   });
 
   it("stores a valid DS response and emits the saved document on measurement", async () => {
+    const normalizedMeasuredData = {
+      length: 72,
+      breadth: 42,
+      height: 5,
+      confidence: 0.94,
+    };
     mocks.processWithDs.mockResolvedValue({
       qrMetadata: { sku: "G_OS7242-5" },
       measuredData: { length: 182.9, width: 106.7, height: 12.8 },
+      normalizedMeasuredData,
     });
     const saved = {
       _id: "650000000000000000000501",
@@ -148,6 +163,7 @@ describe("measurement incident service", () => {
       adminId: "650000000000000000000001",
       userId: "1234",
       qrMetadata: { sku: "G_OS7242-5" },
+      normalizedMeasuredData,
     }));
     expect(mocks.sendPayloadToUser).toHaveBeenCalledWith("1234", "measurement", saved);
     expect(mocks.sendMeasurement).toHaveBeenCalledWith("L2-QC-01", saved);
@@ -226,6 +242,39 @@ describe("measurement incident service", () => {
     expect(mocks.sendMeasurement).toHaveBeenCalledWith(updated.stationId, updated);
   });
 
+  it("stores DS-provided normalized data unchanged for an incident ID update", async () => {
+    const measuredData = { length: 79.43, breadth: 70.03, height: 6.47, confidence: 0.96 };
+    const normalizedMeasuredData = {
+      length: 79.43,
+      breadth: 70.03,
+      height: 6.47,
+      confidence: 0.96,
+    };
+    const id = "650000000000000000000501";
+    mocks.findOne.mockReturnValue({
+      lean: vi.fn().mockResolvedValue({ _id: id, qrMetadata: { length: 78, breadth: 70, height: 6 } }),
+    });
+    mocks.findOneAndUpdate.mockReturnValue({
+      lean: vi.fn().mockResolvedValue({ _id: id, stationId: "88:a2:9e:d0:95:ec" }),
+    });
+    const res = responseDouble();
+
+    await service.updateMeasurement({
+      ...identity,
+      params: { id },
+      body: { measuredData, normalizedMeasuredData },
+    }, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(mocks.findOneAndUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: id }),
+      expect.objectContaining({
+        $set: expect.objectContaining({ measuredData, normalizedMeasuredData }),
+      }),
+      { new: true, runValidators: true },
+    );
+  });
+
   it("updates the newest pending incident using only its SKU", async () => {
     const updated = {
       _id: "650000000000000000000501",
@@ -265,6 +314,46 @@ describe("measurement incident service", () => {
       { new: true, runValidators: true, sort: { createdAt: -1 } },
     );
     expect(mocks.sendMeasurement).toHaveBeenCalledWith(updated.stationId, updated);
+  });
+
+  it("stores DS-provided normalized data unchanged for a SKU update", async () => {
+    const measuredData = { length: 79.43, breadth: 70.03, height: 6.47, confidence: 0.96 };
+    const normalizedMeasuredData = {
+      length: 79.43,
+      breadth: 70.03,
+      height: 6.47,
+      confidence: 0.96,
+    };
+    const target = {
+      _id: "650000000000000000000503",
+      qrMetadata: { length: 78, breadth: 70, height: 6 },
+    };
+    mocks.findOne.mockReturnValue({
+      sort: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue(target) }),
+    });
+    mocks.findOneAndUpdate.mockReturnValue({
+      lean: vi.fn().mockResolvedValue({
+        _id: target._id,
+        qrSku: "G_OK8478",
+        stationId: "88:a2:9e:d0:95:ec",
+      }),
+    });
+    const res = responseDouble();
+
+    await service.updateMeasurementBySku({
+      verified: { userData: { system: true, service: "python-backend" } },
+      params: { sku: "G_OK8478" },
+      body: { measuredData, normalizedMeasuredData, stationId: "88:a2:9e:d0:95:ec" },
+    }, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(mocks.findOneAndUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ qrSku: "G_OK8478", _id: target._id }),
+      expect.objectContaining({
+        $set: expect.objectContaining({ measuredData, normalizedMeasuredData }),
+      }),
+      { new: true, runValidators: true, sort: { createdAt: -1 } },
+    );
   });
 
   it("does not let a descriptive DS station alias block the SKU match", async () => {

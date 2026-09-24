@@ -54,6 +54,7 @@ import measurementCalibrationRoutes from "../../core/v2/measurementCalibration/m
 import verifyMeasurementAuth from "../../core/v2/measurementIncidents/measurementAuth.middleware.js";
 import amemberIntegrationRoutes from "../../core/v2/integrations/amember.routes.js";
 import assistantRoutes from "../../core/v2/assistant/assistant.routes.js";
+import measurementMediaRoutes from "../../core/v2/measurementMedia/measurementMedia.routes.js";
 
 const router = express.Router();
 
@@ -126,6 +127,9 @@ router.use("/measurement-incidents", verifyMeasurementAuth, measurementIncidents
 router.use("/measurements", measurementsRoutes);
 router.use("/admin-storage", adminStorageRoutes);
 router.use("/measurement-calibration", measurementCalibrationRoutes);
+// Measurement-only upload path with local MinIO fallback. The shared uploads
+// API remains unchanged for every other product flow.
+router.use("/measurement-media", measurementMediaRoutes);
 
 export default router;
 

@@ -71,8 +71,11 @@ async function withSftp(cfg, callback) {
   }
 }
 
-function mediaKey(context, mediaType, folderName, originalName) {
-  const leaf = `${Date.now()}-${randomUUID()}-${sanitize(path.basename(String(originalName || "file")))}`;
+function mediaKey(context, mediaType, folderName, originalName, objectId) {
+  const safeOriginalName = sanitize(path.basename(String(originalName || "file")));
+  const leaf = objectId
+    ? `${sanitize(objectId)}-${safeOriginalName}`
+    : `${Date.now()}-${randomUUID()}-${safeOriginalName}`;
   return `v2/${context.adminId}/${context.versionId}/${context.provider}/uploads/${mediaType}s/${sanitize(folderName)}/${leaf}`;
 }
 
@@ -80,13 +83,13 @@ function legacyPath(value) {
   return !parseV2StoragePath(value);
 }
 
-export async function putMediaV2({ adminId, buffer, mediaType, folderName, originalName }) {
-  if (!adminId) return putLegacyMedia({ buffer, mediaType, folderName, originalName });
+export async function putMediaV2({ adminId, buffer, mediaType, folderName, originalName, objectId }) {
+  if (!adminId) return putLegacyMedia({ buffer, mediaType, folderName, originalName, objectId });
   if (!Buffer.isBuffer(buffer)) throw new Error("Media buffer is required");
   if (!["image", "video", "report"].includes(mediaType)) throw new Error("Invalid media type");
 
   const context = await resolveStorageConfig({ adminId });
-  const key = mediaKey(context, mediaType, folderName, originalName);
+  const key = mediaKey(context, mediaType, folderName, originalName, objectId);
   if (context.provider === "nas") {
     const remotePath = `${String(context.config.basePath || "").replace(/\/$/, "")}/${key}`;
     await withSftp(context.config, async (sftp) => {

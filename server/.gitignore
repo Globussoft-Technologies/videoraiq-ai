@@ -73,3 +73,5 @@ deploy.js
 
 # Temporary file uploads
 incidentUploads/
+deployment-backups/
+docker-compose.measurement-minio.pre-change.backup.yml

@@ -5,6 +5,7 @@ import { sendMeasurement, sendPayloadToUser } from "../../../socket.js";
 import MeasurementIncident from "./measurementIncidents.model.js";
 import { MeasurementDsError, processWithDs } from "./measurementDs.client.js";
 import { normalizeMeasuredData } from "./measurementNormalization.js";
+import { resolveMeasurementMediaReference } from "../measurementMedia/measurementMedia.service.js";
 import {
   createQrMeasurementSchema,
   dsMeasurementResponseSchema,
@@ -48,12 +49,9 @@ function isMacStationId(value) {
   return /^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(String(value || "").trim());
 }
 
-function normalizedMeasurementImage(value) {
-  if (typeof value === "string") return value.trim() || null;
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return String(value.url || value.storagePath || "").trim() || null;
-  }
-  return null;
+function resolvedNormalizedMeasuredData(input, qrMetadata) {
+  return input.normalizedMeasuredData
+    ?? normalizeMeasuredData(input.measuredData, qrMetadata);
 }
 
 function relativeCapturePath(value) {
@@ -209,8 +207,8 @@ class MeasurementIncidentsService {
         qrSku: normalizedSku(processed.qrMetadata?.sku || processed.qrMetadata?.skuCode),
         qrMetadata: processed.qrMetadata,
         measuredData: processed.measuredData,
-        normalizedMeasuredData: normalizeMeasuredData(processed.measuredData, processed.qrMetadata),
-        measurementImage: normalizedMeasurementImage(processed.measurementImage),
+        normalizedMeasuredData: resolvedNormalizedMeasuredData(processed, processed.qrMetadata),
+        measurementImage: await resolveMeasurementMediaReference(processed.measurementImage),
         dsProcessedAt: processed.processedAt || new Date(),
       });
 
@@ -311,14 +309,15 @@ class MeasurementIncidentsService {
 
       const target = await MeasurementIncident.findOne(filter).lean();
       if (!target) return res.status(404).json(Response.notFoundResp("Measurement incident not found"));
+      const measurementImage = await resolveMeasurementMediaReference(validation.value.measurementImage);
 
       const incident = await MeasurementIncident.findOneAndUpdate(
         { ...filter, _id: target._id },
         {
           $set: {
             measuredData: validation.value.measuredData,
-            normalizedMeasuredData: normalizeMeasuredData(validation.value.measuredData, target.qrMetadata),
-            measurementImage: normalizedMeasurementImage(validation.value.measurementImage),
+            normalizedMeasuredData: resolvedNormalizedMeasuredData(validation.value, target.qrMetadata),
+            measurementImage,
             dsProcessedAt: validation.value.processedAt || new Date(),
           },
         },
@@ -388,14 +387,15 @@ class MeasurementIncidentsService {
         );
         return res.status(404).json(Response.notFoundResp("No pending Measurement Incident found for this SKU"));
       }
+      const measurementImage = await resolveMeasurementMediaReference(bodyValidation.value.measurementImage);
 
       const incident = await MeasurementIncident.findOneAndUpdate(
         { ...filter, _id: target._id },
         {
           $set: {
             measuredData: bodyValidation.value.measuredData,
-            normalizedMeasuredData: normalizeMeasuredData(bodyValidation.value.measuredData, target.qrMetadata),
-            measurementImage: normalizedMeasurementImage(bodyValidation.value.measurementImage),
+            normalizedMeasuredData: resolvedNormalizedMeasuredData(bodyValidation.value, target.qrMetadata),
+            measurementImage,
             dsProcessedAt: bodyValidation.value.processedAt || new Date(),
           },
         },

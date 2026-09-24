@@ -32,6 +32,7 @@ import { scheduleEmpExitSync } from "./services/empExitSync.service.js";
 import DetectionSettingService from "./core/v1/detectionSettings/detectionSettings.service.js";
 import AttendanceAutoEmailReportService from "./core/v2/attendanceAutoEmailReport/attendanceAutoEmailReport.service.js";
 import MeasurementAutoEmailReportService from "./core/v2/measurementAutoEmailReport/measurementAutoEmailReport.service.js";
+import { startMeasurementMediaRetryWorker } from "./core/v2/measurementMedia/measurementMedia.service.js";
 
 if (process.env.T === "D") mustRunInsideContainer();
 
@@ -83,6 +84,7 @@ app.use(
       "x-station-id",
       "x-capture-trigger",
       "x-captured-at",
+      "x-idempotency-key",
       "x-access-token",
       "x-device-id",
       "x-session-id",
@@ -196,6 +198,7 @@ const startServer = async () => {
     DetectionSettingService.startDetectionScheduleRunner();
     AttendanceAutoEmailReportService.startRunner();
     MeasurementAutoEmailReportService.startRunner();
+    startMeasurementMediaRetryWorker();
   } catch (error) {
     logger.error(`❗ Failed to start server: ${error.message}`);
     process.exit(1);

@@ -13,7 +13,10 @@ const MM_PER_INCH = 25.4;
 //
 // The measurement pipeline stores capture paths relative to the API host, e.g.
 // "/api/v2/measurements/captures/<file>.jpg" — those just need the host prefixed.
-// Older upload-folder paths (no leading "/api/") are joined onto ImageView.
+// Stored provider paths (no leading "/api/") are always served through the
+// backend upload proxy. This is important for on-prem object storage: the
+// MinIO bucket is private and its object keys are not browser URLs. The proxy
+// also remains provider-aware for NAS, AWS, GCP and Oracle paths.
 function backendDomain() {
   try {
     if (config.has("backendDomain")) return String(config.get("backendDomain") || "").replace(/\/+$/, "");
@@ -37,7 +40,13 @@ function mediaUrl(pathValue) {
     return `${host}/${p.replace(/^\/+/, "")}`;
   }
 
-  let base = host;
+  if (host) {
+    return `${host}/api/v2/uploads/${p.replace(/^\/+/, "")}`;
+  }
+
+  // Compatibility fallback for deployments that have not configured a
+  // backendDomain yet. Normal deployments should use the proxy above.
+  let base = "";
   try {
     if (config.has("ImageView")) base = String(config.get("ImageView") || "");
   } catch { /* not configured */ }

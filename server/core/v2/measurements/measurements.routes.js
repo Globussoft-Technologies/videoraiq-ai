@@ -21,6 +21,11 @@ router.post(
   parseJpeg,
   controller.createCapture.bind(controller),
 );
+router.post(
+  "/diagnostics",
+  verifyStationToken,
+  controller.createDiagnostic.bind(controller),
+);
 router.get("/captures/:filename", controller.fetchCapture.bind(controller));
 router.delete(
   "/captures/:filename",

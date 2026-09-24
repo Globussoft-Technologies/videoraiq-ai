@@ -1,6 +1,59 @@
 import { describe, expect, it } from "vitest";
 import { toRow, deviationOf, buildMatch } from "../../core/v2/measurementLogs/measurementLog.service.js";
 
+it("serves local/provider measurement image paths through the backend proxy", () => {
+  const row = toRow(
+    {
+      _id: "local-minio-image",
+      status: "accepted",
+      qrMetadata: { length: 72, breadth: 42, height: 5 },
+      measurementImage: "/uploads/images/measurement-results/result.jpg",
+    },
+    "Asia/Kolkata",
+  );
+
+  expect(row.measurementImageUrl).toBe(
+    "http://backend.test/api/v2/uploads/uploads/images/measurement-results/result.jpg",
+  );
+});
+
+it("keeps stable measurement fallback paths on the backend media endpoint", () => {
+  const row = toRow(
+    {
+      _id: "fallback-image",
+      status: "accepted",
+      qrMetadata: { length: 72, breadth: 42, height: 5 },
+      measurementImage: "/api/v2/measurement-media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    },
+    "Asia/Kolkata",
+  );
+
+  expect(row.measurementImageUrl).toBe(
+    "http://backend.test/api/v2/measurement-media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  );
+});
+
+it("keeps QR capture and measurement frame as separate preview URLs", () => {
+  const row = toRow(
+    {
+      _id: "two-distinct-images",
+      status: "accepted",
+      qrMetadata: { length: 72, breadth: 42, height: 5 },
+      qrImagePath: "/api/v2/measurements/captures/qr-capture.jpg",
+      measurementImage: "/uploads/images/measurement-results/measurement-frame.jpg",
+    },
+    "Asia/Kolkata",
+  );
+
+  expect(row.qrImageUrl).toBe(
+    "http://backend.test/api/v2/measurements/captures/qr-capture.jpg",
+  );
+  expect(row.measurementImageUrl).toBe(
+    "http://backend.test/api/v2/uploads/uploads/images/measurement-results/measurement-frame.jpg",
+  );
+  expect(row.qrImageUrl).not.toBe(row.measurementImageUrl);
+});
+
 // The QR label (qrMetadata) is always inches. DS `measuredData` has been seen
 // in inches, cm and mm, and the breadth axis arrives as either `breadth` or
 // `width`. toRow / deviationOf must normalise all of that against the label.
