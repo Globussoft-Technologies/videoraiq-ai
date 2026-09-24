@@ -5,14 +5,18 @@ import { DOWNLOADS, STATUS_META, devColor } from '../data';
 import { exportMeasurementRecords } from '../export';
 import { getMeasurementRecords } from '../api';
 import SnapshotPreviewModal from './SnapshotPreviewModal';
+import RefreshControl from '@/components/RefreshControl';
 
 // snap | order·ref | sku·model | printed | measured | Δ | conf | match | station | when·result
 // Every column is a fixed width so nothing stretches into a mid-table gap; the
 // MATCH bar takes any surplus on wide viewports (1fr), keeping slack at the
 // right edge. Widen ORDER·REF / SKU·MODEL to use the freed space.
 const GRID_COLS =
-  '52px 52px minmax(200px,1.15fr) minmax(184px,1.05fr) 112px 118px 118px 56px 150px 92px 82px 122px';
-const GRID_MIN_W = 1180;
+  '52px 52px minmax(200px,1.15fr) minmax(184px,1.05fr) 112px 118px 118px 56px 150px 82px 122px';
+// Must be at least the sum of the fixed/minimum columns, gaps and horizontal
+// padding. If this is smaller, the final STATION / STATUS / WHEN columns can
+// overflow the row itself, leaving their background and borders unpainted.
+const GRID_MIN_W = 1388;
 
 // DS measurement confidence → colour + label. Anything under 0.6 is unreliable
 // and the printed/measured comparison should not be trusted without the photo.
@@ -269,7 +273,6 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
   const [statusF, setStatusF] = useState('all');
   const [dbStatusF, setDbStatusF] = useState('all');
   const [skuF, setSkuF] = useState('all');
-  const [stationF, setStationF] = useState('all');
   const [q, setQ] = useState('');
   // Debounced copy of `q` — the actual value sent to the API.
   const [qDebounced, setQDebounced] = useState('');
@@ -286,10 +289,10 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
   // SKU / station option lists — captured from the first successful response
   // and kept stable so narrowing a filter never empties its own dropdown.
   const [skuList, setSkuList] = useState([]);
-  const [stationList, setStationList] = useState([]);
 
   const fromDate = dateRange?.from || null;
   const toDate = dateRange?.to || null;
@@ -310,19 +313,16 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
     if (statusF !== 'all') params.status = statusF;
     if (dbStatusF !== 'all') params.recordStatus = dbStatusF;
     if (skuF !== 'all') params.sku = skuF;
-    if (stationF !== 'all') params.station = stationF;
     if (qDebounced) params.q = qDebounced;
 
     getMeasurementRecords(params)
-      .then(({ rows, skus, stations }) => {
+      .then(({ rows, skus }) => {
         if (cancelled) return;
         setRecords(rows);
         setError('');
         // Only seed the option lists from an unfiltered-ish response so a
         // narrow filter can't shrink the choices permanently.
         if (skus?.length) setSkuList((prev) => (skus.length >= prev.length ? skus : prev));
-        if (stations?.length)
-          setStationList((prev) => (stations.length >= prev.length ? stations : prev));
       })
       .catch((e) => {
         if (!cancelled) {
@@ -334,7 +334,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
     return () => {
       cancelled = true;
     };
-  }, [fromDate, toDate, statusF, dbStatusF, skuF, stationF, qDebounced]);
+  }, [fromDate, toDate, statusF, dbStatusF, skuF, qDebounced, refreshKey]);
 
   const skuOptions = useMemo(() => {
     const base = skuList.length
@@ -342,30 +342,30 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
       : [...new Set(records.map((r) => r.sku).filter((s) => s && s !== '—'))].sort();
     return ['all', ...base];
   }, [skuList, records]);
-  const stationOptions = useMemo(() => {
+  /* station filter removed */
+  /* const stationOptions = useMemo(() => {
     const base = stationList.length
       ? stationList
       : [...new Set(records.map((r) => r.station).filter((s) => s && s !== '—'))].sort();
     return ['all', ...base];
-  }, [stationList, records]);
+  }, [stationList, records]); */
 
   // The server already applied every filter — the table renders rows as-is.
   const filtered = records;
 
-  const filterActive = statusF !== 'all' || dbStatusF !== 'all' || skuF !== 'all' || stationF !== 'all' || q;
+  const filterActive = statusF !== 'all' || dbStatusF !== 'all' || skuF !== 'all' || q;
 
   const clear = () => {
     setStatusF('all');
     setDbStatusF('all');
     setSkuF('all');
-    setStationF('all');
     setQ('');
   };
 
   // Any filter / result change sends the user back to the first page.
   useEffect(() => {
     setPage(1);
-  }, [statusF, dbStatusF, skuF, stationF, qDebounced, fromDate, toDate, pageSize]);
+  }, [statusF, dbStatusF, skuF, qDebounced, fromDate, toDate, pageSize]);
 
   const totalRows = filtered.length;
   const pageCount = Math.max(1, Math.ceil(totalRows / pageSize));
@@ -415,7 +415,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
     'flex items-center gap-[7px] h-[34px] px-[10px] rounded-[8px] bg-[var(--bg2)] border border-[var(--bd)] text-[var(--tx3)] transition-colors focus-within:border-[var(--blue)] focus-within:text-[var(--tx2)]';
 
   return (
-    <div className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[14px] overflow-hidden">
+    <div className="relative z-10 bg-[var(--bg1)] border border-[var(--bd)] rounded-[14px] overflow-visible">
       {/* ── single-row toolbar ── */}
       <div className="flex items-center gap-2 p-[13px_16px] border-b border-[var(--bd)] flex-wrap">
         <span className="font-[var(--disp)] font-semibold text-[14px] mr-2">Measurement Records</span>
@@ -440,12 +440,6 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
             <option key={v} value={v}>{v === 'all' ? 'All SKUs' : v}</option>
           ))}
         </select>
-        <select className={selectCls} value={stationF} onChange={(e) => setStationF(e.target.value)}>
-          {stationOptions.map((v) => (
-            <option key={v} value={v}>{v === 'all' ? 'All Stations' : v}</option>
-          ))}
-        </select>
-
         <span className={`${fieldWrap} w-[190px]`}>
           <Search size={14} strokeWidth={1.8} />
           <input
@@ -476,7 +470,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
           </button>
         )}
 
-        <span className="ml-auto flex items-center gap-[10px]">
+        <span className="ml-auto flex items-center gap-[10px] shrink-0">
           {loading ? (
             <Loader2 size={13} className="animate-spin text-[var(--tx3)]" />
           ) : (
@@ -520,12 +514,17 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
               type="button"
               onClick={() => exportMeasurementRecords(DL_KEY[d.fmt], filtered)}
               title={`Export ${shown} record${shown === 1 ? '' : 's'} as ${d.fmt}`}
-              className="flex items-center gap-[6px] font-[var(--mono)] text-[11px] font-semibold rounded-[9px] px-[13px] py-[7px] cursor-pointer border-0 text-white transition-all hover:brightness-105 active:scale-95"
+                 className="flex items-center gap-[6px] shrink-0 font-[var(--mono)] text-[11px] font-semibold rounded-[9px] px-[13px] py-[7px] cursor-pointer border-0 text-white transition-all hover:brightness-105 active:scale-95"
               style={DL_STYLE[d.fmt]}
             >
               <Download size={13} />{d.fmt}
             </button>
           ))}
+          <RefreshControl
+            storageKey="measurement_logs"
+            defaultActive
+            onManualRefresh={() => setRefreshKey((key) => key + 1)}
+          />
         </span>
       </div>
 
@@ -533,12 +532,12 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
         <div className="max-h-[520px] overflow-auto">
           <div style={{ minWidth: GRID_MIN_W }}>
           <div
-            className="grid gap-x-[10px] p-[10px_16px] border-b border-[var(--bd2)] font-[var(--mono)] text-[9px] tracking-[.06em] text-[var(--tx3)] bg-[var(--bg1solid)] sticky top-0 z-[2]"
+            className="relative grid w-full min-w-full h-[42px] box-border items-center gap-x-[10px] p-[8px_16px] border-b border-[var(--bd2)] font-[var(--mono)] text-[9px] tracking-[.06em] text-[var(--tx3)] bg-[var(--bg1solid)] sticky top-0 z-[5] isolate [&>span]:min-w-0 [&>span]:whitespace-nowrap [&>span]:overflow-hidden [&>span]:text-ellipsis [&>span:nth-child(3)]:pl-[12px]"
             style={{ gridTemplateColumns: GRID_COLS }}
           >
             <span>SNAP</span><span>MEAS</span><span>ORDER · REF</span><span>SKU · MODEL</span>
             <span>PRINTED L×W×H (in)</span><span>MEASURED L×W×H (in)</span><span>Δ L / W / H (in)</span>
-            <span>CONF</span><span>MATCH</span><span>STATION</span><span>STATUS</span><span>WHEN · RESULT</span>
+            <span>CONF</span><span>MATCH</span><span>STATUS</span><span>WHEN · RESULT</span>
           </div>
           <div>
             {pageRows.map((r, idx) => {
@@ -546,7 +545,7 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
               return (
                 <div
                   key={r.id}
-                  className="grid gap-x-[10px] p-[10px_16px] border-b border-[var(--bd)] items-center text-[12.5px] transition-colors hover:bg-[var(--bg2)]"
+                  className="grid gap-x-[10px] p-[10px_16px] border-b border-[var(--bd)] items-center text-[12.5px] transition-colors hover:bg-[var(--bg2)] [&>*:nth-child(3)]:pl-[12px]"
                   style={{ gridTemplateColumns: GRID_COLS }}
                 >
                   <ImageThumb src={r.qrImageUrl || r.shot} label="QR capture" onOpen={() => setPreviewIdx(previewIndexFor(r, 'qr'))} />
@@ -592,12 +591,6 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
                     );
                   })()}
                   <MatchCell r={r} />
-                  <span
-                    className="font-[var(--mono)] text-[10.5px] text-[var(--tx2)] whitespace-nowrap overflow-hidden text-ellipsis"
-                    title={r.station}
-                  >
-                    {r.station}
-                  </span>
                   <span
                     className="font-[var(--mono)] text-[10px] font-semibold whitespace-nowrap overflow-hidden text-ellipsis"
                     style={{ color: r.recordStatus === 'accepted' ? 'var(--ok)' : r.recordStatus === 'rejected' ? 'var(--crit)' : r.recordStatus === 'pending' ? 'var(--warn)' : 'var(--tx3)' }}
@@ -733,9 +726,8 @@ const MeasurementRecords = ({ onRowsChange, dateRange }) => {
                     </span>
                   </div>
 
-                  {/* footer: station + time */}
-                  <div className="mt-auto flex items-center justify-between font-[var(--mono)] text-[9.5px] text-[var(--tx3)] pt-[3px] border-t border-[var(--bd)]">
-                    <span className="truncate" title={r.stationId || r.station}>{r.station}</span>
+                  {/* footer: time */}
+                  <div className="mt-auto flex items-center justify-end font-[var(--mono)] text-[9.5px] text-[var(--tx3)] pt-[3px] border-t border-[var(--bd)]">
                     <span className="shrink-0">{r.date} · {r.time}</span>
                   </div>
                 </div>

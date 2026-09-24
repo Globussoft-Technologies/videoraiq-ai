@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, ImageOff, Maximize2, Minus, Plus, RotateCcw, X } from 'lucide-react';
 import ImageWithLoader from '@/pages/AttendanceLogs/components/ImageWithLoader';
 
@@ -195,6 +196,11 @@ const SnapshotPreviewModal = ({
         </div>
       )}
       {!fullscreen && src && (
+        <div className="absolute top-3 right-3 z-30">
+          {zoomControls}
+        </div>
+      )}
+      {!fullscreen && src && (
         <button
           type="button"
           onClick={openFullscreen}
@@ -230,7 +236,8 @@ const SnapshotPreviewModal = ({
     </div>
   );
 
-  return (
+  return createPortal(
+    (
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
       onClick={onClose}
@@ -265,13 +272,11 @@ const SnapshotPreviewModal = ({
           <X className="w-5 h-5 text-[var(--tx)]" />
         </button>
 
-        <div className="flex items-center justify-end gap-[10px] mb-[12px]">
-          {src && zoomControls}
-        </div>
-
         {renderedImage}
       </div>
     </div>
+    ),
+    document.body
   );
 };
 

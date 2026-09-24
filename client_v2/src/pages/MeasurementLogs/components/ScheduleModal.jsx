@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Clock3, Mail, FileText, Settings2, SlidersHorizontal, Check } from 'lucide-react';
+import { X, Clock3, Mail, FileText, SlidersHorizontal, Check } from 'lucide-react';
 import { REPORT_OPTS, FREQ_OPTS, DAY_OPTS } from '../data';
 import SingleDatePicker from '@/components/SingleDatePicker';
 import MultiSelect from '@/components/MultiSelect';
@@ -99,13 +99,9 @@ const Toggle = ({ on }) => (
 
 const GRADIENT = 'linear-gradient(135deg,var(--blue),var(--violet))';
 
-const ScheduleModal = ({ initial, recipients = [], stations = [], onClose, onSave }) => {
+const ScheduleModal = ({ initial, recipients = [], onClose, onSave }) => {
   const [form, setForm] = useState(EMPTY);
 
-  const scopeOpts = [
-    { v: 'all', l: 'All stations' },
-    ...stations.map((s) => ({ v: s, l: s })),
-  ];
   const recipientOptions = recipients.map((r) => ({
     id: String(r.email).toLowerCase(),
     label: r.name ? `${r.name} — ${r.email}` : r.email,
@@ -323,21 +319,6 @@ const ScheduleModal = ({ initial, recipients = [], stations = [], onClose, onSav
                 No verified recipients yet — add and verify one under Settings → Recipients.
               </div>
             )}
-          </Section>
-
-          {/* Stations */}
-          <Section title="Stations covered" icon={Settings2}>
-            <select
-              className={selectCls}
-              value={form.scope}
-              onChange={(e) => set('scope', e.target.value)}
-            >
-              {scopeOpts.map((o) => (
-                <option key={o.v} value={o.v}>
-                  {o.l}
-                </option>
-              ))}
-            </select>
           </Section>
 
           {/* Report format */}

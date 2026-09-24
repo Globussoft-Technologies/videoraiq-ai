@@ -236,7 +236,7 @@ const MismatchBySkuModal = ({ rows: seed, dateRange, onClose }) => {
 };
 
 const Card = ({ title, sub, info, children }) => (
-  <div className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[14px] p-4">
+  <div className="min-w-0 bg-[var(--bg1)] border border-[var(--bd)] rounded-[14px] p-4">
     <div className="flex items-center gap-[6px]">
       <span className="font-[var(--disp)] font-semibold text-[13.5px]">{title}</span>
       {info && <InfoHint title={title} lines={info} />}
@@ -363,9 +363,9 @@ const ThroughputChart = ({ rows = [], unit = 'hour', loading }) => {
       : '';
 
   return (
-    <div className="bg-[var(--bg1)] border border-[var(--bd)] rounded-[14px] p-4 flex flex-col">
-      <div className="flex items-center gap-[10px]">
-        <span>
+    <div className="min-w-0 bg-[var(--bg1)] border border-[var(--bd)] rounded-[14px] p-4 flex flex-col">
+      <div className="flex items-start gap-[10px] flex-wrap">
+        <span className="min-w-0 flex-1">
           <span className="flex items-center gap-[6px]">
             <span className="font-[var(--disp)] font-semibold text-[13.5px]">
               Throughput &amp; Failures
@@ -387,7 +387,7 @@ const ThroughputChart = ({ rows = [], unit = 'hour', loading }) => {
               : 'Units measured per hour'}
           </span>
         </span>
-        <span className="ml-auto flex gap-3 font-[var(--mono)] text-[9.5px] text-[var(--tx3)]">
+        <span className="ml-auto flex gap-3 shrink-0 font-[var(--mono)] text-[9.5px] text-[var(--tx3)]">
           <span className="flex items-center gap-[5px]">
             <span className="w-2 h-2 rounded-[2px] bg-[#3b82f6]" />PASS
           </span>
@@ -410,14 +410,20 @@ const ThroughputChart = ({ rows = [], unit = 'hour', loading }) => {
         // The card's own height therefore never grows with the numbers.
         // (+SKU_BUTTON_H so this card lines up with Mismatch Rate by SKU,
         // whose list sits above a "View all" button this card doesn't have.)
-        <div className="flex mt-[16px] shrink-0" style={{ height: CARD_CONTENT_H + SKU_BUTTON_H }}>
+        <div
+          className="flex mt-[16px] shrink-0 min-w-0 overflow-x-auto"
+          style={{ height: CARD_CONTENT_H + SKU_BUTTON_H }}
+        >
           <div className="flex flex-col justify-between pr-[8px] pb-[22px] font-[var(--mono)] text-[9px] text-[var(--tx3)] text-right shrink-0">
             {ticks.map((t, i) => (
               <span key={`${t}-${i}`} className="leading-none">{t.toLocaleString()}</span>
             ))}
           </div>
 
-          <div className="relative flex-1 min-w-0">
+          <div
+            className="relative flex-1 min-w-0"
+            style={{ minWidth: Math.max(0, rows.length * (rows.length > 14 ? 34 : 42)) }}
+          >
             <div className="absolute inset-x-0 top-0 bottom-[22px] flex flex-col justify-between pointer-events-none">
               {ticks.map((t, i) => (
                 <span
@@ -447,7 +453,7 @@ const ThroughputChart = ({ rows = [], unit = 'hour', loading }) => {
                   <div
                     key={h.key ?? barLabel(h)}
                     className="relative h-full flex flex-col justify-end items-center shrink-0"
-                    style={{ width: rows.length > 14 ? 24 : 46 }}
+                    style={{ width: rows.length > 14 ? 24 : 36 }}
                     title={`${barLabel(h)}: ${h.pass} pass, ${h.fail} fail`}
                   >
                     <span

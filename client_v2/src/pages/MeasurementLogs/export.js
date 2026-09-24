@@ -20,7 +20,7 @@ const HEADERS = [
   '#', 'Order', 'Order Item', 'Ref', 'SKU', 'Model',
   'Printed LxWxH (in)', 'Measured LxWxH (in)', 'Measured raw (DS)', 'Unit',
   'Dev L (in)', 'Dev W (in)', 'Dev H (in)',
-  'Confidence', 'Match %', 'Station', 'Status', 'When', 'Result', 'Snapshot', 'Measurement Image',
+  'Confidence', 'Match %', 'Status', 'When', 'Result', 'Snapshot', 'Measurement Image',
 ];
 
 // Prefer the backend's average per-axis score. devFrac remains a compatibility
@@ -69,7 +69,7 @@ const toRow = (r, i, { asAscii = false, snap = 'text' } = {}) => {
     r.declared, r.measured, r.measuredRaw || '—', r.measuredUnit || '—',
     r.devL, r.devB, r.devH,
     r.confidence != null ? Number(r.confidence).toFixed(2) : '—',
-    matchPct(r), r.station, r.recordStatus || '—', r.dateTime || r.time,
+    matchPct(r), r.recordStatus || '—', r.dateTime || r.time,
     STATUS_META[r.status]?.label || r.status,
     linkCell(snapshotUrl(r), snap),
     linkCell(measurementImageUrl(r), snap),
