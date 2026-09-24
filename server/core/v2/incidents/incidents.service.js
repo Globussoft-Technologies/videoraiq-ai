@@ -1425,6 +1425,69 @@ class IncidentsService {
         vehicleStages.push(stripNormPlateStage);
       }
 
+      // Bulk resolution deliberately reuses the exact match and aggregation
+      // filters above. This keeps the operation scoped to the same authorized
+      // incident set shown by Incident Center, without fetching every record
+      // into the browser or issuing one request per incident.
+      if (req.body?._bulkResolve) {
+        const mode = req.body.bulkResolveMode;
+        const incidentIds = Array.isArray(req.body.incidentIds)
+          ? req.body.incidentIds
+          : [];
+        const unresolvedClause = { resolved: { $ne: true } };
+        const resolveFilter = {
+          ...matchStage,
+          $and: [...(matchStage.$and || []), unresolvedClause],
+        };
+
+        if (mode === "selected" || mode === "page") {
+          resolveFilter._id = {
+            $in: incidentIds.map((id) => new mongoose.Types.ObjectId(id)),
+          };
+        }
+
+        const resolveUpdate = {
+          $set: {
+            resolved: true,
+            "report.status": false,
+            "report.description": "",
+            "report.resolvedAt": new Date(),
+          },
+          $unset: { "report.reportedAt": "" },
+        };
+
+        let updateResult;
+        if (vehicleStages.length) {
+          // Vehicle tagging/name search is expressed as aggregation stages.
+          // Resolve the matching ids inside Mongo, then still perform one
+          // updateMany rather than making a request per incident.
+          const matching = await Incident.aggregate([
+            { $match: resolveFilter },
+            ...vehicleStages,
+            { $project: { _id: 1 } },
+          ]);
+          const matchingIds = matching.map(({ _id }) => _id);
+          updateResult = matchingIds.length
+            ? await Incident.updateMany(
+                { _id: { $in: matchingIds }, resolved: { $ne: true } },
+                resolveUpdate,
+              )
+            : { modifiedCount: 0, nModified: 0 };
+        } else {
+          updateResult = await Incident.updateMany(resolveFilter, resolveUpdate);
+        }
+
+        const resolvedCount = Number(
+          updateResult.modifiedCount ?? updateResult.nModified ?? 0,
+        );
+        return res.status(200).json({
+          status: "success",
+          message: "Incidents resolved successfully",
+          resolvedCount,
+          data: { resolvedCount },
+        });
+      }
+
       // Aggregated paginated data
       const data = await Incident.aggregate([
         // 1ï¸âƒ£ Match early (uses index)
@@ -1589,6 +1652,37 @@ class IncidentsService {
 
   async updateIncident(req, res, next) {
     try {
+      // Reuse the existing update endpoint for bulk resolution. The client
+      // sends incidentIds as an array; getAllIncidents then applies the same
+      // authorization/filter builder and performs one updateMany operation.
+      if (Array.isArray(req.body?.incidentIds) || req.body?.mode) {
+        const { mode: requestedMode, incidentIds = [], filters = {} } = req.body || {};
+        const mode = requestedMode === 'currentPage' || requestedMode === 'current_page'
+          ? 'page'
+          : requestedMode;
+        if (!['selected', 'page', 'filtered'].includes(mode)) {
+          return res.status(400).json({ status: 'failed', message: 'Invalid bulk resolve mode' });
+        }
+        if ((mode === 'selected' || mode === 'page') && (
+          !Array.isArray(incidentIds) ||
+          incidentIds.length === 0 ||
+          incidentIds.some((id) => !mongoose.isValidObjectId(id))
+        )) {
+          return res.status(400).json({ status: 'failed', message: 'Invalid incident IDs' });
+        }
+        if (!filters || typeof filters !== 'object' || Array.isArray(filters)) {
+          return res.status(400).json({ status: 'failed', message: 'Invalid incident filters' });
+        }
+
+        req.body = {
+          ...filters,
+          _bulkResolve: true,
+          bulkResolveMode: mode,
+          incidentIds,
+        };
+        return this.getAllIncidents(req, res, next);
+      }
+
       const incidentId = req.params.id;
       const updates = { ...req.body };
 
