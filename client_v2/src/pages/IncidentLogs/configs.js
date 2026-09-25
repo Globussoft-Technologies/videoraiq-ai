@@ -154,6 +154,7 @@ const industrialDetectionConfig = ({
   sheetName,
   storagePrefix,
   permissionKey,
+  showAlertThreshold = true,
 }) => ({
   endpoint,
   title,
@@ -165,6 +166,7 @@ const industrialDetectionConfig = ({
   showStatus: false,
   sortable: true,
   showIndustrialFields: true,
+  showAlertThreshold,
   gridVariant: 'details',
   enableViewExports: true,
   datePickerVariant: 'preset',
@@ -195,6 +197,7 @@ export const OIL_LEAKAGE_CONFIG = industrialDetectionConfig({
   sheetName: 'Oil Leakage Logs',
   storagePrefix: 'oil_leakage',
   permissionKey: 'oilLeakageLogs',
+  showAlertThreshold: false,
 });
 
 export const EQUIPMENT_OIL_LEAKAGE_CONFIG = industrialDetectionConfig({
@@ -222,6 +225,7 @@ export const WRONG_LOCATION_CONFIG = industrialDetectionConfig({
   sheetName: 'Wrong Location Logs',
   storagePrefix: 'wrong_location',
   permissionKey: 'wrongLocationLogs',
+  showAlertThreshold: false,
 });
 
 export const WASTE_DISPOSAL_CONFIG = industrialDetectionConfig({

@@ -87,7 +87,9 @@ const buildExportColumns = (config) => {
   if (config.showIndustrialFields) {
     cols.push(
       { key: 'count', label: 'Objects Detected' },
-      { key: 'alertThreshold', label: 'Alert Threshold' }
+      ...(config.showAlertThreshold === false
+        ? []
+        : [{ key: 'alertThreshold', label: 'Alert Threshold' }])
     );
   }
 
@@ -260,7 +262,8 @@ const exportToGridPDF = async (config, params) => {
       );
     }
     if (config.showIndustrialFields) {
-      details.push(['Objects Detected', 'count'], ['Alert Threshold', 'alertThreshold']);
+      details.push(['Objects Detected', 'count']);
+      if (config.showAlertThreshold !== false) details.push(['Alert Threshold', 'alertThreshold']);
     }
     details.push(['NVR', 'nvrName'], ['Camera', 'channelName'], ['Time', 'createdAt']);
     const cardHeight = imageHeight + bodyTopGap + rowGap * details.length + 4;
